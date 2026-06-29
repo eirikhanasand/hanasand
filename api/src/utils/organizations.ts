@@ -171,6 +171,40 @@ export type OrganizationWatchlistAlertGenerationContract = {
     canGenerateAlerts: boolean
 }
 
+export type OrganizationWatchlistAlertGenerationRef = {
+    schemaVersion: 'organization.watchlist_alert_generation_ref.v1'
+    source: 'organization_shared_watchlist'
+    organizationId: string
+    tenantId: string
+    ownerOrganizationId: string
+    watchlistId: string
+    watchlistItemId: string
+    itemId: string
+    termFamily: WatchlistKind
+    category: WatchlistKind
+    term: string
+    normalizedTerm: string
+    status: 'active'
+    lifecycle: {
+        status: 'active'
+        reason: string | null
+        requestId: string | null
+        createdBy: string
+        updatedBy: string | null
+    }
+    dedupe: {
+        scope: 'organization_watchlist_term'
+        key: string
+        parts: {
+            organizationId: string
+            tenantId: string
+            watchlistItemId: string
+            termFamily: WatchlistKind
+            normalizedTerm: string
+        }
+    }
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -186,6 +220,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
+        alertGenerationRef: OrganizationWatchlistAlertGenerationRef
         alertGenerationReference: {
             schemaVersion: 'organization.watchlist_item_alert_reference.v1'
             organizationId: string
@@ -817,22 +852,26 @@ export function organizationWatchlistAlertTermsExport(
     member: { userId: string, role: OrganizationRole }
 ): OrganizationWatchlistAlertTermsExport {
     const alertGeneration = organizationWatchlistAlertGenerationContract(organization, items)
-    const activeTerms = alertGeneration.activeWatchlistTerms.map(term => ({
-        ...term,
-        source: 'organization_shared_watchlist' as const,
-        alertGeneratorKey: `org:${term.organizationId}:watchlist:${term.watchlistItemId}:${term.termFamily}:${term.term.toLowerCase()}`,
-        alertGenerationReference: {
-            schemaVersion: 'organization.watchlist_item_alert_reference.v1' as const,
-            organizationId: term.organizationId,
-            tenantId: term.tenantId,
-            watchlistItemId: term.watchlistItemId,
-            itemId: term.itemId,
-            termFamily: term.termFamily,
-            category: term.category,
-            term: term.term,
-            status: 'active' as const,
-        },
-    }))
+    const activeTerms = alertGeneration.activeWatchlistTerms.map(term => {
+        const alertGenerationRef = organizationWatchlistAlertGenerationRef(term)
+        return {
+            ...term,
+            source: 'organization_shared_watchlist' as const,
+            alertGeneratorKey: alertGenerationRef.dedupe.key,
+            alertGenerationRef,
+            alertGenerationReference: {
+                schemaVersion: 'organization.watchlist_item_alert_reference.v1' as const,
+                organizationId: term.organizationId,
+                tenantId: term.tenantId,
+                watchlistItemId: term.watchlistItemId,
+                itemId: term.itemId,
+                termFamily: term.termFamily,
+                category: term.category,
+                term: term.term,
+                status: 'active' as const,
+            },
+        }
+    })
     const statuses = items.map(normalizeWatchlistStatus)
     const pausedCount = statuses.filter(status => status === 'paused').length
     const archivedCount = statuses.filter(status => status === 'archived').length
@@ -858,6 +897,44 @@ export function organizationWatchlistAlertTermsExport(
         },
         blockedReasons: alertGeneration.blockedReasons,
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
+    }
+}
+
+function organizationWatchlistAlertGenerationRef(term: OrganizationWatchlistTerm): OrganizationWatchlistAlertGenerationRef {
+    const normalizedTerm = cleanText(term.term).toLowerCase()
+    const key = `org:${term.organizationId}:watchlist:${term.watchlistItemId}:${term.termFamily}:${normalizedTerm}`
+    return {
+        schemaVersion: 'organization.watchlist_alert_generation_ref.v1',
+        source: 'organization_shared_watchlist',
+        organizationId: term.organizationId,
+        tenantId: term.tenantId,
+        ownerOrganizationId: term.organizationId,
+        watchlistId: term.watchlistItemId,
+        watchlistItemId: term.watchlistItemId,
+        itemId: term.itemId,
+        termFamily: term.termFamily,
+        category: term.category,
+        term: term.term,
+        normalizedTerm,
+        status: 'active',
+        lifecycle: {
+            status: 'active',
+            reason: term.lifecycleReason,
+            requestId: term.lifecycleRequestId,
+            createdBy: term.createdBy,
+            updatedBy: term.updatedBy,
+        },
+        dedupe: {
+            scope: 'organization_watchlist_term',
+            key,
+            parts: {
+                organizationId: term.organizationId,
+                tenantId: term.tenantId,
+                watchlistItemId: term.watchlistItemId,
+                termFamily: term.termFamily,
+                normalizedTerm,
+            },
+        },
     }
 }
 

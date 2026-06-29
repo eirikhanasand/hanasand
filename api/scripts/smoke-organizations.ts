@@ -10,6 +10,7 @@ import {
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
     organizationVisibilityDecision,
+    organizationWatchlistAlertTermsExport,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
 } from '../src/utils/organizations.ts'
@@ -161,6 +162,63 @@ assert.deepEqual(buildOrganizationBridgeContext({
     pendingInviteCount: 0,
     sharedWatchlistCount: 0,
     readinessStatus: 'needs_watchlist',
+})
+
+const alertTermsExport = organizationWatchlistAlertTermsExport(
+    {
+        id: 'org_acme',
+        name: 'Acme Security',
+        slug: 'acme-security',
+        member_count: 8,
+        owner_count: 1,
+        pending_invite_count: 2,
+        shared_watchlist_count: 2,
+    },
+    [
+        {
+            id: 'watch_keyword_acme',
+            organization_id: 'org_acme',
+            kind: 'keyword',
+            value: 'Credential Reset Lures',
+            notes: '',
+            status: 'active',
+            created_by: 'owner',
+            updated_by: 'admin',
+            lifecycle_reason: 'Proof fixture seed.',
+            lifecycle_request_id: 'proof-fixture-create',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+        {
+            id: 'watch_paused_acme',
+            organization_id: 'org_acme',
+            kind: 'domain',
+            value: 'paused.example',
+            notes: '',
+            status: 'paused',
+            created_by: 'owner',
+            updated_by: 'owner',
+            lifecycle_reason: 'Paused for cleanup.',
+            lifecycle_request_id: 'proof-fixture-pause',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+        },
+    ],
+    { userId: 'org_smoke_admin', role: 'admin' }
+)
+assert.equal(alertTermsExport.member.userId, 'org_smoke_admin')
+assert.equal(alertTermsExport.activeTerms.length, 1)
+assert.equal(alertTermsExport.excluded.pausedCount, 1)
+assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.schemaVersion, 'organization.watchlist_alert_generation_ref.v1')
+assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.status, 'active')
+assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.lifecycle.requestId, 'proof-fixture-create')
+assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.dedupe.key, alertTermsExport.activeTerms[0].alertGeneratorKey)
+assert.deepEqual(alertTermsExport.activeTerms[0].alertGenerationRef.dedupe.parts, {
+    organizationId: 'org_acme',
+    tenantId: 'org_acme',
+    watchlistItemId: 'watch_keyword_acme',
+    termFamily: 'keyword',
+    normalizedTerm: 'credential reset lures',
 })
 
 assert.deepEqual(organizationVisibilityDecision({

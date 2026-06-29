@@ -592,6 +592,9 @@ assert.equal(alertTermsWhilePaused.activeTerms.length, 1)
 assert.equal(alertTermsWhilePaused.excluded.pausedCount, 1)
 assert.equal(alertTermsWhilePaused.activeTerms[0].status, 'active')
 assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationReference.status, 'active')
+assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.status, 'active')
+assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.lifecycle.status, 'active')
+assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.dedupe.scope, 'organization_watchlist_term')
 
 const ownerResumesCompanyResponse = await app.inject({
     method: 'POST',
@@ -727,6 +730,30 @@ assert.match(keywordExportTerm.alertGeneratorKey, /^org:/)
 assert.equal(keywordExportTerm.lifecycleReason, 'Refine live proof keyword.')
 assert.equal(keywordExportTerm.lifecycleRequestId, 'smoke-keyword-update')
 assert.equal(keywordExportTerm.alertGenerationReference.watchlistItemId, keywordExportTerm.watchlistItemId)
+assert.equal(keywordExportTerm.alertGenerationRef.schemaVersion, 'organization.watchlist_alert_generation_ref.v1')
+assert.equal(keywordExportTerm.alertGenerationRef.source, 'organization_shared_watchlist')
+assert.equal(keywordExportTerm.alertGenerationRef.organizationId, organization.id)
+assert.equal(keywordExportTerm.alertGenerationRef.tenantId, organization.id)
+assert.equal(keywordExportTerm.alertGenerationRef.ownerOrganizationId, organization.id)
+assert.equal(keywordExportTerm.alertGenerationRef.watchlistId, keywordExportTerm.watchlistItemId)
+assert.equal(keywordExportTerm.alertGenerationRef.watchlistItemId, keywordExportTerm.watchlistItemId)
+assert.equal(keywordExportTerm.alertGenerationRef.itemId, keywordExportTerm.itemId)
+assert.equal(keywordExportTerm.alertGenerationRef.termFamily, 'keyword')
+assert.equal(keywordExportTerm.alertGenerationRef.category, 'keyword')
+assert.equal(keywordExportTerm.alertGenerationRef.term, 'credential reset lures')
+assert.equal(keywordExportTerm.alertGenerationRef.normalizedTerm, 'credential reset lures')
+assert.equal(keywordExportTerm.alertGenerationRef.lifecycle.reason, 'Refine live proof keyword.')
+assert.equal(keywordExportTerm.alertGenerationRef.lifecycle.requestId, 'smoke-keyword-update')
+assert.equal(keywordExportTerm.alertGenerationRef.lifecycle.createdBy, 'org_smoke_admin')
+assert.equal(keywordExportTerm.alertGenerationRef.lifecycle.updatedBy, 'org_smoke_admin')
+assert.equal(keywordExportTerm.alertGenerationRef.dedupe.key, keywordExportTerm.alertGeneratorKey)
+assert.deepEqual(keywordExportTerm.alertGenerationRef.dedupe.parts, {
+    organizationId: organization.id,
+    tenantId: organization.id,
+    watchlistItemId: keywordExportTerm.watchlistItemId,
+    termFamily: 'keyword',
+    normalizedTerm: 'credential reset lures',
+})
 assert.deepEqual(
     alertTermsExport.activeWatchlistTerms,
     readiness.alertGenerationBridge.activeWatchlistTerms
@@ -841,6 +868,10 @@ assert.equal(cleanupBeforeArchiveExportResponse.statusCode, 200, cleanupBeforeAr
 const cleanupBeforeArchiveExport = parseBody(cleanupBeforeArchiveExportResponse.body).alertTermsExport
 assert.ok(cleanupBeforeArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupCompanyItem.id))
 assert.ok(cleanupBeforeArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
+const cleanupCompanyExportTerm = cleanupBeforeArchiveExport.activeTerms.find((term: Row) => term.watchlistItemId === cleanupCompanyItem.id)
+assert.equal(cleanupCompanyExportTerm.alertGenerationRef.lifecycle.reason, 'Disposable proof cleanup fixture.')
+assert.equal(cleanupCompanyExportTerm.alertGenerationRef.lifecycle.requestId, 'smoke-cleanup-create-company')
+assert.equal(cleanupCompanyExportTerm.alertGenerationRef.dedupe.parts.normalizedTerm, 'live proof cleanup holdings')
 
 const cleanupArchiveResponse = await app.inject({
     method: 'POST',
@@ -893,6 +924,7 @@ const cleanupAfterArchiveExport = parseBody(cleanupAfterArchiveExportResponse.bo
 assert.ok(!cleanupAfterArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupCompanyItem.id))
 assert.ok(!cleanupAfterArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
 assert.equal(cleanupAfterArchiveExport.excluded.archivedCount, 3)
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.status === 'active'))
 
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
