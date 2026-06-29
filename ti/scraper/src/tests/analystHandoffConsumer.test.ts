@@ -647,25 +647,41 @@ describe("analyst handoff consumer validation", () => {
     expect(beta.customerWorkflow).toBe("organization_threat_monitoring");
     expect(beta.rows.map((row) => row.id)).toEqual([
       "create_organization",
-      "invite_teammates",
-      "share_watchlists",
-      "generate_real_alerts",
+      "invite_teammate",
+      "create_shared_watchlist",
+      "activate_source_coverage",
+      "generate_alert",
       "configure_destinations",
-      "work_alerts",
-      "source_backed_ti_coverage"
+      "work_alert",
+      "open_link_case",
+      "deliver_discord_webhook",
+      "support_access_recovery",
+      "public_ti_actor_relevance"
     ]);
     expect(beta.rows.every((row) => row.persistenceMode === "real_persistence")).toBe(true);
-    expect(beta.rows.find((row) => row.id === "invite_teammates")).toMatchObject({
+    expect(beta.rows.every((row) => row.expectedAdapter && row.payloadShape.length && row.proofCommand)).toBe(true);
+    expect(beta.rows.find((row) => row.id === "invite_teammate")).toMatchObject({
       ownerLane: "support",
       customerVisibleState: "ready",
-      requiredNextAction: "verify_team_invitation_action"
+      requiredNextAction: "verify_team_invitation_action",
+      expectedAdapter: "supportActionExecutorReadiness"
     });
-    expect(beta.rows.find((row) => row.id === "work_alerts")).toMatchObject({
+    expect(beta.rows.find((row) => row.id === "work_alert")).toMatchObject({
       ownerLane: "dashboard",
       uiQualityProofStatus: "present",
       customerVisibleState: "ready"
     });
-    expect(beta.rows.find((row) => row.id === "source_backed_ti_coverage")).toMatchObject({
+    expect(beta.rows.find((row) => row.id === "open_link_case")).toMatchObject({
+      ownerLane: "alert",
+      expectedAdapter: "persistedAlertToCaseHandoffPayload",
+      customerVisibleState: "ready"
+    });
+    expect(beta.rows.find((row) => row.id === "deliver_discord_webhook")).toMatchObject({
+      ownerLane: "webhook",
+      expectedAdapter: "persistedAlertToWebhookTriggerContext",
+      customerVisibleState: "ready"
+    });
+    expect(beta.rows.find((row) => row.id === "public_ti_actor_relevance")).toMatchObject({
       ownerLane: "publicTI",
       customerVisibleState: "ready",
       requiredNextAction: "verify_source_backed_ti_coverage"
@@ -691,10 +707,10 @@ describe("analyst handoff consumer validation", () => {
 
     expect(validateBetaReadinessArtifact(blocked)).toMatchObject({ ok: true, blockerCodes: [] });
     expect(blocked.ok).toBe(false);
-    expect(blocked.rows.find((row) => row.id === "generate_real_alerts")?.blockers).toContain("source_coverage_required_for_real_alerts");
+    expect(blocked.rows.find((row) => row.id === "generate_alert")?.blockers).toContain("source_coverage_required_for_alert_generation");
     expect(blocked.rows.find((row) => row.id === "configure_destinations")?.blockers).toContain("missing_webhook_destination");
-    expect(blocked.rows.find((row) => row.id === "work_alerts")?.uiQualityProofStatus).toBe("missing");
-    expect(blocked.rows.find((row) => row.id === "source_backed_ti_coverage")?.blockers).toContain("source_policy_inactive");
+    expect(blocked.rows.find((row) => row.id === "work_alert")?.uiQualityProofStatus).toBe("missing");
+    expect(blocked.rows.find((row) => row.id === "public_ti_actor_relevance")?.blockers).toContain("source_policy_inactive");
     const serialized = JSON.stringify(blocked);
     expect(serialized).not.toContain("\"stages\"");
     expect(serialized).not.toContain("\"compatibility\"");

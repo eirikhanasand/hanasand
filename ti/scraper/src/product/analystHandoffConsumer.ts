@@ -657,12 +657,16 @@ export type ProductReadinessAggregateValidation = {
 
 export type BetaReadinessCapabilityId =
   | "create_organization"
-  | "invite_teammates"
-  | "share_watchlists"
-  | "generate_real_alerts"
+  | "invite_teammate"
+  | "create_shared_watchlist"
+  | "activate_source_coverage"
+  | "generate_alert"
   | "configure_destinations"
-  | "work_alerts"
-  | "source_backed_ti_coverage";
+  | "work_alert"
+  | "open_link_case"
+  | "deliver_discord_webhook"
+  | "support_access_recovery"
+  | "public_ti_actor_relevance";
 
 export type BetaReadinessPersistenceMode = "real_persistence" | "local_proof" | "session_state" | "demo_fixture";
 
@@ -674,10 +678,14 @@ export type BetaReadinessRow = {
   latestCommitOrCheck: string;
   customerVisibleState: ProductReadinessState;
   blockers: string[];
+  blockingReason: string | null;
   deployRisk: ProductReadinessRow["deployRisk"];
   requiredNextAction: string;
   uiQualityProofStatus: "present" | "missing" | "not_required";
   persistenceMode: BetaReadinessPersistenceMode;
+  expectedAdapter: string;
+  payloadShape: string[];
+  proofCommand: string;
 };
 
 export type BetaReadinessArtifact = {
@@ -1163,34 +1171,57 @@ export function buildBetaReadinessArtifact(input: Array<{
       capabilityLabel: "Organization creation",
       productRow: productRows.get("organization_lifecycle"),
       requiredNextAction: "verify_organization_create_route",
-      persistenceMode: "real_persistence"
+      persistenceMode: "real_persistence",
+      expectedAdapter: "organizationLifecycleReadiness",
+      payloadShape: ["organizationId", "tenantId", "readyForOnboarding", "typedBlockers"],
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts"
     }),
     betaRowFromProduct({
-      id: "invite_teammates",
+      id: "invite_teammate",
       ownerLane: "support",
       capabilityLabel: "Team invitation workflow",
       productRow: productRows.get("support_controls"),
       requiredNextAction: "verify_team_invitation_action",
       persistenceMode: "real_persistence",
+      expectedAdapter: "supportActionExecutorReadiness",
+      payloadShape: ["action", "executorContract.path", "executorContract.requiredHeaders", "executorContract.requiredBody", "blockers"],
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts",
       customerVisibleStateOverride: supportInviteReady(input) ? undefined : "blocked",
       extraBlockers: supportInviteReady(input) ? [] : ["missing_invite_teammate_executor"]
     }),
     betaRowFromProduct({
-      id: "share_watchlists",
+      id: "create_shared_watchlist",
       ownerLane: "watchlist",
       capabilityLabel: "Shared watchlist monitoring",
       productRow: productRows.get("shared_watchlists"),
       requiredNextAction: "verify_shared_watchlist_persistence",
-      persistenceMode: "real_persistence"
+      persistenceMode: "real_persistence",
+      expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+      payloadShape: ["organizationId", "tenantId", "watchlistId", "watchlistItemIds", "activeTerms[].alertGenerationRef"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts"
     }),
     betaRowFromProduct({
-      id: "generate_real_alerts",
-      ownerLane: "alert",
-      capabilityLabel: "Real alert generation",
-      productRow: productRows.get("alert_case_workflow"),
-      requiredNextAction: "verify_real_alert_generation",
+      id: "activate_source_coverage",
+      ownerLane: "source",
+      capabilityLabel: "Source coverage activation",
+      productRow: source,
+      requiredNextAction: "verify_source_coverage_activation",
       persistenceMode: "real_persistence",
-      extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_real_alerts"]
+      expectedAdapter: "buildDwmSourceReadinessArtifact",
+      payloadShape: ["sourceIds", "freshProvenance", "blockers", "checkedAt"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts"
+    }),
+    betaRowFromProduct({
+      id: "generate_alert",
+      ownerLane: "alert",
+      capabilityLabel: "Alert generation",
+      productRow: productRows.get("alert_case_workflow"),
+      requiredNextAction: "verify_alert_generation",
+      persistenceMode: "real_persistence",
+      expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+      payloadShape: ["organizationId", "watchlistId", "watchlistItemIds", "sourceFamily", "captureIds", "dedupeKey"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmWorkflowPersistence.test.ts",
+      extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_alert_generation"]
     }),
     betaRowFromProduct({
       id: "configure_destinations",
@@ -1198,25 +1229,67 @@ export function buildBetaReadinessArtifact(input: Array<{
       capabilityLabel: "Notification destination configuration",
       productRow: productRows.get("webhook_delivery"),
       requiredNextAction: "verify_webhook_destination_configuration",
-      persistenceMode: "real_persistence"
+      persistenceMode: "real_persistence",
+      expectedAdapter: "webhookDestinationLifecycle",
+      payloadShape: ["destinationId", "orgId", "type", "status", "health.ready", "retry.lastErrorCategory"],
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhook-contract.ts"
     }),
     betaRowFromProduct({
-      id: "work_alerts",
+      id: "work_alert",
       ownerLane: "dashboard",
       capabilityLabel: "Analyst alert workflow",
       productRow: productRows.get("alert_case_workflow"),
       requiredNextAction: "verify_dashboard_alert_workflow",
       persistenceMode: "real_persistence",
+      expectedAdapter: "persistedAlertToCaseHandoffPayload",
+      payloadShape: ["alertId", "casePath", "captureIds", "watchlistItemIds", "workflowState"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts",
       uiQualityProofStatus: dashboard?.uiQualityProofExists ? "present" : "missing",
       extraBlockers: dashboard?.uiQualityProofExists ? [] : ["missing_dashboard_ui_quality_proof"]
     }),
     betaRowFromProduct({
-      id: "source_backed_ti_coverage",
+      id: "open_link_case",
+      ownerLane: "alert",
+      capabilityLabel: "Case link workflow",
+      productRow: productRows.get("alert_case_workflow"),
+      requiredNextAction: "verify_case_link_workflow",
+      persistenceMode: "real_persistence",
+      expectedAdapter: "persistedAlertToCaseHandoffPayload",
+      payloadShape: ["caseIdCandidate", "casePath", "alertId", "dedupeKey", "captureIds"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+    }),
+    betaRowFromProduct({
+      id: "deliver_discord_webhook",
+      ownerLane: "webhook",
+      capabilityLabel: "Discord webhook delivery",
+      productRow: productRows.get("webhook_delivery"),
+      requiredNextAction: "verify_discord_webhook_delivery",
+      persistenceMode: "real_persistence",
+      expectedAdapter: "persistedAlertToWebhookTriggerContext",
+      payloadShape: ["organizationId", "alertId", "webhookDestinationIds", "deliveryId", "casePath", "captureIds"],
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts"
+    }),
+    betaRowFromProduct({
+      id: "support_access_recovery",
+      ownerLane: "support",
+      capabilityLabel: "Support access recovery",
+      productRow: productRows.get("support_controls"),
+      requiredNextAction: "verify_support_access_recovery",
+      persistenceMode: "real_persistence",
+      expectedAdapter: "supportActionExecutionHandoff",
+      payloadShape: ["action", "idempotencyKey", "executorReadiness.ready", "execution.path", "audit.blockerCode"],
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+    }),
+    betaRowFromProduct({
+      id: "public_ti_actor_relevance",
       ownerLane: "publicTI",
       capabilityLabel: "Source-backed threat intelligence coverage",
       productRow: publicTi,
       requiredNextAction: "verify_source_backed_ti_coverage",
       persistenceMode: "real_persistence",
+      expectedAdapter: "publicTiArtifactToOrgWatchlistCreate",
+      payloadShape: ["artifactId", "query", "provenance", "watchlistTerms", "backedIds.organizationIds", "backedIds.alertIds"],
+      proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts",
       extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_ti"]
     })
   ];
@@ -1246,12 +1319,16 @@ export function validateBetaReadinessArtifact(input: unknown): BetaReadinessVali
   }
   const requiredRows: BetaReadinessCapabilityId[] = [
     "create_organization",
-    "invite_teammates",
-    "share_watchlists",
-    "generate_real_alerts",
+    "invite_teammate",
+    "create_shared_watchlist",
+    "activate_source_coverage",
+    "generate_alert",
     "configure_destinations",
-    "work_alerts",
-    "source_backed_ti_coverage"
+    "work_alert",
+    "open_link_case",
+    "deliver_discord_webhook",
+    "support_access_recovery",
+    "public_ti_actor_relevance"
   ];
   const rowIds = new Set((artifact.rows || []).map((row) => row.id));
   for (const id of requiredRows) {
@@ -1266,9 +1343,14 @@ export function validateBetaReadinessArtifact(input: unknown): BetaReadinessVali
     if (!typed.latestCommitOrCheck) blockers.push({ code: "missing_latest_commit_or_check", rowId, field: "latestCommitOrCheck", detail: "Every beta row needs a latest commit or check pointer." });
     if (!typed.requiredNextAction) blockers.push({ code: "missing_required_next_action", rowId, field: "requiredNextAction", detail: "Every beta row needs a required next action." });
     if (!typed.persistenceMode) blockers.push({ code: "missing_persistence_mode", rowId, field: "persistenceMode", detail: "Every beta row must declare whether proof is real, local, session, or demo." });
+    if (!typed.expectedAdapter) blockers.push({ code: "missing_expected_adapter", rowId, field: "expectedAdapter", detail: "Every beta row needs an adapter contract name." });
+    if (!Array.isArray(typed.payloadShape) || !typed.payloadShape.length) blockers.push({ code: "missing_payload_shape", rowId, field: "payloadShape", detail: "Every beta row needs a payload shape." });
+    if (!typed.proofCommand) blockers.push({ code: "missing_proof_command", rowId, field: "proofCommand", detail: "Every beta row needs a proof command." });
     const uiFacing = [
       typed.capabilityLabel,
       typed.requiredNextAction,
+      typed.expectedAdapter,
+      typed.proofCommand,
       typed.proofArtifact?.artifactId,
       ...(typed.blockers || [])
     ].filter(Boolean).join(" ").toLowerCase();
@@ -1293,6 +1375,9 @@ function betaRowFromProduct(input: {
   productRow?: ProductReadinessRow;
   requiredNextAction: string;
   persistenceMode: BetaReadinessPersistenceMode;
+  expectedAdapter: string;
+  payloadShape: string[];
+  proofCommand: string;
   uiQualityProofStatus?: BetaReadinessRow["uiQualityProofStatus"];
   customerVisibleStateOverride?: ProductReadinessState;
   extraBlockers?: string[];
@@ -1307,10 +1392,14 @@ function betaRowFromProduct(input: {
     latestCommitOrCheck: input.productRow?.lastCheckedAt || "missing_check",
     customerVisibleState: state,
     blockers: Array.from(new Set(blockers)),
+    blockingReason: blockers.length ? blockers[0]! : null,
     deployRisk: state === "ready" ? input.productRow?.deployRisk || "none" : "high",
     requiredNextAction: input.requiredNextAction,
     uiQualityProofStatus: input.uiQualityProofStatus || "not_required",
-    persistenceMode: input.persistenceMode
+    persistenceMode: input.persistenceMode,
+    expectedAdapter: input.expectedAdapter,
+    payloadShape: input.payloadShape,
+    proofCommand: input.proofCommand
   };
 }
 
@@ -1446,7 +1535,8 @@ function hasDomainNativeLabel(label: string): boolean {
     "invitation",
     "notification",
     "destination",
-    "analyst"
+    "analyst",
+    "case"
   ].some((term) => normalized.includes(term));
 }
 
