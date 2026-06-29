@@ -1463,6 +1463,19 @@ function watchlistTermRequestPayloadFor(term: string, watchlist: WatchlistReleva
         item.value.toLowerCase() === parsed.value.toLowerCase()
         || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase()
     )
+    const sourceEvidenceRefs = unique(matchingIntersections.flatMap(item => item.sourceEvidenceRefs))
+    const sourceHealthRows = actionability.sourceHealthQueue.rows.filter(row =>
+        sourceEvidenceRefs.some(ref => row.provenance.includes(ref) || row.sourceName.includes(ref) || row.sourceId === ref)
+        || actionability.orgRelevance.sourceCoverage.some(source =>
+            source.sourceName === row.sourceName
+            && (source.sourceFamily === row.sourceFamily || source.provenance === row.provenance)
+        )
+    )
+    const sourceIntakeItems = actionability.sourceEnrichmentIntake.items.filter(item =>
+        sourceHealthRows.some(row => row.id === item.sourceHealthRowId)
+        || item.requestedFields.some(field => /sourceProvenance|captureId|sourceRequestId/i.test(field))
+    )
+    const watchlistAction = actionability.actionPayloads.payloads.watchlistAdd
     return {
         schemaVersion: 'ti.public_actor.watchlist_term_request.v1',
         source: 'public-ti',
@@ -1481,8 +1494,30 @@ function watchlistTermRequestPayloadFor(term: string, watchlist: WatchlistReleva
         watchlistItemIds: unique(matchingIntersections.map(item => item.watchlistItemId).filter((value): value is string => Boolean(value))),
         alertIds: unique(matchingIntersections.flatMap(item => item.alertIds)),
         casePaths: unique(matchingIntersections.flatMap(item => item.casePaths)),
-        sourceEvidenceRefs: unique(matchingIntersections.flatMap(item => item.sourceEvidenceRefs)),
+        sourceEvidenceRefs,
         provenance: actionability.exportPayloads.watchlist.provenance,
+        sourceIntake: {
+            schemaVersion: 'ti.public_actor.watchlist_source_intake.v1',
+            route: actionability.sourceEnrichmentIntake.route,
+            candidateTerm: {
+                kind: parsed.kind,
+                value: parsed.value,
+                matched: matchingTerms.some(item => item.matched) || matchingIntersections.length > 0,
+            },
+            actionReadiness: {
+                ready: watchlistAction.ready,
+                unavailable: watchlistAction.unavailable,
+                route: watchlistAction.route,
+                backedRoute: watchlistAction.backedRoute,
+                blockedBy: watchlistAction.blockedBy,
+            },
+            sourceCoverage: actionability.orgRelevance.sourceCoverage.filter(source =>
+                sourceEvidenceRefs.some(ref => source.provenance.includes(ref) || source.sourceName.includes(ref) || source.sourceId === ref)
+            ),
+            sourceHealthRows,
+            enrichmentItems: sourceIntakeItems,
+            requestedFields: unique(sourceIntakeItems.flatMap(item => item.requestedFields)),
+        },
     }
 }
 
