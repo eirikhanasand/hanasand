@@ -48,6 +48,19 @@ export type WorkbenchAction = {
 
 export type WorkbenchHandoffAction = 'create_watchlist' | 'rebuild_alerts' | 'open_case' | 'queue_enrichment'
 
+type WorkbenchPublicTiActionReadiness = {
+    action: WorkbenchHandoffAction
+    route?: string
+    endpoint?: string
+    backedRoute?: string
+    ready: boolean
+    missing: string[]
+    blockerCodes: string[]
+    ownerLane: 'org' | 'alert' | 'case' | 'source'
+    selected: boolean
+    sourceRequestCount: number
+}
+
 export type WorkbenchHandoffPayload = {
     schemaVersion?: string
     query?: string
@@ -94,6 +107,7 @@ export type WorkbenchPublicTiHandoff = {
         case?: WorkbenchHandoffPayload
         enrichment?: WorkbenchHandoffPayload
     }
+    actionReadiness?: WorkbenchPublicTiActionReadiness[]
 }
 
 export type WorkbenchCaseMutationAction = 'assign' | 'note' | 'escalate' | 'suppress' | 'close' | 'reopen' | 'false_positive'
@@ -1160,14 +1174,20 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     const orgMissing = !orgContext?.organization
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sourceCoverage = orgContext?.readiness.sourceCoverage
+    const watchlistReadiness = handoffReadinessFor(handoff, 'create_watchlist')
+    const rebuildReadiness = handoffReadinessFor(handoff, 'rebuild_alerts')
+    const caseReadiness = handoffReadinessFor(handoff, 'open_case')
+    const enrichmentReadiness = handoffReadinessFor(handoff, 'queue_enrichment')
     const rows: OperatorActionRailRow[] = []
     const watchlistPayload = handoff.actionPayloads?.watchlist || handoff.selectedPayload
     const watchTerms = handoffTerms(handoff)
+    const watchlistDisabledReason = readinessDisabledReason(watchlistReadiness)
+        || (orgMissing ? 'Public TI handoff mutations require a selected organization from GET /api/organizations.' : !watchTerms.length ? 'The public TI payload has no watchlist term.' : undefined)
     rows.push({
         id: 'handoff_watchlist',
         label: 'Add org watchlist term',
-        detail: watchTerms.length ? watchTerms.map(term => `${term.kind || inferTermKind(term.value)}:${term.value}`).join(', ') : 'No watchlist term was included in the public TI payload.',
-        tone: orgMissing || !watchTerms.length ? 'blocked' : 'ready',
+        detail: readinessDetail(watchlistReadiness, watchTerms.length ? watchTerms.map(term => `${term.kind || inferTermKind(term.value)}:${term.value}`).join(', ') : 'No watchlist term was included in the public TI payload.'),
+        tone: readinessTone(watchlistReadiness, orgMissing || !watchTerms.length ? 'blocked' : 'ready'),
         action: {
             id: 'public_ti_create_watchlist',
             label: 'Add term',
@@ -1181,42 +1201,48 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
                 webhookDestinationId: activeWebhook?.id,
                 publicTiHandoff: handoffEnvelope(handoff),
             },
-            disabledReason: orgMissing ? 'Public TI handoff mutations require a selected organization from GET /api/organizations.' : !watchTerms.length ? 'The public TI payload has no watchlist term.' : undefined,
+            disabledReason: watchlistDisabledReason,
         },
-        disabledReason: orgMissing ? 'Select or create an organization before mutating shared watchlists.' : undefined,
+        disabledReason: watchlistDisabledReason,
     })
+    const rebuildDisabledReason = readinessDisabledReason(rebuildReadiness)
+        || (orgMissing
+            ? 'Public TI alert rebuild requires selected organization context.'
+            : !sourceCoverage ? 'Alert rebuild state unavailable from /api/dwm/operations.'
+                : !orgContext?.readiness.activeWatchlistCount ? 'Create an active organization watchlist before rebuilding alerts.' : undefined)
     rows.push({
         id: 'handoff_rebuild',
         label: 'Rebuild alerts',
-        detail: sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${orgContext?.readiness.liveAlertCount ?? 0} saved alerts loaded.` : 'Alert rebuild state unavailable from /api/dwm/operations.',
-        tone: orgMissing || !sourceCoverage || !orgContext?.readiness.activeWatchlistCount ? 'blocked' : 'ready',
+        detail: readinessDetail(rebuildReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${orgContext?.readiness.liveAlertCount ?? 0} saved alerts loaded.` : 'Alert rebuild state unavailable from /api/dwm/operations.'),
+        tone: readinessTone(rebuildReadiness, orgMissing || !sourceCoverage || !orgContext?.readiness.activeWatchlistCount ? 'blocked' : 'ready'),
         action: {
             id: 'public_ti_rebuild_alerts',
             label: 'Rebuild',
             method: 'POST',
             href: '/api/dwm/alerts/rebuild',
             body: { ...scopeBody(orgContext), publicTiHandoff: handoffEnvelope(handoff), watchTerms },
-            disabledReason: orgMissing
-                ? 'Public TI alert rebuild requires selected organization context.'
-                : !sourceCoverage ? 'Alert rebuild state unavailable from /api/dwm/operations.'
-                    : !orgContext?.readiness.activeWatchlistCount ? 'Create an active organization watchlist before rebuilding alerts.' : undefined,
+            disabledReason: rebuildDisabledReason,
         },
+        disabledReason: rebuildDisabledReason,
     })
     const casePayload = handoff.actionPayloads?.case || handoff.selectedPayload
+    const caseDisabledReason = readinessDisabledReason(caseReadiness)
+        || (orgMissing ? 'Public TI case creation requires selected organization context.' : casePayload?.blocked ? (casePayload.missing || handoff.missing).join('; ') : undefined)
     rows.push({
         id: 'handoff_case',
         label: 'Open selected case',
-        detail: handoff.missing.length ? handoff.missing.join('; ') : 'Create or reopen a backed analyst case from the handoff payload.',
-        tone: orgMissing || casePayload?.blocked ? 'blocked' : 'ready',
+        detail: readinessDetail(caseReadiness, handoff.missing.length ? handoff.missing.join('; ') : 'Create or reopen a backed analyst case from the handoff payload.'),
+        tone: readinessTone(caseReadiness, orgMissing || casePayload?.blocked ? 'blocked' : 'ready'),
         action: {
             id: 'public_ti_open_case',
             label: 'Open case',
             method: 'POST',
             href: '/api/cases',
             body: { ...scopeBody(orgContext), ...(casePayload?.body || {}), sourceType: 'public_ti', sourceId: handoff.artifactId, publicTiHandoff: handoffEnvelope(handoff), reopen: true },
-            disabledReason: orgMissing ? 'Public TI case creation requires selected organization context.' : casePayload?.blocked ? (casePayload.missing || handoff.missing).join('; ') : undefined,
+            disabledReason: caseDisabledReason,
         },
         copyPayload: casePayload?.blocked ? handoff : undefined,
+        disabledReason: caseDisabledReason,
     })
     rows.push(activeWebhook && orgContext?.organization ? {
         id: 'handoff_webhook',
@@ -1240,13 +1266,38 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     rows.push({
         id: 'handoff_source',
         label: handoff.sourceRequired ? 'Request source pack' : 'Source health',
-        detail: sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Source pack mutation API is not loaded here; copy exact handoff or open source ops.',
-        tone: sourceCoverage?.activeSourceCount ? 'ready' : 'blocked',
-        href: '/dashboard/ti/sources',
-        copyPayload: handoff.sourceRequired || !sourceCoverage ? handoff : undefined,
+        detail: readinessDetail(enrichmentReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Source pack mutation API is not loaded here; copy exact handoff or open source ops.'),
+        tone: readinessTone(enrichmentReadiness, sourceCoverage?.activeSourceCount ? 'ready' : 'blocked'),
+        href: enrichmentReadiness?.backedRoute || '/dashboard/ti/sources',
+        copyPayload: handoff.sourceRequired || !sourceCoverage || enrichmentReadiness?.ready === false ? handoff : undefined,
+        disabledReason: readinessDisabledReason(enrichmentReadiness),
     })
     rows.push({ id: 'handoff_copy', label: 'Exact handoff', detail: `${handoff.action || 'public TI'} payload for ${handoff.artifact?.label || handoff.artifactId || selected.title}.`, tone: 'ready', copyPayload: handoff })
     return rows
+}
+
+function handoffReadinessFor(handoff: WorkbenchPublicTiHandoff, action: WorkbenchHandoffAction): WorkbenchPublicTiActionReadiness | undefined {
+    return handoff.actionReadiness?.find(item => item.action === action)
+}
+
+function readinessDisabledReason(readiness: WorkbenchPublicTiActionReadiness | undefined) {
+    if (!readiness || readiness.ready) return undefined
+    return [
+        readiness.blockerCodes.length ? `Blocked: ${readiness.blockerCodes.join(', ')}.` : '',
+        readiness.missing.length ? readiness.missing.join('; ') : '',
+    ].filter(Boolean).join(' ') || 'Action is blocked by Public TI readiness.'
+}
+
+function readinessDetail(readiness: WorkbenchPublicTiActionReadiness | undefined, fallback: string) {
+    if (!readiness) return fallback
+    const route = readiness.backedRoute || readiness.endpoint || readiness.route
+    const sourceRequests = readiness.sourceRequestCount ? `; ${readiness.sourceRequestCount} source request${readiness.sourceRequestCount === 1 ? '' : 's'}` : ''
+    return `${fallback} Readiness: ${readiness.ready ? 'ready' : 'blocked'} via ${route || 'public TI action contract'}${sourceRequests}.`
+}
+
+function readinessTone(readiness: WorkbenchPublicTiActionReadiness | undefined, fallback: WorkbenchWorkflowStep['status']): WorkbenchWorkflowStep['status'] {
+    if (!readiness) return fallback
+    return readiness.ready ? 'ready' : 'blocked'
 }
 
 type HandoffTerm = { value: string, kind: string, notes?: string }
