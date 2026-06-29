@@ -479,6 +479,71 @@ describe("analyst handoff consumer validation", () => {
     expect(report.deployGate.rows.some((row) => row.kind === "webhook_destination" && row.ownerLane === "webhook" && row.blockerCodes.includes("no_live_endpoint"))).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "org_lifecycle" && row.ownerLane === "org" && row.blockerCodes.includes("watchlist_setup_required"))).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "support_executor" && row.ownerLane === "helpdesk" && row.action === "access_recovery" && row.route === "/api/admin/support/organizations/org_acme/access-recovery")).toBe(true);
+    expect(report.readinessMatrix.schemaVersion).toBe("hanasand.analyst_handoff.readiness_matrix.v1");
+    expect(report.readinessMatrix.rows.map((row) => row.id).sort()).toEqual([
+      "discord_webhook_destination_delivery",
+      "entitlement_policy_readiness",
+      "org_scoped_alert_case_workflow",
+      "organization_onboarding_lifecycle",
+      "public_ti_actor_handoff",
+      "shared_watchlist_alert_export",
+      "source_activation_and_provenance",
+      "support_admin_recovery_controls"
+    ]);
+    expect(report.readinessMatrix.rows.find((row) => row.id === "organization_onboarding_lifecycle")).toMatchObject({
+      ownerLane: "org",
+      status: "blocked",
+      currentProofArtifact: {
+        schemaVersion: "organization.lifecycle_readiness.v1",
+        artifactId: "deploy_gate.org_lifecycle"
+      },
+      requiredRoute: "GET /api/organizations/:id/readiness-lifecycle",
+      requiredProbe: "org.lifecycle_readiness",
+      customerVisible: true,
+      deployRisk: "high"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "shared_watchlist_alert_export")).toMatchObject({
+      ownerLane: "org",
+      status: "ready",
+      currentProofArtifact: {
+        schemaVersion: "organization.watchlist_alert_terms_export.v1",
+        artifactId: "org_watchlist.alert_terms_export"
+      },
+      requiredAction: "export_shared_watchlist_terms"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "org_scoped_alert_case_workflow")).toMatchObject({
+      ownerLane: "alert",
+      status: "ready",
+      requiredRoute: "/v1/cases",
+      requiredAction: "create_case_from_org_alert"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "source_activation_and_provenance")).toMatchObject({
+      ownerLane: "source",
+      status: "ready",
+      requiredAction: "activate_source_pack"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "discord_webhook_destination_delivery")).toMatchObject({
+      ownerLane: "webhook",
+      status: "blocked",
+      blockingGaps: ["no_live_endpoint"],
+      requiredAction: "deliver_dwm_webhook"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "support_admin_recovery_controls")).toMatchObject({
+      ownerLane: "helpdesk",
+      status: "blocked",
+      customerVisible: false,
+      requiredAction: "prepare_support_recovery_action"
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "public_ti_actor_handoff")).toMatchObject({
+      ownerLane: "publicTI",
+      status: "blocked",
+      blockingGaps: ["missing_org"]
+    });
+    expect(report.readinessMatrix.rows.find((row) => row.id === "entitlement_policy_readiness")).toMatchObject({
+      ownerLane: "entitlement",
+      status: "ready",
+      requiredRoute: "GET /v1/organizations/:id/entitlements/readiness"
+    });
   });
 
   test("keeps validator modules free of UI, network, and database imports", () => {
@@ -492,6 +557,34 @@ describe("analyst handoff consumer validation", () => {
     expect(combined).not.toContain("fetch(");
     expect(combined).not.toContain("axios");
     expect(combined).not.toContain("postgres");
+  });
+
+  test("keeps readiness matrix rows free of prompt-shaped presentation language", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:30:00.000Z",
+      results: [{ file: "customer-org.json", bundle: fixture }]
+    });
+    const forbidden = [
+      "control room",
+      "how this feeds",
+      "dashboard slop",
+      "named examples",
+      "signal",
+      "acceptance criteria",
+      "acceptance-criteria"
+    ];
+    for (const row of report.readinessMatrix.rows) {
+      const uiFacing = [
+        row.capability,
+        row.currentProofArtifact.artifactId,
+        row.requiredRoute,
+        row.requiredAction,
+        row.requiredProbe,
+        ...row.blockingGaps
+      ].filter(Boolean).join(" ").toLowerCase();
+      for (const phrase of forbidden) expect(uiFacing).not.toContain(phrase);
+    }
   });
 });
 

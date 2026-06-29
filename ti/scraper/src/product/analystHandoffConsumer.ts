@@ -33,6 +33,7 @@ export const PUBLIC_TI_READINESS_SCHEMA_VERSION = "ti.public_actor.readiness.v1"
 export const DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION = "dwm.webhook.destination_admin_proof_row.v1" as const;
 export const ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION = "organization.lifecycle_readiness.v1" as const;
 export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_executor_readiness.v1" as const;
+export const ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION = "hanasand.analyst_handoff.readiness_matrix.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -53,7 +54,8 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   publicTiReadiness: PUBLIC_TI_READINESS_SCHEMA_VERSION,
   webhookDestinationAdminProofRow: DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION,
   organizationLifecycleReadiness: ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION,
-  supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
+  supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION,
+  readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION
 } as const;
 
 export type AnalystHandoffConsumerBlockerCode =
@@ -484,6 +486,7 @@ export type AnalystHandoffValidationReport = {
   blockerCodes: AnalystHandoffConsumerBlockerCode[];
   productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
   deployGate: AnalystHandoffDeployGateAssertions;
+  readinessMatrix: AnalystHandoffReadinessMatrix;
   results: Array<{
     file?: string;
     ok: boolean;
@@ -525,6 +528,43 @@ export type AnalystHandoffDeployGateAssertions = {
   ownerLaneMap: Record<AnalystHandoffOwnerLane, AnalystHandoffOwnerLane>;
   rowsByOwner: Record<AnalystHandoffOwnerLane, { ok: boolean; rowCount: number; blockerCodes: string[] }>;
   rows: AnalystHandoffDeployGateRow[];
+};
+
+export type AnalystHandoffReadinessCapability =
+  | "organization_onboarding_lifecycle"
+  | "shared_watchlist_alert_export"
+  | "org_scoped_alert_case_workflow"
+  | "source_activation_and_provenance"
+  | "discord_webhook_destination_delivery"
+  | "support_admin_recovery_controls"
+  | "public_ti_actor_handoff"
+  | "entitlement_policy_readiness";
+
+export type AnalystHandoffReadinessMatrixRow = {
+  id: AnalystHandoffReadinessCapability;
+  ownerLane: AnalystHandoffOwnerLane;
+  status: "ready" | "blocked" | "needs_input" | "provisional";
+  capability: string;
+  currentProofArtifact: {
+    schemaVersion: string;
+    artifactId: string;
+    sourceFile?: string;
+    route?: string;
+    probeId?: string;
+  };
+  blockingGaps: string[];
+  requiredRoute?: string;
+  requiredAction?: string;
+  requiredProbe?: string;
+  deployRisk: "none" | "low" | "medium" | "high";
+  customerVisible: boolean;
+};
+
+export type AnalystHandoffReadinessMatrix = {
+  schemaVersion: typeof ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION;
+  ok: boolean;
+  rowCount: number;
+  rows: AnalystHandoffReadinessMatrixRow[];
 };
 
 export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHandoffConsumerValidation {
@@ -675,6 +715,11 @@ export function buildAnalystHandoffValidationReport(input: {
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
     result: results[index]
   })));
+  const readinessMatrix = buildAnalystHandoffReadinessMatrix(input.results.map((item, index) => ({
+    file: item.file,
+    bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
+    result: results[index]
+  })), deployGate);
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
     contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
@@ -686,6 +731,7 @@ export function buildAnalystHandoffValidationReport(input: {
     blockerCodes: [...new Set(results.flatMap((item) => item.blockerCodes))].sort() as AnalystHandoffConsumerBlockerCode[],
     productReadiness: productReadinessFor(allBlockers),
     deployGate,
+    readinessMatrix,
     results
   };
 }
@@ -715,6 +761,256 @@ export function buildDeployGateAssertions(input: Array<{
     rowsByOwner,
     rows
   };
+}
+
+export function buildAnalystHandoffReadinessMatrix(input: Array<{
+  file?: string;
+  bundle?: Partial<AnalystHandoffConsumerBundle>;
+  result?: AnalystHandoffValidationReport["results"][number];
+}>, deployGate: AnalystHandoffDeployGateAssertions = buildDeployGateAssertions(input)): AnalystHandoffReadinessMatrix {
+  const bundles = input.filter((item) => item.bundle);
+  const rows: AnalystHandoffReadinessMatrixRow[] = [
+    readinessRow({
+      id: "organization_onboarding_lifecycle",
+      ownerLane: "org",
+      capability: "organization_onboarding_lifecycle",
+      proof: proofFromDeployGate(deployGate.rows, "org_lifecycle") ?? proofFromBundle(bundles, "organization.lifecycle_readiness.v1", "deployGateEvidence.orgLifecycle"),
+      gaps: deployGateRowsByKind(deployGate.rows, "org_lifecycle").flatMap((row) => row.blockerCodes),
+      requiredRoute: "GET /api/organizations/:id/readiness-lifecycle",
+      requiredProbe: "org.lifecycle_readiness",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "shared_watchlist_alert_export",
+      ownerLane: "org",
+      capability: "shared_watchlist_alert_export",
+      proof: sharedWatchlistProof(bundles),
+      gaps: sharedWatchlistGaps(bundles),
+      requiredRoute: "GET /api/organizations/:id/watchlists/alert-terms",
+      requiredAction: "export_shared_watchlist_terms",
+      requiredProbe: "org.watchlist_alert_terms_export",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "org_scoped_alert_case_workflow",
+      ownerLane: "alert",
+      capability: "org_scoped_alert_case_workflow",
+      proof: proofFromDeployGate(deployGate.rows, "alert_case_handoff") ?? proofFromBundle(bundles, ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION, "stages.caseHandoff"),
+      gaps: deployGateRowsByKind(deployGate.rows, "alert_case_handoff").flatMap((row) => row.blockerCodes),
+      requiredRoute: "/v1/cases",
+      requiredAction: "create_case_from_org_alert",
+      requiredProbe: "dwm.alert_case_handoff",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "source_activation_and_provenance",
+      ownerLane: "source",
+      capability: "source_activation_and_provenance",
+      proof: sourceProof(bundles),
+      gaps: sourceGaps(bundles),
+      requiredRoute: "GET /v1/dwm/source-requests/readiness",
+      requiredAction: "activate_source_pack",
+      requiredProbe: "dwm.source_worker_readiness",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "discord_webhook_destination_delivery",
+      ownerLane: "webhook",
+      capability: "discord_webhook_destination_delivery",
+      proof: proofFromDeployGate(deployGate.rows, "webhook_destination") ?? proofFromBundle(bundles, DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION, "stages.webhookTrigger.destinationLifecycle"),
+      gaps: deployGateRowsByKind(deployGate.rows, "webhook_destination").flatMap((row) => row.blockerCodes),
+      requiredRoute: "/v1/dwm/webhooks/deliver",
+      requiredAction: "deliver_dwm_webhook",
+      requiredProbe: "dwm.webhook_destination_lifecycle",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "support_admin_recovery_controls",
+      ownerLane: "helpdesk",
+      capability: "support_admin_recovery_controls",
+      proof: proofFromDeployGate(deployGate.rows, "support_executor") ?? proofFromBundle(bundles, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION, "deployGateEvidence.supportExecutor"),
+      gaps: deployGateRowsByKind(deployGate.rows, "support_executor").flatMap((row) => row.blockerCodes),
+      requiredRoute: "/api/admin/support/readiness",
+      requiredAction: "prepare_support_recovery_action",
+      requiredProbe: "support.action_executor_readiness",
+      customerVisible: false
+    }),
+    readinessRow({
+      id: "public_ti_actor_handoff",
+      ownerLane: "publicTI",
+      capability: "public_ti_actor_handoff",
+      proof: proofFromDeployGate(deployGate.rows, "public_ti_readiness") ?? proofFromBundle(bundles, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, "publicTi"),
+      gaps: deployGateRowsByKind(deployGate.rows, "public_ti_readiness").flatMap((row) => row.blockerCodes),
+      requiredRoute: "/ti",
+      requiredAction: "create_org_watchlist_from_public_ti_actor",
+      requiredProbe: "ti.public_actor.readiness",
+      customerVisible: true
+    }),
+    readinessRow({
+      id: "entitlement_policy_readiness",
+      ownerLane: "entitlement",
+      capability: "entitlement_policy_readiness",
+      proof: entitlementProof(bundles),
+      gaps: entitlementGaps(bundles),
+      requiredRoute: "GET /v1/organizations/:id/entitlements/readiness",
+      requiredAction: "evaluate_org_entitlement_policy",
+      requiredProbe: "dwm.entitlement_readiness",
+      customerVisible: true,
+      provisional: bundles.some((item) => item.bundle?.entitlement?.allowed && !item.bundle.entitlement.checkedAt)
+    })
+  ];
+  return {
+    schemaVersion: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION,
+    ok: rows.every((row) => row.status === "ready" || row.status === "provisional"),
+    rowCount: rows.length,
+    rows
+  };
+}
+
+function readinessRow(input: {
+  id: AnalystHandoffReadinessCapability;
+  ownerLane: AnalystHandoffOwnerLane;
+  capability: string;
+  proof?: AnalystHandoffReadinessMatrixRow["currentProofArtifact"];
+  gaps: string[];
+  requiredRoute?: string;
+  requiredAction?: string;
+  requiredProbe?: string;
+  customerVisible: boolean;
+  provisional?: boolean;
+}): AnalystHandoffReadinessMatrixRow {
+  const blockingGaps = Array.from(new Set(input.gaps.filter(Boolean)));
+  const status = blockingGaps.length ? "blocked" : input.provisional ? "provisional" : input.proof ? "ready" : "needs_input";
+  return {
+    id: input.id,
+    ownerLane: input.ownerLane,
+    status,
+    capability: input.capability,
+    currentProofArtifact: input.proof ?? {
+      schemaVersion: "missing",
+      artifactId: `${input.id}.missing_proof`,
+      route: input.requiredRoute,
+      probeId: input.requiredProbe
+    },
+    blockingGaps: status === "needs_input" && !blockingGaps.length ? ["missing_proof_artifact"] : blockingGaps,
+    requiredRoute: input.requiredRoute,
+    requiredAction: input.requiredAction,
+    requiredProbe: input.requiredProbe,
+    deployRisk: deployRisk(status, input.customerVisible),
+    customerVisible: input.customerVisible
+  };
+}
+
+function deployRisk(status: AnalystHandoffReadinessMatrixRow["status"], customerVisible: boolean): AnalystHandoffReadinessMatrixRow["deployRisk"] {
+  if (status === "ready") return "none";
+  if (status === "provisional") return customerVisible ? "medium" : "low";
+  if (status === "needs_input") return customerVisible ? "medium" : "low";
+  return customerVisible ? "high" : "medium";
+}
+
+function deployGateRowsByKind(rows: AnalystHandoffDeployGateRow[], kind: AnalystHandoffDeployGateRowKind): AnalystHandoffDeployGateRow[] {
+  return rows.filter((row) => row.kind === kind);
+}
+
+function proofFromDeployGate(rows: AnalystHandoffDeployGateRow[], kind: AnalystHandoffDeployGateRowKind): AnalystHandoffReadinessMatrixRow["currentProofArtifact"] | undefined {
+  const row = deployGateRowsByKind(rows, kind)[0];
+  if (!row) return undefined;
+  return {
+    schemaVersion: row.schemaVersion,
+    artifactId: `deploy_gate.${kind}`,
+    sourceFile: row.sourceFile,
+    route: row.route,
+    probeId: row.kind
+  };
+}
+
+function proofFromBundle(
+  bundles: Array<{ file?: string; bundle?: Partial<AnalystHandoffConsumerBundle> }>,
+  schemaVersion: string,
+  artifactId: string
+): AnalystHandoffReadinessMatrixRow["currentProofArtifact"] | undefined {
+  const source = bundles.find((item) => item.bundle);
+  if (!source) return undefined;
+  return { schemaVersion, artifactId, sourceFile: source.file };
+}
+
+function sharedWatchlistProof(bundles: Array<{ file?: string; bundle?: Partial<AnalystHandoffConsumerBundle> }>): AnalystHandoffReadinessMatrixRow["currentProofArtifact"] | undefined {
+  const source = bundles.find((item) => item.bundle?.stages?.orgWatchlist?.termsExport);
+  const exportContract = source?.bundle?.stages?.orgWatchlist?.termsExport;
+  if (!source || !exportContract) return undefined;
+  return {
+    schemaVersion: exportContract.schemaVersion,
+    artifactId: "org_watchlist.alert_terms_export",
+    sourceFile: source.file,
+    route: "GET /api/organizations/:id/watchlists/alert-terms",
+    probeId: "org.watchlist_alert_terms_export"
+  };
+}
+
+function sharedWatchlistGaps(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>): string[] {
+  if (!bundles.length) return ["missing_handoff_bundle"];
+  return bundles.flatMap(({ bundle }) => {
+    const termsExport = bundle?.stages?.orgWatchlist?.termsExport;
+    if (!termsExport) return ["missing_shared_watchlist_export"];
+    return [
+      ...(!termsExport.canGenerateAlerts ? ["watchlist_export_cannot_generate_alerts"] : []),
+      ...(!(termsExport.activeTerms?.length || termsExport.activeWatchlistTerms?.length) ? ["missing_active_watchlist_terms"] : []),
+      ...(termsExport.blockedReasons || [])
+    ];
+  });
+}
+
+function sourceProof(bundles: Array<{ file?: string; bundle?: Partial<AnalystHandoffConsumerBundle> }>): AnalystHandoffReadinessMatrixRow["currentProofArtifact"] | undefined {
+  const source = bundles.find((item) => item.bundle?.sourceReadiness);
+  const readiness = source?.bundle?.sourceReadiness;
+  if (!source || !readiness) return undefined;
+  return {
+    schemaVersion: readiness.schemaVersion,
+    artifactId: "dwm.source_worker_readiness",
+    sourceFile: source.file,
+    route: "GET /v1/dwm/source-requests/readiness",
+    probeId: "dwm.source_worker_readiness"
+  };
+}
+
+function sourceGaps(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>): string[] {
+  if (!bundles.length) return ["missing_handoff_bundle"];
+  return bundles.flatMap(({ bundle }) => {
+    const readiness = bundle?.sourceReadiness;
+    if (!readiness) return ["missing_source_readiness"];
+    return [
+      ...(!readiness.ready ? ["source_worker_not_ready"] : []),
+      ...(!readiness.freshProvenance ? ["missing_fresh_source_provenance"] : []),
+      ...(!readiness.sourceIds.length ? ["missing_active_source_ids"] : []),
+      ...(readiness.blockers || [])
+    ];
+  });
+}
+
+function entitlementProof(bundles: Array<{ file?: string; bundle?: Partial<AnalystHandoffConsumerBundle> }>): AnalystHandoffReadinessMatrixRow["currentProofArtifact"] | undefined {
+  const source = bundles.find((item) => item.bundle?.entitlement);
+  const entitlement = source?.bundle?.entitlement;
+  if (!source || !entitlement) return undefined;
+  return {
+    schemaVersion: entitlement.schemaVersion ?? DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION,
+    artifactId: "dwm.entitlement_readiness",
+    sourceFile: source.file,
+    route: "GET /v1/organizations/:id/entitlements/readiness",
+    probeId: "dwm.entitlement_readiness"
+  };
+}
+
+function entitlementGaps(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>): string[] {
+  if (!bundles.length) return ["missing_handoff_bundle"];
+  return bundles.flatMap(({ bundle }) => {
+    const entitlement = bundle?.entitlement;
+    const compatibilityBlockers = bundle?.compatibility?.entitlementBlockers || [];
+    if (!entitlement) return ["missing_entitlement_readiness"];
+    return [
+      ...(!entitlement.allowed ? [entitlement.reason || "entitlement_blocked"] : []),
+      ...compatibilityBlockers.filter((item) => item.status === "blocked" || item.blockerCode).map((item) => item.blockerCode)
+    ];
+  });
 }
 
 function deployGateRowsForBundle(
