@@ -2015,6 +2015,21 @@ describe("dwm source requests", () => {
               latestCaptureAt: expect.any(String)
             })
           }),
+          sourcePackActivationPreview: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
+            mode: "prepare_no_network",
+            ready: false,
+            actions: [],
+            summary: expect.objectContaining({
+              total: 0,
+              actionTypes: []
+            }),
+            policyBoundary: expect.objectContaining({
+              liveNetworkFetch: false,
+              metadataOnlyRestrictedSources: true
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
           watchlistAlertabilityBridge: expect.objectContaining({
             schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
             ready: true,
@@ -2179,6 +2194,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -2965,6 +2981,34 @@ describe("dwm source requests", () => {
             operationTypes: expect.arrayContaining(["record_capture", "request_candidate"])
           })
         }),
+        sourcePackActivationPreview: expect.objectContaining({
+          schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
+          mode: "prepare_no_network",
+          ready: true,
+          actions: expect.arrayContaining([
+            expect.objectContaining({
+              action: "request_candidate",
+              family: "darkweb_onion",
+              route: expect.objectContaining({
+                path: "/v1/dwm/source-requests",
+                liveNetworkFetch: false,
+                body: expect.objectContaining({ dryRun: true })
+              }),
+              parserStatus: expect.objectContaining({ state: "missing_source" }),
+              gap: expect.objectContaining({ state: "missing" }),
+              provenance: expect.objectContaining({
+                coverageProofId: expect.any(String)
+              }),
+              policyBoundary: expect.objectContaining({ metadataOnlyRestrictedSources: true }),
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            intakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            actionTypes: expect.arrayContaining(["request_candidate"])
+          }),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+        }),
         watchlistAlertabilityBridge: expect.objectContaining({
           schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
           ready: false,
@@ -3504,6 +3548,41 @@ describe("dwm source requests", () => {
             summary: expect.objectContaining({
               retryFamilies: expect.arrayContaining(["telegram"]),
               operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+            })
+          }),
+          sourcePackActivationPreview: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
+            mode: "prepare_no_network",
+            ready: true,
+            actions: expect.arrayContaining([
+              expect.objectContaining({
+                action: "retry",
+                family: "telegram",
+                route: expect.objectContaining({
+                  path: "/v1/dwm/source-requests",
+                  liveNetworkFetch: false,
+                  body: expect.objectContaining({
+                    action: "pack_review",
+                    packAction: "retry",
+                    dryRun: true
+                  })
+                }),
+                parserStatus: expect.objectContaining({ state: "retry_required" }),
+                gap: expect.objectContaining({ state: "failed" }),
+                blockers: expect.arrayContaining([
+                  expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
+                ]),
+                provenance: expect.objectContaining({
+                  coverageProofId: expect.any(String)
+                }),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              })
+            ]),
+            summary: expect.objectContaining({
+              retryFamilies: expect.arrayContaining(["telegram"]),
+              intakeFamilies: expect.arrayContaining(["actor_page"]),
+              actionTypes: expect.arrayContaining(["retry", "request_candidate"]),
+              parserStates: expect.arrayContaining(["retry_required"])
             })
           }),
           watchlistAlertabilityBridge: expect.objectContaining({
