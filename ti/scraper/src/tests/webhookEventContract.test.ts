@@ -3,12 +3,14 @@ import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+  DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
   buildWebhookDispatchReadiness,
+  buildWebhookDispatchReplayHistory,
   buildWebhookDispatchReplayRequest,
   buildWebhookDispatchSupportPacket,
   buildWebhookEventSupportHandoff,
@@ -366,6 +368,103 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(replay)).not.toContain("hash_acme_lumma");
   });
 
+  test("builds redacted replay delivery history from persisted attempts", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay",
+      generatedAt: "2026-06-29T12:24:00.000Z"
+    });
+    const history = buildWebhookDispatchReplayHistory({
+      readiness,
+      replayRequest: replay,
+      generatedAt: "2026-06-29T12:25:00.000Z",
+      deliveries: [
+        {
+          ...deliveryFixture(),
+          id: "delivery_replay_retry",
+          status: "failed",
+          dryRun: true,
+          replay: true,
+          attemptedAt: "2026-06-29T12:23:00.000Z",
+          nextRetryAt: "2026-06-29T12:28:00.000Z",
+          errorCategory: "upstream_5xx",
+          responseSummary: "Discord rejected https://discord.com/api/webhooks/123/token token=secret",
+          idempotencyKey: replay.request.body.idempotencyKey
+        },
+        {
+          ...deliveryFixture(),
+          id: "delivery_replay_delivered",
+          status: "delivered",
+          dryRun: false,
+          replay: true,
+          attemptedAt: "2026-06-29T12:22:00.000Z",
+          idempotencyKey: "prior_replay_idem"
+        },
+        {
+          ...deliveryFixture(),
+          id: "delivery_other_org",
+          organizationId: "org_other",
+          webhookDestinationId: "webhook_other"
+        }
+      ]
+    });
+
+    expect(history).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:25:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      request: {
+        replayRequestId: replay.id,
+        route: "/v1/dwm/webhooks/deliver",
+        dryRun: true,
+        idempotencyKey: replay.request.body.idempotencyKey,
+        redacted: true
+      },
+      history: {
+        redacted: true,
+        attemptCount: 2,
+        deliveredCount: 1,
+        failedCount: 1,
+        dryRunCount: 1,
+        liveCount: 1,
+        replayCount: 2,
+        latestStatus: "failed",
+        latestAttemptedAt: "2026-06-29T12:23:00.000Z"
+      },
+      retry: {
+        retryable: true,
+        nextRetryAt: "2026-06-29T12:28:00.000Z",
+        attemptCount: 2,
+        lastErrorCategory: "upstream_5xx"
+      },
+      auditPreview: {
+        eventType: "dwm.webhook.dispatch_replay_history_checked",
+        outcome: "ready",
+        replayRequestId: replay.id,
+        blockerCodes: []
+      },
+      blockers: []
+    });
+    expect(history.history.attempts.map((item) => item.deliveryId)).toEqual(["delivery_replay_retry", "delivery_replay_delivered"]);
+    expect(history.history.attempts[0].responseSummary).toBe("Discord rejected https://discord.com/api/webhooks/[redacted] token=[redacted]");
+    expect(history.request.payloadShape).toEqual(expect.arrayContaining(["alertId", "webhookDestinationIds", "dryRun", "idempotencyKey"]));
+    expect(JSON.stringify(history)).not.toContain("https://discord.com/api/webhooks/123/token");
+    expect(JSON.stringify(history)).not.toContain("secret");
+    expect(JSON.stringify(history)).not.toContain("delivery_other_org");
+    expect(JSON.stringify(history)).not.toContain("endpoint_hash_acme");
+    expect(JSON.stringify(history)).not.toContain("payloadBody");
+  });
+
   test("blocks webhook dispatch without case provenance active destination or duplicate-safe state", () => {
     const readiness = buildWebhookDispatchReadiness({
       alert: {
@@ -467,6 +566,66 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(replay)).not.toContain("https://discord.com");
     expect(JSON.stringify(replay)).not.toContain("payloadBody");
     expect(JSON.stringify(replay)).not.toContain("hash_acme_lumma");
+  });
+
+  test("keeps blocked replay history non-executable and owner-coded", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        status: "suppressed",
+        evidence: [],
+        provenance: { captureIds: [] },
+        workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+      },
+      destinations: [{ ...destinationFixture(), organizationId: "org_other", status: "disabled" }],
+      existingDeliveries: [{ ...deliveryFixture(), status: "delivered" }],
+      checkedAt: "2026-06-29T12:21:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay_blocked",
+      dryRun: false
+    });
+    const history = buildWebhookDispatchReplayHistory({
+      readiness,
+      replayRequest: replay,
+      deliveries: [{ ...deliveryFixture(), status: "delivered", replay: true }]
+    });
+
+    expect(history).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION,
+      ok: false,
+      request: {
+        replayRequestId: replay.id,
+        route: "/v1/dwm/webhooks/deliver",
+        dryRun: false,
+        redacted: true
+      },
+      history: {
+        attemptCount: 1,
+        deliveredCount: 1,
+        replayCount: 1
+      },
+      auditPreview: {
+        outcome: "blocked",
+        blockerCodes: expect.arrayContaining(["missing_case_id", "missing_provenance", "disabled_destination", "suppressed_alert"])
+      }
+    });
+    expect(history.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_case_id", ownerLane: "case", path: "alert.caseId" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "alert.evidence" }),
+      expect.objectContaining({ code: "disabled_destination", ownerLane: "webhook", path: "destinations[].status" })
+    ]));
+    expect(history.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "link_case", blockerCode: "missing_case_id" }),
+      expect.objectContaining({ action: "restore_provenance", blockerCode: "missing_provenance" }),
+      expect.objectContaining({ action: "enable_destination", blockerCode: "disabled_destination" })
+    ]));
+    expect(JSON.stringify(history)).not.toContain("https://discord.com");
+    expect(JSON.stringify(history)).not.toContain("payloadBody");
+    expect(JSON.stringify(history)).not.toContain("hash_acme_lumma");
   });
 
   test("keeps blocked webhook dispatch support packet actionable and redacted", () => {

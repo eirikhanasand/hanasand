@@ -7,6 +7,7 @@ export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_su
 export const DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION = "dwm.webhook_dispatch_readiness.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION = "dwm.webhook_dispatch_support_packet.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_request.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_history.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -336,6 +337,69 @@ export type DwmWebhookDispatchReplayRequest = {
     path: string;
     message: string;
   }>;
+  nextActions: DwmWebhookDispatchReadiness["nextActions"];
+};
+
+export type DwmWebhookDispatchReplayHistory = {
+  schemaVersion: typeof DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  target: DwmWebhookDispatchReplayRequest["target"];
+  request: {
+    replayRequestId: string;
+    route: DwmWebhookDispatchReplayRequest["request"]["route"];
+    dryRun: boolean;
+    idempotencyKey: string;
+    payloadShape: string[];
+    redacted: true;
+  };
+  history: {
+    redacted: true;
+    attemptCount: number;
+    deliveredCount: number;
+    failedCount: number;
+    skippedCount: number;
+    dryRunCount: number;
+    liveCount: number;
+    replayCount: number;
+    latestStatus?: string;
+    latestAttemptedAt?: string;
+    attempts: Array<{
+      deliveryId?: string;
+      destinationId?: string;
+      status?: string;
+      dryRun: boolean;
+      replay: boolean;
+      httpStatus?: number;
+      payloadHash?: string;
+      dedupeKey?: string;
+      idempotencyKey?: string;
+      attemptedAt?: string;
+      nextRetryAt?: string;
+      retryable: boolean;
+      errorCategory?: string;
+      responseSummary?: string;
+    }>;
+  };
+  retry: {
+    retryable: boolean;
+    nextRetryAt?: string;
+    attemptCount: number;
+    lastErrorCategory?: string;
+  };
+  auditPreview: {
+    eventType: "dwm.webhook.dispatch_replay_history_checked";
+    outcome: "ready" | "blocked";
+    replayRequestId: string;
+    blockerCodes: Array<DwmWebhookDispatchReadinessBlocker["code"] | "missing_replay_target">;
+  };
+  blockers: DwmWebhookDispatchReplayRequest["blockers"];
   nextActions: DwmWebhookDispatchReadiness["nextActions"];
 };
 
@@ -797,6 +861,105 @@ export function buildWebhookDispatchReplayRequest(input: {
   };
 }
 
+export function buildWebhookDispatchReplayHistory(input: {
+  readiness: DwmWebhookDispatchReadiness;
+  replayRequest: DwmWebhookDispatchReplayRequest;
+  deliveries?: Array<Record<string, any>>;
+  generatedAt?: string;
+}): DwmWebhookDispatchReplayHistory {
+  const readiness = input.readiness;
+  const replayRequest = input.replayRequest;
+  const destinationIds = new Set(replayRequest.target.destinationIds);
+  const scopedAttempts = (input.deliveries ?? [])
+    .filter((delivery) => {
+      const deliveryAlertId = stringValue(delivery.alertId);
+      const deliveryOrgId = stringValue(delivery.organizationId ?? delivery.orgId);
+      const deliveryTenantId = stringValue(delivery.tenantId);
+      const destinationId = stringValue(delivery.webhookDestinationId ?? delivery.destinationId);
+      const dedupeKey = stringValue(delivery.dedupeKey);
+      return deliveryAlertId === readiness.alertId
+        && (!readiness.organizationId || !deliveryOrgId || deliveryOrgId === readiness.organizationId)
+        && (!readiness.tenantId || !deliveryTenantId || deliveryTenantId === readiness.tenantId)
+        && (!destinationIds.size || !destinationId || destinationIds.has(destinationId))
+        && (!readiness.dedupeKey || !dedupeKey || dedupeKey === readiness.dedupeKey);
+    })
+    .sort((a, b) => String(b.attemptedAt ?? b.createdAt ?? "").localeCompare(String(a.attemptedAt ?? a.createdAt ?? "")));
+  const attempts = scopedAttempts.map((delivery) => {
+    const status = stringValue(delivery.status);
+    const nextRetryAt = stringValue(delivery.nextRetryAt ?? delivery.next_retry_at);
+    const retryable = Boolean(delivery.retryable ?? nextRetryAt);
+    return {
+      deliveryId: stringValue(delivery.id ?? delivery.deliveryId),
+      destinationId: stringValue(delivery.webhookDestinationId ?? delivery.destinationId),
+      status,
+      dryRun: Boolean(delivery.dryRun),
+      replay: Boolean(delivery.replay) || stringValue(delivery.eventType) === "dwm.alert.replayed" || stringValue(delivery.reason) === "webhook_dispatch_replay",
+      httpStatus: typeof delivery.httpStatus === "number" ? delivery.httpStatus : typeof delivery.responseStatus === "number" ? delivery.responseStatus : undefined,
+      payloadHash: stringValue(delivery.payloadHash),
+      dedupeKey: stringValue(delivery.dedupeKey),
+      idempotencyKey: stringValue(delivery.idempotencyKey),
+      attemptedAt: stringValue(delivery.attemptedAt ?? delivery.createdAt),
+      nextRetryAt,
+      retryable,
+      errorCategory: stringValue(delivery.errorCategory ?? delivery.errorClass),
+      responseSummary: redactedSummary(delivery.responseSummary ?? delivery.error)
+    };
+  });
+  const latestAttempt = attempts[0];
+  const lastRetryableAttempt = attempts.find((attempt) => attempt.retryable);
+  const replayBlockers = dispatchReplayBlockers(readiness);
+  const blockers = [...replayRequest.blockers, ...replayBlockers];
+  const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmWebhookDispatchReplayHistory["auditPreview"]["blockerCodes"];
+
+  return {
+    schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_dispatch_replay_history", `${replayRequest.id}:${attempts.map((attempt) => attempt.deliveryId ?? "").join(",")}`),
+    generatedAt: input.generatedAt ?? replayRequest.generatedAt,
+    ok: replayRequest.ok && blockers.length === 0,
+    tenantId: replayRequest.tenantId,
+    organizationId: replayRequest.organizationId,
+    alertId: replayRequest.alertId,
+    caseId: replayRequest.caseId,
+    redacted: true,
+    target: replayRequest.target,
+    request: {
+      replayRequestId: replayRequest.id,
+      route: replayRequest.request.route,
+      dryRun: replayRequest.request.body.dryRun,
+      idempotencyKey: replayRequest.request.body.idempotencyKey,
+      payloadShape: replayRequest.request.payloadShape,
+      redacted: true
+    },
+    history: {
+      redacted: true,
+      attemptCount: attempts.length,
+      deliveredCount: attempts.filter((attempt) => attempt.status === "delivered").length,
+      failedCount: attempts.filter((attempt) => attempt.status === "failed").length,
+      skippedCount: attempts.filter((attempt) => attempt.status === "skipped").length,
+      dryRunCount: attempts.filter((attempt) => attempt.dryRun).length,
+      liveCount: attempts.filter((attempt) => !attempt.dryRun).length,
+      replayCount: attempts.filter((attempt) => attempt.replay).length,
+      latestStatus: latestAttempt?.status,
+      latestAttemptedAt: latestAttempt?.attemptedAt,
+      attempts
+    },
+    retry: {
+      retryable: Boolean(lastRetryableAttempt),
+      nextRetryAt: lastRetryableAttempt?.nextRetryAt,
+      attemptCount: attempts.length,
+      lastErrorCategory: lastRetryableAttempt?.errorCategory
+    },
+    auditPreview: {
+      eventType: "dwm.webhook.dispatch_replay_history_checked",
+      outcome: blockers.length === 0 ? "ready" : "blocked",
+      replayRequestId: replayRequest.id,
+      blockerCodes
+    },
+    blockers,
+    nextActions: replayRequest.nextActions
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -992,6 +1155,15 @@ function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhoo
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function redactedSummary(value: unknown): string | undefined {
+  const text = stringValue(value);
+  if (!text) return undefined;
+  return text
+    .replace(/https:\/\/discord\.com\/api\/webhooks\/[^\s"']+/g, "https://discord.com/api/webhooks/[redacted]")
+    .replace(/token=[^\s&"']+/gi, "token=[redacted]")
+    .replace(/secret[=:][^\s&"']+/gi, "secret=[redacted]");
 }
 
 function stringValue(value: unknown): string | undefined {
