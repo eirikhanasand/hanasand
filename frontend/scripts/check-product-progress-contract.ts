@@ -211,12 +211,15 @@ for (const rowId of PRODUCT_READINESS_PROOF_ROW_IDS) {
     assert.ok(row.href, `Missing deep link for product-readiness row ${rowId}`)
     assert.equal(row.deepLinkTarget, row.href)
     assert.equal(typeof row.blockerCount, 'number')
-    assert.equal(row.unavailableReason, row.status === 'unavailable' ? row.source : undefined)
     assert.ok(row.ownerLane, `Missing owner lane for product-readiness row ${rowId}`)
     assert.ok(row.operatorAction, `Missing operator action for product-readiness row ${rowId}`)
+    assertProductReadinessRowProof(row)
 }
 for (const rowId of PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS) {
     assert.ok(partialContext.readiness.productReadiness.find(item => item.id === rowId), `Missing workflow row ${rowId}`)
+}
+for (const row of partialContext.readiness.productReadiness) {
+    assertProductReadinessRowProof(row)
 }
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.href, '/dashboard')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
@@ -324,6 +327,7 @@ assert.equal(degradedContext.readiness.productReadiness.find(item => item.id ===
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'deploy_probe')?.status, 'needs_action')
 assert.ok(degradedContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
 assert.ok(degradedContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
+assert.ok(degradedContext.readiness.productReadiness.every(item => item.backendProofContractVersion && item.expectedDashboardRowId && item.integrationProbeHint), 'Each degraded row needs proof metadata.')
 assert.ok((degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.blockerCount || 0) >= 3)
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.operatorAction, 'Resolve DWM entitlement')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'helpdesk_audit')?.operatorAction, 'Open helpdesk workbench')
@@ -357,6 +361,7 @@ assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === '
 assert.ok(longLabelContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.deepLinkTarget === item.href))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
+assert.ok(longLabelContext.readiness.productReadiness.every(item => item.backendProofContractVersion && item.proofTimestamp && item.staleAfterSeconds), 'Every product-readiness row needs proof contract metadata.')
 
 for (const attribute of [
     'data-readiness-row-id',
@@ -365,6 +370,10 @@ for (const attribute of [
     'data-readiness-deep-link-target',
     'data-readiness-proof-timestamp',
     'data-readiness-unavailable-reason',
+    'data-readiness-stale-after-seconds',
+    'data-readiness-expected-dashboard-row-id',
+    'data-readiness-integration-probe-hint',
+    'data-readiness-backend-proof-contract-version',
     'data-readiness-owner-lane',
     'data-readiness-operator-action',
 ]) {
@@ -397,24 +406,44 @@ assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href=
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',
     sourceReadiness: '930f93af',
-    orgLifecycle: '414c72a4',
-    publicTiProvenance: 'def920a7',
+    sourceCustomerConfig: '342c1fe3',
+    orgAlertLifecycle: '414c72a4',
+    orgOnboardingLifecycle: 'd0f53e04',
+    publicTiExperienceGate: 'def920a7',
+    publicTiBackedReadiness: '929f3416',
+    dashboardRenderProof: 'dfb2d272',
     productProgress: '89d9547e',
-    entitlement: '4da6a209',
+    entitlementBlocker: '4da6a209',
+    entitlementProof: '1c88a82a',
     helpdeskSupportAction: '9e25b6ad',
+    helpdeskExecutor: '5b7d9357',
     analystHandoffReport: '99b75073',
     sourceActionContracts: '178ec078',
+    webhookDeliveryReadiness: '14210040',
+    webhookAdminProof: 'b3600c7e',
+    alertMatching: '9d4c7118',
+    customerAlertProof: '03d8d1ec',
 }
 assert.deepEqual(Object.keys(backendProofCommits).sort(), [
+    'alertMatching',
     'analystHandoffReport',
-    'entitlement',
+    'customerAlertProof',
+    'dashboardRenderProof',
+    'entitlementBlocker',
+    'entitlementProof',
     'helpdeskAuditFilters',
+    'helpdeskExecutor',
     'helpdeskSupportAction',
-    'orgLifecycle',
+    'orgAlertLifecycle',
+    'orgOnboardingLifecycle',
     'productProgress',
-    'publicTiProvenance',
+    'publicTiBackedReadiness',
+    'publicTiExperienceGate',
     'sourceActionContracts',
+    'sourceCustomerConfig',
     'sourceReadiness',
+    'webhookAdminProof',
+    'webhookDeliveryReadiness',
 ])
 
 function assertDependencyProofFields(input: {
@@ -425,6 +454,7 @@ function assertDependencyProofFields(input: {
     proofTimestamp?: string
     expectedDashboardRowId?: string
     integrationProbeHint?: string
+    backendProofContractVersion?: string
 } | undefined) {
     assert.ok(input, 'Missing readiness dependency proof object.')
     assert.ok(input.ownerLane, 'Missing ownerLane.')
@@ -435,7 +465,32 @@ function assertDependencyProofFields(input: {
     assert.ok(input.proofTimestamp, 'Missing proofTimestamp.')
     assert.ok(input.expectedDashboardRowId, 'Missing expectedDashboardRowId.')
     assert.ok(input.integrationProbeHint, 'Missing integrationProbeHint.')
+    assert.ok(input.backendProofContractVersion, 'Missing backendProofContractVersion.')
     if (input.status !== 'ready') {
         assert.ok(input.unavailableReason, `Missing unavailableReason for ${input.expectedDashboardRowId}.`)
+    }
+}
+
+function assertProductReadinessRowProof(input: {
+    id: string
+    status: string
+    ownerLane?: string
+    proofTimestamp?: string
+    unavailableReason?: string
+    staleAfterSeconds?: number
+    expectedDashboardRowId?: string
+    integrationProbeHint?: string
+    backendProofContractVersion?: string
+}) {
+    assert.ok(input.ownerLane, `Missing ownerLane for ${input.id}.`)
+    assert.ok(input.proofTimestamp, `Missing proofTimestamp for ${input.id}.`)
+    assert.ok(input.expectedDashboardRowId, `Missing expectedDashboardRowId for ${input.id}.`)
+    assert.equal(input.expectedDashboardRowId, input.id)
+    assert.ok(input.integrationProbeHint, `Missing integrationProbeHint for ${input.id}.`)
+    assert.ok(input.backendProofContractVersion, `Missing backendProofContractVersion for ${input.id}.`)
+    assert.equal(typeof input.staleAfterSeconds, 'number', `Missing staleAfterSeconds for ${input.id}.`)
+    assert.ok((input.staleAfterSeconds || 0) > 0, `Invalid staleAfterSeconds for ${input.id}.`)
+    if (input.status !== 'ready') {
+        assert.ok(input.unavailableReason, `Missing unavailableReason for non-ready row ${input.id}.`)
     }
 }

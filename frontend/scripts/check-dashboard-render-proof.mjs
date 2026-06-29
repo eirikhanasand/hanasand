@@ -12,37 +12,37 @@ const readinessRows = {
     dashboard_evidence: {
         href: '/dashboard',
         backendProbe: 'GET /api/product-progress .dashboardEvidence',
-        commits: ['89d9547e'],
+        commits: ['89d9547e', 'dfb2d272'],
     },
     source_inventory_probe: {
         href: '/dashboard/ti/sources',
         backendProbe: 'GET /api/ti/scraper/control + source readiness 930f93af',
-        commits: ['930f93af', '178ec078'],
+        commits: ['930f93af', '178ec078', '342c1fe3'],
     },
     entitlement_readiness: {
         href: '/dashboard/dwm',
         backendProbe: 'GET /api/dwm/entitlements/readiness',
-        commits: ['4da6a209'],
+        commits: ['4da6a209', '1c88a82a'],
     },
     webhook_delivery: {
         href: '/dashboard/automations?setup=dwm',
         backendProbe: 'GET /api/dwm/webhooks/deliveries',
-        commits: [],
+        commits: ['14210040', '03d8d1ec'],
     },
     org_alert_export: {
         href: '/dashboard/dwm',
         backendProbe: 'GET /api/organizations/:id/watchlist-alert-terms',
-        commits: ['414c72a4'],
+        commits: ['414c72a4', 'd0f53e04'],
     },
     webhook_health: {
         href: '/dashboard/automations?setup=dwm',
         backendProbe: 'GET /api/dwm/webhooks',
-        commits: [],
+        commits: ['b3600c7e'],
     },
     helpdesk_audit: {
         href: '/dashboard/system/impersonation',
         backendProbe: 'GET /api/admin/support/readiness with audit filters 016a8ef7',
-        commits: ['016a8ef7', '9e25b6ad'],
+        commits: ['016a8ef7', '9e25b6ad', '5b7d9357'],
     },
     deploy_probe: {
         href: '/status',
@@ -52,7 +52,7 @@ const readinessRows = {
     public_ti_provenance: {
         href: '/ti',
         backendProbe: 'GET /api/public-ti/provenance/readiness',
-        commits: ['def920a7'],
+        commits: ['def920a7', '929f3416'],
     },
 }
 
@@ -75,6 +75,10 @@ for (const attr of [
     'data-readiness-deep-link-target',
     'data-readiness-proof-timestamp',
     'data-readiness-unavailable-reason',
+    'data-readiness-stale-after-seconds',
+    'data-readiness-expected-dashboard-row-id',
+    'data-readiness-integration-probe-hint',
+    'data-readiness-backend-proof-contract-version',
     'data-readiness-owner-lane',
     'data-readiness-operator-action',
 ]) {
@@ -104,7 +108,7 @@ for (const source of [workbenchSource, modelSource, pageSource]) {
     }
 }
 
-for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'proofTimestamp', 'expectedDashboardRowId', 'integrationProbeHint']) {
+for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'proofTimestamp', 'expectedDashboardRowId', 'integrationProbeHint', 'backendProofContractVersion']) {
     assert.ok(progressSource.includes(field), `Product-progress dependency proof field missing: ${field}`)
 }
 
@@ -127,7 +131,7 @@ for (const [id, spec] of Object.entries(readinessRows)) {
     assert.ok(renderDomSource.includes(spec.href), `Rendered proof command missing href ${spec.href}`)
 }
 
-for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3']) {
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop']) {
     assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
 }
 
@@ -150,8 +154,9 @@ const worker3Matrix = {
         'missing readiness row selector',
         'empty owner lane or operator action',
         'missing deep-link target',
+        'missing proof timestamp, stale threshold, probe hint, dashboard row id, or backend proof contract version',
         'ready row with nonzero blocker count',
-        'unavailable row without unavailable reason',
+        'non-ready row without unavailable reason',
         'visible prompt/coordinator wording',
         'white translucent dark-mode borders',
         'missing screenshot or acceptance JSON artifact',

@@ -123,6 +123,7 @@ export type ProductReadinessSnapshotBase = {
     proofTimestamp?: string
     expectedDashboardRowId?: string
     integrationProbeHint?: string
+    backendProofContractVersion?: string
 }
 
 export type PublicTiProvenanceReadiness = ProductReadinessSnapshotBase & {
@@ -377,6 +378,7 @@ function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvena
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'public_ti_provenance',
         integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+        backendProofContractVersion: 'ti.public_provenance.readiness.v1',
     }
 }
 
@@ -395,6 +397,7 @@ function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditRe
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'helpdesk_audit',
         integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+        backendProofContractVersion: 'support.audit.readiness.v1',
     }
 }
 
@@ -413,6 +416,7 @@ function unavailableDeployProbe(source: string, checkedAt: string): DeployProbeR
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'deploy_probe',
         integrationProbeHint: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
+        backendProofContractVersion: 'product.deploy_probe.readiness.v1',
     }
 }
 
@@ -431,6 +435,7 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
         integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
     }
 }
 
@@ -449,6 +454,7 @@ function unavailableWebhookHealth(source: string, checkedAt: string): WebhookHea
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'webhook_health',
         integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+        backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
     }
 }
 
@@ -467,6 +473,7 @@ function unavailableDashboardEvidence(source: string, checkedAt: string): Dashbo
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dashboard_evidence',
         integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
+        backendProofContractVersion: 'dashboard.alert_evidence.readiness.v1',
     }
 }
 
@@ -485,6 +492,7 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'entitlement_readiness',
         integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        backendProofContractVersion: 'dwm.entitlement.readiness.v1',
     }
 }
 
@@ -512,6 +520,7 @@ function normalizeDashboardEvidenceReadiness(input: DashboardAlertEvidenceReadin
         proofTimestamp: input.proofTimestamp || input.checkedAt || context.checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'dashboard_evidence',
         integrationProbeHint: input.integrationProbeHint || 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dashboard.alert_evidence.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`),
     }
 }
@@ -549,6 +558,7 @@ function normalizeDeployProbeReadiness(input: DeployProbeReadiness | undefined, 
         proofTimestamp: input.proofTimestamp || latestProbeAt || context.checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'deploy_probe',
         integrationProbeHint: input.integrationProbeHint || 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'product.deploy_probe.readiness.v1',
     }
     return {
         ...next,
@@ -576,6 +586,7 @@ function normalizeOrgAlertExportReadiness(input: OrganizationAlertExportReadines
         proofTimestamp: input.proofTimestamp || input.exportedAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'org_alert_export',
         integrationProbeHint: input.integrationProbeHint || 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'organization.watchlist_alert_terms_export.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : `${input.activeTermCount} active alert term${input.activeTermCount === 1 ? '' : 's'} exported for alert generation.`),
     }
 }
@@ -600,6 +611,7 @@ function normalizeWebhookHealthReadiness(input: WebhookHealthReadiness | undefin
         proofTimestamp: input.proofTimestamp || input.latestDeliveryAt || input.latestAuditEventAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'webhook_health',
         integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.webhook_health.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : `${input.activeDestinationCount} active webhook destination${input.activeDestinationCount === 1 ? '' : 's'} with ${input.deliveryReadyCount} delivery-ready route${input.deliveryReadyCount === 1 ? '' : 's'}.`),
     }
 }
@@ -631,6 +643,7 @@ function normalizeEntitlementReadiness(input: EntitlementReadiness | undefined, 
         proofTimestamp: input.proofTimestamp || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'entitlement_readiness',
         integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.entitlement.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : entitlementDetail(input)),
     }
 }
@@ -659,6 +672,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             proofTimestamp: options.checkedAt,
             expectedDashboardRowId: 'source_inventory_probe',
             integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+            backendProofContractVersion: 'dwm.source_inventory.v1',
         }
     }
 
@@ -710,6 +724,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         proofTimestamp: workerLastRunAt || input.sourceInventory?.generatedAt || input.generatedAt || options.checkedAt,
         expectedDashboardRowId: 'source_inventory_probe',
         integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+        backendProofContractVersion: input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
     }
 }
 
@@ -963,6 +978,8 @@ export function buildOrgOperatingContext(input: {
     const pendingInvites = input.organizationState.pendingInvites.filter(item => item.status === 'pending')
     const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
     const activeWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
+    const latestWatchlistAt = latestTimestamp(activeWatchlists.map(item => item.updatedAt))
+    const latestWebhookAt = latestTimestamp(activeWebhooks.map(item => item.updatedAt))
     const termCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
     const latestDelivery = (input.deliveries || [])[0]
     const liveAlertIds = new Set(input.liveAlertIds || [])
@@ -982,6 +999,8 @@ export function buildOrgOperatingContext(input: {
         activeWatchlistCount: activeWatchlists.length,
         termCount,
         activeWebhookCount: activeWebhooks.length,
+        latestWatchlistAt,
+        latestWebhookAt,
         sourceCoverage: input.operations ? {
             sourceCount: input.operations.counts.sourceCount,
             activeSourceCount: input.operations.counts.activeSourceCount,
@@ -1072,6 +1091,8 @@ function buildProductReadiness(input: {
     activeWatchlistCount: number
     termCount: number
     activeWebhookCount: number
+    latestWatchlistAt?: string
+    latestWebhookAt?: string
     sourceCoverage?: {
         sourceCount: number
         activeSourceCount: number
@@ -1121,6 +1142,7 @@ function buildProductReadiness(input: {
             source: 'GET /api/organizations + /api/organizations/:id/members',
             href: input.organization ? `/api/organizations/${encodeURIComponent(input.organization.id)}/members` : '/dashboard',
             checkedAt: input.organization?.updatedAt,
+            backendProofContractVersion: 'organization.lifecycle.readiness.v1',
         },
         {
             id: 'shared_watchlists',
@@ -1129,6 +1151,8 @@ function buildProductReadiness(input: {
             detail: `${input.activeWatchlistCount} active watchlist${input.activeWatchlistCount === 1 ? '' : 's'} with ${input.termCount} term${input.termCount === 1 ? '' : 's'}.`,
             source: 'GET/POST /api/dwm/watchlists',
             href: '/dashboard/dwm',
+            checkedAt: input.latestWatchlistAt,
+            backendProofContractVersion: 'organization.watchlist_lifecycle.readiness.v1',
         },
         {
             id: 'entitlement_readiness',
@@ -1140,6 +1164,12 @@ function buildProductReadiness(input: {
             source: entitlement?.source || 'Missing DWM entitlement readiness contract',
             href: entitlement?.href || '/dashboard/dwm',
             checkedAt: entitlement?.checkedAt,
+            staleAfterSeconds: entitlement?.staleAfterSeconds,
+            proofTimestamp: entitlement?.proofTimestamp,
+            unavailableReason: entitlement?.unavailableReason,
+            expectedDashboardRowId: entitlement?.expectedDashboardRowId,
+            integrationProbeHint: entitlement?.integrationProbeHint,
+            backendProofContractVersion: entitlement?.backendProofContractVersion || entitlement?.schemaVersion,
         },
         {
             id: 'source_coverage',
@@ -1151,6 +1181,7 @@ function buildProductReadiness(input: {
             source: 'GET /api/dwm/operations',
             href: '/dashboard/ti/sources',
             checkedAt: input.sourceCoverage?.latestRunAt,
+            backendProofContractVersion: 'dwm.operations.source_coverage.v1',
         },
         {
             id: 'dashboard_alert',
@@ -1161,6 +1192,8 @@ function buildProductReadiness(input: {
                 : 'No backend DWM alert is surfaced in the dashboard queue; fallback rows do not count.',
             source: 'GET /api/dwm/alerts as active org member',
             href: '/dashboard/ti/workbench',
+            checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.sourceCoverage?.latestRunAt,
+            backendProofContractVersion: 'dwm.alert.matching.readiness.v1',
         },
         {
             id: 'webhook_delivery',
@@ -1172,6 +1205,7 @@ function buildProductReadiness(input: {
             source: 'GET /api/dwm/webhooks/deliveries',
             href: '/dashboard/automations?setup=dwm',
             checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt,
+            backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
         },
         {
             id: 'org_alert_export',
@@ -1183,6 +1217,12 @@ function buildProductReadiness(input: {
             source: orgAlertExport?.source || 'Missing organization watchlist alert-term export contract',
             href: orgAlertExport?.href || '/dashboard/dwm',
             checkedAt: orgAlertExport?.checkedAt || orgAlertExport?.exportedAt,
+            staleAfterSeconds: orgAlertExport?.staleAfterSeconds,
+            proofTimestamp: orgAlertExport?.proofTimestamp,
+            unavailableReason: orgAlertExport?.unavailableReason,
+            expectedDashboardRowId: orgAlertExport?.expectedDashboardRowId,
+            integrationProbeHint: orgAlertExport?.integrationProbeHint,
+            backendProofContractVersion: orgAlertExport?.backendProofContractVersion || orgAlertExport?.schemaVersion,
         },
         {
             id: 'webhook_health',
@@ -1193,7 +1233,13 @@ function buildProductReadiness(input: {
                 : 'Webhook health readiness is not loaded by product progress.',
             source: webhookHealth?.source || 'Missing DWM webhook health readiness contract',
             href: webhookHealth?.href || '/dashboard/automations?setup=dwm',
-            checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt,
+            checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt || input.latestWebhookAt,
+            staleAfterSeconds: webhookHealth?.staleAfterSeconds,
+            proofTimestamp: webhookHealth?.proofTimestamp,
+            unavailableReason: webhookHealth?.unavailableReason,
+            expectedDashboardRowId: webhookHealth?.expectedDashboardRowId,
+            integrationProbeHint: webhookHealth?.integrationProbeHint,
+            backendProofContractVersion: webhookHealth?.backendProofContractVersion || webhookHealth?.schemaVersion,
         },
         {
             id: 'dashboard_evidence',
@@ -1205,6 +1251,12 @@ function buildProductReadiness(input: {
             source: dashboardEvidence?.source || 'Missing dashboard alert evidence contract',
             href: dashboardEvidence?.href || dashboardEvidence?.dashboardPath || '/dashboard',
             checkedAt: dashboardEvidence?.checkedAt,
+            staleAfterSeconds: dashboardEvidence?.staleAfterSeconds,
+            proofTimestamp: dashboardEvidence?.proofTimestamp,
+            unavailableReason: dashboardEvidence?.unavailableReason,
+            expectedDashboardRowId: dashboardEvidence?.expectedDashboardRowId,
+            integrationProbeHint: dashboardEvidence?.integrationProbeHint,
+            backendProofContractVersion: dashboardEvidence?.backendProofContractVersion || dashboardEvidence?.schemaVersion,
         },
         {
             id: 'source_inventory_probe',
@@ -1216,6 +1268,12 @@ function buildProductReadiness(input: {
             source: sourceGrowth?.source || (sourceGrowth?.proxyExposed ? 'GET /api/dwm/source-inventory' : 'Missing /api/dwm/source-packs proxy'),
             href: '/dashboard/ti/sources',
             checkedAt: sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
+            staleAfterSeconds: sourceGrowth?.staleAfterSeconds,
+            proofTimestamp: sourceGrowth?.proofTimestamp,
+            unavailableReason: sourceGrowth?.unavailableReason,
+            expectedDashboardRowId: sourceGrowth?.expectedDashboardRowId,
+            integrationProbeHint: sourceGrowth?.integrationProbeHint,
+            backendProofContractVersion: sourceGrowth?.backendProofContractVersion || sourceGrowth?.schemaVersion,
         },
         {
             id: 'public_ti_provenance',
@@ -1225,8 +1283,14 @@ function buildProductReadiness(input: {
                 ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
                 : 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
             source: publicTiProvenance?.source || 'Public TI handoff contract',
-            href: publicTiProvenance?.href || '/ti/apt29',
+            href: publicTiProvenance?.href || '/ti',
             checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
+            staleAfterSeconds: publicTiProvenance?.staleAfterSeconds,
+            proofTimestamp: publicTiProvenance?.proofTimestamp,
+            unavailableReason: publicTiProvenance?.unavailableReason,
+            expectedDashboardRowId: publicTiProvenance?.expectedDashboardRowId,
+            integrationProbeHint: publicTiProvenance?.integrationProbeHint,
+            backendProofContractVersion: publicTiProvenance?.backendProofContractVersion || publicTiProvenance?.schemaVersion,
         },
         {
             id: 'helpdesk_audit',
@@ -1238,6 +1302,12 @@ function buildProductReadiness(input: {
             source: helpdeskAudit?.source || 'Missing dashboard readiness API',
             href: '/dashboard/system/impersonation',
             checkedAt: helpdeskAudit?.checkedAt || helpdeskAudit?.latestAuditEventAt,
+            staleAfterSeconds: helpdeskAudit?.staleAfterSeconds,
+            proofTimestamp: helpdeskAudit?.proofTimestamp,
+            unavailableReason: helpdeskAudit?.unavailableReason,
+            expectedDashboardRowId: helpdeskAudit?.expectedDashboardRowId,
+            integrationProbeHint: helpdeskAudit?.integrationProbeHint,
+            backendProofContractVersion: helpdeskAudit?.backendProofContractVersion || helpdeskAudit?.schemaVersion,
         },
         {
             id: 'deploy_probe',
@@ -1249,6 +1319,12 @@ function buildProductReadiness(input: {
             source: deployProbe?.source || 'Missing /api/product-progress contract',
             href: '/status',
             checkedAt: deployProbe?.checkedAt || deployProbe?.latestProbeAt,
+            staleAfterSeconds: deployProbe?.staleAfterSeconds,
+            proofTimestamp: deployProbe?.proofTimestamp,
+            unavailableReason: deployProbe?.unavailableReason,
+            expectedDashboardRowId: deployProbe?.expectedDashboardRowId,
+            integrationProbeHint: deployProbe?.integrationProbeHint,
+            backendProofContractVersion: deployProbe?.backendProofContractVersion || deployProbe?.schemaVersion,
         },
     ].map(withProductReadinessWorkflowMetadata)
 }
@@ -1256,12 +1332,17 @@ function buildProductReadiness(input: {
 function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessItem): WorkbenchProductReadinessItem {
     const blockerCount = item.status === 'ready' ? 0 : countReadinessBlockers(item.detail)
     const workflow = productReadinessWorkflow(item)
+    const proof = productReadinessProofMetadata(item)
     return {
         ...item,
         blockerCount,
         deepLinkTarget: item.href,
-        proofTimestamp: item.checkedAt,
-        unavailableReason: item.status === 'unavailable' ? item.source : undefined,
+        proofTimestamp: item.proofTimestamp || item.checkedAt,
+        unavailableReason: item.status === 'ready' ? undefined : item.unavailableReason || proof.unavailableReason || item.source,
+        staleAfterSeconds: item.staleAfterSeconds ?? proof.staleAfterSeconds,
+        expectedDashboardRowId: item.expectedDashboardRowId || item.id,
+        integrationProbeHint: item.integrationProbeHint || proof.integrationProbeHint,
+        backendProofContractVersion: item.backendProofContractVersion || proof.backendProofContractVersion,
         ownerLane: workflow.ownerLane,
         operatorAction: workflow.operatorAction,
     }
@@ -1297,12 +1378,127 @@ function productReadinessWorkflow(item: WorkbenchProductReadinessItem): { ownerL
     }
 }
 
+function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
+    backendProofContractVersion: string
+    integrationProbeHint: string
+    staleAfterSeconds: number
+    unavailableReason: string
+} {
+    switch (item.id) {
+        case 'org_members':
+            return {
+                backendProofContractVersion: 'organization.lifecycle.readiness.v1',
+                integrationProbeHint: 'GET /api/organizations and /api/organizations/:id/members must return a selected organization and active member.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_org_membership_readiness',
+            }
+        case 'shared_watchlists':
+            return {
+                backendProofContractVersion: 'organization.watchlist_lifecycle.readiness.v1',
+                integrationProbeHint: 'GET/POST /api/dwm/watchlists must return at least one active shared watchlist with alert terms.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_shared_watchlist_readiness',
+            }
+        case 'entitlement_readiness':
+            return {
+                backendProofContractVersion: 'dwm.entitlement.readiness.v1',
+                integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_dwm_entitlement_readiness_api',
+            }
+        case 'source_coverage':
+            return {
+                backendProofContractVersion: 'dwm.operations.source_coverage.v1',
+                integrationProbeHint: 'GET /api/dwm/operations must return active monitored sources and latest run state.',
+                staleAfterSeconds: 1800,
+                unavailableReason: 'missing_dwm_operations_source_coverage',
+            }
+        case 'source_inventory_probe':
+            return {
+                backendProofContractVersion: 'dwm.source_inventory.v1',
+                integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+                staleAfterSeconds: 7200,
+                unavailableReason: 'missing_source_proxy_worker_readiness',
+            }
+        case 'dashboard_alert':
+            return {
+                backendProofContractVersion: 'dwm.alert.matching.readiness.v1',
+                integrationProbeHint: 'GET /api/dwm/alerts must return a real backend alert visible in the operator dashboard queue.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_dashboard_alert',
+            }
+        case 'webhook_delivery':
+            return {
+                backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
+                integrationProbeHint: 'GET /api/dwm/webhooks/deliveries must return a delivery row for a dashboard-visible alert.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_matching_delivery',
+            }
+        case 'org_alert_export':
+            return {
+                backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+                integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_org_alert_export_readiness_api',
+            }
+        case 'webhook_health':
+            return {
+                backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
+                integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_webhook_lifecycle_health_api',
+            }
+        case 'dashboard_evidence':
+            return {
+                backendProofContractVersion: 'dashboard.alert_evidence.readiness.v1',
+                integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
+                staleAfterSeconds: 600,
+                unavailableReason: 'missing_dashboard_alert_evidence',
+            }
+        case 'public_ti_provenance':
+            return {
+                backendProofContractVersion: 'ti.public_provenance.readiness.v1',
+                integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+                staleAfterSeconds: 3600,
+                unavailableReason: 'missing_public_ti_provenance_readiness_api',
+            }
+        case 'helpdesk_audit':
+            return {
+                backendProofContractVersion: 'support.audit.readiness.v1',
+                integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+                staleAfterSeconds: 3600,
+                unavailableReason: 'missing_helpdesk_audit_readiness_api',
+            }
+        case 'deploy_probe':
+            return {
+                backendProofContractVersion: 'product.deploy_probe.readiness.v1',
+                integrationProbeHint: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
+                staleAfterSeconds: 600,
+                unavailableReason: 'missing_live_deploy_probe',
+            }
+        default:
+            return {
+                backendProofContractVersion: 'unknown.readiness.v1',
+                integrationProbeHint: item.source,
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_readiness_proof',
+            }
+    }
+}
+
 function countReadinessBlockers(detail: string) {
     const parts = detail
         .split(';')
         .map(part => part.trim())
         .filter(Boolean)
     return Math.max(1, parts.length)
+}
+
+function latestTimestamp(values: Array<string | undefined>) {
+    return values
+        .filter(Boolean)
+        .sort()
+        .at(-1)
 }
 
 function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {

@@ -167,6 +167,10 @@ export type WorkbenchProductReadinessItem = {
     deepLinkTarget?: string
     proofTimestamp?: string
     unavailableReason?: string
+    staleAfterSeconds?: number
+    expectedDashboardRowId?: string
+    integrationProbeHint?: string
+    backendProofContractVersion?: string
     ownerLane?: string
     operatorAction?: string
 }
@@ -1230,6 +1234,10 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
                             data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
                             data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
+                            data-readiness-stale-after-seconds={item.staleAfterSeconds ?? ''}
+                            data-readiness-expected-dashboard-row-id={item.expectedDashboardRowId || ''}
+                            data-readiness-integration-probe-hint={item.integrationProbeHint || ''}
+                            data-readiness-backend-proof-contract-version={item.backendProofContractVersion || ''}
                             data-readiness-owner-lane={item.ownerLane || ''}
                             data-readiness-operator-action={item.operatorAction || ''}
                         >

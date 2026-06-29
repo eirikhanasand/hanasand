@@ -24,7 +24,7 @@ const pageSpecs = [
     {
         id: 'dashboard',
         path: '/dashboard',
-        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]'],
+        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-backend-proof-contract-version]'],
     },
     {
         id: 'dashboard_ti_control',
@@ -41,6 +41,12 @@ const bannedCopy = [
     'delegation',
     'you are tasked',
     'worker 3',
+    'ti control room',
+    'how this feeds',
+    '/ti/<query>',
+    'dashboard slop',
+    'apt29',
+    'lockbit',
 ]
 
 const highContrastDarkTokens = ['border-white/', 'bg-white/10', 'bg-white/15']
@@ -128,6 +134,11 @@ async function inspectRenderedPage(page, spec) {
                 const operatorAction = row.getAttribute('data-readiness-operator-action') || ''
                 const unavailableReason = row.getAttribute('data-readiness-unavailable-reason') || ''
                 const proofTimestamp = row.getAttribute('data-readiness-proof-timestamp') || ''
+                const staleAfterSecondsText = row.getAttribute('data-readiness-stale-after-seconds')
+                const staleAfterSeconds = Number(staleAfterSecondsText)
+                const expectedDashboardRowId = row.getAttribute('data-readiness-expected-dashboard-row-id') || ''
+                const integrationProbeHint = row.getAttribute('data-readiness-integration-probe-hint') || ''
+                const backendProofContractVersion = row.getAttribute('data-readiness-backend-proof-contract-version') || ''
                 readinessRows[id] = {
                     present: true,
                     state,
@@ -137,13 +148,22 @@ async function inspectRenderedPage(page, spec) {
                     operatorAction,
                     unavailableReason,
                     proofTimestamp,
+                    staleAfterSeconds,
+                    expectedDashboardRowId,
+                    integrationProbeHint,
+                    backendProofContractVersion,
                 }
                 if (deepLinkTarget !== href) reasons.push(`bad deep-link target for ${id}: ${deepLinkTarget}`)
                 if (!ownerLane) reasons.push(`missing owner lane for ${id}`)
                 if (!operatorAction) reasons.push(`missing operator action for ${id}`)
                 if (blockerCountText === null || Number.isNaN(blockerCount)) reasons.push(`missing blocker count for ${id}`)
+                if (!proofTimestamp) reasons.push(`missing proof timestamp for ${id}`)
+                if (staleAfterSecondsText === null || Number.isNaN(staleAfterSeconds) || staleAfterSeconds <= 0) reasons.push(`missing stale threshold for ${id}`)
+                if (expectedDashboardRowId !== id) reasons.push(`bad expected dashboard row id for ${id}: ${expectedDashboardRowId}`)
+                if (!integrationProbeHint) reasons.push(`missing integration probe hint for ${id}`)
+                if (!backendProofContractVersion) reasons.push(`missing backend proof contract version for ${id}`)
                 if (state === 'ready' && blockerCount !== 0) reasons.push(`ready row has blockers: ${id}`)
-                if (state === 'unavailable' && !unavailableReason) reasons.push(`unavailable row missing reason: ${id}`)
+                if (state !== 'ready' && !unavailableReason) reasons.push(`non-ready row missing reason: ${id}`)
                 if (!String(row.getAttribute('class') || '').includes('dark:border-[#2d3a52]')) reasons.push(`missing muted dark border class for ${id}`)
             }
         }
