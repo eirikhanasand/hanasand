@@ -927,6 +927,99 @@ export function buildDwmWebhookDeliveryHistory({
     }
 }
 
+export function buildDwmWebhookDeliveryPersistenceProof({
+    deliveries,
+    auditEvents = [],
+    destinations = [],
+    filters = {},
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+}: {
+    deliveries: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    destinations?: DwmWebhookDestinationPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+    liveDeliveryEnabled?: boolean
+}) {
+    const history = buildDwmWebhookDeliveryHistory({ deliveries, auditEvents, destinations, filters, liveDeliveryEnabled })
+    const rows = history.entries.map(entry => ({
+        schemaVersion: 'dwm.webhook.delivery_persistence_row.v1',
+        requestId: entry.requestId,
+        deliveryId: entry.deliveryId,
+        orgId: entry.orgId,
+        destinationId: entry.destinationId,
+        alertId: entry.alert.id,
+        caseId: entry.alert.caseId,
+        casePath: entry.alert.casePath,
+        status: entry.status,
+        rawStatus: entry.rawStatus,
+        dryRun: entry.dryRun,
+        live: entry.live,
+        replay: entry.replay,
+        eventType: entry.eventType,
+        dedupeKey: entry.alert.dedupeKey,
+        idempotencyKey: entry.deliveryProof.idempotencyKey,
+        payloadHash: entry.deliveryProof.payloadHash,
+        sanitizedPayloadPreview: entry.sanitizedPayloadPreview,
+        responseSummary: entry.deliveryProof.response.summary,
+        error: entry.deliveryProof.error,
+        retry: {
+            retryable: entry.retry.retryable,
+            nextRetryAt: entry.retry.nextRetryAt,
+            attemptCount: entry.retry.attemptCount,
+            lastErrorCategory: entry.retry.lastErrorCategory,
+            terminalFailure: entry.retry.terminalFailure,
+        },
+        audit: {
+            auditEventId: entry.deliveryProof.auditEventId,
+            auditAction: entry.deliveryProof.auditAction,
+            expectedAuditActions: entry.replay
+                ? ['delivery.replayed', 'delivery.failed', 'delivery.retry_scheduled']
+                : ['delivery.created', 'delivery.failed', 'delivery.retry_scheduled'],
+        },
+        timestamps: {
+            createdAt: entry.deliveryProof.createdAt,
+            updatedAt: entry.deliveryProof.updatedAt,
+            attemptedAt: entry.deliveryProof.attemptedAt,
+        },
+    }))
+    const blockers = rows.length
+        ? []
+        : [{
+            code: 'missing_delivery_attempt',
+            ownerLane: 'webhook',
+            path: 'deliveryHistory.entries',
+            message: 'No persisted webhook delivery attempts matched the requested filters.',
+            blocking: true,
+        }]
+    const auditEventIds = [...new Set(rows.map(row => row.audit.auditEventId).filter(Boolean) as string[])]
+
+    return {
+        schemaVersion: 'dwm.webhook.delivery_persistence_proof.v1',
+        liveDeliveryEnabled,
+        filters: history.filters,
+        ok: blockers.length === 0,
+        redacted: true,
+        totals: {
+            rows: rows.length,
+            persisted: rows.filter(row => row.status === 'sent' || row.dryRun).length,
+            failed: rows.filter(row => row.status === 'failed').length,
+            skipped: rows.filter(row => row.status === 'skipped').length,
+            retryScheduled: rows.filter(row => row.retry.retryable).length,
+            dryRun: rows.filter(row => row.dryRun).length,
+            live: rows.filter(row => row.live).length,
+            replay: rows.filter(row => row.replay).length,
+            auditLinked: auditEventIds.length,
+        },
+        audit: {
+            eventType: 'dwm.webhook.delivery_persistence_checked',
+            outcome: blockers.length === 0 ? 'ready' : 'blocked',
+            auditEventIds,
+        },
+        blockers,
+        rows,
+    }
+}
+
 export function buildDwmWebhookDeliveryReceipts({
     deliveries,
     auditEvents = [],

@@ -27,6 +27,7 @@ import {
     buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
+    buildDwmWebhookDeliveryPersistenceProof,
     buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReplayGuard,
     buildDwmWebhookDeliveryTimeline,
@@ -215,6 +216,12 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
                     alertVisibilityPolicy: membership?.alert_visibility_policy,
                 }
                 : null,
+        }),
+        deliveryPersistenceProof: buildDwmWebhookDeliveryPersistenceProof({
+            deliveries,
+            auditEvents,
+            destinations,
+            filters: { orgId },
         }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
@@ -600,6 +607,19 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryPersistenceProof: visibilityResult && !visibilityResult.decision.allowed
+            ? buildDwmWebhookDeliveryPersistenceProof({
+                deliveries: [],
+                auditEvents: [],
+                destinations: [],
+                filters: deliveryFilters,
+            })
+            : buildDwmWebhookDeliveryPersistenceProof({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+            }),
         deliveryReceipts: buildDwmWebhookDeliveryReceipts({
             deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
             auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
@@ -917,6 +937,18 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             },
         }),
         deliveryHistory: buildDwmWebhookDeliveryHistory({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+        }),
+        deliveryPersistenceProof: buildDwmWebhookDeliveryPersistenceProof({
             deliveries: ledgerDeliveries,
             auditEvents,
             destinations,

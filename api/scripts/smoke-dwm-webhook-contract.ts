@@ -22,6 +22,7 @@ import {
     buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
+    buildDwmWebhookDeliveryPersistenceProof,
     buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReplayGuard,
     buildDwmWebhookDeliveryTimeline,
@@ -1880,6 +1881,20 @@ const deliveryHistory = buildDwmWebhookDeliveryHistory({
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
 })
+const deliveryPersistenceProof = buildDwmWebhookDeliveryPersistenceProof({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+})
+const emptyDeliveryPersistenceProof = buildDwmWebhookDeliveryPersistenceProof({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract', alertId: 'alert_no_delivery_contract' },
+})
 const deliveryReceipts = buildDwmWebhookDeliveryReceipts({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2845,6 +2860,8 @@ const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.delivery
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
 const deliveryHistoryMissingDestination = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_missing_destination_contract')
+const deliveryPersistenceReplay = deliveryPersistenceProof.rows.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
+const deliveryPersistenceRetry = deliveryPersistenceProof.rows.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryReceiptReplay = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryReceiptRetry = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryReceiptTerminal = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_terminal_contract')
@@ -2872,6 +2889,12 @@ expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistor
 expect(deliveryHistoryMissingDestination?.destination.availability.state === 'missing_destination' && deliveryHistoryMissingDestination.destination.availability.setupRoute === 'POST /api/dwm/webhooks', 'Delivery history should expose setup guidance for missing webhook destination attempts.', deliveryHistoryMissingDestination)
 expect(deliveryHistoryMissingDestination?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract' && deliveryHistoryMissingDestination.deliveryProof.auditEventId === 'audit_missing_destination_contract', 'Missing destination history should preserve sanitized Discord preview and audit proof.', deliveryHistoryMissingDestination)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
+expect(deliveryPersistenceProof.schemaVersion === 'dwm.webhook.delivery_persistence_proof.v1' && deliveryPersistenceProof.ok === true && deliveryPersistenceProof.totals.rows === deliveryHistory.total, 'Delivery persistence proof should summarize persisted delivery history rows.', deliveryPersistenceProof)
+expect(deliveryPersistenceReplay?.sanitizedPayloadPreview?.context.casePath === replayWorkflowAlert.casePath && deliveryPersistenceReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery persistence proof should preserve replay case context and audit linkage.', deliveryPersistenceReplay)
+expect(deliveryPersistenceRetry?.retry.retryable === true && deliveryPersistenceRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryPersistenceRetry.retry.lastErrorCategory === 'upstream_5xx', 'Delivery persistence proof should preserve retry/backoff metadata.', deliveryPersistenceRetry)
+expect(deliveryPersistenceProof.totals.retryScheduled >= 1 && deliveryPersistenceProof.audit.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery persistence proof should roll up retry and audit ids.', deliveryPersistenceProof)
+expect(emptyDeliveryPersistenceProof.ok === false && emptyDeliveryPersistenceProof.blockers.some(item => item.code === 'missing_delivery_attempt'), 'Delivery persistence proof should block clearly when no attempts match filters.', emptyDeliveryPersistenceProof)
+expect(!JSON.stringify(deliveryPersistenceProof).includes(secret), 'Delivery persistence proof should redact endpoint, response, and payload secrets.', deliveryPersistenceProof)
 expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.status === 'skipped', 'Delivery history should expose duplicate replay live-send guard skipped attempts.', duplicateReplayGuardHistory)
 expect(duplicateReplayGuardSkipped?.deliveryProof.auditEventId === 'audit_duplicate_replay_skipped_contract' && duplicateReplayGuardSkipped.dedupe.alreadyDelivered === true, 'Duplicate replay guard should link skipped audit and prior delivered idempotency proof.', duplicateReplayGuardSkipped)
 expect(duplicateReplayGuardDelivered?.status === 'sent' && duplicateReplayGuardDelivered.dedupe.alreadyDelivered === true, 'Duplicate replay guard should preserve the prior delivered attempt.', duplicateReplayGuardDelivered)
@@ -3255,6 +3278,11 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].retry.terminalFailure',
             'deliveryHistory.entries[].dedupe.alreadyDelivered',
             'deliveryHistory.entries[].status',
+            'deliveryPersistenceProof.schemaVersion',
+            'deliveryPersistenceProof.rows[].sanitizedPayloadPreview.context.casePath',
+            'deliveryPersistenceProof.rows[].retry.nextRetryAt',
+            'deliveryPersistenceProof.rows[].audit.auditEventId',
+            'deliveryPersistenceProof.blockers[].code',
             'deliveryReceipts.schemaVersion',
             'deliveryReceipts.receipts[].proof.auditEventId',
             'deliveryReceipts.receipts[].proof.noNetwork',
