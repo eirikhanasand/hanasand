@@ -55,6 +55,7 @@ type DwmSourceRequestBody = {
   cursor?: string;
   createdFrom?: string;
   createdTo?: string;
+  generatedAt?: string;
   family?: SourceGrowthFamily;
   decision?: string;
   activationState?: string;
@@ -1079,7 +1080,9 @@ function sourcePackSafeOutput() {
 function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
   const packAction = body.packAction ?? "approve";
   const sources = lookupSourcePackReviewSources(body, options);
-  if (!sources.length) {
+  const registryCandidates = lookupSourcePackRegistryReviewCandidates(body, options)
+    .filter((item) => !sources.some((source) => sourceCandidate(source).id === item.candidate.id));
+  if (!sources.length && !registryCandidates.length) {
     return json({
       error: {
         code: "source_pack_candidates_not_found",
@@ -1091,9 +1094,13 @@ function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOp
 
   const reviewedAt = nowIso();
   const actor = body.decidedBy ?? body.approvedBy ?? body.requestedBy ?? "operator";
-  const results = sources.map((source) => applySourcePackReviewAction(source, body, options, { packAction, actor, reviewedAt }));
-  const sourcePackId = String(body.sourcePackId ?? sourceCandidate(sources[0]).sourcePackId ?? "").trim();
-  const sourcePackLabel = String(sourceCandidate(sources[0]).sourcePackLabel ?? (sourcePackId || "source pack"));
+  const sourceResults = sources.map((source) => applySourcePackReviewAction(source, body, options, { packAction, actor, reviewedAt }));
+  const registryResults = registryCandidates.map((item) => applySourcePackRegistryReviewAction(item.pack, item.candidate, body, options, { packAction, actor, reviewedAt }));
+  const results = [...sourceResults, ...registryResults];
+  const firstCandidate = sources[0] ? sourceCandidate(sources[0]) : registryCandidates[0]?.candidate;
+  const sourcePackId = String(body.sourcePackId ?? (firstCandidate as any)?.sourcePackId ?? registryCandidates[0]?.pack.id ?? "").trim();
+  const sourcePackLabel = String((firstCandidate as any)?.sourcePackLabel ?? registryCandidates[0]?.pack.label ?? (sourcePackId || "source pack"));
+  const currentRegistry = sourcePackId ? sourcePackStore(options).get(sourcePackId) : undefined;
   return json({
     action: "pack_review",
     packAction,
@@ -1106,8 +1113,10 @@ function handleSourcePackReview(body: DwmSourceRequestBody, options: ApiServerOp
     packStatus: sourcePackRollup({
       sourcePackId: sourcePackId || undefined,
       sourcePackLabel,
-      sources: sourcePackId ? sourcesForPack(sourcePackId, options) : results.map((item) => item.source).filter(Boolean) as SourceRecord[]
+      sources: sourcePackId ? sourcesForPack(sourcePackId, options) : results.map((item: any) => item.source).filter(Boolean) as SourceRecord[],
+      registry: currentRegistry
     }),
+    registry: currentRegistry ? sourcePackRegistryStatus(currentRegistry, options) : undefined,
     safeOutput: {
       rawUnsafeRowsStored: false,
       liveNetworkScrapeStarted: false,
@@ -1446,6 +1455,26 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
   actor: string;
   reviewedAt: string;
 }) {
+  const contract = sourcePackActionContract({
+    pack: sourcePackStore(options).get(String(sourceCandidate(source).sourcePackId ?? "")),
+    candidate: sourceCandidate(source),
+    source,
+    packAction: input.packAction,
+    body,
+    options
+  });
+  if (body.dryRun === true || !contract.allowed) {
+    return sourcePackReviewResult(source, contract.allowed ? "prepared" : "blocked", {
+      reviewedAt: input.reviewedAt,
+      actor: input.actor,
+      reason: body.reason,
+      collectionTrigger: sourceCandidate(source).collectionTrigger ?? skippedCollectionTrigger(source, contract.allowed ? "dry_run_prepare" : String(contract.blockers[0]?.code ?? "action_blocked")),
+      alertRebuild: sourceCandidate(source).alertRebuild ?? skippedAlertRebuild(source, "captures_required_before_alert_rebuild"),
+      actionContract: contract,
+      error: contract.allowed ? undefined : { code: String(contract.blockers[0]?.code ?? "action_blocked"), message: String(contract.blockers[0]?.message ?? "Source-pack action blocked.") }
+    });
+  }
+
   if (input.packAction === "approve" || input.packAction === "promote") {
     if (isRestrictedMetadataSource(source) && body.approveMetadataOnly !== true) {
       return sourcePackReviewResult(source, "approval_blocked", {
@@ -1457,7 +1486,16 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
         error: {
           code: "metadata_only_approval_required",
           message: "Restricted metadata pack candidates require approveMetadataOnly=true before activation."
-        }
+        },
+        actionContract: sourcePackActionContract({
+          pack: sourcePackStore(options).get(String(sourceCandidate(source).sourcePackId ?? "")),
+          candidate: sourceCandidate(source),
+          source,
+          packAction: input.packAction,
+          body,
+          options,
+          extraBlockers: [{ code: "activation_disabled", severity: "blocking", message: "metadata-only approval required", retryable: true }]
+        })
       });
     }
     const activated = saveLifecyclePatch(source, options, {
@@ -1482,7 +1520,8 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       actor: input.actor,
       reason: body.reason,
       collectionTrigger: operations.collectionTrigger,
-      alertRebuild: operations.alertRebuild
+      alertRebuild: operations.alertRebuild,
+      actionContract: contract
     });
   }
 
@@ -1502,7 +1541,7 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       reason: body.reason,
       at: input.reviewedAt
     });
-    return sourcePackReviewResult(rejected, "rejected", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
+    return sourcePackReviewResult(rejected, "rejected", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason, actionContract: contract });
   }
 
   if (input.packAction === "suppress") {
@@ -1521,7 +1560,7 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
       reason: body.reason,
       at: input.reviewedAt
     });
-    return sourcePackReviewResult(suppressed, "suppressed", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason });
+    return sourcePackReviewResult(suppressed, "suppressed", { reviewedAt: input.reviewedAt, actor: input.actor, reason: body.reason, actionContract: contract });
   }
 
   const retried = saveLifecyclePatch(source, options, {
@@ -1550,7 +1589,52 @@ function applySourcePackReviewAction(source: SourceRecord, body: DwmSourceReques
     actor: input.actor,
     reason: body.reason,
     collectionTrigger: failed.collectionTrigger,
-    alertRebuild: failed.alertRebuild
+    alertRebuild: failed.alertRebuild,
+    actionContract: contract
+  });
+}
+
+function applySourcePackRegistryReviewAction(pack: SourcePackRegistry, candidate: SourcePackRegistryCandidate, body: DwmSourceRequestBody, options: ApiServerOptions, input: {
+  packAction: NonNullable<DwmSourceRequestBody["packAction"]>;
+  actor: string;
+  reviewedAt: string;
+}) {
+  const contract = sourcePackActionContract({ pack, candidate, packAction: input.packAction, body, options });
+  if (body.dryRun === true || !contract.allowed) {
+    return sourcePackRegistryReviewResult(pack, candidate, contract.allowed ? "prepared" : "blocked", input, {
+      actionContract: contract,
+      error: contract.allowed ? undefined : { code: String(contract.blockers[0]?.code ?? "action_blocked"), message: String(contract.blockers[0]?.message ?? "Source-pack action blocked.") }
+    });
+  }
+
+  if (input.packAction === "suppress") {
+    const updated = saveSourcePackRegistryCandidateDecision(pack, candidate.id, options, {
+      status: "suppressed",
+      decision: isDuplicateSourcePackCandidate(candidate) ? "suppressed_duplicate" : "suppressed",
+      actor: input.actor,
+      at: input.reviewedAt,
+      reason: body.reason ?? "source-pack registry candidate suppressed"
+    });
+    return sourcePackRegistryReviewResult(updated.pack, updated.candidate, "suppressed", input, { actionContract: contract });
+  }
+
+  if (input.packAction === "retry") {
+    const updated = saveSourcePackRegistryCandidateDecision(pack, candidate.id, options, {
+      status: "retry_scheduled",
+      decision: "retry_scheduled",
+      actor: input.actor,
+      at: input.reviewedAt,
+      reason: body.reason ?? "source-pack registry retry requested",
+      parserStatus: "parser_retry_scheduled",
+      healthStatus: "retry_scheduled",
+      retryHint: `retry requested at ${input.reviewedAt}`
+    });
+    return sourcePackRegistryReviewResult(updated.pack, updated.candidate, "retry_scheduled", input, { actionContract: contract });
+  }
+
+  return sourcePackRegistryReviewResult(pack, candidate, "blocked", input, {
+    actionContract: contract,
+    error: { code: "activation_disabled", message: "Registry-only candidates require a source row or worker validation before activation." }
   });
 }
 
@@ -1560,6 +1644,7 @@ function sourcePackReviewResult(source: SourceRecord | undefined, reviewStatus: 
   reason?: string;
   collectionTrigger?: Record<string, unknown>;
   alertRebuild?: Record<string, unknown>;
+  actionContract?: Record<string, unknown>;
   error?: Record<string, unknown>;
 }) {
   if (!source) return { reviewStatus, error: input.error };
@@ -1577,8 +1662,69 @@ function sourcePackReviewResult(source: SourceRecord | undefined, reviewStatus: 
     policy: sourcePolicyPosture(source),
     collectionTrigger: input.collectionTrigger ?? candidate.collectionTrigger ?? skippedCollectionTrigger(source, reviewStatus),
     alertRebuild: input.alertRebuild ?? candidate.alertRebuild ?? skippedAlertRebuild(source, "captures_required_before_alert_rebuild"),
+    actionContract: input.actionContract,
     nextAction: nextSourceAction(source),
     error: input.error
+  };
+}
+
+function sourcePackRegistryReviewResult(pack: SourcePackRegistry, candidate: SourcePackRegistryCandidate, reviewStatus: string, input: {
+  packAction: NonNullable<DwmSourceRequestBody["packAction"]>;
+  actor: string;
+  reviewedAt: string;
+}, output: { actionContract: Record<string, unknown>; error?: Record<string, unknown> }) {
+  return {
+    reviewStatus,
+    reviewedAt: input.reviewedAt,
+    actor: input.actor,
+    sourcePackId: pack.id,
+    sourcePackLabel: pack.label,
+    candidate: {
+      id: candidate.id,
+      sourcePackId: pack.id,
+      sourcePackLabel: pack.label,
+      family: candidate.family,
+      declaredFamily: candidate.declaredFamily,
+      status: candidate.status,
+      decision: candidate.decision,
+      targetRef: candidate.targetRef,
+      retryHint: candidate.retryHint,
+      failure: candidate.failure
+    },
+    health: registryOnlySourceHealth(candidate),
+    parser: {
+      status: candidate.parserStatus ?? "not_scheduled",
+      profile: parserProfileForFamily(candidate.declaredFamily),
+      expectation: candidate.parserExpectation,
+      warnings: candidate.failure?.message ? [String(candidate.failure.message)] : []
+    },
+    lifecycle: {
+      status: candidate.status,
+      activationState: candidate.decision ?? candidate.status,
+      parserStatus: candidate.parserStatus ?? "not_scheduled",
+      healthStatus: candidate.healthStatus ?? (candidate.status === "duplicate" ? "duplicate_skipped" : "blocked"),
+      persisted: true,
+      registryOnly: true
+    },
+    collectionTrigger: {
+      id: stableId("dwm_collection_trigger", `${candidate.id}:registry_action`),
+      type: "frontier_collection",
+      queued: false,
+      unsafeJobQueued: false,
+      reason: reviewStatus,
+      candidateId: candidate.id,
+      policyBoundary: candidate.policyBoundary,
+      parserStatus: candidate.parserStatus ?? "not_scheduled"
+    },
+    alertRebuild: {
+      id: stableId("dwm_alert_rebuild_trigger", `${candidate.id}:registry_action`),
+      candidateId: candidate.id,
+      queued: false,
+      skipped: true,
+      reason: "no_capture_for_registry_only_candidate"
+    },
+    actionContract: output.actionContract,
+    error: output.error
   };
 }
 
@@ -1596,6 +1742,161 @@ function sourcePackStatusResponse(body: DwmSourceRequestBody, options: ApiServer
     packStatus: sourcePackRollup({ sourcePackId: sourcePackId || undefined, sourcePackLabel, sources, registry }),
     registry: registryStatus,
     safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function sourcePackActionContract(input: {
+  pack?: SourcePackRegistry;
+  candidate: any;
+  source?: SourceRecord;
+  packAction: NonNullable<DwmSourceRequestBody["packAction"]>;
+  body: DwmSourceRequestBody;
+  options: ApiServerOptions;
+  extraBlockers?: Array<Record<string, unknown>>;
+}) {
+  const blockers = sourcePackActionBlockers(input);
+  const action = input.packAction === "approve" ? "activate" : input.packAction;
+  const idempotencyKey = stableId("dwm_source_pack_action", [
+    input.pack?.id ?? input.candidate.sourcePackId ?? "missing_pack",
+    input.candidate.id,
+    action,
+    input.body.reason ?? "",
+    input.body.approveMetadataOnly === true ? "metadata_only_approved" : "default"
+  ].join(":"));
+  return {
+    schemaVersion: "dwm.source_pack_action_contract.v1",
+    mode: input.body.dryRun === true ? "prepare" : "execute",
+    action,
+    requestedAction: input.packAction,
+    allowed: blockers.filter((blocker) => blocker.severity === "blocking").length === 0,
+    idempotencyKey,
+    sourcePackId: input.pack?.id ?? input.candidate.sourcePackId,
+    candidateId: input.candidate.id,
+    sourceId: input.source?.id ?? input.candidate.sourceId,
+    family: sourcePackActionCandidateFamily(input.candidate, input.source),
+    activationState: input.source ? activationStateForSource(input.source) : input.candidate.activationState ?? input.candidate.decision ?? input.candidate.status,
+    retryEligibility: {
+      retryable: Boolean(input.source) || isRetryableSourcePackCandidate(input.candidate) || Boolean(input.source?.metadata?.lastCollectionOutcome?.retryAfter),
+      reason: retryEligibilityReason(input.candidate, input.source)
+    },
+    blockers,
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourcePackActionBlockers(input: {
+  pack?: SourcePackRegistry;
+  candidate: any;
+  source?: SourceRecord;
+  packAction: NonNullable<DwmSourceRequestBody["packAction"]>;
+  body: DwmSourceRequestBody;
+  options: ApiServerOptions;
+  extraBlockers?: Array<Record<string, unknown>>;
+}) {
+  const blockers: Array<Record<string, unknown>> = [];
+  if (!input.pack) blockers.push({ code: "missing_source_pack", severity: "blocking", message: "source pack registry row is required for candidate action", retryable: false });
+  const readiness = buildDwmSourcePackWorkerReadinessSnapshot(input.options, { generatedAt: input.body.generatedAt });
+  if (readiness.freshness === "stale") blockers.push({ code: "stale_worker", severity: "blocking", message: `source-pack worker is older than ${readiness.staleAfterMinutes} minutes`, retryable: true });
+  if (isDuplicateSourcePackCandidate(input.candidate) && input.packAction !== "suppress") blockers.push({ code: "duplicate_source", severity: "blocking", message: "duplicate candidates can only be suppressed or inspected", retryable: false });
+  if (isRejectedPolicySourcePackCandidate(input.candidate) && input.packAction !== "suppress") blockers.push({ code: "rejected_policy", severity: "blocking", message: String(input.candidate.failure?.message ?? input.candidate.reason ?? "candidate rejected by policy"), retryable: false });
+  if (input.packAction !== "suppress" && (input.candidate.failure || String(input.candidate.parserStatus ?? "").includes("failed") || String(input.candidate.parserStatus ?? "").includes("blocked"))) {
+    blockers.push({
+      code: "parser_failure",
+      severity: isRetryableSourcePackCandidate(input.candidate) && input.packAction === "retry" ? "warning" : "blocking",
+      message: String(input.candidate.failure?.message ?? input.candidate.parserStatus ?? "parser failure"),
+      retryable: isRetryableSourcePackCandidate(input.candidate)
+    });
+  }
+  if (input.packAction === "retry" && !input.source && !isRetryableSourcePackCandidate(input.candidate)) {
+    blockers.push({ code: "no_retry_eligibility", severity: "blocking", message: "candidate has no retryable parser or collection failure", retryable: false });
+  }
+  if ((input.packAction === "approve" || input.packAction === "promote") && !input.source) {
+    blockers.push({ code: "activation_disabled", severity: "blocking", message: "candidate has no persisted source row to activate", retryable: false });
+  }
+  if ((input.packAction === "approve" || input.packAction === "promote") && input.source && isRestrictedMetadataSource(input.source) && input.body.approveMetadataOnly !== true) {
+    blockers.push({ code: "activation_disabled", severity: "blocking", message: "restricted metadata activation requires approveMetadataOnly=true", retryable: true });
+  }
+  if (input.pack) {
+    const coverage = sourceFamilyCoverage({ sources: sourcesForPack(input.pack.id, input.options), registry: input.pack });
+    const candidateFamily = sourcePackActionCandidateFamily(input.candidate, input.source);
+    const family = coverage[candidateFamily];
+    if (family.total > 0 && family.active === 0 && input.packAction === "retry") {
+      blockers.push({ code: "source_family_inactive", severity: "warning", family: candidateFamily, retryable: true });
+    }
+    const promotable = input.pack.candidates.some((candidate) => !isBlockedSourcePackCandidate(candidate) || isRetryableSourcePackCandidate(candidate));
+    if (!promotable && (input.packAction === "approve" || input.packAction === "promote" || input.packAction === "retry")) {
+      blockers.push({ code: "source_pack_not_promotable", severity: "blocking", message: "source pack has no promotable or retryable candidates", retryable: false });
+    }
+  }
+  return [...blockers, ...(input.extraBlockers ?? [])];
+}
+
+function retryEligibilityReason(candidate: any, source?: SourceRecord): string {
+  if (source) return "persisted source row can schedule an operator parser retry";
+  if (isRetryableSourcePackCandidate(candidate)) return "candidate has retryable parser or validation state";
+  if (source?.metadata?.lastCollectionOutcome?.retryAfter) return "source has collection retry backoff";
+  if (isDuplicateSourcePackCandidate(candidate)) return "duplicate candidates are not retryable";
+  if (isRejectedPolicySourcePackCandidate(candidate)) return "policy-rejected candidates are not retryable";
+  return "no retryable failure is recorded";
+}
+
+function sourcePackActionCandidateFamily(candidate: any, source?: SourceRecord): SourceGrowthFamily {
+  return candidate.declaredFamily ?? candidate.sourceGrowthFamily ?? (source ? sourceGrowthFamilyForSource(source) : "telegram");
+}
+
+function lookupSourcePackRegistryReviewCandidates(body: DwmSourceRequestBody, options: ApiServerOptions): Array<{ pack: SourcePackRegistry; candidate: SourcePackRegistryCandidate }> {
+  const candidateIds = new Set([body.candidateId, ...(body.candidateIds ?? [])].filter(Boolean).map(String));
+  const pack = findSourcePackRegistry(body, options);
+  const packs = pack ? [pack] : sourcePackStore(options).list({ limit: 500 }).items;
+  return packs.flatMap((item) => item.candidates
+    .filter((candidate) => (candidateIds.size === 0 && item.id === body.sourcePackId) || candidateIds.has(candidate.id))
+    .map((candidate) => ({ pack: item, candidate })));
+}
+
+function saveSourcePackRegistryCandidateDecision(pack: SourcePackRegistry, candidateId: string, options: ApiServerOptions, input: {
+  status: string;
+  decision: string;
+  actor: string;
+  at: string;
+  reason?: string;
+  parserStatus?: string;
+  healthStatus?: string;
+  retryHint?: string;
+}) {
+  let updatedCandidate = pack.candidates.find((candidate) => candidate.id === candidateId);
+  const updatedPack = upsertSourcePackRegistry(options, {
+    ...pack,
+    updatedAt: input.at,
+    candidates: pack.candidates.map((candidate) => {
+      if (candidate.id !== candidateId) return candidate;
+      updatedCandidate = {
+        ...candidate,
+        status: input.status,
+        decision: input.decision,
+        decidedBy: input.actor,
+        decidedAt: input.at,
+        reason: input.reason,
+        parserStatus: input.parserStatus ?? candidate.parserStatus,
+        healthStatus: input.healthStatus ?? candidate.healthStatus,
+        retryHint: input.retryHint ?? candidate.retryHint
+      };
+      return updatedCandidate;
+    }),
+    audit: [
+      ...pack.audit,
+      { at: input.at, action: input.decision, actor: input.actor, reason: input.reason, candidateId }
+    ]
+  });
+  return {
+    pack: updatedPack,
+    candidate: updatedPack.candidates.find((candidate) => candidate.id === candidateId) ?? updatedCandidate ?? pack.candidates.find((candidate) => candidate.id === candidateId)!
   };
 }
 

@@ -429,6 +429,187 @@ describe("dwm source requests", () => {
     });
   });
 
+  test("controls source-pack activation retry and duplicate suppression with typed blockers", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const sourcePackRegistry = new InMemoryDwmSourcePackRegistryAdapter();
+    const options = { store, frontier, sourcePackRegistry };
+
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_action_contract",
+        sourcePackLabel: "Action contract source pack",
+        tenantId: "tenant_action",
+        scope: "APT29",
+        requestedBy: "source-action-worker",
+        candidates: [
+          { target: "@action_contract_active", type: "telegram_channel", family: "telegram" },
+          { target: "@action_contract_retry", type: "telegram_channel", family: "telegram", parserExpectation: "retry_fixture" },
+          { target: "@action_contract_active", type: "telegram_channel", family: "telegram" },
+          { target: "metadata://darkweb/password-dump", type: "restricted_metadata", family: "darkweb_onion" }
+        ]
+      })
+    }), options);
+    const createdBody = await created.json() as any;
+    expect(created.status).toBe(201);
+    expect(createdBody.summary).toMatchObject({ acceptedCount: 2, rejectedCount: 1, duplicateCount: 1 });
+
+    const worker = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_action_contract", chunkSize: 10 })
+    }), options);
+    expect(worker.status).toBe(200);
+
+    const statusBefore = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_action_contract" })
+    }), options);
+    const statusBeforeBody = await statusBefore.json() as any;
+    const activeCandidate = statusBeforeBody.registry.candidates.find((candidate: any) => candidate.declaredFamily === "telegram" && candidate.status === "active");
+    const retryCandidate = statusBeforeBody.registry.candidates.find((candidate: any) => candidate.declaredFamily === "telegram" && candidate.decision === "retry_scheduled");
+    const duplicateCandidate = statusBeforeBody.registry.candidates.find((candidate: any) => candidate.failure?.code === "duplicate_candidate");
+    const rejectedCandidate = statusBeforeBody.registry.candidates.find((candidate: any) => candidate.failure?.code === "restricted_policy_blocked");
+    expect(activeCandidate).toBeTruthy();
+    expect(retryCandidate).toBeTruthy();
+    expect(duplicateCandidate).toBeTruthy();
+    expect(rejectedCandidate).toBeTruthy();
+
+    const stalePrepare = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "approve",
+        candidateIds: [activeCandidate.id],
+        dryRun: true,
+        generatedAt: "2030-01-01T00:00:00.000Z",
+        approvedBy: "source-action-worker",
+        reason: "prepare stale activation"
+      })
+    }), options);
+    const stalePrepareBody = await stalePrepare.json() as any;
+    expect(stalePrepare.status).toBe(200);
+    expect(stalePrepareBody.results[0]).toMatchObject({
+      reviewStatus: "blocked",
+      actionContract: {
+        schemaVersion: "dwm.source_pack_action_contract.v1",
+        mode: "prepare",
+        allowed: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "stale_worker", severity: "blocking", retryable: true })
+        ]),
+        safeOutput: { liveNetworkScrapeStarted: false, rawTargetsExposed: false }
+      }
+    });
+
+    const retried = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "retry",
+        candidateIds: [retryCandidate.id],
+        decidedBy: "source-action-worker",
+        reason: "retry parser fixture"
+      })
+    }), options);
+    const retriedBody = await retried.json() as any;
+    expect(retried.status).toBe(200);
+    expect(retriedBody.results[0]).toMatchObject({
+      reviewStatus: "retry_scheduled",
+      actionContract: {
+        allowed: true,
+        idempotencyKey: expect.any(String),
+        retryEligibility: { retryable: true }
+      },
+      parser: { status: "parser_retry_scheduled" }
+    });
+
+    const suppressedDuplicate = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "suppress",
+        candidateIds: [duplicateCandidate.id],
+        decidedBy: "source-action-worker",
+        reason: "duplicate suppressed idempotently"
+      })
+    }), options);
+    const suppressedDuplicateBody = await suppressedDuplicate.json() as any;
+    expect(suppressedDuplicate.status).toBe(200);
+    expect(suppressedDuplicateBody.results[0]).toMatchObject({
+      reviewStatus: "suppressed",
+      candidate: { id: duplicateCandidate.id, status: "suppressed", decision: "suppressed_duplicate", targetRef: { rawStored: false } },
+      actionContract: { allowed: true, requestedAction: "suppress" },
+      collectionTrigger: { queued: false, unsafeJobQueued: false }
+    });
+
+    const duplicateRetry = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "retry",
+        candidateIds: [duplicateCandidate.id],
+        decidedBy: "source-action-worker",
+        reason: "retry suppressed duplicate"
+      })
+    }), options);
+    const duplicateRetryBody = await duplicateRetry.json() as any;
+    expect(duplicateRetry.status).toBe(200);
+    expect(duplicateRetryBody.results[0]).toMatchObject({
+      reviewStatus: "blocked",
+      actionContract: {
+        allowed: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "duplicate_source", severity: "blocking", retryable: false })
+        ])
+      }
+    });
+
+    const rejectedActivation = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "approve",
+        candidateIds: [rejectedCandidate.id],
+        approveMetadataOnly: true,
+        approvedBy: "source-action-worker",
+        reason: "try unsafe rejected activation"
+      })
+    }), options);
+    const rejectedActivationBody = await rejectedActivation.json() as any;
+    expect(rejectedActivation.status).toBe(200);
+    expect(rejectedActivationBody.results[0]).toMatchObject({
+      reviewStatus: "blocked",
+      actionContract: {
+        allowed: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "rejected_policy", severity: "blocking", retryable: false }),
+          expect.objectContaining({ code: "activation_disabled", severity: "blocking", retryable: false })
+        ])
+      },
+      collectionTrigger: { queued: false, unsafeJobQueued: false }
+    });
+
+    const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), options);
+    const inventoryBody = await inventory.json() as any;
+    expect(inventory.status).toBe(200);
+    expect(inventoryBody.sourcePackWorker.sourceHealth).toMatchObject({
+      schemaVersion: "dwm.source_health_operations.v1",
+      candidateStates: { retryable: 1, duplicate: 1 },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        privateTelegramContentExposed: false,
+        restrictedPayloadDownloadAllowed: false
+      }
+    });
+    expect(inventoryBody.sourcePackWorker.sourceHealth.typedBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate_source", family: "telegram", retryable: false }),
+      expect.objectContaining({ code: "rejected_policy", family: "darkweb_onion", retryable: false })
+    ]));
+    expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceHealth)).not.toContain("password-dump");
+    expect(frontier.snapshot()).toHaveLength(1);
+  });
+
   test("exposes Telegram-only source-growth pack coverage and health fields without live scraping", async () => {
     const store = new InMemoryScraperStore();
     const frontier = new FocusedFrontier();
