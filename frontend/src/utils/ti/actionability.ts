@@ -27,6 +27,7 @@ export type TiActionabilityModel = {
     webhookDeliveryHandoff: WorkflowHandoffContract
     consumerReadiness: ConsumerReadinessContract
     readiness: PublicTiReadinessContract
+    actionPayloads: PublicTiActionPayloadSet
     exportPayloads: {
         watchlist: TiHandoffExportPayload
         alertRebuild: TiHandoffExportPayload
@@ -74,6 +75,39 @@ export type PublicTiReadinessBlocker = {
     route: string
     recoverable: boolean
     source: 'public_result' | 'consumer_readiness' | 'entitlement_readiness' | 'delivery_readiness'
+}
+
+export type PublicTiActionPayloadKind = 'watchlist_add' | 'case_handoff' | 'webhook_delivery' | 'analyst_handoff_bundle' | 'source_enrichment'
+
+export type PublicTiActionPayloadSet = {
+    schemaVersion: 'ti.public_actor.action_payloads.v1'
+    actorId: string
+    query: string
+    generatedAt: string
+    payloads: {
+        watchlistAdd: PublicTiActionPayload<'watchlist_add'>
+        caseHandoff: PublicTiActionPayload<'case_handoff'>
+        webhookDelivery: PublicTiActionPayload<'webhook_delivery'>
+        analystHandoffBundle: PublicTiActionPayload<'analyst_handoff_bundle'>
+        sourceEnrichment: PublicTiActionPayload<'source_enrichment'>
+    }
+}
+
+export type PublicTiActionPayload<K extends PublicTiActionPayloadKind = PublicTiActionPayloadKind> = {
+    schemaVersion: 'ti.public_actor.action_payload.v1'
+    kind: K
+    label: string
+    actorId: string
+    query: string
+    generatedAt: string
+    method: 'POST'
+    route: string
+    backedRoute?: string
+    ready: boolean
+    unavailable: boolean
+    blockedBy: PublicTiReadinessBlocker[]
+    body: Record<string, unknown>
+    provenance: TiHandoffExportPayload['provenance']
 }
 
 export type WatchlistRelevanceContract = {
@@ -267,6 +301,15 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         exportPayloads,
         consumerReadiness,
     })
+    const actionPayloads = buildPublicTiActionPayloads({
+        result,
+        actor,
+        exportPayloads,
+        consumerReadiness,
+        readiness,
+        sourceProvenance,
+        enrichmentGapQueue,
+    })
 
     return {
         alertDisposition,
@@ -301,6 +344,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         webhookDeliveryHandoff: buildWebhookDeliveryHandoff(exportPayloads.webhookDelivery),
         consumerReadiness,
         readiness,
+        actionPayloads,
         exportPayloads,
         handoffs: {
             watchlistEndpoint,
@@ -311,6 +355,178 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
             caseBlockers,
         },
     }
+}
+
+function buildPublicTiActionPayloads(input: {
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    exportPayloads: TiActionabilityModel['exportPayloads']
+    consumerReadiness: ConsumerReadinessContract
+    readiness: PublicTiReadinessContract
+    sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
+    enrichmentGapQueue: EnrichmentGapQueueItem[]
+}): PublicTiActionPayloadSet {
+    const actorId = actorIdForQuery(input.result.query)
+    const sourceIds = uniqueStrings(input.sourceProvenance.map(source => source.sourceId))
+    const provenanceIds = input.sourceProvenance.map(source => ({
+        sourceId: source.sourceId,
+        sourceName: source.sourceName,
+        provenance: source.provenance,
+        captureId: source.captureId,
+        confidence: source.confidence,
+    }))
+    const commonContext = {
+        actorId,
+        query: input.result.query,
+        actorClass: input.actor.actorClass,
+        aliases: input.result.aliases,
+        generatedAt: input.result.generatedAt,
+        readinessState: input.readiness.state,
+        backedIds: input.readiness.backedIds,
+        sourceIds,
+        provenanceIds,
+    }
+    const watchlistTerms = readTermArray(input.exportPayloads.watchlist.body.terms)
+    const watchlistBlockers = blockersForAction(input.readiness, ['missing_org', 'missing_source_provenance', 'stale_provenance', 'entitlement_blocked', ...(watchlistTerms.length ? [] : ['missing_org_watchlist'] as const)])
+    const caseBlockers = blockersForAction(input.readiness, ['missing_org', 'missing_alert', 'missing_capture', 'missing_case_route', 'missing_source_provenance', 'stale_provenance', 'entitlement_blocked'])
+    const webhookBlockers = blockersForAction(input.readiness, ['missing_org', 'missing_alert', 'missing_capture', 'missing_webhook_destination', 'missing_source_provenance', 'stale_provenance', 'entitlement_blocked', 'unavailable_contract'])
+    const analystBlockers = input.readiness.blockers
+    const sourceBlockers = blockersForAction(input.readiness, ['missing_source_provenance', 'missing_capture', 'stale_provenance'])
+
+    return {
+        schemaVersion: 'ti.public_actor.action_payloads.v1',
+        actorId,
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        payloads: {
+            watchlistAdd: actionPayload({
+                kind: 'watchlist_add',
+                label: 'Watchlist add request',
+                actorId,
+                result: input.result,
+                route: '/v1/dwm/watchlists',
+                backedRoute: input.exportPayloads.watchlist.backedRoute,
+                body: {
+                    ...input.exportPayloads.watchlist.body,
+                    ...commonContext,
+                    source: 'public_ti',
+                    status: 'active',
+                },
+                provenance: input.exportPayloads.watchlist.provenance,
+                blockedBy: watchlistBlockers,
+            }),
+            caseHandoff: actionPayload({
+                kind: 'case_handoff',
+                label: 'Case draft request',
+                actorId,
+                result: input.result,
+                route: input.exportPayloads.case.endpoint ?? '/v1/cases',
+                backedRoute: input.exportPayloads.case.backedRoute,
+                body: {
+                    ...input.exportPayloads.case.body,
+                    ...commonContext,
+                    source: 'public_ti',
+                    noMutation: true,
+                },
+                provenance: input.exportPayloads.case.provenance,
+                blockedBy: caseBlockers,
+            }),
+            webhookDelivery: actionPayload({
+                kind: 'webhook_delivery',
+                label: 'Webhook dry-run request',
+                actorId,
+                result: input.result,
+                route: input.exportPayloads.webhookDelivery.endpoint ?? '/v1/dwm/webhooks/deliver',
+                backedRoute: input.exportPayloads.webhookDelivery.backedRoute,
+                body: {
+                    ...input.exportPayloads.webhookDelivery.body,
+                    ...commonContext,
+                    dryRun: true,
+                    noMutation: true,
+                },
+                provenance: input.exportPayloads.webhookDelivery.provenance,
+                blockedBy: webhookBlockers,
+            }),
+            analystHandoffBundle: actionPayload({
+                kind: 'analyst_handoff_bundle',
+                label: 'Analyst handoff bundle',
+                actorId,
+                result: input.result,
+                route: '/dashboard/dwm',
+                backedRoute: '/dashboard/dwm',
+                body: {
+                    schemaVersion: input.consumerReadiness.consumerSchemaVersion,
+                    ...commonContext,
+                    stages: input.consumerReadiness.bundlePreview.stages,
+                    readiness: input.readiness,
+                    actionRoutes: {
+                        watchlist: '/v1/dwm/watchlists',
+                        alertRebuild: '/v1/dwm/alerts/rebuild',
+                        case: '/v1/cases',
+                        webhookDelivery: '/v1/dwm/webhooks/deliver',
+                        enrichment: '/dashboard/ti/enrichment',
+                    },
+                },
+                provenance: input.exportPayloads.blockers.provenance,
+                blockedBy: analystBlockers,
+            }),
+            sourceEnrichment: actionPayload({
+                kind: 'source_enrichment',
+                label: 'Source enrichment request',
+                actorId,
+                result: input.result,
+                route: input.exportPayloads.enrichment.backedRoute ?? '/dashboard/ti/enrichment',
+                backedRoute: input.exportPayloads.enrichment.backedRoute,
+                body: {
+                    ...input.exportPayloads.enrichment.body,
+                    ...commonContext,
+                    tasks: input.enrichmentGapQueue,
+                    noMutation: true,
+                },
+                provenance: input.exportPayloads.enrichment.provenance,
+                blockedBy: sourceBlockers,
+            }),
+        },
+    }
+}
+
+function actionPayload<K extends PublicTiActionPayloadKind>(input: {
+    kind: K
+    label: string
+    actorId: string
+    result: TiSearchResponse
+    route: string
+    backedRoute?: string
+    body: Record<string, unknown>
+    provenance: TiHandoffExportPayload['provenance']
+    blockedBy: PublicTiReadinessBlocker[]
+}): PublicTiActionPayload<K> {
+    const uniqueBlockers = uniqueBy(input.blockedBy, blocker => `${blocker.code}:${blocker.stage}:${blocker.field}`)
+    return {
+        schemaVersion: 'ti.public_actor.action_payload.v1',
+        kind: input.kind,
+        label: input.label,
+        actorId: input.actorId,
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        method: 'POST',
+        route: input.route,
+        backedRoute: input.backedRoute,
+        ready: uniqueBlockers.length === 0,
+        unavailable: uniqueBlockers.length > 0,
+        blockedBy: uniqueBlockers,
+        body: input.body,
+        provenance: input.provenance,
+    }
+}
+
+function blockersForAction(readiness: PublicTiReadinessContract, codes: PublicTiReadinessBlocker['code'][]): PublicTiReadinessBlocker[] {
+    const allowed = new Set(codes)
+    return readiness.blockers.filter(blocker => allowed.has(blocker.code))
+}
+
+function actorIdForQuery(query: string) {
+    return `actor:${query.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unknown'}`
 }
 
 function buildPublicTiReadiness(input: {

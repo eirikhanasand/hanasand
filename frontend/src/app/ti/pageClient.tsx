@@ -930,6 +930,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <ConsumerReadinessPanel actionability={actionability} />
                 <ReadinessBlockersPanel actionability={actionability} />
+                <ActionPayloadsPanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
@@ -1019,6 +1020,62 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
             </div>
         </Panel>
+    )
+}
+
+function ActionPayloadsPanel({ actionability }: { actionability: TiActionabilityModel }) {
+    const payloads = [
+        actionability.actionPayloads.payloads.watchlistAdd,
+        actionability.actionPayloads.payloads.caseHandoff,
+        actionability.actionPayloads.payloads.webhookDelivery,
+        actionability.actionPayloads.payloads.analystHandoffBundle,
+        actionability.actionPayloads.payloads.sourceEnrichment,
+    ]
+
+    return (
+        <div data-public-ti-action-exports='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Action exports</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Validated request bodies for authenticated review. Copying does not change customer state.</p>
+                </div>
+                <CopyPayloadButton label='Action exports' payload={actionability.actionPayloads} />
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {payloads.map(payload => {
+                    const primaryBlocker = payload.blockedBy[0]
+                    return (
+                        <div key={payload.kind} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{payload.label}</p>
+                                        <span className={payload.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                            {payload.ready ? 'Ready' : 'Unavailable'}
+                                        </span>
+                                    </div>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{payload.route}</p>
+                                    {primaryBlocker ? (
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {primaryBlocker.handoff}</p>
+                                    ) : (
+                                        <p className='mt-1 text-[11px] leading-5 text-[#147a3b]'>Required IDs and provenance are present.</p>
+                                    )}
+                                </div>
+                                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                    {payload.backedRoute ? (
+                                        <a href={payload.backedRoute} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                            Open
+                                        </a>
+                                    ) : null}
+                                    <CopyPayloadButton label={payload.label} payload={payload} />
+                                </div>
+                            </div>
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
     )
 }
 
