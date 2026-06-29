@@ -1022,9 +1022,6 @@ function alertMatchesDwmAlertFilters(alert: any, url: URL) {
   if (!matchesParam(url, ["severity"], alert.severityOverride ?? alert.severity)) return false;
   if (!matchesParam(url, ["severityOverride"], alert.severityOverride ?? "none")) return false;
   if (!matchesParam(url, ["sourceFamily"], alert.sourceFamily)) return false;
-  if (!matchesParam(url, ["visibilityPolicy"], alert.workflowContext?.visibilityPolicy ?? alert.webhookContext?.visibilityPolicy)) return false;
-  if (!matchesParam(url, ["termCategory", "category"], alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory)) return false;
-  if (!matchesAnyParam(url, ["allowedRole", "memberRole"], alert.workflowContext?.membershipContext?.allowedViewerRoles ?? alert.webhookContext?.membershipContext?.allowedViewerRoles ?? [])) return false;
   if (!matchesParam(url, ["recommendedRoute", "route"], alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute)) return false;
   if (!matchesAnyParam(url, ["watchlistId"], alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [])) return false;
   if (!matchesAnyParam(url, ["watchlistItemId"], alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [])) return false;
@@ -1110,9 +1107,6 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     evidenceCount: alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
     sourceFamily: alert.sourceFamily,
     watchlistIds: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
-    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
-    watchlistTermContexts: alert.workflowContext?.watchlistTermContexts ?? [],
-    matchedTermCategory: alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory,
-    membershipContext: alert.workflowContext?.membershipContext ?? alert.webhookContext?.membershipContext
+    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? []
   };
 }

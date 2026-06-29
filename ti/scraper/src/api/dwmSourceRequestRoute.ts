@@ -5,10 +5,8 @@ import { buildDwmProductSnapshot } from "../product/dwmProduct.ts";
 import { applyDwmSeedCatalog, sourceDedupeKey } from "../product/dwmSourceInventory.ts";
 import {
   InMemoryDwmSourcePackActiveSourceAdapter,
-  InMemoryDwmSourcePackCollectionReceiptAdapter,
   InMemoryDwmSourcePackRegistryAdapter,
   InMemoryDwmSourcePackValidationQueueAdapter,
-  InMemoryDwmSourcePackWorkerRunAdapter,
   applyDwmSourcePackValidationResults,
   buildDwmSourcePackCollectionJobHandoff,
   enqueueDwmSourcePackCollectionTasks,
@@ -21,16 +19,12 @@ import {
   type DwmSourceCandidateValidationResult,
   type DwmSourcePackActiveSourceAdapter,
   type DwmSourcePackCandidateRecord,
-  type DwmSourcePackCollectionQueueReceiptRecord,
-  type DwmSourcePackCollectionReceiptAdapter,
   type DwmSourcePackFamily,
   type DwmSourcePackListQuery,
   type DwmSourcePackRecord,
   type DwmSourcePackRegistryAdapter,
   type DwmSourcePackValidationQueueAdapter,
-  type DwmSourcePackValidationQueueRecord,
-  type DwmSourcePackWorkerRunAdapter,
-  type DwmSourcePackWorkerRunRecord
+  type DwmSourcePackValidationQueueRecord
 } from "../storage/dwmSourcePackRegistry.ts";
 import { hashContent, nowIso, stableId } from "../utils.ts";
 import { json, readJson } from "./http.ts";
@@ -98,12 +92,23 @@ type DwmSourcePackCandidate = {
 type SourceGrowthFamily = DwmSourcePackFamily;
 type SourcePackRegistry = DwmSourcePackRecord;
 type SourcePackRegistryCandidate = DwmSourcePackCandidateRecord;
+type SourcePackWorkerRunRecord = {
+  id: string;
+  sourcePackId: string;
+  sourcePackLabel: string;
+  startedAt: string;
+  completedAt: string;
+  status: string;
+  actor: string;
+  validationJobKeys: string[];
+  sourceRecordSummary: Record<string, unknown>;
+  collectionQueueSummary: Record<string, unknown>;
+};
 
 const sourcePackRegistries = new WeakMap<object, InMemoryDwmSourcePackRegistryAdapter>();
 const sourcePackValidationQueues = new WeakMap<object, InMemoryDwmSourcePackValidationQueueAdapter>();
 const sourcePackActiveSources = new WeakMap<object, InMemoryDwmSourcePackActiveSourceAdapter>();
-const sourcePackWorkerRuns = new WeakMap<object, InMemoryDwmSourcePackWorkerRunAdapter>();
-const sourcePackCollectionReceipts = new WeakMap<object, InMemoryDwmSourcePackCollectionReceiptAdapter>();
+const sourcePackWorkerRuns = new WeakMap<object, SourcePackWorkerRunRecord[]>();
 
 export async function createDwmSourceRequest(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<DwmSourceRequestBody>(request);
@@ -524,28 +529,14 @@ function sourcePackActiveSourceStore(options: ApiServerOptions): DwmSourcePackAc
   return activeSources;
 }
 
-function sourcePackWorkerRunStore(options: ApiServerOptions): DwmSourcePackWorkerRunAdapter {
-  const configured = options.sourcePackWorkerRunStore as DwmSourcePackWorkerRunAdapter | undefined;
-  if (configured && typeof configured.save === "function" && typeof configured.list === "function") return configured;
+function sourcePackWorkerRunStore(options: ApiServerOptions): SourcePackWorkerRunRecord[] {
   const key = options.store as object;
-  let adapter = sourcePackWorkerRuns.get(key);
-  if (!adapter) {
-    adapter = new InMemoryDwmSourcePackWorkerRunAdapter();
-    sourcePackWorkerRuns.set(key, adapter);
+  let runs = sourcePackWorkerRuns.get(key);
+  if (!runs) {
+    runs = [];
+    sourcePackWorkerRuns.set(key, runs);
   }
-  return adapter;
-}
-
-function sourcePackCollectionReceiptStore(options: ApiServerOptions): DwmSourcePackCollectionReceiptAdapter {
-  const configured = options.sourcePackCollectionReceiptStore as DwmSourcePackCollectionReceiptAdapter | undefined;
-  if (configured && typeof configured.upsert === "function" && typeof configured.list === "function") return configured;
-  const key = options.store as object;
-  let adapter = sourcePackCollectionReceipts.get(key);
-  if (!adapter) {
-    adapter = new InMemoryDwmSourcePackCollectionReceiptAdapter();
-    sourcePackCollectionReceipts.set(key, adapter);
-  }
-  return adapter;
+  return runs;
 }
 
 function upsertSourcePackRegistry(options: ApiServerOptions, pack: SourcePackRegistry): SourcePackRegistry {
@@ -794,36 +785,9 @@ function handleSourcePackWorkerRun(body: DwmSourceRequestBody, options: ApiServe
     updateExisting: true
   });
   const handoff = buildDwmSourcePackCollectionJobHandoff(activeRows, { generatedAt: startedAt });
-  const persistedCollectionReceipts = persistedCollectionReceiptsForPack(registry.id, options);
-  const persistedTaskIds = new Set(persistedCollectionReceipts.map((receipt) => receipt.taskId));
-  const duplicatePersistedReceipts = handoff.jobs
-    .filter((job) => persistedTaskIds.has(job.id))
-    .map((job) => ({
-      status: "duplicate" as const,
-      taskId: job.id,
-      sourceId: job.sourceId,
-      candidateId: job.candidateId,
-      reason: "persisted_collection_receipt"
-    }));
-  const jobsToQueue = handoff.jobs.filter((job) => !persistedTaskIds.has(job.id));
-  const queuedCollection = enqueueDwmSourcePackCollectionTasks(options.frontier, jobsToQueue, options.store.listSources(), {
+  const collectionQueue = enqueueDwmSourcePackCollectionTasks(options.frontier, handoff.jobs, options.store.listSources(), {
     tenantId: body.tenantId ?? registry.tenantId
   });
-  const collectionQueue = {
-    ...queuedCollection,
-    receipts: [...duplicatePersistedReceipts, ...queuedCollection.receipts],
-    summary: {
-      queuedCount: queuedCollection.summary.queuedCount,
-      duplicateCount: queuedCollection.summary.duplicateCount + duplicatePersistedReceipts.length,
-      blockedCount: queuedCollection.summary.blockedCount,
-      taskCount: new Set([
-        ...(options.frontier.snapshot?.() ?? []).map((item: any) => String(item.task?.id ?? item.id)),
-        ...persistedTaskIds,
-        ...queuedCollection.receipts.filter((receipt) => receipt.status !== "blocked").map((receipt) => receipt.taskId)
-      ].filter(Boolean)).size
-    }
-  };
-  persistSourcePackWorkerCollectionReceipts(handoff.jobs, collectionQueue.receipts, options);
   persistSourcePackWorkerCollectionState(sourceWrite.sources, collectionQueue.receipts, options, startedAt);
 
   const completedAt = nowIso();
@@ -842,7 +806,7 @@ function handleSourcePackWorkerRun(body: DwmSourceRequestBody, options: ApiServe
       }
     ]
   });
-  const runRecord: DwmSourcePackWorkerRunRecord = {
+  const runRecord: SourcePackWorkerRunRecord = {
     id: stableId("dwm_source_pack_worker_run", `${savedPack.id}:${startedAt}`),
     sourcePackId: savedPack.id,
     sourcePackLabel: savedPack.label,
@@ -857,7 +821,7 @@ function handleSourcePackWorkerRun(body: DwmSourceRequestBody, options: ApiServe
     },
     collectionQueueSummary: collectionQueue.summary
   };
-  sourcePackWorkerRunStore(options).save(runRecord);
+  sourcePackWorkerRunStore(options).push(runRecord);
 
   return json({
     action: "pack_worker_run",
@@ -1013,37 +977,6 @@ function persistSourcePackWorkerCollectionState(
       },
       updatedAt: at
     } as SourceRecord);
-  }
-}
-
-function persistedCollectionReceiptsForPack(sourcePackId: string, options: ApiServerOptions): DwmSourcePackCollectionQueueReceiptRecord[] {
-  return sourcePackCollectionReceiptStore(options).list().filter((receipt) => receipt.packId === sourcePackId);
-}
-
-function persistSourcePackWorkerCollectionReceipts(
-  jobs: ReturnType<typeof buildDwmSourcePackCollectionJobHandoff>["jobs"],
-  receipts: Array<{ status: string; taskId: string; sourceId: string; candidateId: string; reason?: string }>,
-  options: ApiServerOptions
-) {
-  const jobById = new Map(jobs.map((job) => [job.id, job]));
-  const receiptStore = sourcePackCollectionReceiptStore(options);
-  for (const receipt of receipts) {
-    const job = jobById.get(receipt.taskId);
-    if (!job) continue;
-    receiptStore.upsert({
-      status: receipt.status === "blocked" ? "blocked" : receipt.status === "duplicate" ? "duplicate" : "queued",
-      taskId: receipt.taskId,
-      sourceId: receipt.sourceId,
-      candidateId: receipt.candidateId,
-      reason: receipt.reason,
-      packId: job.packId,
-      requestId: job.requestId,
-      family: job.family,
-      queuedAt: job.queuedAt,
-      parserStatus: job.parserStatus,
-      validationJobKey: job.validationJobKey,
-      targetRawStored: false
-    });
   }
 }
 
@@ -1232,7 +1165,7 @@ function sourcePackWorkerStateForPacks(packs: SourcePackRegistry[], options: Api
   const packIds = new Set(packs.map((pack) => pack.id));
   const queueRecords = sourcePackValidationQueue(options).list().filter((record) => record.packIds.some((packId) => packIds.has(packId)));
   const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
-  const runs = sourcePackWorkerRunStore(options).list().filter((run) => packIds.has(run.sourcePackId));
+  const runs = sourcePackWorkerRunStore(options).filter((run) => packIds.has(run.sourcePackId));
   return {
     readiness: sourcePackWorkerReadinessCounters(packs, queueRecords, activeRows),
     lastRun: runs.at(-1)
@@ -1249,12 +1182,7 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
   const queueRecords = sourcePackValidationQueue(options).list().filter((record) => record.packIds.some((packId) => packIds.has(packId)));
   const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
   const frontierTasks = options.frontier.snapshot().map((item: any) => item.task ?? item).filter((task: any) => packIds.has(String(task.planning?.sourcePack?.packId ?? "")));
-  const persistedQueueReceipts = sourcePackCollectionReceiptStore(options).list().filter((receipt) => packIds.has(receipt.packId) && receipt.status !== "blocked");
-  const queuedTaskIds = new Set([
-    ...frontierTasks.map((task: any) => String(task.id)),
-    ...persistedQueueReceipts.map((receipt) => receipt.taskId)
-  ]);
-  const lastRun = sourcePackWorkerRunStore(options).list().filter((run) => packIds.has(run.sourcePackId)).at(-1);
+  const lastRun = sourcePackWorkerRunStore(options).filter((run) => packIds.has(run.sourcePackId)).at(-1);
   const parserSourceFamilyCounts = SOURCE_GROWTH_FAMILIES.reduce<Record<SourceGrowthFamily, Record<string, number>>>((acc, family) => {
     acc[family] = {};
     return acc;
@@ -1268,7 +1196,7 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     totalCandidates: candidates.length,
     accepted: candidates.filter((candidate) => !["rejected", "duplicate", "suppressed", "disabled", "failed"].includes(candidate.status)).length,
     rejected: candidates.filter((candidate) => candidate.status === "rejected" || candidate.status === "failed").length,
-    queued: queueRecords.filter((record) => record.status === "queued" || record.status === "validating").length + queuedTaskIds.size,
+    queued: queueRecords.filter((record) => record.status === "queued" || record.status === "validating").length + frontierTasks.length,
     duplicateOrUpserted: candidates.filter((candidate) => candidate.status === "duplicate").length + Number(lastRun?.sourceRecordSummary?.upsertedCount ?? 0),
     metadataOnly: candidates.filter((candidate) => candidate.policyBoundary?.metadataOnly === true).length,
     restrictedBlocked: candidates.filter((candidate) => (
@@ -1285,7 +1213,7 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     parserSourceFamilyCounts,
     sourceFamilyCounts: sourceFamilyCoverage({ sources, registry: packs[0] }),
     activeSourceRows: activeRows.length,
-    queuedCollectionTasks: queuedTaskIds.size,
+    queuedCollectionTasks: frontierTasks.length,
     safeOutput: sourcePackSafeOutput()
   };
 }
