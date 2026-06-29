@@ -12,8 +12,11 @@ import {
   type AnalystHandoffKind,
   type ActorWatchlistAdapterValue,
 } from "./analystHandoff.ts";
+import { nowIso } from "../utils.ts";
 
 export const ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION = "hanasand.analyst_handoff.consumer.v1" as const;
+export const ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION = "hanasand.analyst_handoff.validation_report.v1" as const;
+export const PUBLIC_TI_HANDOFF_SCHEMA_VERSION = "ti.public_actor.authenticated_bridge.v1" as const;
 export const ORG_ALERT_TERMS_EXPORT_SCHEMA_VERSION = "organization.watchlist_alert_terms_export.v1" as const;
 export const ORG_ALERT_GENERATION_REF_SCHEMA_VERSION = "organization.watchlist_alert_generation_ref.v1" as const;
 export const DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION = "dwm.webhook.audit_event.v1" as const;
@@ -21,6 +24,21 @@ export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION = "dwm.webhook.des
 export const DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION = "dwm.entitlement_read_model.v1" as const;
 export const DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION = "dwm.source_worker_readiness.v1" as const;
 export const CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION = "case.route_availability.v1" as const;
+export const HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION = "helpdesk.action_availability.v1" as const;
+
+export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
+  consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+  validationReport: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
+  publicTi: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
+  orgAlertTermsExport: ORG_ALERT_TERMS_EXPORT_SCHEMA_VERSION,
+  orgAlertGenerationRef: ORG_ALERT_GENERATION_REF_SCHEMA_VERSION,
+  webhookAuditEvent: DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION,
+  webhookDestinationLifecycle: DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION,
+  entitlementReadModel: DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION,
+  sourceWorkerReadiness: DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION,
+  caseRouteAvailability: CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION,
+  helpdeskActionAvailability: HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION
+} as const;
 
 export type AnalystHandoffConsumerBlockerCode =
   | AnalystHandoffBlockerCode
@@ -37,11 +55,23 @@ export type AnalystHandoffConsumerBlockerCode =
   | "webhook_audit_contract_mismatch"
   | "webhook_destination_lifecycle_mismatch"
   | "source_worker_not_ready"
-  | "case_route_unavailable";
+  | "case_route_unavailable"
+  | "public_ti_contract_mismatch"
+  | "helpdesk_action_unavailable";
+
+export type AnalystHandoffOwnerLane =
+  | "org"
+  | "alert"
+  | "source"
+  | "entitlement"
+  | "webhook"
+  | "case"
+  | "publicTI"
+  | "helpdesk";
 
 export type AnalystHandoffConsumerBlocker = Omit<AnalystHandoffBlocker, "code"> & {
   code: AnalystHandoffConsumerBlockerCode;
-  stage: AnalystHandoffConsumerStageName | "bundle" | "membership" | "entitlement" | "org_terms_export" | "webhook_audit" | "webhook_lifecycle" | "source_readiness" | "case_route";
+  stage: AnalystHandoffConsumerStageName | "bundle" | "membership" | "entitlement" | "org_terms_export" | "webhook_audit" | "webhook_lifecycle" | "source_readiness" | "case_route" | "public_ti" | "helpdesk";
 };
 
 export type AnalystHandoffConsumerStageName = "publicTi" | "orgWatchlist" | "caseHandoff" | "webhookTrigger";
@@ -77,6 +107,37 @@ export type AnalystHandoffCaseRouteAvailability = {
   available: boolean;
   path: "/v1/cases";
   methods: Array<"POST">;
+  reason?: string;
+  checkedAt: string;
+};
+
+export type AnalystHandoffPublicTiContract = {
+  schemaVersion: typeof PUBLIC_TI_HANDOFF_SCHEMA_VERSION;
+  source: "public-ti";
+  action: string;
+  artifactId: string;
+  query: string;
+  generatedAt: string;
+  artifact: {
+    id: string;
+    kind: string;
+    label: string;
+    freshness?: string;
+    provenance?: string[];
+    watchlistTerms?: Array<{ kind: string; value: string; notes?: string }>;
+  };
+  orgRequired: boolean;
+  sourceRequired: boolean;
+  stale: boolean;
+  missing: string[];
+  blockers: Array<{ code: string; detail: string }>;
+};
+
+export type AnalystHandoffHelpdeskActionAvailability = {
+  schemaVersion: typeof HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION;
+  available: boolean;
+  action: "open_case" | "escalate" | "assign" | "notify_customer";
+  route?: string;
   reason?: string;
   checkedAt: string;
 };
@@ -225,10 +286,12 @@ export type AnalystHandoffConsumerBundle = {
   schemaVersion: typeof ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION;
   generatedAt: string;
   staleEvidenceBefore?: string;
+  publicTi?: AnalystHandoffPublicTiContract;
   entitlement?: AnalystHandoffConsumerEntitlement;
   membership?: AnalystHandoffConsumerMembership;
   sourceReadiness?: AnalystHandoffSourceWorkerReadiness;
   caseRoute?: AnalystHandoffCaseRouteAvailability;
+  helpdeskAction?: AnalystHandoffHelpdeskActionAvailability;
   stages: Partial<{
     publicTi: ActorWatchlistAdapterValue;
     orgWatchlist: AlertGenerationAdapterValue & {
@@ -259,6 +322,36 @@ export type AnalystHandoffConsumerValidation = {
     sourceReadinessSatisfied: boolean;
     caseRouteAvailable: boolean;
   };
+};
+
+export type AnalystHandoffLaneReadiness = {
+  owner: AnalystHandoffOwnerLane;
+  ok: boolean;
+  blockerCodes: AnalystHandoffConsumerBlockerCode[];
+  blockerCount: number;
+  recommendedOwnerLane: AnalystHandoffOwnerLane;
+};
+
+export type AnalystHandoffValidationReport = {
+  schemaVersion: typeof ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  bundleCount: number;
+  passedCount: number;
+  failedCount: number;
+  blockerCodes: AnalystHandoffConsumerBlockerCode[];
+  productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
+  results: Array<{
+    file?: string;
+    ok: boolean;
+    schemaVersion: typeof ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION;
+    blockerCount: number;
+    blockerCodes: AnalystHandoffConsumerBlockerCode[];
+    blockers: Array<Pick<AnalystHandoffConsumerBlocker, "code" | "stage" | "field" | "detail" | "recoverable"> & { ownerLane: AnalystHandoffOwnerLane }>;
+    productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
+    contracts: AnalystHandoffConsumerValidation["contracts"] | null;
+    identity?: AnalystHandoffIdentity;
+  }>;
 };
 
 export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHandoffConsumerValidation {
@@ -303,9 +396,11 @@ export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHan
   blockers.push(...validateCaseStage(stages.caseHandoff, identity));
   blockers.push(...validateWebhookStage(stages.webhookTrigger, identity));
   blockers.push(...validateMembership(bundle.membership, identity));
+  blockers.push(...validatePublicTiContract(bundle.publicTi, stages.publicTi?.handoff, bundle.staleEvidenceBefore));
   blockers.push(...validateEntitlement(bundle.entitlement));
   blockers.push(...validateSourceReadiness(bundle.sourceReadiness, identity));
   blockers.push(...validateCaseRouteAvailability(bundle.caseRoute));
+  blockers.push(...validateHelpdeskAction(bundle.helpdeskAction));
 
   return {
     schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -330,6 +425,7 @@ export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHan
 export function summarizeAnalystHandoffConsumerBundle(input: unknown) {
   const validation = validateAnalystHandoffConsumerBundle(input);
   const bundle = input as Partial<AnalystHandoffConsumerBundle>;
+  const productReadiness = productReadinessFor(validation.blockers);
   return {
     ok: validation.ok,
     schemaVersion: validation.schemaVersion,
@@ -338,6 +434,7 @@ export function summarizeAnalystHandoffConsumerBundle(input: unknown) {
     stageCount: validation.stageCount,
     identity: validation.identity,
     contracts: validation.contracts,
+    productReadiness,
     sourceReadiness: bundle.sourceReadiness
       ? {
           schemaVersion: bundle.sourceReadiness.schemaVersion,
@@ -361,6 +458,54 @@ export function summarizeAnalystHandoffConsumerBundle(input: unknown) {
       caseHandoff: requestSummary(bundle.stages?.caseHandoff?.request),
       webhookTrigger: requestSummary(bundle.stages?.webhookTrigger?.request)
     }
+  };
+}
+
+export function buildAnalystHandoffValidationReport(input: {
+  checkedAt?: string;
+  results: Array<{ file?: string; bundle?: unknown; error?: unknown }>;
+}): AnalystHandoffValidationReport {
+  const results = input.results.map((item) => {
+    if (item.error) {
+      const synthetic = blocker("invalid_request", "bundle", "file", item.error instanceof Error ? item.error.message : "Unable to read or parse handoff bundle.", true);
+      const readiness = productReadinessFor([synthetic]);
+      return {
+        file: item.file,
+        ok: false,
+        schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+        blockerCount: 1,
+        blockerCodes: ["invalid_request" as const],
+        blockers: [{ ...synthetic, ownerLane: ownerLaneForBlocker(synthetic) }],
+        productReadiness: readiness,
+        contracts: null,
+        identity: undefined
+      };
+    }
+    const validation = validateAnalystHandoffConsumerBundle(item.bundle);
+    const readiness = productReadinessFor(validation.blockers);
+    return {
+      file: item.file,
+      ok: validation.ok,
+      schemaVersion: validation.schemaVersion,
+      blockerCount: validation.blockers.length,
+      blockerCodes: uniqueBlockerCodes(validation.blockers),
+      blockers: validation.blockers.map((blocker) => ({ ...blocker, ownerLane: ownerLaneForBlocker(blocker) })),
+      productReadiness: readiness,
+      contracts: validation.contracts,
+      identity: validation.identity
+    };
+  });
+  const allBlockers = results.flatMap((item) => item.blockers.map(({ ownerLane: _ownerLane, ...blocker }) => blocker as AnalystHandoffConsumerBlocker));
+  return {
+    schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
+    checkedAt: input.checkedAt || nowIso(),
+    ok: results.every((item) => item.ok),
+    bundleCount: results.length,
+    passedCount: results.filter((item) => item.ok).length,
+    failedCount: results.filter((item) => !item.ok).length,
+    blockerCodes: [...new Set(results.flatMap((item) => item.blockerCodes))].sort() as AnalystHandoffConsumerBlockerCode[],
+    productReadiness: productReadinessFor(allBlockers),
+    results
   };
 }
 
@@ -573,6 +718,37 @@ function validateMembership(membership: AnalystHandoffConsumerMembership | undef
   return [];
 }
 
+function validatePublicTiContract(
+  publicTi: AnalystHandoffPublicTiContract | undefined,
+  handoff: AnalystHandoffEnvelope<"actor_watchlist_candidate", unknown> | undefined,
+  staleEvidenceBefore?: string
+): AnalystHandoffConsumerBlocker[] {
+  if (!publicTi) return [];
+  const blockers: AnalystHandoffConsumerBlocker[] = [];
+  if (publicTi.schemaVersion !== PUBLIC_TI_HANDOFF_SCHEMA_VERSION) {
+    blockers.push(blocker("unsupported_schema", "public_ti", "publicTi.schemaVersion", `Expected ${PUBLIC_TI_HANDOFF_SCHEMA_VERSION}.`, false));
+  }
+  if (publicTi.source !== "public-ti") {
+    blockers.push(blocker("public_ti_contract_mismatch", "public_ti", "publicTi.source", "Public TI handoff source must be public-ti.", false));
+  }
+  if (!publicTi.query.trim() || !publicTi.artifactId.trim()) {
+    blockers.push(blocker("public_ti_contract_mismatch", "public_ti", "publicTi.query", "Public TI handoff requires query and artifact id.", true));
+  }
+  if (!publicTi.artifact?.provenance?.length) {
+    blockers.push(blocker("missing_provenance", "public_ti", "publicTi.artifact.provenance", "Public TI handoff requires artifact provenance.", true));
+  }
+  if (publicTi.stale || isStale(publicTi.artifact?.freshness, staleEvidenceBefore)) {
+    blockers.push(blocker("stale_evidence", "public_ti", "publicTi.artifact.freshness", "Public TI handoff evidence is stale.", true));
+  }
+  if (!publicTi.artifact?.watchlistTerms?.length) {
+    blockers.push(blocker("missing_watchlist_term", "public_ti", "publicTi.artifact.watchlistTerms", "Public TI handoff needs at least one watchlist term.", true));
+  }
+  if (handoff?.identity?.artifactId && publicTi.artifactId !== handoff.identity.artifactId) {
+    blockers.push(blocker("identity_mismatch", "public_ti", "publicTi.artifactId", "Public TI artifact id does not match consumer handoff identity.", false));
+  }
+  return blockers;
+}
+
 function validateEntitlement(entitlement?: AnalystHandoffConsumerEntitlement): AnalystHandoffConsumerBlocker[] {
   if (!entitlement) return [];
   if (entitlement.schemaVersion && entitlement.schemaVersion !== DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION) {
@@ -614,6 +790,17 @@ function validateCaseRouteAvailability(route: AnalystHandoffCaseRouteAvailabilit
   return [];
 }
 
+function validateHelpdeskAction(action: AnalystHandoffHelpdeskActionAvailability | undefined): AnalystHandoffConsumerBlocker[] {
+  if (!action) return [];
+  if (action.schemaVersion !== HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION) {
+    return [blocker("unsupported_schema", "helpdesk", "helpdeskAction.schemaVersion", `Expected ${HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION}.`, false)];
+  }
+  if (!action.available) {
+    return [blocker("helpdesk_action_unavailable", "helpdesk", "helpdeskAction.available", action.reason || `Helpdesk action ${action.action} is unavailable.`, true)];
+  }
+  return [];
+}
+
 function identityMismatchBlocker(stage: AnalystHandoffConsumerStageName, error: unknown): AnalystHandoffConsumerBlocker {
   const typed = error as AnalystHandoffIdentityMismatchError;
   return blocker("identity_mismatch", stage, `${stage}.handoff.identity.${String(typed.field || "unknown")}`, error instanceof Error ? error.message : "Handoff identity changed between stages.", false);
@@ -627,6 +814,38 @@ function requestSummary(request: unknown) {
     path: typed.path,
     bodyKeys: Object.keys(typed.body || {})
   };
+}
+
+function productReadinessFor(blockers: AnalystHandoffConsumerBlocker[]): Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness> {
+  const lanes: AnalystHandoffOwnerLane[] = ["org", "alert", "source", "entitlement", "webhook", "case", "publicTI", "helpdesk"];
+  return Object.fromEntries(lanes.map((owner) => {
+    const owned = blockers.filter((blocker) => ownerLaneForBlocker(blocker) === owner);
+    const blockerCodes = uniqueBlockerCodes(owned);
+    return [owner, {
+      owner,
+      ok: owned.length === 0,
+      blockerCodes,
+      blockerCount: owned.length,
+      recommendedOwnerLane: owner
+    }];
+  })) as Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
+}
+
+function ownerLaneForBlocker(blocker: Pick<AnalystHandoffConsumerBlocker, "code" | "stage" | "field">): AnalystHandoffOwnerLane {
+  if (blocker.stage === "org_terms_export" || blocker.code === "alert_generation_ref_mismatch" || blocker.code === "org_terms_contract_mismatch") return "org";
+  if (blocker.stage === "entitlement" || blocker.code === "entitlement_blocked") return "entitlement";
+  if (blocker.stage === "publicTi" || blocker.stage === "public_ti" || blocker.code === "public_ti_contract_mismatch" || blocker.code === "unsupported_actor_artifact" || blocker.code === "missing_watchlist_term") return "publicTI";
+  if (blocker.stage === "source_readiness" || blocker.code === "source_worker_not_ready" || blocker.code === "missing_provenance") return "source";
+  if (blocker.stage === "webhookTrigger" || blocker.stage === "webhook_audit" || blocker.stage === "webhook_lifecycle" || blocker.code.startsWith("webhook_")) return "webhook";
+  if (blocker.stage === "caseHandoff" || blocker.stage === "case_route" || blocker.code === "case_route_unavailable") return "case";
+  if (blocker.stage === "helpdesk" || blocker.code === "helpdesk_action_unavailable") return "helpdesk";
+  if (blocker.code === "absent_alert_id" || blocker.stage === "orgWatchlist" || blocker.code === "missing_watchlist_id" || blocker.code === "missing_watchlist_item") return "alert";
+  if (blocker.code === "nonmember") return "org";
+  return "alert";
+}
+
+function uniqueBlockerCodes(blockers: Array<Pick<AnalystHandoffConsumerBlocker, "code">>) {
+  return [...new Set(blockers.map((item) => item.code))].sort() as AnalystHandoffConsumerBlockerCode[];
 }
 
 function hasNoStageBlockers(blockers: AnalystHandoffConsumerBlocker[], stage: AnalystHandoffConsumerBlocker["stage"]) {

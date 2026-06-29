@@ -8,6 +8,8 @@ import {
 } from "../product/analystHandoff.ts";
 import {
   ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+  ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
+  buildAnalystHandoffValidationReport,
   validateAnalystHandoffConsumerBundle,
   type AnalystHandoffConsumerBlockerCode,
   type AnalystHandoffConsumerBundle,
@@ -239,6 +241,42 @@ describe("analyst handoff consumer validation", () => {
     expect(codes).not.toContain("source_worker_not_ready");
     expect(validation.contracts.sourceReadinessSatisfied).toBe(true);
   });
+
+  test("builds lane-owned readiness reports for downstream adoption", () => {
+    const happy = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:00:00.000Z",
+      results: [
+        { file: "happy.json", bundle: happy },
+        { file: "missing-org-ref.json", bundle: withMissingOrgRef(happy) },
+        { file: "missing-alert-request.json", bundle: withMissingAlertRequest(happy) },
+        { file: "missing-case-route.json", bundle: withMissingCaseRoute(happy) },
+        { file: "stale-source.json", bundle: withStaleSource(happy) },
+        { file: "entitlement-denied.json", bundle: withEntitlementDenied(happy) },
+        { file: "webhook-lifecycle-missing.json", bundle: withMissingWebhookLifecycle(happy) },
+        { file: "public-ti-provenance-missing.json", bundle: withPublicTiMissingProvenance(happy) },
+        { file: "helpdesk-unavailable.json", bundle: withHelpdeskUnavailable(happy) }
+      ]
+    });
+
+    expect(report.schemaVersion).toBe(ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION);
+    expect(report.ok).toBe(false);
+    expect(report.bundleCount).toBe(9);
+    expect(report.passedCount).toBe(1);
+    expect(report.failedCount).toBe(8);
+    expect(report.productReadiness.org.blockerCodes).toContain("alert_generation_ref_mismatch");
+    expect(report.productReadiness.alert.blockerCodes).toContain("missing_watchlist_id");
+    expect(report.productReadiness.source.blockerCodes).toContain("source_worker_not_ready");
+    expect(report.productReadiness.entitlement.blockerCodes).toContain("entitlement_blocked");
+    expect(report.productReadiness.webhook.blockerCodes).toContain("webhook_destination_lifecycle_mismatch");
+    expect(report.productReadiness.case.blockerCodes).toContain("case_route_unavailable");
+    expect(report.productReadiness.publicTI.blockerCodes).toContain("missing_provenance");
+    expect(report.productReadiness.helpdesk.blockerCodes).toContain("helpdesk_action_unavailable");
+
+    const publicTiResult = report.results.find((item) => item.file === "public-ti-provenance-missing.json");
+    expect(publicTiResult?.productReadiness.publicTI.recommendedOwnerLane).toBe("publicTI");
+    expect(publicTiResult?.blockers.some((item) => item.ownerLane === "publicTI")).toBe(true);
+  });
 });
 
 function loadFixture(name: string): unknown {
@@ -415,6 +453,98 @@ function caseRoute(available: boolean) {
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function withMissingOrgRef(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  if (fixture.stages.orgWatchlist?.termsExport?.activeTerms?.[0]) {
+    delete fixture.stages.orgWatchlist.termsExport.activeTerms[0].alertGenerationRef;
+  }
+  return fixture;
+}
+
+function withMissingAlertRequest(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  if (fixture.stages.orgWatchlist?.request.body) fixture.stages.orgWatchlist.request.body.watchlistId = "";
+  if (fixture.stages.caseHandoff?.request.body) fixture.stages.caseHandoff.request.body.alertId = "";
+  if (fixture.stages.webhookTrigger?.request.body) fixture.stages.webhookTrigger.request.body.alertId = "";
+  return fixture;
+}
+
+function withMissingCaseRoute(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  delete fixture.caseRoute;
+  return fixture;
+}
+
+function withStaleSource(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  fixture.sourceReadiness = {
+    schemaVersion: "dwm.source_worker_readiness.v1",
+    ready: false,
+    freshProvenance: false,
+    sourceIds: [],
+    blockers: ["source health stale"],
+    checkedAt: "2026-06-29T01:00:00.000Z"
+  };
+  return fixture;
+}
+
+function withEntitlementDenied(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  fixture.entitlement = {
+    schemaVersion: "dwm.entitlement_read_model.v1",
+    allowed: false,
+    reason: "Plan limit reached.",
+    feature: "dwm_alert_generation",
+    plan: "trial"
+  };
+  return fixture;
+}
+
+function withMissingWebhookLifecycle(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  delete fixture.stages.webhookTrigger?.destinationLifecycle;
+  return fixture;
+}
+
+function withPublicTiMissingProvenance(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  fixture.publicTi = {
+    schemaVersion: "ti.public_actor.authenticated_bridge.v1",
+    source: "public-ti",
+    action: "create_watchlist",
+    artifactId: "artifact_lumma_acme",
+    query: "Lumma C2",
+    generatedAt: "2026-06-29T00:14:00.000Z",
+    artifact: {
+      id: "artifact_lumma_acme",
+      kind: "tool",
+      label: "Lumma C2",
+      freshness: "2026-06-29T00:10:00.000Z",
+      provenance: [],
+      watchlistTerms: [{ kind: "domain", value: "acme.com" }]
+    },
+    orgRequired: true,
+    sourceRequired: true,
+    stale: false,
+    missing: ["provenance"],
+    blockers: [{ code: "source_required", detail: "Attach source provenance." }]
+  };
+  return fixture;
+}
+
+function withHelpdeskUnavailable(input: AnalystHandoffConsumerBundle): AnalystHandoffConsumerBundle {
+  const fixture = clone(input);
+  fixture.helpdeskAction = {
+    schemaVersion: "helpdesk.action_availability.v1",
+    available: false,
+    action: "open_case",
+    route: "/v1/cases",
+    reason: "Helpdesk case workflow is not mounted.",
+    checkedAt: "2026-06-29T01:00:00.000Z"
+  };
+  return fixture;
 }
 
 function alertFixture(overrides: { organizationId?: string; caseIdCandidate?: string; casePath?: string } = {}): DwmAlert & {
