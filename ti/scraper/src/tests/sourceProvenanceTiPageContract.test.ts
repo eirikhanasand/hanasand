@@ -13,6 +13,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -29,6 +30,7 @@ import {
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
   buildSourceProvenanceSourceFreshnessGapPacket,
+  buildSourceProvenanceParserHealthAlertPacket,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -2034,6 +2036,170 @@ describe("source provenance TI page contract", () => {
     expect(packet.lifecycle.nextTransitions).toEqual(["test_source", "repair_provenance"]);
     expect(JSON.stringify(packet)).not.toContain("rawText");
     expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("builds parser health alerts from lifecycle state for source ops and alert generation", () => {
+    const { lifecycle } = buildBlockedSourceLifecycle();
+    const packet = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      lifecycleId: lifecycle.id,
+      sourcePackActivationReadinessId: lifecycle.sourcePackActivationReadinessId,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(packet.summary).toMatchObject({
+      alertCount: 3,
+      sourceFamilies: expect.arrayContaining(["actor_page", "darkweb_metadata", "telegram_public"]),
+      retryableCount: 1,
+      policyBlockedCount: 1,
+      freshnessBlockedCount: 0,
+      alertGenerationReady: false,
+      nextRetryAt: "2026-06-29T12:37:00.000Z"
+    });
+    expect(packet.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        alertType: "parser_retry_scheduled",
+        severity: "blocking",
+        policyStatus: "allowed",
+        parserStatus: expect.objectContaining({
+          state: "retry_scheduled",
+          failureReason: "Parser test is retryable and must wait for the next retry window."
+        }),
+        retryState: expect.objectContaining({
+          retryable: true,
+          nextRetryAt: "2026-06-29T12:37:00.000Z",
+          nextAction: "retry_parser"
+        }),
+        provenance: expect.objectContaining({
+          lifecycleId: lifecycle.id,
+          sourcePackActivationReadinessId: lifecycle.sourcePackActivationReadinessId,
+          stage: "retry_backoff",
+          fixtureBacked: true,
+          sourceHealthProofId: expect.any(String)
+        }),
+        freshness: expect.objectContaining({
+          state: "fresh",
+          newestEvidenceAt: "2026-06-01T10:15:00.000Z"
+        }),
+        enrichmentGap: expect.objectContaining({
+          type: "parser_retry",
+          ownerLane: "parser",
+          nextAction: "retry_parser"
+        }),
+        alertGenerationImpact: expect.objectContaining({
+          ready: false,
+          webhookConsumable: true,
+          publicTiReady: false
+        }),
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          body: expect.objectContaining({ action: "retry", dryRun: true }),
+          liveNetworkFetch: false
+        }),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      }),
+      expect.objectContaining({
+        alertType: "policy_blocked",
+        policyStatus: "approval_required",
+        parserStatus: expect.objectContaining({ state: "blocked" }),
+        retryState: expect.objectContaining({
+          retryable: false,
+          nextAction: "request_policy_approval"
+        }),
+        enrichmentGap: expect.objectContaining({
+          type: "policy_validation",
+          ownerLane: "policy"
+        }),
+        route: expect.objectContaining({
+          body: expect.objectContaining({ action: "request_approval", dryRun: true })
+        })
+      })
+    ]));
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        ready: false,
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true }),
+          liveNetworkFetch: false
+        })
+      }),
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        requiredFields: expect.arrayContaining(["rows[].route", "rows[].retryState"])
+      }),
+      expect.objectContaining({
+        consumer: "webhook",
+        ready: true,
+        route: expect.objectContaining({
+          path: "/v1/dwm/webhooks/dry-run",
+          liveNetworkFetch: false
+        })
+      })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].sourceFamily",
+      "rows[].parserStatus",
+      "rows[].provenance",
+      "rows[].alertGenerationImpact"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("keeps parser health alert packet ready when lifecycle has fresh tested evidence", () => {
+    const { lifecycle } = buildFreshSourceLifecycle();
+    const packet = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+      ok: true,
+      summary: {
+        alertCount: 0,
+        sourceFamilies: [],
+        retryableCount: 0,
+        policyBlockedCount: 0,
+        freshnessBlockedCount: 0,
+        alertGenerationReady: true
+      },
+      rows: [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true }),
+      expect.objectContaining({ consumer: "webhook", ready: false })
+    ]));
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {

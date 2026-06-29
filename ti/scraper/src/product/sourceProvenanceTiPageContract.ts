@@ -17,6 +17,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "t
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1068,6 +1069,112 @@ export type TiSourceProvenanceSourceFreshnessGapConsumer = {
     liveNetworkFetch: false;
   };
   requiredFields: string[];
+};
+
+export type TiSourceProvenanceParserHealthAlertPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute?: string;
+  lifecycleId: string;
+  sourcePackActivationReadinessId: string;
+  rows: TiSourceProvenanceParserHealthAlertRow[];
+  summary: {
+    alertCount: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    retryableCount: number;
+    policyBlockedCount: number;
+    freshnessBlockedCount: number;
+    alertGenerationReady: boolean;
+    nextRetryAt?: string;
+  };
+  consumers: TiSourceProvenanceParserHealthAlertConsumer[];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceParserHealthAlertRow = {
+  alertId: string;
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  alertType: "parser_retry_scheduled" | "policy_blocked" | "parser_not_ready" | "freshness_missing";
+  severity: "info" | "warning" | "blocking";
+  sourceIds: string[];
+  candidateIds: string[];
+  policyStatus: "allowed" | "approval_required";
+  parserStatus: {
+    state: "ready" | "not_ready" | "retry_scheduled" | "blocked";
+    parserReadyCount: number;
+    failureReason?: string;
+  };
+  retryState: {
+    retryable: boolean;
+    nextRetryAt?: string;
+    nextAction: "retry_parser" | "request_policy_approval" | "test_source" | "repair_provenance";
+  };
+  provenance: {
+    lifecycleId: string;
+    sourcePackActivationReadinessId: string;
+    stage: TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"];
+    evidenceGeneratedAt: string;
+    sourceHealthProofId: string;
+    fixtureBacked: true;
+  };
+  freshness: {
+    state: TiSourceProvenanceScraperEnrichmentLifecycle["enrichmentFreshness"]["state"];
+    newestEvidenceAt?: string;
+    readyCaseRows: number;
+    blockedCaseRows: number;
+  };
+  enrichmentGap: {
+    type: "parser_retry" | "policy_validation" | "parser_readiness" | "freshness";
+    ownerLane: "source" | "parser" | "policy" | "publicTI";
+    nextAction: TiSourceProvenanceScraperEnrichmentLifecycleStage["nextAction"];
+  };
+  alertGenerationImpact: {
+    ready: boolean;
+    blockedAlertRows: number;
+    webhookConsumable: boolean;
+    publicTiReady: boolean;
+  };
+  route: {
+    method: "POST";
+    path: "/v1/dwm/source-requests";
+    body: {
+      action: "retry" | "request_approval" | "test" | "source_health";
+      sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+      dryRun: true;
+    };
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceParserHealthAlertConsumer = {
+  consumer: "publicTI" | "alertGeneration" | "sourceOps" | "webhook";
+  ready: boolean;
+  requiredFields: string[];
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
 };
 
 export type TiSourceProvenancePageAction = {
@@ -2128,6 +2235,57 @@ export function buildSourceProvenanceSourceFreshnessGapPacket(input: {
   };
 }
 
+export function buildSourceProvenanceParserHealthAlertPacket(input: {
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle;
+  generatedAt?: string;
+}): TiSourceProvenanceParserHealthAlertPacket {
+  const generatedAt = input.generatedAt ?? input.lifecycle.generatedAt;
+  const rows = input.lifecycle.sourceHealth.families.flatMap((family) => parserHealthAlertRows(input.lifecycle, family, generatedAt));
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const nextRetryAt = earliestTimestamp(rows.map((row) => row.retryState.nextRetryAt));
+  const alertGenerationReady = rows.length === 0 && input.lifecycle.enrichmentFreshness.state === "fresh";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_parser_health_alert_packet", `${input.lifecycle.id}:${generatedAt}:${rows.map((row) => `${row.sourceFamily}:${row.alertType}`).join("|")}`),
+    generatedAt,
+    ok: rows.length === 0,
+    tenantId: input.lifecycle.tenantId,
+    organizationId: input.lifecycle.organizationId,
+    actor: input.lifecycle.actor,
+    publicTiRoute: input.lifecycle.publicTiRoute,
+    lifecycleId: input.lifecycle.id,
+    sourcePackActivationReadinessId: input.lifecycle.sourcePackActivationReadinessId,
+    rows,
+    summary: {
+      alertCount: rows.length,
+      sourceFamilies,
+      retryableCount: rows.filter((row) => row.retryState.retryable).length,
+      policyBlockedCount: rows.filter((row) => row.alertType === "policy_blocked").length,
+      freshnessBlockedCount: rows.filter((row) => row.alertType === "freshness_missing").length,
+      alertGenerationReady,
+      nextRetryAt
+    },
+    consumers: parserHealthAlertConsumers(input.lifecycle, rows, alertGenerationReady),
+    payloadShape: [
+      "rows[].sourceFamily",
+      "rows[].policyStatus",
+      "rows[].parserStatus",
+      "rows[].retryState",
+      "rows[].provenance",
+      "rows[].freshness",
+      "rows[].enrichmentGap",
+      "rows[].alertGenerationImpact"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -2702,6 +2860,233 @@ function sourceFreshnessConsumers(
     },
     requiredFields: ["sourceHealth", "gaps[].candidateId", "gaps[].retryAfter", "lifecycle.nextTransitions"]
   }];
+}
+
+function parserHealthAlertRows(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle,
+  family: TiSourceProvenanceSourcePackIntakeReceipt["sourceHealth"]["families"][number],
+  generatedAt: string
+): TiSourceProvenanceParserHealthAlertRow[] {
+  const rows: TiSourceProvenanceParserHealthAlertRow[] = [];
+  if (family.blockedByPolicy > 0) rows.push(parserHealthAlertRow(lifecycle, family, "policy_blocked", generatedAt));
+  if (family.retryScheduled > 0) rows.push(parserHealthAlertRow(lifecycle, family, "parser_retry_scheduled", generatedAt));
+  if (family.parserReady === 0 && family.queuedForReview > 0 && family.blockedByPolicy === 0 && family.retryScheduled === 0) {
+    rows.push(parserHealthAlertRow(lifecycle, family, "parser_not_ready", generatedAt));
+  }
+  if (lifecycle.enrichmentFreshness.state === "missing") rows.push(parserHealthAlertRow(lifecycle, family, "freshness_missing", generatedAt));
+  return uniqueParserHealthAlertRows(rows);
+}
+
+function parserHealthAlertRow(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle,
+  family: TiSourceProvenanceSourcePackIntakeReceipt["sourceHealth"]["families"][number],
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"],
+  generatedAt: string
+): TiSourceProvenanceParserHealthAlertRow {
+  const evidenceRefs = lifecycleEvidenceRefsForFamily(lifecycle);
+  const retryBlocker = lifecycle.blockers.find((blocker) => blocker.code === "parser_retry_scheduled");
+  const policyBlocker = lifecycle.blockers.find((blocker) => blocker.code === "policy_approval_required");
+  const stage = parserHealthAlertStage(alertType);
+  const parserState = parserHealthAlertParserState(alertType);
+  const nextAction = parserHealthAlertNextAction(alertType);
+  const sourceHealthProofId = stableId("ti_source_provenance_parser_health_source_health", `${lifecycle.id}:${family.family}:${family.queuedForReview}:${family.blockedByPolicy}:${family.retryScheduled}:${family.parserReady}`);
+
+  return {
+    alertId: stableId("ti_source_provenance_parser_health_alert", `${lifecycle.id}:${family.family}:${alertType}:${generatedAt}`),
+    sourceFamily: family.family,
+    alertType,
+    severity: alertType === "parser_not_ready" ? "warning" : "blocking",
+    sourceIds: evidenceRefs.sourceIds,
+    candidateIds: evidenceRefs.candidateIds,
+    policyStatus: family.blockedByPolicy > 0 || alertType === "policy_blocked" ? "approval_required" : "allowed",
+    parserStatus: {
+      state: parserState,
+      parserReadyCount: family.parserReady,
+      failureReason: alertType === "parser_retry_scheduled"
+        ? retryBlocker?.message
+        : (alertType === "policy_blocked" ? policyBlocker?.message : undefined)
+    },
+    retryState: {
+      retryable: alertType === "parser_retry_scheduled",
+      nextRetryAt: alertType === "parser_retry_scheduled" ? retryBlocker?.retryAfter : undefined,
+      nextAction
+    },
+    provenance: {
+      lifecycleId: lifecycle.id,
+      sourcePackActivationReadinessId: lifecycle.sourcePackActivationReadinessId,
+      stage,
+      evidenceGeneratedAt: generatedAt,
+      sourceHealthProofId,
+      fixtureBacked: true
+    },
+    freshness: {
+      state: lifecycle.enrichmentFreshness.state,
+      newestEvidenceAt: lifecycle.enrichmentFreshness.newestEvidenceAt,
+      readyCaseRows: lifecycle.enrichmentFreshness.readyCaseRows,
+      blockedCaseRows: lifecycle.enrichmentFreshness.blockedCaseRows
+    },
+    enrichmentGap: {
+      type: parserHealthAlertGapType(alertType),
+      ownerLane: parserHealthAlertOwnerLane(alertType),
+      nextAction
+    },
+    alertGenerationImpact: {
+      ready: false,
+      blockedAlertRows: Math.max(1, lifecycle.enrichmentFreshness.blockedCaseRows),
+      webhookConsumable: alertType === "parser_retry_scheduled" || alertType === "policy_blocked",
+      publicTiReady: false
+    },
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action: parserHealthAlertRouteAction(alertType),
+        sourceFamily: family.family,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function parserHealthAlertStage(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceScraperEnrichmentLifecycleStage["stage"] {
+  if (alertType === "policy_blocked") return "policy_validation";
+  if (alertType === "parser_retry_scheduled") return "retry_backoff";
+  if (alertType === "freshness_missing") return "enrichment_freshness";
+  return "activation_test";
+}
+
+function parserHealthAlertParserState(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceParserHealthAlertRow["parserStatus"]["state"] {
+  if (alertType === "policy_blocked") return "blocked";
+  if (alertType === "parser_retry_scheduled") return "retry_scheduled";
+  if (alertType === "parser_not_ready") return "not_ready";
+  return "ready";
+}
+
+function parserHealthAlertNextAction(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceParserHealthAlertRow["retryState"]["nextAction"] {
+  if (alertType === "policy_blocked") return "request_policy_approval";
+  if (alertType === "parser_retry_scheduled") return "retry_parser";
+  if (alertType === "freshness_missing") return "repair_provenance";
+  return "test_source";
+}
+
+function parserHealthAlertGapType(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceParserHealthAlertRow["enrichmentGap"]["type"] {
+  if (alertType === "policy_blocked") return "policy_validation";
+  if (alertType === "parser_retry_scheduled") return "parser_retry";
+  if (alertType === "freshness_missing") return "freshness";
+  return "parser_readiness";
+}
+
+function parserHealthAlertOwnerLane(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceParserHealthAlertRow["enrichmentGap"]["ownerLane"] {
+  if (alertType === "policy_blocked") return "policy";
+  if (alertType === "parser_retry_scheduled") return "parser";
+  if (alertType === "freshness_missing") return "publicTI";
+  return "source";
+}
+
+function parserHealthAlertRouteAction(
+  alertType: TiSourceProvenanceParserHealthAlertRow["alertType"]
+): TiSourceProvenanceParserHealthAlertRow["route"]["body"]["action"] {
+  if (alertType === "policy_blocked") return "request_approval";
+  if (alertType === "parser_retry_scheduled") return "retry";
+  if (alertType === "freshness_missing") return "source_health";
+  return "test";
+}
+
+function lifecycleEvidenceRefsForFamily(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle
+): { candidateIds: string[]; sourceIds: string[] } {
+  return {
+    candidateIds: uniqueStrings(lifecycle.stages.flatMap((stage) => stage.evidenceRefs.candidateIds)),
+    sourceIds: uniqueStrings(lifecycle.stages.flatMap((stage) => stage.evidenceRefs.sourceIds))
+  };
+}
+
+function parserHealthAlertConsumers(
+  lifecycle: TiSourceProvenanceScraperEnrichmentLifecycle,
+  rows: TiSourceProvenanceParserHealthAlertRow[],
+  alertGenerationReady: boolean
+): TiSourceProvenanceParserHealthAlertConsumer[] {
+  return [{
+    consumer: "publicTI",
+    ready: rows.length === 0 && lifecycle.enrichmentFreshness.state === "fresh",
+    requiredFields: ["rows[].sourceFamily", "rows[].parserStatus", "rows[].freshness", "safeOutput.liveNetworkScrapeStarted"],
+    route: {
+      method: "GET",
+      path: lifecycle.publicTiRoute ?? `/ti/${encodeURIComponent(lifecycle.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: alertGenerationReady,
+    requiredFields: ["rows[].alertGenerationImpact", "rows[].provenance", "rows[].retryState"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: lifecycle.actor,
+        organizationId: lifecycle.organizationId,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: rows.length > 0 || lifecycle.sourceHealth.queuedForReview > 0,
+    requiredFields: ["rows[].route", "rows[].policyStatus", "rows[].retryState"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "webhook",
+    ready: rows.some((row) => row.alertGenerationImpact.webhookConsumable),
+    requiredFields: ["rows[].alertId", "rows[].sourceFamily", "rows[].alertType", "rows[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/webhooks/dry-run",
+      body: {
+        actor: lifecycle.actor,
+        dryRun: true,
+        sourceAlertRows: rows.map((row) => row.alertId)
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function uniqueParserHealthAlertRows(
+  rows: TiSourceProvenanceParserHealthAlertRow[]
+): TiSourceProvenanceParserHealthAlertRow[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.sourceFamily}:${row.alertType}:${row.retryState.nextRetryAt ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function uniqueSourceFreshnessGaps(
