@@ -205,6 +205,46 @@ export type OrganizationWatchlistAlertGenerationRef = {
     }
 }
 
+export type OrganizationWatchlistAlertBridgeBlockerCode =
+    | 'no_active_watchlist_terms'
+    | 'paused_watchlist_excluded'
+    | 'archived_watchlist_excluded'
+    | 'missing_org_tenant'
+    | 'revoked_member_denied'
+    | 'no_alert_ref'
+    | 'support_only_access'
+    | 'nonmember_denied'
+
+export type OrganizationWatchlistAlertBridgeBlocker = {
+    code: OrganizationWatchlistAlertBridgeBlockerCode
+    severity: 'blocker' | 'notice'
+    message: string
+    count?: number
+}
+
+export type OrganizationWatchlistAlertBridgeContract = {
+    schemaVersion: 'organization.watchlist_alert_bridge_contract.v1'
+    recommendedDownstreamRoute: 'organization_watchlist'
+    memberProvenance: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    supportAccess: {
+        mode: 'support_contract_only'
+        blockerCode: 'support_only_access'
+        message: string
+    }
+    deniedAccess: {
+        nonmember: 'nonmember_denied'
+        revokedMember: 'revoked_member_denied'
+    }
+    requiredFields: string[]
+    alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key'
+    typedBlockers: OrganizationWatchlistAlertBridgeBlocker[]
+    blockerCatalog: OrganizationWatchlistAlertBridgeBlockerCode[]
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -217,6 +257,8 @@ export type OrganizationWatchlistAlertTermsExport = {
     }
     visibilityPolicy: OrganizationAlertVisibilityPolicy
     allowedViewerRoles: OrganizationRole[]
+    recommendedDownstreamRoute: 'organization_watchlist'
+    alertBridgeContract: OrganizationWatchlistAlertBridgeContract
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -875,6 +917,14 @@ export function organizationWatchlistAlertTermsExport(
     const statuses = items.map(normalizeWatchlistStatus)
     const pausedCount = statuses.filter(status => status === 'paused').length
     const archivedCount = statuses.filter(status => status === 'archived').length
+    const typedBlockers = organizationWatchlistAlertBridgeBlockers({
+        organizationId: organization.id,
+        tenantId: organization.id,
+        activeTermCount: activeTerms.length,
+        pausedCount,
+        archivedCount,
+        missingAlertRefCount: 0,
+    })
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -887,6 +937,51 @@ export function organizationWatchlistAlertTermsExport(
         },
         visibilityPolicy: alertGeneration.visibilityPolicy,
         allowedViewerRoles: alertGeneration.allowedViewerRoles,
+        recommendedDownstreamRoute: 'organization_watchlist',
+        alertBridgeContract: {
+            schemaVersion: 'organization.watchlist_alert_bridge_contract.v1',
+            recommendedDownstreamRoute: 'organization_watchlist',
+            memberProvenance: {
+                userId: member.userId,
+                role: member.role,
+                status: 'active',
+            },
+            supportAccess: {
+                mode: 'support_contract_only',
+                blockerCode: 'support_only_access',
+                message: 'Support users must inspect org watchlist alert exports through the admin support contract, not member-scoped org routes.',
+            },
+            deniedAccess: {
+                nonmember: 'nonmember_denied',
+                revokedMember: 'revoked_member_denied',
+            },
+            requiredFields: [
+                'organizationId',
+                'tenantId',
+                'member.userId',
+                'member.role',
+                'activeTerms[].watchlistItemId',
+                'activeTerms[].itemId',
+                'activeTerms[].status',
+                'activeTerms[].termFamily',
+                'activeTerms[].term',
+                'activeTerms[].alertGenerationRef',
+                'activeTerms[].alertGenerationRef.dedupe.key',
+                'activeTerms[].alertGeneratorKey',
+            ],
+            alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key',
+            typedBlockers,
+            blockerCatalog: [
+                'no_active_watchlist_terms',
+                'paused_watchlist_excluded',
+                'archived_watchlist_excluded',
+                'missing_org_tenant',
+                'revoked_member_denied',
+                'no_alert_ref',
+                'support_only_access',
+                'nonmember_denied',
+            ],
+        },
         activeTerms,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
@@ -898,6 +993,61 @@ export function organizationWatchlistAlertTermsExport(
         blockedReasons: alertGeneration.blockedReasons,
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
     }
+}
+
+function organizationWatchlistAlertBridgeBlockers(input: {
+    organizationId: string
+    tenantId: string
+    activeTermCount: number
+    pausedCount: number
+    archivedCount: number
+    missingAlertRefCount: number
+}): OrganizationWatchlistAlertBridgeBlocker[] {
+    const blockers: OrganizationWatchlistAlertBridgeBlocker[] = []
+    if (!input.organizationId || !input.tenantId) {
+        blockers.push({
+            code: 'missing_org_tenant',
+            severity: 'blocker',
+            message: 'Organization and tenant ids are required before org watchlist terms can generate alerts.',
+        })
+    }
+
+    if (input.activeTermCount === 0) {
+        blockers.push({
+            code: 'no_active_watchlist_terms',
+            severity: 'blocker',
+            message: 'No active organization watchlist terms are available for alert generation.',
+        })
+    }
+
+    if (input.missingAlertRefCount > 0) {
+        blockers.push({
+            code: 'no_alert_ref',
+            severity: 'blocker',
+            message: 'One or more active terms is missing alertGenerationRef metadata.',
+            count: input.missingAlertRefCount,
+        })
+    }
+
+    if (input.pausedCount > 0) {
+        blockers.push({
+            code: 'paused_watchlist_excluded',
+            severity: 'notice',
+            message: 'Paused watchlist items are auditable but excluded from active alert matching.',
+            count: input.pausedCount,
+        })
+    }
+
+    if (input.archivedCount > 0) {
+        blockers.push({
+            code: 'archived_watchlist_excluded',
+            severity: 'notice',
+            message: 'Archived watchlist items are auditable but excluded from active alert matching.',
+            count: input.archivedCount,
+        })
+    }
+
+    return blockers
 }
 
 function organizationWatchlistAlertGenerationRef(term: OrganizationWatchlistTerm): OrganizationWatchlistAlertGenerationRef {

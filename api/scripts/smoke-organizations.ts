@@ -209,6 +209,27 @@ const alertTermsExport = organizationWatchlistAlertTermsExport(
 assert.equal(alertTermsExport.member.userId, 'org_smoke_admin')
 assert.equal(alertTermsExport.activeTerms.length, 1)
 assert.equal(alertTermsExport.excluded.pausedCount, 1)
+assert.equal(alertTermsExport.recommendedDownstreamRoute, 'organization_watchlist')
+assert.equal(alertTermsExport.alertBridgeContract.schemaVersion, 'organization.watchlist_alert_bridge_contract.v1')
+assert.equal(alertTermsExport.alertBridgeContract.recommendedDownstreamRoute, 'organization_watchlist')
+assert.deepEqual(alertTermsExport.alertBridgeContract.memberProvenance, {
+    userId: 'org_smoke_admin',
+    role: 'admin',
+    status: 'active',
+})
+assert.equal(alertTermsExport.alertBridgeContract.supportAccess.mode, 'support_contract_only')
+assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.nonmember, 'nonmember_denied')
+assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.revokedMember, 'revoked_member_denied')
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('activeTerms[].alertGenerationRef.dedupe.key'))
+assert.equal(alertTermsExport.alertBridgeContract.alertGeneratorKeyExpectation, 'alertGenerationRef.dedupe.key')
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_watchlist_terms'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_only_access'))
+assert.deepEqual(alertTermsExport.alertBridgeContract.typedBlockers, [{
+    code: 'paused_watchlist_excluded',
+    severity: 'notice',
+    message: 'Paused watchlist items are auditable but excluded from active alert matching.',
+    count: 1,
+}])
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.schemaVersion, 'organization.watchlist_alert_generation_ref.v1')
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.status, 'active')
 assert.equal(alertTermsExport.activeTerms[0].alertGenerationRef.lifecycle.requestId, 'proof-fixture-create')
@@ -220,6 +241,24 @@ assert.deepEqual(alertTermsExport.activeTerms[0].alertGenerationRef.dedupe.parts
     termFamily: 'keyword',
     normalizedTerm: 'credential reset lures',
 })
+
+const emptyAlertTermsExport = organizationWatchlistAlertTermsExport(
+    {
+        id: 'org_empty',
+        name: 'Empty Org',
+        slug: 'empty-org',
+        member_count: 1,
+        owner_count: 1,
+        pending_invite_count: 0,
+        shared_watchlist_count: 0,
+    },
+    [],
+    { userId: 'org_empty_owner', role: 'owner' }
+)
+assert.equal(emptyAlertTermsExport.canGenerateAlerts, false)
+assert.deepEqual(emptyAlertTermsExport.blockedReasons, ['needs_shared_watchlist_item'])
+assert.deepEqual(emptyAlertTermsExport.alertBridgeContract.typedBlockers.map(blocker => blocker.code), ['no_active_watchlist_terms'])
+assert.equal(emptyAlertTermsExport.alertBridgeContract.typedBlockers[0].severity, 'blocker')
 
 assert.deepEqual(organizationVisibilityDecision({
     role: 'viewer',
