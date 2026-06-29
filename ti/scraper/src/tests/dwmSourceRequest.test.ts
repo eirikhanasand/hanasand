@@ -2007,6 +2007,14 @@ describe("dwm source requests", () => {
               latestCaptureAt: expect.any(String)
             })
           }),
+          sourceFamilyCoverageMatrix: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
+            rows: expect.any(Array),
+            summary: expect.objectContaining({
+              totalFamilies: expect.any(Number),
+              latestCaptureAt: expect.any(String)
+            })
+          }),
           gaps: [],
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
@@ -2142,6 +2150,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2912,6 +2921,21 @@ describe("dwm source requests", () => {
             operationTypes: expect.arrayContaining(["record_capture", "request_candidate"])
           })
         }),
+        sourceFamilyCoverageMatrix: expect.objectContaining({
+          schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              sourceFamily: "darkweb_onion",
+              gapState: "missing",
+              alertGenerationReady: false,
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            operationTypes: expect.arrayContaining(["record_capture", "request_candidate"])
+          })
+        }),
         gaps: expect.arrayContaining([
           expect.objectContaining({ family: "darkweb_onion", state: "missing" })
         ])
@@ -3412,6 +3436,22 @@ describe("dwm source requests", () => {
               operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
             }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          sourceFamilyCoverageMatrix: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                sourceFamily: "telegram",
+                parserState: "retry_required",
+                operationTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+                gapState: "failed",
+                blockerCodes: expect.arrayContaining(["parser_retry_required"])
+              })
+            ]),
+            summary: expect.objectContaining({
+              retryFamilies: expect.arrayContaining(["telegram"]),
+              operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+            })
           })
         }),
         alertCaseHandoffReadiness: expect.objectContaining({

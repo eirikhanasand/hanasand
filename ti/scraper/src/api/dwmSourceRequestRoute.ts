@@ -3133,6 +3133,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3457,6 +3458,13 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     actorReadiness,
     consumerProofLedger
   });
+  const downstreamFixtureExport = sourceActorPublicTiDownstreamFixtureExport({
+    query,
+    actorReadiness,
+    consumerProofLedger,
+    alertGenerationConsumerHandoff,
+    sourceOperationsHandoff
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3496,14 +3504,76 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertGenerationConsumerHandoff,
     consumerProofLedger,
     sourceOperationsHandoff,
-    downstreamFixtureExport: sourceActorPublicTiDownstreamFixtureExport({
+    downstreamFixtureExport,
+    sourceFamilyCoverageMatrix: sourceActorPublicTiSourceFamilyCoverageMatrix({
       query,
-      actorReadiness,
-      consumerProofLedger,
-      alertGenerationConsumerHandoff,
-      sourceOperationsHandoff
+      downstreamFixtureExport
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiSourceFamilyCoverageMatrix(input: {
+  query: string;
+  downstreamFixtureExport: Record<string, any>;
+}) {
+  const operationTypesByFamily = new Map<string, string[]>();
+  for (const operation of input.downstreamFixtureExport.operations ?? []) {
+    const family = String(operation.family ?? "unknown");
+    operationTypesByFamily.set(family, uniqueSourceReadinessStrings([...(operationTypesByFamily.get(family) ?? []), operation.type]));
+  }
+  const rows = (input.downstreamFixtureExport.rows ?? []).map((row: any) => ({
+    schemaVersion: "ti.public_actor.source_family_coverage_row.v1",
+    proofId: stableId("ti_public_actor_source_family_coverage_row", `${input.query}:${row.sourceFamily}:${row.state}:${row.parserStatus?.state}:${row.consumers?.publicTi?.ready === true}:${row.consumers?.alertGeneration?.ready === true}`),
+    query: input.query,
+    sourceFamily: row.sourceFamily,
+    state: row.state,
+    parserState: row.parserStatus?.state,
+    captureState: row.parserStatus?.captureState,
+    confidence: row.confidence,
+    confidenceTier: row.confidenceTier,
+    lastCaptureAt: row.timestamps?.lastCaptureAt,
+    lastEnrichmentAt: row.timestamps?.lastEnrichmentAt,
+    publicTiReady: row.consumers?.publicTi?.ready === true,
+    alertGenerationReady: row.consumers?.alertGeneration?.ready === true,
+    operationTypes: operationTypesByFamily.get(String(row.sourceFamily)) ?? [],
+    gapState: row.gap?.state,
+    blockerCodes: uniqueSourceReadinessStrings((row.blockers ?? []).map((blocker: any) => blocker.code).filter(Boolean)),
+    provenance: {
+      evidenceProofId: row.provenance?.evidenceProofId,
+      sourceHealthProofId: row.provenance?.sourceHealthProofId,
+      parserProofId: row.provenance?.parserProofId,
+      sourceIds: row.provenance?.sourceIds ?? [],
+      candidateIds: row.provenance?.candidateIds ?? []
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  }));
+  return {
+    schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
+    proofId: stableId("ti_public_actor_source_family_coverage_matrix", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.parserState}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      totalFamilies: rows.length,
+      publicTiReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.publicTiReady).map((row: any) => row.sourceFamily)),
+      alertReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.alertGenerationReady).map((row: any) => row.sourceFamily)),
+      gapFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.gapState).map((row: any) => row.sourceFamily)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.operationTypes.some((type: string) => String(type).startsWith("retry"))).map((row: any) => row.sourceFamily)),
+      operationTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.operationTypes)),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.lastEnrichmentAt))
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
