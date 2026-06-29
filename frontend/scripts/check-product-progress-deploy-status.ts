@@ -5,15 +5,27 @@ import { GET as productProgressGet } from '../src/app/api/product-progress/route
 
 const here = new URL('.', import.meta.url)
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
+const deployLedgerSource = readFileSync(new URL('../src/utils/productProgress/deployLedger.ts', here), 'utf8')
 
 for (const token of [
     'deployProbeReadiness',
     '/api/status',
     'status.public_service.v1',
+    'productProgressDeployProof',
     'Website health is not up in /api/status.',
     'GET /api/status must return fresh website/API checks',
 ]) {
     assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing deploy-status token: ${token}`)
+}
+for (const token of [
+    'deployLedgerFromStatusPayload',
+    'productProgressDeployProof',
+    'product.deploy_proof_ledger.v1',
+    'latestProbeAt',
+    'dashboardAlertId',
+    'deliveryId',
+]) {
+    assert.ok(deployLedgerSource.includes(token), `Deploy ledger adapter missing token: ${token}`)
 }
 
 const originalFetch = globalThis.fetch
@@ -25,6 +37,17 @@ globalThis.fetch = async (input: RequestInfo | URL) => {
         return jsonResponse({
             overall: 'up',
             generated_at: '2026-06-29T13:00:00.000Z',
+            productProgressDeployProof: {
+                schemaVersion: 'product.deploy_proof_ledger.v1',
+                latestProbeAt: '2026-06-29T13:01:00.000Z',
+                deployedCommit: 'commit_ready_123',
+                frontendHealthy: true,
+                apiHealthy: true,
+                scraperHealthy: true,
+                dashboardAlertId: 'alert_ready_1',
+                deliveryId: 'delivery_ready_1',
+                ledgerPath: '/var/lib/hanasand/product-progress/deploy-proof.json',
+            },
             checks: [
                 { service: 'Website', check_name: 'Website', status: 'up', checked_at: '2026-06-29T13:00:00.000Z' },
                 { service: 'Core platform', check_name: 'API', status: 'up', checked_at: '2026-06-29T13:00:00.000Z' },
@@ -56,12 +79,16 @@ try {
     const readyResponse = await productProgressGet(request)
     const readyPayload = await readyResponse.json()
     assert.equal(readyPayload.deployProbe.status, 'ready')
-    assert.equal(readyPayload.deployProbe.source, '/api/status')
-    assert.equal(readyPayload.deployProbe.backendProofContractVersion, 'status.public_service.v1')
+    assert.equal(readyPayload.deployProbe.source, '/api/status#productProgressDeployProof')
+    assert.equal(readyPayload.deployProbe.backendProofContractVersion, 'product.deploy_proof_ledger.v1')
+    assert.equal(readyPayload.deployProbe.deployedCommit, 'commit_ready_123')
     assert.equal(readyPayload.deployProbe.frontendHealthy, true)
     assert.equal(readyPayload.deployProbe.apiHealthy, true)
     assert.equal(readyPayload.deployProbe.scraperHealthy, true)
-    assert.equal(readyPayload.deployProbe.latestProbeAt, '2026-06-29T13:00:00.000Z')
+    assert.equal(readyPayload.deployProbe.latestProbeAt, '2026-06-29T13:01:00.000Z')
+    assert.equal(readyPayload.deployProbe.dashboardAlertId, 'alert_ready_1')
+    assert.equal(readyPayload.deployProbe.deliveryId, 'delivery_ready_1')
+    assert.equal(readyPayload.deployProbe.ledgerPath, '/var/lib/hanasand/product-progress/deploy-proof.json')
     assert.equal(readyPayload.deployProbe.unavailableReason, undefined)
 
     globalThis.fetch = async (input: RequestInfo | URL) => {
