@@ -1149,12 +1149,22 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                 <div className='mt-3 grid gap-2'>
                     {proof.handoffRows.slice(0, 6).map(row => {
                         const rowBlocker = row.blockers[0]
+                        const evidenceMeta = [
+                            row.evidence.sourceName,
+                            row.evidence.reportDate ? formatDate(row.evidence.reportDate) : '',
+                            typeof row.evidence.confidence === 'number' ? `${Math.round(row.evidence.confidence * 100)}% confidence` : '',
+                            row.evidence.sourceId ? `source ${row.evidence.sourceId}` : '',
+                            row.evidence.captureId ? `capture ${row.evidence.captureId}` : '',
+                        ].filter(Boolean)
                         return (
                             <div key={row.rowId} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                 <div className='flex flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
                                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.action} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}</p>
+                                        <p data-ti-org-row-evidence='true' className='mt-1 wrap-break-word text-[11px] leading-5 text-[#475467] dark:text-[#c3cee0]'>
+                                            {evidenceMeta.length ? evidenceMeta.join(' · ') : 'Evidence metadata pending'} · {row.evidence.summary}
+                                        </p>
                                         <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
                                         {row.alertId || row.watchlistItemId || row.captureIds.length ? (
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>

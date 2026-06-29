@@ -155,9 +155,11 @@ export type PublicTiOrgRelevanceProof = {
         sourceId?: string
         sourceName: string
         provenance: string
+        reportDate?: string
         captureId?: string
         confidence?: number
         supportsTerms: string[]
+        shownBecause: string
     }>
     alertCaseRefs: Array<{
         alertId: string
@@ -195,6 +197,16 @@ export type PublicTiAffectedEntity = {
     alertIds: string[]
 }
 
+export type PublicTiOrgRelevanceEvidence = {
+    sourceId?: string
+    sourceName?: string
+    provenance?: string
+    reportDate?: string
+    captureId?: string
+    confidence?: number
+    summary: string
+}
+
 export type PublicTiOrgRelevanceRow = {
     rowId: string
     kind: 'watchlist_match' | 'candidate_term' | 'source_evidence' | 'alert_case' | 'webhook_delivery' | 'enrichment_gap'
@@ -213,6 +225,7 @@ export type PublicTiOrgRelevanceRow = {
     casePath?: string
     captureIds: string[]
     webhookDestinationIds: string[]
+    evidence: PublicTiOrgRelevanceEvidence
     blockers: PublicTiReadinessBlocker[]
 }
 
@@ -653,13 +666,16 @@ function buildOrgRelevanceProof(input: {
         const terms = readTermArray(input.exportPayloads.watchlist.body.terms)
             .filter(term => sourceSupportsTerm(source, term))
             .map(term => String(term.value))
+        const actorEvidence = actorEvidenceForSource(input.actor, source)
         return {
             sourceId: source.sourceId,
             sourceName: source.sourceName,
             provenance: source.provenance,
+            reportDate: actorEvidence?.reportDate,
             captureId: source.captureId,
             confidence: source.confidence,
             supportsTerms: uniqueStrings(terms.length ? terms : readTermArray(input.exportPayloads.watchlist.body.terms).map(term => String(term.value))),
+            shownBecause: actorEvidence?.shownBecause ?? 'Returned as evidence for watchlist, alert, or case handoff.',
         }
     })
     const evidenceRefs = sourceEvidence.flatMap(source => [
@@ -755,6 +771,19 @@ function sourceSupportsTerm(source: NonNullable<TiActionabilityContract['sourceP
     return Boolean(value && haystack.includes(value.toLowerCase()))
 }
 
+function actorEvidenceForSource(actor: TiActorIntelligenceProfile, source: NonNullable<TiActionabilityContract['sourceProvenance']>[number]) {
+    const sourceKey = `${source.sourceId ?? ''}:${source.captureId ?? ''}:${source.provenance}`.toLowerCase()
+    return actor.provenanceRows.find(row => {
+        const rowKey = `${row.sourceId ?? ''}:${row.captureId ?? ''}:${row.provenance}`.toLowerCase()
+        return Boolean(
+            rowKey === sourceKey
+            || (source.captureId && row.captureId === source.captureId)
+            || (source.sourceId && row.sourceId === source.sourceId)
+            || row.provenance === source.provenance
+        )
+    })
+}
+
 function buildAffectedEntities(input: {
     result: TiSearchResponse
     actor: TiActorIntelligenceProfile
@@ -812,6 +841,11 @@ function buildOrgRelevanceRows(input: {
     const rows: PublicTiOrgRelevanceRow[] = []
 
     for (const match of input.matches) {
+        const provenanceRefs = uniqueStrings([
+            match.watchlistId,
+            match.watchlistItemId,
+            ...sourceRefsForTerm(match.value, input.sourceEvidence),
+        ])
         rows.push({
             rowId: `watchlist:${match.watchlistItemId ?? match.value}`,
             kind: 'watchlist_match',
@@ -821,19 +855,21 @@ function buildOrgRelevanceRows(input: {
             action: 'Open saved watchlist item',
             route: match.casePath ?? match.route ?? '/dashboard/dwm',
             sourceFamily: 'watchlist',
-            provenanceRefs: uniqueStrings([match.watchlistId, match.watchlistItemId]),
+            provenanceRefs,
             tenantId: match.tenantId,
             organizationId: match.organizationId,
             watchlistId: match.watchlistId,
             watchlistItemId: match.watchlistItemId,
             captureIds: [],
             webhookDestinationIds: [],
+            evidence: rowEvidenceFor(provenanceRefs, input.sourceEvidence, `Saved watchlist item for ${match.value}.`),
             blockers: match.organizationId && match.watchlistId && match.watchlistItemId ? [] : rowBlockers(['missing_org', 'missing_org_watchlist']),
         })
     }
 
     for (const term of input.candidateTerms) {
         const blockers = term.matched ? [] : rowBlockers(['missing_org_watchlist'])
+        const provenanceRefs = uniqueStrings(term.sourceEvidenceRefs)
         rows.push({
             rowId: `term:${term.kind}:${term.value.toLowerCase()}`,
             kind: 'candidate_term',
@@ -843,15 +879,17 @@ function buildOrgRelevanceRows(input: {
             action: term.matched ? 'Use matched watchlist item' : 'Persist as watchlist item',
             route: '/v1/dwm/watchlists',
             sourceFamily: 'watchlist',
-            provenanceRefs: term.sourceEvidenceRefs,
-            captureIds: term.sourceEvidenceRefs.filter(ref => /^capture/i.test(ref)),
+            provenanceRefs,
+            captureIds: provenanceRefs.filter(ref => /^capture/i.test(ref)),
             webhookDestinationIds: [],
+            evidence: rowEvidenceFor(provenanceRefs, input.sourceEvidence, term.notes || `Candidate watchlist term for ${term.value}.`),
             blockers,
         })
     }
 
     for (const source of input.sourceEvidence) {
         const blockers = source.captureId ? [] : rowBlockers(['missing_capture'])
+        const provenanceRefs = uniqueStrings([source.sourceId, source.captureId, source.provenance])
         rows.push({
             rowId: `source:${source.sourceId ?? source.sourceName}:${source.captureId ?? source.provenance}`,
             kind: 'source_evidence',
@@ -861,9 +899,10 @@ function buildOrgRelevanceRows(input: {
             action: source.captureId ? 'Use capture as evidence' : 'Attach capture ID',
             route: '/dashboard/ti/enrichment',
             sourceFamily: sourceFamilyForEvidence(source),
-            provenanceRefs: uniqueStrings([source.sourceId, source.captureId, source.provenance]),
+            provenanceRefs,
             captureIds: uniqueStrings([source.captureId]),
             webhookDestinationIds: [],
+            evidence: rowEvidenceFor(provenanceRefs, input.sourceEvidence, source.shownBecause),
             blockers,
         })
     }
@@ -872,6 +911,7 @@ function buildOrgRelevanceRows(input: {
         const caseBlockers = alert.casePath ? [] : rowBlockers(['missing_case_route'])
         const captureBlockers = alert.captureIds.length ? [] : rowBlockers(['missing_capture'])
         const blockers = uniqueBy([...caseBlockers, ...captureBlockers], blocker => `${blocker.code}:${blocker.field}`)
+        const alertProvenanceRefs = uniqueStrings([alert.alertId, alert.caseIdCandidate, alert.casePath, ...alert.captureIds])
         rows.push({
             rowId: `alert:${alert.alertId}`,
             kind: 'alert_case',
@@ -881,15 +921,17 @@ function buildOrgRelevanceRows(input: {
             action: alert.casePath ? 'Open related case' : 'Create case route',
             route: alert.casePath ?? '/v1/cases',
             sourceFamily: alert.casePath ? 'case' : 'alert',
-            provenanceRefs: uniqueStrings([alert.alertId, alert.caseIdCandidate, alert.casePath, ...alert.captureIds]),
+            provenanceRefs: alertProvenanceRefs,
             tenantId: alert.tenantId,
             organizationId: alert.organizationId,
             alertId: alert.alertId,
             casePath: alert.casePath,
             captureIds: alert.captureIds,
             webhookDestinationIds: alert.webhookDestinationIds,
+            evidence: rowEvidenceFor(alertProvenanceRefs, input.sourceEvidence, `Related alert ${alert.alertId} is attached to this actor result.`),
             blockers,
         })
+        const webhookProvenanceRefs = uniqueStrings([alert.alertId, ...alert.captureIds, ...alert.webhookDestinationIds])
         rows.push({
             rowId: `webhook:${alert.alertId}`,
             kind: 'webhook_delivery',
@@ -899,18 +941,20 @@ function buildOrgRelevanceRows(input: {
             action: alert.webhookDestinationIds.length ? 'Prepare delivery dry run' : 'Attach webhook destination',
             route: '/v1/dwm/webhooks/deliver',
             sourceFamily: 'webhook',
-            provenanceRefs: uniqueStrings([alert.alertId, ...alert.captureIds, ...alert.webhookDestinationIds]),
+            provenanceRefs: webhookProvenanceRefs,
             tenantId: alert.tenantId,
             organizationId: alert.organizationId,
             alertId: alert.alertId,
             casePath: alert.casePath,
             captureIds: alert.captureIds,
             webhookDestinationIds: alert.webhookDestinationIds,
+            evidence: rowEvidenceFor(webhookProvenanceRefs, input.sourceEvidence, `Webhook delivery readiness for alert ${alert.alertId}.`),
             blockers: alert.webhookDestinationIds.length ? [] : rowBlockers(['missing_webhook_destination']),
         })
     }
 
     for (const gap of input.enrichmentGaps) {
+        const provenanceRefs = uniqueStrings([gap.id, gap.dependency])
         rows.push({
             rowId: `gap:${gap.id}`,
             kind: 'enrichment_gap',
@@ -920,9 +964,12 @@ function buildOrgRelevanceRows(input: {
             action: gap.dependency,
             route: gap.route ?? routeForGap(gap),
             sourceFamily: gap.sourceFamily ?? sourceFamilyForGap(gap),
-            provenanceRefs: uniqueStrings([gap.id, gap.dependency]),
+            provenanceRefs,
             captureIds: [],
             webhookDestinationIds: [],
+            evidence: {
+                summary: gap.detail,
+            },
             blockers: blockersForGap(gap, input.blockers),
         })
     }
@@ -941,11 +988,39 @@ function buildOrgRelevanceRows(input: {
             provenanceRefs: uniqueStrings([blocker.field, blocker.handoff]),
             captureIds: [],
             webhookDestinationIds: [],
+            evidence: {
+                summary: blocker.detail,
+            },
             blockers: [blocker],
         })
     }
 
     return uniqueBy(rows, row => row.rowId).slice(0, 48)
+}
+
+function sourceRefsForTerm(value: string, sources: PublicTiOrgRelevanceProof['sourceEvidence']) {
+    return sources
+        .filter(source => source.supportsTerms.some(term => term.toLowerCase() === value.toLowerCase()))
+        .flatMap(source => [source.sourceId, source.captureId, source.provenance])
+        .filter((ref): ref is string => Boolean(ref))
+}
+
+function rowEvidenceFor(refs: string[], sources: PublicTiOrgRelevanceProof['sourceEvidence'], fallbackSummary: string): PublicTiOrgRelevanceEvidence {
+    const source = sources.find(item => refs.some(ref => ref === item.sourceId || ref === item.captureId || ref === item.provenance)) ?? sources[0]
+    if (!source) {
+        return {
+            summary: fallbackSummary,
+        }
+    }
+    return {
+        sourceId: source.sourceId,
+        sourceName: source.sourceName,
+        provenance: source.provenance,
+        reportDate: source.reportDate,
+        captureId: source.captureId,
+        confidence: source.confidence,
+        summary: source.shownBecause || fallbackSummary,
+    }
 }
 
 function sourceFamilyForEvidence(source: PublicTiOrgRelevanceProof['sourceEvidence'][number]): PublicTiOrgSourceFamily {
