@@ -4059,6 +4059,7 @@ function buildDwmWebhookAlertDeliveryProof({
     })
     const dryRunDeliveryRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
+        expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
         method: 'POST',
         route: 'POST /api/dwm/webhook-deliveries',
         noNetwork: true,
@@ -4072,6 +4073,7 @@ function buildDwmWebhookAlertDeliveryProof({
         const canSend = liveDeliveryEnabled && !dryRun && liveRequested && blockingDestinationCodes.length === 0
         return {
             destinationId: destination.id,
+            expectedIdempotencyKey: buildIdempotencyKey(eventType, orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
             method: 'POST',
             route: 'POST /api/dwm/webhook-deliveries',
             noNetwork: !canSend,
@@ -4082,6 +4084,7 @@ function buildDwmWebhookAlertDeliveryProof({
     })
     const destinationTestRequests = selectedDestinations.map(destination => ({
         destinationId: destination.id,
+        expectedIdempotencyKey: buildIdempotencyKey('dwm.alert.test', orgId, destination.id, 'webhook_test'),
         method: 'POST',
         route: `POST /api/dwm/webhook-destinations/${destination.id}/test`,
         noNetwork: true,
