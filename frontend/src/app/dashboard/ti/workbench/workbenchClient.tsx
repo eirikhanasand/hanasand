@@ -377,6 +377,15 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         return payload
     }, [])
 
+    const refreshAlertDetail = useCallback(async (itemId: string, options: { loading?: boolean } = {}) => {
+        if (options.loading !== false) setAlertDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
+        const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(itemId)}`, { cache: 'no-store' })
+        const payload = await readAlertDetailJson(response)
+        if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+        setAlertDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
+        return payload
+    }, [])
+
     useEffect(() => {
         if (!selected?.caseDetailHref) return
         let cancelled = false
@@ -404,10 +413,8 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         let cancelled = false
         const itemId = selected.id
         setAlertDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
-        fetch(`/api/dwm/alerts/${encodeURIComponent(itemId)}`, { cache: 'no-store' })
-            .then(async response => {
-                const payload = await readAlertDetailJson(response)
-                if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+        refreshAlertDetail(itemId, { loading: false })
+            .then(payload => {
                 if (!cancelled) setAlertDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
             })
             .catch(error => {
@@ -416,7 +423,12 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         return () => {
             cancelled = true
         }
-    }, [alertDetails, selected])
+    }, [alertDetails, refreshAlertDetail, selected])
+
+    async function refreshBackedSelection(item: WorkbenchCase) {
+        if (item.kind === 'dwm_alert' && item.persistent) await refreshAlertDetail(item.id, { loading: false })
+        if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
+    }
 
     async function applyDecision(item: WorkbenchCase, decision: LocalDecision) {
         const nextDecision = {
@@ -447,6 +459,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
+            await refreshBackedSelection(item)
             return decisionStatus ? `${label(decisionStatus)} saved to the DWM workflow.` : 'Owner saved to the DWM workflow.'
         })
     }
@@ -460,7 +473,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
+            await refreshBackedSelection(item)
             return 'Evidence replay recorded in the DWM workflow.'
         })
     }
@@ -475,7 +488,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
+            await refreshBackedSelection(item)
             return payload.attemptedCount ? 'Webhook delivery attempted.' : 'No webhook delivery was attempted.'
         })
     }
@@ -500,7 +513,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
-            if (item.caseDetailHref) await refreshCaseDetail(item.id, item.caseDetailHref, { loading: false })
+            await refreshBackedSelection(item)
             return actionResultMessage(action, payload)
         })
     }

@@ -749,6 +749,8 @@ assert.ok(workbenchSource.includes('initialSelectedId'), 'Operator workbench sho
 assert.ok(workbenchSource.includes('readAlertDetailJson'), 'Operator workbench should parse selected live alert detail from the backed alert proxy.')
 assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(itemId)}'), 'Selected live alerts should load /api/dwm/alerts/:id in the root console.')
 assert.ok(workbenchSource.includes('Alert API evidence'), 'Selected alert inspection should expose backed alert evidence when case detail is unavailable.')
+assert.ok(workbenchSource.includes('refreshAlertDetail'), 'Selected live alert detail should refresh from /api/dwm/alerts/:id after backed actions.')
+assert.ok(workbenchSource.includes('refreshBackedSelection(item)'), 'Replay/send/update actions should refresh selected backed alert and case state.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')
