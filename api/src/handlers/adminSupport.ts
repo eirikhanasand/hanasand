@@ -52,6 +52,9 @@ type AuditQuery = {
     workflow?: string
     bridgeWorkflow?: string
     reason?: string
+    supportReason?: string
+    context?: string
+    supportContext?: string
     outcome?: string
     from?: string
     to?: string
@@ -360,6 +363,9 @@ const adminAuditFilters = new Set([
     'workflow',
     'bridgeWorkflow',
     'reason',
+    'supportReason',
+    'context',
+    'supportContext',
     'outcome',
     'from',
     'to',
@@ -393,7 +399,8 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const idempotency = text(query.idempotency || query.idempotencyKey || query.idempotency_key)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
     const workflow = text(query.workflow || query.bridgeWorkflow)
-    const reason = text(query.reason)
+    const reason = text(query.reason || query.supportReason)
+    const contextFilter = text(query.context || query.supportContext)
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
     const to = text(query.to)
@@ -453,6 +460,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     }
     if (workflow) where.push(`e.context->>'workflow' ILIKE ${add(`%${workflow}%`)}`)
     if (reason) where.push(`e.reason ILIKE ${add(`%${reason}%`)}`)
+    if (contextFilter) where.push(`e.context::text ILIKE ${add(`%${contextFilter}%`)}`)
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
@@ -490,7 +498,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
 
     const events = result.rows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, reason, outcome, from, to, limit }
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, reason, context: contextFilter, outcome, from, to, limit }
     return res.send({
         events,
         filters,
@@ -5823,6 +5831,7 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
 }
 
 function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
+    const filterFields = Array.from(adminAuditFilters)
     return {
         schemaVersion: 'support.audit.bridge_adapter_contract.v1',
         route: '/api/admin/audit-events',
@@ -5841,7 +5850,17 @@ function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
             'outcome',
             'reason',
         ],
-        filterFields: ['org', 'actor', 'target', 'action', 'severity', 'outcome', 'request', 'entity', 'source', 'service', 'workflow', 'from', 'to'],
+        filterFields,
+        supportAliases: {
+            actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
+            organization: ['org', 'orgId', 'organizationId'],
+            target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
+            request: ['request', 'requestId', 'correlation', 'correlationId'],
+            entity: ['entity', 'entityId', 'entityType'],
+            supportSession: ['session', 'supportSession', 'supportSessionId'],
+            reason: ['reason', 'supportReason'],
+            context: ['context', 'supportContext'],
+        },
         currentFilters: filters,
         redaction: {
             required: true,

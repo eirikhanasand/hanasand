@@ -89,7 +89,7 @@ assert.match(ensureSchema, /idx_admin_access_recovery_approved_by/)
 assert.match(ensureSchema, /idx_admin_access_recovery_denied_by/)
 
 const adminSupport = await readFile(new URL('../src/handlers/adminSupport.ts', import.meta.url), 'utf8')
-for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'reason', 'outcome', 'from', 'to']) {
+for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'reason', 'supportReason', 'context', 'supportContext', 'outcome', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing audit filter ${expected}.`)
 }
 assert.match(adminSupport, /const org = text\(query\.org \|\| query\.orgId \|\| query\.organizationId\)/)
@@ -99,6 +99,9 @@ assert.match(adminSupport, /const action = text\(query\.action \|\| query\.actio
 assert.match(adminSupport, /const entity = text\(query\.entity \|\| query\.entityId\)/)
 assert.match(adminSupport, /const workflow = text\(query\.workflow \|\| query\.bridgeWorkflow\)/)
 assert.match(adminSupport, /e\.context->>'workflow' ILIKE/)
+assert.match(adminSupport, /const reason = text\(query\.reason \|\| query\.supportReason\)/)
+assert.match(adminSupport, /const contextFilter = text\(query\.context \|\| query\.supportContext\)/)
+assert.match(adminSupport, /e\.context::text ILIKE/)
 for (const expected of ['requestId', 'status', 'requester', 'approver']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing approval search filter ${expected}.`)
 }
@@ -205,6 +208,10 @@ assert.match(adminSupport, /supportAuditExportProof/)
 assert.match(adminSupport, /supportAuditBridgeAdapterContract/)
 assert.match(adminSupport, /support\.audit\.bridge_adapter_contract\.v1/)
 assert.match(adminSupport, /supportedWorkflows: \['organization', 'watchlist', 'webhook', 'alert', 'impersonation', 'support'\]/)
+assert.match(adminSupport, /const filterFields = Array\.from\(adminAuditFilters\)/)
+assert.match(adminSupport, /supportAliases: \{/)
+assert.match(adminSupport, /supportActorId/)
+assert.match(adminSupport, /supportContext/)
 assert.match(adminSupport, /expectedResponsePath: 'detail\.bridgeAdapter'/)
 assert.match(adminSupport, /redaction: \{/)
 assert.match(adminSupport, /supportAuditWorkflowRollup/)
