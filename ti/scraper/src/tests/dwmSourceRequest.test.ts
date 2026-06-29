@@ -1156,6 +1156,19 @@ describe("dwm source requests", () => {
     expect(worker.status).toBe(200);
     expect(workerBody.activation.summary.activeSourceCount).toBe(6);
     expect(workerBody.collectionQueue.summary.taskCount).toBe(6);
+    const telegramSource = store.listSources().find((source: any) => source.metadata?.sourceGrowthFamily === "telegram");
+    expect(telegramSource?.id).toBeTruthy();
+    const observed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "record_capture",
+        sourceId: telegramSource?.id,
+        captureText: "APT29 public Telegram preview mentions example.com infrastructure."
+      })
+    }), options);
+    const observedBody = await observed.json() as any;
+    expect(observed.status).toBe(200);
+    expect(observedBody.alertRebuild).toMatchObject({ requested: true, status: "skipped", reason: "missing_active_watchlist" });
 
     const config = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1301,6 +1314,68 @@ describe("dwm source requests", () => {
       expect.objectContaining({ family: "public_advisory", canProduceAlert: true, canEnrichActor: true }),
       expect.objectContaining({ family: "actor_page", canProduceAlert: true, canEnrichActor: true }),
       expect.objectContaining({ family: "clear_web", canProduceAlert: true, canEnrichActor: true })
+    ]));
+    const telegramReadiness = configBody.sourceReadinessArtifact.sourceFamilyReadiness.find((row: any) => row.family === "telegram");
+    expect(telegramReadiness).toMatchObject({
+      operationalStates: expect.objectContaining({ canary: 1 }),
+      parserStatuses: expect.arrayContaining(["telegram_public_parser_ready"]),
+      lastCaptureAt: expect.any(String),
+      lastEnrichmentAt: expect.any(String),
+      retryBackoff: expect.objectContaining({ retryable: false }),
+      privacyBoundary: expect.objectContaining({
+        noPrivateTelegram: true,
+        noAutoJoin: true,
+        noCredentials: true,
+        liveNetworkRequiredForProof: false
+      }),
+      sourceTrust: expect.objectContaining({ tier: "medium", score: expect.any(Number) })
+    });
+    const darkwebReadiness = configBody.sourceReadinessArtifact.sourceFamilyReadiness.find((row: any) => row.family === "darkweb_onion");
+    expect(darkwebReadiness).toMatchObject({
+      privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true, restrictedPayloadStored: false }),
+      sourceTrust: expect.objectContaining({ tier: "medium" })
+    });
+    expect(configBody.sourceReadinessArtifact.actorCoverage).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        watchlistTerm: "APT29",
+        actorSections: expect.objectContaining({
+          overview: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "actor_page", "public_advisory"]) }),
+          infrastructure: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_onion", "public_advisory", "actor_page"]) }),
+          targeting: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["darkweb_metadata", "public_advisory"]) }),
+          evidence: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "darkweb_metadata", "clear_web"]) }),
+          freshness: expect.objectContaining({ covered: true, sourceFamilies: expect.arrayContaining(["telegram", "clear_web"]) })
+        }),
+        lastSuccessfulCaptureAt: expect.any(String),
+        lastSuccessfulEnrichmentAt: expect.any(String)
+      })
+    ]));
+    expect(configBody.sourceReadinessArtifact.sharedWatchlistAlertability).toMatchObject({
+      sourceTrust: expect.objectContaining({
+        averageScore: expect.any(Number),
+        byFamily: expect.objectContaining({
+          telegram: expect.objectContaining({ tier: "medium" }),
+          public_advisory: expect.objectContaining({ tier: "high" }),
+          actor_page: expect.objectContaining({ tier: "high" })
+        })
+      }),
+      blockerReasons: expect.any(Array)
+    });
+    expect(configBody.sourceReadinessArtifact.readinessLedgerRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "telegram",
+        state: "canary",
+        canEnrichActor: true,
+        canProduceAlert: true,
+        lastCaptureAt: expect.any(String),
+        matchableFields: expect.arrayContaining(["text"]),
+        privacyBoundary: expect.objectContaining({ noPrivateTelegram: true }),
+        safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+      }),
+      expect.objectContaining({
+        family: "darkweb_onion",
+        state: "active",
+        privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true })
+      })
     ]));
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
     expect(frontier.snapshot()).toHaveLength(6);

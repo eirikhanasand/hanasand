@@ -375,6 +375,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
     verificationCheck("source_customer_config_present", snapshot.sourceCustomerConfig.schemaVersion === "dwm.source_pack_customer_config.v1", snapshot.sourceCustomerConfig.schemaVersion),
     verificationCheck("source_customer_config_redacted", snapshot.sourceCustomerConfig.safeOutput?.rawTargetsExposed === false && snapshot.sourceCustomerConfig.safeOutput?.privateTelegramContentExposed === false, snapshot.sourceCustomerConfig.safeOutput),
     verificationCheck("source_readiness_artifact_present", snapshot.sourceReadinessArtifact.schemaVersion === "dwm.source_readiness_artifact.v1", snapshot.sourceReadinessArtifact.schemaVersion),
+    verificationCheck("source_readiness_ledger_present", Array.isArray(snapshot.sourceReadinessArtifact.readinessLedgerRows), snapshot.sourceReadinessArtifact.readinessLedgerRows?.length ?? "missing"),
+    verificationCheck("source_readiness_trust_present", Boolean(snapshot.sourceReadinessArtifact.sharedWatchlistAlertability?.sourceTrust), snapshot.sourceReadinessArtifact.sharedWatchlistAlertability?.sourceTrust ?? "missing"),
     verificationCheck("parser_family_counts_present", Object.keys(snapshot.parserSourceFamilyCounts).length > 0, Object.keys(snapshot.parserSourceFamilyCounts)),
     verificationCheck("source_family_counts_present", Object.keys(snapshot.sourceFamilyCounts).length > 0, Object.keys(snapshot.sourceFamilyCounts)),
     verificationCheck("pack_ids_redacted", snapshot.redactedSourcePackIds.every((pack) => pack.safeRef && pack.rawTargetsExposed === false), snapshot.redactedSourcePackIds.length),
@@ -411,7 +413,10 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs[].redactedIdentity.rawStored",
       "sourceInventory.sourcePackWorker.sourceCustomerConfig.allowedOperatorActions[].action",
       "sourceInventory.sourcePackWorker.sourceReadinessArtifact.actorCoverage[].watchlistTerm",
+      "sourceInventory.sourcePackWorker.sourceReadinessArtifact.actorCoverage[].actorSections.overview.covered",
       "sourceInventory.sourcePackWorker.sourceReadinessArtifact.sharedWatchlistAlertability.activeSourceFamilies[]",
+      "sourceInventory.sourcePackWorker.sourceReadinessArtifact.sharedWatchlistAlertability.sourceTrust.averageScore",
+      "sourceInventory.sourcePackWorker.sourceReadinessArtifact.readinessLedgerRows[].state",
       "sourceInventory.sourcePackWorker.parserSourceFamilyCounts",
       "sourceInventory.sourcePackWorker.sourceFamilyCounts",
       "sourceInventory.sourcePackWorker.rejectedCandidates[].targetRef.rawStored",
@@ -422,6 +427,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourcePacks.sourceOperationsReadiness.summary.candidateCount",
       "sourcePacks.sourceCustomerConfig.summary.configurableCount",
       "sourcePacks.sourceReadinessArtifact.sharedWatchlistAlertability.matchableFields[]",
+      "sourcePacks.sourceReadinessArtifact.readinessLedgerRows[].privacyBoundary.liveNetworkRequiredForProof",
       "sourcePacks.readiness.state",
       "sourcePacks.proxyVerification.state"
     ],
@@ -442,6 +448,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       ".sourceInventory.sourcePackWorker.sourceCustomerConfig.safeOutput.liveNetworkScrapeStarted == false",
       ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.schemaVersion == \"dwm.source_readiness_artifact.v1\"",
       ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.safeOutput.liveNetworkScrapeStarted == false",
+      ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.readinessLedgerRows | all(.safeOutput.liveNetworkScrapeStarted == false)",
+      ".sourceInventory.sourcePackWorker.sourceReadinessArtifact.actorCoverage | all(.actorSections.overview.covered != null)",
       ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
     ],
     blockers: snapshot.readiness.blockers,
@@ -915,11 +923,18 @@ function buildDwmSourceReadinessArtifact(
   const alertCapableProofs = activeProofs.filter((proof: any) => proof.alertability?.canProduceAlert === true);
   const enrichmentCapableProofs = activeProofs.filter((proof: any) => proof.actorEnrichment?.canEnrichActor === true);
   const sourceFamilyReadiness = SOURCE_GROWTH_FAMILIES.map((family) => {
+    const familyConfigs = sourceConfigs.filter((row: any) => row.family === family);
     const familyProofs = activationProofs.filter((proof: any) => proof.family === family);
     const blockers = uniqueSourceReadinessBlockers(familyProofs.flatMap((proof: any) => [
       ...(proof.activationBlockers ?? []),
       ...(proof.actorEnrichment?.blockers ?? [])
     ]));
+    const latestCaptureAtForFamily = latestIso(familyProofs.flatMap((proof: any) => [
+      proof.retryReadiness?.lastRun?.status === "capture_observed" ? proof.retryReadiness?.lastRun?.at : undefined,
+      proof.retryReadiness?.lastRun?.status === "completed" ? proof.retryReadiness?.lastRun?.at : undefined
+    ]));
+    const canEnrichActor = familyProofs.some((proof: any) => proof.actorEnrichment?.canEnrichActor === true);
+    const canProduceAlert = familyProofs.some((proof: any) => proof.alertability?.canProduceAlert === true);
     return {
       family,
       candidateCount: familyProofs.length,
@@ -928,13 +943,20 @@ function buildDwmSourceReadinessArtifact(
       paused: familyProofs.filter((proof: any) => proof.state === "paused").length,
       failed: familyProofs.filter((proof: any) => proof.state === "failed").length,
       blocked: familyProofs.filter((proof: any) => proof.state === "blocked").length,
-      canEnrichActor: familyProofs.some((proof: any) => proof.actorEnrichment?.canEnrichActor === true),
-      canProduceAlert: familyProofs.some((proof: any) => proof.alertability?.canProduceAlert === true),
+      policyBlocked: familyProofs.filter((proof: any) => proof.policyResult?.allowed === false || proof.state === "blocked").length,
+      operationalStates: sourceReadinessStateCounts(familyProofs),
+      canEnrichActor,
+      canProduceAlert,
       matchableFields: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])),
       alertableFields: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.alertability?.alertableFields ?? [])),
       actorSignals: uniqueSourceReadinessStrings(familyProofs.flatMap((proof: any) => proof.actorEnrichment?.actorSignals ?? [])),
       parserStatuses: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.parserAvailability?.status).filter(Boolean)),
       expectedCaptureTypes: uniqueSourceReadinessStrings(familyProofs.map((proof: any) => proof.expectedCapture?.type).filter(Boolean)),
+      lastCaptureAt: latestCaptureAtForFamily,
+      lastEnrichmentAt: canEnrichActor ? input.generatedAt : undefined,
+      retryBackoff: sourceReadinessRetryBackoff(familyConfigs),
+      privacyBoundary: sourceReadinessPrivacyBoundary(familyProofs),
+      sourceTrust: sourceTrustForFamily(family, familyProofs),
       blockers
     };
   });
@@ -959,6 +981,7 @@ function buildDwmSourceReadinessArtifact(
     enrichableSourceFamilies,
     activeSourceFamilies,
     missingCoverage,
+    actorSections: sourceReadinessActorSections(enrichmentCapableProofs),
     actorSignals: uniqueSourceReadinessStrings(enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.actorSignals ?? [])),
     watchlistMatchFields: uniqueSourceReadinessStrings(enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])),
     alertableFields: uniqueSourceReadinessStrings(alertCapableProofs.flatMap((proof: any) => proof.alertability?.alertableFields ?? [])),
@@ -989,9 +1012,17 @@ function buildDwmSourceReadinessArtifact(
         ...enrichmentCapableProofs.flatMap((proof: any) => proof.actorEnrichment?.watchlistMatchFields ?? [])
       ]),
       watchlistTerms,
+      sourceTrust: sourceReadinessTrustRollup(sourceFamilyReadiness),
       blockers: uniqueSourceReadinessBlockers(sourceFamilyReadiness.flatMap((row) => row.blockers)),
+      blockerReasons: uniqueSourceReadinessStrings(sourceFamilyReadiness.flatMap((row) => row.blockers.map((blocker) => blocker.code))),
       sourcePolicyLimits: sourceReadinessPolicyLimits(activationProofs)
     },
+    readinessLedgerRows: sourceReadinessLedgerRows({
+      generatedAt: input.generatedAt,
+      scope: input.scope ?? sourceCustomerConfig.scope,
+      watchlistTerms,
+      sourceFamilyReadiness
+    }),
     lastHealthProof: {
       sourceConfigCount: sourceConfigs.length,
       canaryCount: activationProofs.filter((proof: any) => proof.state === "canary").length,
@@ -1011,6 +1042,140 @@ function buildDwmSourceReadinessArtifact(
       restrictedPayloadDownloadAllowed: false
     }
   };
+}
+
+function sourceReadinessStateCounts(activationProofs: Array<Record<string, any>>) {
+  return activationProofs.reduce<Record<string, number>>((acc, proof) => {
+    const state = String(proof.state ?? "unknown");
+    acc[state] = (acc[state] ?? 0) + 1;
+    return acc;
+  }, { active: 0, canary: 0, paused: 0, failed: 0, blocked: 0 });
+}
+
+function sourceReadinessRetryBackoff(sourceConfigs: Array<Record<string, any>>) {
+  const retryStates = sourceConfigs
+    .map((row) => row.retryState?.activationRetryReadiness ?? row.retryState)
+    .filter(Boolean);
+  const retryable = retryStates.some((state) => state.retryable === true);
+  const nextRetryAt = latestIso(retryStates.map((state) => state.nextRetryAt ?? state.retryHint));
+  const failureCategories = uniqueSourceReadinessStrings(retryStates.map((state) => state.failureCategory).filter(Boolean));
+  return {
+    retryable,
+    nextRetryAt,
+    failureCategories,
+    backoffSeconds: retryStates.map((state) => state.backoffSeconds).find((value) => Number.isFinite(value)),
+    lastRunStatuses: uniqueSourceReadinessStrings(retryStates.map((state) => state.lastRun?.status).filter(Boolean))
+  };
+}
+
+function sourceReadinessPrivacyBoundary(activationProofs: Array<Record<string, any>>) {
+  return {
+    publicOnly: activationProofs.every((proof) => proof.policyResult?.publicOnly === true || proof.policyResult?.metadataOnly === true),
+    metadataOnly: activationProofs.some((proof) => proof.policyResult?.metadataOnly === true),
+    restrictedSource: activationProofs.some((proof) => proof.policyResult?.category === "restricted_metadata_only" || proof.policyResult?.category === "policy_rejected"),
+    noPrivateTelegram: activationProofs.every((proof) => proof.credentialBoundary?.noPrivateAccess !== false),
+    noAutoJoin: activationProofs.every((proof) => proof.credentialBoundary?.noAutoJoin !== false),
+    noCredentials: activationProofs.every((proof) => proof.credentialBoundary?.noCredentialCollection !== false),
+    noRepliesReactionsOrMediaDownloads: true,
+    restrictedPayloadStored: false,
+    liveNetworkRequiredForProof: false
+  };
+}
+
+function sourceTrustForFamily(family: SourceGrowthFamily, activationProofs: Array<Record<string, any>>) {
+  const policyBlocked = activationProofs.some((proof) => proof.policyResult?.allowed === false || proof.state === "blocked");
+  const parserFailed = activationProofs.some((proof) => proof.state === "failed" || proof.parserAvailability?.available === false);
+  const activeOrCanary = activationProofs.some((proof) => proof.state === "active" || proof.state === "canary");
+  const tier = policyBlocked
+    ? "blocked"
+    : parserFailed
+      ? "degraded"
+      : family === "public_advisory" || family === "actor_page"
+        ? "high"
+        : activeOrCanary
+          ? "medium"
+          : "pending";
+  return {
+    tier,
+    score: tier === "high" ? 0.9 : tier === "medium" ? 0.72 : tier === "degraded" ? 0.42 : tier === "pending" ? 0.25 : 0,
+    reason: tier === "blocked"
+      ? "policy blocked"
+      : tier === "degraded"
+        ? "parser or collection retry required"
+        : tier === "high"
+          ? "public attribution or actor metadata source"
+          : activeOrCanary
+            ? "active bounded source with safe policy boundary"
+            : "candidate exists but is not active"
+  };
+}
+
+function sourceReadinessActorSections(activationProofs: Array<Record<string, any>>) {
+  const sections = ["overview", "infrastructure", "targeting", "evidence", "freshness"];
+  const familiesBySection = Object.fromEntries(sections.map((section) => [section, [] as string[]])) as Record<string, string[]>;
+  for (const proof of activationProofs) {
+    for (const section of actorSectionsForFamily(proof.family)) {
+      familiesBySection[section] = uniqueSourceReadinessStrings([...(familiesBySection[section] ?? []), proof.family]);
+    }
+  }
+  return Object.fromEntries(sections.map((section) => [section, {
+    covered: (familiesBySection[section] ?? []).length > 0,
+    sourceFamilies: familiesBySection[section] ?? [],
+    blockers: (familiesBySection[section] ?? []).length > 0 ? [] : [{ code: "missing_source_family", severity: "warning", section, retryable: true }]
+  }]));
+}
+
+function actorSectionsForFamily(family: string): string[] {
+  if (family === "telegram") return ["overview", "evidence", "freshness"];
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return ["infrastructure", "targeting", "evidence", "freshness"];
+  if (family === "public_advisory") return ["overview", "infrastructure", "targeting", "evidence", "freshness"];
+  if (family === "actor_page") return ["overview", "infrastructure", "targeting", "freshness"];
+  if (family === "clear_web") return ["overview", "evidence", "freshness"];
+  return [];
+}
+
+function sourceReadinessTrustRollup(sourceFamilyReadiness: Array<Record<string, any>>) {
+  const byFamily = Object.fromEntries(sourceFamilyReadiness.map((row) => [row.family, row.sourceTrust]));
+  const activeScores = sourceFamilyReadiness
+    .filter((row) => row.canProduceAlert || row.canEnrichActor)
+    .map((row) => Number(row.sourceTrust?.score ?? 0))
+    .filter((score) => Number.isFinite(score));
+  const averageScore = activeScores.length > 0
+    ? Math.round((activeScores.reduce((sum, score) => sum + score, 0) / activeScores.length) * 100) / 100
+    : 0;
+  return { averageScore, byFamily };
+}
+
+function sourceReadinessLedgerRows(input: {
+  generatedAt: string;
+  scope?: string;
+  watchlistTerms: string[];
+  sourceFamilyReadiness: Array<Record<string, any>>;
+}) {
+  return input.sourceFamilyReadiness.map((row) => ({
+    id: stableId("dwm_source_readiness_ledger", `${input.scope ?? "global"}:${row.family}:${input.generatedAt}`),
+    generatedAt: input.generatedAt,
+    scope: input.scope,
+    watchlistTerms: input.watchlistTerms,
+    family: row.family,
+    state: row.active > 0 ? "active" : row.canary > 0 ? "canary" : row.failed > 0 ? "failed" : row.blocked > 0 ? "policy_blocked" : row.paused > 0 ? "paused" : "missing",
+    canEnrichActor: row.canEnrichActor,
+    canProduceAlert: row.canProduceAlert,
+    matchableFields: row.matchableFields,
+    alertableFields: row.alertableFields,
+    lastCaptureAt: row.lastCaptureAt,
+    lastEnrichmentAt: row.lastEnrichmentAt,
+    retryBackoff: row.retryBackoff,
+    privacyBoundary: row.privacyBoundary,
+    sourceTrust: row.sourceTrust,
+    blockerCodes: uniqueSourceReadinessStrings(row.blockers.map((blocker: any) => blocker.code)),
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  }));
 }
 
 function uniqueSourceReadinessStrings(values: unknown[]): string[] {
