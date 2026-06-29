@@ -243,6 +243,7 @@ export function classifySourceFamily(source: SourceRecord | undefined, capture?:
   const url = String((source as any)?.url ?? capture?.url ?? "").toLowerCase();
   const name = String((source as any)?.name ?? "").toLowerCase();
   if (type.includes("telegram") || url.includes("t.me/")) return "telegram_public";
+  if (type.includes("actor_page") || type.includes("actor-page") || name.includes("actor-page") || name.includes("actor page")) return "actor_page";
   if (type.includes("tor") || type.includes("i2p") || type.includes("darknet") || type.includes("darkweb") || url.includes(".onion") || url.includes(".i2p")) return "darkweb_metadata";
   if (type.includes("advisory") || type.includes("cert") || type.includes("cve") || name.includes("cert") || name.includes("advisory") || url.includes("advisor")) return "public_advisory";
   if (type.includes("rss") || type.includes("static") || type.includes("dynamic") || url.startsWith("https://")) return "clear_web";

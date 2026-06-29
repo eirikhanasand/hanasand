@@ -1,6 +1,7 @@
 import { buildDwmProductSnapshot, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
+import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
 
 type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
 
@@ -12,6 +13,8 @@ export type RuntimeDwmWatchlist = {
   webhookDestinationId?: string;
   webhookUrl?: string;
   status: "active" | "paused";
+  orgWatchlistTerms?: RuntimeOrgWatchlistTermContext[];
+  orgMembershipContext?: RuntimeOrgMembershipContext;
 };
 
 export type DwmAlertGenerationCaptureRef = {
@@ -33,8 +36,10 @@ export type DwmAlertGenerationCandidate = {
   webhookDestinationIds: string[];
   hasWebhookRoute: boolean;
   visibilityPolicy: DwmAlertVisibilityPolicy;
+  membershipContext?: RuntimeOrgMembershipContext;
   sourceFamilies: string[];
   captureRefs: DwmAlertGenerationCaptureRef[];
+  watchlistTermContexts: RuntimeOrgWatchlistTermContext[];
   dedupeSeed: string;
   dedupeKeyCandidate: string;
 };
@@ -238,6 +243,7 @@ export function buildDwmAlertGenerationPlan(input: {
       const existing = candidates.get(key);
       const captureRefs = captureRefsForTerm({ term, sources, captures });
       const sourceFamilies = uniqueStrings(captureRefs.map((ref) => ref.sourceFamily));
+      const watchlistTermContexts = watchlistTermContextsFor(watchlist, term.value);
       if (existing) {
         existing.watchlistIds = uniqueStrings([...existing.watchlistIds, watchlist.id]);
         existing.watchlistItemIds = uniqueStrings([...existing.watchlistItemIds, ...watchlistItemIdsFor(watchlist, term.value)]);
@@ -245,6 +251,8 @@ export function buildDwmAlertGenerationPlan(input: {
         existing.hasWebhookRoute = existing.hasWebhookRoute || Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl);
         existing.captureRefs = mergeCaptureRefs(existing.captureRefs, captureRefs);
         existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
+        existing.watchlistTermContexts = mergeWatchlistTermContexts(existing.watchlistTermContexts, watchlistTermContexts);
+        existing.membershipContext = existing.membershipContext ?? watchlist.orgMembershipContext;
         continue;
       }
 
@@ -260,8 +268,10 @@ export function buildDwmAlertGenerationPlan(input: {
         webhookDestinationIds: [watchlist.webhookDestinationId].filter(Boolean) as string[],
         hasWebhookRoute: Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl),
         visibilityPolicy,
+        membershipContext: watchlist.orgMembershipContext,
         sourceFamilies,
         captureRefs,
+        watchlistTermContexts,
         dedupeSeed,
         dedupeKeyCandidate: stableId("dwm_dedupe_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${dedupeSeed}`)
       });
@@ -415,10 +425,13 @@ export function buildDwmAlertWorkflowContext(input: {
     tenantId: input.tenantId,
     organizationId: input.organizationId,
     visibilityPolicy: input.generationCandidate?.visibilityPolicy,
+    membershipContext: input.generationCandidate?.membershipContext,
     generationCandidateId: input.generationCandidate?.id,
     caseIdCandidate,
     watchlistIds,
     watchlistItemIds,
+    watchlistTermContexts: input.generationCandidate?.watchlistTermContexts ?? [],
+    matchedTermCategory: input.generationCandidate?.watchlistTermContexts?.find((term) => term.value.toLowerCase() === input.alert.matchedTerm?.value?.toLowerCase())?.category,
     matchedTerm: input.alert.matchedTerm,
     sourceFamily: input.alert.sourceFamily,
     captureIds,
@@ -439,9 +452,12 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     tenantId: workflowContext.tenantId,
     organizationId: workflowContext.organizationId,
     visibilityPolicy: workflowContext.visibilityPolicy,
+    membershipContext: workflowContext.membershipContext,
     generationCandidateId: workflowContext.generationCandidateId,
     watchlistIds: workflowContext.watchlistIds,
     watchlistItemIds: workflowContext.watchlistItemIds,
+    watchlistTermContexts: workflowContext.watchlistTermContexts,
+    matchedTermCategory: workflowContext.matchedTermCategory,
     sourceFamily: workflowContext.sourceFamily,
     captureIds: workflowContext.captureIds,
     evidenceCount: workflowContext.evidenceCount,
@@ -476,6 +492,13 @@ function watchlistItemIdsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: string
     .map((term) => String((term as any).id ?? `${watchlist.id}:${term.value}`));
 }
 
+function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: string | undefined): RuntimeOrgWatchlistTermContext[] {
+  if (!matchedTerm) return [];
+  const normalized = matchedTerm.toLowerCase();
+  return (watchlist.orgWatchlistTerms ?? [])
+    .filter((term) => term.value.toLowerCase() === normalized || term.terms.some((value) => value.toLowerCase() === normalized));
+}
+
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
   return input.captures
     .filter((capture) => captureText(capture).includes(normalizeTerm(input.term.value)))
@@ -494,6 +517,12 @@ function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]
 function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAlertGenerationCaptureRef[]): DwmAlertGenerationCaptureRef[] {
   const byId = new Map(existing.map((ref) => [ref.captureId, ref]));
   for (const ref of next) byId.set(ref.captureId, byId.get(ref.captureId) ?? ref);
+  return [...byId.values()];
+}
+
+function mergeWatchlistTermContexts(existing: RuntimeOrgWatchlistTermContext[], next: RuntimeOrgWatchlistTermContext[]): RuntimeOrgWatchlistTermContext[] {
+  const byId = new Map(existing.map((term) => [term.watchlistItemId, term]));
+  for (const term of next) byId.set(term.watchlistItemId, byId.get(term.watchlistItemId) ?? term);
   return [...byId.values()];
 }
 
