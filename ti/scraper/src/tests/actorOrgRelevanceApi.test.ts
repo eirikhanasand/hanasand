@@ -129,6 +129,7 @@ describe("actor org relevance API", () => {
         needs_case_handoff: 0,
         needs_webhook_trigger: 0,
         ready_for_customer: 0,
+        customer_notified: 0,
         blocked: 0
       }
     });
@@ -203,7 +204,106 @@ describe("actor org relevance API", () => {
     expect(ready.counts).toMatchObject({ total: 1, ready_for_customer: 1 });
     expect(ready.records[0]).toMatchObject({
       state: "ready_for_customer",
-      latestWebhookTrigger: { id: webhook.receipt.id }
+      latestWebhookTrigger: { id: webhook.receipt.id },
+      routes: {
+        customerNotification: `/v1/ti/actor-org-relevance/${created.record.id}/customer-notification`
+      }
+    });
+
+    const dryRunNotificationResponse = await notifyCustomer(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      rationale: "SOC reviewed the prepared case and delivery evidence.",
+      generatedAt: "2026-06-29T10:20:30.000Z"
+    });
+    expect(dryRunNotificationResponse.status).toBe(400);
+    expect(await dryRunNotificationResponse.json()).toMatchObject({ error: { code: "webhook_delivery_not_confirmed" } });
+
+    const liveWebhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ dryRun: false, generatedAt: "2026-06-29T10:21:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const liveWebhook = await liveWebhookResponse.json() as any;
+    expect(liveWebhookResponse.status).toBe(201);
+    expect(liveWebhook.receipt.destination.dryRun).toBe(false);
+
+    const missingRationale = await notifyCustomer(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      generatedAt: "2026-06-29T10:21:30.000Z"
+    });
+    expect(missingRationale.status).toBe(400);
+    expect(await missingRationale.json()).toMatchObject({ error: { code: "missing_rationale" } });
+
+    const notifiedResponse = await notifyCustomer(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      rationale: "Customer SOC received the case handoff and webhook delivery evidence.",
+      generatedAt: "2026-06-29T10:22:00.000Z"
+    });
+    const notified = await notifiedResponse.json() as any;
+    expect(notifiedResponse.status).toBe(201);
+    expect(notified.created).toBe(true);
+    expect(notified.receipt).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.customer_notification_receipt.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      reviewId: created.record.id,
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      createdBy: "user_ti",
+      webhookTriggerReceiptId: liveWebhook.receipt.id,
+      caseHandoffReceiptId: caseHandoff.receipt.id,
+      deliveryMode: "webhook_delivery",
+      rationale: "Customer SOC received the case handoff and webhook delivery evidence.",
+      destination: {
+        webhookDestinationIds: ["webhook_soc"],
+        dryRun: false
+      },
+      routing: {
+        alertId: "dwm_alert_microsoft",
+        casePath: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+        publicTi: "/ti/apt29%20microsoft",
+        review: `/v1/ti/actor-org-relevance/${created.record.id}`
+      },
+      evidence: {
+        dedupeKey: liveWebhook.receipt.provenance.dedupeKey,
+        captureIds: ["capture_microsoft_apt29"],
+        sourceIds: ["microsoft"],
+        sourceFamilies: ["public_advisory"],
+        evidenceCount: 1
+      }
+    });
+    expect(notified.summary.workflow).toMatchObject({
+      status: "closed",
+      decision: "customer_notified",
+      rationale: "Customer SOC received the case handoff and webhook delivery evidence.",
+      updatedBy: "user_ti",
+      updatedAt: "2026-06-29T10:22:00.000Z"
+    });
+    expect(notified.summary.latestCustomerNotification.id).toBe(notified.receipt.id);
+    expect(notified.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "customer_notified", actorId: "user_ti" })
+    ]));
+
+    const duplicateNotificationResponse = await notifyCustomer(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      rationale: "Customer SOC received the case handoff and webhook delivery evidence.",
+      generatedAt: "2026-06-29T10:23:00.000Z"
+    });
+    const duplicateNotification = await duplicateNotificationResponse.json() as any;
+    expect(duplicateNotificationResponse.status).toBe(200);
+    expect(duplicateNotification.created).toBe(false);
+    expect(duplicateNotification.receipt.id).toBe(notified.receipt.id);
+    expect(duplicateNotification.record.customerNotificationReceipts).toHaveLength(1);
+    expect(duplicateNotification.record.timeline.filter((event: any) => event.eventType === "customer_notified")).toHaveLength(1);
+
+    const crossOrgNotification = await notifyCustomer(store, created.record.id, "tenant_other", "org_other", {
+      rationale: "Cross-org notification must not work."
+    });
+    expect(crossOrgNotification.status).toBe(404);
+
+    const notifiedQueueResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=customer_notified");
+    const notifiedQueue = await notifiedQueueResponse.json() as any;
+    expect(notifiedQueue.counts).toMatchObject({ total: 1, customer_notified: 1 });
+    expect(notifiedQueue.records[0]).toMatchObject({
+      state: "customer_notified",
+      latestWebhookTrigger: { id: liveWebhook.receipt.id },
+      latestCustomerNotification: { id: notified.receipt.id }
     });
 
     const otherOrgResponse = await listHandoffQueue(store, "tenant_other", "org_other");
@@ -1135,6 +1235,14 @@ async function patchWorkflow(store: InMemoryScraperStore | FileBackedScraperStor
 
 async function cancelPreparedHandoff(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
   return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/cancel-prepared-handoff?tenantId=${tenantId}&organizationId=${organizationId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify(body)
+  }), { store, frontier: new FocusedFrontier() });
+}
+
+async function notifyCustomer(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/customer-notification?tenantId=${tenantId}&organizationId=${organizationId}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
     body: JSON.stringify(body)
