@@ -157,7 +157,7 @@ export type ActorOrgRelevanceMaterializeWatchlistInput = {
 };
 
 export type ActorOrgRelevanceMaterializeWatchlistResult =
-  | { ok: true; record: ActorOrgRelevanceReviewRecord; watchlist: ActorOrgRelevanceMaterializedWatchlist; created: boolean }
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; watchlist: ActorOrgRelevanceMaterializedWatchlist; created: boolean; changed: boolean }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceAlertGenerationReceipt = {
@@ -552,6 +552,14 @@ export function materializeActorOrgRelevanceWatchlist(input: {
   const webhookDestinationId = input.materialize?.webhookDestinationId
     || record.handoff.webhookTrigger.request.body.webhookDestinationIds[0]
     || input.existing?.webhookDestinationId;
+  const provenance = record.readiness.provenance.map((row) => ({
+    sourceId: row.sourceId,
+    sourceName: row.sourceName,
+    captureId: row.captureId,
+    provenance: row.provenance,
+    confidence: row.confidence
+  }));
+  const publicTiHandoffId = record.handoff.watchlist.handoff.handoffId;
   const watchlist: ActorOrgRelevanceMaterializedWatchlist = {
     ...input.existing,
     id,
@@ -567,15 +575,20 @@ export function materializeActorOrgRelevanceWatchlist(input: {
     actorOrgRelevanceReviewId: record.id,
     actorId: record.actorId,
     query: record.query,
-    provenance: record.readiness.provenance.map((row) => ({
-      sourceId: row.sourceId,
-      sourceName: row.sourceName,
-      captureId: row.captureId,
-      provenance: row.provenance,
-      confidence: row.confidence
-    })),
-    publicTiHandoffId: record.handoff.watchlist.handoff.handoffId
+    provenance,
+    publicTiHandoffId
   };
+  const existingWatchlist = input.existing;
+  const changed = !existingWatchlist || !sameMaterializedWatchlist(existingWatchlist, watchlist);
+  if (!changed) {
+    return {
+      ok: true,
+      created: false,
+      changed: false,
+      watchlist: existingWatchlist,
+      record
+    };
+  }
   const timelineEvent: ActorOrgRelevanceTimelineEvent = {
     id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:watchlist_materialized:${watchlist.id}`),
     occurredAt: generatedAt,
@@ -587,6 +600,7 @@ export function materializeActorOrgRelevanceWatchlist(input: {
   return {
     ok: true,
     created: !input.existing,
+    changed,
     watchlist,
     record: {
       ...record,
@@ -600,6 +614,22 @@ export function materializeActorOrgRelevanceWatchlist(input: {
       timeline: [...record.timeline, timelineEvent]
     }
   };
+}
+
+function sameMaterializedWatchlist(left: ActorOrgRelevanceMaterializedWatchlist, right: ActorOrgRelevanceMaterializedWatchlist) {
+  return left.id === right.id
+    && left.tenantId === right.tenantId
+    && left.organizationId === right.organizationId
+    && left.name === right.name
+    && left.webhookDestinationId === right.webhookDestinationId
+    && left.status === right.status
+    && left.source === right.source
+    && left.actorOrgRelevanceReviewId === right.actorOrgRelevanceReviewId
+    && left.actorId === right.actorId
+    && left.query === right.query
+    && left.publicTiHandoffId === right.publicTiHandoffId
+    && JSON.stringify(left.terms) === JSON.stringify(right.terms)
+    && JSON.stringify(left.provenance) === JSON.stringify(right.provenance);
 }
 
 export function createActorOrgRelevanceAlertGenerationRequest(input: {

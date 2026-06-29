@@ -127,6 +127,7 @@ export async function materializeActorOrgRelevanceReviewWatchlist(request: Reque
   (options.store as any).saveActorOrgRelevanceReview(materialized.record);
   return json({
     created: materialized.created,
+    changed: materialized.changed,
     watchlist: materialized.watchlist,
     record: materialized.record,
     summary: summarizeActorOrgRelevanceReview(materialized.record)

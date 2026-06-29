@@ -184,6 +184,7 @@ describe("actor org relevance API", () => {
 
     expect(materializedResponse.status).toBe(201);
     expect(materialized.created).toBe(true);
+    expect(materialized.changed).toBe(true);
     expect(materialized.watchlist).toMatchObject({
       id: "watchlist_microsoft",
       tenantId: "tenant_microsoft",
@@ -221,8 +222,10 @@ describe("actor org relevance API", () => {
     const idempotent = await idempotentResponse.json() as any;
     expect(idempotentResponse.status).toBe(200);
     expect(idempotent.created).toBe(false);
+    expect(idempotent.changed).toBe(false);
     expect(idempotent.watchlist.createdAt).toBe("2026-06-29T10:20:00.000Z");
-    expect(idempotent.watchlist.updatedAt).toBe("2026-06-29T10:21:00.000Z");
+    expect(idempotent.watchlist.updatedAt).toBe("2026-06-29T10:20:00.000Z");
+    expect(idempotent.record.timeline.filter((event: any) => event.eventType === "watchlist_materialized")).toHaveLength(1);
   });
 
   test("blocks watchlist materialization for blocked reviews and other organization scopes", async () => {
