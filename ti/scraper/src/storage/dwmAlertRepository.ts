@@ -138,6 +138,7 @@ export type DwmAlertWorkflowExecutionReadiness = {
     dedupeKey?: string;
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
+    alertDetailPath?: string;
   };
   createdEventDispatch?: {
     schemaVersion: "dwm.alert_created_event_dispatch.v1";
@@ -190,6 +191,7 @@ export type DwmAlertCustomerProofHandoffRow = {
   tenantId: string;
   organizationId?: string;
   dedupeKey: string;
+  alertDetailPath?: string;
   deliveryDedupeKey: string;
   replayMarker?: string;
   sourceFamily: string;
@@ -218,6 +220,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     dedupeKey?: string;
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
+    alertDetailPath?: string;
   };
   updatedEvent?: {
     schemaVersion: "dwm.alert_updated_event.v1";
@@ -283,6 +286,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     dashboard: {
       route: "organization_watchlist";
       casePath?: string;
+      alertDetailPath?: string;
       fields: string[];
     };
     helpdesk: {
@@ -307,6 +311,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     };
     detail: {
       route: "/v1/dwm/alerts/:alertId";
+      alertDetailPath?: string;
       stableFields: string[];
       selectedCaptureIds: string[];
       provenanceCaptureIds: string[];
@@ -345,6 +350,7 @@ export type DwmAlertDownstreamHandoff = {
   schemaVersion: "dwm.alert_downstream_handoff.v1";
   handoffId: string;
   alertId?: string;
+  alertDetailPath?: string;
   tenantId?: string;
   organizationId?: string;
   ready: boolean;
@@ -848,6 +854,7 @@ export type DwmPersistedDeliveryReadinessContext = {
   recommendedRoute?: string;
   alertCreatedEventId?: string;
   alertCreatedAt?: string;
+  alertDetailPath?: string;
   caseIdCandidate?: string;
   caseId?: string;
   casePath?: string;
@@ -966,6 +973,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       id: alertId,
       tenantId: input.tenantId,
       organizationId: input.organizationId ?? existing?.organizationId,
+      alertDetailPath: workflowContext.alertDetailPath,
       watchlistIds: workflowContext.watchlistIds,
       watchlistItemIds: workflowContext.watchlistItemIds,
       workflowContext,
@@ -1066,6 +1074,7 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute ?? input.workflowContext.recommendedRoute,
     alertCreatedEventId: input.existing?.alertCreatedEvent?.id ?? previousContext.alertCreatedEventId,
     alertCreatedAt: input.existing?.alertCreatedEvent?.at ?? previousContext.alertCreatedAt,
+    alertDetailPath: input.workflowContext.alertDetailPath,
     caseIdCandidate: input.workflowContext.caseIdCandidate,
     caseId: input.existing?.caseId ?? input.workflowContext.caseId,
     casePath: input.existing?.casePath ?? input.workflowContext.casePath,
@@ -1522,6 +1531,7 @@ export function dwmAlertToSqlRecord(alert: any) {
     webhook_context: alert.webhookContext,
     case_id_candidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate ?? null,
     case_path: alert.casePath ?? alert.workflowContext?.casePath ?? null,
+    alert_detail_path: alert.alertDetailPath ?? alert.workflowContext?.alertDetailPath ?? null,
     watchlist_item_ids: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
     watchlist_ids: alert.watchlistIds ?? [],
     workflow_note: alert.workflowNote ? String(alert.workflowNote) : null,
@@ -1584,12 +1594,14 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmCustomerProofBlockerCode[];
   const deliveryState = String(context.state ?? alert.deliveryState ?? "pending_review");
   const deliveryReady = Boolean(context.ready) && !blockerCodes.includes("webhook_destination_not_verified") && !blockerCodes.includes("support_only_redaction_needed");
+  const alertDetailPath = context.alertDetailPath ?? alert.alertDetailPath ?? workflow.alertDetailPath ?? webhook.alertDetailPath;
   return {
     schemaVersion: "dwm.customer_alert_proof.v1",
     alertId: String(alert.id),
     tenantId: String(alert.tenantId ?? workflow.tenantId ?? webhook.tenantId ?? "default"),
     organizationId: alert.organizationId ?? workflow.organizationId ?? webhook.organizationId,
     dedupeKey: String(alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? workflow.dedupeKey),
+    alertDetailPath,
     deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
     replayMarker: context.replayMarker,
     sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
@@ -1652,8 +1664,9 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       alertGeneratorKeys,
       dashboard: {
         route: "organization_watchlist",
+        alertDetailPath,
         casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
-        fields: ["organizationId", "tenantId", "alertId", "casePath", "watchlistItemIds", "workflow.status", "updatedEvent"]
+        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "updatedEvent"]
       },
       helpdesk: {
         redacted: true,
@@ -1676,14 +1689,15 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       schemaVersion: "dwm.alert_consumer_contract.v1",
       queue: {
         route: "/v1/dwm/alerts",
-        stableFields: ["alertId", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
+        stableFields: ["alertId", "alertDetailPath", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
         workflowStatus: String(alert.workflowStatus ?? "new"),
         sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
         evidenceCount
       },
       detail: {
         route: "/v1/dwm/alerts/:alertId",
-        stableFields: ["selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "updatedEvent", "dedupeKey", "watchlistItemIds"],
+        alertDetailPath,
+        stableFields: ["alertDetailPath", "selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "updatedEvent", "dedupeKey", "watchlistItemIds"],
         selectedCaptureIds,
         provenanceCaptureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
         generationEvidenceWindow
@@ -1694,7 +1708,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         dispatchReady: webhookDestinationIds.length > 0 && evidenceCount > 0,
         deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
         replayMarker: context.replayMarker,
-        requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
+        requiredFields: ["alertId", "eventId", "alertDetailPath", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
       },
       webhookUpdatedEvent: updatedEvent ? {
         eventType: "dwm.alert.updated",
@@ -1703,7 +1717,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
         replayMarker: context.replayMarker,
         addedCaptureIds: updatedEvent.addedCaptureIds,
-        requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
+        requiredFields: ["alertId", "eventId", "alertDetailPath", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
       } : undefined,
       publicTI: {
         redacted: true,
@@ -1732,7 +1746,8 @@ function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fal
     captureIds: uniqueStrings(asStringArray(event?.captureIds ?? fallbackCaptureIds)),
     dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
-    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute
+    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute,
+    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath
   };
 }
 
@@ -1754,7 +1769,8 @@ function normalizeDwmAlertUpdatedEvent(alert: any | undefined, context: any, fal
     previousEvidenceCount: event?.previousEvidenceCount,
     dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
-    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute
+    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute,
+    alertDetailPath: event?.alertDetailPath ?? context?.alertDetailPath ?? alert?.alertDetailPath
   };
 }
 
@@ -1817,6 +1833,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const eventCount = (alert?.workflowEvents ?? []).length;
   const orgId = input.organizationId ?? alert?.organizationId ?? workflow.organizationId ?? webhook.organizationId;
   const casePath = context.casePath ?? alert?.casePath ?? workflow.casePath;
+  const alertDetailPath = context.alertDetailPath ?? alert?.alertDetailPath ?? workflow.alertDetailPath ?? webhook.alertDetailPath;
   const caseIdCandidate = context.caseIdCandidate ?? alert?.caseIdCandidate ?? workflow.caseIdCandidate;
   const deliveryDedupeKey = String(context.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey ?? "");
   const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
@@ -1899,6 +1916,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
     schemaVersion: "dwm.alert_downstream_handoff.v1",
     handoffId: stableId("dwm_downstream_handoff", `${tenantId ?? "missing"}:${orgId ?? "missing"}:${alertId ?? "missing"}:${deliveryDedupeKey}:${eventCount}`),
     alertId,
+    alertDetailPath,
     tenantId,
     organizationId: orgId,
     ready: blockerCodes.length === 0,
@@ -2382,6 +2400,11 @@ export function buildDwmAlertWorkflowContext(input: {
   const watchlistItemIds = input.generationCandidate?.watchlistItemIds ?? watchlists.flatMap((watchlist) => watchlistItemIdsFor(watchlist, input.alert.matchedTerm?.value));
   const dedupeKey = String(input.alert.dedupeKey ?? input.alert.webhookDelivery?.dedupeKey);
   const caseIdCandidate = stableId("case", `${input.tenantId}:${input.alert.id}`);
+  const alertDetailPath = buildDwmAlertDetailPath(input.alert.id, {
+    organizationId: input.organizationId,
+    tenantId: input.tenantId,
+    dedupeKey
+  });
   return {
     tenantId: input.tenantId,
     organizationId: input.organizationId,
@@ -2421,10 +2444,20 @@ export function buildDwmAlertWorkflowContext(input: {
     evidenceCount: evidence.length,
     dedupeKey,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
+    alertDetailPath,
     casePath: `/v1/cases/${encodeURIComponent(caseIdCandidate)}?alertId=${encodeURIComponent(input.alert.id)}&dedupeKey=${encodeURIComponent(dedupeKey)}`,
     webhookDestinationIds: input.generationCandidate?.webhookDestinationIds ?? watchlists.map((watchlist) => watchlist.webhookDestinationId).filter(Boolean),
     hasWebhookRoute: input.generationCandidate?.hasWebhookRoute ?? watchlists.some((watchlist) => Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl))
   };
+}
+
+function buildDwmAlertDetailPath(alertId: string, input: { organizationId?: string; tenantId?: string; dedupeKey?: string }) {
+  const params = new URLSearchParams();
+  if (input.organizationId) params.set("organizationId", input.organizationId);
+  else if (input.tenantId) params.set("tenantId", input.tenantId);
+  if (input.dedupeKey) params.set("dedupeKey", input.dedupeKey);
+  const query = params.toString();
+  return `/v1/dwm/alerts/${encodeURIComponent(alertId)}${query ? `?${query}` : ""}`;
 }
 
 export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext>) {
@@ -2450,6 +2483,7 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     evidenceCount: workflowContext.evidenceCount,
     dedupeKey: workflowContext.dedupeKey,
     recommendedRoute: workflowContext.recommendedRoute,
+    alertDetailPath: workflowContext.alertDetailPath,
     caseIdCandidate: workflowContext.caseIdCandidate,
     casePath: workflowContext.casePath,
     severity: alert.severity,
@@ -2489,6 +2523,7 @@ function buildDwmAlertCreatedEvent(input: {
     dedupeKey,
     deliveryDedupeKey: String(input.alert.webhookDelivery?.dedupeKey ?? dedupeKey),
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
+    alertDetailPath: input.workflowContext.alertDetailPath,
     confidence: input.alert.confidence,
     confidenceReasoning: input.alert.confidenceReasoning ?? [],
     provenance: {
@@ -2540,6 +2575,7 @@ function buildDwmAlertUpdatedEvent(input: {
     dedupeKey,
     deliveryDedupeKey: String(input.alert.webhookDelivery?.dedupeKey ?? dedupeKey),
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
+    alertDetailPath: input.workflowContext.alertDetailPath,
     generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
     provenance: {
       matchBasis: input.alert.provenance?.matchBasis,

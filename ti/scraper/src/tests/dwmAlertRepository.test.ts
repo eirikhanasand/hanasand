@@ -439,6 +439,13 @@ describe("dwm alert repository", () => {
     expect(telegramAlert?.workflowContext.caseIdCandidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramAlert?.webhookContext.caseIdCandidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramAlert?.casePath).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
+    expect(telegramAlert?.alertDetailPath).toContain(`/v1/dwm/alerts/${telegramAlert?.id}`);
+    expect(telegramAlert?.alertDetailPath).toContain("organizationId=org_repo_acme");
+    expect(telegramAlert?.alertDetailPath).toContain(`dedupeKey=${telegramAlert?.dedupeKey}`);
+    expect(telegramAlert?.workflowContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.webhookContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.deliveryReadinessContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.alertCreatedEvent.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
 
     const telegramSql = dwmAlertToSqlRecord(telegramAlert);
     expect(telegramSql).toMatchObject({
@@ -458,6 +465,7 @@ describe("dwm alert repository", () => {
     expect(telegramSql.workflow_context.generationCandidateId).toBe(generationPlan.candidates[0].id);
     expect(telegramSql.workflow_context.webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
     expect(telegramSql.webhook_context.casePath).toContain(telegramSql.id);
+    expect(telegramSql.alert_detail_path).toBe(telegramAlert?.alertDetailPath);
     expect(telegramSql.delivery_readiness_context).toMatchObject({
       schemaVersion: "dwm.alert_delivery_persistence.v1",
       organizationId: "org_repo_acme",
@@ -482,8 +490,10 @@ describe("dwm alert repository", () => {
       captureIds: ["cap_repo_tg_acme"],
       dedupeKey: telegramAlert?.dedupeKey,
       deliveryDedupeKey: telegramAlert?.dedupeKey,
-      recommendedRoute: "identity_response"
+      recommendedRoute: "identity_response",
+      alertDetailPath: telegramAlert?.alertDetailPath
     });
+    expect(telegramHandoff.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramHandoff.evidence.generationEvidenceWindow).toMatchObject({
       captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
       sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"],
@@ -494,8 +504,13 @@ describe("dwm alert repository", () => {
     expect(telegramProof.createdEvent).toMatchObject({
       eventId: telegramAlert?.alertCreatedEvent.id,
       captureIds: ["cap_repo_tg_acme"],
-      recommendedRoute: "identity_response"
+      recommendedRoute: "identity_response",
+      alertDetailPath: telegramAlert?.alertDetailPath
     });
+    expect(telegramProof.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramProof.consumerAdapter.dashboard.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramProof.consumerContract.detail.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramProof.consumerContract.webhookEvent.requiredFields).toContain("alertDetailPath");
     expect(telegramProof.generationEvidenceWindow).toMatchObject({
       contentHashes: expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]),
       firstObservedAt: "2026-06-28T13:04:00.000Z"
@@ -513,7 +528,8 @@ describe("dwm alert repository", () => {
         sourceFamily: "telegram_public",
         captureIds: ["cap_repo_tg_acme"],
         dedupeKey: telegramAlert?.dedupeKey,
-        recommendedRoute: "identity_response"
+        recommendedRoute: "identity_response",
+        alertDetailPath: telegramAlert?.alertDetailPath
       }
     });
 
@@ -1101,6 +1117,7 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_customer",
       generatedAt: "2026-06-28T13:30:00.000Z"
     });
+    expect(preservedHandoff.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(preservedHandoff.createdEventDispatch).toMatchObject({
       ready: false,
       eventId: alert.alertCreatedEvent.id,
@@ -1134,6 +1151,7 @@ describe("dwm alert repository", () => {
       updatedEvent: {
         schemaVersion: "dwm.alert_updated_event.v1",
         eventType: "dwm.alert.updated",
+        alertDetailPath: preserved.alertDetailPath,
         addedCaptureIds: ["cap_repo_tg_acme_followup"],
         captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
         evidenceCount: 2,
@@ -1168,7 +1186,10 @@ describe("dwm alert repository", () => {
         organizationId: "org_repo_customer",
         watchlistItemIds: ["watch_item_customer"],
         alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
-        dashboard: { route: "organization_watchlist" },
+        dashboard: {
+          route: "organization_watchlist",
+          alertDetailPath: preserved.alertDetailPath
+        },
         helpdesk: { redacted: true },
         publicTI: { canConsume: true }
       },
@@ -1182,6 +1203,7 @@ describe("dwm alert repository", () => {
         },
         detail: {
           route: "/v1/dwm/alerts/:alertId",
+          alertDetailPath: preserved.alertDetailPath,
           selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
           provenanceCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
         },
@@ -1190,7 +1212,7 @@ describe("dwm alert repository", () => {
           eventId: alert.alertCreatedEvent.id,
           dispatchReady: true,
           deliveryDedupeKey: alert.dedupeKey,
-          requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
+          requiredFields: ["alertId", "eventId", "alertDetailPath", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
         },
         webhookUpdatedEvent: {
           eventType: "dwm.alert.updated",
@@ -1198,7 +1220,7 @@ describe("dwm alert repository", () => {
           dispatchReady: true,
           deliveryDedupeKey: alert.dedupeKey,
           addedCaptureIds: ["cap_repo_tg_acme_followup"],
-          requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
+          requiredFields: ["alertId", "eventId", "alertDetailPath", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
         },
         publicTI: {
           redacted: true,
@@ -1208,13 +1230,19 @@ describe("dwm alert repository", () => {
       }
     });
     expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
+    expect(proof.consumerContract.queue.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.queue.stableFields).toContain("updatedEvent");
+    expect(proof.consumerContract.detail.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.detail.stableFields).toContain("generationEvidenceWindow");
     expect(proof.consumerContract.detail.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.publicTI.stableFields).toContain("provenance.captureIds");
+    expect(proof.alertDetailPath).toBe(preserved.alertDetailPath);
+    expect(proof.createdEvent?.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.consumerAdapter.dashboard.fields).toContain("updatedEvent");
+    expect(proof.consumerAdapter.dashboard.fields).toContain("alertDetailPath");
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));
+    expect(dwmAlertToSqlRecord(preserved).alert_detail_path).toBe(preserved.alertDetailPath);
   });
 
   test("builds isolated downstream handoff records for overlapping org watchlist terms across Telegram, darkweb, and actor captures", () => {
