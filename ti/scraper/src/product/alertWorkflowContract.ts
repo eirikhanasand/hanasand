@@ -3,6 +3,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 export const DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION = "dwm.alert_workflow_contract.v1" as const;
 export const DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION = "dwm.alert_workflow_preservation.v1" as const;
 export const DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION = "dwm.alert_workflow_admin_audit.v1" as const;
+export const DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.alert_workflow_support_action_request.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -122,6 +123,52 @@ export type DwmAlertWorkflowAdminAuditAdapter = {
     action: "inspect_alert_scope" | "restore_case_route" | "restore_assignee" | "review_workflow_transition" | "restore_delivery_state" | "restore_provenance";
     blockerCode: DwmAlertWorkflowPreservationBlocker["code"];
     path: string;
+  }[];
+};
+
+export type DwmAlertWorkflowSupportActionRequest = {
+  schemaVersion: typeof DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  adminSupportContract: {
+    schemaVersion: "support.action_prepare.v1";
+    method: "GET";
+    route: "/api/admin/support/inspect";
+    query: {
+      org?: string;
+      entity: string;
+      entityType: "dwm_alert";
+      action: "support.alert.inspect_workflow" | "support.alert.restore_workflow";
+      prepareAction: "inspect_alert_workflow" | "restore_alert_workflow";
+      requestId?: string;
+      idempotencyKey: string;
+    };
+  };
+  target: {
+    tenantId: string;
+    organizationId?: string;
+    alertId: string;
+    caseId?: string;
+    casePath?: string;
+  };
+  redaction: {
+    required: true;
+    attestation: "support_safe_metadata_only";
+    hiddenFields: string[];
+  };
+  auditPreview: {
+    actionType: "support.alert.inspect_workflow" | "support.alert.restore_workflow";
+    source: "dwm.alert_workflow_admin_audit";
+    outcome: "prepared" | "blocked";
+    blockerCodes: DwmAlertWorkflowPreservationBlocker["code"][];
+    ownerLanes: DwmAlertWorkflowPreservationBlocker["ownerLane"][];
+  };
+  blockers: {
+    code: "audit_blocked" | "missing_support_target";
+    ownerLane: DwmAlertWorkflowPreservationBlocker["ownerLane"];
+    path: string;
+    message: string;
   }[];
 };
 
@@ -302,6 +349,59 @@ export function buildAlertWorkflowAdminAuditAdapter(input: {
   };
 }
 
+export function buildAlertWorkflowSupportActionRequest(input: {
+  adapter: DwmAlertWorkflowAdminAuditAdapter;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmAlertWorkflowSupportActionRequest {
+  const adapter = input.adapter;
+  const actionType = adapter.ok ? "support.alert.inspect_workflow" : "support.alert.restore_workflow";
+  const prepareAction = adapter.ok ? "inspect_alert_workflow" : "restore_alert_workflow";
+  const idempotencyKey = stableId("dwm_alert_workflow_support_action", `${adapter.id}:${actionType}:${input.requestId ?? ""}`);
+  const blockers = supportActionBlockers(adapter);
+
+  return {
+    schemaVersion: DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+    id: stableId("dwm_alert_workflow_support_action_request", `${adapter.id}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? adapter.generatedAt,
+    ok: blockers.length === 0,
+    adminSupportContract: {
+      schemaVersion: "support.action_prepare.v1",
+      method: "GET",
+      route: "/api/admin/support/inspect",
+      query: {
+        org: adapter.organizationId,
+        entity: adapter.alertId,
+        entityType: "dwm_alert",
+        action: actionType,
+        prepareAction,
+        requestId: stringValue(input.requestId),
+        idempotencyKey
+      }
+    },
+    target: {
+      tenantId: adapter.tenantId,
+      organizationId: adapter.organizationId,
+      alertId: adapter.alertId,
+      caseId: adapter.caseId,
+      casePath: adapter.casePath
+    },
+    redaction: {
+      required: true,
+      attestation: "support_safe_metadata_only",
+      hiddenFields: ["rawEvidence", "workflowPayload", "customerRationale", "secretMaterial"]
+    },
+    auditPreview: {
+      actionType,
+      source: "dwm.alert_workflow_admin_audit",
+      outcome: blockers.length === 0 ? "prepared" : "blocked",
+      blockerCodes: adapter.audit.blockerCodes,
+      ownerLanes: adapter.audit.ownerLanes
+    },
+    blockers
+  };
+}
+
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
     + contract.provenance.captureIds.length
@@ -330,6 +430,27 @@ function nextAuditAction(code: DwmAlertWorkflowPreservationBlocker["code"]): Dwm
     case "workflow_events_regressed":
       return "review_workflow_transition";
   }
+}
+
+function supportActionBlockers(adapter: DwmAlertWorkflowAdminAuditAdapter): DwmAlertWorkflowSupportActionRequest["blockers"] {
+  const blockers: DwmAlertWorkflowSupportActionRequest["blockers"] = [];
+  if (!adapter.organizationId || !adapter.alertId) {
+    blockers.push({
+      code: "missing_support_target",
+      ownerLane: "alert",
+      path: !adapter.organizationId ? "adapter.organizationId" : "adapter.alertId",
+      message: "Support action preparation requires organization and alert identity."
+    });
+  }
+  if (!adapter.ok) {
+    blockers.push(...adapter.nextActions.map((action) => ({
+      code: "audit_blocked" as const,
+      ownerLane: action.ownerLane,
+      path: action.path,
+      message: "Alert workflow audit has unresolved blockers."
+    })));
+  }
+  return blockers;
 }
 
 function stringValue(value: unknown): string | undefined {
