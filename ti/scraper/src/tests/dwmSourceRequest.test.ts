@@ -2222,11 +2222,20 @@ describe("dwm source requests", () => {
                   evidenceProofId: expect.any(String),
                   freshnessProofId: expect.any(String),
                   enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
+                  sourceOperationsReadinessProofId: expect.any(String),
+                  sourceOperationsRowProofId: expect.any(String),
+                  sourceOperationsState: "ready",
+                  operatorActionTypes: expect.arrayContaining(["rebuild_alerts"]),
                   sourceIds: expect.arrayContaining([expect.any(String)])
                 }),
                 webhookPayload: expect.objectContaining({
                   canConsume: true,
-                  requiredFields: expect.arrayContaining(["provenance.enrichmentProofIds", "freshness.lastCaptureAt"])
+                  requiredFields: expect.arrayContaining(["provenance.enrichmentProofIds", "provenance.sourceOperationsReadinessProofId", "freshness.lastCaptureAt"]),
+                  deliveryContext: expect.objectContaining({
+                    liveNetworkFetch: false,
+                    sourceOperationsState: "ready",
+                    operatorActionTypes: expect.arrayContaining(["rebuild_alerts"])
+                  })
                 }),
                 safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
               })
@@ -2235,6 +2244,8 @@ describe("dwm source requests", () => {
               readyRows: expect.any(Number),
               sourceFamilies: expect.arrayContaining(["telegram"]),
               enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
+              sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
+              operatorActionTypes: expect.arrayContaining(["rebuild_alerts"]),
               latestCaptureAt: expect.any(String)
             })
           }),
@@ -3391,6 +3402,10 @@ describe("dwm source requests", () => {
               webhookPayload: expect.objectContaining({ canConsume: false }),
               provenance: expect.objectContaining({
                 freshnessProofId: expect.any(String),
+                sourceOperationsReadinessProofId: expect.any(String),
+                sourceOperationsRowProofId: expect.any(String),
+                sourceOperationsState: "actionable",
+                operatorActionTypes: expect.arrayContaining(["record_capture"]),
                 sourceIds: expect.arrayContaining([expect.any(String)])
               }),
               safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
@@ -3399,7 +3414,9 @@ describe("dwm source requests", () => {
           summary: expect.objectContaining({
             blockedRows: expect.any(Number),
             sourceFamilies: expect.arrayContaining(["telegram"]),
-            watchlistTerms: expect.arrayContaining(["APT28"])
+            watchlistTerms: expect.arrayContaining(["APT28"]),
+            sourceOperationsProofIds: expect.arrayContaining([expect.any(String)]),
+            operatorActionTypes: expect.arrayContaining(["record_capture"])
           }),
           blockers: expect.arrayContaining([
             expect.objectContaining({ code: "capture_required" })

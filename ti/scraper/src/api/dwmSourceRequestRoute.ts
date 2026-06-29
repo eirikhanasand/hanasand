@@ -3612,7 +3612,8 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     query,
     alertGenerationConsumerHandoff,
     sourceEnrichmentFreshnessLedger,
-    watchlistAlertabilityBridge
+    watchlistAlertabilityBridge,
+    sourceOperationsReadiness: downstreamFixtureExport.sourceOperationsReadiness
   });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
@@ -3937,8 +3938,10 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
   alertGenerationConsumerHandoff: Record<string, any>;
   sourceEnrichmentFreshnessLedger: Record<string, any>;
   watchlistAlertabilityBridge: Record<string, any>;
+  sourceOperationsReadiness: Record<string, any>;
 }) {
   const freshnessByFamily = new Map<string, Record<string, any>>((input.sourceEnrichmentFreshnessLedger.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const sourceOperationsByFamily = new Map<string, Record<string, any>>((input.sourceOperationsReadiness.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
   const watchlistByFamily = new Map<string, Array<Record<string, any>>>();
   for (const row of input.watchlistAlertabilityBridge.rows ?? []) {
     const family = String(row.sourceFamily);
@@ -3947,6 +3950,7 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
   const rows = (input.alertGenerationConsumerHandoff.rows ?? []).map((row: any) => {
     const family = String(row.family);
     const freshness = freshnessByFamily.get(family);
+    const sourceOperations = sourceOperationsByFamily.get(family);
     const watchlistRows = watchlistByFamily.get(family) ?? [];
     const captureIds = uniqueSourceReadinessStrings([
       ...(row.provenance?.captureIds ?? []),
@@ -3968,7 +3972,8 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
       row.provenance?.sourceHealthProofId,
       freshness?.proofId,
       freshness?.provenance?.coverageProofId,
-      freshness?.provenance?.parserProofId
+      freshness?.provenance?.parserProofId,
+      sourceOperations?.proofId
     ].filter(Boolean).map(String));
     return {
       schemaVersion: "ti.public_actor.alert_enrichment_handoff_row.v1",
@@ -4011,6 +4016,10 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
         parserProofId: freshness?.provenance?.parserProofId,
         freshnessProofId: freshness?.proofId,
         coverageProofId: freshness?.provenance?.coverageProofId,
+        sourceOperationsReadinessProofId: input.sourceOperationsReadiness.proofId,
+        sourceOperationsRowProofId: sourceOperations?.proofId,
+        sourceOperationsState: sourceOperations?.state,
+        operatorActionTypes: uniqueSourceReadinessStrings((sourceOperations?.operatorActions ?? []).map((action: any) => action.type)),
         enrichmentProofIds,
         captureIds,
         sourceIds,
@@ -4020,18 +4029,21 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
       },
       webhookPayload: {
         canConsume: row.state === "ready_for_rebuild",
-        requiredFields: ["alertId", "dedupeKey", "watchlistTerm", "sourceFamily", "provenance.enrichmentProofIds", "provenance.sourceIds", "freshness.lastCaptureAt"],
+        requiredFields: ["alertId", "dedupeKey", "watchlistTerm", "sourceFamily", "provenance.enrichmentProofIds", "provenance.sourceIds", "provenance.sourceOperationsReadinessProofId", "freshness.lastCaptureAt"],
         payloadKeys: ["watchlistTerm", "sourceFamily", "confidence", "parserStatus", "freshness", "matchContext", "provenance", "safeOutput"],
         deliveryContext: {
           liveNetworkFetch: false,
           metadataOnlyRestrictedSources: true,
-          restrictedPayloadStored: false
+          restrictedPayloadStored: false,
+          sourceOperationsState: sourceOperations?.state,
+          operatorActionTypes: uniqueSourceReadinessStrings((sourceOperations?.operatorActions ?? []).map((action: any) => action.type))
         }
       },
       blockers: dedupeBlockers([
         ...(row.blockers ?? []),
         ...(freshness?.blockers ?? []),
-        ...watchlistRows.flatMap((item) => item.blockers ?? [])
+        ...watchlistRows.flatMap((item) => item.blockers ?? []),
+        ...(sourceOperations?.blockers ?? [])
       ]),
       safeOutput: {
         rawTargetsExposed: false,
@@ -4057,6 +4069,8 @@ function sourceActorPublicTiAlertEnrichmentHandoff(input: {
       alertableFields: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.matchContext.alertableFields)),
       matchableFields: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.matchContext.matchableFields)),
       enrichmentProofIds: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.provenance.enrichmentProofIds)),
+      sourceOperationsProofIds: uniqueSourceReadinessStrings(rows.map((row: any) => row.provenance.sourceOperationsRowProofId).filter(Boolean)),
+      operatorActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.provenance.operatorActionTypes ?? [])),
       latestCaptureAt: latestIso(rows.map((row: any) => row.freshness?.lastCaptureAt)),
       latestEnrichmentAt: latestIso(rows.map((row: any) => row.freshness?.lastEnrichmentAt))
     },
