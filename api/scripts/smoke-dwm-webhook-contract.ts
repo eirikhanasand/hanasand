@@ -12,6 +12,7 @@ import {
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryReadiness,
@@ -1637,6 +1638,25 @@ const operationDestinations = [
         createdAt: '2026-06-28T11:00:00.000Z',
         updatedAt: '2026-06-28T12:09:00.000Z',
     },
+    {
+        id: 'destination_test_failed_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Failed Test Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/666666666/${secret}`,
+        endpointHash: 'endpoint_test_failed_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:14:00.000Z',
+        lastTestStatus: 'failed' as const,
+        lastTestError: `test failed token=${secret}`,
+        lastTestHttpStatus: 400,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:14:00.000Z',
+    },
 ]
 const operationAuditEvents = [
     ...auditEventContracts.map(item => ({
@@ -1663,6 +1683,13 @@ const operationAuditEvents = [
     },
 ]
 const deliveryOperations = buildDwmWebhookDeliveryOperations({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+})
+const deliveryHistory = buildDwmWebhookDeliveryHistory({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
     deliveries: auditDeliveryRows,
@@ -1697,6 +1724,14 @@ const archivedOrgDashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
     auditEvents: operationAuditEvents,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
     orgStatus: 'archived',
+})
+const retiredWatchlistDashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+    watchlistStatus: 'retired',
 })
 const foreignDeliveryRetryPersistence = buildDwmWebhookDeliveryRetryPersistence({
     liveDeliveryEnabled: false,
@@ -2116,14 +2151,27 @@ const dashboardDisabled = dashboardReadiness.destinations.find(item => item.dest
 const dashboardSecretMissing = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
 const dashboardRetry = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const dashboardTerminal = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_terminal_contract')
+const dashboardTestFailed = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_test_failed_contract')
+const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
+const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
+const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
+expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && deliveryHistory.total === deliveryOperations.total, 'Delivery history should mirror customer-visible delivery operations.', deliveryHistory)
+expect(deliveryHistoryReplay?.discordPreview?.embedCount === 1 && deliveryHistoryReplay.discordPreview.fieldNames.includes('Alert URL'), 'Delivery history should expose safe Discord preview fields.', deliveryHistoryReplay)
+expect(deliveryHistoryReplay?.alert.casePath === replayWorkflowAlert.casePath && deliveryHistoryReplay.watchlist.id === 'watchlist_item_replay_contract', 'Delivery history should preserve alert/case/watchlist context.', deliveryHistoryReplay)
+expect(deliveryHistoryReplay?.deliveryProof.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryReplay.dedupe.duplicateAttemptCount === 2, 'Delivery history should link replay audit and duplicate replay proof.', deliveryHistoryReplay)
+expect(deliveryHistoryRetry?.retry.retryable === true && deliveryHistoryRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Delivery history should expose retry/backoff state.', deliveryHistoryRetry)
+expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistoryTerminal.retry.lastErrorCategory === 'upstream_4xx', 'Delivery history should expose terminal failure state.', deliveryHistoryTerminal)
+expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
 expect(dashboardSecretMissing?.healthStates.includes('secret_missing') && dashboardSecretMissing.secretState === 'missing', 'Dashboard readiness should expose missing secret/url state without leaking values.', dashboardSecretMissing)
 expect(dashboardRetry?.healthStates.includes('retry_scheduled') && dashboardRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Dashboard readiness should expose scheduled retry/backoff state.', dashboardRetry)
 expect(dashboardTerminal?.healthStates.includes('terminal_failure') && dashboardTerminal.retry.terminalFailure === true, 'Dashboard readiness should expose terminal failure state.', dashboardTerminal)
+expect(dashboardTestFailed?.healthStates.includes('test_failed') && dashboardTestFailed.test.status === 'failed' && !JSON.stringify(dashboardTestFailed).includes(secret), 'Dashboard readiness should expose failed test-send state with redaction.', dashboardTestFailed)
 expect(policyBlockedDashboardReadiness.summary.policyBlockedCount === 1 && policyBlockedDashboardReadiness.destinations.length === 0, 'Dashboard readiness should deny revoked/nonmember actors without destination leakage.', policyBlockedDashboardReadiness)
 expect(archivedOrgDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && archivedOrgDashboardReadiness.blockers.some(item => item.reason === 'org_archived'), 'Dashboard readiness should expose archived org policy blockers.', archivedOrgDashboardReadiness)
+expect(retiredWatchlistDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && retiredWatchlistDashboardReadiness.blockers.some(item => item.reason === 'watchlist_retired'), 'Dashboard readiness should expose retired watchlist policy blockers.', retiredWatchlistDashboardReadiness)
 expect(!JSON.stringify(dashboardReadiness).includes(secret), 'Dashboard readiness should not leak endpoint secrets.', dashboardReadiness)
 expect(deliveryOperationDetail.total === 1 && deliveryOperationDetail.recentDeliveries[0]?.deliveryId === 'delivery_replay_duplicate_contract', 'Delivery operations should retrieve a delivery by request id.', deliveryOperationDetail)
 expect(deliveryOperationByCase.recentDeliveries.every(item => item.casePath === replayWorkflowAlert.casePath && item.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery operations should filter by case path and dedupe key.', deliveryOperationByCase)
@@ -2229,16 +2277,22 @@ console.log(JSON.stringify({
         'delivery operations list/detail filters',
         'delivery operations retry/backoff summary',
         'delivery operations replay/audit linkage',
+        'delivery history customer-safe read model',
+        'delivery history Discord preview proof',
+        'delivery history retry/terminal failure proof',
+        'delivery history secret redaction',
         'delivery retry persistence grouped idempotency keys',
         'delivery retry persistence terminal failure state',
         'delivery retry persistence duplicate replay dedupe',
         'delivery retry persistence wrong-org filtering',
         'delivery retry persistence secret redaction',
         'dashboard readiness verified delivery proof',
+        'dashboard readiness failed test-send state',
         'dashboard readiness disabled/secret-missing blockers',
         'dashboard readiness retry scheduled state',
         'dashboard readiness terminal failure state',
         'dashboard readiness policy-blocked denial',
+        'dashboard readiness retired watchlist blocker',
         'dashboard readiness secret redaction',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
@@ -2302,6 +2356,10 @@ console.log(JSON.stringify({
             'destinationCrud.blockers[].code',
             'destinationCrud.desired.redactedEndpoint.endpointHash',
             'destinationCrud.health.productProgress.status',
+            'deliveryHistory.schemaVersion',
+            'deliveryHistory.entries[].discordPreview.fieldNames',
+            'deliveryHistory.entries[].deliveryProof.auditEventId',
+            'deliveryHistory.entries[].retry.terminalFailure',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',

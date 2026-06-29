@@ -19,6 +19,7 @@ import {
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
+    buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryRetryPersistence,
@@ -453,6 +454,19 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryHistory: visibilityResult && !visibilityResult.decision.allowed
+            ? buildDwmWebhookDeliveryHistory({
+                deliveries: [],
+                auditEvents: [],
+                destinations: [],
+                filters: deliveryFilters,
+            })
+            : buildDwmWebhookDeliveryHistory({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+            }),
         deliveryRetryPersistence: visibilityResult && !visibilityResult.decision.allowed
             ? buildDwmWebhookDeliveryRetryPersistence({
                 deliveries: [],
@@ -560,6 +574,18 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             canManage: true,
         }),
         deliveryOperations: buildDwmWebhookDeliveryOperations({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+        }),
+        deliveryHistory: buildDwmWebhookDeliveryHistory({
             deliveries: ledgerDeliveries,
             auditEvents,
             destinations,
