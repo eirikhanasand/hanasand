@@ -20,6 +20,7 @@ import {
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryReceipts,
+    buildDwmWebhookDeliveryReplayGuard,
     buildDwmWebhookDeliveryTimeline,
     buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDeliveryRequestInput,
@@ -1774,6 +1775,26 @@ const nonmemberDeliveryActionPlan = buildDwmWebhookDeliveryActionPlan({
     canManage: false,
     visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
 })
+const deliveryReplayGuard = buildDwmWebhookDeliveryReplayGuard({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDeliveryReplayGuard = buildDwmWebhookDeliveryReplayGuard({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const duplicateReplayGuardHistory = buildDwmWebhookDeliveryHistory({
     liveDeliveryEnabled: true,
     destinations: [
@@ -2587,6 +2608,9 @@ const deliveryTimelineTerminal = deliveryTimeline.timelines.find(item => item.de
 const deliveryActionRetry = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_live_contract')
 const deliveryActionTerminal = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_terminal_contract')
 const deliveryActionDelivered = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_sent_contract')
+const replayGuardReplay = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract')
+const replayGuardDelivered = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+const replayGuardTerminal = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
 const duplicateReplayGuardDelivered = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_delivered_contract')
 const duplicateReplayGuardSkipped = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_skipped_contract')
 expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && deliveryHistory.total === deliveryOperations.total, 'Delivery history should mirror customer-visible delivery operations.', deliveryHistory)
@@ -2624,6 +2648,14 @@ expect(deliveryActionDelivered?.action === 'monitor' && deliveryActionDelivered.
 expect(nonmemberDeliveryActionPlan.actions.length === 0 && nonmemberDeliveryActionPlan.blockers.some(item => item.code === 'permission_denied'), 'Delivery action plan should deny nonmembers without leaking actions.', nonmemberDeliveryActionPlan)
 expect(orgAlertDeliveryContract.deliveryActionPlan.schemaVersion === 'dwm.webhook.delivery_action_plan.v1' && orgAlertDeliveryContract.deliveryActionPlan.actions.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped delivery action plan.', orgAlertDeliveryContract.deliveryActionPlan)
 expect(!JSON.stringify(deliveryActionPlan).includes(secret), 'Delivery action plan should redact endpoint, response, and payload secrets.', deliveryActionPlan)
+expect(deliveryReplayGuard.schemaVersion === 'dwm.webhook.delivery_replay_guard.v1' && deliveryReplayGuard.noNetwork === true, 'Delivery replay guard should expose no-network replay safety proof.', deliveryReplayGuard)
+expect(replayGuardReplay?.guard.dryRunAllowed === true && replayGuardReplay.guard.liveAllowed === false && replayGuardReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery replay guard should allow dry-run replay while live delivery is disabled.', replayGuardReplay)
+expect(replayGuardDelivered?.guard.duplicateLiveBlocked === true && replayGuardDelivered.blockers.some(item => item.code === 'dedupe_already_delivered'), 'Delivery replay guard should block duplicate live sends for already delivered keys.', replayGuardDelivered)
+expect(replayGuardTerminal?.retry.terminalFailure === true && replayGuardTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery replay guard should surface terminal failure blockers before replay.', replayGuardTerminal)
+expect(replayGuardReplay?.latestReceipt?.discordPreview?.fieldNames.includes('Alert URL') && replayGuardReplay.audit.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery replay guard should keep latest Discord proof and audit linkage.', replayGuardReplay)
+expect(nonmemberDeliveryReplayGuard.entries.length === 0 && nonmemberDeliveryReplayGuard.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay guard should deny nonmembers without leaking replay keys.', nonmemberDeliveryReplayGuard)
+expect(orgAlertDeliveryContract.deliveryReplayGuard.schemaVersion === 'dwm.webhook.delivery_replay_guard.v1' && orgAlertDeliveryContract.deliveryReplayGuard.entries.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped replay guard.', orgAlertDeliveryContract.deliveryReplayGuard)
+expect(!JSON.stringify(deliveryReplayGuard).includes(secret), 'Delivery replay guard should redact endpoint, response, and payload secrets.', deliveryReplayGuard)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
@@ -2769,6 +2801,12 @@ console.log(JSON.stringify({
         'delivery action plan delivered monitoring',
         'delivery action plan nonmember denial',
         'delivery action plan secret redaction',
+        'delivery replay guard dry-run replay',
+        'delivery replay guard duplicate live-send block',
+        'delivery replay guard terminal failure block',
+        'delivery replay guard audit linkage',
+        'delivery replay guard nonmember denial',
+        'delivery replay guard secret redaction',
         'delivery retry persistence grouped idempotency keys',
         'delivery retry persistence terminal failure state',
         'delivery retry persistence duplicate replay dedupe',
@@ -2891,6 +2929,11 @@ console.log(JSON.stringify({
             'deliveryActionPlan.actions[].requests.dryRunRetry.body',
             'deliveryActionPlan.actions[].requests.liveRetry.blockers[].code',
             'deliveryActionPlan.actions[].audit.nextAction',
+            'deliveryReplayGuard.schemaVersion',
+            'deliveryReplayGuard.entries[].guard.dryRunAllowed',
+            'deliveryReplayGuard.entries[].guard.duplicateLiveBlocked',
+            'deliveryReplayGuard.entries[].blockers[].code',
+            'deliveryReplayGuard.entries[].latestReceipt.discordPreview.fieldNames',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
@@ -2941,6 +2984,8 @@ console.log(JSON.stringify({
             'orgAlertDelivery.deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
             'orgAlertDelivery.deliveryActionPlan.schemaVersion',
             'orgAlertDelivery.deliveryActionPlan.actions[].action',
+            'orgAlertDelivery.deliveryReplayGuard.schemaVersion',
+            'orgAlertDelivery.deliveryReplayGuard.entries[].guard.liveBlocked',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,
