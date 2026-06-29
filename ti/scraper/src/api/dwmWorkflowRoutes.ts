@@ -1167,6 +1167,16 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
       title: "Alert created",
       detail: `${String(alert.alertCreatedEvent.sourceFamily ?? alert.sourceFamily).replaceAll("_", " ")} match saved with ${Number(alert.alertCreatedEvent.evidenceCount ?? 0)} evidence item(s).`
     } : alert.savedAt ? { id: `${alert.id}:saved`, at: alert.savedAt, type: "saved", title: "Alert saved", detail: "Match saved to the customer queue." } : undefined,
+    alert.alertUpdatedEvent ? {
+      id: alert.alertUpdatedEvent.id,
+      at: alert.alertUpdatedEvent.at,
+      type: "alert_updated",
+      title: "Alert updated",
+      detail: [
+        `${String(alert.alertUpdatedEvent.sourceFamily ?? alert.sourceFamily).replaceAll("_", " ")} match updated with ${Number(alert.alertUpdatedEvent.evidenceCount ?? 0)} evidence item(s).`,
+        (alert.alertUpdatedEvent.addedCaptureIds ?? []).length ? `Added captures: ${(alert.alertUpdatedEvent.addedCaptureIds ?? []).join(", ")}` : undefined
+      ].filter(Boolean).join(" ")
+    } : undefined,
     ...events.map((event: any) => ({
       id: event.id,
       at: event.at,
@@ -1208,6 +1218,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     visibilityDecision: access?.visibilityDecision,
     alert: buildDwmAlertListItem(alert, options, deliveries),
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
+    alertEventSummary: buildDwmAlertEventSummary(alert),
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
     downstreamHandoff,

@@ -906,6 +906,35 @@ describe("dwm workflow persistence", () => {
     });
     expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.dedupeKey).toBe(alphaDarkweb.dedupeKey);
 
+    const alphaUpdatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const alphaUpdatedDetail = await alphaUpdatedDetailResponse.json() as any;
+    expect(alphaUpdatedDetailResponse.status).toBe(200);
+    expect(alphaUpdatedDetail.alertEventSummary).toMatchObject({
+      schemaVersion: "dwm.alert_event_summary.v1",
+      eventTypes: ["dwm.alert.created", "dwm.alert.updated"],
+      hasUpdatedEvent: true,
+      updatedEvent: {
+        eventType: "dwm.alert.updated",
+        addedCaptureIds: ["cap_workflow_onion_acme_followup"],
+        captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
+      }
+    });
+    expect(alphaUpdatedDetail.timeline.find((event: any) => event.type === "alert_updated")).toMatchObject({
+      id: preservedDarkweb.alertUpdatedEvent.id,
+      type: "alert_updated",
+      title: "Alert updated"
+    });
+    expect(alphaUpdatedDetail.evidenceReplay.map((item: any) => item.id)).toEqual(expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]));
+    expect(alphaUpdatedDetail.workflowSummary).toMatchObject({
+      status: "investigating",
+      assignedOwner: "owner-alpha-workflow",
+      severityOverride: "high",
+      caseId: "case_alpha_darkweb",
+      eventCount: 1
+    });
+
     const betaListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${betaOrg.id}`, {
       headers: { "x-user-email": "owner-beta@workflow.example" }
     }), options);
