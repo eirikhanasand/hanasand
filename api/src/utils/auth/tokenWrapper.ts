@@ -22,6 +22,9 @@ type ImpersonationSession = {
     actor_id: string
     target_id: string
     target_name: string
+    reason: string
+    scope: string[]
+    organization_id: string | null
 }
 
 function headerValue(value: string | string[] | undefined) {
@@ -38,19 +41,40 @@ async function getImpersonationSession(token: string, actorId: string): Promise<
             s.id,
             s.actor_id,
             s.target_id,
-            u.name AS target_name
+            s.reason,
+            u.name AS target_name,
+            audit.context AS audit_context
         FROM impersonation_sessions s
         JOIN users u
           ON u.id = s.target_id
          AND u.active IS TRUE
          AND u.deletion_scheduled_at IS NULL
+        LEFT JOIN LATERAL (
+            SELECT context
+            FROM admin_audit_events
+            WHERE action_type = 'impersonation.start'
+              AND entity_id = s.id::text
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        ) audit ON TRUE
         WHERE s.token_hash = $1
           AND s.actor_id = $2
           AND s.revoked_at IS NULL
           AND s.expires_at > NOW()
         LIMIT 1
     `, [hashImpersonationToken(token), actorId])
-    return result.rows[0] as ImpersonationSession | undefined ?? null
+    const row = result.rows[0] as (Record<string, any> & ImpersonationSession) | undefined
+    if (!row) return null
+    const context = row.audit_context as Record<string, unknown> | undefined
+    return {
+        id: row.id,
+        actor_id: row.actor_id,
+        target_id: row.target_id,
+        target_name: row.target_name,
+        reason: row.reason || '',
+        scope: normalizeStoredImpersonationScope(context?.scope),
+        organization_id: typeof context?.organizationId === 'string' ? context.organizationId : null,
+    }
 }
 
 function isSensitiveImpersonatedRequest(req: FastifyRequest) {
@@ -117,6 +141,49 @@ async function auditImpersonationRequest(req: FastifyRequest, actorId: string, t
     })
 }
 
+function normalizeStoredImpersonationScope(value: unknown) {
+    if (!Array.isArray(value)) return []
+    return Array.from(new Set(value.map(item => typeof item === 'string' ? item.trim().toLowerCase() : '').filter(Boolean)))
+}
+
+function isImpersonationScopeAllowed(req: FastifyRequest, session: ImpersonationSession) {
+    const method = (req.method || '').toUpperCase()
+    const path = (req.url || '').split('?')[0] || ''
+    if (path.startsWith('/api/impersonation') || path.startsWith('/impersonation')) return true
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') return false
+    if (session.scope.includes('support_debug')) return true
+    if (path.includes('/organization') || path.includes('/organizations') || path.includes('/org/')) {
+        return session.scope.includes('read_org')
+    }
+    return session.scope.includes('read_profile') || session.scope.includes('read_org')
+}
+
+async function auditImpersonationScopeDenied(req: FastifyRequest, session: ImpersonationSession) {
+    const method = req.method || ''
+    const path = (req.url || '').split('?')[0] || ''
+    await recordAdminAuditEvent(req, {
+        actionType: 'impersonation.scope_denied',
+        actorId: session.actor_id,
+        targetType: 'user',
+        targetId: session.target_id,
+        organizationId: session.organization_id,
+        entityId: session.id,
+        severity: 'warning',
+        outcome: 'denied',
+        reason: session.reason,
+        context: {
+            schemaVersion: 'support.impersonation.scope_denied.v1',
+            sessionId: session.id,
+            method,
+            path,
+            scope: session.scope,
+            organizationId: session.organization_id,
+            blockerCode: 'impersonation_scope_denied',
+            noSilentImpersonation: true,
+        },
+    })
+}
+
 /**
  * Token wrapper helper function. Used to check whether a `token` is valid
  * before allowing API access, for example when updating and deleting packages
@@ -178,6 +245,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
         let target: ImpersonationTarget | null = null
         let impersonationSessionId: string | undefined
         let impersonating = false
+        let activeImpersonationSession: ImpersonationSession | null = null
         if (impersonationToken) {
             const serverSession = await getImpersonationSession(impersonationToken, session.user.id)
             if (!serverSession) {
@@ -191,6 +259,7 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
             effectiveId = serverSession.target_id
             target = { id: serverSession.target_id, name: serverSession.target_name }
             impersonationSessionId = serverSession.id
+            activeImpersonationSession = serverSession
             impersonating = true
         }
 
@@ -201,6 +270,17 @@ export default async function tokenWrapper(req: FastifyRequest, res: FastifyRepl
                 authenticatedId: session.user.id,
                 impersonating: true,
                 error: 'Return to own view before changing account, security, or system settings.'
+            }
+        }
+
+        if (impersonating && activeImpersonationSession && !isImpersonationScopeAllowed(req, activeImpersonationSession)) {
+            void auditImpersonationScopeDenied(req, activeImpersonationSession)
+            return {
+                valid: false,
+                id: effectiveId,
+                authenticatedId: session.user.id,
+                impersonating: true,
+                error: 'Impersonation scope does not allow this request.'
             }
         }
 

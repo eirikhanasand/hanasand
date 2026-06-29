@@ -15,6 +15,8 @@ type StartBody = {
     organization_id?: string
     organizationId?: string
     orgId?: string
+    supportSessionId?: string
+    support_session_id?: string
 }
 type EventQuery = {
     q?: string
@@ -84,6 +86,128 @@ async function audit(req: FastifyRequest, sessionId: string | null, actorId: str
     return { requestId, eventIds }
 }
 
+async function auditDeniedImpersonationStart(req: FastifyRequest, input: {
+    actorId: string
+    targetId: string
+    organizationId: string
+    supportSessionId: string
+    reason: string
+    blocker: string
+    message: string
+    scope: string[]
+    durationMinutes: number | null
+    expiresAt: string | null
+}) {
+    const requestId = supportRequestId(req)
+    await recordAdminAuditEvent(req, {
+        actionType: 'impersonation.start',
+        actorId: input.actorId,
+        targetType: 'user',
+        targetId: input.targetId,
+        organizationId: input.organizationId || null,
+        entityId: input.supportSessionId || input.targetId,
+        severity: 'warning',
+        outcome: 'denied',
+        reason: input.reason,
+        requestId,
+        context: {
+            schemaVersion: 'support.impersonation.denied.v1',
+            requestId,
+            targetUserId: input.targetId,
+            organizationId: input.organizationId || null,
+            supportSessionId: input.supportSessionId || null,
+            blockerCode: input.blocker,
+            message: input.message,
+            scope: input.scope,
+            durationMinutes: input.durationMinutes,
+            expiresAt: input.expiresAt,
+            outcome: 'denied',
+            noSilentImpersonation: true,
+            redactionRequired: true,
+        },
+    })
+    const eventIds = await loadAdminAuditEventIds({
+        requestId,
+        actionType: 'impersonation.start',
+        entityId: input.supportSessionId || input.targetId,
+    })
+    return { requestId, eventIds, message: input.message }
+}
+
+async function loadSupportSessionState(supportSessionId: string) {
+    const result = await run(`
+        SELECT id, action_type, actor_id, target_id, organization_id, entity_id, request_id, reason, outcome, context, created_at
+        FROM admin_audit_events
+        WHERE entity_id = $1
+          AND action_type IN ('support.session.create', 'support.session.revoke')
+        ORDER BY created_at ASC, id ASC
+    `, [supportSessionId])
+    const create = result.rows.find((row: Record<string, unknown>) => row.action_type === 'support.session.create') as Record<string, any> | undefined
+    if (!create) return null
+    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.action_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
+    const context = create.context as Record<string, unknown>
+    return {
+        supportSessionId,
+        actorId: cleanText(create.actor_id),
+        reason: cleanText(create.reason),
+        requestId: cleanText(create.request_id),
+        organizationId: cleanText(context.targetOrganizationId || create.organization_id),
+        targetUserId: cleanText(context.targetUserId || create.target_id),
+        allowedActions: Array.isArray(context.allowedActions) ? context.allowedActions.map(action => cleanText(action)).filter(Boolean) : [],
+        scope: Array.isArray(context.scope) ? context.scope.map(item => cleanText(item)).filter(Boolean) : [],
+        expiresAt: cleanText(context.expiresAt),
+        status: revoke ? 'revoked' : Date.parse(cleanText(context.expiresAt)) <= Date.now() ? 'expired' : 'active',
+    }
+}
+
+async function validateSupportSessionForImpersonation(input: {
+    actorId: string
+    targetUserId: string
+    organizationId: string
+    supportSessionId: string
+    scope: string[]
+    expiresAt: string
+}) {
+    if (!input.supportSessionId) {
+        return { error: null as { code: string, message: string, status: number } | null }
+    }
+
+    const state = await loadSupportSessionState(input.supportSessionId)
+    if (!state) {
+        return { error: { code: 'support_session_not_found', message: 'Support session not found.', status: 404 } }
+    }
+    if (state.status === 'revoked') {
+        return { error: { code: 'support_session_revoked', message: 'Support session has been revoked.', status: 409 } }
+    }
+    if (state.status === 'expired') {
+        return { error: { code: 'support_session_expired', message: 'Support session has expired.', status: 409 } }
+    }
+    if (state.actorId && state.actorId !== input.actorId) {
+        return { error: { code: 'support_session_actor_mismatch', message: 'Support session belongs to a different support actor.', status: 403 } }
+    }
+    if (state.organizationId && !input.organizationId) {
+        return { error: { code: 'support_session_org_required', message: 'Support session is scoped to an organization; include organizationId when starting impersonation.', status: 400 } }
+    }
+    if (state.organizationId && input.organizationId && state.organizationId !== input.organizationId) {
+        return { error: { code: 'support_session_org_mismatch', message: 'Support session is not scoped to this organization.', status: 403 } }
+    }
+    if (state.targetUserId && state.targetUserId !== input.targetUserId) {
+        return { error: { code: 'support_session_user_mismatch', message: 'Support session is not scoped to this target user.', status: 403 } }
+    }
+    if (!state.allowedActions.includes('impersonation')) {
+        return { error: { code: 'support_session_action_denied', message: 'Support session does not allow impersonation.', status: 403 } }
+    }
+    const missingScope = input.scope.find(item => !state.scope.includes(item))
+    if (missingScope) {
+        return { error: { code: 'support_session_scope_denied', message: `Support session does not include impersonation scope ${missingScope}.`, status: 403 } }
+    }
+    const supportSessionExpiry = Date.parse(state.expiresAt)
+    if (!Number.isNaN(supportSessionExpiry) && Date.parse(input.expiresAt) > supportSessionExpiry) {
+        return { error: { code: 'support_session_duration_exceeds_scope', message: 'Impersonation expiry cannot exceed the scoped support session expiry.', status: 400 } }
+    }
+    return { error: null }
+}
+
 export async function startImpersonation(req: FastifyRequest, res: FastifyReply) {
     const actor = await tokenWrapper(req, res)
     if (!actor.valid || !actor.id || actor.impersonating) {
@@ -120,16 +244,60 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
     let durationMinutes: number
     let scope: string[]
     const organizationId = cleanText(body?.organization_id || body?.organizationId || body?.orgId)
+    const supportSessionId = supportSessionIdFromRequest(req, body)
     try {
         reason = requireAuditReason(body?.reason, 'Impersonation reason')
         durationMinutes = normalizeDurationMinutes(body?.duration_minutes ?? body?.durationMinutes)
         scope = normalizeImpersonationScope(body?.scope)
     } catch (error) {
-        return res.status(400).send(impersonationError('invalid_impersonation_request', error instanceof Error ? error.message : 'Invalid impersonation request.'))
+        const auditTrail = await auditDeniedImpersonationStart(req, {
+            actorId: actor.id,
+            targetId: target.id,
+            organizationId,
+            supportSessionId,
+            reason: cleanText(body?.reason),
+            blocker: 'invalid_impersonation_request',
+            message: error instanceof Error ? error.message : 'Invalid impersonation request.',
+            scope: [],
+            durationMinutes: null,
+            expiresAt: null,
+        })
+        return res.status(400).send(impersonationError('invalid_impersonation_request', auditTrail.message, {
+            requestId: auditTrail.requestId,
+            auditEventIds: auditTrail.eventIds,
+        }))
+    }
+
+    const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000)
+    const sessionGuard = await validateSupportSessionForImpersonation({
+        actorId: actor.id,
+        targetUserId: target.id,
+        organizationId,
+        supportSessionId,
+        scope,
+        expiresAt: expiresAt.toISOString(),
+    })
+    if (sessionGuard.error) {
+        const auditTrail = await auditDeniedImpersonationStart(req, {
+            actorId: actor.id,
+            targetId: target.id,
+            organizationId,
+            supportSessionId,
+            reason,
+            blocker: sessionGuard.error.code,
+            message: sessionGuard.error.message,
+            scope,
+            durationMinutes,
+            expiresAt: expiresAt.toISOString(),
+        })
+        return res.status(sessionGuard.error.status).send(impersonationError(sessionGuard.error.code, sessionGuard.error.message, {
+            requestId: auditTrail.requestId,
+            auditEventIds: auditTrail.eventIds,
+            supportSessionId: supportSessionId || null,
+        }))
     }
 
     const rawToken = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`
-    const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000)
     const session = await run(`
         INSERT INTO impersonation_sessions (token_hash, actor_id, target_id, reason, expires_at)
         VALUES ($1, $2, $3, $4, $5)
@@ -141,6 +309,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
         requestId: supportRequestId(req),
         targetUserId: target.id,
         organizationId: organizationId || null,
+        supportSessionId: supportSessionId || null,
         durationMinutes,
         scope,
         expiresAt: expiresAt.toISOString(),
@@ -159,6 +328,8 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
             reason,
             duration_minutes: durationMinutes,
             scope,
+            support_session_id: supportSessionId || null,
+            supportSessionId: supportSessionId || null,
             organization_id: organizationId || null,
             created_at: row.created_at,
             expires_at: row.expires_at,
@@ -172,6 +343,7 @@ export async function startImpersonation(req: FastifyRequest, res: FastifyReply)
             actorId: actor.id,
             targetUserId: target.id,
             organizationId: organizationId || null,
+            supportSessionId: supportSessionId || null,
             reason,
             scope,
             durationMinutes,
@@ -365,15 +537,24 @@ function cleanText(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
 }
 
-function impersonationError(code: string, message: string) {
+function impersonationError(code: string, message: string, detail: Record<string, unknown> = {}) {
     return {
         error: message,
         detail: {
             schemaVersion: 'support.impersonation.error.v1',
             code,
             outcome: 'denied',
+            ...detail,
         },
     }
+}
+
+function supportSessionIdFromRequest(req: FastifyRequest, body: StartBody | undefined) {
+    return cleanText(headerText(req.headers['x-support-session-id']) || body?.supportSessionId || body?.support_session_id)
+}
+
+function headerText(value: string | string[] | undefined) {
+    return Array.isArray(value) ? cleanText(value[0]) : cleanText(value)
 }
 
 async function loadAdminAuditEventIds(input: { requestId: string, actionType: string, entityId: string }) {
