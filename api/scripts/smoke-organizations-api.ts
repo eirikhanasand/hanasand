@@ -3909,6 +3909,25 @@ const outsiderResponse = await app.inject({
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderResponse.statusCode, 404, outsiderResponse.body)
+const outsiderOrganizationReadResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}`,
+    headers: { ...authHeaders('org_smoke_outsider', 'outsider-token'), 'x-request-id': 'smoke-outsider-org-read-denied' },
+})
+assert.equal(outsiderOrganizationReadResponse.statusCode, 404, outsiderOrganizationReadResponse.body)
+const outsiderOrganizationAccessDenial = parseBody(outsiderOrganizationReadResponse.body).organizationAccessDenial
+assert.equal(outsiderOrganizationAccessDenial.schemaVersion, 'organization.access_denial.v1')
+assert.equal(outsiderOrganizationAccessDenial.organizationId, organization.id)
+assert.equal(outsiderOrganizationAccessDenial.tenantId, organization.id)
+assert.equal(outsiderOrganizationAccessDenial.actorId, 'org_smoke_outsider')
+assert.equal(outsiderOrganizationAccessDenial.route, 'GET /api/organizations/:id')
+assert.equal(outsiderOrganizationAccessDenial.blockerCode, 'nonmember_denied')
+assert.equal(outsiderOrganizationAccessDenial.denialReason, 'not_member')
+assert.equal(outsiderOrganizationAccessDenial.nonmemberEnumeration, false)
+assert.ok(outsiderOrganizationAccessDenial.noLeakFields.includes('activeTerms[]'))
+assert.ok(outsiderOrganizationAccessDenial.downstreamRoutes.alertTermsExport.includes('watchlists/alert-terms'))
+assert.equal(outsiderOrganizationAccessDenial.serviceLogAction, 'organization_access_denied')
+assert.equal(outsiderOrganizationAccessDenial.requestId, 'smoke-outsider-org-read-denied')
 const outsiderReadinessResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/alert-readiness`,
@@ -3950,6 +3969,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutati
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.action === 'read_watchlist' && log.metadata.itemId === ownerWatchlistItem.id && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-wrong-org-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-archived-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_access_denied' && log.metadata.requestId === 'smoke-outsider-org-read-denied' && log.metadata.blockerCode === 'nonmember_denied'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))

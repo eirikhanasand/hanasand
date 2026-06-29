@@ -18,6 +18,7 @@ import {
     normalizeWatchlistRequestId,
     organizationAnalystPortalVisibilityAdapter,
     organizationAlertCaseWorkflowState,
+    organizationAccessDenial,
     organizationInviteActionDenial,
     organizationInviteAcceptanceDenial,
     organizationInviteManagementDenial,
@@ -221,7 +222,19 @@ export async function getOrganization(req: FastifyRequest<{ Params: Organization
 
     const organization = await loadOrganizationForMember(req.params.id, userId)
     if (!organization) {
-        return res.status(404).send({ error: 'Organization not found.' })
+        const denial = organizationAccessDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            route: 'GET /api/organizations/:id',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            route: denial.route,
+            blockerCode: denial.blockerCode,
+            denialReason: denial.denialReason,
+        })
+        return res.status(denial.statusCode).send({ error: denial.message, organizationAccessDenial: denial })
     }
 
     return res.send({

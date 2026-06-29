@@ -5068,6 +5068,50 @@ export function organizationSettingsMutationDenial(input: {
     }
 }
 
+export function organizationAccessDenial(input: {
+    organizationId: string
+    actorId: string
+    route: 'GET /api/organizations/:id'
+    requestId?: string | null
+}) {
+    return {
+        schemaVersion: 'organization.access_denial.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        route: input.route,
+        blockerCode: 'nonmember_denied' as const,
+        denialReason: 'not_member' as const,
+        statusCode: 404,
+        nonmemberEnumeration: false as const,
+        message: 'Organization not found.',
+        safeFields: [
+            'schemaVersion',
+            'organizationId',
+            'tenantId',
+            'route',
+            'blockerCode',
+            'denialReason',
+            'requestId',
+        ],
+        noLeakFields: [
+            'organization.members',
+            'organization.invites',
+            'watchlistScope.alertGeneratorKeys',
+            'activeTerms[]',
+            'destination.secret',
+        ],
+        downstreamRoutes: {
+            watchlists: 'GET /api/organizations/:id/watchlists',
+            alertReadiness: 'GET /api/organizations/:id/alert-readiness',
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+        },
+        serviceLogAction: 'organization_access_denied' as const,
+        requestId: input.requestId ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
     const lifecycleState = organizationWatchlistEnabledState(status)
