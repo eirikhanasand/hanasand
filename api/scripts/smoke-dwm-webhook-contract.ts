@@ -1696,6 +1696,105 @@ const deliveryHistory = buildDwmWebhookDeliveryHistory({
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
 })
+const duplicateReplayGuardHistory = buildDwmWebhookDeliveryHistory({
+    liveDeliveryEnabled: true,
+    destinations: [
+        {
+            id: 'destination_duplicate_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            name: 'Duplicate Guard Discord',
+            kind: 'discord' as const,
+            endpointHint: `https://discord.com/api/webhooks/777777777/${secret}`,
+            endpointHash: 'endpoint_duplicate_replay_hash',
+            status: 'active' as const,
+            events: ['dwm.alert.created', 'dwm.alert.replayed'],
+            createdBy: 'owner_contract',
+            lastTestedAt: '2026-06-28T12:04:00.000Z',
+            lastTestStatus: 'dry_run' as const,
+            lastTestError: null,
+            lastTestHttpStatus: null,
+            lastDeliveryAt: '2026-06-28T12:20:00.000Z',
+            createdAt: '2026-06-28T11:00:00.000Z',
+            updatedAt: '2026-06-28T12:21:00.000Z',
+        },
+    ],
+    deliveries: [
+        {
+            id: 'delivery_duplicate_replay_delivered_contract',
+            destinationId: 'destination_duplicate_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            alertId: 'alert_duplicate_replay_contract',
+            eventType: 'dwm.alert.replayed' as const,
+            status: 'delivered' as const,
+            dryRun: false,
+            endpointHint: `https://discord.com/api/webhooks/777777777/${secret}`,
+            endpointHash: 'endpoint_duplicate_replay_hash',
+            payloadHash: 'payload_duplicate_replay_delivered_hash',
+            payload: replayPayload,
+            responseStatus: 204,
+            responseBody: '',
+            error: null,
+            idempotencyKey: 'dwm.alert.replayed:org_contract:destination_duplicate_replay_contract:dwm_dedupe_duplicate_replay_contract',
+            watchlistId: 'watchlist_item_replay_contract',
+            watchlistName: 'Replay contract watchlist',
+            route: 'identity_response',
+            casePath: replayWorkflowAlert.casePath,
+            attemptedAt: '2026-06-28T12:20:00.000Z',
+            createdAt: '2026-06-28T12:20:00.000Z',
+        },
+        {
+            id: 'delivery_duplicate_replay_skipped_contract',
+            destinationId: 'destination_duplicate_replay_contract',
+            ownerId: 'owner_contract',
+            orgId: 'org_contract',
+            alertId: 'alert_duplicate_replay_contract',
+            eventType: 'dwm.alert.replayed' as const,
+            status: 'skipped' as const,
+            dryRun: false,
+            endpointHint: `https://discord.com/api/webhooks/777777777/${secret}`,
+            endpointHash: 'endpoint_duplicate_replay_hash',
+            payloadHash: 'payload_duplicate_replay_skipped_hash',
+            payload: replayPayload,
+            responseStatus: null,
+            responseBody: null,
+            error: 'Delivery skipped because this destination already has a delivered attempt for the same idempotency key.',
+            idempotencyKey: 'dwm.alert.replayed:org_contract:destination_duplicate_replay_contract:dwm_dedupe_duplicate_replay_contract',
+            watchlistId: 'watchlist_item_replay_contract',
+            watchlistName: 'Replay contract watchlist',
+            route: 'identity_response',
+            casePath: replayWorkflowAlert.casePath,
+            attemptedAt: '2026-06-28T12:21:00.000Z',
+            createdAt: '2026-06-28T12:21:00.000Z',
+        },
+    ],
+    auditEvents: [
+        {
+            id: 'audit_duplicate_replay_delivered_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_duplicate_replay_contract',
+            deliveryId: 'delivery_duplicate_replay_delivered_contract',
+            action: 'delivery.replayed',
+            metadata: { status: 'delivered', endpointHint: `https://discord.com/api/webhooks/777777777/${secret}` },
+            createdAt: '2026-06-28T12:20:01.000Z',
+        },
+        {
+            id: 'audit_duplicate_replay_skipped_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_duplicate_replay_contract',
+            deliveryId: 'delivery_duplicate_replay_skipped_contract',
+            action: 'delivery.skipped',
+            metadata: { status: 'skipped', reason: 'duplicate_delivered_idempotency_key', endpointHint: `https://discord.com/api/webhooks/777777777/${secret}` },
+            createdAt: '2026-06-28T12:21:01.000Z',
+        },
+    ],
+    filters: { orgId: 'org_contract', dedupeKey: 'dwm.alert.replayed:org_contract:destination_duplicate_replay_contract:dwm_dedupe_duplicate_replay_contract' },
+})
 const deliveryRetryPersistence = buildDwmWebhookDeliveryRetryPersistence({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2155,6 +2254,8 @@ const dashboardTestFailed = dashboardReadiness.destinations.find(item => item.de
 const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
+const duplicateReplayGuardDelivered = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_delivered_contract')
+const duplicateReplayGuardSkipped = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_skipped_contract')
 expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && deliveryHistory.total === deliveryOperations.total, 'Delivery history should mirror customer-visible delivery operations.', deliveryHistory)
 expect(deliveryHistoryReplay?.discordPreview?.embedCount === 1 && deliveryHistoryReplay.discordPreview.fieldNames.includes('Alert URL'), 'Delivery history should expose safe Discord preview fields.', deliveryHistoryReplay)
 expect(deliveryHistoryReplay?.alert.casePath === replayWorkflowAlert.casePath && deliveryHistoryReplay.watchlist.id === 'watchlist_item_replay_contract', 'Delivery history should preserve alert/case/watchlist context.', deliveryHistoryReplay)
@@ -2162,6 +2263,10 @@ expect(deliveryHistoryReplay?.deliveryProof.auditEventId === 'audit_replay_dupli
 expect(deliveryHistoryRetry?.retry.retryable === true && deliveryHistoryRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Delivery history should expose retry/backoff state.', deliveryHistoryRetry)
 expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistoryTerminal.retry.lastErrorCategory === 'upstream_4xx', 'Delivery history should expose terminal failure state.', deliveryHistoryTerminal)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
+expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.status === 'skipped', 'Delivery history should expose duplicate replay live-send guard skipped attempts.', duplicateReplayGuardHistory)
+expect(duplicateReplayGuardSkipped?.deliveryProof.auditEventId === 'audit_duplicate_replay_skipped_contract' && duplicateReplayGuardSkipped.dedupe.alreadyDelivered === true, 'Duplicate replay guard should link skipped audit and prior delivered idempotency proof.', duplicateReplayGuardSkipped)
+expect(duplicateReplayGuardDelivered?.status === 'sent' && duplicateReplayGuardDelivered.dedupe.alreadyDelivered === true, 'Duplicate replay guard should preserve the prior delivered attempt.', duplicateReplayGuardDelivered)
+expect(!JSON.stringify(duplicateReplayGuardHistory).includes(secret), 'Duplicate replay guard history should redact endpoint secrets.', duplicateReplayGuardHistory)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
@@ -2280,6 +2385,8 @@ console.log(JSON.stringify({
         'delivery history customer-safe read model',
         'delivery history Discord preview proof',
         'delivery history retry/terminal failure proof',
+        'delivery history duplicate replay live-send guard',
+        'delivery history duplicate replay skipped audit proof',
         'delivery history secret redaction',
         'delivery retry persistence grouped idempotency keys',
         'delivery retry persistence terminal failure state',
@@ -2360,6 +2467,8 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].discordPreview.fieldNames',
             'deliveryHistory.entries[].deliveryProof.auditEventId',
             'deliveryHistory.entries[].retry.terminalFailure',
+            'deliveryHistory.entries[].dedupe.alreadyDelivered',
+            'deliveryHistory.entries[].status',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',

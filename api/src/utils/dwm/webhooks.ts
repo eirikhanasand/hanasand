@@ -2484,6 +2484,21 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
 
     const deliveries = []
     for (const destination of plan.selectedDestinations) {
+        const normalizedAlert = normalizeAlert(plan.alert)
+        const idempotencyKey = buildIdempotencyKey(plan.eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
+        const deliveredDuplicate = live && !dryRun
+            ? await findDeliveredDwmWebhookDelivery(ownerId, destination.org_id, destination.id, idempotencyKey)
+            : null
+        if (deliveredDuplicate) {
+            deliveries.push(await recordSkippedDuplicateDwmWebhookDelivery({
+                ownerId,
+                destination: destination as DwmWebhookDestinationRow,
+                eventType: plan.eventType,
+                alert: plan.alert,
+                priorDelivery: deliveredDuplicate,
+            }))
+            continue
+        }
         deliveries.push(await deliverToDwmWebhookDestination({
             ownerId,
             destination: destination as DwmWebhookDestinationRow,
@@ -2929,6 +2944,101 @@ async function deliverToDwmWebhookDestination({
     return toDwmWebhookDelivery(delivery)
 }
 
+async function recordSkippedDuplicateDwmWebhookDelivery({
+    ownerId,
+    destination,
+    eventType,
+    alert,
+    priorDelivery,
+}: {
+    ownerId: string
+    destination: DwmWebhookDestinationRow
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    priorDelivery: DwmWebhookDeliveryRow
+}) {
+    const deliveryId = crypto.randomUUID()
+    const payload = buildDwmAlertDeliveryPayload({ destination, alert, eventType, deliveryId })
+    const normalizedAlert = normalizeAlert(alert)
+    const watchlist = normalizeWatchlist(alert.watchlist)
+    const payloadHash = hashValue('payload', JSON.stringify(payload))
+    const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
+    const error = 'Delivery skipped because this destination already has a delivered attempt for the same idempotency key.'
+    const result = await run(`
+        INSERT INTO dwm_webhook_deliveries (
+            id,
+            destination_id,
+            owner_id,
+            org_id,
+            alert_id,
+            event_type,
+            status,
+            dry_run,
+            endpoint_hint,
+            endpoint_hash,
+            payload_hash,
+            payload,
+            response_status,
+            response_body,
+            error,
+            idempotency_key,
+            watchlist_id,
+            watchlist_name,
+            route,
+            case_path,
+            attempted_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, 'skipped', FALSE, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, $14, $15, $16, NOW())
+        RETURNING *
+    `, [
+        deliveryId,
+        destination.id,
+        ownerId,
+        destination.org_id,
+        normalizedAlert.id,
+        eventType,
+        destination.endpoint_hint,
+        destination.endpoint_hash,
+        payloadHash,
+        JSON.stringify(payload),
+        error,
+        idempotencyKey,
+        watchlist.id,
+        watchlist.name,
+        normalizedAlert.route,
+        normalizedAlert.casePath,
+    ])
+
+    const delivery = result.rows[0] as DwmWebhookDeliveryRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: delivery.org_id,
+        destinationId: destination.id,
+        deliveryId: delivery.id,
+        action: 'delivery.skipped',
+        metadata: {
+            alertId: delivery.alert_id,
+            eventType: delivery.event_type,
+            status: delivery.status,
+            endpointHint: delivery.endpoint_hint,
+            endpointHash: delivery.endpoint_hash,
+            payloadHash: delivery.payload_hash,
+            dryRun: delivery.dry_run,
+            error: delivery.error,
+            idempotencyKey: delivery.idempotency_key,
+            priorDeliveryId: priorDelivery.id,
+            priorDeliveredAt: priorDelivery.attempted_at,
+            reason: 'duplicate_delivered_idempotency_key',
+            watchlistId: delivery.watchlist_id,
+            route: delivery.route,
+            casePath: delivery.case_path,
+        },
+    })
+
+    return toDwmWebhookDelivery(delivery)
+}
+
 async function recordDwmWebhookAudit({
     ownerId,
     actorId,
@@ -3012,6 +3122,27 @@ async function loadDestinationsForOrg(ownerId: string, orgId: string) {
     `, [ownerId, orgId])
 
     return result.rows as DwmWebhookDestinationRow[]
+}
+
+async function findDeliveredDwmWebhookDelivery(
+    ownerId: string,
+    orgId: string,
+    destinationId: string,
+    idempotencyKey: string
+) {
+    const result = await run(`
+        SELECT *
+        FROM dwm_webhook_deliveries
+        WHERE owner_id = $1
+          AND org_id = $2
+          AND destination_id = $3
+          AND idempotency_key = $4
+          AND status = 'delivered'
+        ORDER BY attempted_at DESC
+        LIMIT 1
+    `, [ownerId, orgId, destinationId, idempotencyKey])
+
+    return (result.rows as DwmWebhookDeliveryRow[])[0] || null
 }
 
 function normalizeWebhookUrl(raw: string) {
