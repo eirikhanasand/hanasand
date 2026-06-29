@@ -533,6 +533,10 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         revokedInviteBlocker: 'member_revoked'
         removedMemberReinviteBlocked: true
         deactivatedUserInviteBlocked: true
+        memberRemovalRevokesPendingInvites: true
+        memberRemovalCleanupSchema: 'organization.member_removal_cleanup.v1'
+        memberRemovalCleanupField: 'memberRemovalCleanup.revokedInviteIds'
+        staleInviteAcceptanceBlocker: 'member_revoked'
     }
     watchlistOwnership: {
         activeIds: string[]
@@ -1726,6 +1730,13 @@ export type OrganizationReadinessProof = {
         >
         noLeakFields: Array<'activeTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'member.userId' | 'destination.secret'>
         auditActions: Array<'organization_watchlist_alert_terms_export_denied' | 'organization_member_removed' | 'organization_invite_revoked'>
+        memberRemovalCleanup: {
+            responseSchema: 'organization.member_removal_cleanup.v1'
+            revokesPendingInvites: true
+            cleanupField: 'memberRemovalCleanup.revokedInviteIds'
+            staleInviteAcceptanceBlocker: 'member_revoked'
+            serviceLogAction: 'organization_member_removed'
+        }
         nonmemberEnumeration: false
     }
     inviteLifecycleProof: {
@@ -2640,6 +2651,10 @@ export function organizationSharedWatchlistDownstreamProof(
             revokedInviteBlocker: 'member_revoked',
             removedMemberReinviteBlocked: true,
             deactivatedUserInviteBlocked: true,
+            memberRemovalRevokesPendingInvites: true,
+            memberRemovalCleanupSchema: 'organization.member_removal_cleanup.v1',
+            memberRemovalCleanupField: 'memberRemovalCleanup.revokedInviteIds',
+            staleInviteAcceptanceBlocker: 'member_revoked',
         },
         watchlistOwnership: {
             activeIds,
@@ -4563,6 +4578,13 @@ export function organizationReadinessProof(input: {
                 'organization_member_removed',
                 'organization_invite_revoked',
             ],
+            memberRemovalCleanup: {
+                responseSchema: 'organization.member_removal_cleanup.v1',
+                revokesPendingInvites: true,
+                cleanupField: 'memberRemovalCleanup.revokedInviteIds',
+                staleInviteAcceptanceBlocker: 'member_revoked',
+                serviceLogAction: 'organization_member_removed',
+            },
             nonmemberEnumeration: false,
         },
         inviteLifecycleProof: {
