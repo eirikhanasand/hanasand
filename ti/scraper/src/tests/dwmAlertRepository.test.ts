@@ -963,6 +963,12 @@ describe("dwm alert repository", () => {
       watchlistItemIds: ["watch_item_customer"],
       deliveryReadinessContext: {
         selectedCaptureIds: ["cap_repo_tg_acme"],
+        generationEvidenceWindow: {
+          captureIds: ["cap_repo_tg_acme"],
+          sourceFamilies: ["telegram_public"],
+          firstObservedAt: "2026-06-28T13:04:00.000Z",
+          lastObservedAt: "2026-06-28T13:04:00.000Z"
+        },
         alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
         blockerCodes: []
       }
@@ -1011,7 +1017,12 @@ describe("dwm alert repository", () => {
     expect(preserved.workflowEvents).toHaveLength(1);
     expect(preserved.deliveryReadinessContext).toMatchObject({
       replayCount: 3,
-      sourceFamily: "telegram_public"
+      sourceFamily: "telegram_public",
+      generationEvidenceWindow: {
+        captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+        firstObservedAt: "2026-06-28T13:04:00.000Z",
+        lastObservedAt: "2026-06-28T13:16:00.000Z"
+      }
     });
     expect(preserved.deliveryReadinessContext.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(preserved.deliveryReadinessContext.blockerCodes).toEqual(expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]));

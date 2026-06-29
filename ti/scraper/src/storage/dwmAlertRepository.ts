@@ -653,6 +653,13 @@ export type DwmPersistedDeliveryReadinessContext = {
   replayMarker: string;
   replayCount: number;
   selectedCaptureIds: string[];
+  generationEvidenceWindow?: {
+    captureIds: string[];
+    sourceFamilies: string[];
+    contentHashes: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
   sourceFamily: string;
   evidenceCount: number;
   recommendedRoute?: string;
@@ -859,6 +866,7 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
     replayMarker: stableId("dwm_replay_marker", `${input.tenantId}:${input.alert.id}:${deliveryDedupeKey}`),
     replayCount: Number(input.existing?.replayCount ?? 0),
     selectedCaptureIds,
+    generationEvidenceWindow: normalizeGenerationEvidenceWindow(input.workflowContext.generationEvidenceWindow ?? previousContext.generationEvidenceWindow),
     sourceFamily: String(input.alert.sourceFamily ?? input.workflowContext.sourceFamily ?? "unknown"),
     evidenceCount,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute ?? input.workflowContext.recommendedRoute,
