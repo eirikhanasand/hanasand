@@ -6,6 +6,7 @@ export const TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION = "orga
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION = "ti.source_provenance_alert_enrichment_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
@@ -346,6 +347,60 @@ export type TiSourceProvenanceAlertRebuildReceiptBlocker = {
   ownerLane: "publicTI" | "org" | "source" | "alert" | "case";
   path: string;
   message: string;
+};
+
+export type TiSourceProvenanceAlertEnrichmentPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceContractId: string;
+  sourceBridgeId: string;
+  alertRebuildReceiptId: string;
+  alertRows: TiSourceProvenanceAlertEnrichmentRow[];
+  coverage: {
+    sourceFamilies: string[];
+    sourceIds: string[];
+    captureIds: string[];
+    contentHashes: string[];
+    newestEvidenceAt?: string;
+    averageConfidence: number;
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceAlertEnrichmentRow = {
+  alertId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceBridgeId: string;
+  sourceFamilies: string[];
+  sourceIds: string[];
+  captureIds: string[];
+  contentHashes: string[];
+  watchlistItemIds: string[];
+  alertGeneratorKeys: string[];
+  confidence: number;
+  freshness: {
+    newestEvidenceAt?: string;
+    state: "fresh" | "missing";
+  };
+  caseHandoff?: {
+    caseId?: string;
+    casePath?: string;
+    ready: boolean;
+  };
+  readyForAnalystWorkflow: boolean;
 };
 
 export type TiSourceProvenanceAlertRebuildResponse = {
@@ -914,6 +969,80 @@ export function buildSourceProvenanceAlertRebuildReceipt(input: {
       "matches.sourceBridgeIds",
       "caseHandoffRows[]",
       "blockers[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceAlertEnrichmentPacket(input: {
+  contract: TiSourceProvenancePageContract;
+  receipt: TiSourceProvenanceAlertRebuildReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceAlertEnrichmentPacket {
+  const generatedAt = input.generatedAt ?? input.receipt.generatedAt;
+  const readyRows = input.contract.rows.filter((row) => row.ready);
+  const newestEvidenceAt = newestTimestamp(readyRows.map((row) => row.capturedAt));
+  const rows = input.receipt.matches.alertIds.map((alertId) => {
+    const caseHandoff = input.receipt.caseHandoffRows.find((row) => row.alertId === alertId);
+    return {
+      alertId,
+      actor: input.contract.actor,
+      publicTiRoute: input.contract.page.route,
+      sourceBridgeId: input.receipt.sourceBridgeId,
+      sourceFamilies: uniqueStrings(readyRows.map((row) => row.sourceFamily).filter(Boolean).map(String)),
+      sourceIds: uniqueStrings(readyRows.map((row) => row.sourceId).filter(Boolean).map(String)),
+      captureIds: uniqueStrings(readyRows.map((row) => row.captureId).filter(Boolean).map(String)),
+      contentHashes: uniqueStrings(readyRows.map((row) => row.contentHash).filter(Boolean).map(String)),
+      watchlistItemIds: input.receipt.matches.watchlistItemIds,
+      alertGeneratorKeys: input.receipt.matches.alertGeneratorKeys,
+      confidence: average(readyRows.map((row) => row.confidence)),
+      freshness: {
+        newestEvidenceAt,
+        state: newestEvidenceAt ? "fresh" as const : "missing" as const
+      },
+      caseHandoff: caseHandoff ? {
+        caseId: caseHandoff.caseId,
+        casePath: caseHandoff.casePath,
+        ready: caseHandoff.ready
+      } : undefined,
+      readyForAnalystWorkflow: Boolean(input.receipt.ok && caseHandoff?.ready)
+    };
+  });
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_alert_enrichment_packet", `${input.receipt.id}:${input.contract.id}:${generatedAt}`),
+    generatedAt,
+    ok: input.receipt.ok && input.contract.ok && rows.length > 0 && rows.every((row) => row.readyForAnalystWorkflow),
+    tenantId: input.contract.tenantId,
+    organizationId: input.contract.organizationId,
+    actor: input.contract.actor,
+    publicTiRoute: input.contract.page.route,
+    sourceContractId: input.contract.id,
+    sourceBridgeId: input.receipt.sourceBridgeId,
+    alertRebuildReceiptId: input.receipt.id,
+    alertRows: rows,
+    coverage: {
+      sourceFamilies: uniqueStrings(readyRows.map((row) => row.sourceFamily).filter(Boolean).map(String)),
+      sourceIds: uniqueStrings(readyRows.map((row) => row.sourceId).filter(Boolean).map(String)),
+      captureIds: uniqueStrings(readyRows.map((row) => row.captureId).filter(Boolean).map(String)),
+      contentHashes: uniqueStrings(readyRows.map((row) => row.contentHash).filter(Boolean).map(String)),
+      newestEvidenceAt,
+      averageConfidence: average(readyRows.map((row) => row.confidence))
+    },
+    payloadShape: [
+      "alertRows[].alertId",
+      "alertRows[].sourceFamilies",
+      "alertRows[].captureIds",
+      "alertRows[].contentHashes",
+      "alertRows[].freshness",
+      "alertRows[].caseHandoff",
+      "coverage.sourceFamilies"
     ],
     safeOutput: {
       rawTargetsExposed: false,
