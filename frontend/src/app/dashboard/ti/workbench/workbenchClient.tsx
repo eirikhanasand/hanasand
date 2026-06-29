@@ -440,8 +440,26 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
     }, [alertDetails, refreshAlertDetail, selected])
 
+    useEffect(() => {
+        if (!selected || selected.caseDetailHref || selected.kind !== 'dwm_alert') return
+        const alertDetail = alertDetails[selected.id]
+        if (alertDetail?.status !== 'ready') return
+        const href = caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext)
+        if (!href) return
+        const currentCaseDetail = caseDetails[selected.id]
+        if (currentCaseDetail?.status === 'ready' || currentCaseDetail?.status === 'loading') return
+        let cancelled = false
+        refreshCaseDetail(selected.id, href)
+            .catch(error => {
+                if (!cancelled) setCaseDetails(current => ({ ...current, [selected.id]: { status: 'error', error: error instanceof Error ? error.message : String(error) } }))
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [alertDetails, caseDetails, orgContext, refreshCaseDetail, selected])
+
     async function refreshBackedSelection(item: WorkbenchCase, payload?: WorkbenchApiPayload, action?: WorkbenchAction) {
-        if (item.kind === 'dwm_alert' && item.persistent) await refreshAlertDetail(item.id, { loading: false })
+        const alertDetail = item.kind === 'dwm_alert' && item.persistent ? await refreshAlertDetail(item.id, { loading: false }) : undefined
         const deliveryEvidence = deliveryEvidenceFromPayload(payload, item.id)
         if (deliveryEvidence.length) {
             setActionDeliveries(current => ({
@@ -449,7 +467,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 [item.id]: mergeDeliveryEvidence(deliveryEvidence, current[item.id] || []),
             }))
         }
-        const caseHref = item.caseDetailHref || caseDetailHrefFromPayload(payload, action, orgContext)
+        const caseHref = item.caseDetailHref || caseDetailHrefFromPayload(payload, action, orgContext) || caseDetailHrefFromAlertDetail(alertDetail, orgContext)
         if (caseHref) await refreshCaseDetail(item.id, caseHref, { loading: false })
     }
 
@@ -2631,6 +2649,18 @@ function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, act
     if (!caseId) return undefined
     const organizationId = payload.case?.organizationId
         || stringValue(action?.body?.organizationId)
+        || orgContext?.organization?.id
+        || orgContext?.scope.organizationId
+    const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+    return `/api/cases/${encodeURIComponent(caseId)}${query}`
+}
+
+function caseDetailHrefFromAlertDetail(payload: AlertDetailPayload | undefined, orgContext: WorkbenchOrgContext | undefined) {
+    const alert = payload?.alert
+    const caseId = stringValue(alert?.caseId) || stringValue(alert?.caseIdCandidate) || stringValue(alert?.workflowContext?.caseIdCandidate)
+    if (!caseId) return undefined
+    const organizationId = stringValue(alert?.organizationId)
+        || stringValue(alert?.workflowContext?.organizationId)
         || orgContext?.organization?.id
         || orgContext?.scope.organizationId
     const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''

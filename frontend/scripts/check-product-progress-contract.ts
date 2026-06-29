@@ -753,6 +753,8 @@ assert.ok(workbenchSource.includes('refreshAlertDetail'), 'Selected live alert d
 assert.ok(workbenchSource.includes('refreshBackedSelection(item, payload'), 'Replay/send/update actions should refresh selected backed alert and case state from action responses.')
 assert.ok(workbenchSource.includes('caseDetailHrefFromPayload'), 'Open-case responses should be converted into /api/cases/:id detail refreshes.')
 assert.ok(workbenchSource.includes('payload?.case?.id'), 'Case detail refresh should depend on the backed case id returned by /api/cases.')
+assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail'), 'Selected alert detail should open linked /api/cases/:id detail when the alert API returns a case id.')
+assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), 'Alert-derived case detail should consume the workflow case candidate returned by /api/dwm/alerts/:id.')
 assert.ok(workbenchSource.includes('deliveryEvidenceFromPayload'), 'Webhook test/send responses should become inspectable delivery evidence in the selected workbench item.')
 assert.ok(workbenchSource.includes('mergeDeliveryEvidence(actionDeliveries'), 'Action-returned delivery evidence should be shown in the backed inspection panel before case detail reloads.')
 assert.ok(workbenchSource.includes('endpoint_hash_not_returned'), 'Delivery evidence from partial webhook responses should mark missing hashes honestly.')
