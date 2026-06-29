@@ -2153,6 +2153,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
 }) {
     const readyCase = caseDetail?.status === 'ready' ? caseDetail.detail.case : undefined
     const hasBackedCase = Boolean(readyCase)
+    const hasBackedAlertWorkflow = item.kind === 'dwm_alert' && item.persistent
     const busy = Boolean(busyAction)
     const closeAction = effectiveStatus === 'closed' ? 'reopen' : 'close'
 
@@ -2160,8 +2161,12 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
         return (
             <div className='grid gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#9a3412]'>Session-local triage</p>
-                    <p className='mt-1 text-xs leading-5 text-[#596170]'>{item.missingDependency || 'Backed case mutations require a live /api/cases/:id detail response. These controls only update this browser session.'}</p>
+                    <p className='text-xs font-semibold uppercase text-[#9a3412]'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170]'>
+                        {hasBackedAlertWorkflow
+                            ? 'These controls PATCH /api/dwm/alerts/:id, then reload alert detail. Case mutations remain blocked until /api/cases/:id is linked.'
+                            : item.missingDependency || 'Backed mutations require a live /api/cases/:id detail response or persistent /api/dwm/alerts/:id alert. These controls only update this browser session.'}
+                    </p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <DecisionButton busy={busy} onClick={() => onDecision({ status: 'reviewing', owner, reason: note || 'Review started.' })}>Review</DecisionButton>
@@ -2172,8 +2177,8 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     </DecisionButton>
                     {item.kind === 'dwm_alert' && (
                         <>
-                            <DecisionButton busy={busy || busyAction === `replay:${item.id}`} onClick={onReplay}>Replay</DecisionButton>
-                            <DecisionButton busy={busy || busyAction === `send:${item.id}`} onClick={onSend}>Send</DecisionButton>
+                            <DecisionButton busy={busy || busyAction === `replay:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Replay requires a persistent /api/dwm/alerts/:id alert.'} onClick={onReplay}>Replay</DecisionButton>
+                            <DecisionButton busy={busy || busyAction === `send:${item.id}`} disabledReason={hasBackedAlertWorkflow ? undefined : 'Send requires a persistent alert and webhook delivery route.'} onClick={onSend}>Send</DecisionButton>
                         </>
                     )}
                 </div>
