@@ -169,6 +169,13 @@ export type DwmAlertCustomerProofHandoffRow = {
   sourceFamily: string;
   evidenceCount: number;
   selectedCaptureIds: string[];
+  generationEvidenceWindow?: {
+    captureIds: string[];
+    sourceFamilies: string[];
+    contentHashes: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
   provenance: {
     matchBasis?: string;
     captureIds: string[];
@@ -273,6 +280,13 @@ export type DwmAlertDownstreamHandoff = {
     sourceIds: string[];
     provenanceGeneratedAt?: string;
     matchBasis?: string;
+    generationEvidenceWindow?: {
+      captureIds: string[];
+      sourceFamilies: string[];
+      contentHashes: string[];
+      firstObservedAt?: string;
+      lastObservedAt?: string;
+    };
   };
   dedupe: {
     alertDedupeKey?: string;
@@ -1129,6 +1143,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert.watchlistItemIds));
+  const generationEvidenceWindow = normalizeGenerationEvidenceWindow(context.generationEvidenceWindow ?? workflow.generationEvidenceWindow ?? webhook.generationEvidenceWindow);
   const delivered = Boolean(alert.deliveredAt) || alert.deliveryState === "delivered" || deliveries.some((delivery) => delivery.status === "delivered") || context.state === "delivered";
   const redactionRequired = input.supportOnlyRedactionNeeded === true || (alert.evidence ?? []).some((item: any) => item.redactionState === "raw_sensitive");
   const hasCaseRoute = Boolean(context.casePath ?? alert.casePath ?? workflow.casePath);
@@ -1158,6 +1173,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
     sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
     evidenceCount,
     selectedCaptureIds,
+    generationEvidenceWindow,
     provenance: {
       matchBasis: alert.provenance?.matchBasis,
       captureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
@@ -1257,6 +1273,22 @@ function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fal
   };
 }
 
+function normalizeGenerationEvidenceWindow(value: unknown) {
+  const window = value && typeof value === "object" ? value as any : undefined;
+  if (!window) return undefined;
+  const captureIds = uniqueStrings(asStringArray(window.captureIds));
+  const sourceFamilies = uniqueStrings(asStringArray(window.sourceFamilies));
+  const contentHashes = uniqueStrings(asStringArray(window.contentHashes));
+  if (!captureIds.length && !sourceFamilies.length && !contentHashes.length && !window.firstObservedAt && !window.lastObservedAt) return undefined;
+  return {
+    captureIds,
+    sourceFamilies,
+    contentHashes,
+    firstObservedAt: window.firstObservedAt ? String(window.firstObservedAt) : undefined,
+    lastObservedAt: window.lastObservedAt ? String(window.lastObservedAt) : undefined
+  };
+}
+
 export function buildDwmAlertDownstreamHandoff(input: {
   alert?: any;
   deliveries?: Array<Record<string, any>>;
@@ -1285,6 +1317,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const selectedCaptureIds = uniqueStrings(asStringArray(context.selectedCaptureIds ?? workflow.captureIds ?? webhook.captureIds ?? alert?.provenance?.captureIds));
   const captureIds = uniqueStrings(asStringArray(alert?.provenance?.captureIds ?? selectedCaptureIds));
   const sourceIds = uniqueStrings(asStringArray(alert?.provenance?.sourceIds ?? (alert?.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId)));
+  const generationEvidenceWindow = normalizeGenerationEvidenceWindow(context.generationEvidenceWindow ?? workflow.generationEvidenceWindow ?? webhook.generationEvidenceWindow);
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert?.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert?.watchlistItemIds));
   const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
@@ -1389,7 +1422,8 @@ export function buildDwmAlertDownstreamHandoff(input: {
       captureIds,
       sourceIds,
       provenanceGeneratedAt: alert?.provenance?.generatedAt,
-      matchBasis: alert?.provenance?.matchBasis
+      matchBasis: alert?.provenance?.matchBasis,
+      generationEvidenceWindow
     },
     dedupe: {
       alertDedupeKey: alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,

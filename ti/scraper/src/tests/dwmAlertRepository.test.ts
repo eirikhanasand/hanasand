@@ -482,11 +482,21 @@ describe("dwm alert repository", () => {
       deliveryDedupeKey: telegramAlert?.dedupeKey,
       recommendedRoute: "identity_response"
     });
+    expect(telegramHandoff.evidence.generationEvidenceWindow).toMatchObject({
+      captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
+      sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"],
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:11:00.000Z"
+    });
     const telegramProof = buildDwmAlertCustomerProofHandoffRow({ alert: telegramAlert });
     expect(telegramProof.createdEvent).toMatchObject({
       eventId: telegramAlert?.alertCreatedEvent.id,
       captureIds: ["cap_repo_tg_acme"],
       recommendedRoute: "identity_response"
+    });
+    expect(telegramProof.generationEvidenceWindow).toMatchObject({
+      contentHashes: expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]),
+      firstObservedAt: "2026-06-28T13:04:00.000Z"
     });
     expect(buildDwmAlertWorkflowExecutionReadiness({
       alert: telegramAlert,
@@ -533,6 +543,10 @@ describe("dwm alert repository", () => {
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).createdEvent).toMatchObject({
       eventId: existing.alertCreatedEvent.id,
       captureIds: ["cap_repo_tg_acme"]
+    });
+    expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).evidence.generationEvidenceWindow).toMatchObject({
+      captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+      lastObservedAt: "2026-06-28T13:16:00.000Z"
     });
     expect(buildDwmAlertWorkflowExecutionReadiness({
       alert: preserved,
