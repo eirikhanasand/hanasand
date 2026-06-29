@@ -510,7 +510,70 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
     `, values)
-    return res.send({ events: result.rows, filters: { q, actor: actorFilter, target: targetFilter, method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit } })
+    const filters = { q, actor: actorFilter, target: targetFilter, method: methodFilter, path: pathFilter, session: sessionFilter, from: fromFilter, to: toFilter, limit }
+    const timeline = result.rows.map(toImpersonationTimelineEvent)
+    return res.send({
+        events: result.rows,
+        filters,
+        timeline: {
+            schemaVersion: 'support.impersonation.timeline.v1',
+            filters,
+            eventIds: timeline.map(event => event.id),
+            summary: impersonationTimelineSummary(timeline),
+            events: timeline,
+            redacted: true,
+            links: {
+                audit: `/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api${sessionFilter ? `&entity=${encodeURIComponent(sessionFilter)}` : ''}`,
+                details: timeline.map(event => event.links.detail),
+            },
+            copyText: timeline.map(event => event.copyText).join('\n'),
+        },
+    })
+}
+
+function toImpersonationTimelineEvent(row: Record<string, any>) {
+    const actionType = String(row.path || '').includes('/stop') ? 'impersonation.stop' : 'impersonation.start'
+    const id = Number(row.id)
+    return {
+        schemaVersion: 'support.impersonation.timeline_event.v1',
+        id,
+        timestamp: row.created_at,
+        actionType,
+        severity: actionType === 'impersonation.start' ? 'warning' : 'notice',
+        outcome: 'success',
+        actor: {
+            id: row.actor_id,
+            name: row.actor_name || null,
+        },
+        target: {
+            type: 'user',
+            id: row.target_id,
+            name: row.target_name || null,
+        },
+        entity: {
+            type: 'impersonation_session',
+            id: row.session_id || null,
+        },
+        method: row.method,
+        path: row.path,
+        links: {
+            detail: `/api/impersonation/events?session=${encodeURIComponent(String(row.session_id || ''))}`,
+            audit: `/api/admin/audit-events?action=${encodeURIComponent(actionType)}&entity=${encodeURIComponent(String(row.session_id || ''))}&source=admin&service=hanasand-api`,
+        },
+        copyText: `${row.created_at} ${actionType} actor=${row.actor_id} target=${row.target_id} session=${row.session_id || ''}`,
+    }
+}
+
+function impersonationTimelineSummary(timeline: Array<Record<string, any>>) {
+    const unique = (values: unknown[]) => Array.from(new Set(values.map(value => cleanText(value)).filter(Boolean))).slice(0, 50)
+    return {
+        eventCount: timeline.length,
+        actionTypes: unique(timeline.map(event => event.actionType)),
+        actorIds: unique(timeline.map(event => event.actor?.id)),
+        targetIds: unique(timeline.map(event => event.target?.id)),
+        sessionIds: unique(timeline.map(event => event.entity?.id)),
+        outcomes: unique(timeline.map(event => event.outcome)),
+    }
 }
 
 function normalizeDurationMinutes(value: unknown) {
