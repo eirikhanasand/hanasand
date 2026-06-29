@@ -890,7 +890,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    const [members, invites, watchlists, audit] = await Promise.all([
+    const [members, invites, watchlists, audit, availability] = await Promise.all([
         run(`
             SELECT
                 om.organization_id,
@@ -932,6 +932,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             ORDER BY created_at DESC
             LIMIT 25
         `, [organization.id]),
+        loadOrganizationAvailability([organization.id]),
     ])
 
     await recordAdminAuditEvent(req, {
@@ -962,6 +963,29 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         reason: inspectionAudit.reason,
         action: 'support.organization',
     }, audit.rows as Record<string, unknown>[])
+    const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const organizationAccessStatus = buildSupportAccessStatus({
+        org: organization.id,
+        user: '',
+        email: '',
+        request: inspectionAudit.requestId,
+        organizationIds: [organization.id],
+        users: members.rows as Record<string, unknown>[],
+        memberships: members.rows as Record<string, unknown>[],
+        invites: invites.rows as Record<string, unknown>[],
+        approvalDetails: [],
+        recoveryEligibility: buildRecoveryEligibility({
+            email: '',
+            user: '',
+            organizationIds: [organization.id],
+            memberships: members.rows as Record<string, unknown>[],
+            users: members.rows as Record<string, unknown>[],
+            availabilityByOrg,
+            invites: invites.rows as Record<string, unknown>[],
+        }),
+        availabilityByOrg,
+        timeline: recentAuditTimeline.events,
+    })
     const alertReadinessBridge = supportTimelineAuditBridgeEvent({
         workflow: 'watchlist',
         action: 'support.organization.alert_readiness.inspect',
@@ -987,6 +1011,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
     })
     return res.send({
         organization: toOrganization(organization),
+        accessStatus: organizationAccessStatus,
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
@@ -1015,6 +1040,13 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         },
         recentAuditEvents: recentAuditTimeline.events,
         recentAuditTimeline,
+        copyText: [
+            `Support organization inspection ${organization.id}`,
+            `Access status: ${organizationAccessStatus.overall}`,
+            `Members: ${members.rows.length}`,
+            `Pending invites: ${(invites.rows as OrganizationInviteRow[]).filter(row => row.status === 'pending').length}`,
+            `Audit events: ${recentAuditTimeline.eventIds.join(', ') || 'none'}`,
+        ].join('\n'),
     })
 }
 
@@ -1046,7 +1078,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         return res.status(404).send({ error: 'User not found.' })
     }
 
-    const [memberships, invites, audit] = await Promise.all([
+    const [memberships, invites, audit, approvals] = await Promise.all([
         run(`
             SELECT
                 om.organization_id,
@@ -1079,6 +1111,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
             ORDER BY created_at DESC
             LIMIT 25
         `, [req.params.id]),
+        loadInspectionApprovals({ org: '', user: req.params.id, email: '', request: inspectionAudit.requestId, outcome: '', limit: 25 }),
     ])
 
     await recordAdminAuditEvent(req, {
@@ -1106,12 +1139,51 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         reason: inspectionAudit.reason,
         action: 'support.user',
     }, audit.rows as Record<string, unknown>[])
+    const approvalDetails = (approvals as AccessRecoveryApprovalRow[]).map(toAccessRecoveryDecision)
+    const organizationIds = Array.from(new Set([
+        ...memberships.rows.map(row => String((row as Record<string, unknown>).organization_id || '')).filter(Boolean),
+        ...invites.rows.map(row => String((row as Record<string, unknown>).organization_id || '')).filter(Boolean),
+        ...approvalDetails.map(item => String(item.organizationId || '')).filter(Boolean),
+    ]))
+    const availability = organizationIds.length ? await loadOrganizationAvailability(organizationIds) : []
+    const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const userAccessStatus = buildSupportAccessStatus({
+        org: '',
+        user: req.params.id,
+        email: '',
+        request: inspectionAudit.requestId,
+        organizationIds,
+        users: [userRow],
+        memberships: memberships.rows as Record<string, unknown>[],
+        invites: invites.rows as Record<string, unknown>[],
+        approvalDetails,
+        recoveryEligibility: buildRecoveryEligibility({
+            email: '',
+            user: req.params.id,
+            organizationIds,
+            memberships: memberships.rows as Record<string, unknown>[],
+            users: [userRow],
+            availabilityByOrg,
+            invites: invites.rows as Record<string, unknown>[],
+        }),
+        availabilityByOrg,
+        timeline: recentAuditTimeline.events,
+    })
     return res.send({
         user: toSupportUser(userRow),
+        accessStatus: userAccessStatus,
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
+        approvalRequests: approvalDetails,
         recentAuditEvents: recentAuditTimeline.events,
         recentAuditTimeline,
+        copyText: [
+            `Support user inspection ${req.params.id}`,
+            `Access status: ${userAccessStatus.overall}`,
+            `Memberships: ${memberships.rows.length}`,
+            `Pending invites: ${invites.rows.length}`,
+            `Audit events: ${recentAuditTimeline.eventIds.join(', ') || 'none'}`,
+        ].join('\n'),
     })
 }
 
