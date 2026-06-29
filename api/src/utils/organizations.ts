@@ -57,6 +57,12 @@ export type OrganizationSharedWatchlistAnalystPortalAction =
     | 'replay_alert'
     | 'deliver_webhook'
     | 'open_audit_timeline'
+export type OrganizationSharedWatchlistProvenanceSourceFamily =
+    | 'organization_watchlist'
+    | 'darkweb_metadata'
+    | 'telegram_public'
+    | 'rss_news'
+    | 'public_ti'
 
 export type OrganizationInput = {
     name?: unknown
@@ -209,6 +215,8 @@ export type OrganizationWatchlistTerm = {
     value: string
     terms: string[]
     status: OrganizationWatchlistStatus
+    enabled: boolean
+    disabledReason: 'watchlist_paused' | 'watchlist_archived' | null
     createdBy: string
     updatedBy: string | null
     lifecycleReason: string | null
@@ -814,6 +822,45 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         }
         blockerCodes: string[]
     }
+    enrichmentProvenance: {
+        schemaVersion: 'organization.shared_watchlist_enrichment_provenance.v1'
+        organizationId: string
+        tenantId: string
+        sourceFamily: 'organization_watchlist'
+        expectedAdapter: 'organizationSharedWatchlistEnrichmentProvenance'
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+        sourceCoverage: {
+            requiredFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+            activeFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+            optionalFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[]
+            sourceHealthRoute: 'GET /v1/dwm/sources/health'
+            state: 'ready' | 'needs_source_coverage'
+            blockerCodes: Array<'source_coverage_required' | 'capture_provenance_missing'>
+        }
+        provenanceFields: {
+            alert: Array<'provenance.captureIds' | 'provenance.sourceIds' | 'provenance.generatedAt' | 'provenance.matchBasis' | 'sourceFamily'>
+            workflowContext: Array<'captureIds' | 'selectedCaptureIds' | 'sourceFamily' | 'alertGeneratorKeys' | 'watchlistTermContexts'>
+            caseEvidence: Array<'evidence.provenance.captureIds' | 'evidence.provenance.sourceIds' | 'evidence.provenance.matchBasis' | 'watchlistItemIds'>
+            webhookPayload: Array<'captureIds' | 'sourceFamily' | 'casePath' | 'watchlistItemIds' | 'auditEventContracts'>
+        }
+        propagation: {
+            alertRepository: 'ti/scraper/src/storage/dwmAlertRepository.ts'
+            caseRoute: 'ti/scraper/src/api/caseRoutes.ts'
+            webhookRoute: 'ti/scraper/src/api/dwmWorkflowRoutes.ts'
+            requiredCorrelationFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'captureIds' | 'sourceIds' | 'casePath'>
+        }
+        redaction: {
+            containsRawContent: false
+            safeFields: Array<'organizationId' | 'tenantId' | 'sourceFamily' | 'captureIds' | 'sourceIds' | 'watchlistItemIds' | 'casePath'>
+            redactedFields: Array<'activeTerms[].term' | 'activeTerms[].value' | 'evidence.rawContent' | 'destination.secret'>
+        }
+        watchlistScope: {
+            watchlistItemIds: string[]
+            alertGeneratorKeys: string[]
+            crossTenantCollisionAllowed: false
+        }
+        blockerCodes: Array<'source_coverage_required' | 'capture_provenance_missing'>
+    }
     integration: {
         expectedAdapter: 'organizationSharedWatchlistDownstreamProof'
         payloadShape: string[]
@@ -1205,6 +1252,8 @@ export type OrganizationDwmAlertReference = {
         kind: WatchlistKind
         termFamily: WatchlistKind
         status: OrganizationWatchlistStatus
+        enabled: boolean
+        disabledReason: 'watchlist_paused' | 'watchlist_archived' | null
         createdBy: string
         updatedBy: string | null
         terms: string[]
@@ -2441,6 +2490,12 @@ export function organizationSharedWatchlistDownstreamProof(
             webhookBlockers,
             auditEventActions,
         }),
+        enrichmentProvenance: organizationSharedWatchlistEnrichmentProvenance({
+            organizationId: organization.id,
+            activeWatchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+            alertGeneratorKeys,
+            alertBlockers,
+        }),
         integration: {
             expectedAdapter: 'organizationSharedWatchlistDownstreamProof',
             payloadShape: [
@@ -2463,6 +2518,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 'webhookBridge.deliveryContract.idempotency',
                 'monitoringWorkflow',
                 'analystPortalWorkflow',
+                'enrichmentProvenance',
                 'audit.eventActions',
                 'audit.eventBridge',
                 'audit.requiredMetadataFields',
@@ -2889,6 +2945,62 @@ function organizationSharedWatchlistAnalystPortalWorkflow(input: {
     }
 }
 
+function organizationSharedWatchlistEnrichmentProvenance(input: {
+    organizationId: string
+    activeWatchlistItemIds: string[]
+    alertGeneratorKeys: string[]
+    alertBlockers: string[]
+}): OrganizationSharedWatchlistDownstreamProof['enrichmentProvenance'] {
+    const hasWatchlistScope = input.activeWatchlistItemIds.length > 0 && input.alertGeneratorKeys.length > 0
+    const requiredFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[] = ['organization_watchlist']
+    const optionalFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[] = ['darkweb_metadata', 'telegram_public', 'rss_news', 'public_ti']
+    const activeFamilies: OrganizationSharedWatchlistProvenanceSourceFamily[] = hasWatchlistScope ? ['organization_watchlist'] : []
+    const blockerCodes: OrganizationSharedWatchlistDownstreamProof['enrichmentProvenance']['blockerCodes'] = [
+        ...(hasWatchlistScope ? [] : ['capture_provenance_missing' as const]),
+        ...(input.alertBlockers.includes('no_active_terms') ? ['source_coverage_required' as const] : []),
+    ]
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_enrichment_provenance.v1',
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        sourceFamily: 'organization_watchlist',
+        expectedAdapter: 'organizationSharedWatchlistEnrichmentProvenance',
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        sourceCoverage: {
+            requiredFamilies,
+            activeFamilies,
+            optionalFamilies,
+            sourceHealthRoute: 'GET /v1/dwm/sources/health',
+            state: blockerCodes.length === 0 ? 'ready' : 'needs_source_coverage',
+            blockerCodes,
+        },
+        provenanceFields: {
+            alert: ['provenance.captureIds', 'provenance.sourceIds', 'provenance.generatedAt', 'provenance.matchBasis', 'sourceFamily'],
+            workflowContext: ['captureIds', 'selectedCaptureIds', 'sourceFamily', 'alertGeneratorKeys', 'watchlistTermContexts'],
+            caseEvidence: ['evidence.provenance.captureIds', 'evidence.provenance.sourceIds', 'evidence.provenance.matchBasis', 'watchlistItemIds'],
+            webhookPayload: ['captureIds', 'sourceFamily', 'casePath', 'watchlistItemIds', 'auditEventContracts'],
+        },
+        propagation: {
+            alertRepository: 'ti/scraper/src/storage/dwmAlertRepository.ts',
+            caseRoute: 'ti/scraper/src/api/caseRoutes.ts',
+            webhookRoute: 'ti/scraper/src/api/dwmWorkflowRoutes.ts',
+            requiredCorrelationFields: ['organizationId', 'tenantId', 'watchlistItemIds', 'alertGeneratorKeys', 'captureIds', 'sourceIds', 'casePath'],
+        },
+        redaction: {
+            containsRawContent: false,
+            safeFields: ['organizationId', 'tenantId', 'sourceFamily', 'captureIds', 'sourceIds', 'watchlistItemIds', 'casePath'],
+            redactedFields: ['activeTerms[].term', 'activeTerms[].value', 'evidence.rawContent', 'destination.secret'],
+        },
+        watchlistScope: {
+            watchlistItemIds: input.activeWatchlistItemIds,
+            alertGeneratorKeys: input.alertGeneratorKeys,
+            crossTenantCollisionAllowed: false,
+        },
+        blockerCodes,
+    }
+}
+
 export function organizationSharedWatchlistIntegrationGuardrails(
     proof: OrganizationSharedWatchlistDownstreamProof
 ): OrganizationSharedWatchlistIntegrationGuardrails {
@@ -2904,6 +3016,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         'webhookBridge.deliveryContract.idempotency',
         'monitoringWorkflow',
         'analystPortalWorkflow',
+        'enrichmentProvenance',
         'audit.eventActions',
         'audit.eventBridge',
         'audit.requiredMetadataFields',
@@ -3978,6 +4091,7 @@ export function toMember(row: OrganizationMemberRow) {
 
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
+    const lifecycleState = organizationWatchlistEnabledState(status)
     return {
         id: row.id,
         itemId: row.id,
@@ -3992,6 +4106,8 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
         value: row.value,
         terms: [row.value],
         status,
+        enabled: lifecycleState.enabled,
+        disabledReason: lifecycleState.disabledReason,
         notes: row.notes,
         createdBy: row.created_by,
         updatedBy: row.updated_by ?? null,
@@ -4014,6 +4130,19 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
     }
 }
 
+function organizationWatchlistEnabledState(status: OrganizationWatchlistStatus): {
+    enabled: boolean
+    disabledReason: OrganizationWatchlistTerm['disabledReason']
+} {
+    if (status === 'paused') {
+        return { enabled: false, disabledReason: 'watchlist_paused' }
+    }
+    if (status === 'archived') {
+        return { enabled: false, disabledReason: 'watchlist_archived' }
+    }
+    return { enabled: true, disabledReason: null }
+}
+
 export function buildOrganizationDwmAlertReference(
     organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
     item: OrganizationWatchlistRow
@@ -4022,13 +4151,17 @@ export function buildOrganizationDwmAlertReference(
     const casePath = `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(item.id)}`
     const dedupeKey = `org:${organization.id}:watchlist:${item.id}:${item.kind}:${item.value.toLowerCase()}`
     const bridgeContext = buildOrganizationBridgeContext(organization)
+    const status = normalizeWatchlistStatus(item)
+    const lifecycleState = organizationWatchlistEnabledState(status)
     const watchlist = {
         id: item.id,
         name: watchlistName,
         itemId: item.id,
         kind: item.kind,
         termFamily: item.kind,
-        status: normalizeWatchlistStatus(item),
+        status,
+        enabled: lifecycleState.enabled,
+        disabledReason: lifecycleState.disabledReason,
         createdBy: item.created_by,
         updatedBy: item.updated_by ?? null,
         terms: [item.value],
@@ -4138,24 +4271,30 @@ export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'status' 
 }
 
 export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): OrganizationWatchlistTerm[] {
-    return items.map(item => ({
-        watchlistItemId: item.id,
-        itemId: item.id,
-        organizationId: item.organization_id,
-        tenantId: item.organization_id,
-        kind: item.kind,
-        termFamily: item.kind,
-        family: item.kind,
-        category: item.kind,
-        term: item.value,
-        value: item.value,
-        terms: [item.value],
-        status: normalizeWatchlistStatus(item),
-        createdBy: item.created_by,
-        updatedBy: item.updated_by ?? null,
-        lifecycleReason: item.lifecycle_reason ?? null,
-        lifecycleRequestId: item.lifecycle_request_id ?? null,
-    })).sort((a, b) => `${a.termFamily}:${a.term}`.localeCompare(`${b.termFamily}:${b.term}`))
+    return items.map(item => {
+        const status = normalizeWatchlistStatus(item)
+        const lifecycleState = organizationWatchlistEnabledState(status)
+        return {
+            watchlistItemId: item.id,
+            itemId: item.id,
+            organizationId: item.organization_id,
+            tenantId: item.organization_id,
+            kind: item.kind,
+            termFamily: item.kind,
+            family: item.kind,
+            category: item.kind,
+            term: item.value,
+            value: item.value,
+            terms: [item.value],
+            status,
+            enabled: lifecycleState.enabled,
+            disabledReason: lifecycleState.disabledReason,
+            createdBy: item.created_by,
+            updatedBy: item.updated_by ?? null,
+            lifecycleReason: item.lifecycle_reason ?? null,
+            lifecycleRequestId: item.lifecycle_request_id ?? null,
+        }
+    }).sort((a, b) => `${a.termFamily}:${a.term}`.localeCompare(`${b.termFamily}:${b.term}`))
 }
 
 export function organizationWatchlistAlertGenerationContract(
