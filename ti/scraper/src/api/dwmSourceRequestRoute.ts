@@ -6274,6 +6274,49 @@ function sourceActorCandidateFixtureManifest(query: string, sourcePackId: string
       }
     };
   });
+  const fixtureReadiness = fixtures.map((fixture) => ({
+    schemaVersion: "dwm.actor_source_candidate_fixture_readiness.v1",
+    proofId: stableId("dwm_actor_source_candidate_fixture_readiness", `${query}:${sourcePackId}:${fixture.family}:${fixture.fixtureId}`),
+    sourcePackId,
+    query,
+    family: fixture.family,
+    fixtureKey: fixture.fixtureKey,
+    parserProfile: fixture.parserProfile,
+    parserExpectation: fixture.parserExpectation,
+    expectedCaptureType: fixture.expectedCaptureType,
+    policyBoundary: fixture.policyBoundary,
+    metadataOnly: fixture.metadataOnly,
+    publicOnly: fixture.publicOnly,
+    validation: {
+      ready: fixture.validationChecks.includes("policy_boundary_present")
+        && fixture.validationChecks.includes("parser_profile_present")
+        && fixture.validationChecks.includes("expected_capture_type_present"),
+      checks: fixture.validationChecks,
+      route: fixture.loadPlan,
+      liveNetworkFetch: false
+    },
+    testRun: {
+      mode: "no_network_fixture",
+      canRun: true,
+      expectedOutcome: "parser_contract_verified",
+      retryable: true,
+      liveNetworkFetch: false
+    },
+    activation: {
+      canCreateCandidate: true,
+      canAutoActivate: fixture.publicOnly && !fixture.metadataOnly,
+      requiresOperatorApproval: true,
+      requiresMetadataOnlyApproval: fixture.metadataOnly,
+      nextAction: fixture.metadataOnly ? "approve_metadata_only_candidate" : "validate_candidate",
+      liveNetworkFetch: false
+    },
+    provenance: {
+      candidateProofId: fixture.candidateProofId,
+      fixtureId: fixture.fixtureId,
+      sourceFamily: fixture.family
+    },
+    safeOutput: fixture.safeOutput
+  }));
   return {
     schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
     proofId: stableId("dwm_actor_source_candidate_fixture_manifest", `${query}:${sourcePackId}:${fixtures.map((fixture) => `${fixture.family}:${fixture.fixtureKey}`).join(",")}`),
@@ -6281,13 +6324,18 @@ function sourceActorCandidateFixtureManifest(query: string, sourcePackId: string
     sourcePackId,
     mode: "no_network_fixture",
     fixtures,
+    fixtureReadiness,
     summary: {
       totalFixtures: fixtures.length,
       families: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.family)),
       metadataOnlyFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture) => fixture.metadataOnly).map((fixture) => fixture.family)),
       publicOnlyFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture) => fixture.publicOnly).map((fixture) => fixture.family)),
       parserProfiles: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.parserProfile)),
-      expectedCaptureTypes: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.expectedCaptureType))
+      expectedCaptureTypes: uniqueSourceReadinessStrings(fixtures.map((fixture) => fixture.expectedCaptureType)),
+      fixtureReadinessRows: fixtureReadiness.length,
+      validationReadyFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.validation.ready).map((row) => row.family)),
+      autoActivationEligibleFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.activation.canAutoActivate).map((row) => row.family)),
+      metadataApprovalRequiredFamilies: uniqueSourceReadinessStrings(fixtureReadiness.filter((row) => row.activation.requiresMetadataOnlyApproval).map((row) => row.family))
     },
     policyBoundary: {
       liveNetworkFetch: false,

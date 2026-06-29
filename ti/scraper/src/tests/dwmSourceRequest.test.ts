@@ -3056,11 +3056,66 @@ describe("dwm source requests", () => {
             expectedCaptureType: "clear_web_metadata"
           })
         ]),
+        fixtureReadiness: expect.arrayContaining([
+          expect.objectContaining({
+            family: "darkweb_onion",
+            parserProfile: "restricted_metadata",
+            expectedCaptureType: "darkweb_onion_metadata_observation",
+            validation: expect.objectContaining({
+              ready: true,
+              route: expect.objectContaining({
+                path: "/v1/dwm/source-requests",
+                liveNetworkFetch: false,
+                body: expect.objectContaining({ action: "pack_worker_run", dryRun: true })
+              }),
+              liveNetworkFetch: false
+            }),
+            testRun: expect.objectContaining({
+              mode: "no_network_fixture",
+              canRun: true,
+              expectedOutcome: "parser_contract_verified",
+              liveNetworkFetch: false
+            }),
+            activation: expect.objectContaining({
+              canCreateCandidate: true,
+              canAutoActivate: false,
+              requiresOperatorApproval: true,
+              requiresMetadataOnlyApproval: true,
+              nextAction: "approve_metadata_only_candidate",
+              liveNetworkFetch: false
+            }),
+            provenance: expect.objectContaining({
+              candidateProofId: expect.any(String),
+              fixtureId: expect.any(String),
+              sourceFamily: "darkweb_onion"
+            }),
+            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          }),
+          expect.objectContaining({
+            family: "public_advisory",
+            parserProfile: "public_advisory",
+            activation: expect.objectContaining({
+              canAutoActivate: true,
+              requiresMetadataOnlyApproval: false,
+              nextAction: "validate_candidate",
+              liveNetworkFetch: false
+            })
+          }),
+          expect.objectContaining({
+            family: "clear_web",
+            expectedCaptureType: "clear_web_metadata",
+            testRun: expect.objectContaining({ canRun: true, liveNetworkFetch: false })
+          })
+        ]),
         summary: expect.objectContaining({
           totalFixtures: 5,
           families: expect.arrayContaining(["darkweb_onion", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"]),
           metadataOnlyFamilies: expect.arrayContaining(["darkweb_onion", "darkweb_metadata"]),
-          parserProfiles: expect.arrayContaining(["restricted_metadata", "actor_page_metadata", "public_advisory", "clear_web"])
+          parserProfiles: expect.arrayContaining(["restricted_metadata", "actor_page_metadata", "public_advisory", "clear_web"]),
+          fixtureReadinessRows: 5,
+          validationReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page", "public_advisory", "clear_web"]),
+          autoActivationEligibleFamilies: expect.arrayContaining(["actor_page", "public_advisory", "clear_web"]),
+          metadataApprovalRequiredFamilies: expect.arrayContaining(["darkweb_onion", "darkweb_metadata"])
         }),
         policyBoundary: expect.objectContaining({
           liveNetworkFetch: false,
