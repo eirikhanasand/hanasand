@@ -10,118 +10,310 @@
       "id": "organization_lifecycle",
       "ownerLane": "org",
       "capabilityLabel": "Organization onboarding readiness",
-      "proofArtifact": { "schemaVersion": "organization.lifecycle_readiness.v1", "artifactId": "deploy_gate.org_lifecycle", "route": "GET /api/organizations/:id/readiness-lifecycle", "probeId": "org.lifecycle_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "organization.lifecycle_readiness.v1",
+        "artifactId": "deploy_gate.org_lifecycle",
+        "route": "GET /api/organizations/:id/readiness-lifecycle",
+        "probeId": "org.lifecycle_readiness"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "ready",
       "blockers": [],
       "requiredNextAction": "verify_organization_onboarding",
       "deployRisk": "none",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "GET /api/organizations/:id/readiness-lifecycle",
+        "routeHandler": "api/src/handlers/organizations.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "organization_lifecycle",
+        "testName": "smoke-organizations-api.ts",
+        "expectedAdapter": "organizationLifecycleReadiness",
+        "payloadShape": [
+          "organizationId",
+          "tenantId",
+          "readyForOnboarding",
+          "typedBlockers"
+        ],
+        "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts"
+      }
     },
     {
       "id": "shared_watchlists",
       "ownerLane": "watchlist",
       "capabilityLabel": "Shared watchlist alert terms",
-      "proofArtifact": { "schemaVersion": "organization.watchlist_alert_terms_export.v1", "artifactId": "org_watchlist.alert_terms_export", "route": "GET /api/organizations/:id/watchlists/alert-terms", "probeId": "org.watchlist_alert_terms_export" },
+      "proofArtifact": {
+        "schemaVersion": "organization.watchlist_alert_terms_export.v1",
+        "artifactId": "org_watchlist.alert_terms_export",
+        "route": "GET /api/organizations/:id/watchlists/alert-terms",
+        "probeId": "org.watchlist_alert_terms_export"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "ready",
       "blockers": [],
       "requiredNextAction": "export_shared_watchlist_terms",
       "deployRisk": "none",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "GET /api/organizations/:id/watchlists/alert-terms",
+        "routeHandler": "api/src/handlers/organizations.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "shared_watchlist_alert_export",
+        "testName": "analystHandoffConsumer.test.ts",
+        "expectedAdapter": "orgWatchlistTermsToAlertGenerationRequest",
+        "payloadShape": [
+          "organizationId",
+          "tenantId",
+          "activeTerms[].alertGenerationRef",
+          "activeWatchlistTerms"
+        ],
+        "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts"
+      }
     },
     {
       "id": "source_activation",
       "ownerLane": "source",
       "capabilityLabel": "Source activation and provenance",
-      "proofArtifact": { "schemaVersion": "dwm.source_worker_readiness.v1", "artifactId": "dwm.source_worker_readiness", "route": "GET /v1/dwm/source-requests/readiness", "probeId": "dwm.source_worker_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "dwm.source_worker_readiness.v1",
+        "artifactId": "dwm.source_worker_readiness",
+        "route": "GET /v1/dwm/source-requests/readiness",
+        "probeId": "dwm.source_worker_readiness"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "blocked",
-      "blockers": ["source_policy_inactive"],
+      "blockers": [
+        "source_policy_inactive"
+      ],
       "requiredNextAction": "activate_source_policy",
       "deployRisk": "high",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "GET /v1/dwm/source-requests/readiness",
+        "routeHandler": "ti/scraper/src/api/dwmSourceRequestRoute.ts",
+        "storageModule": "ti/scraper/src/storage/dwmSourcePackRegistry.ts",
+        "proofRowId": "source_activation_and_provenance",
+        "testName": "dwmSourceRequest.test.ts",
+        "expectedAdapter": "buildDwmSourceReadinessArtifact",
+        "payloadShape": [
+          "sourceIds",
+          "freshProvenance",
+          "blockers",
+          "checkedAt"
+        ],
+        "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts"
+      }
     },
     {
       "id": "alert_case_workflow",
       "ownerLane": "alert",
       "capabilityLabel": "Alert and case workflow",
-      "proofArtifact": { "schemaVersion": "hanasand.analyst_handoff.consumer.v1", "artifactId": "deploy_gate.alert_case_handoff", "route": "/v1/cases", "probeId": "dwm.alert_case_handoff" },
+      "proofArtifact": {
+        "schemaVersion": "hanasand.analyst_handoff.consumer.v1",
+        "artifactId": "deploy_gate.alert_case_handoff",
+        "route": "/v1/cases",
+        "probeId": "dwm.alert_case_handoff"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "ready",
       "blockers": [],
       "requiredNextAction": "open_org_alert_case",
       "deployRisk": "none",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "POST /v1/dwm/alerts/rebuild -> POST /v1/cases",
+        "routeHandler": "ti/scraper/src/api/dwmWorkflowRoutes.ts + ti/scraper/src/api/caseRoutes.ts",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "org_scoped_alert_case_workflow",
+        "testName": "dwmCaseWorkflow.test.ts",
+        "expectedAdapter": "persistedAlertToCaseHandoffPayload",
+        "payloadShape": [
+          "alertId",
+          "casePath",
+          "captureIds",
+          "watchlistItemIds",
+          "workflowState"
+        ],
+        "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      }
     },
     {
       "id": "webhook_delivery",
       "ownerLane": "webhook",
       "capabilityLabel": "Webhook delivery destination",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "webhook_delivery.missing_proof", "route": "/v1/dwm/webhooks/deliver", "probeId": "dwm.webhook_destination_lifecycle" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "webhook_delivery.missing_proof",
+        "route": "/v1/dwm/webhooks/deliver",
+        "probeId": "dwm.webhook_destination_lifecycle"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "blocked",
-      "blockers": ["missing_webhook_destination"],
+      "blockers": [
+        "missing_webhook_destination"
+      ],
       "requiredNextAction": "verify_discord_webhook_destination",
       "deployRisk": "high",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
+        "routeHandler": "api/src/handlers/dwm/webhooks.ts + ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        "storageModule": "api/src/utils/dwm/webhooks.ts + ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "webhook_destination",
+        "testName": "dwmWebhookDelivery.test.ts",
+        "expectedAdapter": "persistedAlertToWebhookTriggerContext",
+        "payloadShape": [
+          "destinationId",
+          "organizationId",
+          "alertId",
+          "webhookDestinationIds",
+          "deliveryId",
+          "casePath"
+        ],
+        "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts"
+      }
     },
     {
       "id": "support_controls",
       "ownerLane": "support",
       "capabilityLabel": "Support recovery controls",
-      "proofArtifact": { "schemaVersion": "support.action_executor_readiness.v1", "artifactId": "deploy_gate.support_executor", "route": "/api/admin/support/readiness", "probeId": "support.action_executor_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "support.action_executor_readiness.v1",
+        "artifactId": "deploy_gate.support_executor",
+        "route": "/api/admin/support/readiness",
+        "probeId": "support.action_executor_readiness"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": false,
       "customerVisibleState": "ready",
       "blockers": [],
       "requiredNextAction": "verify_support_recovery_action",
       "deployRisk": "none",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "POST /api/admin/support/organizations/:id/access-recovery",
+        "routeHandler": "api/src/handlers/adminSupport.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "support_executor",
+        "testName": "smoke-admin-support-contract.ts",
+        "expectedAdapter": "supportActionExecutionHandoff",
+        "payloadShape": [
+          "action",
+          "idempotencyKey",
+          "executorReadiness.ready",
+          "execution.path",
+          "audit.blockerCode"
+        ],
+        "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+      }
     },
     {
       "id": "dashboard_operator_workspace",
       "ownerLane": "dashboard",
       "capabilityLabel": "Dashboard operator workspace",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "dashboard_operator_workspace.missing_proof" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "dashboard_operator_workspace.missing_proof"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "blocked",
-      "blockers": ["missing_dashboard_ui_quality_proof"],
+      "blockers": [
+        "missing_dashboard_ui_quality_proof"
+      ],
       "requiredNextAction": "capture_dashboard_operator_workspace_ui_proof",
       "deployRisk": "high",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "/dashboard",
+        "routeHandler": "dashboard.operator_workspace",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "dashboard_operator_workspace",
+        "testName": "dwmCaseWorkflow.test.ts",
+        "expectedAdapter": "persistedAlertToCaseHandoffPayload",
+        "payloadShape": [
+          "alertId",
+          "casePath",
+          "captureIds",
+          "watchlistItemIds",
+          "workflowState"
+        ],
+        "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      }
     },
     {
       "id": "public_ti_actor_handoff",
       "ownerLane": "publicTI",
       "capabilityLabel": "Threat intelligence actor handoff",
-      "proofArtifact": { "schemaVersion": "ti.public_actor.readiness.v1", "artifactId": "deploy_gate.public_ti_readiness", "route": "/ti", "probeId": "ti.public_actor.readiness" },
+      "proofArtifact": {
+        "schemaVersion": "ti.public_actor.readiness.v1",
+        "artifactId": "deploy_gate.public_ti_readiness",
+        "route": "/ti",
+        "probeId": "ti.public_actor.readiness"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "ready",
       "blockers": [],
       "requiredNextAction": "verify_public_ti_actor_handoff",
       "deployRisk": "none",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "/ti",
+        "routeHandler": "ti.actor_profile_surface",
+        "storageModule": "api/src/utils/ti/search.ts",
+        "proofRowId": "public_ti_actor_handoff",
+        "testName": "check-ti-org-relevance.ts",
+        "expectedAdapter": "publicTiArtifactToOrgWatchlistCreate",
+        "payloadShape": [
+          "artifactId",
+          "query",
+          "provenance",
+          "watchlistTerms",
+          "backedIds.organizationIds",
+          "backedIds.alertIds"
+        ],
+        "proofCommand": "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts"
+      }
     },
     {
       "id": "website_product_surface",
       "ownerLane": "website",
       "capabilityLabel": "Website product surface",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "website_product_surface.missing_proof" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "website_product_surface.missing_proof"
+      },
       "lastCheckedAt": "2026-06-29T00:35:00.000Z",
       "customerVisible": true,
       "customerVisibleState": "blocked",
-      "blockers": ["missing_website_ui_quality_proof"],
+      "blockers": [
+        "missing_website_ui_quality_proof"
+      ],
       "requiredNextAction": "capture_website_product_surface_ui_proof",
       "deployRisk": "high",
-      "uiQualityProofExists": false
+      "uiQualityProofExists": false,
+      "workflowContract": {
+        "route": "/",
+        "routeHandler": "website.product_surface",
+        "storageModule": "product_readiness.website_surface",
+        "proofRowId": "website_product_surface",
+        "testName": "check-product-north-star.ts",
+        "expectedAdapter": "websiteProductReadinessProof",
+        "payloadShape": [
+          "route",
+          "checkedAt",
+          "proofArtifactId",
+          "passed",
+          "blockers"
+        ],
+        "proofCommand": "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-product-north-star.ts"
+      }
     }
   ]
 }

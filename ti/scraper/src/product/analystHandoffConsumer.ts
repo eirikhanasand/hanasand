@@ -625,6 +625,17 @@ export type ProductReadinessOwnerLane =
 
 export type ProductReadinessState = "ready" | "degraded" | "blocked" | "provisional";
 
+export type ProductReadinessWorkflowContract = {
+  route: string;
+  routeHandler: string;
+  storageModule: string;
+  proofRowId: string;
+  testName: string;
+  expectedAdapter: string;
+  payloadShape: string[];
+  proofCommand: string;
+};
+
 export type ProductReadinessRow = {
   id: ProductReadinessCapabilityId;
   ownerLane: ProductReadinessOwnerLane;
@@ -637,6 +648,7 @@ export type ProductReadinessRow = {
   requiredNextAction: string;
   deployRisk: AnalystHandoffReadinessMatrixRow["deployRisk"];
   uiQualityProofExists: boolean;
+  workflowContract: ProductReadinessWorkflowContract;
 };
 
 export type ProductReadinessAggregate = {
@@ -1041,7 +1053,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Organization onboarding readiness",
       matrixRow: matrixRows.get("organization_onboarding_lifecycle"),
       lastCheckedAt: latestOrgLifecycleCheckedAt(bundles, checkedAt),
-      requiredNextAction: "verify_organization_onboarding"
+      requiredNextAction: "verify_organization_onboarding",
+      workflowContract: {
+        route: "GET /api/organizations/:id/readiness-lifecycle",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "organization_lifecycle",
+        testName: "smoke-organizations-api.ts",
+        expectedAdapter: "organizationLifecycleReadiness",
+        payloadShape: ["organizationId", "tenantId", "readyForOnboarding", "typedBlockers"],
+        proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts"
+      }
     }),
     productRowFromMatrix({
       id: "shared_watchlists",
@@ -1049,7 +1071,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Shared watchlist alert terms",
       matrixRow: matrixRows.get("shared_watchlist_alert_export"),
       lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
-      requiredNextAction: "export_shared_watchlist_terms"
+      requiredNextAction: "export_shared_watchlist_terms",
+      workflowContract: {
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "shared_watchlist_alert_export",
+        testName: "analystHandoffConsumer.test.ts",
+        expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+        payloadShape: ["organizationId", "tenantId", "activeTerms[].alertGenerationRef", "activeWatchlistTerms"],
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts"
+      }
     }),
     productRowFromMatrix({
       id: "source_activation",
@@ -1057,7 +1089,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Source activation and provenance",
       matrixRow: matrixRows.get("source_activation_and_provenance"),
       lastCheckedAt: latestSourceCheckedAt(bundles, checkedAt),
-      requiredNextAction: "activate_source_policy"
+      requiredNextAction: "activate_source_policy",
+      workflowContract: {
+        route: "GET /v1/dwm/source-requests/readiness",
+        routeHandler: "ti/scraper/src/api/dwmSourceRequestRoute.ts",
+        storageModule: "ti/scraper/src/storage/dwmSourcePackRegistry.ts",
+        proofRowId: "source_activation_and_provenance",
+        testName: "dwmSourceRequest.test.ts",
+        expectedAdapter: "buildDwmSourceReadinessArtifact",
+        payloadShape: ["sourceIds", "freshProvenance", "blockers", "checkedAt"],
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts"
+      }
     }),
     productRowFromMatrix({
       id: "alert_case_workflow",
@@ -1065,7 +1107,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Alert and case workflow",
       matrixRow: matrixRows.get("org_scoped_alert_case_workflow"),
       lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
-      requiredNextAction: "open_org_alert_case"
+      requiredNextAction: "open_org_alert_case",
+      workflowContract: {
+        route: "POST /v1/dwm/alerts/rebuild -> POST /v1/cases",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts + ti/scraper/src/api/caseRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "org_scoped_alert_case_workflow",
+        testName: "dwmCaseWorkflow.test.ts",
+        expectedAdapter: "persistedAlertToCaseHandoffPayload",
+        payloadShape: ["alertId", "casePath", "captureIds", "watchlistItemIds", "workflowState"],
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      }
     }),
     productRowFromMatrix({
       id: "webhook_delivery",
@@ -1073,7 +1125,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Webhook delivery destination",
       matrixRow: matrixRows.get("discord_webhook_destination_delivery"),
       lastCheckedAt: latestWebhookCheckedAt(bundles, checkedAt),
-      requiredNextAction: "verify_discord_webhook_destination"
+      requiredNextAction: "verify_discord_webhook_destination",
+      workflowContract: {
+        route: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
+        routeHandler: "api/src/handlers/dwm/webhooks.ts + ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "api/src/utils/dwm/webhooks.ts + ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "webhook_destination",
+        testName: "dwmWebhookDelivery.test.ts",
+        expectedAdapter: "persistedAlertToWebhookTriggerContext",
+        payloadShape: ["destinationId", "organizationId", "alertId", "webhookDestinationIds", "deliveryId", "casePath"],
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts"
+      }
     }),
     productRowFromMatrix({
       id: "support_controls",
@@ -1082,7 +1144,17 @@ export function buildProductReadinessAggregate(input: Array<{
       matrixRow: matrixRows.get("support_admin_recovery_controls"),
       lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
       requiredNextAction: "verify_support_recovery_action",
-      customerVisible: false
+      customerVisible: false,
+      workflowContract: {
+        route: "POST /api/admin/support/organizations/:id/access-recovery",
+        routeHandler: "api/src/handlers/adminSupport.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "support_executor",
+        testName: "smoke-admin-support-contract.ts",
+        expectedAdapter: "supportActionExecutionHandoff",
+        payloadShape: ["action", "idempotencyKey", "executorReadiness.ready", "execution.path", "audit.blockerCode"],
+        proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+      }
     }),
     surfaceProductReadinessRow({
       id: "dashboard_operator_workspace",
@@ -1090,7 +1162,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Dashboard operator workspace",
       proof: firstSurfaceProof(bundles, "dashboard"),
       checkedAt,
-      requiredNextAction: "capture_dashboard_operator_workspace_ui_proof"
+      requiredNextAction: "capture_dashboard_operator_workspace_ui_proof",
+      workflowContract: {
+        route: "/dashboard",
+        routeHandler: "dashboard.operator_workspace",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "dashboard_operator_workspace",
+        testName: "dwmCaseWorkflow.test.ts",
+        expectedAdapter: "persistedAlertToCaseHandoffPayload",
+        payloadShape: ["alertId", "casePath", "captureIds", "watchlistItemIds", "workflowState"],
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      }
     }),
     productRowFromMatrix({
       id: "public_ti_actor_handoff",
@@ -1098,7 +1180,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Threat intelligence actor handoff",
       matrixRow: matrixRows.get("public_ti_actor_handoff"),
       lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
-      requiredNextAction: "verify_public_ti_actor_handoff"
+      requiredNextAction: "verify_public_ti_actor_handoff",
+      workflowContract: {
+        route: "/ti",
+        routeHandler: "ti.actor_profile_surface",
+        storageModule: "api/src/utils/ti/search.ts",
+        proofRowId: "public_ti_actor_handoff",
+        testName: "check-ti-org-relevance.ts",
+        expectedAdapter: "publicTiArtifactToOrgWatchlistCreate",
+        payloadShape: ["artifactId", "query", "provenance", "watchlistTerms", "backedIds.organizationIds", "backedIds.alertIds"],
+        proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts"
+      }
     }),
     surfaceProductReadinessRow({
       id: "website_product_surface",
@@ -1106,7 +1198,17 @@ export function buildProductReadinessAggregate(input: Array<{
       capabilityLabel: "Website product surface",
       proof: firstSurfaceProof(bundles, "website"),
       checkedAt,
-      requiredNextAction: "capture_website_product_surface_ui_proof"
+      requiredNextAction: "capture_website_product_surface_ui_proof",
+      workflowContract: {
+        route: "/",
+        routeHandler: "website.product_surface",
+        storageModule: "product_readiness.website_surface",
+        proofRowId: "website_product_surface",
+        testName: "check-product-north-star.ts",
+        expectedAdapter: "websiteProductReadinessProof",
+        payloadShape: ["route", "checkedAt", "proofArtifactId", "passed", "blockers"],
+        proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-product-north-star.ts"
+      }
     })
   ];
   return {
@@ -1142,10 +1244,29 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
     if (!typed.lastCheckedAt) blockers.push({ code: "missing_last_checked_at", rowId, field: "lastCheckedAt", detail: "Every readiness row needs a last checked timestamp." });
     if (!typed.requiredNextAction) blockers.push({ code: "missing_required_next_action", rowId, field: "requiredNextAction", detail: "Every readiness row needs a required next action." });
     if (!Array.isArray(typed.blockers)) blockers.push({ code: "missing_blockers", rowId, field: "blockers", detail: "Every readiness row needs a blocker array." });
+    if (!typed.workflowContract) {
+      blockers.push({ code: "missing_workflow_contract", rowId, field: "workflowContract", detail: "Every product readiness row needs route, storage, proof row, adapter, payload, and test mapping." });
+    } else {
+      if (!typed.workflowContract.route) blockers.push({ code: "missing_workflow_route", rowId, field: "workflowContract.route", detail: "Every product workflow needs the route it proves." });
+      if (!typed.workflowContract.routeHandler) blockers.push({ code: "missing_route_handler", rowId, field: "workflowContract.routeHandler", detail: "Every product workflow needs the route handler module or surface id." });
+      if (!typed.workflowContract.storageModule) blockers.push({ code: "missing_storage_module", rowId, field: "workflowContract.storageModule", detail: "Every product workflow needs the persistence module or surface contract." });
+      if (!typed.workflowContract.proofRowId) blockers.push({ code: "missing_proof_row_id", rowId, field: "workflowContract.proofRowId", detail: "Every product workflow needs the proof row id Worker 3 can match." });
+      if (!typed.workflowContract.testName) blockers.push({ code: "missing_workflow_test", rowId, field: "workflowContract.testName", detail: "Every product workflow needs the focused test or smoke proof." });
+      if (!typed.workflowContract.expectedAdapter) blockers.push({ code: "missing_expected_adapter", rowId, field: "workflowContract.expectedAdapter", detail: "Every product workflow needs an adapter contract name." });
+      if (!Array.isArray(typed.workflowContract.payloadShape) || !typed.workflowContract.payloadShape.length) blockers.push({ code: "missing_payload_shape", rowId, field: "workflowContract.payloadShape", detail: "Every product workflow needs a payload shape." });
+      if (!typed.workflowContract.proofCommand) blockers.push({ code: "missing_proof_command", rowId, field: "workflowContract.proofCommand", detail: "Every product workflow needs a proof command." });
+    }
     const uiFacing = [
       typed.capabilityLabel,
       typed.requiredNextAction,
       typed.proofArtifact?.artifactId,
+      typed.workflowContract?.route,
+      typed.workflowContract?.routeHandler,
+      typed.workflowContract?.storageModule,
+      typed.workflowContract?.proofRowId,
+      typed.workflowContract?.testName,
+      typed.workflowContract?.expectedAdapter,
+      typed.workflowContract?.proofCommand,
       ...(typed.blockers || [])
     ].filter(Boolean).join(" ").toLowerCase();
     for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) {
@@ -1530,6 +1651,7 @@ function productRowFromMatrix(input: {
   lastCheckedAt: string;
   requiredNextAction: string;
   customerVisible?: boolean;
+  workflowContract: ProductReadinessWorkflowContract;
 }): ProductReadinessRow {
   const status = input.matrixRow?.status || "needs_input";
   const blockers = input.matrixRow
@@ -1546,7 +1668,8 @@ function productRowFromMatrix(input: {
     blockers,
     requiredNextAction: input.requiredNextAction,
     deployRisk: input.matrixRow?.deployRisk ?? "high",
-    uiQualityProofExists: false
+    uiQualityProofExists: false,
+    workflowContract: input.workflowContract
   };
 }
 
@@ -1557,6 +1680,7 @@ function surfaceProductReadinessRow(input: {
   proof?: ProductReadinessUiQualityProof;
   checkedAt: string;
   requiredNextAction: string;
+  workflowContract: ProductReadinessWorkflowContract;
 }): ProductReadinessRow {
   const blockers = input.proof
     ? input.proof.passed ? [] : input.proof.blockers.length ? input.proof.blockers : [`${input.proof.surface}_ui_quality_proof_failed`]
@@ -1579,7 +1703,8 @@ function surfaceProductReadinessRow(input: {
     blockers,
     requiredNextAction: input.requiredNextAction,
     deployRisk: blockers.length ? "high" : "none",
-    uiQualityProofExists: Boolean(input.proof?.passed)
+    uiQualityProofExists: Boolean(input.proof?.passed),
+    workflowContract: input.workflowContract
   };
 }
 

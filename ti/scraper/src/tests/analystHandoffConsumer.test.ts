@@ -575,6 +575,33 @@ describe("analyst handoff consumer validation", () => {
       "webhook_delivery",
       "website_product_surface"
     ]);
+    expect(aggregate.rows.every((row) =>
+      row.workflowContract?.route
+      && row.workflowContract.routeHandler
+      && row.workflowContract.storageModule
+      && row.workflowContract.proofRowId
+      && row.workflowContract.testName
+      && row.workflowContract.expectedAdapter
+      && row.workflowContract.payloadShape.length
+      && row.workflowContract.proofCommand
+    )).toBe(true);
+    expect(aggregate.rows.find((row) => row.id === "organization_lifecycle")).toMatchObject({
+      workflowContract: {
+        route: "GET /api/organizations/:id/readiness-lifecycle",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "organization_lifecycle",
+        expectedAdapter: "organizationLifecycleReadiness"
+      }
+    });
+    expect(aggregate.rows.find((row) => row.id === "shared_watchlists")).toMatchObject({
+      workflowContract: {
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "shared_watchlist_alert_export",
+        expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest"
+      }
+    });
     expect(aggregate.rows.find((row) => row.id === "dashboard_operator_workspace")).toMatchObject({
       ownerLane: "dashboard",
       customerVisibleState: "ready",
@@ -583,18 +610,34 @@ describe("analyst handoff consumer validation", () => {
         schemaVersion: "hanasand.ui_quality_proof.v1",
         artifactId: "dashboard.render_proof.operator_workspace",
         route: "/dashboard"
+      },
+      workflowContract: {
+        route: "/dashboard",
+        routeHandler: "dashboard.operator_workspace",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "dashboard_operator_workspace"
       }
     });
     expect(aggregate.rows.find((row) => row.id === "website_product_surface")).toMatchObject({
       ownerLane: "website",
       customerVisibleState: "ready",
       uiQualityProofExists: true,
-      requiredNextAction: "capture_website_product_surface_ui_proof"
+      requiredNextAction: "capture_website_product_surface_ui_proof",
+      workflowContract: {
+        route: "/",
+        routeHandler: "website.product_surface",
+        proofRowId: "website_product_surface"
+      }
     });
     expect(aggregate.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
       ownerLane: "webhook",
       customerVisibleState: "ready",
-      requiredNextAction: "verify_discord_webhook_destination"
+      requiredNextAction: "verify_discord_webhook_destination",
+      workflowContract: {
+        route: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
+        proofRowId: "webhook_destination",
+        expectedAdapter: "persistedAlertToWebhookTriggerContext"
+      }
     });
     expect(validateProductReadinessAggregateArtifact(aggregate).ok).toBe(true);
     const serialized = JSON.stringify(aggregate);
@@ -612,13 +655,23 @@ describe("analyst handoff consumer validation", () => {
     expect(greenish.rows.find((row) => row.id === "shared_watchlists")).toMatchObject({
       ownerLane: "watchlist",
       customerVisibleState: "ready",
-      proofArtifact: { schemaVersion: "organization.watchlist_alert_terms_export.v1" }
+      proofArtifact: { schemaVersion: "organization.watchlist_alert_terms_export.v1" },
+      workflowContract: {
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "shared_watchlist_alert_export"
+      }
     });
     expect(greenish.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
       ownerLane: "webhook",
       customerVisibleState: "ready",
-      requiredNextAction: "verify_discord_webhook_destination"
+      requiredNextAction: "verify_discord_webhook_destination",
+      workflowContract: {
+        route: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
+        testName: "dwmWebhookDelivery.test.ts"
+      }
     });
+    expect(greenish.rows.every((row) => row.workflowContract.proofRowId && row.workflowContract.payloadShape.length)).toBe(true);
 
     expect(validateProductReadinessAggregateArtifact(blocked)).toMatchObject({ ok: true, blockerCodes: [] });
     expect(blocked.ok).toBe(false);
@@ -821,6 +874,9 @@ describe("analyst handoff consumer validation", () => {
       capabilityLabel: "Dashboard slop control room"
     };
     expect(validateProductReadinessAggregateArtifact(badAggregate).blockerCodes).toContain("prompt_shaped_language");
+    const badProductWorkflow = clone(report.productReadinessAggregate) as ProductReadinessAggregate;
+    delete (badProductWorkflow.rows[0] as Partial<(typeof badProductWorkflow.rows)[number]>).workflowContract;
+    expect(validateProductReadinessAggregateArtifact(badProductWorkflow).blockerCodes).toContain("missing_workflow_contract");
     const badBeta = clone(report.betaReadiness) as BetaReadinessArtifact;
     badBeta.rows[0] = {
       ...badBeta.rows[0]!,
