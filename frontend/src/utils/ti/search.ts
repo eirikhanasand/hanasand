@@ -121,12 +121,25 @@ export interface TiActionabilityContract {
         caseIdCandidate?: string
         casePath?: string
         source?: string
+        tenantId?: string
+        organizationId?: string
+        dedupeKey?: string
+        recommendedRoute?: string
+        captureIds?: string[]
+        evidenceCount?: number
+        webhookDestinationIds?: string[]
     }>
     relatedCases?: Array<{
         id: string
         title: string
         status: string
         priority?: string
+        path?: string
+    }>
+    relatedWebhookDestinations?: Array<{
+        id: string
+        name: string
+        status: 'active' | 'paused' | 'disabled'
         path?: string
     }>
     sourceProvenance?: Array<{
@@ -162,6 +175,12 @@ export interface TiActionabilityContract {
             method: 'POST'
             endpoint: string
             payload?: { alertId: string; title?: string; priority?: string; note?: string }
+            missing?: string[]
+        }
+        webhookDelivery?: {
+            method: 'POST'
+            endpoint: string
+            payload?: Record<string, unknown>
             missing?: string[]
         }
     }

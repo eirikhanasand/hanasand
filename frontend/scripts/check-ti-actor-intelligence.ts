@@ -145,6 +145,8 @@ assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability
 assert(actionability.createAlertHandoff.backedRoute === '/dashboard/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
 assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
 assert(actionability.caseHandoff.blocked && actionability.caseHandoff.missing.some(item => /DWM alert ID/i.test(item)), 'Blocked case handoff should expose missing alert dependency.')
+assert(actionability.webhookDeliveryHandoff.kind === 'webhook_delivery' && actionability.webhookDeliveryHandoff.endpoint === '/v1/dwm/webhooks/deliver', 'Actionability should expose explicit webhook delivery fields.')
+assert(actionability.webhookDeliveryHandoff.blocked && actionability.webhookDeliveryHandoff.missing.some(item => /webhook destination/i.test(item)), 'Blocked webhook delivery should expose missing destination dependency.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
@@ -161,6 +163,8 @@ assert(Array.isArray(actionability.exportPayloads.watchlist.body.terms), 'Watchl
 assert(actionability.exportPayloads.watchlist.blocked, 'APT29 watchlist handoff should be blocked until org context is present.')
 assert(actionability.exportPayloads.alertRebuild.endpoint === '/v1/dwm/alerts/rebuild', 'Alert rebuild handoff should target the backed alert rebuild route.')
 assert(Array.isArray(actionability.exportPayloads.case.body.requiredBeforePost), 'Case handoff should expose dependencies before POST.')
+assert(actionability.exportPayloads.webhookDelivery.schemaVersion === 'ti.public_actor.webhook_delivery_handoff.v1', 'Webhook delivery handoff should be export-ready.')
+assert(Array.isArray(actionability.exportPayloads.webhookDelivery.body.requiredBeforePost), 'Webhook delivery should expose dependencies before POST.')
 assert(actionability.exportPayloads.enrichment.schemaVersion === 'ti.public_actor.enrichment_queue.v1', 'Enrichment queue handoff should be shaped for source/capture work.')
 assert(JSON.stringify(actionability.exportPayloads.enrichment.body).includes('capture'), 'Enrichment handoff should include capture/source work.')
 assert(artifacts.some(item => item.kind === 'country' && item.label === 'United States' && item.watchlistTerms.some(term => /SolarWinds/i.test(term.value))), 'APT29 artifact workbench should turn geography into watchlist-relevant evidence.')
@@ -232,6 +236,13 @@ const backed = buildTiActionability({
             caseIdCandidate: 'case_1',
             casePath: '/v1/cases/case_1?alertId=dwm_alert_1',
             source: 'DWM alerts API',
+            tenantId: 'tenant_1',
+            organizationId: 'org_1',
+            dedupeKey: 'apt29:microsoft',
+            recommendedRoute: 'analyst_review',
+            captureIds: ['capture_1'],
+            evidenceCount: 2,
+            webhookDestinationIds: ['webhook_1'],
         }],
         relatedCases: [{
             id: 'case_1',
@@ -240,6 +251,15 @@ const backed = buildTiActionability({
             priority: 'high',
             path: '/v1/cases/case_1?alertId=dwm_alert_1',
         }],
+        relatedWebhookDestinations: [{
+            id: 'webhook_1',
+            name: 'SOC incident intake',
+            status: 'active',
+            path: '/dashboard/dwm',
+        }],
+        sourceProvenance: [
+            { sourceId: 'microsoft', sourceName: 'Microsoft', provenance: 'https://www.microsoft.com/en-us/security/blog/', confidence: 0.82, captureId: 'capture_1' },
+        ],
         handoffs: {
             caseCreate: {
                 method: 'POST',
@@ -257,6 +277,9 @@ assert(!backed.exportPayloads.case.blocked, 'Backed case export should be open w
 assert(backed.createAlertHandoff.ready, 'Backed alert handoff should be ready when watchlist context exists.')
 assert(backed.caseHandoff.ready, 'Backed case handoff should be ready when case payload has no blockers.')
 assert(backed.caseHandoff.backedRoute === '/v1/cases/case_1?alertId=dwm_alert_1', 'Backed case handoff should preserve the open case route.')
+assert(backed.webhookDeliveryHandoff.ready, 'Backed webhook delivery should be ready when alert, capture, and destination context exists.')
+assert(backed.exportPayloads.webhookDelivery.body.alertId === 'dwm_alert_1', 'Backed webhook delivery should carry the DWM alert ID.')
+assert(JSON.stringify(backed.exportPayloads.webhookDelivery.body).includes('webhook_1'), 'Backed webhook delivery should carry destination IDs.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -292,6 +315,7 @@ assert(quiet.exportPayloads.watchlist.missing.some(item => /Authenticated organi
 assert(quiet.watchlistRelevance.state === 'missing_terms', 'Unknown actor should expose missing watchlist relevance without fake terms.')
 assert(quiet.createAlertHandoff.blocked, 'Unknown actor should block alert handoff.')
 assert(quiet.caseHandoff.blocked, 'Unknown actor should block case handoff.')
+assert(quiet.webhookDeliveryHandoff.blocked, 'Unknown actor should block webhook delivery handoff.')
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard helper should stay empty for sparse actor artifacts.')
 for (const phrase of bannedUiCopy) {
@@ -303,6 +327,7 @@ assert(pageClientSource.includes('Review sources'), 'Public TI decision flow sho
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
 assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')
 assert(pageClientSource.includes('Open case'), 'Public TI decision flow should include case routing.')
+assert(pageClientSource.includes('Deliver webhook'), 'Public TI decision flow should include webhook delivery readiness.')
 assert(pageClientSource.includes('Queue enrichment'), 'Public TI decision flow should include enrichment routing.')
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')

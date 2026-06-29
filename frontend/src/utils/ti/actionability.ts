@@ -24,10 +24,12 @@ export type TiActionabilityModel = {
     watchlistRelevance: WatchlistRelevanceContract
     createAlertHandoff: WorkflowHandoffContract
     caseHandoff: WorkflowHandoffContract
+    webhookDeliveryHandoff: WorkflowHandoffContract
     exportPayloads: {
         watchlist: TiHandoffExportPayload
         alertRebuild: TiHandoffExportPayload
         case: TiHandoffExportPayload
+        webhookDelivery: TiHandoffExportPayload
         enrichment: TiHandoffExportPayload
         blockers: TiHandoffExportPayload
     }
@@ -35,6 +37,7 @@ export type TiActionabilityModel = {
         watchlistEndpoint: string
         alertRebuildEndpoint: string
         caseEndpoint: string
+        webhookDeliveryEndpoint: string
         casePayload?: { alertId: string; title?: string; priority?: string; note?: string }
         caseBlockers: string[]
     }
@@ -53,7 +56,7 @@ export type WatchlistRelevanceContract = {
 
 export type WorkflowHandoffContract = {
     schemaVersion: 'ti.public_actor.workflow_handoff.v1'
-    kind: 'create_alert' | 'case'
+    kind: 'create_alert' | 'case' | 'webhook_delivery'
     method: 'POST'
     endpoint: string
     ready: boolean
@@ -102,10 +105,10 @@ export type SourceCluster = {
 }
 
 export type TiHandoffExportPayload = {
-    schemaVersion: 'ti.public_actor.watchlist_handoff.v1' | 'ti.public_actor.alert_rebuild_handoff.v1' | 'ti.public_actor.case_handoff.v1' | 'ti.public_actor.enrichment_queue.v1' | 'ti.public_actor.blockers.v1'
+    schemaVersion: 'ti.public_actor.watchlist_handoff.v1' | 'ti.public_actor.alert_rebuild_handoff.v1' | 'ti.public_actor.case_handoff.v1' | 'ti.public_actor.webhook_delivery_handoff.v1' | 'ti.public_actor.enrichment_queue.v1' | 'ti.public_actor.blockers.v1'
     query: string
     generatedAt: string
-    route: 'watchlist' | 'alert_rebuild' | 'case' | 'enrichment_queue' | 'blocked_dependencies'
+    route: 'watchlist' | 'alert_rebuild' | 'case' | 'webhook_delivery' | 'enrichment_queue' | 'blocked_dependencies'
     method?: 'POST'
     endpoint?: string
     backedRoute?: string
@@ -134,6 +137,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
     const watchlistEndpoint = contract?.handoffs?.watchlist?.endpoint ?? '/api/organizations/:id/watchlists'
     const alertRebuildEndpoint = contract?.handoffs?.alertRebuild?.endpoint ?? '/v1/dwm/alerts/rebuild'
     const caseEndpoint = contract?.handoffs?.caseCreate?.endpoint ?? '/v1/cases'
+    const webhookDeliveryEndpoint = contract?.handoffs?.webhookDelivery?.endpoint ?? '/v1/dwm/webhooks/deliver'
     const watchlistBlockers = contract?.handoffs?.watchlist?.missing ?? (matches.length ? [] : ['Authenticated organization ID and member/admin watchlist permission'])
     const casePayload = contract?.handoffs?.caseCreate?.payload ?? (firstAlert ? {
         alertId: firstAlert.id,
@@ -155,6 +159,10 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         watchlistBlockers,
         casePayload,
         caseBlockers,
+        webhookDeliveryEndpoint,
+        webhookPayload: contract?.handoffs?.webhookDelivery?.payload,
+        webhookBlockers: contract?.handoffs?.webhookDelivery?.missing,
+        webhookDestinations: contract?.relatedWebhookDestinations ?? [],
         relatedAlerts,
         relatedCases,
         sourceProvenance,
@@ -194,11 +202,13 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         }),
         createAlertHandoff: buildCreateAlertHandoff(exportPayloads.alertRebuild),
         caseHandoff: buildCaseHandoff(exportPayloads.case),
+        webhookDeliveryHandoff: buildWebhookDeliveryHandoff(exportPayloads.webhookDelivery),
         exportPayloads,
         handoffs: {
             watchlistEndpoint,
             alertRebuildEndpoint,
             caseEndpoint,
+            webhookDeliveryEndpoint,
             casePayload,
             caseBlockers,
         },
@@ -259,6 +269,21 @@ function buildCaseHandoff(payload: TiHandoffExportPayload): WorkflowHandoffContr
     }
 }
 
+function buildWebhookDeliveryHandoff(payload: TiHandoffExportPayload): WorkflowHandoffContract {
+    return {
+        schemaVersion: 'ti.public_actor.workflow_handoff.v1',
+        kind: 'webhook_delivery',
+        method: 'POST',
+        endpoint: payload.endpoint ?? '/v1/dwm/webhooks/deliver',
+        ready: !payload.blocked,
+        blocked: payload.blocked,
+        missing: payload.missing,
+        payload: payload.body,
+        backedRoute: payload.backedRoute,
+        provenance: payload.provenance,
+    }
+}
+
 function buildEnrichmentGapQueue(gaps: NonNullable<TiActionabilityContract['enrichmentGaps']>): EnrichmentGapQueueItem[] {
     return gaps.map(gap => ({
         id: gap.id,
@@ -282,6 +307,10 @@ function buildExportPayloads(input: {
     watchlistBlockers: string[]
     casePayload?: { alertId: string; title?: string; priority?: string; note?: string }
     caseBlockers: string[]
+    webhookDeliveryEndpoint: string
+    webhookPayload?: Record<string, unknown>
+    webhookBlockers?: string[]
+    webhookDestinations: NonNullable<TiActionabilityContract['relatedWebhookDestinations']>
     relatedAlerts: NonNullable<TiActionabilityContract['relatedAlerts']>
     relatedCases: NonNullable<TiActionabilityContract['relatedCases']>
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
@@ -308,7 +337,29 @@ function buildExportPayloads(input: {
         caseIdCandidate: alert.caseIdCandidate,
         casePath: alert.casePath,
         source: alert.source,
+        tenantId: alert.tenantId,
+        organizationId: alert.organizationId,
+        dedupeKey: alert.dedupeKey,
+        recommendedRoute: alert.recommendedRoute,
+        captureIds: alert.captureIds,
+        evidenceCount: alert.evidenceCount,
+        webhookDestinationIds: alert.webhookDestinationIds,
     }))
+    const webhookDestinations = input.webhookDestinations.filter(destination => destination.status === 'active')
+    const firstAlert = input.relatedAlerts[0]
+    const captureIds = uniqueBy([
+        ...input.sourceClusters.map(source => source.captureId).filter((captureId): captureId is string => Boolean(captureId)),
+        ...(firstAlert?.captureIds ?? []),
+    ].map(value => ({ value })), item => item.value).map(item => item.value)
+    const webhookDestinationIds = uniqueBy([
+        ...webhookDestinations.map(destination => destination.id),
+        ...(firstAlert?.webhookDestinationIds ?? []),
+    ].map(value => ({ value })), item => item.value).map(item => item.value)
+    const webhookMissing = input.webhookBlockers ?? [
+        ...(firstAlert?.id ? [] : ['DWM alert ID from /v1/dwm/alerts or /v1/dwm/alerts/rebuild']),
+        ...(webhookDestinationIds.length ? [] : ['Active webhook destination ID from /v1/dwm/webhooks']),
+        ...(captureIds.length ? [] : ['Replayable capture ID from source provenance or DWM alert evidence']),
+    ]
     const relatedCaseContext = input.relatedCases.map(item => ({
         id: item.id,
         title: item.title,
@@ -414,6 +465,30 @@ function buildExportPayloads(input: {
             },
             provenance,
         },
+        webhookDelivery: {
+            schemaVersion: 'ti.public_actor.webhook_delivery_handoff.v1',
+            query: input.result.query,
+            generatedAt: input.result.generatedAt,
+            route: 'webhook_delivery',
+            method: 'POST',
+            endpoint: input.webhookDeliveryEndpoint,
+            backedRoute: webhookDestinations[0]?.path ?? '/dashboard/dwm',
+            blocked: webhookMissing.length > 0,
+            missing: webhookMissing,
+            body: input.webhookPayload ?? {
+                query: input.result.query,
+                alertId: firstAlert?.id,
+                dedupeKey: firstAlert?.dedupeKey ?? (firstAlert?.id ? `public-ti:${input.result.query}:${firstAlert.id}` : undefined),
+                recommendedRoute: firstAlert?.recommendedRoute ?? 'analyst_review',
+                webhookDestinationIds,
+                captureIds,
+                evidenceCount: firstAlert?.evidenceCount ?? provenance.length,
+                dryRun: true,
+                requiredBeforePost: webhookMissing,
+                provenance,
+            },
+            provenance,
+        },
         enrichment: {
             schemaVersion: 'ti.public_actor.enrichment_queue.v1',
             query: input.result.query,
@@ -441,6 +516,7 @@ function buildExportPayloads(input: {
                 watchlist: input.watchlistBlockers,
                 case: input.caseBlockers,
                 alertRebuild: input.watchlistBlockers.length ? ['Create or select organization watchlist before alert rebuild'] : [],
+                webhookDelivery: webhookMissing,
                 orgRequired: input.watchlistBlockers.some(item => /organization|org/i.test(item)),
             },
             provenance,

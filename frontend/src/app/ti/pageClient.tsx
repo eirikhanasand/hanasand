@@ -295,7 +295,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
-                            <div className='grid gap-4'>
+                            <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
                                 <ActorIntelligenceDossier
                                     actor={actorIntel}
                                     result={result}
@@ -520,7 +520,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
     const confidence = Math.round(actor.confidence * 100)
     const artifactByLookup = new Map(artifacts.map(artifact => [`${artifact.kind}:${artifact.label.toLowerCase()}`, artifact]))
     return (
-        <section data-ti-actor-dossier='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
+        <section data-ti-actor-dossier='true' className='w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='w-full min-w-0 lg:flex-1 lg:basis-64'>
                     <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor Profile</p>
@@ -529,7 +529,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 </div>
                 <div className='grid w-full min-w-0 basis-full grid-cols-2 gap-2 text-center text-xs sm:min-w-52 md:grid-cols-4 lg:w-auto lg:basis-auto'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
-                    <EvidenceMetric label='Last seen' value={actor.lastSeen || result.lastSeen} />
+                    <EvidenceMetric label='Last seen' value={formatDate(actor.lastSeen || result.lastSeen)} />
                     <EvidenceMetric label='Confidence' value={`${confidence}%`} />
                     <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
                 </div>
@@ -1002,7 +1002,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related records</p>
                     <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'}
+                        {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'webhook ready' : 'webhook blocked'}
                     </p>
                     {!actionability.relatedAlerts.length && !actionability.relatedCases.length ? (
                         <p className='mt-2 text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached to {query}; rebuild alerts after saving a matching watchlist term.</p>
@@ -1112,6 +1112,15 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             payload: actionability.caseHandoff,
             route: actionability.caseHandoff.backedRoute,
             missing: actionability.caseHandoff.missing,
+        },
+        {
+            id: 'webhook-delivery',
+            label: 'Deliver webhook',
+            status: actionability.webhookDeliveryHandoff.blocked ? 'blocked' : 'ready',
+            detail: actionability.webhookDeliveryHandoff.blocked ? 'Delivery needs alert, capture, and destination context.' : `Ready for ${actionability.webhookDeliveryHandoff.endpoint}.`,
+            payload: actionability.webhookDeliveryHandoff,
+            route: actionability.webhookDeliveryHandoff.backedRoute,
+            missing: actionability.webhookDeliveryHandoff.missing,
         },
         {
             id: 'enrichment',
