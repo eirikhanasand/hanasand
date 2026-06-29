@@ -817,6 +817,70 @@ describe("dwm workflow persistence", () => {
       watchlistId: "watch_workflow_alpha_acme"
     });
 
+    (store as any).saveOrganization({
+      ...(store as any).getOrganization(alphaOrg.id),
+      status: "deleted",
+      updatedAt: "2026-06-27T21:13:00.000Z"
+    });
+    const deletedOrgMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}`, {
+      method: "PATCH",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({
+        organizationId: alphaOrg.id,
+        status: "triaged",
+        note: "Deleted org mutation must not append workflow events."
+      })
+    }), options);
+    const deletedOrgMutation = await deletedOrgMutationResponse.json() as any;
+    expect(deletedOrgMutationResponse.status).toBe(409);
+    expect(deletedOrgMutation.error.code).toBe("archived_org");
+    expect(deletedOrgMutation.workflowExecutionReadiness).toMatchObject({
+      ready: false,
+      action: "note",
+      blockerCodes: expect.arrayContaining(["archived_org"]),
+      currentWorkflowEventCount: 1
+    });
+    expect(deletedOrgMutation.downstreamHandoff).toMatchObject({
+      ready: false,
+      lifecycle: { organizationStatus: "deleted" },
+      blockerCodes: expect.arrayContaining(["archived_org", "retired_watchlist"])
+    });
+    const deletedOrgAlert = (store as any).getDwmAlert(alphaDarkweb.id);
+    expect(deletedOrgAlert.workflowEvents).toHaveLength(1);
+    expect(deletedOrgAlert.workflowStatus).toBe("investigating");
+    const deletedOrgListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const deletedOrgList = await deletedOrgListResponse.json() as any;
+    expect(deletedOrgListResponse.status).toBe(200);
+    expect(deletedOrgList.alertQueueVisibility).toMatchObject({
+      organizationLifecycleState: "deleted",
+      watchlistScope: {
+        blockedLifecycleCodes: expect.arrayContaining(["org_deleted", "retired_watchlist"])
+      },
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "org_deleted", field: "organization.status", recoverable: false }),
+        expect.objectContaining({ code: "retired_watchlist", field: "alertQueue.lifecycle" })
+      ])
+    });
+    const deletedOrgRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id })
+    }), options);
+    const deletedOrgRebuild = await deletedOrgRebuildResponse.json() as any;
+    expect(deletedOrgRebuildResponse.status).toBe(409);
+    expect(deletedOrgRebuild.error.code).toBe("archived_org");
+    const deletedOrgDeliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id, alertId: alphaDarkweb.id })
+    }), options);
+    const deletedOrgDelivery = await deletedOrgDeliveryResponse.json() as any;
+    expect(deletedOrgDeliveryResponse.status).toBe(409);
+    expect(deletedOrgDelivery.error.code).toBe("archived_org");
+    expect((store as any).getDwmAlert(alphaDarkweb.id).workflowEvents).toHaveLength(1);
+
     const quietOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
       method: "POST",
       headers: { "x-user-email": "owner-quiet@workflow.example" },

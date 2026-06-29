@@ -204,6 +204,24 @@ export async function updateDwmAlert(request: Request, options: ApiServerOptions
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
   const staleReadiness = workflowVersionReadiness(existing, body, scope.organizationId);
   if (!staleReadiness.ready) return json({ error: { code: "stale_workflow_version", message: "Alert workflow changed; reload before mutating." }, workflowExecutionReadiness: staleReadiness }, 409);
+  if (scope.organization && !organizationLifecycleActive(scope.organization)) {
+    const downstreamHandoff = buildDwmAlertDownstreamHandoff({
+      alert: existing,
+      deliveries: ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === existing.id),
+      organizationId: scope.organizationId,
+      ...downstreamLifecycleForAlert(options, existing, scope)
+    });
+    return json({
+      error: { code: "archived_org", message: "Organization lifecycle is not active; alert workflow mutation is disabled." },
+      workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({
+        alert: existing,
+        organizationId: scope.organizationId,
+        action: workflowActionFromBody(body),
+        lifecycleBlockers: downstreamHandoff.blockerCodes.filter((code: string) => code === "archived_org") as any
+      }),
+      downstreamHandoff
+    }, 409);
+  }
   const generatedAt = nowIso();
   const workflowTransition = resolveAlertWorkflowTransition(existing, body);
   if (workflowTransition.error) return json({
