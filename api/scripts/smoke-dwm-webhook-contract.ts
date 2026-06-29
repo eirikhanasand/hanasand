@@ -15,6 +15,7 @@ import {
     buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
+    buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     filterDwmWebhookDestinationHealthForVisibility,
@@ -616,6 +617,30 @@ const retryLedgerRows = [
         attemptedAt: '2026-06-28T12:07:00.000Z',
         createdAt: '2026-06-28T12:07:00.000Z',
     },
+    {
+        id: 'delivery_live_terminal_contract',
+        destinationId: 'destination_terminal_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'alert_terminal_contract',
+        eventType: 'dwm.alert.created' as const,
+        status: 'failed' as const,
+        dryRun: false,
+        endpointHint: `https://discord.com/api/webhooks/444444444/${secret}`,
+        endpointHash: 'endpoint_terminal_hash',
+        payloadHash: 'payload_terminal_hash',
+        payload: {},
+        responseStatus: 400,
+        responseBody: `bad request token=${secret}`,
+        error: `bad request token=${secret}`,
+        idempotencyKey: 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract',
+        watchlistId: 'watchlist_item_terminal_contract',
+        watchlistName: 'Terminal watchlist',
+        route: 'customer_webhook',
+        casePath: '/v1/cases/terminal',
+        attemptedAt: '2026-06-28T12:09:00.000Z',
+        createdAt: '2026-06-28T12:09:00.000Z',
+    },
 ]
 const deliveryLedger = buildDwmWebhookDeliveryLedger({
     deliveries: retryLedgerRows,
@@ -1157,6 +1182,17 @@ const auditEventContracts = buildDwmWebhookAuditEventContracts({
             metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`, error: `token=${secret}` },
             createdAt: '2026-06-28T12:06:01.000Z',
         },
+        {
+            id: 'audit_live_terminal_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_terminal_contract',
+            deliveryId: 'delivery_live_terminal_contract',
+            action: 'delivery.failed',
+            metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/444444444/${secret}`, error: `token=${secret}` },
+            createdAt: '2026-06-28T12:09:01.000Z',
+        },
     ],
 })
 const destinationHealth = buildDwmWebhookDestinationHealth({
@@ -1355,6 +1391,25 @@ const operationDestinations = [
         createdAt: '2026-06-28T11:00:00.000Z',
         updatedAt: '2026-06-28T12:10:00.000Z',
     },
+    {
+        id: 'destination_terminal_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Terminal Failure Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/444444444/${secret}`,
+        endpointHash: 'endpoint_terminal_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: '2026-06-28T12:09:00.000Z',
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:09:00.000Z',
+    },
 ]
 const operationAuditEvents = [
     ...auditEventContracts.map(item => ({
@@ -1386,6 +1441,20 @@ const deliveryOperations = buildDwmWebhookDeliveryOperations({
     deliveries: auditDeliveryRows,
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
+})
+const deliveryRetryPersistence = buildDwmWebhookDeliveryRetryPersistence({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+})
+const foreignDeliveryRetryPersistence = buildDwmWebhookDeliveryRetryPersistence({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_foreign' },
 })
 const deliveryOperationDetail = buildDwmWebhookDeliveryOperations({
     liveDeliveryEnabled: false,
@@ -1781,6 +1850,17 @@ expect(deliveryOperations.schemaVersion === 'dwm.webhook.delivery_operations.v1'
 expect(deliveryOperations.counts.replay >= 2 && deliveryOperations.counts.retryable >= 1 && deliveryOperations.counts.failed >= 1, 'Delivery operations should roll up replay, retryable, and failed counts.', deliveryOperations)
 expect(deliveryOperations.recentDeliveries.some(item => item.deliveryId === 'delivery_live_failed_retry_contract' && item.attempts.nextRetryAt === '2026-06-28T12:11:00.000Z' && item.attempts.lastErrorCategory === 'upstream_5xx'), 'Delivery operations should expose retry/backoff detail.', deliveryOperations)
 expect(deliveryOperations.recentDeliveries.some(item => item.deliveryId === 'delivery_replay_duplicate_contract' && item.replay === true && item.auditEventId === 'audit_replay_duplicate_contract'), 'Delivery operations should link replay markers and audit ids.', deliveryOperations)
+const persistedRetryKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract')
+const persistedReplayKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract')
+const persistedTerminalKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
+const persistedSentKey = deliveryRetryPersistence.deliveryKeys.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+expect(deliveryRetryPersistence.schemaVersion === 'dwm.webhook.delivery_retry_persistence.v1' && deliveryRetryPersistence.counts.retryable >= 1, 'Delivery retry persistence should expose grouped retry proof.', deliveryRetryPersistence)
+expect(persistedRetryKey?.retry.retryable === true && persistedRetryKey.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && persistedRetryKey.retry.persistedAttemptCount === 2, 'Delivery retry persistence should keep retry/backoff attempts by idempotency key.', persistedRetryKey)
+expect(persistedReplayKey?.replay === true && persistedReplayKey.dedupe.duplicate === true && persistedReplayKey.dedupe.duplicateAttemptCount === 2, 'Delivery retry persistence should expose duplicate replay/dedupe proof.', persistedReplayKey)
+expect(persistedTerminalKey?.status === 'terminal_failure' && persistedTerminalKey.retry.terminalFailure === true && persistedTerminalKey.retry.lastErrorCategory === 'upstream_4xx', 'Delivery retry persistence should separate terminal failures from retryable failures.', persistedTerminalKey)
+expect(persistedSentKey?.dedupe.alreadyDelivered === true && persistedSentKey.status === 'delivered', 'Delivery retry persistence should mark already delivered dedupe keys.', persistedSentKey)
+expect(foreignDeliveryRetryPersistence.deliveryKeys.length === 1 && foreignDeliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_foreign'), 'Delivery retry persistence org filter should not leak other org attempts.', foreignDeliveryRetryPersistence)
+expect(!JSON.stringify(deliveryRetryPersistence).includes(secret), 'Delivery retry persistence should redact endpoint, response, and error secrets.', deliveryRetryPersistence)
 expect(deliveryOperationDetail.total === 1 && deliveryOperationDetail.recentDeliveries[0]?.deliveryId === 'delivery_replay_duplicate_contract', 'Delivery operations should retrieve a delivery by request id.', deliveryOperationDetail)
 expect(deliveryOperationByCase.recentDeliveries.every(item => item.casePath === replayWorkflowAlert.casePath && item.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery operations should filter by case path and dedupe key.', deliveryOperationByCase)
 expect(retryEligibleContract.canRetry === true && retryEligibleContract.blockers.length === 0 && retryEligibleContract.deliveryOperations.total >= 1, 'Retry contract should allow eligible failed dry-run retry without network.', retryEligibleContract)
@@ -1881,6 +1961,11 @@ console.log(JSON.stringify({
         'delivery operations list/detail filters',
         'delivery operations retry/backoff summary',
         'delivery operations replay/audit linkage',
+        'delivery retry persistence grouped idempotency keys',
+        'delivery retry persistence terminal failure state',
+        'delivery retry persistence duplicate replay dedupe',
+        'delivery retry persistence wrong-org filtering',
+        'delivery retry persistence secret redaction',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
         'delivery retry role gate',
@@ -1943,6 +2028,10 @@ console.log(JSON.stringify({
             'destinationCrud.blockers[].code',
             'destinationCrud.desired.redactedEndpoint.endpointHash',
             'destinationCrud.health.productProgress.status',
+            'deliveryRetryPersistence.schemaVersion',
+            'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
+            'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
+            'deliveryRetryPersistence.deliveryKeys[].dedupe.duplicateAttemptCount',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,

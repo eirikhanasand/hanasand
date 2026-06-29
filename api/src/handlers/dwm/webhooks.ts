@@ -20,6 +20,7 @@ import {
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
+    buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
     createDwmWebhookDestination,
@@ -438,6 +439,19 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryRetryPersistence: visibilityResult && !visibilityResult.decision.allowed
+            ? buildDwmWebhookDeliveryRetryPersistence({
+                deliveries: [],
+                auditEvents: [],
+                destinations: [],
+                filters: deliveryFilters,
+            })
+            : buildDwmWebhookDeliveryRetryPersistence({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+            }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({
             destinations,
             deliveries,
@@ -537,6 +551,18 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             deliveries: ledgerDeliveries,
             auditEvents,
             canManage: true,
+        }),
+        deliveryRetryPersistence: buildDwmWebhookDeliveryRetryPersistence({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
         }),
         orgAlertDelivery: buildDwmOrgAlertWebhookDeliveryContract({
             ownerId: userId,

@@ -779,6 +779,158 @@ export function buildDwmWebhookDeliveryOperations({
     }
 }
 
+export function buildDwmWebhookDeliveryRetryPersistence({
+    deliveries,
+    auditEvents = [],
+    destinations = [],
+    filters = {},
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    now = new Date(),
+}: {
+    deliveries: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    destinations?: DwmWebhookDestinationPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+    liveDeliveryEnabled?: boolean
+    now?: Date
+}) {
+    const ledger = buildDwmWebhookDeliveryLedger({ deliveries, auditEvents, filters, now })
+    const auditContracts = buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations })
+    const auditsByDelivery = new Map<string, typeof auditContracts>()
+    for (const audit of auditContracts) {
+        if (!audit.deliveryId) continue
+        const audits = auditsByDelivery.get(audit.deliveryId) || []
+        audits.push(audit)
+        auditsByDelivery.set(audit.deliveryId, audits)
+    }
+    const destinationsById = new Map(destinations.map(destination => [destination.id, destination]))
+    const groups = new Map<string, typeof ledger>()
+    for (const attempt of ledger) {
+        const key = attempt.idempotencyKey || attempt.deliveryId
+        const attempts = groups.get(key) || []
+        attempts.push(attempt)
+        groups.set(key, attempts)
+    }
+
+    const deliveryKeys = [...groups.entries()].map(([key, attempts]) => {
+        const sortedAttempts = [...attempts]
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const latest = sortedAttempts[0]
+        const sent = sortedAttempts.find(attempt => attempt.status === 'sent') || null
+        const destination = latest.destinationId ? destinationsById.get(latest.destinationId) || null : null
+        const auditEventIds = [...new Set(sortedAttempts.flatMap((attempt) => {
+            const audits = auditsByDelivery.get(attempt.deliveryId) || []
+            return [
+                attempt.auditEventId,
+                ...audits.map(audit => audit.auditEventId),
+            ].filter(Boolean) as string[]
+        }))]
+        const terminalFailure = !sent
+            && (latest.status === 'failed' || latest.status === 'skipped')
+            && !latest.retryable
+            && latest.errorClass !== 'live_delivery_disabled'
+        const retryable = !sent && latest.retryable
+        const duplicateAttemptCount = sortedAttempts.length > 1 ? sortedAttempts.length : 0
+
+        return {
+            schemaVersion: 'dwm.webhook.delivery_retry_key.v1',
+            idempotencyKey: latest.idempotencyKey || key,
+            dedupeKey: latest.dedupeKey || dedupeFromIdempotencyKey(latest.idempotencyKey) || null,
+            orgId: latest.orgId,
+            destinationId: latest.destinationId,
+            alertId: latest.alertId,
+            eventType: latest.eventType,
+            watchlistId: latest.watchlistId,
+            watchlistName: latest.watchlistName,
+            route: latest.route,
+            casePath: latest.casePath,
+            replay: sortedAttempts.some(attempt => attempt.replay),
+            status: sent ? 'delivered' : retryable ? 'retry_scheduled' : terminalFailure ? 'terminal_failure' : latest.status,
+            destination: {
+                id: latest.destinationId,
+                label: destination?.name || null,
+                type: destination?.kind || null,
+                status: destination?.status || null,
+                enabled: destination ? destination.status === 'active' : null,
+                redactedEndpoint: latest.redactedDestination,
+            },
+            retry: {
+                persistedAttemptCount: sortedAttempts.length,
+                attemptCount: latest.attemptCount,
+                retryable,
+                nextRetryAt: retryable ? latest.nextRetryAt : null,
+                lastErrorCategory: latest.errorClass,
+                reason: latest.retryReason,
+                terminalFailure,
+            },
+            dedupe: {
+                alreadyDelivered: Boolean(sent),
+                duplicate: duplicateAttemptCount > 0,
+                duplicateAttemptCount,
+                latestDedupeKey: latest.dedupeKey || dedupeFromIdempotencyKey(latest.idempotencyKey) || null,
+            },
+            latestAttempt: {
+                requestId: latest.requestId,
+                deliveryId: latest.deliveryId,
+                status: latest.status,
+                rawStatus: latest.rawStatus,
+                dryRun: latest.dryRun,
+                live: latest.live,
+                liveRequested: latest.liveRequested,
+                responseStatus: latest.responseStatus,
+                errorClass: latest.errorClass,
+                attemptedAt: latest.attemptedAt,
+                auditEventId: latest.auditEventId,
+            },
+            attempts: sortedAttempts.slice(0, 5).map(attempt => ({
+                requestId: attempt.requestId,
+                deliveryId: attempt.deliveryId,
+                status: attempt.status,
+                rawStatus: attempt.rawStatus,
+                dryRun: attempt.dryRun,
+                live: attempt.live,
+                liveRequested: attempt.liveRequested,
+                retryable: attempt.retryable,
+                nextRetryAt: attempt.nextRetryAt,
+                errorClass: attempt.errorClass,
+                responseStatus: attempt.responseStatus,
+                auditEventId: attempt.auditEventId,
+                attemptedAt: attempt.attemptedAt,
+            })),
+            audit: {
+                latestAuditEventId: auditEventIds[0] || null,
+                auditEventIds,
+            },
+        }
+    }).sort((a, b) => String(b.latestAttempt.attemptedAt).localeCompare(String(a.latestAttempt.attemptedAt)))
+
+    return {
+        schemaVersion: 'dwm.webhook.delivery_retry_persistence.v1',
+        liveDeliveryEnabled,
+        filters: {
+            orgId: clean(filters.orgId) || null,
+            destinationId: clean(filters.destinationId) || null,
+            alertId: clean(filters.alertId) || null,
+            casePath: clean(filters.casePath) || null,
+            dedupeKey: clean(filters.dedupeKey) || null,
+            requestId: clean(filters.requestId) || clean(filters.deliveryId) || null,
+        },
+        totalDeliveryKeys: deliveryKeys.length,
+        counts: {
+            attempts: ledger.length,
+            retryable: deliveryKeys.filter(item => item.retry.retryable).length,
+            terminalFailure: deliveryKeys.filter(item => item.retry.terminalFailure).length,
+            delivered: deliveryKeys.filter(item => item.dedupe.alreadyDelivered).length,
+            dryRun: deliveryKeys.filter(item => item.latestAttempt.dryRun).length,
+            live: deliveryKeys.filter(item => item.latestAttempt.live).length,
+            replay: deliveryKeys.filter(item => item.replay).length,
+            duplicateDedupe: deliveryKeys.filter(item => item.dedupe.duplicate).length,
+        },
+        idempotencyCoverage: idempotencyCoverage(ledger),
+        deliveryKeys,
+    }
+}
+
 export function buildDwmWebhookDeliveryRetryContract({
     ownerId,
     input,
