@@ -688,6 +688,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     alertCreatedEvent: alert.alertCreatedEvent,
     alertCreatedEventId: alert.alertCreatedEvent?.id ?? alert.deliveryReadinessContext?.alertCreatedEventId,
     alertCreatedAt: alert.alertCreatedEvent?.at ?? alert.deliveryReadinessContext?.alertCreatedAt,
+    generationEvidenceWindow: alert.deliveryReadinessContext?.generationEvidenceWindow ?? alert.workflowContext?.generationEvidenceWindow ?? alert.webhookContext?.generationEvidenceWindow,
     deliveryReadinessContext: alert.deliveryReadinessContext,
     deliveryDedupeKey: alert.deliveryReadinessContext?.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey,
     replayMarker: alert.deliveryReadinessContext?.replayMarker,

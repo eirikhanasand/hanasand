@@ -81,12 +81,24 @@ describe("dwm webhook delivery", () => {
         evidenceCount: 1,
         recommendedRoute: "identity_response"
       },
+      generationEvidenceWindow: {
+        captureIds: ["cap_webhook_acme"],
+        sourceFamilies: ["telegram_public"],
+        firstObservedAt: "2026-06-27T21:02:00.000Z",
+        lastObservedAt: "2026-06-27T21:02:00.000Z"
+      },
       deliveryReadinessContext: {
         schemaVersion: "dwm.alert_delivery_persistence.v1",
         selectedCaptureIds: ["cap_webhook_acme"],
         sourceFamily: "telegram_public",
         deliveryDedupeKey: expect.any(String),
-        replayMarker: expect.any(String)
+        replayMarker: expect.any(String),
+        generationEvidenceWindow: {
+          captureIds: ["cap_webhook_acme"],
+          sourceFamilies: ["telegram_public"],
+          firstObservedAt: "2026-06-27T21:02:00.000Z",
+          lastObservedAt: "2026-06-27T21:02:00.000Z"
+        }
       }
     });
     expect(typeof seen[0].body.alertCreatedEvent.id).toBe("string");
@@ -224,6 +236,12 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].url).toBe("https://hooks.example.com/chosen");
     expect(seen[0].body.webhookDestinationId).toBe("webhook_selection_chosen");
     expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme"]);
+    expect(seen[0].body.generationEvidenceWindow).toMatchObject({
+      captureIds: ["cap_webhook_acme"],
+      sourceFamilies: ["telegram_public"],
+      firstObservedAt: "2026-06-27T21:02:00.000Z",
+      lastObservedAt: "2026-06-27T21:02:00.000Z"
+    });
     expect(seen[0].body.alertCreatedEvent).toMatchObject({
       schemaVersion: "dwm.alert_created_event.v1",
       organizationId: "org_webhook_selection",
