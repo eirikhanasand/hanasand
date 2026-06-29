@@ -7,6 +7,8 @@ import {
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
   buildSourceProvenanceActorProfileContract,
@@ -16,6 +18,8 @@ import {
   buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
+  buildSourceProvenanceSourcePackIntakeRequest,
+  buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
 } from "../product/sourceProvenanceTiPageContract.ts";
@@ -378,6 +382,94 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(request)).not.toContain("rawText");
     expect(JSON.stringify(request)).not.toContain("password");
+  });
+
+  test("packages source provenance watchlist terms for alert rebuild consumers", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow()]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29",
+      requestId: "req_bridge_packet"
+    });
+    const request = buildSourceProvenanceAlertRebuildRequest({
+      candidate,
+      sourceContractId: contract.id
+    });
+    const packet = buildSourceProvenanceWatchlistAlertBridgePacket({
+      candidate,
+      request,
+      generatedAt: "2026-06-29T12:01:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:01:00.000Z",
+      ok: true,
+      redacted: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      watchlistId: "watch_public_ti_apt29",
+      sourceBridgeId: bridge.id,
+      sourceCandidateId: candidate.id,
+      alertRebuildRequestId: request.id,
+      bridge: {
+        source: "public_ti_source_provenance",
+        from: "organization.watchlist_alert_terms_export.v1",
+        to: "/v1/dwm/alerts/rebuild",
+        dryRunOnly: true,
+        liveNetworkFetch: false
+      },
+      watchlist: {
+        activeTermCount: 1,
+        watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+        alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+        terms: [{
+          watchlistItemId: candidate.activeTerms[0].watchlistItemId,
+          term: "APT29",
+          normalizedTerm: "apt29",
+          kind: "actor",
+          alertGeneratorKey: candidate.activeTerms[0].alertGeneratorKey,
+          captureIds: ["cap_telegram_apt29"],
+          sourceIds: ["src_telegram"],
+          contentHashes: ["hash_telegram_apt29"]
+        }]
+      },
+      alertRequest: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          watchlistId: "watch_public_ti_apt29",
+          dryRun: true
+        }
+      },
+      blockers: [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "watchlist.watchlistItemIds",
+      "watchlist.alertGeneratorKeys",
+      "alertRequest.body.sourceBridgeId",
+      "blockers[]"
+    ]));
+    expect(packet.nextActions).toEqual([
+      expect.objectContaining({ action: "request_alert_rebuild", ownerLane: "alert" })
+    ]);
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
   });
 
   test("packages source provenance into alert rebuild readiness for downstream alert workflow", () => {
@@ -1016,6 +1108,142 @@ describe("source provenance TI page contract", () => {
     expect(JSON.stringify(workflow)).not.toContain("password");
   });
 
+  test("builds dry-run source-pack intake request from actor source update workflow", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({
+      workflow,
+      generatedAt: "2026-06-29T12:15:00.000Z"
+    });
+
+    expect(request).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      sourceUpdateWorkflowId: workflow.id,
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "source_pack_intake",
+          sourcePackLabel: "APT28 enrichment source pack",
+          dryRun: true,
+          actor: "APT28",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          candidates: expect.any(Array)
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      },
+      summary: {
+        candidateCount: plan.candidates.length,
+        blocked: 2,
+        retryable: 1,
+        families: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      offlineContract: {
+        fixtureBacked: true,
+        liveNetworkFetch: false,
+        liveProbeOptIn: true
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(request.acceptedCandidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        candidateId: sectorCandidate!.candidateId,
+        family: "public_advisory",
+        type: "public_url",
+        targetRef: "https://example.com/security/advisory/apt28-sectors",
+        parserStatus: "ready",
+        activationState: "ready_to_test",
+        validation: expect.objectContaining({ allowed: true })
+      })
+    ]));
+    expect(request.route.body.candidates).toEqual(request.acceptedCandidates);
+    expect(request.retryCandidates).toEqual([expect.objectContaining({
+      candidateId: campaignCandidate!.candidateId,
+      family: "telegram_public",
+      targetRef: "@apt28_public_updates",
+      type: "telegram_channel",
+      validation: expect.objectContaining({
+        allowed: false,
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      })
+    })]);
+    expect(request.blockedCandidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "telegram_public",
+        validation: expect.objectContaining({ allowed: false })
+      }),
+      expect.objectContaining({
+        family: "darkweb_metadata",
+        targetRef: "metadata://darkweb/apt28/infrastructure",
+        type: "restricted_metadata",
+        policyBoundary: expect.objectContaining({
+          metadataOnly: true,
+          restricted: true,
+          requiresGovernance: true,
+          liveNetworkFetch: false
+        }),
+        validation: expect.objectContaining({
+          allowed: false,
+          reason: "Candidate requires policy approval before intake."
+        })
+      })
+    ]));
+    expect(request.payloadShape).toEqual(expect.arrayContaining([
+      "route.body.candidates[]",
+      "blockedCandidates[]",
+      "offlineContract"
+    ]));
+    expect(JSON.stringify(request)).not.toContain("rawText");
+    expect(JSON.stringify(request)).not.toContain("password");
+  });
+
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
@@ -1156,6 +1384,41 @@ describe("source provenance TI page contract", () => {
       expect.objectContaining({ code: "missing_watchlist_items", ownerLane: "org", path: "candidate.activeTerms[].watchlistItemId" }),
       expect.objectContaining({ code: "missing_alert_generation_refs", ownerLane: "alert", path: "candidate.activeTerms[].alertGeneratorKey" })
     ]));
+
+    const packet = buildSourceProvenanceWatchlistAlertBridgePacket({ candidate, request });
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
+      ok: false,
+      redacted: true,
+      watchlist: {
+        activeTermCount: 0,
+        watchlistItemIds: [],
+        alertGeneratorKeys: [],
+        terms: []
+      },
+      alertRequest: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          watchlistItemIds: [],
+          alertGeneratorKeys: [],
+          dryRun: true
+        }
+      }
+    });
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "source_provenance_not_ready", ownerLane: "source" }),
+      expect.objectContaining({ code: "watchlist_candidate_blocked", ownerLane: "publicTI" }),
+      expect.objectContaining({ code: "missing_alert_generation_refs", ownerLane: "alert" })
+    ]));
+    expect(packet.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "repair_source_provenance", ownerLane: "source" }),
+      expect.objectContaining({ action: "materialize_watchlist_terms", ownerLane: "org" }),
+      expect.objectContaining({ action: "request_alert_rebuild", ownerLane: "alert" })
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("cap_telegram_apt29");
+    expect(JSON.stringify(packet)).not.toContain("hash_telegram_apt29");
   });
 
   test("keeps alert rebuild readiness blocked until source provenance is complete", () => {

@@ -10,6 +10,7 @@ export const DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION = "dwm.webhook_d
 export const DWM_WEBHOOK_DISPATCH_REPLAY_HISTORY_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_history.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
 export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION = "dwm.webhook_destination_lifecycle_proof.v1" as const;
+export const DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_destination_action_request.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -519,6 +520,55 @@ export type DwmWebhookDestinationLifecycleProof = {
   }>;
   blockers: Array<{
     code: "missing_destination" | "org_scope_empty";
+    ownerLane: "webhook";
+    path: string;
+    message: string;
+  }>;
+};
+
+export type DwmWebhookDestinationActionRequest = {
+  schemaVersion: typeof DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  destinationId?: string;
+  redacted: true;
+  action: "test_destination" | "enable_destination" | "disable_destination" | "review_destination";
+  request: {
+    method: "POST" | "PATCH";
+    route: string;
+    canSend: boolean;
+    noNetwork: true;
+    liveSendEnabled: false;
+    body?: {
+      tenantId: string;
+      organizationId?: string;
+      destinationId: string;
+      action: DwmWebhookDestinationActionRequest["action"];
+      dryRun: true;
+      live: false;
+      requestId?: string;
+      idempotencyKey: string;
+    };
+  };
+  proof: {
+    lifecycleProofId: string;
+    currentStatus?: string;
+    enabled?: boolean;
+    lastTestStatus?: string;
+    redactedEndpoint?: DwmWebhookDestinationLifecycleProof["destinations"][number]["redactedEndpoint"];
+    retry?: DwmWebhookDestinationLifecycleProof["destinations"][number]["retry"];
+  };
+  auditPreview: {
+    eventType: "dwm.webhook.destination_action_prepared";
+    outcome: "prepared" | "blocked";
+    nextAuditAction: "destination.test_requested" | "destination.enable_requested" | "destination.disable_requested" | "destination.review_blocked";
+    blockerCodes: DwmWebhookDestinationActionRequest["blockers"][number]["code"][];
+  };
+  blockers: Array<{
+    code: "destination_missing" | "destination_disabled" | "destination_already_enabled" | "destination_already_disabled" | "missing_endpoint" | "test_failed" | "delivery_failed" | "org_scope_empty";
     ownerLane: "webhook";
     path: string;
     message: string;
@@ -1245,6 +1295,199 @@ export function buildWebhookDestinationLifecycleProof(input: {
     destinations,
     blockers
   };
+}
+
+export function buildWebhookDestinationActionRequest(input: {
+  proof: DwmWebhookDestinationLifecycleProof;
+  destinationId?: string;
+  action?: DwmWebhookDestinationActionRequest["action"];
+  requestId?: string;
+  generatedAt?: string;
+}): DwmWebhookDestinationActionRequest {
+  const destination = selectDestinationForAction(input.proof, input.destinationId);
+  const action = input.action ?? defaultDestinationAction(destination, input.proof);
+  const blockers = destinationActionBlockers(input.proof, destination, action);
+  const routeDestinationId = destination?.id ?? input.destinationId ?? "";
+  const canSend = blockers.length === 0 && Boolean(destination);
+  const idempotencyKey = stableId("dwm_webhook_destination_action", [
+    input.proof.tenantId,
+    input.proof.organizationId ?? "",
+    routeDestinationId,
+    action,
+    input.requestId ?? ""
+  ].join(":"));
+
+  return {
+    schemaVersion: DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_destination_action_request", `${input.proof.id}:${routeDestinationId}:${action}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? new Date(0).toISOString(),
+    ok: canSend,
+    tenantId: input.proof.tenantId,
+    organizationId: input.proof.organizationId,
+    destinationId: destination?.id ?? input.destinationId,
+    redacted: true,
+    action,
+    request: {
+      method: action === "test_destination" ? "POST" : "PATCH",
+      route: destinationActionRoute(action, routeDestinationId),
+      canSend,
+      noNetwork: true,
+      liveSendEnabled: false,
+      body: canSend && destination ? {
+        tenantId: input.proof.tenantId,
+        organizationId: input.proof.organizationId,
+        destinationId: destination.id,
+        action,
+        dryRun: true,
+        live: false,
+        requestId: input.requestId,
+        idempotencyKey
+      } : undefined
+    },
+    proof: {
+      lifecycleProofId: input.proof.id,
+      currentStatus: destination?.status,
+      enabled: destination?.enabled,
+      lastTestStatus: destination?.lastTest?.status,
+      redactedEndpoint: destination?.redactedEndpoint,
+      retry: destination?.retry
+    },
+    auditPreview: {
+      eventType: "dwm.webhook.destination_action_prepared",
+      outcome: canSend ? "prepared" : "blocked",
+      nextAuditAction: destinationAuditAction(action, canSend),
+      blockerCodes: blockers.map((blocker) => blocker.code)
+    },
+    blockers
+  };
+}
+
+function selectDestinationForAction(proof: DwmWebhookDestinationLifecycleProof, destinationId?: string): DwmWebhookDestinationLifecycleProof["destinations"][number] | undefined {
+  if (destinationId) return proof.destinations.find((destination) => destination.id === destinationId);
+  return proof.destinations.find((destination) => destination.blockers.some((blocker) => blocker.code === "test_missing" || blocker.code === "test_failed"))
+    ?? proof.destinations.find((destination) => !destination.enabled)
+    ?? proof.destinations[0];
+}
+
+function defaultDestinationAction(
+  destination: DwmWebhookDestinationLifecycleProof["destinations"][number] | undefined,
+  proof: DwmWebhookDestinationLifecycleProof
+): DwmWebhookDestinationActionRequest["action"] {
+  if (!destination) return proof.blockers.length ? "review_destination" : "test_destination";
+  if (!destination.enabled) return "enable_destination";
+  return "test_destination";
+}
+
+function destinationActionRoute(action: DwmWebhookDestinationActionRequest["action"], destinationId: string): string {
+  const encodedDestinationId = encodeURIComponent(destinationId);
+  if (action === "test_destination") return `/v1/dwm/webhook-destinations/${encodedDestinationId}/test`;
+  if (action === "enable_destination") return `/v1/dwm/webhook-destinations/${encodedDestinationId}`;
+  if (action === "disable_destination") return `/v1/dwm/webhook-destinations/${encodedDestinationId}`;
+  return "/v1/dwm/webhook-destinations";
+}
+
+function destinationAuditAction(
+  action: DwmWebhookDestinationActionRequest["action"],
+  canSend: boolean
+): DwmWebhookDestinationActionRequest["auditPreview"]["nextAuditAction"] {
+  if (!canSend) return "destination.review_blocked";
+  if (action === "enable_destination") return "destination.enable_requested";
+  if (action === "disable_destination") return "destination.disable_requested";
+  return "destination.test_requested";
+}
+
+function destinationActionBlockers(
+  proof: DwmWebhookDestinationLifecycleProof,
+  destination: DwmWebhookDestinationLifecycleProof["destinations"][number] | undefined,
+  action: DwmWebhookDestinationActionRequest["action"]
+): DwmWebhookDestinationActionRequest["blockers"] {
+  const blockers: DwmWebhookDestinationActionRequest["blockers"] = [];
+  if (proof.blockers.some((blocker) => blocker.code === "org_scope_empty")) {
+    blockers.push({
+      code: "org_scope_empty",
+      ownerLane: "webhook",
+      path: "destinations[].organizationId",
+      message: "No webhook destination is visible for this organization."
+    });
+  }
+  if (!destination) {
+    blockers.push({
+      code: "destination_missing",
+      ownerLane: "webhook",
+      path: "destinationId",
+      message: "Webhook destination was not found in the org-scoped lifecycle proof."
+    });
+    return uniqueDestinationActionBlockers(blockers);
+  }
+  if (action === "test_destination" && !destination.enabled) {
+    blockers.push({
+      code: "destination_disabled",
+      ownerLane: "webhook",
+      path: "destination.enabled",
+      message: "Enable the webhook destination before sending a dry-run test."
+    });
+  }
+  if (action === "enable_destination" && destination.enabled) {
+    blockers.push({
+      code: "destination_already_enabled",
+      ownerLane: "webhook",
+      path: "destination.enabled",
+      message: "Webhook destination is already enabled."
+    });
+  }
+  if (action === "disable_destination" && !destination.enabled) {
+    blockers.push({
+      code: "destination_already_disabled",
+      ownerLane: "webhook",
+      path: "destination.enabled",
+      message: "Webhook destination is already disabled."
+    });
+  }
+  for (const blocker of destination.blockers) {
+    if (blocker.code === "destination_disabled" && action !== "enable_destination") {
+      blockers.push({
+        code: "destination_disabled",
+        ownerLane: "webhook",
+        path: "destination.enabled",
+        message: blocker.message
+      });
+    }
+    if (blocker.code === "missing_endpoint") {
+      blockers.push({
+        code: "missing_endpoint",
+        ownerLane: "webhook",
+        path: "destination.redactedEndpoint",
+        message: blocker.message
+      });
+    }
+    if (blocker.code === "test_failed" && action === "test_destination") {
+      blockers.push({
+        code: "test_failed",
+        ownerLane: "webhook",
+        path: "destination.lastTest.status",
+        message: blocker.message
+      });
+    }
+    if (blocker.code === "delivery_failed" && action === "test_destination") {
+      blockers.push({
+        code: "delivery_failed",
+        ownerLane: "webhook",
+        path: "destination.lastDelivery.status",
+        message: blocker.message
+      });
+    }
+  }
+  return uniqueDestinationActionBlockers(blockers);
+}
+
+function uniqueDestinationActionBlockers(blockers: DwmWebhookDestinationActionRequest["blockers"]): DwmWebhookDestinationActionRequest["blockers"] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {

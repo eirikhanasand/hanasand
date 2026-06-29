@@ -7,9 +7,11 @@ export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.sou
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION = "ti.source_provenance_alert_enrichment_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION = "ti.source_provenance_watchlist_alert_bridge_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -244,6 +246,62 @@ export type TiSourceProvenanceAlertRebuildRequestBlocker = {
   ownerLane: "publicTI" | "org" | "alert";
   path: string;
   message: string;
+};
+
+export type TiSourceProvenanceWatchlistAlertBridgePacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  redacted: true;
+  tenantId: string;
+  organizationId?: string;
+  watchlistId?: string;
+  sourceBridgeId: string;
+  sourceCandidateId: string;
+  alertRebuildRequestId: string;
+  bridge: {
+    source: "public_ti_source_provenance";
+    from: "organization.watchlist_alert_terms_export.v1";
+    to: "/v1/dwm/alerts/rebuild";
+    dryRunOnly: true;
+    liveNetworkFetch: false;
+  };
+  watchlist: {
+    activeTermCount: number;
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
+    terms: Array<{
+      watchlistItemId: string;
+      term: string;
+      normalizedTerm: string;
+      kind: "actor" | "keyword";
+      alertGeneratorKey: string;
+      captureIds: string[];
+      sourceIds: string[];
+      contentHashes: string[];
+    }>;
+  };
+  alertRequest: TiSourceProvenanceAlertRebuildRequest["request"];
+  payloadShape: string[];
+  blockers: Array<TiSourceProvenanceAlertabilityBlocker | TiSourceProvenanceAlertRebuildRequestBlocker>;
+  nextActions: Array<{
+    ownerLane: "source" | "publicTI" | "org" | "alert";
+    action: "repair_source_provenance" | "materialize_watchlist_terms" | "request_alert_rebuild";
+    blockerCode?: string;
+    route: {
+      method: "POST";
+      path: string;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
 };
 
 export type TiSourceProvenanceAlertRebuildReadiness = {
@@ -637,6 +695,74 @@ export type TiSourceProvenanceActorProfileSourceUpdateHealthInput = {
   failureReason?: string;
 };
 
+export type TiSourceProvenanceSourcePackIntakeRequest = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourceUpdateWorkflowId: string;
+  route: {
+    method: "POST";
+    path: "/v1/dwm/source-requests";
+    body: {
+      action: "source_pack_intake";
+      sourcePackLabel: string;
+      dryRun: true;
+      actor: string;
+      tenantId: string;
+      organizationId?: string;
+      candidates: TiSourceProvenanceSourcePackIntakeCandidate[];
+    };
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  acceptedCandidates: TiSourceProvenanceSourcePackIntakeCandidate[];
+  blockedCandidates: TiSourceProvenanceSourcePackIntakeCandidate[];
+  retryCandidates: TiSourceProvenanceSourcePackIntakeCandidate[];
+  summary: {
+    candidateCount: number;
+    accepted: number;
+    blocked: number;
+    retryable: number;
+    families: string[];
+    nextRetryAt?: string;
+  };
+  offlineContract: {
+    fixtureBacked: true;
+    liveNetworkFetch: false;
+    liveProbeOptIn: true;
+    note: "This request is dry-run safe. Production collection requires a separate explicit activation/test action.";
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourcePackIntakeCandidate = {
+  candidateId: string;
+  field: TiSourceProvenanceActorProfileFieldName;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  targetRef: string;
+  type: "public_url" | "telegram_channel" | "restricted_metadata";
+  parserProfile: TiSourceProvenanceActorProfileGapSourceCandidate["parserProfile"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"];
+  policyBoundary: TiSourceProvenanceActorProfileGapSourceCandidate["policyBoundary"];
+  validation: {
+    allowed: boolean;
+    reason: string;
+    failureReason?: string;
+    nextRetryAt?: string;
+  };
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -833,6 +959,73 @@ export function buildSourceProvenanceAlertRebuildRequest(input: {
       "blockers[]"
     ],
     blockers
+  };
+}
+
+export function buildSourceProvenanceWatchlistAlertBridgePacket(input: {
+  candidate: TiSourceProvenanceOrgWatchlistCandidate;
+  request: TiSourceProvenanceAlertRebuildRequest;
+  generatedAt?: string;
+}): TiSourceProvenanceWatchlistAlertBridgePacket {
+  const generatedAt = input.generatedAt ?? input.request.generatedAt;
+  const watchlistItemIds = uniqueStrings(input.candidate.activeTerms.map((term) => term.watchlistItemId).filter(Boolean));
+  const alertGeneratorKeys = uniqueStrings(input.candidate.activeTerms.map((term) => term.alertGeneratorKey).filter(Boolean));
+  const blockers = [
+    ...input.candidate.blockers,
+    ...input.request.blockers
+  ];
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_watchlist_alert_bridge_packet", `${input.candidate.id}:${input.request.id}:${generatedAt}`),
+    generatedAt,
+    ok: input.candidate.ok && input.request.ok && blockers.length === 0,
+    redacted: true,
+    tenantId: input.candidate.tenantId,
+    organizationId: input.candidate.organizationId,
+    watchlistId: input.candidate.watchlistId,
+    sourceBridgeId: input.candidate.sourceBridgeId,
+    sourceCandidateId: input.candidate.id,
+    alertRebuildRequestId: input.request.id,
+    bridge: {
+      source: "public_ti_source_provenance",
+      from: "organization.watchlist_alert_terms_export.v1",
+      to: "/v1/dwm/alerts/rebuild",
+      dryRunOnly: true,
+      liveNetworkFetch: false
+    },
+    watchlist: {
+      activeTermCount: input.candidate.activeTerms.length,
+      watchlistItemIds,
+      alertGeneratorKeys,
+      terms: input.candidate.activeTerms.map((term) => ({
+        watchlistItemId: term.watchlistItemId,
+        term: term.term,
+        normalizedTerm: term.alertGenerationRef.normalizedTerm,
+        kind: term.kind,
+        alertGeneratorKey: term.alertGeneratorKey,
+        captureIds: term.provenanceRefs.captureIds,
+        sourceIds: term.provenanceRefs.sourceIds,
+        contentHashes: term.provenanceRefs.contentHashes
+      }))
+    },
+    alertRequest: input.request.request,
+    payloadShape: [
+      "watchlist.watchlistItemIds",
+      "watchlist.alertGeneratorKeys",
+      "watchlist.terms[].captureIds",
+      "watchlist.terms[].sourceIds",
+      "alertRequest.body.dryRun",
+      "alertRequest.body.sourceBridgeId",
+      "blockers[]"
+    ],
+    blockers,
+    nextActions: sourceProvenanceWatchlistAlertBridgeActions(blockers),
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
   };
 }
 
@@ -1214,6 +1407,74 @@ export function buildSourceProvenanceActorProfileSourceUpdateWorkflow(input: {
       "tasks[].lastRun",
       "tasks[].nextRetryAt",
       "health.families[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceSourcePackIntakeRequest(input: {
+  workflow: TiSourceProvenanceActorProfileSourceUpdateWorkflow;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackIntakeRequest {
+  const generatedAt = input.generatedAt ?? input.workflow.generatedAt;
+  const candidates = input.workflow.tasks.map((task) => sourcePackIntakeCandidate(input.workflow, task));
+  const acceptedCandidates = candidates.filter((candidate) => candidate.validation.allowed);
+  const blockedCandidates = candidates.filter((candidate) => !candidate.validation.allowed);
+  const retryCandidates = candidates.filter((candidate) => candidate.validation.nextRetryAt);
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_intake_request", `${input.workflow.id}:${generatedAt}:${candidates.map((candidate) => candidate.candidateId).join(",")}`),
+    generatedAt,
+    ok: acceptedCandidates.length > 0,
+    tenantId: input.workflow.tenantId,
+    organizationId: input.workflow.organizationId,
+    actor: input.workflow.actor,
+    sourceUpdateWorkflowId: input.workflow.id,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action: "source_pack_intake",
+        sourcePackLabel: `${input.workflow.actor} enrichment source pack`,
+        dryRun: true,
+        actor: input.workflow.actor,
+        tenantId: input.workflow.tenantId,
+        organizationId: input.workflow.organizationId,
+        candidates: acceptedCandidates
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    acceptedCandidates,
+    blockedCandidates,
+    retryCandidates,
+    summary: {
+      candidateCount: candidates.length,
+      accepted: acceptedCandidates.length,
+      blocked: blockedCandidates.length,
+      retryable: retryCandidates.length,
+      families: uniqueStrings(candidates.map((candidate) => candidate.family)),
+      nextRetryAt: earliestTimestamp(retryCandidates.map((candidate) => candidate.validation.nextRetryAt))
+    },
+    offlineContract: {
+      fixtureBacked: true,
+      liveNetworkFetch: false,
+      liveProbeOptIn: true,
+      note: "This request is dry-run safe. Production collection requires a separate explicit activation/test action."
+    },
+    payloadShape: [
+      "route.body.candidates[]",
+      "acceptedCandidates[]",
+      "blockedCandidates[]",
+      "retryCandidates[]",
+      "summary.families",
+      "offlineContract"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -1706,6 +1967,68 @@ function actorProfileSourceUpdateHealth(
   };
 }
 
+function sourcePackIntakeCandidate(
+  workflow: TiSourceProvenanceActorProfileSourceUpdateWorkflow,
+  task: TiSourceProvenanceActorProfileSourceUpdateTask
+): TiSourceProvenanceSourcePackIntakeCandidate {
+  const blocked = task.activationState === "blocked" || task.parserStatus === "blocked";
+  const retryBlocked = task.parserStatus === "failed" || task.parserStatus === "retry_scheduled";
+  const allowed = !blocked && !retryBlocked;
+
+  return {
+    candidateId: task.candidateId,
+    field: task.field,
+    family: task.family,
+    targetRef: sourcePackIntakeTargetRef(workflow.actor, task),
+    type: sourcePackIntakeType(task.family),
+    parserProfile: task.parserProfile,
+    parserStatus: task.parserStatus,
+    activationState: task.activationState,
+    policyBoundary: sourcePackIntakePolicyBoundary(task.family),
+    validation: {
+      allowed,
+      reason: allowed
+        ? "Candidate can be submitted as a dry-run source-pack intake row."
+        : blocked
+          ? "Candidate requires policy approval before intake."
+          : "Candidate has parser retry state and should not be submitted until retry/test succeeds.",
+      failureReason: task.failureReason,
+      nextRetryAt: task.nextRetryAt
+    }
+  };
+}
+
+function sourcePackIntakeType(family: TiSourceProvenanceActorProfileGapSourceCandidate["family"]): TiSourceProvenanceSourcePackIntakeCandidate["type"] {
+  if (family === "telegram_public") return "telegram_channel";
+  if (family === "darkweb_metadata") return "restricted_metadata";
+  return "public_url";
+}
+
+function sourcePackIntakeTargetRef(actor: string, task: TiSourceProvenanceActorProfileSourceUpdateTask): string {
+  const normalizedActor = actor.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "actor";
+  if (task.family === "telegram_public") return `@${normalizedActor}_public_updates`;
+  if (task.family === "darkweb_metadata") return `metadata://darkweb/${normalizedActor}/${task.field}`;
+  if (task.family === "actor_page") return `https://example.com/threat-actors/${normalizedActor}`;
+  return `https://example.com/security/advisory/${normalizedActor}-${task.field}`;
+}
+
+function sourcePackIntakePolicyBoundary(
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"]
+): TiSourceProvenanceActorProfileGapSourceCandidate["policyBoundary"] {
+  const restricted = family === "darkweb_metadata";
+  return {
+    publicOnly: !restricted,
+    metadataOnly: true,
+    restricted,
+    requiresGovernance: restricted,
+    noCredentials: true,
+    noAutoJoin: true,
+    noRepliesOrReactions: true,
+    noMediaDownloads: true,
+    liveNetworkFetch: false
+  };
+}
+
 function rowsForActorProfileField(
   field: TiSourceProvenanceActorProfileFieldName,
   rows: TiSourceProvenancePageRow[]
@@ -1764,6 +2087,46 @@ function sourceProvenanceAlertRebuildActions(
       liveNetworkFetch: false
     }
   }];
+}
+
+function sourceProvenanceWatchlistAlertBridgeActions(
+  blockers: Array<TiSourceProvenanceAlertabilityBlocker | TiSourceProvenanceAlertRebuildRequestBlocker>
+): TiSourceProvenanceWatchlistAlertBridgePacket["nextActions"] {
+  if (!blockers.length) {
+    return [{
+      ownerLane: "alert",
+      action: "request_alert_rebuild",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    }];
+  }
+  return uniqueBlockers(blockers).map((blocker) => {
+    const action = blocker.ownerLane === "source" || blocker.ownerLane === "publicTI"
+      ? "repair_source_provenance"
+      : blocker.ownerLane === "org"
+        ? "materialize_watchlist_terms"
+        : "request_alert_rebuild";
+    const path = action === "repair_source_provenance"
+      ? "/v1/dwm/source-requests"
+      : action === "materialize_watchlist_terms"
+        ? "/v1/organizations/watchlists/terms"
+        : "/v1/dwm/alerts/rebuild";
+    return {
+      ownerLane: blocker.ownerLane,
+      action,
+      blockerCode: blocker.code,
+      route: {
+        method: "POST",
+        path,
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  });
 }
 
 function uniqueBlockers<T extends { code: string; path: string; message: string }>(blockers: T[]): T[] {
@@ -1853,6 +2216,13 @@ function newestTimestamp(values: Array<string | undefined>): string | undefined 
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
+}
+
+function earliestTimestamp(values: Array<string | undefined>): string | undefined {
+  return values
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(0);
 }
 
 function daysBetween(start: string, end: string): number {
