@@ -82,6 +82,7 @@ for (const attr of [
     'data-readiness-backend-proof-contract-version',
     'data-readiness-owner-lane',
     'data-readiness-operator-action',
+    'data-readiness-priority',
     'data-readiness-detail',
     'data-readiness-detail-state',
     'data-readiness-detail-owner',
@@ -89,6 +90,7 @@ for (const attr of [
     'data-readiness-detail-proof',
     'data-readiness-detail-blocker',
     'data-readiness-detail-href',
+    'data-readiness-scorecard-link',
 ]) {
     assert.ok(workbenchSource.includes(attr), `Missing DOM proof attribute ${attr}`)
 }
@@ -102,6 +104,7 @@ for (const requiredClass of [
     'shrink-0',
     'min-w-0',
     'flex flex-wrap items-start justify-between gap-3',
+    'min-w-36',
     'min-w-44',
 ]) {
     assert.ok(workbenchSource.includes(requiredClass), `Missing render guard class ${requiredClass}`)
@@ -140,6 +143,7 @@ for (const requiredToken of [
     'highContrastTokenHits',
     '--base-url=',
     'readiness detail missing',
+    'data-readiness-scorecard-link="/readiness"',
 ]) {
     assert.ok(renderDomSource.includes(requiredToken), `Rendered proof command missing ${requiredToken}`)
 }
@@ -173,6 +177,7 @@ const worker3Matrix = {
         'empty owner lane or operator action',
         'missing deep-link target',
         'missing proof timestamp, stale threshold, probe hint, dashboard row id, or backend proof contract version',
+        'missing readiness priority or scorecard link',
         'missing readiness detail owner, action, proof, blocker, or deep link',
         'ready row with nonzero blocker count',
         'non-ready row without unavailable reason',

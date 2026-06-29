@@ -421,6 +421,10 @@ for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
 
 assert.ok(workbenchSource.includes('data-readiness-detail-href'), 'Readiness detail should expose the backed workflow href.')
 assert.ok(workbenchSource.includes('Open workflow'), 'Readiness detail should deep-link to the backed workflow.')
+assert.ok(workbenchSource.includes('readinessPrioritySort'), 'Dashboard readiness rows should be prioritized by blocker state.')
+assert.ok(workbenchSource.includes('data-readiness-priority'), 'Dashboard readiness rows should expose priority for DOM proof.')
+assert.ok(workbenchSource.includes('href=\'/readiness\''), 'Dashboard readiness detail should link to the product scorecard.')
+assert.ok(workbenchSource.includes('Open scorecard'), 'Dashboard readiness detail should expose the product scorecard action.')
 
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',

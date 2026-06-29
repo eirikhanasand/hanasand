@@ -24,7 +24,7 @@ const pageSpecs = [
     {
         id: 'dashboard',
         path: '/dashboard',
-        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-backend-proof-contract-version]', '[data-readiness-detail]'],
+        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-backend-proof-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-scorecard-link="/readiness"]'],
     },
     {
         id: 'dashboard_ti_control',
@@ -168,6 +168,7 @@ async function inspectRenderedPage(page, spec) {
                 if (!ownerLane) reasons.push(`missing owner lane for ${id}`)
                 if (!operatorAction) reasons.push(`missing operator action for ${id}`)
                 if (blockerCountText === null || Number.isNaN(blockerCount)) reasons.push(`missing blocker count for ${id}`)
+                if (!row.getAttribute('data-readiness-priority')) reasons.push(`missing readiness priority for ${id}`)
                 if (!proofTimestamp) reasons.push(`missing proof timestamp for ${id}`)
                 if (staleAfterSecondsText === null || Number.isNaN(staleAfterSeconds) || staleAfterSeconds <= 0) reasons.push(`missing stale threshold for ${id}`)
                 if (expectedDashboardRowId !== id) reasons.push(`bad expected dashboard row id for ${id}: ${expectedDashboardRowId}`)
