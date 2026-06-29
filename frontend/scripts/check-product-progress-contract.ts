@@ -663,6 +663,10 @@ assert.ok(workbenchSource.includes('replay_alert'), 'Operator action rail should
 assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
 assert.ok(workbenchSource.includes('send_alert'), 'Operator action rail should expose backed webhook delivery send.')
 assert.ok(workbenchSource.includes('/api/dwm/webhooks/deliver'), 'Send action should call the webhook delivery endpoint.')
+assert.ok(workbenchSource.includes('request_source_coverage'), 'Operator action rail should expose source coverage requests.')
+assert.ok(workbenchSource.includes('run_canary_collection'), 'Operator action rail should expose canary collection runs.')
+assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
+assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',

@@ -1074,6 +1074,18 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     } else {
         rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
     }
+    if (selected.kind === 'source_readiness') {
+        for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
+            rows.push({
+                id: action.id,
+                label: action.label,
+                detail: `${action.method} ${action.href}.`,
+                tone: action.disabledReason ? 'blocked' : 'ready',
+                action,
+                disabledReason: action.disabledReason,
+            })
+        }
+    }
     rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })

@@ -1969,6 +1969,34 @@ export function buildReadinessCases(input: {
             nextTasks: [`Owner: source-ops. Active sources: ${activeSources}/${sourceCount}.`, 'Approve bounded public Telegram coverage.', 'Approve metadata-only dark web source coverage.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }],
             workflowPath: path,
+            actions: [
+                {
+                    id: 'request_source_coverage',
+                    label: 'Request sources',
+                    method: 'POST',
+                    href: '/api/dwm/source-requests',
+                    body: {
+                        ...actionScope(input.scope),
+                        seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'darkweb-actor-metadata-core'],
+                        activate: true,
+                        approveMetadataOnly: true,
+                        approvedBy: 'dashboard',
+                        limit: 24,
+                    },
+                },
+                {
+                    id: 'run_canary_collection',
+                    label: 'Run canary',
+                    method: 'POST',
+                    href: '/api/dwm/canary/run',
+                    body: {
+                        operatorApproval: true,
+                        approvedBy: 'dashboard',
+                        maxSources: 12,
+                        maxTasks: 24,
+                    },
+                },
+            ],
         }),
         readinessCase({
             id: 'alert_generation',
