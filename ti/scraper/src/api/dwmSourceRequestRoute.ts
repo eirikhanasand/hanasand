@@ -3485,6 +3485,7 @@ function sourceActorIntakeRecommendation(query: string, family: string) {
 }
 
 function sourceActorCandidateIntakeContract(query: string, actorReadiness: Record<string, any>) {
+  const candidatePreviews = actorReadiness.candidateGaps.map((gap: any) => sourceActorCandidateIntakePreview(query, gap));
   return {
     schemaVersion: "dwm.actor_source_candidate_intake.v1",
     mode: "prepare_no_network",
@@ -3506,8 +3507,71 @@ function sourceActorCandidateIntakeContract(query: string, actorReadiness: Recor
       liveNetworkFetch: false,
       rawRestrictedPayloadStorage: false
     },
+    validationSummary: {
+      totalCandidates: candidatePreviews.length,
+      accepted: candidatePreviews.filter((preview: any) => preview.policyResult.allowed === true).length,
+      blocked: candidatePreviews.filter((preview: any) => preview.policyResult.allowed !== true).length,
+      metadataOnly: candidatePreviews.filter((preview: any) => preview.policyResult.metadataOnly === true).length,
+      publicOnly: candidatePreviews.filter((preview: any) => preview.policyResult.publicOnly === true).length
+    },
+    candidatePreviews,
     candidateGaps: actorReadiness.candidateGaps,
     safeOutput: actorReadiness.safeOutput
+  };
+}
+
+function sourceActorCandidateIntakePreview(query: string, gap: Record<string, any>) {
+  const recommendation = gap.intakeRecommendation ?? sourceActorIntakeRecommendation(query, gap.family);
+  const family = recommendation.family as SourceGrowthFamily;
+  const metadataOnly = family === "darkweb_onion" || family === "darkweb_metadata" || recommendation.policyBoundary === "metadata_only_restricted_source";
+  const publicOnly = family === "telegram" || recommendation.policyBoundary === "public_metadata_only";
+  const policyAllowed = family === "telegram"
+    ? recommendation.policyBoundary === "public_telegram_only"
+    : metadataOnly || publicOnly;
+  const blockers = [
+    ...(policyAllowed ? [] : [{ code: "policy_rejected", severity: "blocking", retryable: false }]),
+    ...(metadataOnly ? [{ code: "metadata_only_restricted_source", severity: "info", retryable: false }] : []),
+    ...(family === "telegram" && recommendation.policyBoundary !== "public_telegram_only" ? [{ code: "private_telegram_not_allowed", severity: "blocking", retryable: false }] : [])
+  ];
+  return {
+    schemaVersion: "dwm.actor_source_candidate_intake_preview.v1",
+    proofId: stableId("dwm_actor_source_candidate_intake_preview", `${query}:${family}:${recommendation.targetTemplate}:${recommendation.policyBoundary}`),
+    query,
+    family,
+    candidate: recommendation,
+    policyResult: {
+      allowed: policyAllowed,
+      publicOnly,
+      metadataOnly,
+      boundary: recommendation.policyBoundary,
+      liveNetworkFetch: false,
+      rawRestrictedPayloadStorage: false
+    },
+    parserExpectation: {
+      profile: parserProfileForFamily(family),
+      status: policyAllowed ? "parser_contract_ready" : "blocked_by_policy",
+      expectedCaptureType: expectedCaptureTypeForFamily(family),
+      liveNetworkRequiredForProof: false
+    },
+    activationReadiness: {
+      canCreateCandidate: policyAllowed,
+      canAutoActivate: false,
+      requiresOperatorApproval: true,
+      requiresMetadataOnlyApproval: metadataOnly,
+      idempotencyKey: stableId("dwm_actor_source_candidate_create", `${query}:${family}:${recommendation.targetTemplate}`)
+    },
+    alertability: {
+      canEventuallyProduceAlert: policyAllowed && alertableFieldsForFamily(family).length > 0,
+      alertableFields: alertableFieldsForFamily(family),
+      requiresCaptureBeforeAlert: true
+    },
+    blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
   };
 }
 
