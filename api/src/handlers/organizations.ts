@@ -436,7 +436,7 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'change member roles')
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     const target = await loadOrganizationMembership(req.params.id, req.params.userId)
@@ -521,7 +521,7 @@ export async function postOrganizationOwnershipTransfer(req: FastifyRequest<{ Pa
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'transfer ownership')
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     let input
@@ -605,7 +605,7 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'invite members')
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     let input
@@ -754,7 +754,7 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         ? inactiveOrganizationMutationBlocker(organization, 'resend invites')
         : null
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     const resendExpiresAt = input.expiresAt ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
@@ -1147,7 +1147,7 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'create shared watchlists')
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     let input
@@ -1225,7 +1225,7 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'update shared watchlists')
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     let input
@@ -1356,7 +1356,7 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         ? null
         : inactiveOrganizationMutationBlocker(organization, `${input.action} shared watchlists`)
     if (lifecycleBlocker) {
-        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+        return sendOrganizationLifecycleBlocker(req, res, lifecycleBlocker, userId, organization.role)
     }
 
     const nextStatus = input.action === 'resume' || input.action === 'restore' ? 'active' : input.action === 'pause' ? 'paused' : 'archived'
@@ -1687,10 +1687,45 @@ function inactiveOrganizationMutationBlocker(organization: Pick<OrganizationRow,
     }
 }
 
-function sendOrganizationLifecycleBlocker(res: FastifyReply, blocker: NonNullable<ReturnType<typeof inactiveOrganizationMutationBlocker>>) {
+function sendOrganizationLifecycleBlocker(req: FastifyRequest, res: FastifyReply, blocker: NonNullable<ReturnType<typeof inactiveOrganizationMutationBlocker>>, actorId: string, actorRole: OrganizationRole | undefined) {
+    const serviceLogAction = 'organization_lifecycle_mutation_blocked'
+    const body = req.body as { requestId?: unknown, request_id?: unknown, reason?: unknown } | undefined
+    const requestId = typeof body?.requestId === 'string'
+        ? body.requestId
+        : typeof body?.request_id === 'string'
+            ? body.request_id
+            : null
+    const reason = typeof body?.reason === 'string' && body.reason.trim()
+        ? body.reason.trim().slice(0, 1000)
+        : null
+    logOrganizationEvent(req, serviceLogAction, blocker.organizationId, actorId, {
+        requestId,
+        reason,
+        actorRole: actorRole ?? null,
+        blockedAction: blocker.action,
+        lifecycleStatus: blocker.status,
+        blockerCode: blocker.code,
+    })
+
     return res.status(409).send({
         error: blocker.message,
-        lifecycleBlocker: blocker,
+        lifecycleBlocker: {
+            ...blocker,
+            serviceLogAction,
+            requestId,
+        },
+        auditEvent: {
+            schemaVersion: 'organization.lifecycle_mutation_blocker_audit.v1',
+            organizationId: blocker.organizationId,
+            tenantId: blocker.tenantId,
+            actorId,
+            actorRole: actorRole ?? null,
+            serviceLogAction,
+            requestId,
+            blockedAction: blocker.action,
+            blockerCode: blocker.code,
+            lifecycleStatus: blocker.status,
+        },
     })
 }
 

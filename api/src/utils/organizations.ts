@@ -514,6 +514,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             | 'organization_watchlist_restored'
             | 'organization_watchlist_cleanup_archived'
             | 'organization_watchlist_alert_terms_exported'
+            | 'organization_lifecycle_mutation_blocked'
         >
         requiredMetadataFields: string[]
         requestIdFields: string[]
@@ -529,6 +530,45 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         alertGeneratorKeys: string[]
         alertGenerationRefField: 'activeTerms[].alertGenerationRef'
         dedupeScope: 'organization_watchlist_term'
+        queueVisibilityContract: {
+            schemaVersion: 'organization.watchlist_alert_visibility_contract.v1'
+            organizationId: string
+            tenantId: string
+            sourceFamily: 'organization_watchlist'
+            routes: {
+                list: 'GET /v1/dwm/alerts'
+                detail: 'GET /v1/dwm/alerts/:id'
+                update: 'PATCH /v1/dwm/alerts/:id'
+                replay: 'POST /v1/dwm/alerts/:id/replay'
+            }
+            requiredQueryFields: Array<'organizationId'>
+            watchlistScope: {
+                watchlistItemIds: string[]
+                alertGeneratorKeys: string[]
+                alertGeneratorKeyField: 'workflowContext.alertGeneratorKeys[]'
+                dedupeScope: 'organization_watchlist_term'
+            }
+            actorVisibility: {
+                policy: OrganizationAlertVisibilityPolicy
+                allowed: boolean
+                denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | null
+                allowedRoles: OrganizationRole[]
+                actorRole: OrganizationRole
+                nonmemberEnumeration: false
+            }
+            actionGates: {
+                readAlertsAllowed: boolean
+                acknowledgeAllowed: boolean
+                assignAllowed: boolean
+                linkCaseAllowed: boolean
+                replayAllowed: boolean
+                mutateAllowedRoles: OrganizationAlertCaseRole[]
+            }
+            requiredAlertFields: string[]
+            evidenceFields: string[]
+            redactedFields: string[]
+            blockerCodes: Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>
+        }
         expectedAlertFields: string[]
         blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[]
     }
@@ -1279,6 +1319,10 @@ export function organizationSharedWatchlistDownstreamProof(
         ...alertBlockers,
         ...(!downstreamAuthorization.allowedActions.includes('link_case') ? ['role_not_allowed' as const] : []),
     ]))
+    const alertVisibilityDenialReason = downstreamAuthorization.visibility.allowed
+        ? (alertBlockers[0] ?? null)
+        : downstreamAuthorization.visibility.reason
+    const alertReadAllowed = downstreamAuthorization.visibility.allowed && alertBlockers.length === 0
     const webhookBlockers = Array.from(new Set([
         ...alertBlockers,
         downstreamAuthorization.downstream.webhook.denialReason,
@@ -1351,6 +1395,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 'organization_watchlist_restored',
                 'organization_watchlist_cleanup_archived',
                 'organization_watchlist_alert_terms_exported',
+                'organization_lifecycle_mutation_blocked',
             ],
             requiredMetadataFields: [
                 'requestId',
@@ -1390,6 +1435,69 @@ export function organizationSharedWatchlistDownstreamProof(
             alertGeneratorKeys,
             alertGenerationRefField: 'activeTerms[].alertGenerationRef',
             dedupeScope: 'organization_watchlist_term',
+            queueVisibilityContract: {
+                schemaVersion: 'organization.watchlist_alert_visibility_contract.v1',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                sourceFamily: 'organization_watchlist',
+                routes: {
+                    list: 'GET /v1/dwm/alerts',
+                    detail: 'GET /v1/dwm/alerts/:id',
+                    update: 'PATCH /v1/dwm/alerts/:id',
+                    replay: 'POST /v1/dwm/alerts/:id/replay',
+                },
+                requiredQueryFields: ['organizationId'],
+                watchlistScope: {
+                    watchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+                    alertGeneratorKeys,
+                    alertGeneratorKeyField: 'workflowContext.alertGeneratorKeys[]',
+                    dedupeScope: 'organization_watchlist_term',
+                },
+                actorVisibility: {
+                    policy: downstreamAuthorization.visibility.alertVisibilityPolicy,
+                    allowed: downstreamAuthorization.visibility.allowed,
+                    denialReason: alertVisibilityDenialReason,
+                    allowedRoles: downstreamAuthorization.visibility.allowedRoles,
+                    actorRole: member.role,
+                    nonmemberEnumeration: false,
+                },
+                actionGates: {
+                    readAlertsAllowed: alertReadAllowed,
+                    acknowledgeAllowed: alertReadAllowed && downstreamAuthorization.allowedActions.includes('acknowledge_alert'),
+                    assignAllowed: alertReadAllowed && downstreamAuthorization.allowedActions.includes('assign_case'),
+                    linkCaseAllowed: alertReadAllowed && downstreamAuthorization.allowedActions.includes('link_case'),
+                    replayAllowed: alertReadAllowed && downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms,
+                    mutateAllowedRoles: ['owner', 'admin', 'analyst'],
+                },
+                requiredAlertFields: [
+                    'organizationId',
+                    'tenantId',
+                    'watchlistItemIds',
+                    'workflowContext.alertGeneratorKeys',
+                    'workflowContext.watchlistTermContexts',
+                    'visibilityDecision',
+                    'casePath',
+                ],
+                evidenceFields: [
+                    'alertId',
+                    'createdAt',
+                    'source',
+                    'sourceFamily',
+                    'watchlistItemIds',
+                    'matchedTerms',
+                    'casePath',
+                    'workflowEvents',
+                ],
+                redactedFields: [
+                    'activeTerms[].term',
+                    'activeTerms[].value',
+                    'watchlistTermContexts[].rawTerm',
+                ],
+                blockerCodes: [
+                    ...alertBlockers,
+                    ...(downstreamAuthorization.visibility.allowed ? [] : [downstreamAuthorization.visibility.reason].filter(Boolean)),
+                ] as Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>,
+            },
             expectedAlertFields: [
                 'organizationId',
                 'tenantId',
@@ -1505,6 +1613,8 @@ export function organizationSharedWatchlistDownstreamProof(
                 'watchlistOwnership.activeIds',
                 'watchlistOwnership.lifecycleStatuses',
                 'alertBridge.alertGeneratorKeys',
+                'alertBridge.queueVisibilityContract.actorVisibility',
+                'alertBridge.queueVisibilityContract.watchlistScope',
                 'alertBridge.expectedAlertFields',
                 'caseBridge.expectedCaseFields',
                 'webhookBridge.expectedDeliveryFields',
