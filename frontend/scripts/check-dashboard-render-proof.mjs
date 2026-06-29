@@ -135,7 +135,7 @@ for (const source of [workbenchSource, modelSource, pageSource, sourceOpsSource]
     }
 }
 
-for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {
+for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>', 'dashboard handoff', 'backed handoff']) {
     assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
 }
 
@@ -171,7 +171,7 @@ for (const [id, spec] of Object.entries(readinessRows)) {
     assert.ok(renderDomSource.includes(spec.href), `Rendered proof command missing href ${spec.href}`)
 }
 
-for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'signal']) {
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'signal', 'dashboard handoff', 'backed handoff']) {
     assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
 }
 for (const consoleWarningGuard of ['consolewarnings', 'same key', 'encountered two children']) {

@@ -47,6 +47,8 @@ const bannedCopy = [
     '/ti/<query>',
     'dashboard slop',
     'signal',
+    'dashboard handoff',
+    'backed handoff',
     'apt29',
     'lockbit',
 ]
