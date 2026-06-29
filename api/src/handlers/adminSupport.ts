@@ -904,6 +904,11 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
 
     const watchlistItems = watchlists.rows as OrganizationWatchlistRow[]
     const alertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
+    const recentAuditTimeline = supportRecentAuditTimeline({
+        org: organization.id,
+        target: organization.id,
+        action: 'support.organization',
+    }, audit.rows as Record<string, unknown>[])
     const alertReadinessBridge = supportTimelineAuditBridgeEvent({
         workflow: 'watchlist',
         action: 'support.organization.alert_readiness.inspect',
@@ -954,7 +959,8 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
             audit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}`,
         },
-        recentAuditEvents: audit.rows,
+        recentAuditEvents: recentAuditTimeline.events,
+        recentAuditTimeline,
     })
 }
 
@@ -1032,11 +1038,17 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         },
     })
 
+    const recentAuditTimeline = supportRecentAuditTimeline({
+        target: req.params.id,
+        entity: req.params.id,
+        action: 'support.user',
+    }, audit.rows as Record<string, unknown>[])
     return res.send({
         user: toSupportUser(userRow),
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
-        recentAuditEvents: audit.rows,
+        recentAuditEvents: recentAuditTimeline.events,
+        recentAuditTimeline,
     })
 }
 
@@ -5390,6 +5402,21 @@ function inviteSnapshot(row: OrganizationInviteRow) {
         expiresAt: row.expires_at,
         acceptedAt: row.accepted_at || null,
         acceptedBy: row.accepted_by || null,
+    }
+}
+
+function supportRecentAuditTimeline(filters: Record<string, unknown>, rows: Record<string, unknown>[]) {
+    const events = rows.map(toSupportAuditTimelineEvent)
+    return {
+        schemaVersion: 'support.recent_audit_timeline.v1',
+        filters,
+        eventIds: events.map(event => event.id),
+        events,
+        redacted: true,
+        links: {
+            timeline: auditFilterQuery(filters),
+            details: events.map(event => event.links?.detail).filter(Boolean),
+        },
     }
 }
 
