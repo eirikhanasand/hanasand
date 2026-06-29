@@ -148,6 +148,10 @@ type SupportAccessRecoveryBody = InviteInput & {
     context?: unknown
     caseId?: unknown
     approvalRequired?: unknown
+    supportSessionId?: unknown
+    support_session_id?: unknown
+    requestId?: unknown
+    request_id?: unknown
 }
 
 type AccessRecoveryDecisionParams = {
@@ -173,6 +177,8 @@ type AccessRecoveryApprovalQuery = {
 type SupportAccessRecoveryDecisionBody = {
     reason?: unknown
     context?: unknown
+    supportSessionId?: unknown
+    support_session_id?: unknown
 }
 
 type SupportSessionParams = {
@@ -2210,7 +2216,59 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
     const targetUserId = text(req.body?.targetUserId)
+    const supportSessionId = supportSessionIdFromRequest(req, req.body)
+    const sessionValidation = await validateSupportSessionForAction({
+        actorId: actor.id,
+        supportSessionId,
+        action: 'access_recovery',
+        requiredScope: 'recovery:invite',
+        organizationId: organization.id,
+        targetUserId: targetUserId || null,
+    })
+    if (sessionValidation.error) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.organization.access_recovery',
+            actorId: actor.id,
+            targetType: targetUserId ? 'user' : 'invite',
+            targetId: targetUserId || input.emails[0],
+            organizationId: organization.id,
+            entityId: supportSessionId || targetUserId || input.emails[0],
+            requestId,
+            severity: 'warning',
+            outcome: 'denied',
+            reason,
+            context: {
+                schemaVersion: 'support.access_recovery.session_guard.v1',
+                requestId,
+                supportSessionId: supportSessionId || null,
+                targetUserId: targetUserId || null,
+                email: input.emails[0],
+                role: input.role,
+                expiresAt: input.expiresAt,
+                blockerCode: sessionValidation.error.code,
+                requiredScope: 'recovery:invite',
+                noSilentMembershipMutation: true,
+                mutation: 'none',
+                supportContext: cleanContext(req.body?.context),
+                redactionRequired: true,
+            },
+        })
+        const auditEventIds = await loadAdminAuditEventIds({
+            requestId,
+            actionType: 'support.organization.access_recovery',
+            entityId: supportSessionId || targetUserId || input.emails[0],
+        })
+        return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
+            schemaVersion: 'support.access_recovery.session_guard.v1',
+            requestId,
+            supportSessionId: supportSessionId || null,
+            auditEventIds,
+            noSilentMembershipMutation: true,
+        }))
+    }
+
     const existingMembership = targetUserId
         ? await run(`
             SELECT organization_id, user_id, role, status
@@ -2237,7 +2295,6 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
     let inviteRow = invite.rows[0] as OrganizationInviteRow
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
 
-    const requestId = supportRequestId(req)
     const supportContext = cleanContext(req.body?.context)
     const approval = accessRecoveryApprovalMetadata({
         actorId: actor.id,
@@ -2322,6 +2379,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             inviteId: inviteRow.id,
             inviteStatus: inviteRow.status,
             targetUserId: targetUserId || null,
+            supportSessionId: supportSessionId || null,
             existingMembership: existingMembership.rows[0] || null,
             caseId: text(req.body?.caseId) || null,
             supportContext,
@@ -2349,6 +2407,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             approvalStatus: approval.status,
             approvedBy: approval.approvedBy,
             approvedAt: approval.approvedAt,
+            supportSessionId: supportSessionId || null,
             approval,
             auditEventIds,
             audit: {
@@ -2415,6 +2474,44 @@ async function decideSupportAccessRecovery(
         return res.status(404).send({ error: 'Access recovery request not found.' })
     }
 
+    const supportSessionId = supportSessionIdFromRequest(req, req.body)
+    const requiredScope = decision === 'approved' ? 'recovery:approve' : 'recovery:deny'
+    const sessionValidation = await validateSupportSessionForAction({
+        actorId: actor.id,
+        supportSessionId,
+        action: 'access_recovery',
+        requiredScope,
+        organizationId: current.organization_id,
+        targetUserId: current.target_user_id || null,
+    })
+    if (sessionValidation.error) {
+        await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'denied', reason, {
+            error: sessionValidation.error.code,
+            schemaVersion: 'support.access_recovery.session_guard.v1',
+            supportSessionId: supportSessionId || null,
+            requiredScope,
+            blockerCode: sessionValidation.error.code,
+            noSilentMembershipMutation: true,
+            mutation: 'none',
+            supportContext: cleanContext(req.body?.context),
+            redactionRequired: true,
+        })
+        const auditEventIds = await loadAdminAuditEventIds({
+            requestId: current.request_id,
+            actionType: `support.organization.access_recovery.${decision === 'approved' ? 'approve' : 'deny'}`,
+            entityId: current.invite_id,
+        })
+        return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
+            schemaVersion: 'support.access_recovery.session_guard.v1',
+            requestId: current.request_id,
+            supportSessionId: supportSessionId || null,
+            requiredScope,
+            auditEventIds,
+            noSilentMembershipMutation: true,
+            decision: toAccessRecoveryDecision(current),
+        }))
+    }
+
     if (!current.approval_required) {
         await recordAccessRecoveryDecisionAudit(req, actor.id, current, decision, 'failed', reason, { error: 'approval_not_required' })
         return res.status(409).send({ error: 'This access recovery request does not require approval.', decision: toAccessRecoveryDecision(current) })
@@ -2478,6 +2575,7 @@ async function decideSupportAccessRecovery(
     const detail = toAccessRecoveryDecision(updated)
     await recordAccessRecoveryDecisionAudit(req, actor.id, updated, decision, decision === 'approved' ? 'success' : 'denied', reason, {
         decision: detail,
+        supportSessionId: supportSessionId || null,
         supportContext: cleanContext(req.body?.context),
     })
 
