@@ -618,7 +618,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             return
         }
         await runPersistentAction(`send:${item.id}`, async () => {
-            const action = item.actions?.find(candidate => candidate.id === 'send_alert')
+            const action = sendDeliveryActionFor(item)
             const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
@@ -1322,7 +1322,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         })
     }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
-    const sendAction = selected.actions?.find(action => action.id === 'send_alert')
+    const sendAction = sendDeliveryActionFor(selected)
     if (sendAction) {
         const sendDestinationReady = hasSendDeliveryDestination(sendAction, orgContext)
         const sendDisabledReason = sendDeliveryDisabledReason(selected, orgContext)
@@ -3038,10 +3038,21 @@ function hasSendDeliveryDestination(action: WorkbenchAction | undefined, orgCont
     return Boolean(activeWebhook || stringValue(action?.body?.webhookDestinationId) || stringValue(action?.body?.webhookUrl))
 }
 
+function sendDeliveryActionFor(item: WorkbenchCase) {
+    return item.actions?.find(candidate => candidate.id === 'send_alert') || (item.kind === 'dwm_alert' ? {
+        id: 'send_alert',
+        label: 'Send',
+        method: 'POST' as const,
+        href: '/api/dwm/webhooks/deliver',
+        body: { alertId: item.id, limit: 1 },
+        disabledReason: item.persistent ? undefined : 'Fallback alerts cannot call /api/dwm/webhooks/deliver.',
+    } : undefined)
+}
+
 function sendDeliveryDisabledReason(item: WorkbenchCase, orgContext: WorkbenchOrgContext | undefined) {
     if (item.kind !== 'dwm_alert') return undefined
     if (!item.persistent) return 'Send requires a persistent alert and webhook delivery route.'
-    const action = item.actions?.find(candidate => candidate.id === 'send_alert')
+    const action = sendDeliveryActionFor(item)
     if (action?.disabledReason) return action.disabledReason
     if (!hasSendDeliveryDestination(action, orgContext)) return 'Send delivery requires an active organization webhook destination or action-scoped webhook target.'
     return undefined
