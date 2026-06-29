@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS, PRODUCT_READINESS_PROOF_ROW_IDS, buildOrgOperatingContext, buildProductProgressExternalState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
+
+const here = new URL('.', import.meta.url)
+const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/workbenchClient.tsx', here), 'utf8')
+const dashboardModelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', here), 'utf8')
+const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -110,6 +116,17 @@ const organizationState = {
         updatedAt: generatedAt,
     }],
 } satisfies DwmOrganizationState
+const longLabelOrganizationState = {
+    ...organizationState,
+    selectedOrganization: {
+        ...organizationState.selectedOrganization,
+        name: 'Acme Security Global Incident Response and Threat Intelligence Operations With A Very Long Customer Label',
+    },
+    webhooks: [{
+        ...organizationState.webhooks[0],
+        name: 'Primary Discord Delivery Destination With A Very Long Workspace And Channel Name For Readiness Proof',
+    }],
+} satisfies DwmOrganizationState
 const watchlists = [{
     id: 'wl_acme',
     tenantId: 'org_acme',
@@ -119,6 +136,11 @@ const watchlists = [{
     status: 'active',
     createdAt: generatedAt,
     updatedAt: generatedAt,
+}] satisfies DwmWatchlistSummary[]
+const longLabelWatchlists = [{
+    ...watchlists[0],
+    name: 'Shared exposure watchlist with an unusually long source and organization scoped label for wrap proof',
+    terms: [{ value: 'acme-security-global-incident-response-and-threat-intelligence.example', kind: 'domain' }],
 }] satisfies DwmWatchlistSummary[]
 const operations = {
     counts: { sourceCount: 12, activeSourceCount: 9, captureCount: 42, watchlistMatchCount: 1 },
@@ -191,3 +213,49 @@ const readyContext = buildOrgOperatingContext({
     externalReadiness: buildProductProgressExternalState(readyPayload, { checkedAt: generatedAt }),
 })
 assert.equal(readyContext.readiness.fullChainReady, true)
+
+const longLabelContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists: longLabelWatchlists,
+    organizationState: longLabelOrganizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: buildProductProgressExternalState(readyPayload, { checkedAt: generatedAt }),
+})
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'org_members')?.status, 'ready')
+assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'org_members')?.detail.includes('Very Long Customer Label'))
+assert.ok(longLabelContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
+assert.ok(longLabelContext.readiness.productReadiness.every(item => item.deepLinkTarget === item.href))
+
+for (const attribute of [
+    'data-readiness-row-id',
+    'data-readiness-state',
+    'data-readiness-blocker-count',
+    'data-readiness-deep-link-target',
+    'data-readiness-proof-timestamp',
+    'data-readiness-unavailable-reason',
+]) {
+    assert.ok(workbenchSource.includes(attribute), `Missing readiness DOM attribute ${attribute}`)
+}
+
+for (const className of [
+    'dark:border-[#2d3a52]',
+    'dark:hover:border-[#3b4b68]',
+    'wrap-break-word text-xs font-semibold',
+    'wrap-break-word text-[11px]',
+    'shrink-0',
+    'min-w-0',
+]) {
+    assert.ok(workbenchSource.includes(className), `Missing readiness render guard class ${className}`)
+}
+
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked']) {
+    assert.equal(workbenchSource.toLowerCase().includes(bannedCopy), false, `Dashboard workbench includes banned copy: ${bannedCopy}`)
+    assert.equal(dashboardModelSource.toLowerCase().includes(bannedCopy), false, `Dashboard model includes banned copy: ${bannedCopy}`)
+    assert.equal(dashboardPageSource.toLowerCase().includes(bannedCopy), false, `Dashboard page includes banned copy: ${bannedCopy}`)
+}
+
+assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href={item.href}>'), 'Readiness rows should deep-link through the backed href.')
