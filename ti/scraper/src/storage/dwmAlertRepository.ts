@@ -267,6 +267,46 @@ export type DwmAlertDownstreamHandoff = {
   generatedAt: string;
 };
 
+export type DwmAlertRetentionAudit = {
+  schemaVersion: "dwm.alert_retention_audit.v1";
+  alertId?: string;
+  tenantId?: string;
+  organizationId?: string;
+  retentionState: "active_monitoring" | "audit_retained" | "lifecycle_blocked_retained" | "review_for_cleanup";
+  reasonCodes: Array<
+    | DwmAlertDownstreamHandoffBlockerCode
+    | "has_evidence"
+    | "has_workflow_history"
+    | "has_delivery_history"
+    | "has_case_link"
+    | "customer_proof_required"
+  >;
+  preserve: {
+    alertRecord: true;
+    evidenceRefs: boolean;
+    provenance: boolean;
+    dedupeKeys: boolean;
+    workflowHistory: boolean;
+    deliveryHistory: boolean;
+    caseLinkage: boolean;
+    customerProof: boolean;
+  };
+  cleanup: {
+    deleteEligible: boolean;
+    reviewRequired: boolean;
+    purgeBlockedReasons: string[];
+    retiredWatchlistIds: string[];
+    disabledDestinationIds: string[];
+  };
+  helpdeskAudit: {
+    redacted: true;
+    safeFields: string[];
+    auditRoute?: string;
+    summary: string;
+  };
+  generatedAt: string;
+};
+
 export function buildDwmAlertWorkflowExecutionReadiness(input: {
   alert?: any;
   organizationId?: string;
@@ -1231,6 +1271,96 @@ function effectiveLifecycleAlertStatus(alert: any): string {
   if (alert?.reviewState === "resolved") return "resolved";
   if (alert?.reviewState === "false_positive" || alert?.deliveryState === "muted") return "suppressed";
   return String(alert?.workflowStatus ?? alert?.reviewState ?? "new");
+}
+
+export function buildDwmAlertRetentionAudit(input: {
+  alert?: any;
+  downstreamHandoff?: DwmAlertDownstreamHandoff;
+  deliveries?: Array<Record<string, any>>;
+  generatedAt?: string;
+}): DwmAlertRetentionAudit {
+  const alert = input.alert;
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const downstreamHandoff = input.downstreamHandoff ?? buildDwmAlertDownstreamHandoff({ alert, deliveries: input.deliveries, generatedAt });
+  const eventCount = downstreamHandoff.workflowVersion.eventCount;
+  const evidenceCount = downstreamHandoff.evidence.evidenceCount;
+  const deliveryHistoryRefs = downstreamHandoff.deliveryReadiness.deliveryHistoryRefs;
+  const hasCaseLink = Boolean(downstreamHandoff.caseReadiness.caseId || downstreamHandoff.caseReadiness.caseIdCandidate || downstreamHandoff.caseReadiness.casePath);
+  const lifecycleRetainedCodes = downstreamHandoff.blockerCodes.filter((code) => [
+    "archived_org",
+    "retired_watchlist",
+    "disabled_destination",
+    "closed_alert",
+    "suppressed_alert",
+    "no_active_source_match"
+  ].includes(code));
+  const reasonCodes = uniqueStrings([
+    ...downstreamHandoff.blockerCodes,
+    evidenceCount > 0 ? "has_evidence" : undefined,
+    eventCount > 0 ? "has_workflow_history" : undefined,
+    deliveryHistoryRefs.length > 0 ? "has_delivery_history" : undefined,
+    hasCaseLink ? "has_case_link" : undefined,
+    downstreamHandoff.customerProof.blockerCodes.length || evidenceCount > 0 ? "customer_proof_required" : undefined
+  ].filter(Boolean).map(String)) as DwmAlertRetentionAudit["reasonCodes"];
+  const terminal = downstreamHandoff.blockerCodes.includes("closed_alert") || downstreamHandoff.blockerCodes.includes("suppressed_alert");
+  const lifecycleBlocked = lifecycleRetainedCodes.length > 0;
+  const deleteEligible = Boolean(alert) && lifecycleBlocked && !evidenceCount && !eventCount && !deliveryHistoryRefs.length && !hasCaseLink;
+  const purgeBlockedReasons = uniqueStrings([
+    evidenceCount > 0 ? "evidence_refs_present" : undefined,
+    downstreamHandoff.evidence.captureIds.length > 0 ? "capture_provenance_present" : undefined,
+    downstreamHandoff.dedupe.alertDedupeKey || downstreamHandoff.dedupe.deliveryDedupeKey ? "dedupe_keys_present" : undefined,
+    eventCount > 0 ? "workflow_history_present" : undefined,
+    deliveryHistoryRefs.length > 0 ? "delivery_history_present" : undefined,
+    hasCaseLink ? "case_linkage_present" : undefined,
+    downstreamHandoff.customerProof.blockerCodes.length || evidenceCount > 0 ? "customer_proof_required" : undefined
+  ].filter(Boolean).map(String));
+  return {
+    schemaVersion: "dwm.alert_retention_audit.v1",
+    alertId: downstreamHandoff.alertId,
+    tenantId: downstreamHandoff.tenantId,
+    organizationId: downstreamHandoff.organizationId,
+    retentionState: !alert
+      ? "review_for_cleanup"
+      : lifecycleBlocked
+        ? "lifecycle_blocked_retained"
+        : terminal || eventCount > 0 || deliveryHistoryRefs.length > 0
+          ? "audit_retained"
+          : "active_monitoring",
+    reasonCodes,
+    preserve: {
+      alertRecord: true,
+      evidenceRefs: evidenceCount > 0 || downstreamHandoff.evidence.selectedCaptureIds.length > 0,
+      provenance: downstreamHandoff.evidence.captureIds.length > 0 || Boolean(downstreamHandoff.evidence.matchBasis),
+      dedupeKeys: Boolean(downstreamHandoff.dedupe.alertDedupeKey || downstreamHandoff.dedupe.deliveryDedupeKey),
+      workflowHistory: eventCount > 0,
+      deliveryHistory: deliveryHistoryRefs.length > 0,
+      caseLinkage: hasCaseLink,
+      customerProof: evidenceCount > 0 || downstreamHandoff.customerProof.blockerCodes.length > 0
+    },
+    cleanup: {
+      deleteEligible,
+      reviewRequired: lifecycleBlocked || terminal,
+      purgeBlockedReasons,
+      retiredWatchlistIds: downstreamHandoff.lifecycle.retiredWatchlistIds,
+      disabledDestinationIds: downstreamHandoff.lifecycle.disabledDestinationIds
+    },
+    helpdeskAudit: {
+      redacted: true,
+      safeFields: ["alertId", "organizationId", "tenantId", "retentionState", "reasonCodes", "caseReadiness.caseId", "deliveryReadiness.deliveryHistoryRefs", "evidence.selectedCaptureIds", "dedupe.deliveryDedupeKey"],
+      auditRoute: downstreamHandoff.alertId ? `/v1/dwm/alerts/${encodeURIComponent(downstreamHandoff.alertId)}` : undefined,
+      summary: retentionSummary({ terminal, lifecycleBlocked, evidenceCount, eventCount, deliveryHistoryRefs, hasCaseLink })
+    },
+    generatedAt
+  };
+}
+
+function retentionSummary(input: { terminal: boolean; lifecycleBlocked: boolean; evidenceCount: number; eventCount: number; deliveryHistoryRefs: string[]; hasCaseLink: boolean }): string {
+  if (input.lifecycleBlocked) return "Alert is retained for audit because lifecycle cleanup blocks downstream replay or delivery.";
+  if (input.terminal) return "Alert is retained because analyst workflow reached a terminal state.";
+  if (input.deliveryHistoryRefs.length) return "Alert is retained because delivery history exists.";
+  if (input.hasCaseLink || input.eventCount) return "Alert is retained because analyst workflow or case linkage exists.";
+  if (input.evidenceCount) return "Alert is retained because capture evidence and provenance exist.";
+  return "Alert remains in active monitoring retention.";
 }
 
 function customerProofBlocker(code: DwmCustomerProofBlockerCode, field: string, detail: string, recoverable: boolean): DwmAlertCustomerProofHandoffRow["typedBlockers"][number] {
