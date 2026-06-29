@@ -1636,6 +1636,15 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         workbench,
         timelineFilter,
     })
+    const auditFilterCoverage = supportInspectionAuditFilterCoverage({
+        timelineFilter,
+        timeline,
+        organizationIds,
+        user,
+        email,
+        request,
+        supportSession,
+    })
 
     await recordAdminAuditEvent(req, {
         actionType: 'support.inspect',
@@ -1691,6 +1700,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             auditDetailPacket,
             orgBoundaryProof,
             recoveryFixturePacket,
+            auditFilterCoverage,
             actionPreparation: workbench.actionPreparation,
             recoveryEligibility,
             auditEventIds: timeline.map(event => event.id),
@@ -1705,6 +1715,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 workflowRollup: supportAuditWorkflowRollup(auditTimelineFilters, timeline),
                 supportWorkflowPacket: supportAuditSupportWorkflowPacket(auditTimelineFilters, timeline),
                 searchProof,
+                auditFilterCoverage,
                 events: timeline,
                 links: {
                     timeline: auditFilterQuery(auditTimelineFilters),
@@ -6342,6 +6353,84 @@ function supportInspectionRecoveryFixturePacket(input: {
             `Fixtures: ${allFixtures.map(fixture => fixture.name).join(', ')}`,
             `Expected actions: ${uniqueTimelineValues(allFixtures.map(fixture => fixture.expectedAuditAction)).join(', ')}`,
             `Denied replay: ${auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' })}`,
+        ].join('\n'),
+    }
+}
+
+function supportInspectionAuditFilterCoverage(input: {
+    timelineFilter: SupportTimelineFilter
+    timeline: Array<Record<string, any>>
+    organizationIds: string[]
+    user: string
+    email: string
+    request: string
+    supportSession: string
+}) {
+    const filterEntries = Object.entries(input.timelineFilter)
+        .filter(([key, value]) => key !== 'unsupported' && key !== 'limit' && value !== undefined && value !== null && value !== '')
+        .map(([key, value]) => ({ key, value: String(value) }))
+    const activeKeys = filterEntries.map(entry => entry.key)
+    const targetBounded = Boolean(input.timelineFilter.org || input.timelineFilter.user || input.timelineFilter.email || input.timelineFilter.request || input.timelineFilter.entity || input.timelineFilter.supportSession)
+    const detailRoutes = input.timeline.map(event => event.links?.detail).filter(Boolean)
+    const eventIds = input.timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const actionValues = uniqueTimelineValues(input.timeline.map(event => event.action || event.actionType))
+    const outcomeValues = uniqueTimelineValues(input.timeline.map(event => event.outcome))
+    const severityValues = uniqueTimelineValues(input.timeline.map(event => event.severity))
+    const entityIds = uniqueTimelineValues(input.timeline.map(event => event.entityId || event.entity?.id))
+    const requestIds = uniqueTimelineValues([
+        input.request,
+        ...input.timeline.map(event => event.requestId),
+    ])
+    return {
+        schemaVersion: 'support.inspection.audit_filter_coverage.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noMutation: true,
+        supportedFilters: Array.from(supportInspectionFilters),
+        activeFilters: filterEntries,
+        activeKeys,
+        unsupportedFilters: input.timelineFilter.unsupported,
+        targetBounded,
+        requiredForBoundedSearch: ['org|user|email|request|entity|supportSession'],
+        resultCoverage: {
+            eventCount: input.timeline.length,
+            eventIds,
+            actionValues,
+            outcomeValues,
+            severityValues,
+            entityIds,
+            requestIds,
+            detailRoutes,
+        },
+        replay: {
+            current: auditFilterQuery(input.timelineFilter),
+            denied: auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' }),
+            success: auditFilterQuery({ ...input.timelineFilter, outcome: 'success' }),
+            byRequest: requestIds.map(requestId => auditFilterQuery({ request: requestId })),
+            byOrg: input.organizationIds.map(org => auditFilterQuery({ org })),
+            byTarget: input.user || input.email ? auditFilterQuery({ target: input.user || input.email }) : null,
+            bySupportSession: input.supportSession ? auditFilterQuery({ supportSession: input.supportSession }) : null,
+            byEntity: entityIds.map(entity => auditFilterQuery({ entity })),
+            byActionOutcome: actionValues.flatMap(action => outcomeValues.map(outcome => auditFilterQuery({ action, outcome }))).slice(0, 25),
+        },
+        guardrails: {
+            supportRoleRequired: true,
+            detailRetrievalRequiresSupport: true,
+            noOverbroadInspection: true,
+            redactionRequired: true,
+            unsupportedFiltersAreTyped: true,
+        },
+        blockers: uniqueTimelineValues([
+            targetBounded ? '' : 'overbroad_support_inspection',
+            input.timelineFilter.unsupported.length ? 'unsupported_audit_filter' : '',
+            input.timeline.length ? '' : 'missing_audit_events',
+            detailRoutes.length ? '' : 'missing_detail_routes',
+        ]),
+        copyText: [
+            `Support audit filters active=${activeKeys.join(',') || 'none'} targetBounded=${targetBounded}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Replay: ${auditFilterQuery(input.timelineFilter)}`,
+            `Denied: ${auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' })}`,
         ].join('\n'),
     }
 }
