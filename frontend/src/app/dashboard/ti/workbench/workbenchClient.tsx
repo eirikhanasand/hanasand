@@ -397,6 +397,9 @@ type WorkbenchApiPayload = {
         delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
         deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     }
+    alert?: { id?: string, replayCount?: number, lastReplayedAt?: string, updatedAt?: string }
+    workflowExecutionReadiness?: { ready?: boolean, action?: string, blockerCodes?: string[] }
+    downstreamHandoff?: { blockerCodes?: string[] }
     case?: { id?: string, status?: string, organizationId?: string }
     receipt?: { id?: string, deliveryMode?: string, webhookDeliveryId?: string }
     watchlist?: { id?: string, status?: string }
@@ -604,7 +607,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             await refreshBackedSelection(item, payload)
-            return 'Evidence replay recorded in the DWM workflow.'
+            return alertReplayResultMessage(payload, item)
         })
     }
 
@@ -3140,6 +3143,18 @@ function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJso
     }
     if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
     return 'No webhook delivery was attempted.'
+}
+
+function alertReplayResultMessage(payload: Awaited<ReturnType<typeof readJson>>, item: WorkbenchCase) {
+    const blockerCodes = [...(payload.workflowExecutionReadiness?.blockerCodes || []), ...(payload.downstreamHandoff?.blockerCodes || [])]
+        .filter((code, index, source) => Boolean(code) && source.indexOf(code) === index)
+    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay blocked by ${blockerCodes.join(', ') || 'workflow guard'}.`
+    const alertId = stringValue(payload.alert?.id) || item.id
+    const replayCount = numberValue(payload.alert?.replayCount)
+    const replayedAt = stringValue(payload.alert?.lastReplayedAt || payload.alert?.updatedAt)
+    const countText = replayCount !== undefined ? `; replay count ${replayCount}` : ''
+    const timeText = replayedAt ? `; latest ${replayedAt}` : ''
+    return `Evidence replay recorded for ${alertId}${countText}${timeText}.`
 }
 
 function sourceOperationsActionMessage(payload: Record<string, unknown>) {
