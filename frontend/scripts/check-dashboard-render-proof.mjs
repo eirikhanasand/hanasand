@@ -7,13 +7,14 @@ const pageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', import.
 const sourceOpsSource = readFileSync(new URL('../src/app/dashboard/ti/control/scraperControlClient.tsx', import.meta.url), 'utf8')
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
 const webhookProofCheckerSource = readFileSync(new URL('./check-product-progress-webhook-proof.ts', import.meta.url), 'utf8')
+const alertGenerationProofCheckerSource = readFileSync(new URL('./check-product-progress-alert-generation.ts', import.meta.url), 'utf8')
 const progressSource = readFileSync(new URL('../src/utils/productProgress/readiness.ts', import.meta.url), 'utf8')
 const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs', import.meta.url), 'utf8')
 
 const readinessRows = {
     dashboard_evidence: {
         href: '/dashboard',
-        backendProbe: 'GET /api/product-progress .dashboardEvidence',
+        backendProbe: 'GET /api/product-progress .dashboardEvidence + /api/dwm/alerts/generation-readiness evidence window',
         commits: ['89d9547e', 'dfb2d272'],
     },
     source_inventory_probe: {
@@ -82,6 +83,16 @@ for (const webhookProofToken of [
     'GET /api/organizations/:id/webhooks must return destinationAdminProof.productProgress',
 ]) {
     assert.ok(webhookProofCheckerSource.includes(webhookProofToken), `Webhook product-progress checker missing token: ${webhookProofToken}`)
+}
+
+for (const alertGenerationProofToken of [
+    'generationEvidenceWindowReady',
+    'generation evidence window',
+    'latestEvidenceAt',
+    '/api/dwm/alerts/generation-readiness',
+    'DWM alert-generation proof did not include a generation evidence window with capture timestamps.',
+]) {
+    assert.ok(alertGenerationProofCheckerSource.includes(alertGenerationProofToken), `Alert-generation product-progress checker missing token: ${alertGenerationProofToken}`)
 }
 
 for (const attr of [
