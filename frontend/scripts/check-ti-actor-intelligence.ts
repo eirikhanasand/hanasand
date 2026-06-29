@@ -112,6 +112,7 @@ const actionability = buildTiActionability(fixture, profile, victims)
 const artifacts = buildActorArtifacts(fixture, profile, victims, actionability)
 const geo = actorGeoProfile(fixture)
 const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
+const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const bannedUiCopy = [
     'how this feeds',
     'control room',
@@ -127,6 +128,23 @@ const bannedUiCopy = [
     'contract',
     'acceptance criteria',
     'dashboard slop',
+    'api result data is live',
+    'case payload',
+    'mode live',
+    'open dwm workbench',
+    'api work',
+    'console/api workflow',
+]
+const brightDarkSurfaceTokens = [
+    'border-white/10',
+    'bg-white/10',
+    'dark:border-white',
+    'dark:bg-white',
+]
+const publicTiImplementationPhrases = [
+    'API activity result',
+    'TI search API',
+    'search API',
 ]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
@@ -338,9 +356,20 @@ assert(nextActorArtifactId(quietArtifacts, undefined, 'next') === '', 'Keyboard 
 for (const phrase of bannedUiCopy) {
     assert(!pageClientSource.toLowerCase().includes(phrase), `Public TI page should not render prompt-shaped/internal copy: ${phrase}.`)
 }
+for (const token of brightDarkSurfaceTokens) {
+    assert(!pageClientSource.includes(token), `Public TI dense dark surfaces should not use bright dark-mode token: ${token}.`)
+}
+for (const phrase of publicTiImplementationPhrases) {
+    assert(!pageClientSource.includes(phrase), `Public TI page should not expose implementation wording: ${phrase}.`)
+    assert(!actorIntelligenceSource.includes(phrase), `Public TI actor intelligence fallbacks should not expose implementation wording: ${phrase}.`)
+}
 assert(pageClientSource.includes('Console handoff'), 'Public TI page should use professional console handoff language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
 assert(pageClientSource.includes('Handoff readiness'), 'Public TI page should expose consumer-ready workflow state.')
+assert(pageClientSource.includes('Local triage list; source evidence stays attached.'), 'Public TI queue should use analyst-native local triage copy.')
+assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
+assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
+assert(pageClientSource.includes('source gap'), 'Public TI enrichment statuses should use source-gap language instead of implementation labels.')
 assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
 assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')
@@ -348,10 +377,15 @@ assert(pageClientSource.includes('Open case'), 'Public TI decision flow should i
 assert(pageClientSource.includes('Deliver webhook'), 'Public TI decision flow should include webhook delivery readiness.')
 assert(pageClientSource.includes('Queue enrichment'), 'Public TI decision flow should include enrichment routing.')
 assert(!pageClientSource.includes('Ready for ${'), 'Public TI visible copy should not expose endpoint-shaped ready labels.')
+assert(!pageClientSource.includes('API result data is live'), 'Public TI queue should not expose implementation-literal API copy.')
+assert(!pageClientSource.includes('Open DWM workbench'), 'Public TI action labels should not expose internal product-lane naming.')
+assert(!pageClientSource.includes('Case payload'), 'Public TI page should not expose raw payload labels as analyst-facing copy.')
+assert(!pageClientSource.includes('API work'), 'Public TI enrichment labels should not expose implementation-literal API work copy.')
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
+assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')

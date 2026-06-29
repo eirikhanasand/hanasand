@@ -115,7 +115,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
 
     return {
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
-        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution not returned by the search API',
+        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution not returned by the search service',
         firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'Not returned',
         lastSeen: result.lastSeen || result.generatedAt,
         motivation: result.targets.map(target => target.rationale).slice(0, 4),

@@ -174,6 +174,9 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
+    const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
+    const totalHandoffCount = actionability.consumerReadiness.stages.length
+    const openGapCount = actionability.enrichmentGapQueue.length
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
         const item = workItems.find(entry => entry.id === id)
         return {
@@ -186,9 +189,10 @@ function Results({ result }: { result: TiSearchResponse }) {
     const queueCounts = queueCountsFor(workItems, localDecisions)
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(result.sources.length) },
-        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Updated', value: formatDate(result.generatedAt || result.lastSeen) },
+        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Last seen', value: formatDate(result.lastSeen || result.generatedAt) },
         { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Queue', value: `${queueCounts.open} open` },
-        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Mode', value: result.status === 'ready' || result.status === 'partial' ? 'Live' : 'Watching' },
+        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Handoff', value: `${readyHandoffCount}/${totalHandoffCount} ready` },
+        { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
     ]
 
     useEffect(() => {
@@ -242,7 +246,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>No aliases returned</span> : null}
                         </div>
                     </div>
-                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[34rem]'>
+                    <div className='grid grid-cols-2 gap-2 sm:grid-cols-5 lg:min-w-[40rem]'>
                         {profileStats.map(item => (
                             <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                         ))}
@@ -255,7 +259,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
                                     <h2 className='text-sm font-semibold text-[#171a21]'>Priority Queue</h2>
-                                    <p className='mt-1 text-xs text-[#667085]'>Session-local triage; API result data is live.</p>
+                                    <p className='mt-1 text-xs text-[#667085]'>Local triage list; source evidence stays attached.</p>
                                 </div>
                                 <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{workItems.length}</span>
                             </div>
@@ -400,7 +404,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             />
                         </div>
 
-                        <Panel title='Timeline' description='API evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
+                        <Panel title='Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                             <div className='grid gap-3'>
                                 {[...timelineFor(result, selected), ...sessionEvents].slice(0, 8).map(event => (
                                     <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
@@ -745,7 +749,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             detail: item.detail,
             timestamp: item.firstReportedAt || item.date || result.generatedAt,
             source: activitySourceLabel(item.sourceIds.length),
-            provenance: item.publisherCount ? `${item.publisherCount} publisher${item.publisherCount === 1 ? '' : 's'}` : 'API activity result',
+            provenance: item.publisherCount ? `${item.publisherCount} publisher${item.publisherCount === 1 ? '' : 's'}` : 'Activity result',
             confidence: item.confidence,
             href,
             evidence: [
@@ -830,7 +834,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         subtitle: result.analystLoop?.headline || result.summary,
         detail: result.analystLoop?.runStatusClarity.summary || 'The collection layer has not returned analyst-reviewable rows for this query yet.',
         timestamp: result.generatedAt,
-        source: 'TI search API',
+        source: 'TI search service',
         provenance: result.mode,
         confidence: result.confidence,
         evidence: result.notes.length ? result.notes : ['No evidence rows returned yet.'],
@@ -881,7 +885,7 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
 
 function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     return (
-        <Panel title='Alert Packet' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Sending remains a console/API workflow.' icon={<BellRing className='h-4 w-4' />}>
+        <Panel title='Alert Packet' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div>
                     <p className='text-sm font-semibold text-[#171a21]'>{packet.title}</p>
@@ -921,19 +925,19 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     const decisionSteps = decisionStepsFor(actionability)
 
     return (
-        <Panel title='Workflow' description='Readiness for watchlist, alert, case, delivery, and source work.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Workflow' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <ConsumerReadinessPanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex items-center justify-between gap-2'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist readiness</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlists</p>
                         <span className={actionability.watchlist.state === 'backed_matches' ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
                             {formatLabel(actionability.watchlistRelevance.state)}
                         </span>
                     </div>
-                    <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Org-scoped watchlist create request with provenance carried in the copied package.</p>
+                    <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Candidate terms preserve source provenance for authenticated review.</p>
                     <div className='mt-2 flex flex-wrap gap-1.5'>
                         {actionability.watchlistRelevance.terms.length ? actionability.watchlistRelevance.terms.slice(0, 6).map(payload => (
                             <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
@@ -943,7 +947,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Geography routing</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Geography</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.geographyHandoffs.slice(0, 4).map(item => (
                             <div key={`${item.role}-${item.code}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -959,7 +963,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source routing</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Sources</p>
                     <div className='mt-2 grid gap-2'>
                         {actionability.sourceClusters.slice(0, 4).map(item => (
                             <div key={`${item.sourceName}-${item.provenance}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -978,7 +982,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 <div className='grid gap-2'>
                     <Link href='/dashboard/dwm' className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                         <ExternalLink className='h-3.5 w-3.5' />
-                        Open DWM workbench
+                        Open console
                     </Link>
                     {casePath ? (
                         <a href={casePath} className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
@@ -994,14 +998,17 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 </div>
 
                 {!casePath && actionability.handoffs.casePayload ? (
-                    <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case payload</p>
-                        <p className='mt-2 break-all font-mono text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{JSON.stringify(actionability.exportPayloads.case.body)}</p>
-                    </div>
+                    <PayloadHandoffRow
+                        label='Case handoff'
+                        detail={actionability.caseHandoff.blocked ? `Blocked until ${actionability.caseHandoff.missing.slice(0, 2).join('; ')}.` : 'Case request is prepared for authenticated review.'}
+                        payload={actionability.exportPayloads.case.body}
+                        route={actionability.caseHandoff.backedRoute}
+                        blocked={actionability.caseHandoff.blocked}
+                    />
                 ) : null}
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related records</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Records</p>
                     <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'webhook ready' : 'webhook blocked'}
                     </p>
@@ -1041,7 +1048,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{stage.missing.slice(0, 2).join('; ')}</p>
                                 ) : null}
                             </div>
-                            <div className='flex shrink-0 items-center gap-1.5'>
+                            <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                 {stage.route ? (
                                     <a href={stage.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                         <ExternalLink className='h-3.5 w-3.5' />
@@ -1094,7 +1101,7 @@ function DecisionFlow({ steps, disposition, shouldAlert, rationale }: { steps: D
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{step.missing.slice(0, 2).join('; ')}</p>
                                 ) : null}
                             </div>
-                            <div className='flex shrink-0 items-center gap-1.5'>
+                            <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                 {step.route ? (
                                     <a href={step.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                         <ExternalLink className='h-3.5 w-3.5' />
@@ -1192,7 +1199,7 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
                     </div>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{detail}</p>
                 </div>
-                <div className='flex shrink-0 items-center gap-1.5'>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     {route ? (
                         <a href={route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                             <ExternalLink className='h-3.5 w-3.5' />
@@ -1242,7 +1249,7 @@ function BlockerList({ blockers }: { blockers: string[] }) {
 
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
-        <Panel title='Enrichment Queue' description='Source and API work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Enrichment Queue' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
                 {tasks.map(task => (
                     <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -1265,7 +1272,7 @@ function ActionPanel({ note, decision, onNoteChange, onDecision }: {
     onDecision: (status: LocalDecision['status']) => void
 }) {
     return (
-        <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted assignment, delivery, and audit logging live in the authenticated console/API workflow.' icon={<ClipboardList className='h-4 w-4' />}>
+        <Panel title='Session Notes' description='These controls are local to this browser session. Use them for scratch triage only; persisted ownership, delivery, and audit history live in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {decision ? (
                     <div className='rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3 text-xs leading-5 text-[#147a3b]'>
@@ -1536,7 +1543,7 @@ function domainFromUrl(value?: string) {
 }
 
 function taskStatusLabel(status: EnrichmentTask['status']) {
-    if (status === 'needs_api') return 'API work'
+    if (status === 'needs_api') return 'source gap'
     if (status === 'needs_review') return 'review'
     if (status === 'watch') return 'watchlist'
     return 'ready'
