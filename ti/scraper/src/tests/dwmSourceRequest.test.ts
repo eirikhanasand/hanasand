@@ -1428,6 +1428,34 @@ describe("dwm source requests", () => {
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           })
         ]),
+        evidenceReadiness: {
+          schemaVersion: "dwm.actor_evidence_readiness.v1",
+          proofId: expect.any(String),
+          evidenceReady: true,
+          summary: expect.objectContaining({
+            readyFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            averageConfidence: expect.any(Number),
+            lastEvidenceAt: expect.any(String)
+          }),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              family: "telegram",
+              confidence: expect.any(Number),
+              confidenceTier: expect.stringMatching(/medium|high|low/),
+              timestamps: expect.objectContaining({
+                lastCaptureAt: expect.any(String),
+                lastEnrichmentAt: expect.any(String),
+                checkedAt: expect.any(String)
+              }),
+              evidenceFields: expect.arrayContaining(["text"]),
+              provenance: expect.objectContaining({
+                family: "telegram",
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ])
+        },
         freshness: {
           lastSuccessfulCaptureAt: expect.any(String),
           lastSuccessfulEnrichmentAt: expect.any(String),
@@ -1520,6 +1548,13 @@ describe("dwm source requests", () => {
           sourceReadinessLedgerRows: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", freshnessState: "fresh" })
           ]),
+          evidenceReadiness: expect.objectContaining({
+            schemaVersion: "dwm.actor_evidence_readiness.v1",
+            evidenceReady: true,
+            rows: expect.arrayContaining([
+              expect.objectContaining({ family: "telegram", confidence: expect.any(Number) })
+            ])
+          }),
           captureReadiness: expect.objectContaining({
             schemaVersion: "dwm.actor_capture_readiness.v1",
             captureReady: true
@@ -1736,6 +1771,25 @@ describe("dwm source requests", () => {
         stale: true,
         captureFreshness: expect.objectContaining({ state: "needs_capture" }),
         lastSuccessfulEnrichmentAt: expect.any(String)
+      },
+      evidenceReadiness: {
+        schemaVersion: "dwm.actor_evidence_readiness.v1",
+        evidenceReady: true,
+        summary: expect.objectContaining({
+          readyFamilies: expect.arrayContaining(["telegram"]),
+          gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+          averageConfidence: expect.any(Number)
+        }),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "darkweb_onion",
+            gap: expect.objectContaining({
+              state: "missing",
+              intakeRecommendation: expect.objectContaining({ policyBoundary: "metadata_only_restricted_source" })
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          })
+        ])
       },
       alertCaseHandoffReadiness: {
         alertReady: false,

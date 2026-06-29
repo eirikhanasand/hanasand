@@ -3054,6 +3054,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       state: actorReadiness.state,
       sections: actorReadiness.actorSections,
       provenance: actorReadiness.provenance,
+      evidenceReadiness: actorReadiness.evidenceReadiness,
       freshness: actorReadiness.freshness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
@@ -3068,6 +3069,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       proofId: actorReadiness.proofId,
       query,
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
+      evidenceReadiness: actorReadiness.evidenceReadiness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
       captureReadiness: actorReadiness.captureReadiness,
@@ -3089,6 +3091,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.proofId | length > 0",
       ".actorReadiness.safeOutput.liveNetworkScrapeStarted == false",
       ".actorReadiness.freshness.captureFreshness.state | IN(\"fresh\",\"needs_capture\",\"stale\")",
+      ".actorReadiness.evidenceReadiness.schemaVersion == \"dwm.actor_evidence_readiness.v1\"",
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
       ".actorReadiness.sourcePackActionReadiness.schemaVersion == \"dwm.actor_source_pack_action_readiness.v1\"",
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
@@ -3185,6 +3188,13 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourcePackActionReadiness,
     freshness
   });
+  const evidenceReadiness = sourceActorEvidenceReadiness({
+    query,
+    provenance,
+    sourceReadinessLedgerRows,
+    candidateGaps,
+    freshness
+  });
   const captureReadiness = sourceActorCaptureReadiness({
     query,
     sourceReadinessLedgerRows,
@@ -3224,6 +3234,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     actorSections,
     missingSections,
     provenance,
+    evidenceReadiness,
     freshness,
     candidateGaps,
     retryBlockers,
@@ -3322,6 +3333,86 @@ function sourceActorDownstreamReadinessRows(input: {
       }
     };
   });
+}
+
+function sourceActorEvidenceReadiness(input: {
+  query: string;
+  provenance: Array<Record<string, any>>;
+  sourceReadinessLedgerRows: Array<Record<string, any>>;
+  candidateGaps: Array<Record<string, any>>;
+  freshness: Record<string, any>;
+}) {
+  const provenanceByFamily = new Map(input.provenance.map((row) => [String(row.family), row]));
+  const evidenceRows = input.sourceReadinessLedgerRows
+    .filter((row) => row.downstreamConsumers?.publicTiActorPage === true || row.downstreamConsumers?.sharedWatchlistAlerts === true || row.candidateGap)
+    .map((row) => {
+      const provenance = provenanceByFamily.get(String(row.family));
+      const confidence = Number(row.sourceTrust?.score ?? provenance?.sourceTrust?.score ?? 0);
+      return {
+        schemaVersion: "dwm.actor_evidence_readiness_row.v1",
+        proofId: stableId("dwm_actor_evidence_readiness_row", `${input.query}:${row.family}:${row.state}:${row.lastCaptureAt ?? "no_capture"}:${row.lastEnrichmentAt ?? "no_enrichment"}`),
+        query: input.query,
+        family: row.family,
+        state: row.state,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        confidence,
+        confidenceTier: confidence >= 0.85 ? "high" : confidence >= 0.6 ? "medium" : confidence > 0 ? "low" : "missing",
+        timestamps: {
+          lastCaptureAt: row.lastCaptureAt,
+          lastEnrichmentAt: row.lastEnrichmentAt,
+          checkedAt: input.freshness.checkedAt
+        },
+        evidenceFields: uniqueSourceReadinessStrings([
+          ...(row.alertability?.alertableFields ?? []),
+          ...(row.alertability?.matchableFields ?? []),
+          ...(provenance?.alertableFields ?? []),
+          ...(provenance?.matchableFields ?? [])
+        ]),
+        provenance: provenance ? {
+          family: provenance.family,
+          state: provenance.state,
+          lastCaptureAt: provenance.lastCaptureAt,
+          lastEnrichmentAt: provenance.lastEnrichmentAt,
+          privacyBoundary: provenance.privacyBoundary,
+          sourceTrust: provenance.sourceTrust,
+          safeOutput: provenance.safeOutput
+        } : undefined,
+        gap: row.candidateGap ? {
+          state: row.candidateGap.state,
+          intakeRecommendation: row.candidateGap.intakeRecommendation
+        } : undefined,
+        blockers: row.blockers ?? [],
+        safeOutput: {
+          rawTargetsExposed: false,
+          restrictedMetadataLeaked: false,
+          privateTelegramContentExposed: false,
+          liveNetworkScrapeStarted: false
+        }
+      };
+    });
+  const evidenceReadyRows = evidenceRows.filter((row) => row.provenance && row.confidence > 0);
+  return {
+    schemaVersion: "dwm.actor_evidence_readiness.v1",
+    proofId: stableId("dwm_actor_evidence_readiness", `${input.query}:${evidenceRows.map((row) => `${row.family}:${row.state}:${row.confidenceTier}`).join(",")}`),
+    query: input.query,
+    evidenceReady: evidenceReadyRows.length > 0,
+    rows: evidenceRows,
+    summary: {
+      readyFamilies: uniqueSourceReadinessStrings(evidenceReadyRows.map((row) => row.family)),
+      gapFamilies: uniqueSourceReadinessStrings(input.candidateGaps.map((gap) => gap.family)),
+      averageConfidence: evidenceReadyRows.length > 0
+        ? Math.round((evidenceReadyRows.reduce((sum, row) => sum + row.confidence, 0) / evidenceReadyRows.length) * 100) / 100
+        : 0,
+      lastEvidenceAt: latestIso(evidenceReadyRows.flatMap((row) => [row.timestamps.lastCaptureAt, row.timestamps.lastEnrichmentAt]))
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
 }
 
 function sourceActorCaptureReadiness(input: {
