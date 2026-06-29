@@ -1154,6 +1154,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     sharedWatchlistSupportInspection: OrganizationSharedWatchlistSupportInspection
     sharedWatchlistAlertQueueVisibility: OrganizationSharedWatchlistAlertQueueVisibility
     webhookDestinationOwnership: OrganizationWebhookDestinationOwnershipContract
+    consumerReadiness: OrganizationSharedWatchlistConsumerReadiness
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -1240,6 +1241,54 @@ export type OrganizationWebhookDestinationOwnershipContract = {
     requiredDeliveryFields: string[]
     redactedFields: string[]
     blockerCodes: string[]
+}
+
+export type OrganizationSharedWatchlistConsumerReadiness = {
+    schemaVersion: 'organization.shared_watchlist_consumer_readiness.v1'
+    organizationId: string
+    tenantId: string
+    sourceFamily: 'organization_watchlist'
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    routes: {
+        alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+        alertList: 'GET /v1/dwm/alerts'
+        alertReplay: 'POST /v1/dwm/alerts/:id/replay'
+        caseList: 'GET /v1/cases'
+        caseOpen: 'POST /v1/cases'
+        webhookDeliver: 'POST /v1/dwm/webhooks/deliver'
+        supportInspection: 'GET /api/admin/support/organizations/:id'
+        dashboardReadiness: 'GET /api/organizations/:id/alert-readiness'
+    }
+    watchlists: {
+        activeCount: number
+        pausedCount: number
+        archivedCount: number
+        activeIds: string[]
+        pausedIds: string[]
+        archivedIds: string[]
+        alertGeneratorKeys: string[]
+        crossTenantCollisionAllowed: false
+    }
+    readiness: {
+        alertQueueReady: boolean
+        caseWorkflowReady: boolean
+        webhookDeliveryReady: boolean
+        supportRedactedReadReady: boolean
+        dashboardReadinessReady: boolean
+    }
+    roleGates: {
+        mutateWatchlists: Array<'owner' | 'admin'>
+        exportTerms: OrganizationRole[]
+        manualWebhookTrigger: Array<'owner' | 'admin'>
+        assignCase: OrganizationAlertCaseRole[]
+    }
+    blockers: string[]
+    noLeakFields: Array<'activeTerms[].term' | 'activeTerms[].value' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret' | 'case.evidence.rawContent'>
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
 export type OrganizationAnalystPortalVisibilityAdapter = {
@@ -4954,6 +5003,67 @@ export function organizationWatchlistAlertTermsExport(
         supportAccess,
         audit: sharedWatchlistDownstreamProof.audit,
     })
+    const consumerReadinessBlockers = Array.from(new Set([
+        ...sharedWatchlistIntegrationGuardrails.blockerCodes,
+        ...sharedWatchlistAlertQueueVisibility.blockerCodes,
+        ...sharedWatchlistAlertQueueVisibility.denialGuardrails.blockerCodes,
+        ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+        ...webhookDestinationOwnership.blockerCodes,
+    ].map(String)))
+    const consumerReadiness: OrganizationSharedWatchlistConsumerReadiness = {
+        schemaVersion: 'organization.shared_watchlist_consumer_readiness.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        sourceFamily: 'organization_watchlist',
+        member: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        routes: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            alertList: sharedWatchlistAlertQueueVisibility.routes.list,
+            alertReplay: sharedWatchlistAlertQueueVisibility.routes.replay,
+            caseList: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.routes.list,
+            caseOpen: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.routes.open,
+            webhookDeliver: webhookDestinationOwnership.route,
+            supportInspection: sharedWatchlistSupportInspection.route,
+            dashboardReadiness: 'GET /api/organizations/:id/alert-readiness',
+        },
+        watchlists: {
+            activeCount: sharedWatchlistDownstreamProof.watchlistOwnership.activeCount,
+            pausedCount: sharedWatchlistDownstreamProof.watchlistOwnership.pausedCount,
+            archivedCount: sharedWatchlistDownstreamProof.watchlistOwnership.archivedCount,
+            activeIds: sharedWatchlistDownstreamProof.watchlistOwnership.activeIds,
+            pausedIds: sharedWatchlistDownstreamProof.watchlistOwnership.pausedIds,
+            archivedIds: sharedWatchlistDownstreamProof.watchlistOwnership.archivedIds,
+            alertGeneratorKeys: sharedWatchlistAlertQueueVisibility.watchlistScope.alertGeneratorKeys,
+            crossTenantCollisionAllowed: sharedWatchlistAlertQueueVisibility.watchlistScope.crossTenantCollisionAllowed,
+        },
+        readiness: {
+            alertQueueReady: sharedWatchlistAlertQueueVisibility.visibility.allowed && sharedWatchlistAlertQueueVisibility.blockerCodes.length === 0,
+            caseWorkflowReady: sharedWatchlistIntegrationGuardrails.caseSafety.ok,
+            webhookDeliveryReady: webhookDestinationOwnership.blockerCodes.length === 0,
+            supportRedactedReadReady: sharedWatchlistSupportInspection.guardrails.ok,
+            dashboardReadinessReady: true,
+        },
+        roleGates: {
+            mutateWatchlists: ['owner', 'admin'],
+            exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
+            manualWebhookTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
+            assignCase: sharedWatchlistAlertQueueVisibility.roleActionMatrix.roleGates.assign_case,
+        },
+        blockers: consumerReadinessBlockers,
+        noLeakFields: [
+            'activeTerms[].term',
+            'activeTerms[].value',
+            'otherOrg.watchlistItemIds',
+            'otherOrg.alertGeneratorKeys',
+            'destination.secret',
+            'case.evidence.rawContent',
+        ],
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -5134,6 +5244,7 @@ export function organizationWatchlistAlertTermsExport(
         sharedWatchlistSupportInspection,
         sharedWatchlistAlertQueueVisibility,
         webhookDestinationOwnership,
+        consumerReadiness,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
