@@ -373,6 +373,13 @@ describe("dwm workflow persistence", () => {
     });
     expect(triage.alert.nextBestAction).toMatchObject({ action: "investigate_or_route", route: "identity_response" });
     expect(triage.alert.deliveryReadiness).toMatchObject({ ready: false, state: "missing_route", evidenceCount: 1 });
+    expect(triage.alert.deliveryReadiness.createdEvent).toMatchObject({
+      schemaVersion: "dwm.alert_created_event.v1",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      recommendedRoute: "identity_response"
+    });
     expect(triage.alert.deliveryReadiness.persistedContext).toMatchObject({
       schemaVersion: "dwm.alert_delivery_persistence.v1",
       organizationId,
@@ -557,6 +564,12 @@ describe("dwm workflow persistence", () => {
     });
     expect(detail.nextBestAction).toMatchObject({ action: "investigate_or_route" });
     expect(detail.deliveryReadiness).toMatchObject({ ready: false, blocker: "missing_webhook_route" });
+    expect(detail.deliveryReadiness.createdEvent).toMatchObject({
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      recommendedRoute: "identity_response"
+    });
     expect(detail.evidenceFreshness).toMatchObject({ evidenceCount: 1, newestEvidenceAt: "2026-06-27T21:02:00.000Z" });
     expect(detail.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"] });
   });

@@ -1430,6 +1430,7 @@ function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
     dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: persisted?.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey,
     replayMarker: persisted?.replayMarker,
+    createdEvent: buildDwmAlertCreatedEventSummary(alert),
     alertGeneratorKeys: persisted?.alertGeneratorKeys ?? alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [],
     sourceFamily: persisted?.sourceFamily ?? alert.sourceFamily,
     caseIdCandidate: persisted?.caseIdCandidate ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
@@ -1545,16 +1546,13 @@ function uniqueAlertStrings(values: string[]) {
   return [...new Set(values)];
 }
 
-function buildDwmAlertWorkflowSummary(alert: any) {
-  const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
-  const lastEvent = events.at(-1);
-  const status = String(alert.workflowStatus ?? "new");
-  const effectiveSeverity = String(alert.severityOverride ?? alert.severity ?? "medium");
+function buildDwmAlertCreatedEventSummary(alert: any) {
   const alertCreatedEvent = alert.alertCreatedEvent;
   const deliveryContext = alert.deliveryReadinessContext ?? {};
   const createdEventId = alertCreatedEvent?.id ?? deliveryContext.alertCreatedEventId;
   const createdEventAt = alertCreatedEvent?.at ?? deliveryContext.alertCreatedAt;
-  const createdEvent = createdEventId || createdEventAt ? {
+  if (!createdEventId && !createdEventAt) return undefined;
+  return {
     schemaVersion: "dwm.alert_created_event.v1",
     eventId: createdEventId,
     eventType: alertCreatedEvent?.eventType ?? "dwm.alert.created",
@@ -1565,11 +1563,18 @@ function buildDwmAlertWorkflowSummary(alert: any) {
       : deliveryContext.selectedCaptureIds ?? alert.provenance?.captureIds ?? []).map(String).filter(Boolean)),
     dedupeKey: alertCreatedEvent?.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
     recommendedRoute: alertCreatedEvent?.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute
-  } : undefined;
+  };
+}
+
+function buildDwmAlertWorkflowSummary(alert: any) {
+  const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+  const lastEvent = events.at(-1);
+  const status = String(alert.workflowStatus ?? "new");
+  const effectiveSeverity = String(alert.severityOverride ?? alert.severity ?? "medium");
   return {
     schemaVersion: "dwm.alert_workflow_summary.v1",
     status,
-    createdEvent,
+    createdEvent: buildDwmAlertCreatedEventSummary(alert),
     reviewState: alert.reviewState,
     deliveryState: alert.deliveryState,
     assignedOwner: alert.assignedOwner,
