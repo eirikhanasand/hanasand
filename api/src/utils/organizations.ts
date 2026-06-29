@@ -543,6 +543,38 @@ export type OrganizationSharedWatchlistDownstreamProof = {
         route: 'POST /v1/dwm/webhooks/deliver'
         defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
         canUseDefaultDestinations: boolean
+        deliveryContract: {
+            schemaVersion: 'organization.watchlist_webhook_delivery_contract.v1'
+            eventType: 'dwm.alert'
+            organizationId: string
+            tenantId: string
+            sourceFamily: 'organization_watchlist'
+            destinationSelection: {
+                policy: OrganizationDefaultWebhookPolicy
+                selectedDestinationSource: 'org_active_destinations' | 'manual_selection_required' | 'webhook_policy_disabled'
+                requiredDestinationOrgId: string
+                selectedDestinationOrgField: 'destination.org_id'
+                selectedDestinationIdField: 'webhookDestinationIds[]'
+                skippedDestinationReasons: Array<'org_mismatch' | 'destination_disabled' | 'event_not_subscribed' | 'manual_selection_required' | 'webhook_policy_disabled'>
+                nonmemberDestinationEnumeration: false
+            }
+            roleGates: {
+                automaticDeliveryAllowed: boolean
+                manualTriggerAllowed: boolean
+                manualTriggerAllowedRoles: Array<'owner' | 'admin'>
+                memberManualTriggerAllowed: false
+                denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | 'manual_webhook_selection_required' | null
+            }
+            idempotency: {
+                scope: 'organization_destination_alert'
+                keyFields: Array<'eventType' | 'organizationId' | 'destinationId' | 'alert.dedupeKey'>
+            }
+            requiredAlertFields: string[]
+            requiredDeliveryFields: string[]
+            evidenceFields: string[]
+            redactedFields: string[]
+            blockerCodes: string[]
+        }
         expectedDeliveryFields: string[]
         blockerCodes: string[]
     }
@@ -1252,6 +1284,16 @@ export function organizationSharedWatchlistDownstreamProof(
         downstreamAuthorization.downstream.webhook.denialReason,
         downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
     ].filter(Boolean).map(String)))
+    const webhookDeliveryAllowedByRole = member.role === 'owner' || member.role === 'admin'
+    const webhookPolicy = downstreamAuthorization.downstream.webhook.defaultPolicy
+    const selectedDestinationSource = webhookPolicy === 'active_destinations' && downstreamAuthorization.downstream.webhook.canUseDefaultDestinations
+        ? 'org_active_destinations'
+        : webhookPolicy === 'disabled'
+            ? 'webhook_policy_disabled'
+            : 'manual_selection_required'
+    const webhookManualDenialReason = webhookDeliveryAllowedByRole
+        ? (downstreamAuthorization.downstream.webhook.denialReason ?? (webhookPolicy === 'manual_selection' ? null : null))
+        : 'role_not_allowed'
 
     return {
         schemaVersion: 'organization.shared_watchlist_downstream_proof.v1',
@@ -1378,6 +1420,71 @@ export function organizationSharedWatchlistDownstreamProof(
             route: 'POST /v1/dwm/webhooks/deliver',
             defaultWebhookPolicy: downstreamAuthorization.downstream.webhook.defaultPolicy,
             canUseDefaultDestinations: downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+            deliveryContract: {
+                schemaVersion: 'organization.watchlist_webhook_delivery_contract.v1',
+                eventType: 'dwm.alert',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                sourceFamily: 'organization_watchlist',
+                destinationSelection: {
+                    policy: webhookPolicy,
+                    selectedDestinationSource,
+                    requiredDestinationOrgId: organization.id,
+                    selectedDestinationOrgField: 'destination.org_id',
+                    selectedDestinationIdField: 'webhookDestinationIds[]',
+                    skippedDestinationReasons: [
+                        'org_mismatch',
+                        'destination_disabled',
+                        'event_not_subscribed',
+                        'manual_selection_required',
+                        'webhook_policy_disabled',
+                    ],
+                    nonmemberDestinationEnumeration: false,
+                },
+                roleGates: {
+                    automaticDeliveryAllowed: downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+                    manualTriggerAllowed: webhookDeliveryAllowedByRole && downstreamAuthorization.organizationLifecycleState === 'active',
+                    manualTriggerAllowedRoles: ['owner', 'admin'],
+                    memberManualTriggerAllowed: false,
+                    denialReason: webhookManualDenialReason,
+                },
+                idempotency: {
+                    scope: 'organization_destination_alert',
+                    keyFields: ['eventType', 'organizationId', 'destinationId', 'alert.dedupeKey'],
+                },
+                requiredAlertFields: [
+                    'alert.id',
+                    'alert.organizationId',
+                    'alert.tenantId',
+                    'alert.dedupeKey',
+                    'alert.watchlistItemIds',
+                    'alert.casePath',
+                ],
+                requiredDeliveryFields: [
+                    'deliveryId',
+                    'organizationId',
+                    'destinationId',
+                    'eventType',
+                    'status',
+                    'idempotencyKey',
+                ],
+                evidenceFields: [
+                    'deliveryId',
+                    'destinationId',
+                    'attemptedAt',
+                    'status',
+                    'casePath',
+                    'watchlistItemIds',
+                    'auditEventContracts',
+                ],
+                redactedFields: [
+                    'destination.endpoint',
+                    'destination.secret',
+                    'activeTerms[].term',
+                    'activeTerms[].value',
+                ],
+                blockerCodes: webhookBlockers,
+            },
             expectedDeliveryFields: [
                 'organizationId',
                 'alertId',
@@ -1401,6 +1508,8 @@ export function organizationSharedWatchlistDownstreamProof(
                 'alertBridge.expectedAlertFields',
                 'caseBridge.expectedCaseFields',
                 'webhookBridge.expectedDeliveryFields',
+                'webhookBridge.deliveryContract.destinationSelection',
+                'webhookBridge.deliveryContract.idempotency',
                 'audit.eventActions',
                 'audit.requiredMetadataFields',
                 'inviteLifecycle.pendingInviteCount',
