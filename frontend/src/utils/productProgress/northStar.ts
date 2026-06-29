@@ -28,6 +28,25 @@ export type ProductNorthStarRow = {
     integrationProbeHint: string
 }
 
+export type ProductNorthStarDirectionId =
+    | 'multi_org_threat_monitoring'
+    | 'source_backed_intelligence'
+    | 'shared_alert_workflow'
+    | 'delivery_destinations'
+    | 'enterprise_support'
+
+export type ProductNorthStarDirection = {
+    id: ProductNorthStarDirectionId
+    label: string
+    state: ReadinessStatus
+    detail: string
+    href: string
+    ownerLanes: string[]
+    backedRowIds: ProductNorthStarRowId[]
+    blocker: string
+    proofSummary: string
+}
+
 export type ProductNorthStarScoreboard = {
     schemaVersion: 'product.north_star.readiness.v1'
     generatedAt: string
@@ -36,6 +55,7 @@ export type ProductNorthStarScoreboard = {
     readyRows: number
     totalRows: number
     firstBlocker?: string
+    direction: ProductNorthStarDirection[]
     rows: ProductNorthStarRow[]
 }
 
@@ -144,8 +164,94 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
         readyRows,
         totalRows: rows.length,
         firstBlocker,
+        direction: buildProductDirection(rows),
         rows,
     }
+}
+
+function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDirection[] {
+    return [
+        directionItem({
+            id: 'multi_org_threat_monitoring',
+            label: 'Multi-organization monitoring',
+            backedRowIds: ['organizations', 'shared_watchlists'],
+            detailReady: 'Organization access and shared watchlists are ready for team monitoring.',
+            detailBlocked: 'Team monitoring needs organization access and shared watchlist proof before it can be treated as ready.',
+            rows,
+        }),
+        directionItem({
+            id: 'source_backed_intelligence',
+            label: 'Source-backed intelligence',
+            backedRowIds: ['source_coverage', 'public_ti_enrichment'],
+            detailReady: 'Source coverage and public TI enrichment are both backed by loaded contracts.',
+            detailBlocked: 'Intelligence quality depends on current source coverage and source-linked TI enrichment.',
+            rows,
+        }),
+        directionItem({
+            id: 'shared_alert_workflow',
+            label: 'Shared alert workflow',
+            backedRowIds: ['real_alert_generation', 'analyst_workflow'],
+            detailReady: 'A backed alert is visible and can be handled in the analyst workflow.',
+            detailBlocked: 'The alert workflow is not complete until a real alert is visible and reviewable by an analyst.',
+            rows,
+        }),
+        directionItem({
+            id: 'delivery_destinations',
+            label: 'Delivery destinations',
+            backedRowIds: ['webhook_delivery'],
+            detailReady: 'Webhook delivery is tied to a dashboard-visible alert.',
+            detailBlocked: 'Delivery needs webhook lifecycle proof and a matched delivery row.',
+            rows,
+        }),
+        directionItem({
+            id: 'enterprise_support',
+            label: 'Enterprise support',
+            backedRowIds: ['support_admin_audit', 'deploy_live_status'],
+            detailReady: 'Support audit and live deploy status are current.',
+            detailBlocked: 'Support and release readiness need audit proof and a fresh deploy probe.',
+            rows,
+        }),
+    ]
+}
+
+function directionItem(input: {
+    id: ProductNorthStarDirectionId
+    label: string
+    backedRowIds: ProductNorthStarRowId[]
+    detailReady: string
+    detailBlocked: string
+    rows: ProductNorthStarRow[]
+}): ProductNorthStarDirection {
+    const backedRows = input.backedRowIds
+        .map(id => input.rows.find(row => row.id === id))
+        .filter((row): row is ProductNorthStarRow => Boolean(row))
+    const state = combineDirectionState(backedRows.map(row => row.state))
+    const blocker = backedRows.find(row => row.state !== 'ready')?.blocker || ''
+    const href = backedRows.find(row => row.state !== 'ready')?.href || backedRows[0]?.href || '/dashboard'
+    const ownerLanes = Array.from(new Set(backedRows.map(row => row.ownerLane).filter(Boolean)))
+    const proofSummary = backedRows
+        .map(row => `${row.label}: ${row.backendProofContractVersion}`)
+        .join('; ')
+
+    return {
+        id: input.id,
+        label: input.label,
+        state,
+        detail: state === 'ready' ? input.detailReady : input.detailBlocked,
+        href,
+        ownerLanes,
+        backedRowIds: input.backedRowIds,
+        blocker,
+        proofSummary,
+    }
+}
+
+function combineDirectionState(states: ReadinessStatus[]): ReadinessStatus {
+    if (!states.length) return 'unavailable'
+    if (states.every(state => state === 'ready')) return 'ready'
+    if (states.some(state => state === 'blocked')) return 'blocked'
+    if (states.some(state => state === 'needs_action')) return 'needs_action'
+    return 'unavailable'
 }
 
 function organizationsRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {

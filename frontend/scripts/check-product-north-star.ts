@@ -67,10 +67,15 @@ const partialScoreboard = buildProductNorthStarScoreboard(partialPayload, { gene
 assert.equal(partialScoreboard.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(partialScoreboard.fullChainReady, false)
 assert.ok(partialScoreboard.firstBlocker)
+assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
 assert.ok(partialScoreboard.rows.every(row => row.state === 'ready' || row.blocker))
+assert.ok(partialScoreboard.direction.every(item => item.ownerLanes.length && item.backedRowIds.length && item.proofSummary && item.href))
+assert.ok(partialScoreboard.direction.every(item => item.state === 'ready' || item.blocker))
+assert.ok(partialScoreboard.direction.some(item => item.id === 'source_backed_intelligence' && item.backedRowIds.includes('public_ti_enrichment') && item.state !== 'ready'))
+assert.ok(partialScoreboard.direction.some(item => item.id === 'shared_alert_workflow' && item.backedRowIds.includes('real_alert_generation') && item.state !== 'ready'))
 
 const readyPayload = {
     ...partialPayload,
@@ -87,6 +92,7 @@ const readyScoreboard = buildProductNorthStarScoreboard(readyPayload, { generate
 assert.equal(readyScoreboard.fullChainReady, true)
 assert.equal(readyScoreboard.readyRows, readyScoreboard.totalRows)
 assert.equal(readyScoreboard.firstBlocker, undefined)
+assert.ok(readyScoreboard.direction.every(item => item.state === 'ready' && !item.blocker))
 
 for (const token of [
     'data-north-star-row-id',
@@ -95,12 +101,16 @@ for (const token of [
     'data-north-star-proof-timestamp',
     'data-north-star-backend-proof-contract-version',
     'data-north-star-stale-after-seconds',
+    'data-north-star-direction-id',
+    'data-north-star-direction-state',
+    'data-north-star-direction-backed-rows',
+    'data-north-star-direction-owner-lanes',
     '/api/product-progress',
 ]) {
     assert.ok(pageSource.includes(token), `Readiness page missing ${token}.`)
 }
 
-for (const phrase of ['powered by', 'confidence', 'signals', 'dashboard slop', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing']) {
+for (const phrase of ['powered by', 'confidence', 'signals', 'dashboard slop', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock']) {
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)
 }

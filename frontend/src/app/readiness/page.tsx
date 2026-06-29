@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { AlertCircle, CheckCircle2, CircleDashed, Clock3, ExternalLink } from 'lucide-react'
 import { parseProductProgressReadinessPayload, type ProductProgressReadinessPayload } from '@/app/dashboard/operatorConsoleModel'
-import { buildProductNorthStarScoreboard, type ProductNorthStarRow } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, type ProductNorthStarDirection, type ProductNorthStarRow } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
@@ -37,9 +37,9 @@ export default async function Page({
                     <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
                         <div className='max-w-3xl'>
                             <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Product readiness</p>
-                            <h1 className='mt-2 text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white'>Threat monitoring proof</h1>
+                            <h1 className='mt-2 text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white'>Threat monitoring readiness</h1>
                             <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
-                                This page reads the same readiness contract used by the console. A row stays blocked until the named backend proof is loaded.
+                                This page reads the same readiness contract used by the console. A row stays non-ready until the named backend contract is loaded.
                             </p>
                         </div>
                         <div className='grid gap-2 sm:grid-cols-3 lg:min-w-[460px]'>
@@ -59,6 +59,23 @@ export default async function Page({
                     )}
                 </div>
 
+                <section className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'>
+                    <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
+                        <div>
+                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>North star</p>
+                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>What has to work for buyers</h2>
+                        </div>
+                        <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                            Each direction below is derived from readiness rows. If the supporting proof is missing, it shows the owner and blocker instead of a green claim.
+                        </p>
+                    </div>
+                    <div className='mt-5 grid gap-3 lg:grid-cols-5'>
+                        {scoreboard.direction.map(item => (
+                            <DirectionCard key={item.id} item={item} />
+                        ))}
+                    </div>
+                </section>
+
                 <div className='grid gap-3 lg:grid-cols-3'>
                     {scoreboard.rows.map(row => (
                         <ReadinessCard key={row.id} row={row} />
@@ -66,6 +83,49 @@ export default async function Page({
                 </div>
             </section>
         </main>
+    )
+}
+
+function DirectionCard({ item }: { item: ProductNorthStarDirection }) {
+    const tone = item.state === 'ready'
+        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        : item.state === 'blocked'
+            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            : item.state === 'needs_action'
+                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+    const Icon = item.state === 'ready' ? CheckCircle2 : item.state === 'blocked' ? AlertCircle : item.state === 'needs_action' ? Clock3 : CircleDashed
+    return (
+        <article
+            className='flex min-w-0 flex-col rounded-xl border border-[#d9e2ef] bg-[#fbfcfe] p-4 dark:border-[#26364f] dark:bg-[#0b1422]'
+            data-north-star-direction-id={item.id}
+            data-north-star-direction-state={item.state}
+            data-north-star-direction-backed-rows={item.backedRowIds.join(',')}
+            data-north-star-direction-owner-lanes={item.ownerLanes.join(',')}
+        >
+            <div className='flex items-start justify-between gap-3'>
+                <h3 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-white'>{item.label}</h3>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${tone}`}>
+                    <Icon className='h-3.5 w-3.5' />
+                    {stateLabel(item.state)}
+                </span>
+            </div>
+            <p className='mt-3 wrap-break-word text-sm leading-5 text-[#596170] dark:text-[#b9c4d6]'>{item.detail}</p>
+            <dl className='mt-4 grid gap-2 text-xs'>
+                <Fact label='Owner' value={item.ownerLanes.join(', ') || 'not loaded'} />
+                <Fact label='Rows' value={item.backedRowIds.join(', ')} />
+                <Fact label='Contracts' value={item.proofSummary} />
+            </dl>
+            {item.blocker && (
+                <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                    {item.blocker}
+                </p>
+            )}
+            <Link href={item.href} className='mt-auto inline-flex w-fit items-center gap-1 pt-4 text-xs font-semibold text-[#3056d3] transition hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white'>
+                Open owner surface
+                <ExternalLink className='h-3.5 w-3.5' />
+            </Link>
+        </article>
     )
 }
 
