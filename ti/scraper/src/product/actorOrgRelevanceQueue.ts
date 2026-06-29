@@ -6,6 +6,7 @@ import {
   type AnalystHandoffAdapterResult,
   type PublicTiOrgRelevanceProofLike
 } from "./analystHandoff.ts";
+import type { DwmWatchTerm } from "./dwmProduct.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 
 export const ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION = "hanasand.actor_org_relevance.review.v1" as const;
@@ -74,7 +75,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized";
   summary: string;
   blockerCodes: string[];
 };
@@ -116,6 +117,41 @@ export type ActorOrgRelevanceWorkflowUpdateInput = {
 
 export type ActorOrgRelevanceWorkflowUpdateResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord }
+  | { ok: false; code: string; message: string };
+
+export type ActorOrgRelevanceMaterializedWatchlist = {
+  id: string;
+  tenantId: string;
+  organizationId: string;
+  name: string;
+  terms: DwmWatchTerm[];
+  webhookDestinationId?: string;
+  status: "active" | "paused";
+  createdAt: string;
+  updatedAt: string;
+  source: "public_ti_actor_org_relevance";
+  actorOrgRelevanceReviewId: string;
+  actorId: string;
+  query: string;
+  provenance: Array<{
+    sourceId?: string;
+    sourceName: string;
+    captureId?: string;
+    provenance: string;
+    confidence?: number;
+  }>;
+  publicTiHandoffId?: string;
+};
+
+export type ActorOrgRelevanceMaterializeWatchlistInput = {
+  actorId?: string;
+  watchlistId?: string;
+  webhookDestinationId?: string;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceMaterializeWatchlistResult =
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; watchlist: ActorOrgRelevanceMaterializedWatchlist; created: boolean }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceQueue = {
@@ -346,6 +382,76 @@ export function updateActorOrgRelevanceReviewWorkflow(
         summary: workflowSummary(input.action, nextWorkflow, assignedTo, Boolean(note)),
         blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
       }]
+    }
+  };
+}
+
+export function materializeActorOrgRelevanceWatchlist(input: {
+  record: ActorOrgRelevanceReviewRecord;
+  existing?: ActorOrgRelevanceMaterializedWatchlist;
+  materialize?: ActorOrgRelevanceMaterializeWatchlistInput;
+}): ActorOrgRelevanceMaterializeWatchlistResult {
+  const record = input.record;
+  if (record.state !== "ready" || !record.handoff) {
+    return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before creating a watchlist." };
+  }
+  const request = record.handoff.watchlist.request.body;
+  const generatedAt = input.materialize?.generatedAt || nowIso();
+  const id = input.materialize?.watchlistId
+    || record.handoff.alertGeneration.request.body.watchlistId
+    || stableId("dwm_watchlist", `${record.tenantId}:${request.terms.map((term) => term.value).join("|")}`);
+  if (input.existing && (input.existing.tenantId !== record.tenantId || input.existing.organizationId !== record.organizationId)) {
+    return { ok: false, code: "watchlist_scope_mismatch", message: "Existing watchlist belongs to another organization scope." };
+  }
+  const webhookDestinationId = input.materialize?.webhookDestinationId
+    || record.handoff.webhookTrigger.request.body.webhookDestinationIds[0]
+    || input.existing?.webhookDestinationId;
+  const watchlist: ActorOrgRelevanceMaterializedWatchlist = {
+    ...input.existing,
+    id,
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    name: input.existing?.name || request.name,
+    terms: request.terms,
+    webhookDestinationId,
+    status: "active",
+    createdAt: input.existing?.createdAt || generatedAt,
+    updatedAt: generatedAt,
+    source: "public_ti_actor_org_relevance",
+    actorOrgRelevanceReviewId: record.id,
+    actorId: record.actorId,
+    query: record.query,
+    provenance: record.readiness.provenance.map((row) => ({
+      sourceId: row.sourceId,
+      sourceName: row.sourceName,
+      captureId: row.captureId,
+      provenance: row.provenance,
+      confidence: row.confidence
+    })),
+    publicTiHandoffId: record.handoff.watchlist.handoff.handoffId
+  };
+  const timelineEvent: ActorOrgRelevanceTimelineEvent = {
+    id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:watchlist_materialized:${watchlist.id}`),
+    occurredAt: generatedAt,
+    actorId: input.materialize?.actorId,
+    eventType: "watchlist_materialized",
+    summary: `Created or updated DWM watchlist ${watchlist.id}.`,
+    blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+  };
+  return {
+    ok: true,
+    created: !input.existing,
+    watchlist,
+    record: {
+      ...record,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: input.materialize?.actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      timeline: [...record.timeline, timelineEvent]
     }
   };
 }

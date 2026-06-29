@@ -2,6 +2,7 @@ import {
   actorOrgRelevanceRecordBelongsTo,
   buildActorOrgRelevanceQueue,
   buildActorOrgRelevanceReviewRecord,
+  materializeActorOrgRelevanceWatchlist,
   summarizeActorOrgRelevanceReview,
   updateActorOrgRelevanceReviewWorkflow,
   type ActorOrgRelevanceReviewRecord
@@ -93,6 +94,40 @@ export async function updateActorOrgRelevanceReview(request: Request, options: A
     record: update.record,
     summary: summarizeActorOrgRelevanceReview(update.record)
   });
+}
+
+export async function materializeActorOrgRelevanceReviewWatchlist(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to create an actor relevance watchlist.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const watchlistId = body.watchlistId ? String(body.watchlistId) : record!.handoff?.alertGeneration.request.body.watchlistId;
+  const existing = watchlistId ? (options.store as any).getDwmWatchlist?.(watchlistId) : undefined;
+  if (existing && (existing.tenantId !== record!.tenantId || existing.organizationId !== record!.organizationId)) {
+    return error("watchlist_scope_mismatch", "Existing watchlist belongs to another organization scope.", 409);
+  }
+  const materialized = materializeActorOrgRelevanceWatchlist({
+    record: record!,
+    existing,
+    materialize: {
+      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      watchlistId,
+      webhookDestinationId: body.webhookDestinationId,
+      generatedAt: body.generatedAt || nowIso()
+    }
+  });
+  if (!materialized.ok) return error(materialized.code, materialized.message, 400);
+  (options.store as any).saveDwmWatchlist(materialized.watchlist);
+  (options.store as any).saveActorOrgRelevanceReview(materialized.record);
+  return json({
+    created: materialized.created,
+    watchlist: materialized.watchlist,
+    record: materialized.record,
+    summary: summarizeActorOrgRelevanceReview(materialized.record)
+  }, materialized.created ? 201 : 200);
 }
 
 function findExistingReview(
