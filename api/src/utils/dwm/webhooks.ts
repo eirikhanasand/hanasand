@@ -3030,6 +3030,9 @@ export function buildDwmWebhookCustomerSetupProof({
     const retryScheduled = readiness.destinations.filter(destination => destination.retryState.retryable)
     const terminalFailures = replayGuard.entries.filter(entry => entry.retry.terminalFailure)
     const firstActiveDestination = activeDestinations[0] || null
+    const firstActiveDestinationTest = firstActiveDestination
+        ? destinationTests.find(test => test.destinationId === firstActiveDestination.destinationId) || null
+        : null
     const blockers = []
     if (destinations.length === 0) blockers.push(retryQueueBlocker('missing_webhook_destination', 'Create a Discord or webhook destination before enabling customer alert delivery.', null, true))
     if (destinations.length > 0 && activeDestinations.length === 0) blockers.push(retryQueueBlocker('no_active_destination', 'All webhook destinations are disabled.', null, true))
@@ -3107,6 +3110,7 @@ export function buildDwmWebhookCustomerSetupProof({
                     destinationId: firstActiveDestination.destinationId,
                     orgId: firstActiveDestination.orgId,
                 },
+                payloadPreview: firstActiveDestinationTest?.dryRunPayloadPreview || null,
             }
             : null,
         deliveryReadiness: readiness,
