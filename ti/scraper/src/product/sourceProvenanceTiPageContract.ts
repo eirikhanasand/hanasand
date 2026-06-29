@@ -7,6 +7,7 @@ export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.sou
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION = "ti.source_provenance_alert_enrichment_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CASE_HANDOFF_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_case_handoff.v1" as const;
 export const TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION = "ti.source_provenance_watchlist_alert_bridge_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
@@ -461,6 +462,67 @@ export type TiSourceProvenanceAlertEnrichmentRow = {
     ready: boolean;
   };
   readyForAnalystWorkflow: boolean;
+};
+
+export type TiSourceProvenanceActorEnrichmentCaseHandoff = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CASE_HANDOFF_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  alertEnrichmentPacketId: string;
+  rows: TiSourceProvenanceActorEnrichmentCaseHandoffRow[];
+  blockers: TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentCaseHandoffRow = {
+  alertId: string;
+  caseId?: string;
+  casePath?: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceBridgeId: string;
+  sourceFamilies: string[];
+  sourceIds: string[];
+  captureIds: string[];
+  contentHashes: string[];
+  watchlistItemIds: string[];
+  alertGeneratorKeys: string[];
+  confidence: number;
+  freshness: TiSourceProvenanceAlertEnrichmentRow["freshness"];
+  ready: boolean;
+  nextCaseAction: "open_case_with_actor_context" | "repair_case_handoff";
+  casePayload: {
+    redacted: true;
+    route?: string;
+    requiredFields: string[];
+    provenanceFields: string[];
+  };
+  blockerCodes: TiSourceProvenanceActorEnrichmentCaseHandoffBlocker["code"][];
+};
+
+export type TiSourceProvenanceActorEnrichmentCaseHandoffBlocker = {
+  code:
+    | "missing_organization_scope"
+    | "missing_alert_rows"
+    | "missing_case_handoff"
+    | "missing_case_path"
+    | "missing_source_provenance"
+    | "alert_enrichment_blocked";
+  ownerLane: "org" | "alert" | "case" | "source" | "publicTI";
+  alertId?: string;
+  path: string;
+  message: string;
 };
 
 export type TiSourceProvenanceAlertRebuildResponse = {
@@ -1340,6 +1402,88 @@ export function buildSourceProvenanceAlertEnrichmentPacket(input: {
   };
 }
 
+export function buildSourceProvenanceActorEnrichmentCaseHandoff(input: {
+  enrichment: TiSourceProvenanceAlertEnrichmentPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceActorEnrichmentCaseHandoff {
+  const generatedAt = input.generatedAt ?? input.enrichment.generatedAt;
+  const rowBlockers = input.enrichment.alertRows.flatMap((row) => actorEnrichmentCaseHandoffRowBlockers(row));
+  const blockers = actorEnrichmentCaseHandoffBlockers(input.enrichment, rowBlockers);
+  const rows = input.enrichment.alertRows.map((row) => {
+    const blockerCodes = actorEnrichmentCaseHandoffRowBlockers(row).map((blocker) => blocker.code);
+    const ready = blockerCodes.length === 0 && Boolean(input.enrichment.organizationId);
+    return {
+      alertId: row.alertId,
+      caseId: row.caseHandoff?.caseId,
+      casePath: row.caseHandoff?.casePath,
+      actor: row.actor,
+      publicTiRoute: row.publicTiRoute,
+      sourceBridgeId: row.sourceBridgeId,
+      sourceFamilies: row.sourceFamilies,
+      sourceIds: row.sourceIds,
+      captureIds: row.captureIds,
+      contentHashes: row.contentHashes,
+      watchlistItemIds: row.watchlistItemIds,
+      alertGeneratorKeys: row.alertGeneratorKeys,
+      confidence: row.confidence,
+      freshness: row.freshness,
+      ready,
+      nextCaseAction: ready ? "open_case_with_actor_context" as const : "repair_case_handoff" as const,
+      casePayload: {
+        redacted: true as const,
+        route: row.caseHandoff?.casePath,
+        requiredFields: [
+          "alertId",
+          "caseId",
+          "actor",
+          "publicTiRoute",
+          "watchlistItemIds",
+          "alertGeneratorKeys"
+        ],
+        provenanceFields: [
+          "sourceBridgeId",
+          "sourceFamilies",
+          "sourceIds",
+          "captureIds",
+          "contentHashes",
+          "freshness"
+        ]
+      },
+      blockerCodes
+    };
+  });
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CASE_HANDOFF_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_enrichment_case_handoff", `${input.enrichment.id}:${generatedAt}`),
+    generatedAt,
+    ok: blockers.length === 0 && rows.length > 0,
+    tenantId: input.enrichment.tenantId,
+    organizationId: input.enrichment.organizationId,
+    actor: input.enrichment.actor,
+    publicTiRoute: input.enrichment.publicTiRoute,
+    alertEnrichmentPacketId: input.enrichment.id,
+    rows,
+    blockers,
+    payloadShape: [
+      "rows[].alertId",
+      "rows[].caseId",
+      "rows[].casePath",
+      "rows[].publicTiRoute",
+      "rows[].sourceBridgeId",
+      "rows[].captureIds",
+      "rows[].contentHashes",
+      "rows[].casePayload"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 export function buildSourceProvenanceActorProfileContract(input: {
   contract: TiSourceProvenancePageContract;
   values?: Partial<Record<TiSourceProvenanceActorProfileFieldName, string[]>>;
@@ -1922,6 +2066,48 @@ function alertRebuildReceiptBlocker(
   message: string
 ): TiSourceProvenanceAlertRebuildReceiptBlocker {
   return { code, ownerLane, path, message };
+}
+
+function actorEnrichmentCaseHandoffBlockers(
+  enrichment: TiSourceProvenanceAlertEnrichmentPacket,
+  rowBlockers: TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[]
+): TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[] {
+  return [
+    !enrichment.organizationId
+      ? actorEnrichmentCaseHandoffBlocker("missing_organization_scope", "org", "enrichment.organizationId", "Actor enrichment case handoff requires organization scope.")
+      : undefined,
+    enrichment.alertRows.length === 0
+      ? actorEnrichmentCaseHandoffBlocker("missing_alert_rows", "alert", "enrichment.alertRows", "Actor enrichment case handoff requires at least one enriched alert row.")
+      : undefined,
+    !enrichment.ok && rowBlockers.length === 0
+      ? actorEnrichmentCaseHandoffBlocker("alert_enrichment_blocked", "publicTI", "enrichment.ok", "Actor enrichment packet is not ready for case handoff.")
+      : undefined,
+    ...rowBlockers
+  ].filter(Boolean) as TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[];
+}
+
+function actorEnrichmentCaseHandoffRowBlockers(row: TiSourceProvenanceAlertEnrichmentRow): TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[] {
+  return [
+    !row.caseHandoff?.caseId
+      ? actorEnrichmentCaseHandoffBlocker("missing_case_handoff", "case", "alertRows[].caseHandoff.caseId", "Enriched alert row needs a case id before analyst handoff.", row.alertId)
+      : undefined,
+    !row.caseHandoff?.casePath
+      ? actorEnrichmentCaseHandoffBlocker("missing_case_path", "case", "alertRows[].caseHandoff.casePath", "Enriched alert row needs a case path before analyst handoff.", row.alertId)
+      : undefined,
+    row.sourceIds.length === 0 || row.captureIds.length === 0 || row.contentHashes.length === 0
+      ? actorEnrichmentCaseHandoffBlocker("missing_source_provenance", "source", "alertRows[].sourceIds", "Actor enrichment case handoff requires source ids, capture ids, and content hashes.", row.alertId)
+      : undefined
+  ].filter(Boolean) as TiSourceProvenanceActorEnrichmentCaseHandoffBlocker[];
+}
+
+function actorEnrichmentCaseHandoffBlocker(
+  code: TiSourceProvenanceActorEnrichmentCaseHandoffBlocker["code"],
+  ownerLane: TiSourceProvenanceActorEnrichmentCaseHandoffBlocker["ownerLane"],
+  path: string,
+  message: string,
+  alertId?: string
+): TiSourceProvenanceActorEnrichmentCaseHandoffBlocker {
+  return { code, ownerLane, path, message, alertId };
 }
 
 function alertWatchlistItemIds(alert: TiSourceProvenanceAlertRebuildResponseAlert): string[] {

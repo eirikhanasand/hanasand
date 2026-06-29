@@ -4,6 +4,7 @@ import {
   TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CASE_HANDOFF_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
@@ -16,6 +17,7 @@ import {
   buildSourceProvenanceActorProfileContract,
   buildSourceProvenanceActorProfileGapSourcePlan,
   buildSourceProvenanceActorProfileSourceUpdateWorkflow,
+  buildSourceProvenanceActorEnrichmentCaseHandoff,
   buildSourceProvenanceAlertEnrichmentPacket,
   buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
@@ -739,6 +741,161 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(packet)).not.toContain("rawText");
     expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("packages actor enrichment into a case-ready analyst handoff", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow(), {
+        ...sourceRow(),
+        sourceId: "src_public_advisory",
+        sourceFamily: "public_advisory",
+        captureId: "cap_public_advisory_apt29",
+        contentHash: "hash_public_advisory_apt29",
+        provenance: "Public advisory links APT29 to phishing infrastructure.",
+        relationship: "targeting",
+        confidence: 0.8
+      }]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29",
+      requestId: "req_source_case_handoff"
+    });
+    const request = buildSourceProvenanceAlertRebuildRequest({ candidate, sourceContractId: contract.id });
+    const receipt = buildSourceProvenanceAlertRebuildReceipt({
+      request,
+      response: {
+        rebuiltAt: "2026-06-29T12:03:00.000Z",
+        savedAlertCount: 1,
+        dryRun: true,
+        alerts: [{
+          id: "alert_apt29_case_handoff",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          workflowContext: {
+            watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+            alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+            sourceBridgeId: bridge.id,
+            caseId: "case_apt29_case_handoff",
+            casePath: "/dashboard/dwm/cases/case_apt29_case_handoff"
+          }
+        }]
+      }
+    });
+    const enrichment = buildSourceProvenanceAlertEnrichmentPacket({ contract, receipt });
+    const handoff = buildSourceProvenanceActorEnrichmentCaseHandoff({
+      enrichment,
+      generatedAt: "2026-06-29T12:05:00.000Z"
+    });
+
+    expect(handoff).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CASE_HANDOFF_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      alertEnrichmentPacketId: enrichment.id,
+      blockers: [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(handoff.rows).toEqual([expect.objectContaining({
+      alertId: "alert_apt29_case_handoff",
+      caseId: "case_apt29_case_handoff",
+      casePath: "/dashboard/dwm/cases/case_apt29_case_handoff",
+      publicTiRoute: "/ti/APT29",
+      sourceBridgeId: bridge.id,
+      sourceFamilies: expect.arrayContaining(["telegram_public", "public_advisory"]),
+      captureIds: expect.arrayContaining(["cap_telegram_apt29", "cap_public_advisory_apt29"]),
+      contentHashes: expect.arrayContaining(["hash_telegram_apt29", "hash_public_advisory_apt29"]),
+      nextCaseAction: "open_case_with_actor_context",
+      ready: true,
+      casePayload: {
+        redacted: true,
+        route: "/dashboard/dwm/cases/case_apt29_case_handoff",
+        requiredFields: expect.arrayContaining(["alertId", "caseId", "actor", "publicTiRoute"]),
+        provenanceFields: expect.arrayContaining(["sourceBridgeId", "captureIds", "contentHashes"])
+      },
+      blockerCodes: []
+    })]);
+    expect(handoff.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].caseId",
+      "rows[].publicTiRoute",
+      "rows[].sourceBridgeId",
+      "rows[].casePayload"
+    ]));
+    expect(JSON.stringify(handoff)).not.toContain("rawText");
+    expect(JSON.stringify(handoff)).not.toContain("password");
+  });
+
+  test("blocks actor enrichment case handoff without org scope source provenance or case identity", () => {
+    const enrichment = {
+      schemaVersion: TI_SOURCE_PROVENANCE_ALERT_ENRICHMENT_PACKET_SCHEMA_VERSION,
+      id: "ti_source_provenance_alert_enrichment_packet_blocked",
+      generatedAt: "2026-06-29T12:05:00.000Z",
+      ok: false,
+      tenantId: "tenant_acme",
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      sourceContractId: "contract_blocked",
+      sourceBridgeId: "bridge_blocked",
+      alertRebuildReceiptId: "receipt_blocked",
+      alertRows: [{
+        alertId: "alert_missing_case",
+        actor: "APT29",
+        publicTiRoute: "/ti/APT29",
+        sourceBridgeId: "bridge_blocked",
+        sourceFamilies: [],
+        sourceIds: [],
+        captureIds: [],
+        contentHashes: [],
+        watchlistItemIds: [],
+        alertGeneratorKeys: [],
+        confidence: 0,
+        freshness: { state: "missing" as const },
+        readyForAnalystWorkflow: false
+      }],
+      coverage: {
+        sourceFamilies: [],
+        sourceIds: [],
+        captureIds: [],
+        contentHashes: [],
+        averageConfidence: 0
+      },
+      payloadShape: [],
+      safeOutput: {
+        rawTargetsExposed: false as const,
+        restrictedMetadataLeaked: false as const,
+        privateTelegramContentExposed: false as const,
+        liveNetworkScrapeStarted: false as const
+      }
+    };
+
+    const handoff = buildSourceProvenanceActorEnrichmentCaseHandoff({ enrichment });
+
+    expect(handoff.ok).toBe(false);
+    expect(handoff.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_organization_scope", ownerLane: "org", path: "enrichment.organizationId" }),
+      expect.objectContaining({ code: "missing_case_handoff", ownerLane: "case", alertId: "alert_missing_case" }),
+      expect.objectContaining({ code: "missing_case_path", ownerLane: "case", alertId: "alert_missing_case" }),
+      expect.objectContaining({ code: "missing_source_provenance", ownerLane: "source", alertId: "alert_missing_case" })
+    ]));
+    expect(handoff.rows).toEqual([expect.objectContaining({
+      alertId: "alert_missing_case",
+      ready: false,
+      nextCaseAction: "repair_case_handoff",
+      blockerCodes: expect.arrayContaining(["missing_case_handoff", "missing_case_path", "missing_source_provenance"])
+    })]);
   });
 
   test("builds source-backed public TI actor profile fields with provenance and freshness", () => {
