@@ -3427,6 +3427,24 @@ describe("dwm source requests", () => {
                   }),
                   liveNetworkFetch: false
                 }),
+                fixtureReadiness: expect.objectContaining({
+                  available: true,
+                  parserProfile: "restricted_metadata",
+                  expectedCaptureType: "darkweb_onion_metadata_observation",
+                  validation: expect.objectContaining({
+                    ready: true,
+                    route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }),
+                    liveNetworkFetch: false
+                  }),
+                  testRun: expect.objectContaining({ mode: "no_network_fixture", canRun: true, liveNetworkFetch: false }),
+                  activation: expect.objectContaining({
+                    canCreateCandidate: true,
+                    canAutoActivate: false,
+                    requiresMetadataOnlyApproval: true,
+                    nextAction: "approve_metadata_only_candidate",
+                    liveNetworkFetch: false
+                  })
+                }),
                 operatorActions: expect.arrayContaining([
                   expect.objectContaining({
                     type: "request_candidate",
@@ -3439,6 +3457,9 @@ describe("dwm source requests", () => {
             summary: expect.objectContaining({
               actionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
               candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              fixtureReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              fixtureTestableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              fixtureMetadataApprovalFamilies: expect.arrayContaining(["darkweb_onion"]),
               policyReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
             })
           }),
@@ -4086,6 +4107,24 @@ describe("dwm source requests", () => {
           expect.objectContaining({
             sourceFamily: "telegram",
             state: "actionable",
+            fixtureReadiness: expect.objectContaining({
+              available: true,
+              parserProfile: "public_channel_handoff",
+              expectedCaptureType: "telegram_public_message_preview",
+              validation: expect.objectContaining({ ready: true, liveNetworkFetch: false }),
+              testRun: expect.objectContaining({
+                mode: "no_network_fixture",
+                canRun: true,
+                expectedOutcome: "parser_contract_verified",
+                liveNetworkFetch: false
+              }),
+              activation: expect.objectContaining({
+                canAutoActivate: true,
+                requiresMetadataOnlyApproval: false,
+                nextAction: "validate_candidate",
+                liveNetworkFetch: false
+              })
+            }),
             operatorActions: expect.arrayContaining([
               expect.objectContaining({ type: "retry_parser" }),
               expect.objectContaining({ type: "retry_capture" })

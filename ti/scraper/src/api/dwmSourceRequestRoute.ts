@@ -4483,15 +4483,18 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
     }
   }
   const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((candidate: any) => [String(candidate.family), candidate]));
+  const fixtureReadinessByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.fixtureManifest?.fixtureReadiness ?? []).map((fixture: any) => [String(fixture.family), fixture]));
   const familyNames = uniqueSourceReadinessStrings([
     ...input.rows.map((row) => row.sourceFamily),
     ...Array.from(operationsByFamily.keys()),
-    ...Array.from(intakeByFamily.keys())
+    ...Array.from(intakeByFamily.keys()),
+    ...Array.from(fixtureReadinessByFamily.keys())
   ]);
   const rows = familyNames.map((family) => {
     const proof = input.rows.find((row) => row.sourceFamily === family);
     const operations = operationsByFamily.get(family) ?? [];
     const intake = intakeByFamily.get(family);
+    const fixtureReadiness = fixtureReadinessByFamily.get(family);
     const blockers = dedupeBlockers([
       ...(proof?.blockers ?? []),
       ...operations.flatMap((operation) => operation.blockers ?? []),
@@ -4533,6 +4536,21 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
         available: false,
         liveNetworkFetch: false
       },
+      fixtureReadiness: fixtureReadiness ? {
+        available: true,
+        proofId: fixtureReadiness.proofId,
+        fixtureKey: fixtureReadiness.fixtureKey,
+        parserProfile: fixtureReadiness.parserProfile,
+        expectedCaptureType: fixtureReadiness.expectedCaptureType,
+        validation: fixtureReadiness.validation,
+        testRun: fixtureReadiness.testRun,
+        activation: fixtureReadiness.activation,
+        provenance: fixtureReadiness.provenance,
+        liveNetworkFetch: false
+      } : {
+        available: false,
+        liveNetworkFetch: false
+      },
       operatorActions: operations.map((operation) => ({
         operationId: operation.operationId,
         type: operation.type,
@@ -4565,6 +4583,9 @@ function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
       readyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "ready").map((row: any) => row.sourceFamily)),
       actionableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "actionable").map((row: any) => row.sourceFamily)),
       candidateIntakeFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.available).map((row: any) => row.sourceFamily)),
+      fixtureReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.available && row.fixtureReadiness.validation?.ready === true).map((row: any) => row.sourceFamily)),
+      fixtureTestableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.testRun?.canRun === true).map((row: any) => row.sourceFamily)),
+      fixtureMetadataApprovalFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.fixtureReadiness.activation?.requiresMetadataOnlyApproval === true).map((row: any) => row.sourceFamily)),
       policyReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.policyResult?.allowed === true).map((row: any) => row.sourceFamily)),
       blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.blockers.length > 0 || row.state === "blocked").map((row: any) => row.sourceFamily)),
       operationTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.operatorActions.map((action: any) => action.type))),
