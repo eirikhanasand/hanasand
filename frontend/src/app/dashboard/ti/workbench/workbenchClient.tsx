@@ -2415,7 +2415,7 @@ function CaseWatchlistRows({ watchlists, orgContext }: { watchlists: CaseWatchli
                 {watchlists.map(watchlist => (
                     <div key={watchlist.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='break-words text-sm font-semibold text-[#171a21]'>{watchlist.name || watchlist.id}</span>
+                            <span className='wrap-break-word text-sm font-semibold text-[#171a21]'>{watchlist.name || watchlist.id}</span>
                             <span className={workflowStatusClass(watchlist.status === 'active' ? 'ready' : 'needs_action')}>{label(watchlist.status)}</span>
                             {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>delivery scoped</span> : null}
                         </div>
