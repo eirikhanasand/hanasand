@@ -2,6 +2,28 @@ import { buildProductProgressExternalState, type ProductProgressReadinessPayload
 
 type ReadinessStatus = 'ready' | 'needs_action' | 'blocked' | 'unavailable'
 
+const PRODUCT_NORTH_STAR_ROW_IDS = [
+    'organizations',
+    'shared_watchlists',
+    'source_coverage',
+    'real_alert_generation',
+    'webhook_delivery',
+    'analyst_workflow',
+    'support_admin_audit',
+    'public_ti_enrichment',
+    'deploy_live_status',
+] as const
+
+const PRODUCT_NORTH_STAR_DIRECTION_IDS = [
+    'multi_org_threat_monitoring',
+    'source_backed_intelligence',
+    'shared_alert_workflow',
+    'delivery_destinations',
+    'enterprise_support',
+] as const
+
+const READINESS_STATUSES = ['ready', 'needs_action', 'blocked', 'unavailable'] as const
+
 export type ProductNorthStarRowId =
     | 'organizations'
     | 'shared_watchlists'
@@ -66,7 +88,67 @@ export function parseProductNorthStarScoreboard(input: unknown): ProductNorthSta
     if (candidate.schemaVersion !== 'product.north_star.readiness.v1') return null
     if (!Array.isArray(candidate.rows) || !Array.isArray(candidate.direction)) return null
     if (typeof candidate.fullChainReady !== 'boolean') return null
+    if (typeof candidate.generatedAt !== 'string' || typeof candidate.query !== 'string') return null
+    if (typeof candidate.readyRows !== 'number' || typeof candidate.totalRows !== 'number') return null
+    if (!candidate.rows.every(isProductNorthStarRow)) return null
+    if (!candidate.direction.every(isProductNorthStarDirection)) return null
+    if (candidate.totalRows !== candidate.rows.length) return null
+    if (candidate.readyRows !== candidate.rows.filter(row => row.state === 'ready').length) return null
+    if (candidate.fullChainReady !== candidate.rows.every(row => row.state === 'ready')) return null
     return candidate as ProductNorthStarScoreboard
+}
+
+function isProductNorthStarRow(input: unknown): input is ProductNorthStarRow {
+    if (!input || typeof input !== 'object') return false
+    const row = input as Partial<ProductNorthStarRow>
+    return isRowId(row.id)
+        && isReadinessStatus(row.state)
+        && isFilledString(row.label)
+        && isFilledString(row.ownerLane)
+        && typeof row.detail === 'string'
+        && isFilledString(row.href)
+        && typeof row.proofSource === 'string'
+        && isFilledString(row.proofTimestamp)
+        && typeof row.staleAfterSeconds === 'number'
+        && row.staleAfterSeconds > 0
+        && isFilledString(row.expectedDashboardRowId)
+        && isFilledString(row.backendProofContractVersion)
+        && typeof row.blocker === 'string'
+        && isFilledString(row.integrationProbeHint)
+        && (row.state === 'ready' || Boolean(row.blocker))
+}
+
+function isProductNorthStarDirection(input: unknown): input is ProductNorthStarDirection {
+    if (!input || typeof input !== 'object') return false
+    const direction = input as Partial<ProductNorthStarDirection>
+    return isDirectionId(direction.id)
+        && isReadinessStatus(direction.state)
+        && isFilledString(direction.label)
+        && typeof direction.detail === 'string'
+        && isFilledString(direction.href)
+        && Array.isArray(direction.ownerLanes)
+        && direction.ownerLanes.every(isFilledString)
+        && Array.isArray(direction.backedRowIds)
+        && direction.backedRowIds.every(isRowId)
+        && typeof direction.blocker === 'string'
+        && isFilledString(direction.proofSummary)
+        && (direction.state === 'ready' || Boolean(direction.blocker))
+}
+
+function isRowId(input: unknown): input is ProductNorthStarRowId {
+    return typeof input === 'string' && PRODUCT_NORTH_STAR_ROW_IDS.includes(input as ProductNorthStarRowId)
+}
+
+function isDirectionId(input: unknown): input is ProductNorthStarDirectionId {
+    return typeof input === 'string' && PRODUCT_NORTH_STAR_DIRECTION_IDS.includes(input as ProductNorthStarDirectionId)
+}
+
+function isReadinessStatus(input: unknown): input is ReadinessStatus {
+    return typeof input === 'string' && READINESS_STATUSES.includes(input as ReadinessStatus)
+}
+
+function isFilledString(input: unknown): input is string {
+    return typeof input === 'string' && input.trim().length > 0
 }
 
 type BuildOptions = {

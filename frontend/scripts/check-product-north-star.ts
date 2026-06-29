@@ -102,6 +102,19 @@ assert.deepEqual(rowExpectedDashboardIds(partialScoreboard), {
 })
 assert.equal(parseProductNorthStarScoreboard(partialScoreboard)?.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersion: 'wrong' }), null)
+assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, readyRows: partialScoreboard.readyRows + 1 }), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, expectedDashboardRowId: '' } : row),
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, state: 'ready', backendProofContractVersion: '' } : row),
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    direction: partialScoreboard.direction.map(item => item.id === 'source_backed_intelligence' ? { ...item, backedRowIds: ['unknown_row'] } : item),
+}), null)
 
 const readyPayload = {
     ...partialPayload,
@@ -134,6 +147,7 @@ for (const token of [
     'data-north-star-direction-owner-lanes',
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
+    'expectedDashboardRowId',
     'Operational evidence',
     'Open workflow',
     'Stale after',
