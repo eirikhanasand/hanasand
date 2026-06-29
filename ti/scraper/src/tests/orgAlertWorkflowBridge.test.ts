@@ -3,8 +3,10 @@ import {
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
+  DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
   buildOrgAlertWebhookFixtureContract,
+  buildOrgAlertSourceEvidenceReport,
   buildOrgAlertWorkflowBridgeReport,
   reconcileOrgAlertWebhookDeliveries
 } from "../product/orgAlertWorkflowBridge.ts";
@@ -168,6 +170,77 @@ describe("org alert workflow bridge", () => {
       }]
     });
     expect(JSON.stringify(reconciliation)).not.toContain("https://discord.com");
+  });
+
+  test("proves bridge rows are backed by fresh source evidence", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const report = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: captureRefs(),
+      checkedAt: "2026-06-29T15:00:00.000Z",
+      maxAgeHours: 24
+    });
+
+    expect(report).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      maxAgeHours: 24,
+      blockers: [],
+      rows: [{
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        alertIds: ["alert_acme_lumma"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        sourceIds: ["src_acme_tg", "src_acme_forum"],
+        captureIds: ["cap_acme_initial", "cap_acme_followup"],
+        contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+        newestEvidenceAt: "2026-06-29T14:30:00.000Z",
+        ageHours: 0.5,
+        ready: true,
+        blockerCodes: []
+      }]
+    });
+  });
+
+  test("blocks source evidence when captures are missing or stale", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const report = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: [{
+        ...sourceRefs()[0],
+        status: "paused",
+        lastCollectedAt: "2026-06-26T14:00:00.000Z"
+      }],
+      captures: [{
+        ...captureRefs()[0],
+        collectedAt: "2026-06-26T14:00:00.000Z"
+      }],
+      checkedAt: "2026-06-29T15:00:00.000Z",
+      maxAgeHours: 24
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.rows[0]).toMatchObject({
+      watchlistItemId: "watch_item_acme_com",
+      ready: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_source_ref",
+        "inactive_source",
+        "missing_capture_ref",
+        "content_hash_mismatch",
+        "stale_evidence"
+      ])
+    });
+    expect(report.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_source_ref", ownerLane: "source", path: "sources[].sourceId" }),
+      expect.objectContaining({ code: "inactive_source", ownerLane: "source", path: "sources[].status" }),
+      expect.objectContaining({ code: "missing_capture_ref", ownerLane: "source", path: "captures[].captureId" }),
+      expect.objectContaining({ code: "content_hash_mismatch", ownerLane: "source", path: "captures[].contentHash" }),
+      expect.objectContaining({ code: "stale_evidence", ownerLane: "source", path: "captures[].collectedAt" })
+    ]));
   });
 
   test("returns owner-coded blockers for rows that cannot reach analyst workflow", () => {
@@ -441,6 +514,36 @@ function webhookDestination() {
     verified: true,
     endpointUrl: "https://discord.com/api/webhooks/acme/token"
   };
+}
+
+function sourceRefs() {
+  return [{
+    sourceId: "src_acme_tg",
+    sourceFamily: "telegram_public",
+    status: "active",
+    lastCollectedAt: "2026-06-29T14:10:00.000Z"
+  }, {
+    sourceId: "src_acme_forum",
+    sourceFamily: "darkweb_metadata",
+    status: "active",
+    lastCollectedAt: "2026-06-29T14:30:00.000Z"
+  }];
+}
+
+function captureRefs() {
+  return [{
+    captureId: "cap_acme_initial",
+    sourceId: "src_acme_tg",
+    sourceFamily: "telegram_public",
+    contentHash: "hash_acme_initial",
+    collectedAt: "2026-06-29T14:05:00.000Z"
+  }, {
+    captureId: "cap_acme_followup",
+    sourceId: "src_acme_forum",
+    sourceFamily: "darkweb_metadata",
+    contentHash: "hash_acme_followup",
+    collectedAt: "2026-06-29T14:30:00.000Z"
+  }];
 }
 
 function happyWebhookFixtureContract() {

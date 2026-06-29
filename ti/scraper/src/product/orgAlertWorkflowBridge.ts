@@ -421,6 +421,7 @@ function sourceEvidenceRow(input: {
     ...input.row.provenance.contentHashes,
     ...captures.map((capture) => capture.contentHash)
   ].filter(Boolean).map(String));
+  const captureContentHashes = uniqueStrings(captures.map((capture) => capture.contentHash).filter(Boolean).map(String));
   const newestEvidenceAt = newestTimestamp([
     ...captures.map((capture) => capture.collectedAt),
     ...sources.map((source) => source.lastCollectedAt ?? source.updatedAt)
@@ -432,7 +433,7 @@ function sourceEvidenceRow(input: {
     sourceIds.some((sourceId) => !input.sourceById.has(sourceId)) ? "missing_source_ref" : undefined,
     sources.some((source) => source.status !== "active") ? "inactive_source" : undefined,
     input.row.provenance.captureIds.some((captureId) => !input.captureById.has(captureId)) ? "missing_capture_ref" : undefined,
-    input.row.provenance.contentHashes.some((hash) => !contentHashes.includes(hash)) ? "content_hash_mismatch" : undefined,
+    input.row.provenance.contentHashes.some((hash) => !captureContentHashes.includes(hash)) ? "content_hash_mismatch" : undefined,
     ageHours === undefined || ageHours > input.maxAgeHours ? "stale_evidence" : undefined
   ].filter(Boolean).map(String)) as OrgAlertSourceEvidenceBlocker["code"][];
 
