@@ -9,8 +9,10 @@ import {
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
+    buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDeliveryRequestInput,
+    buildDwmWebhookDeliveryRetryContract,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     filterDwmWebhookDestinationHealthForVisibility,
@@ -1069,6 +1071,30 @@ const auditDeliveryRows = [
         attemptedAt: '2026-06-28T12:04:00.000Z',
         createdAt: '2026-06-28T12:04:00.000Z',
     },
+    {
+        id: 'delivery_live_test_contract',
+        destinationId: 'destination_live_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'webhook_test',
+        eventType: 'dwm.alert.test' as const,
+        status: 'dry_run' as const,
+        dryRun: true,
+        endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+        endpointHash: 'endpoint_live_hash',
+        payloadHash: 'payload_live_test_hash',
+        payload: replayPayload,
+        responseStatus: null,
+        responseBody: null,
+        error: null,
+        idempotencyKey: 'dwm.alert.test:org_contract:destination_live_contract:webhook_test',
+        watchlistId: 'test-watchlist',
+        watchlistName: 'Webhook test watchlist',
+        route: 'test_delivery',
+        casePath: '/dashboard/dwm',
+        attemptedAt: '2026-06-28T12:04:00.000Z',
+        createdAt: '2026-06-28T12:04:00.000Z',
+    },
 ]
 const auditEventContracts = buildDwmWebhookAuditEventContracts({
     destinations: auditDestinationRows,
@@ -1268,6 +1294,208 @@ const orgAlertDeliveryContract = buildDwmOrgAlertWebhookDeliveryContract({
         live: false,
     },
 })
+const operationDestinations = [
+    ...auditDestinationRows,
+    {
+        id: 'destination_sent_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Already Delivered Discord',
+        kind: 'discord' as const,
+        endpointHint: 'https://hooks.example.com/sent',
+        endpointHash: 'endpoint_sent_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: '2026-06-28T12:07:00.000Z',
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:07:00.000Z',
+    },
+    {
+        id: 'destination_missing_url_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Missing URL Discord',
+        kind: 'discord' as const,
+        endpointHint: '',
+        endpointHash: '',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: null,
+        lastTestStatus: null,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:09:00.000Z',
+    },
+]
+const operationAuditEvents = [
+    ...auditEventContracts.map(item => ({
+        id: item.auditEventId,
+        ownerId: 'owner_contract',
+        actorId: item.actorId,
+        orgId: item.orgId,
+        destinationId: item.destinationId,
+        deliveryId: item.deliveryId,
+        action: item.action,
+        metadata: item.metadata,
+        createdAt: item.createdAt,
+    })),
+    {
+        id: 'audit_replay_duplicate_contract',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_replay_contract',
+        deliveryId: 'delivery_replay_duplicate_contract',
+        action: 'delivery.replayed',
+        metadata: { status: 'dry_run' },
+        createdAt: '2026-06-28T12:08:01.000Z',
+    },
+]
+const deliveryOperations = buildDwmWebhookDeliveryOperations({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+})
+const deliveryOperationDetail = buildDwmWebhookDeliveryOperations({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { requestId: 'delivery_replay_duplicate_contract' },
+})
+const deliveryOperationByCase = buildDwmWebhookDeliveryOperations({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' },
+})
+const retryEligibleContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_live_contract',
+        eventType: 'dwm.alert.created',
+        alertId: 'alert_live_contract',
+        dedupeKey: 'dwm_dedupe_live_contract',
+        dryRun: true,
+        live: false,
+    },
+})
+const duplicateDeliveredRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_sent_contract',
+        eventType: 'dwm.alert.created',
+        alertId: 'alert_sent_contract',
+        dedupeKey: 'dwm_dedupe_sent_contract',
+        dryRun: true,
+        live: false,
+    },
+})
+const disabledRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_disabled_contract',
+        eventType: 'dwm.alert.created',
+        alertId: 'alert_disabled_contract',
+        dedupeKey: 'dwm_dedupe_disabled_contract',
+        dryRun: true,
+        live: false,
+    },
+})
+const missingUrlRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_missing_url_contract',
+        eventType: 'dwm.alert.created',
+        alertId: 'alert_missing_url_contract',
+        dedupeKey: 'dwm_dedupe_missing_url_contract',
+        dryRun: true,
+        live: false,
+    },
+})
+const liveDisabledRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_replay_contract',
+        eventType: 'dwm.alert.replayed',
+        alert: replayWorkflowAlert,
+        dryRun: false,
+        live: true,
+    },
+})
+const missingAlertRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: true,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_replay_contract',
+        eventType: 'dwm.alert.replayed',
+        dryRun: true,
+        live: false,
+    },
+})
+const readOnlyRetryContract = buildDwmWebhookDeliveryRetryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    canManage: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_contract',
+        destinationId: 'destination_live_contract',
+        eventType: 'dwm.alert.created',
+        alertId: 'alert_live_contract',
+        dedupeKey: 'dwm_dedupe_live_contract',
+        dryRun: true,
+        live: false,
+    },
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -1335,6 +1563,20 @@ expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplica
 expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
 expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
 expect(!JSON.stringify(orgAlertDeliveryContract).includes(secret), 'Org alert delivery contract should not leak endpoint, response, or audit secrets.', orgAlertDeliveryContract)
+expect(deliveryOperations.schemaVersion === 'dwm.webhook.delivery_operations.v1' && deliveryOperations.total === auditDeliveryRows.filter(item => item.orgId === 'org_contract').length, 'Delivery operations should list recent org deliveries.', deliveryOperations)
+expect(deliveryOperations.counts.replay >= 2 && deliveryOperations.counts.retryable >= 1 && deliveryOperations.counts.failed >= 1, 'Delivery operations should roll up replay, retryable, and failed counts.', deliveryOperations)
+expect(deliveryOperations.recentDeliveries.some(item => item.deliveryId === 'delivery_live_failed_retry_contract' && item.attempts.nextRetryAt === '2026-06-28T12:11:00.000Z' && item.attempts.lastErrorCategory === 'upstream_5xx'), 'Delivery operations should expose retry/backoff detail.', deliveryOperations)
+expect(deliveryOperations.recentDeliveries.some(item => item.deliveryId === 'delivery_replay_duplicate_contract' && item.replay === true && item.auditEventId === 'audit_replay_duplicate_contract'), 'Delivery operations should link replay markers and audit ids.', deliveryOperations)
+expect(deliveryOperationDetail.total === 1 && deliveryOperationDetail.recentDeliveries[0]?.deliveryId === 'delivery_replay_duplicate_contract', 'Delivery operations should retrieve a delivery by request id.', deliveryOperationDetail)
+expect(deliveryOperationByCase.recentDeliveries.every(item => item.casePath === replayWorkflowAlert.casePath && item.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery operations should filter by case path and dedupe key.', deliveryOperationByCase)
+expect(retryEligibleContract.canRetry === true && retryEligibleContract.blockers.length === 0 && retryEligibleContract.deliveryOperations.total >= 1, 'Retry contract should allow eligible failed dry-run retry without network.', retryEligibleContract)
+expect(duplicateDeliveredRetryContract.canRetry === false && duplicateDeliveredRetryContract.blockers.some(item => item.code === 'dedupe_already_delivered'), 'Retry contract should block already-delivered idempotency keys.', duplicateDeliveredRetryContract)
+expect(disabledRetryContract.canRetry === false && disabledRetryContract.blockers.some(item => item.code === 'destination_disabled'), 'Retry contract should block disabled destinations.', disabledRetryContract)
+expect(missingUrlRetryContract.canRetry === false && missingUrlRetryContract.blockers.some(item => item.code === 'missing_webhook_url'), 'Retry contract should block destinations missing webhook URL refs.', missingUrlRetryContract)
+expect(liveDisabledRetryContract.externalSendEnabled === false && liveDisabledRetryContract.blockers.some(item => item.code === 'live_delivery_disabled'), 'Retry contract should preserve live-disabled no-network semantics.', liveDisabledRetryContract)
+expect(missingAlertRetryContract.canRetry === false && missingAlertRetryContract.blockers.some(item => item.code === 'missing_alert_context'), 'Retry contract should require alert context.', missingAlertRetryContract)
+expect(readOnlyRetryContract.canRetry === false && readOnlyRetryContract.access.canManage === false, 'Retry contract should require owner/admin management access.', readOnlyRetryContract)
+expect(!JSON.stringify(deliveryOperations).includes(secret) && !JSON.stringify(retryEligibleContract).includes(secret), 'Delivery operations and retry contract should not leak endpoint secrets.', { deliveryOperations, retryEligibleContract })
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1391,6 +1633,13 @@ console.log(JSON.stringify({
         'org alert delivery health/lifecycle linkage',
         'org alert delivery audit/ledger linkage',
         'org alert delivery secret redaction',
+        'delivery operations list/detail filters',
+        'delivery operations retry/backoff summary',
+        'delivery operations replay/audit linkage',
+        'delivery retry eligibility contract',
+        'delivery retry typed blockers',
+        'delivery retry role gate',
+        'delivery operations secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',

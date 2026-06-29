@@ -17,7 +17,9 @@ import {
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
+    buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryRequestInput,
+    buildDwmWebhookDeliveryRetryContract,
     createDwmWebhookDestination,
     buildDwmWebhookDeliveryReadiness,
     deliverDwmAlertNotification,
@@ -47,6 +49,10 @@ type OrgQuery = {
     case_path?: string
     dedupeKey?: string
     dedupe_key?: string
+    requestId?: string
+    request_id?: string
+    deliveryId?: string
+    delivery_id?: string
 }
 
 type Membership = {
@@ -236,27 +242,24 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
 
     const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
     const auditEvents = await listDwmWebhookAuditEvents(userId, orgId || undefined)
+    const destinations = await listDwmWebhookDestinations(userId, orgId || undefined)
+    const deliveryFilters = {
+        orgId,
+        destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
+        alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
+        casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
+        dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
+        requestId: clean(req.query?.requestId) || clean(req.query?.request_id) || clean(req.query?.deliveryId) || clean(req.query?.delivery_id),
+    }
     const evidence = buildDwmWebhookDeliveryEvidence({
         deliveries,
         auditEvents,
-        filters: {
-            orgId,
-            destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
-            alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
-            casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
-            dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
-        },
+        filters: deliveryFilters,
     })
     const deliveryLedger = buildDwmWebhookDeliveryLedger({
         deliveries,
         auditEvents,
-        filters: {
-            orgId,
-            destinationId: clean(req.query?.destinationId) || clean(req.query?.destination_id),
-            alertId: clean(req.query?.alertId) || clean(req.query?.alert_id),
-            casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
-            dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
-        },
+        filters: deliveryFilters,
     })
     const visibilityResult = orgId && orgId !== userId
         ? filterDwmWebhookDeliveryEvidenceForVisibility({
@@ -273,18 +276,33 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         deliveries,
         deliveryEvidence: visibilityResult ? visibilityResult.deliveryEvidence : evidence,
         deliveryLedger: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveryLedger,
+        deliveryOperations: visibilityResult && !visibilityResult.decision.allowed
+            ? {
+                schemaVersion: 'dwm.webhook.delivery_operations.v1',
+                liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+                filters: deliveryFilters,
+                total: 0,
+                counts: { queued: 0, sent: 0, failed: 0, skipped: 0, dryRun: 0, live: 0, replay: 0, retryable: 0 },
+                recentDeliveries: [],
+            }
+            : buildDwmWebhookDeliveryOperations({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+            }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({
-            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            destinations,
             deliveries,
             auditEvents,
         }),
         destinationHealth: buildDwmWebhookDestinationHealth({
-            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            destinations,
             deliveries,
             auditEvents,
         }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({
-            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            destinations,
             deliveries,
             auditEvents,
             ...destinationLifecycleAccess(orgId, userId, visibility),
@@ -292,7 +310,7 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
             deliveries,
-            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            destinations,
         }),
         visibility: visibilityResult?.decision ?? {
             allowed: true,
@@ -332,6 +350,26 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
         }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries: ledgerDeliveries, auditEvents }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries: ledgerDeliveries, auditEvents, viewerRole: 'admin', canManage: true }),
+        deliveryOperations: buildDwmWebhookDeliveryOperations({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+        }),
+        deliveryRetry: buildDwmWebhookDeliveryRetryContract({
+            ownerId: userId,
+            input: { ...input, orgId },
+            destinations,
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            canManage: true,
+        }),
         orgAlertDelivery: buildDwmOrgAlertWebhookDeliveryContract({
             ownerId: userId,
             input,
