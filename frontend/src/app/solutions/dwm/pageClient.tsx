@@ -41,7 +41,7 @@ const fields = [
     'webhookDelivery',
 ]
 
-const buyerSignals = [
+const sourceCoverageStats = [
     { label: 'Active monitored sources', value: activeSourceCount.toString(), detail: `${totalSourceCount} mapped across source families` },
     { label: 'Public Telegram sources', value: String(telegramCoverage?.activeCount || 0), detail: 'Broker rooms, mirrors, stealer-log shops' },
     { label: 'Metadata-only sources', value: String(darkwebCoverage?.activeCount || 0), detail: 'Actor pages, mirrors, hashes, screenshots' },
@@ -207,7 +207,7 @@ export default function DarkWebMonitoringPage() {
                             </Link>
                         </div>
                         <div className='grid gap-3 border-t border-white/10 pt-5 text-sm text-[#d7dff0] sm:grid-cols-3'>
-                            {buyerSignals.map(signal => <Metric key={signal.label} label={signal.label} value={signal.value} detail={signal.detail} />)}
+                            {sourceCoverageStats.map(stat => <Metric key={stat.label} label={stat.label} value={stat.value} detail={stat.detail} />)}
                         </div>
                     </div>
 

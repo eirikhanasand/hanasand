@@ -1,12 +1,16 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { headers } from 'next/headers'
 import { ArrowRight, Building2, ChevronRight, ExternalLink, Search, ShieldCheck, Waypoints } from 'lucide-react'
 import LogoutClient from '@/components/logout/logoutClient'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from './seo'
+
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Hanasand Threat Intelligence',
-    description: 'Monitor ransomware victim claims, actor infrastructure, and company exposure with high-speed threat intelligence.',
+    description: 'Monitor ransomware victim claims, actor infrastructure, and company exposure with source-backed threat intelligence.',
     path: '/',
     keywords: ['hanasand', 'threat intelligence', 'ransomware monitoring', 'dark web monitoring', 'company exposure alerts'],
 })
@@ -17,7 +21,7 @@ const examples = [
         slug: 'hanasand/company-exposure-monitor',
         detail: 'Watch company names, domains, suppliers, brands, and portfolio companies across recent victim-claim activity.',
         badge: 'Live alerts',
-        signal: '12 min median refresh',
+        proof: '12 min median refresh',
         icon: Building2,
     },
     {
@@ -25,7 +29,7 @@ const examples = [
         slug: 'hanasand/actor-overview',
         detail: 'Map actors to victims, claimed data, infrastructure changes, sectors, timelines, and review state.',
         badge: 'Graph ready',
-        signal: 'Actor and victim pivots',
+        proof: 'Actor and victim pivots',
         icon: Waypoints,
     },
     {
@@ -33,7 +37,7 @@ const examples = [
         slug: 'hanasand/darkweb-exposure-index',
         detail: 'Normalized actor, company, URL, note, claim, and timing fields from leak and extortion infrastructure.',
         badge: 'Indexed feeds',
-        signal: 'Company and actor pivots',
+        proof: 'Company and actor pivots',
         icon: ShieldCheck,
     },
 ]
@@ -41,7 +45,7 @@ const examples = [
 const solutions = [
     {
         title: 'Threat Monitoring',
-        detail: 'High-speed ransomware and exposure notifications for watched companies and vendors.',
+        detail: 'Ransomware and exposure notifications for watched companies and vendors.',
         href: '/ti',
     },
     {
@@ -64,8 +68,8 @@ const solutions = [
 const stats = [
     ['Alert target', 'Company, vendor, domain, and brand mentions'],
     ['What gets sent', 'Actor, company, claimed data, source, time, status'],
-    ['Refresh signal', 'New and changed actor-page claims'],
-    ['Buyer workflow', 'Webhook, API, and console review queue'],
+    ['Freshness basis', 'New and changed actor-page claims'],
+    ['Review workflow', 'Webhook, API, and console review queue'],
 ]
 
 const feedRows = [
@@ -81,27 +85,31 @@ export default async function Page({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
     const params = await searchParams
-    const logout = Boolean(Array.isArray(params.logout) ? params.logout[0] : params.logout) || false
+    const logout = Boolean(firstParam(params.logout)) || false
+    const query = firstParam(params.q) || 'watchlist terms'
+    const Headers = await headers()
+    const generatedAt = new Date().toISOString()
+    const scoreboard = await loadProductReadiness(Headers, query) || buildProductNorthStarScoreboard(null, { generatedAt, query })
 
     return (
-        <main className='min-h-full bg-[#f7f8fb] text-[#16181d]'>
+        <main className='min-h-full bg-[#f7f8fb] text-[#16181d] dark:bg-[#08111f] dark:text-[#f5f7fb]'>
             <LogoutClient logoutServer={logout} />
 
-            <section className='border-b border-[#e3e7ee] bg-[radial-gradient(circle_at_1px_1px,rgba(24,32,52,0.09)_1px,transparent_0)] bg-[length:22px_22px]'>
+            <section className='border-b border-[#e3e7ee] bg-[radial-gradient(circle_at_1px_1px,rgba(24,32,52,0.09)_1px,transparent_0)] bg-[length:22px_22px] dark:border-[#26364f] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(157,182,255,0.18)_1px,transparent_0)]'>
                 <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
                     <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
                         <Link href='/ti' className='landing-primary-action inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold shadow-sm transition'>
-                            <span className='landing-inner-pill rounded-full px-2 py-0.5 text-xs'>New</span>
-                            Direct actor-page monitoring for company exposure
+                            <span className='landing-inner-pill rounded-full px-2 py-0.5 text-xs'>Proof</span>
+                            Source-backed monitoring for company exposure
                             <ArrowRight className='h-4 w-4' />
                         </Link>
 
                         <div className='grid gap-4'>
-                            <h1 className='text-5xl font-semibold tracking-normal text-[#111318] md:text-7xl'>
-                                Hanasand Threat Intelligence
+                            <h1 className='text-5xl font-semibold tracking-normal text-[#111318] dark:text-white md:text-7xl'>
+                                Company Exposure Monitoring
                             </h1>
-                            <p className='mx-auto max-w-3xl text-lg leading-8 text-[#596170] md:text-xl'>
-                                High-speed company exposure alerts and actor overviews built from watched sources, fresh claim changes, and review-ready context.
+                            <p className='mx-auto max-w-3xl text-lg leading-8 text-[#596170] dark:text-[#b9c4d6] md:text-xl'>
+                                Search watched sources, threat actors, companies, domains, and CVEs; route source-backed alerts to the API, webhooks, and analyst console.
                             </p>
                         </div>
 
@@ -120,28 +128,30 @@ export default async function Page({
                                 <ChevronRight className='h-4 w-4' />
                             </button>
                         </form>
+
+                        <HomeReadinessStrip scoreboard={scoreboard} />
                     </div>
 
                     <div className='grid gap-4 lg:grid-cols-3'>
                         {examples.map((item) => {
                             const Icon = item.icon
                             return (
-                                <Link key={item.slug} href='/ti' className='group overflow-hidden rounded-lg border border-[#e0e5ed] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df] hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)]'>
+                                <Link key={item.slug} href='/ti' className='group overflow-hidden rounded-lg border border-[#e0e5ed] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df] hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-[#26364f] dark:bg-[#101927] dark:hover:border-[#405579]'>
                                     <div className='grid gap-4 p-5'>
                                         <div className='flex items-start justify-between gap-3'>
-                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3]'>
+                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3] dark:border-[#34445f] dark:bg-[#0b1422] dark:text-[#9db6ff]'>
                                                 <Icon className='h-5 w-5' />
                                             </div>
                                             <span className='landing-status-pill rounded-full border px-2.5 py-1 text-xs font-semibold'>{item.badge}</span>
                                         </div>
                                         <div className='grid gap-1'>
-                                            <h2 className='text-lg font-semibold text-[#171a21]'>{item.title}</h2>
-                                            <p className='font-mono text-sm text-[#737c8c]'>{item.slug}</p>
+                                            <h2 className='text-lg font-semibold text-[#171a21] dark:text-white'>{item.title}</h2>
+                                            <p className='font-mono text-sm text-[#737c8c] dark:text-[#97a6bd]'>{item.slug}</p>
                                         </div>
-                                        <p className='min-h-16 text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                        <p className='min-h-16 text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>{item.detail}</p>
                                     </div>
-                                    <div className='flex items-center justify-between border-t border-[#eef1f5] bg-[#f8fafc] px-5 py-3 text-sm'>
-                                        <span className='font-medium text-[#2b3340]'>{item.signal}</span>
+                                    <div className='flex items-center justify-between border-t border-[#eef1f5] bg-[#f8fafc] px-5 py-3 text-sm dark:border-[#26364f] dark:bg-[#0b1422]'>
+                                        <span className='font-medium text-[#2b3340] dark:text-[#d8e0ee]'>{item.proof}</span>
                                         <span className='landing-text-action inline-flex items-center gap-1 font-semibold'>Open <ExternalLink className='landing-action-icon h-3.5 w-3.5' /></span>
                                     </div>
                                 </Link>
@@ -231,4 +241,91 @@ export default async function Page({
             </section>
         </main>
     )
+}
+
+function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
+    const stateLabel = scoreboard.fullChainReady ? 'ready' : 'needs proof'
+    const nextStep = scoreboard.fullChainReady
+        ? 'Source, alert, delivery, and analyst proof are loaded.'
+        : scoreboard.firstBlocker || 'Product readiness proof is not loaded.'
+
+    return (
+        <div
+            className='grid w-full max-w-5xl gap-3 rounded-xl border border-[#d9e2ef] bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1.5fr_auto]'
+            data-home-product-readiness='true'
+            data-home-readiness-state={stateLabel}
+            data-home-readiness-ready-rows={scoreboard.readyRows}
+            data-home-readiness-total-rows={scoreboard.totalRows}
+            data-home-readiness-query={scoreboard.query}
+        >
+            <HomeReadinessFact label='Product category' value='Company exposure monitoring API and analyst console' />
+            <HomeReadinessFact label='Proof state' value={`${scoreboard.readyRows}/${scoreboard.totalRows} rows ready`} />
+            <HomeReadinessFact label='Checked' value={formatChecked(scoreboard.generatedAt)} />
+            <HomeReadinessFact label={scoreboard.fullChainReady ? 'Workflow proof' : 'Next blocker'} value={nextStep} />
+            <Link
+                href={`/readiness?q=${encodeURIComponent(scoreboard.query)}`}
+                className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+            >
+                Open readiness
+                <ArrowRight className='h-4 w-4' />
+            </Link>
+        </div>
+    )
+}
+
+function HomeReadinessFact({ label, value }: { label: string, value: string }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 dark:border-[#26364f] dark:bg-[#0b1422]'>
+            <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
+            <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-[#171a21] dark:text-white'>{value}</p>
+        </div>
+    )
+}
+
+async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {
+    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
+    if (!host) return null
+    const proto = requestHeaders.get('x-forwarded-proto') || 'http'
+    const target = new URL('/api/product-readiness', `${proto}://${host}`)
+    target.searchParams.set('q', query)
+
+    try {
+        const response = await fetch(target, {
+            cache: 'no-store',
+            headers: forwardedHeaders(requestHeaders),
+            signal: AbortSignal.timeout(3500),
+        })
+        if (!response.ok) return null
+        return parseProductNorthStarScoreboard(await response.json())
+    } catch {
+        return null
+    }
+}
+
+function forwardedHeaders(requestHeaders: Headers) {
+    const next = new Headers()
+    const cookie = requestHeaders.get('cookie')
+    if (cookie) next.set('cookie', cookie)
+    for (const name of ['authorization', 'x-tenant-id', 'x-organization-id', 'x-user-id', 'x-user-email', 'x-actor-id']) {
+        const value = requestHeaders.get(name)
+        if (value) next.set(name, value)
+    }
+    return next
+}
+
+function firstParam(value: string | string[] | undefined) {
+    if (Array.isArray(value)) return value[0] || undefined
+    return value
+}
+
+function formatChecked(value: string) {
+    const time = new Date(value).getTime()
+    if (!value || Number.isNaN(time)) return 'not loaded'
+    const seconds = Math.max(0, Math.round((Date.now() - time) / 1000))
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.round(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.round(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }

@@ -4,6 +4,7 @@ import { buildProductProgressPayload } from '../src/utils/productProgress/readin
 import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
 
 const here = new URL('.', import.meta.url)
+const homeSource = readFileSync(new URL('../src/app/page.tsx', here), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 const modelSource = readFileSync(new URL('../src/utils/productProgress/northStar.ts', here), 'utf8')
 const routeSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
@@ -164,6 +165,28 @@ assert.equal(readyScoreboard.firstBlocker, undefined)
 assert.ok(readyScoreboard.direction.every(item => item.state === 'ready' && !item.blocker))
 
 for (const token of [
+    'data-home-product-readiness',
+    'data-home-readiness-state',
+    'data-home-readiness-ready-rows',
+    'data-home-readiness-total-rows',
+    'data-home-readiness-query',
+    '/api/product-readiness',
+    'parseProductNorthStarScoreboard',
+    'buildProductNorthStarScoreboard',
+    'Product category',
+    'Company Exposure Monitoring',
+    'Proof state',
+    'Next blocker',
+    'Open readiness',
+]) {
+    assert.ok(homeSource.includes(token), `Homepage missing product readiness proof token: ${token}.`)
+}
+
+for (const phrase of ['Refresh signal', ' item.signal', 'High-speed', 'Buyer workflow']) {
+    assert.equal(homeSource.includes(phrase), false, `Homepage contains stale product language: ${phrase}`)
+}
+
+for (const token of [
     'data-north-star-row-id',
     'data-north-star-state',
     'data-north-star-owner-lane',
@@ -197,6 +220,7 @@ for (const token of [
 }
 
 for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'named examples', 'dashboard slop', 'how this feeds', 'acceptance criteria', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
+    assert.equal(homeSource.toLowerCase().includes(phrase), false, `Homepage contains banned copy: ${phrase}`)
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)
     assert.equal(routeSource.toLowerCase().includes(phrase), false, `Product readiness API route contains banned copy: ${phrase}`)

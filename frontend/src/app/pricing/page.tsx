@@ -150,7 +150,7 @@ export default function PricingPage() {
                 <div className='mx-auto grid max-w-7xl gap-6 px-4 py-12 md:px-8'>
                     <div>
                         <p className='text-sm font-semibold uppercase text-[#3056d3]'>Customer reviews</p>
-                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Small teams use Hanasand when they need a fast signal, not another dashboard to babysit.</h2>
+                        <h2 className='mt-2 max-w-3xl text-3xl font-semibold'>Small teams use Hanasand when they need an early company mention with enough context to act.</h2>
                     </div>
                     <div className='grid gap-4 lg:grid-cols-3'>
                         {reviews.map((review) => (
