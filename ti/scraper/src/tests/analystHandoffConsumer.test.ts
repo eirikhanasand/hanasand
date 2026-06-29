@@ -13,7 +13,9 @@ import {
   PRODUCT_READINESS_FORBIDDEN_LANGUAGE,
   buildAnalystHandoffValidationReport,
   validateAnalystHandoffConsumerBundle,
+  validateBetaReadinessArtifact,
   validateProductReadinessAggregateArtifact,
+  type BetaReadinessArtifact,
   type AnalystHandoffConsumerBlockerCode,
   type AnalystHandoffConsumerBundle,
   type DwmWebhookDestinationLifecycleContract,
@@ -631,6 +633,74 @@ describe("analyst handoff consumer validation", () => {
     expect(serialized).not.toContain("\"deployGateEvidence\"");
   });
 
+  test("emits beta readiness for the end-to-end organization monitoring workflow", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T02:30:00.000Z",
+      results: [{ file: "customer-org.json", bundle: fixture }]
+    });
+    const beta = report.betaReadiness;
+
+    expect(beta.schemaVersion).toBe("hanasand.beta_readiness.v1");
+    expect(beta.ok).toBe(true);
+    expect(beta.status).toBe("nearly_sellable");
+    expect(beta.customerWorkflow).toBe("organization_threat_monitoring");
+    expect(beta.rows.map((row) => row.id)).toEqual([
+      "create_organization",
+      "invite_teammates",
+      "share_watchlists",
+      "generate_real_alerts",
+      "configure_destinations",
+      "work_alerts",
+      "source_backed_ti_coverage"
+    ]);
+    expect(beta.rows.every((row) => row.persistenceMode === "real_persistence")).toBe(true);
+    expect(beta.rows.find((row) => row.id === "invite_teammates")).toMatchObject({
+      ownerLane: "support",
+      customerVisibleState: "ready",
+      requiredNextAction: "verify_team_invitation_action"
+    });
+    expect(beta.rows.find((row) => row.id === "work_alerts")).toMatchObject({
+      ownerLane: "dashboard",
+      uiQualityProofStatus: "present",
+      customerVisibleState: "ready"
+    });
+    expect(beta.rows.find((row) => row.id === "source_backed_ti_coverage")).toMatchObject({
+      ownerLane: "publicTI",
+      customerVisibleState: "ready",
+      requiredNextAction: "verify_source_backed_ti_coverage"
+    });
+    expect(validateBetaReadinessArtifact(beta)).toMatchObject({ ok: true, blockerCodes: [] });
+    const serialized = JSON.stringify(beta);
+    expect(serialized).not.toContain("\"stages\"");
+    expect(serialized).not.toContain("\"deployGate\"");
+    expect(serialized).not.toContain("\"productReadinessAggregate\"");
+  });
+
+  test("validates beta readiness fixtures for nearly-sellable and blocked org paths", () => {
+    const nearlySellable = loadFixture("beta-readiness-nearly-sellable.json") as BetaReadinessArtifact;
+    const blocked = loadFixture("beta-readiness-blocked.json") as BetaReadinessArtifact;
+
+    expect(validateBetaReadinessArtifact(nearlySellable)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(nearlySellable.ok).toBe(true);
+    expect(nearlySellable.rows.find((row) => row.id === "configure_destinations")).toMatchObject({
+      ownerLane: "webhook",
+      persistenceMode: "real_persistence",
+      customerVisibleState: "ready"
+    });
+
+    expect(validateBetaReadinessArtifact(blocked)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.rows.find((row) => row.id === "generate_real_alerts")?.blockers).toContain("source_coverage_required_for_real_alerts");
+    expect(blocked.rows.find((row) => row.id === "configure_destinations")?.blockers).toContain("missing_webhook_destination");
+    expect(blocked.rows.find((row) => row.id === "work_alerts")?.uiQualityProofStatus).toBe("missing");
+    expect(blocked.rows.find((row) => row.id === "source_backed_ti_coverage")?.blockers).toContain("source_policy_inactive");
+    const serialized = JSON.stringify(blocked);
+    expect(serialized).not.toContain("\"stages\"");
+    expect(serialized).not.toContain("\"compatibility\"");
+    expect(serialized).not.toContain("\"deployGateEvidence\"");
+  });
+
   test("keeps validator modules free of UI, network, and database imports", () => {
     const consumerSource = readFileSync(new URL("../product/analystHandoffConsumer.ts", import.meta.url), "utf8");
     const validatorSource = readFileSync(new URL("../../scripts/validateAnalystHandoffBundles.ts", import.meta.url), "utf8");
@@ -676,6 +746,12 @@ describe("analyst handoff consumer validation", () => {
       capabilityLabel: "Dashboard slop control room"
     };
     expect(validateProductReadinessAggregateArtifact(badAggregate).blockerCodes).toContain("prompt_shaped_language");
+    const badBeta = clone(report.betaReadiness) as BetaReadinessArtifact;
+    badBeta.rows[0] = {
+      ...badBeta.rows[0]!,
+      capabilityLabel: "Control room signal"
+    };
+    expect(validateBetaReadinessArtifact(badBeta).blockerCodes).toContain("prompt_shaped_language");
   });
 });
 

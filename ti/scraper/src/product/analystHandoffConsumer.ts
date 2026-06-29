@@ -35,6 +35,7 @@ export const ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION = "organization.lif
 export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_executor_readiness.v1" as const;
 export const ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION = "hanasand.analyst_handoff.readiness_matrix.v1" as const;
 export const PRODUCT_READINESS_SCHEMA_VERSION = "hanasand.product_readiness.v1" as const;
+export const BETA_READINESS_SCHEMA_VERSION = "hanasand.beta_readiness.v1" as const;
 export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
@@ -59,6 +60,7 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION,
   readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION,
   productReadiness: PRODUCT_READINESS_SCHEMA_VERSION,
+  betaReadiness: BETA_READINESS_SCHEMA_VERSION,
   uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION
 } as const;
 
@@ -69,7 +71,9 @@ export const PRODUCT_READINESS_FORBIDDEN_LANGUAGE = [
   "named examples",
   "signal",
   "acceptance criteria",
-  "acceptance-criteria"
+  "acceptance-criteria",
+  "acceptance criterion",
+  "coordinator"
 ] as const;
 
 export type AnalystHandoffConsumerBlockerCode =
@@ -516,6 +520,7 @@ export type AnalystHandoffValidationReport = {
   deployGate: AnalystHandoffDeployGateAssertions;
   readinessMatrix: AnalystHandoffReadinessMatrix;
   productReadinessAggregate: ProductReadinessAggregate;
+  betaReadiness: BetaReadinessArtifact;
   results: Array<{
     file?: string;
     ok: boolean;
@@ -645,6 +650,48 @@ export type ProductReadinessAggregate = {
 };
 
 export type ProductReadinessAggregateValidation = {
+  ok: boolean;
+  blockerCodes: string[];
+  blockers: Array<{ code: string; rowId?: string; field?: string; detail: string }>;
+};
+
+export type BetaReadinessCapabilityId =
+  | "create_organization"
+  | "invite_teammates"
+  | "share_watchlists"
+  | "generate_real_alerts"
+  | "configure_destinations"
+  | "work_alerts"
+  | "source_backed_ti_coverage";
+
+export type BetaReadinessPersistenceMode = "real_persistence" | "local_proof" | "session_state" | "demo_fixture";
+
+export type BetaReadinessRow = {
+  id: BetaReadinessCapabilityId;
+  ownerLane: ProductReadinessOwnerLane | "integration";
+  capabilityLabel: string;
+  proofArtifact: ProductReadinessRow["proofArtifact"];
+  latestCommitOrCheck: string;
+  customerVisibleState: ProductReadinessState;
+  blockers: string[];
+  deployRisk: ProductReadinessRow["deployRisk"];
+  requiredNextAction: string;
+  uiQualityProofStatus: "present" | "missing" | "not_required";
+  persistenceMode: BetaReadinessPersistenceMode;
+};
+
+export type BetaReadinessArtifact = {
+  schemaVersion: typeof BETA_READINESS_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  status: "nearly_sellable" | "blocked";
+  rowCount: number;
+  customerWorkflow: "organization_threat_monitoring";
+  deployRisk: ProductReadinessRow["deployRisk"];
+  rows: BetaReadinessRow[];
+};
+
+export type BetaReadinessValidation = {
   ok: boolean;
   blockerCodes: string[];
   blockers: Array<{ code: string; rowId?: string; field?: string; detail: string }>;
@@ -809,6 +856,11 @@ export function buildAnalystHandoffValidationReport(input: {
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
     result: results[index]
   })), readinessMatrix, checkedAt);
+  const betaReadiness = buildBetaReadinessArtifact(input.results.map((item, index) => ({
+    file: item.file,
+    bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
+    result: results[index]
+  })), productReadinessAggregate, checkedAt);
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
     contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
@@ -822,6 +874,7 @@ export function buildAnalystHandoffValidationReport(input: {
     deployGate,
     readinessMatrix,
     productReadinessAggregate,
+    betaReadiness,
     results
   };
 }
@@ -1094,6 +1147,190 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
   };
 }
 
+export function buildBetaReadinessArtifact(input: Array<{
+  file?: string;
+  bundle?: Partial<AnalystHandoffConsumerBundle>;
+  result?: AnalystHandoffValidationReport["results"][number];
+}>, productReadiness: ProductReadinessAggregate = buildProductReadinessAggregate(input), checkedAt: string = nowIso()): BetaReadinessArtifact {
+  const productRows = new Map(productReadiness.rows.map((row) => [row.id, row]));
+  const dashboard = productRows.get("dashboard_operator_workspace");
+  const source = productRows.get("source_activation");
+  const publicTi = productRows.get("public_ti_actor_handoff");
+  const rows: BetaReadinessRow[] = [
+    betaRowFromProduct({
+      id: "create_organization",
+      ownerLane: "org",
+      capabilityLabel: "Organization creation",
+      productRow: productRows.get("organization_lifecycle"),
+      requiredNextAction: "verify_organization_create_route",
+      persistenceMode: "real_persistence"
+    }),
+    betaRowFromProduct({
+      id: "invite_teammates",
+      ownerLane: "support",
+      capabilityLabel: "Team invitation workflow",
+      productRow: productRows.get("support_controls"),
+      requiredNextAction: "verify_team_invitation_action",
+      persistenceMode: "real_persistence",
+      customerVisibleStateOverride: supportInviteReady(input) ? undefined : "blocked",
+      extraBlockers: supportInviteReady(input) ? [] : ["missing_invite_teammate_executor"]
+    }),
+    betaRowFromProduct({
+      id: "share_watchlists",
+      ownerLane: "watchlist",
+      capabilityLabel: "Shared watchlist monitoring",
+      productRow: productRows.get("shared_watchlists"),
+      requiredNextAction: "verify_shared_watchlist_persistence",
+      persistenceMode: "real_persistence"
+    }),
+    betaRowFromProduct({
+      id: "generate_real_alerts",
+      ownerLane: "alert",
+      capabilityLabel: "Real alert generation",
+      productRow: productRows.get("alert_case_workflow"),
+      requiredNextAction: "verify_real_alert_generation",
+      persistenceMode: "real_persistence",
+      extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_real_alerts"]
+    }),
+    betaRowFromProduct({
+      id: "configure_destinations",
+      ownerLane: "webhook",
+      capabilityLabel: "Notification destination configuration",
+      productRow: productRows.get("webhook_delivery"),
+      requiredNextAction: "verify_webhook_destination_configuration",
+      persistenceMode: "real_persistence"
+    }),
+    betaRowFromProduct({
+      id: "work_alerts",
+      ownerLane: "dashboard",
+      capabilityLabel: "Analyst alert workflow",
+      productRow: productRows.get("alert_case_workflow"),
+      requiredNextAction: "verify_dashboard_alert_workflow",
+      persistenceMode: "real_persistence",
+      uiQualityProofStatus: dashboard?.uiQualityProofExists ? "present" : "missing",
+      extraBlockers: dashboard?.uiQualityProofExists ? [] : ["missing_dashboard_ui_quality_proof"]
+    }),
+    betaRowFromProduct({
+      id: "source_backed_ti_coverage",
+      ownerLane: "publicTI",
+      capabilityLabel: "Source-backed threat intelligence coverage",
+      productRow: publicTi,
+      requiredNextAction: "verify_source_backed_ti_coverage",
+      persistenceMode: "real_persistence",
+      extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_ti"]
+    })
+  ];
+  return {
+    schemaVersion: BETA_READINESS_SCHEMA_VERSION,
+    checkedAt,
+    ok: rows.every((row) => row.customerVisibleState === "ready"),
+    status: rows.every((row) => row.customerVisibleState === "ready") ? "nearly_sellable" : "blocked",
+    rowCount: rows.length,
+    customerWorkflow: "organization_threat_monitoring",
+    deployRisk: maxDeployRisk(rows.map((row) => row.deployRisk)),
+    rows
+  };
+}
+
+export function validateBetaReadinessArtifact(input: unknown): BetaReadinessValidation {
+  const artifact = input as Partial<BetaReadinessArtifact>;
+  const blockers: BetaReadinessValidation["blockers"] = [];
+  if (artifact.schemaVersion !== BETA_READINESS_SCHEMA_VERSION) {
+    blockers.push({ code: "unsupported_schema", field: "schemaVersion", detail: `Expected ${BETA_READINESS_SCHEMA_VERSION}.` });
+  }
+  if (!Array.isArray(artifact.rows)) {
+    blockers.push({ code: "missing_rows", field: "rows", detail: "Beta readiness rows are required." });
+  }
+  if (Array.isArray(artifact.rows) && artifact.rowCount !== artifact.rows.length) {
+    blockers.push({ code: "row_count_mismatch", field: "rowCount", detail: "Beta readiness rowCount must match rows.length." });
+  }
+  const requiredRows: BetaReadinessCapabilityId[] = [
+    "create_organization",
+    "invite_teammates",
+    "share_watchlists",
+    "generate_real_alerts",
+    "configure_destinations",
+    "work_alerts",
+    "source_backed_ti_coverage"
+  ];
+  const rowIds = new Set((artifact.rows || []).map((row) => row.id));
+  for (const id of requiredRows) {
+    if (!rowIds.has(id)) blockers.push({ code: "missing_required_capability", rowId: id, field: "rows[].id", detail: `Missing beta capability: ${id}.` });
+  }
+  for (const row of artifact.rows || []) {
+    const typed = row as Partial<BetaReadinessRow>;
+    const rowId = typed.id;
+    if (!typed.ownerLane) blockers.push({ code: "missing_owner_lane", rowId, field: "ownerLane", detail: "Every beta row needs an owner lane." });
+    if (!typed.capabilityLabel) blockers.push({ code: "missing_capability_label", rowId, field: "capabilityLabel", detail: "Every beta row needs a domain-native label." });
+    if (!typed.proofArtifact?.schemaVersion || !typed.proofArtifact?.artifactId) blockers.push({ code: "missing_proof_artifact", rowId, field: "proofArtifact", detail: "Every beta row needs a proof artifact pointer." });
+    if (!typed.latestCommitOrCheck) blockers.push({ code: "missing_latest_commit_or_check", rowId, field: "latestCommitOrCheck", detail: "Every beta row needs a latest commit or check pointer." });
+    if (!typed.requiredNextAction) blockers.push({ code: "missing_required_next_action", rowId, field: "requiredNextAction", detail: "Every beta row needs a required next action." });
+    if (!typed.persistenceMode) blockers.push({ code: "missing_persistence_mode", rowId, field: "persistenceMode", detail: "Every beta row must declare whether proof is real, local, session, or demo." });
+    const uiFacing = [
+      typed.capabilityLabel,
+      typed.requiredNextAction,
+      typed.proofArtifact?.artifactId,
+      ...(typed.blockers || [])
+    ].filter(Boolean).join(" ").toLowerCase();
+    for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) {
+      if (uiFacing.includes(phrase)) blockers.push({ code: "prompt_shaped_language", rowId, field: "capabilityLabel", detail: `Beta rows cannot contain prompt-shaped language: ${phrase}.` });
+    }
+    if (typed.capabilityLabel && !hasDomainNativeLabel(typed.capabilityLabel)) {
+      blockers.push({ code: "non_domain_native_label", rowId, field: "capabilityLabel", detail: "Beta rows must use domain-native terminology." });
+    }
+  }
+  return {
+    ok: blockers.length === 0,
+    blockerCodes: [...new Set(blockers.map((item) => item.code))].sort(),
+    blockers
+  };
+}
+
+function betaRowFromProduct(input: {
+  id: BetaReadinessCapabilityId;
+  ownerLane: BetaReadinessRow["ownerLane"];
+  capabilityLabel: string;
+  productRow?: ProductReadinessRow;
+  requiredNextAction: string;
+  persistenceMode: BetaReadinessPersistenceMode;
+  uiQualityProofStatus?: BetaReadinessRow["uiQualityProofStatus"];
+  customerVisibleStateOverride?: ProductReadinessState;
+  extraBlockers?: string[];
+}): BetaReadinessRow {
+  const blockers = [...(input.productRow?.blockers || ["missing_product_readiness_row"]), ...(input.extraBlockers || [])].filter(Boolean);
+  const state = input.customerVisibleStateOverride || (blockers.length ? "blocked" : input.productRow?.customerVisibleState || "blocked");
+  return {
+    id: input.id,
+    ownerLane: input.ownerLane,
+    capabilityLabel: input.capabilityLabel,
+    proofArtifact: input.productRow?.proofArtifact ?? missingBetaProof(input.id),
+    latestCommitOrCheck: input.productRow?.lastCheckedAt || "missing_check",
+    customerVisibleState: state,
+    blockers: Array.from(new Set(blockers)),
+    deployRisk: state === "ready" ? input.productRow?.deployRisk || "none" : "high",
+    requiredNextAction: input.requiredNextAction,
+    uiQualityProofStatus: input.uiQualityProofStatus || "not_required",
+    persistenceMode: input.persistenceMode
+  };
+}
+
+function missingBetaProof(id: BetaReadinessCapabilityId): ProductReadinessRow["proofArtifact"] {
+  return {
+    schemaVersion: "missing",
+    artifactId: `${id}.missing_proof`
+  };
+}
+
+function supportInviteReady(input: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>): boolean {
+  return input.some((item) => (item.bundle?.deployGateEvidence?.supportExecutor || []).some((row) =>
+    row.ready
+    && row.executableByExistingEndpoint
+    && Boolean(row.executorContract?.path)
+    && row.action.includes("invite")
+    && !row.blockers.length
+  ));
+}
+
 function productRowFromMatrix(input: {
   id: ProductReadinessCapabilityId;
   ownerLane: ProductReadinessOwnerLane;
@@ -1204,7 +1441,12 @@ function hasDomainNativeLabel(label: string): boolean {
     "support",
     "dashboard",
     "threat intelligence",
-    "website"
+    "website",
+    "team",
+    "invitation",
+    "notification",
+    "destination",
+    "analyst"
   ].some((term) => normalized.includes(term));
 }
 

@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "hanasand.beta_readiness.v1",
+  "checkedAt": "2026-06-29T02:25:00.000Z",
+  "ok": false,
+  "status": "blocked",
+  "rowCount": 7,
+  "customerWorkflow": "organization_threat_monitoring",
+  "deployRisk": "high",
+  "rows": [
+    {
+      "id": "create_organization",
+      "ownerLane": "org",
+      "capabilityLabel": "Organization creation",
+      "proofArtifact": { "schemaVersion": "organization.lifecycle_readiness.v1", "artifactId": "deploy_gate.org_lifecycle", "route": "GET /api/organizations/:id/readiness-lifecycle", "probeId": "org.lifecycle_readiness" },
+      "latestCommitOrCheck": "8a87ba41",
+      "customerVisibleState": "ready",
+      "blockers": [],
+      "deployRisk": "none",
+      "requiredNextAction": "verify_organization_create_route",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "invite_teammates",
+      "ownerLane": "support",
+      "capabilityLabel": "Team invitation workflow",
+      "proofArtifact": { "schemaVersion": "support.action_executor_readiness.v1", "artifactId": "deploy_gate.support_executor", "route": "/api/admin/support/readiness", "probeId": "support.action_executor_readiness" },
+      "latestCommitOrCheck": "26371c0a",
+      "customerVisibleState": "ready",
+      "blockers": [],
+      "deployRisk": "none",
+      "requiredNextAction": "verify_team_invitation_action",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "share_watchlists",
+      "ownerLane": "watchlist",
+      "capabilityLabel": "Shared watchlist monitoring",
+      "proofArtifact": { "schemaVersion": "organization.watchlist_alert_terms_export.v1", "artifactId": "org_watchlist.alert_terms_export", "route": "GET /api/organizations/:id/watchlists/alert-terms", "probeId": "org.watchlist_alert_terms_export" },
+      "latestCommitOrCheck": "38518474",
+      "customerVisibleState": "ready",
+      "blockers": [],
+      "deployRisk": "none",
+      "requiredNextAction": "verify_shared_watchlist_persistence",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "generate_real_alerts",
+      "ownerLane": "alert",
+      "capabilityLabel": "Real alert generation",
+      "proofArtifact": { "schemaVersion": "hanasand.analyst_handoff.consumer.v1", "artifactId": "deploy_gate.alert_case_handoff", "route": "/v1/cases", "probeId": "dwm.alert_case_handoff" },
+      "latestCommitOrCheck": "dwm-alert-repository-typecheck",
+      "customerVisibleState": "blocked",
+      "blockers": ["source_coverage_required_for_real_alerts"],
+      "deployRisk": "high",
+      "requiredNextAction": "verify_real_alert_generation",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "configure_destinations",
+      "ownerLane": "webhook",
+      "capabilityLabel": "Notification destination configuration",
+      "proofArtifact": { "schemaVersion": "missing", "artifactId": "configure_destinations.missing_proof", "route": "GET /api/dwm/webhooks?orgId=<org_id>", "probeId": "dwm.webhook_destination_lifecycle" },
+      "latestCommitOrCheck": "webhook-destination-proof",
+      "customerVisibleState": "blocked",
+      "blockers": ["missing_webhook_destination"],
+      "deployRisk": "high",
+      "requiredNextAction": "verify_webhook_destination_configuration",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "work_alerts",
+      "ownerLane": "dashboard",
+      "capabilityLabel": "Analyst alert workflow",
+      "proofArtifact": { "schemaVersion": "missing", "artifactId": "work_alerts.missing_proof", "route": "/dashboard", "probeId": "dashboard.ui_quality" },
+      "latestCommitOrCheck": "dashboard-render-proof",
+      "customerVisibleState": "blocked",
+      "blockers": ["missing_dashboard_ui_quality_proof"],
+      "deployRisk": "high",
+      "requiredNextAction": "verify_dashboard_alert_workflow",
+      "uiQualityProofStatus": "missing",
+      "persistenceMode": "real_persistence"
+    },
+    {
+      "id": "source_backed_ti_coverage",
+      "ownerLane": "publicTI",
+      "capabilityLabel": "Source-backed threat intelligence coverage",
+      "proofArtifact": { "schemaVersion": "dwm.source_worker_readiness.v1", "artifactId": "dwm.source_worker_readiness", "route": "GET /v1/dwm/source-requests/readiness", "probeId": "dwm.source_worker_readiness" },
+      "latestCommitOrCheck": "source-readiness-typecheck",
+      "customerVisibleState": "blocked",
+      "blockers": ["source_policy_inactive"],
+      "deployRisk": "high",
+      "requiredNextAction": "verify_source_backed_ti_coverage",
+      "uiQualityProofStatus": "not_required",
+      "persistenceMode": "real_persistence"
+    }
+  ]
+}
