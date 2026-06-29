@@ -595,6 +595,8 @@ assert(pageClientSource.includes('data-ti-org-enrichment-gaps'), 'Public TI org 
 assert(pageClientSource.includes('Actor identity'), 'Public TI org relevance should label actor identity without implementation wording.')
 assert(pageClientSource.includes('Enrichment needed'), 'Public TI org relevance should expose collection/enrichment gaps.')
 assert(pageClientSource.includes('data-ti-collection-gap-intake'), 'Collection gaps should expose structured intake rows.')
+assert(pageClientSource.includes('CopyPayloadButton label=\'Source enrichment intake\''), 'Collection gaps should export source enrichment intake for authenticated review.')
+assert(pageClientSource.includes('intake.summary.sourceRequests'), 'Collection gaps should summarize source request intake.')
 assert(pageClientSource.includes('task.requestedFields?.slice'), 'Collection gaps should show requested enrichment fields without raw payload dumping.')
 assert(pageClientSource.includes('sourceRequestRouteLabel(task.route)'), 'Collection gaps should show analyst-native route labels.')
 for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'Sources', 'Evidence', 'Watchlist Relevance', 'Related alerts/cases', 'Collection Gaps', 'Actions']) {

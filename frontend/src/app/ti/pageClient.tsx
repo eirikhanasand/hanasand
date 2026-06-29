@@ -428,7 +428,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
-                        <EnrichmentTasksPanel tasks={enrichmentTasks} />
+                        <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
                         <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
@@ -2565,9 +2565,15 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     )
 }
 
-function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
+function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; intake: TiActionabilityModel['sourceEnrichmentIntake'] }) {
     return (
         <Panel title='Collection Gaps' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
+            <div className='mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                    <span className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>Source enrichment intake</span> · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {intake.summary.sourceRequests} source request{intake.summary.sourceRequests === 1 ? '' : 's'} · {intake.summary.captures} capture{intake.summary.captures === 1 ? '' : 's'}
+                </p>
+                <CopyPayloadButton label='Source enrichment intake' payload={intake} />
+            </div>
             <div data-ti-collection-gap-intake='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
                 {tasks.map(task => (
                     <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
