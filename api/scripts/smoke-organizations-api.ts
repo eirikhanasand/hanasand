@@ -1195,6 +1195,55 @@ assert.equal(archivedOrgReadiness.readinessProof.routes.alertTermsExport, 'GET /
 assert.ok(archivedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_archived'))
 assert.ok(archivedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_archived'))
 
+const deleteOrganizationResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { lifecycleStatus: 'deleted' },
+})
+assert.equal(deleteOrganizationResponse.statusCode, 200, deleteOrganizationResponse.body)
+const deletedOrganizationSettings = parseBody(deleteOrganizationResponse.body)
+assert.equal(deletedOrganizationSettings.organization.lifecycleStatus, 'deleted')
+assert.equal(deletedOrganizationSettings.settings.lifecycleStatus, 'deleted')
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.lifecycleStatus, 'deleted')
+assert.ok(deletedOrganizationSettings.lifecycleReadiness.typedBlockers.includes('org_deleted'))
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.alertExportReadiness.ready, false)
+
+const deletedOrgAlertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-deleted-org-alert-terms`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(deletedOrgAlertTermsResponse.statusCode, 200, deletedOrgAlertTermsResponse.body)
+const deletedOrgAlertTerms = parseBody(deletedOrgAlertTermsResponse.body).alertTermsExport
+assert.equal(deletedOrgAlertTerms.downstreamAuthorization.organizationLifecycleState, 'deleted')
+assert.equal(deletedOrgAlertTerms.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, false)
+assert.ok(deletedOrgAlertTerms.downstreamAuthorization.downstream.alertGeneration.blockerCodes.includes('org_deleted'))
+assert.deepEqual(deletedOrgAlertTerms.activeTerms, [])
+assert.ok(deletedOrgAlertTerms.blockedReasons.includes('org_deleted'))
+assert.equal(deletedOrgAlertTerms.canGenerateAlerts, false)
+assert.ok(deletedOrgAlertTerms.alertBridgeContract.typedBlockers.some((blocker: Row) => blocker.code === 'org_deleted'))
+
+const deletedOrgReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(deletedOrgReadinessResponse.statusCode, 200, deletedOrgReadinessResponse.body)
+const deletedOrgReadiness = parseBody(deletedOrgReadinessResponse.body).alertReadiness
+assert.equal(deletedOrgReadiness.lifecycleReadiness.lifecycleStatus, 'deleted')
+assert.equal(deletedOrgReadiness.alertGenerationBridge.canGenerateAlerts, false)
+assert.deepEqual(deletedOrgReadiness.alertGenerationBridge.activeWatchlistTerms, [])
+assert.equal(deletedOrgReadiness.downstreamAuthorization.organizationLifecycleState, 'deleted')
+assert.equal(deletedOrgReadiness.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, false)
+assert.equal(deletedOrgReadiness.readinessProof.readiness.organizationCanGenerateAlerts, false)
+assert.equal(deletedOrgReadiness.readinessProof.readiness.readyForWorker3Replay, false)
+assert.equal(deletedOrgReadiness.readinessProof.readiness.readyForDashboard, false)
+assert.ok(deletedOrgReadiness.readinessProof.blockers.includes('org_deleted'))
+assert.ok(deletedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_deleted'))
+assert.ok(deletedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_deleted'))
+assert.equal(deletedOrgReadiness.readinessProof.cleanupProof.cleanupIdempotent, true)
+
 const reactivateOrganizationResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${organization.id}/settings`,
