@@ -2011,6 +2011,9 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
         shared_watchlist_count: items.length,
     })
     const alertGeneration = organizationWatchlistAlertGenerationContract(organization, items)
+    const activeItems = items.filter(item => (item.status ?? 'active') === 'active' && !item.archived_at)
+    const pausedItems = items.filter(item => item.status === 'paused' && !item.archived_at)
+    const archivedItems = items.filter(item => item.status === 'archived' || Boolean(item.archived_at))
     return {
         schemaVersion: 'organization.shared_watchlist_contract.v1',
         organizationId: organization.id,
@@ -2022,8 +2025,52 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
         termFamilies: alertGeneration.termFamilies,
         blockedReasons: alertGeneration.blockedReasons,
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
+        ownership: {
+            organizationId: organization.id,
+            ownerOrganizationId: organization.id,
+            itemIds: items.map(item => item.id),
+            activeItemIds: activeItems.map(item => item.id),
+            pausedItemIds: pausedItems.map(item => item.id),
+            archivedItemIds: archivedItems.map(item => item.id),
+            creatorUserIds: [...new Set(items.map(item => item.created_by))].sort(),
+            updaterUserIds: [...new Set(items.map(item => item.updated_by).filter(Boolean))].sort(),
+            duplicateTermScope: 'organization',
+            crossOrgEnumerationAllowed: false,
+        },
+        lifecycle: {
+            activeCount: activeItems.length,
+            pausedCount: pausedItems.length,
+            archivedCount: archivedItems.length,
+            cleanupRequired: pausedItems.length + archivedItems.length > 0,
+            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
+            archiveRoute: 'DELETE /api/organizations/:organizationId/watchlists/:itemId',
+            actionRoute: 'POST /api/organizations/:organizationId/watchlists/:itemId/actions',
+            cleanupIdempotent: true,
+        },
+        alertExportBridge: {
+            route: 'GET /api/organizations/:id/watchlists/alert-terms',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            watchlistItemIds: alertGeneration.activeWatchlistTerms.map(term => term.watchlistItemId),
+            termFamilies: alertGeneration.termFamilies,
+            requiredFields: [
+                'organizationId',
+                'tenantId',
+                'activeTerms[].watchlistItemId',
+                'activeTerms[].alertGenerationRef',
+                'activeTerms[].alertGeneratorKey',
+            ],
+            blockedReasons: alertGeneration.blockedReasons,
+        },
         permissions: {
+            actorRole: organization.role ?? 'viewer',
+            canRead: true,
             canWrite: roleCanWriteWatchlist(organization.role),
+            canArchive: roleCanWriteWatchlist(organization.role),
+            canCleanup: roleCanWriteWatchlist(organization.role),
+            writeRoles: ['owner', 'admin'],
+            readRoles: ['owner', 'admin', 'member', 'viewer'],
+            nonmemberEnumeration: false,
         },
     }
 }

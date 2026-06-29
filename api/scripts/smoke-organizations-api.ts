@@ -665,6 +665,23 @@ assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
 assert.equal(memberWatchlist[0].enabled, true)
 assert.equal(memberWatchlist[0].disabledReason, null)
+const memberSharedWatchlistContract = parseBody(memberWatchlistResponse.body).sharedWatchlistContract
+assert.equal(memberSharedWatchlistContract.schemaVersion, 'organization.shared_watchlist_contract.v1')
+assert.equal(memberSharedWatchlistContract.organizationId, organization.id)
+assert.equal(memberSharedWatchlistContract.permissions.actorRole, 'member')
+assert.equal(memberSharedWatchlistContract.permissions.canRead, true)
+assert.equal(memberSharedWatchlistContract.permissions.canWrite, false)
+assert.equal(memberSharedWatchlistContract.permissions.nonmemberEnumeration, false)
+assert.deepEqual(memberSharedWatchlistContract.permissions.writeRoles, ['owner', 'admin'])
+assert.deepEqual(memberSharedWatchlistContract.permissions.readRoles, ['owner', 'admin', 'member', 'viewer'])
+assert.equal(memberSharedWatchlistContract.ownership.crossOrgEnumerationAllowed, false)
+assert.deepEqual(memberSharedWatchlistContract.ownership.activeItemIds, [ownerWatchlistItem.id])
+assert.deepEqual(memberSharedWatchlistContract.ownership.creatorUserIds, ['org_smoke_owner'])
+assert.equal(memberSharedWatchlistContract.lifecycle.activeCount, 1)
+assert.equal(memberSharedWatchlistContract.lifecycle.cleanupRequired, false)
+assert.equal(memberSharedWatchlistContract.alertExportBridge.route, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.deepEqual(memberSharedWatchlistContract.alertExportBridge.watchlistItemIds, [ownerWatchlistItem.id])
+assert.ok(memberSharedWatchlistContract.alertExportBridge.requiredFields.includes('activeTerms[].alertGenerationRef'))
 
 const viewerWatchlistResponse = await app.inject({
     method: 'GET',
@@ -852,7 +869,25 @@ assert.deepEqual(
     parseBody(ownerSeesAllResponse.body).watchlistItems.map((item: Row) => item.value).sort(),
     ['Acme Payroll Vendor', 'Acme Shared Holdings', 'acme-shared.example', 'credential reset lures', 'scattered spider'].sort()
 )
-assert.deepEqual(parseBody(ownerSeesAllResponse.body).sharedWatchlistContract.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+const ownerSharedWatchlistContract = parseBody(ownerSeesAllResponse.body).sharedWatchlistContract
+assert.deepEqual(ownerSharedWatchlistContract.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.equal(ownerSharedWatchlistContract.permissions.actorRole, 'owner')
+assert.equal(ownerSharedWatchlistContract.permissions.canWrite, true)
+assert.equal(ownerSharedWatchlistContract.permissions.canArchive, true)
+assert.equal(ownerSharedWatchlistContract.permissions.canCleanup, true)
+assert.equal(ownerSharedWatchlistContract.ownership.duplicateTermScope, 'organization')
+assert.equal(ownerSharedWatchlistContract.ownership.crossOrgEnumerationAllowed, false)
+assert.equal(ownerSharedWatchlistContract.ownership.activeItemIds.length, 5)
+assert.ok(ownerSharedWatchlistContract.ownership.itemIds.includes(ownerWatchlistItem.id))
+assert.deepEqual(ownerSharedWatchlistContract.ownership.creatorUserIds.sort(), ['org_smoke_admin', 'org_smoke_owner'].sort())
+assert.equal(ownerSharedWatchlistContract.lifecycle.activeCount, 5)
+assert.equal(ownerSharedWatchlistContract.lifecycle.pausedCount, 0)
+assert.equal(ownerSharedWatchlistContract.lifecycle.archivedCount, 0)
+assert.equal(ownerSharedWatchlistContract.lifecycle.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
+assert.equal(ownerSharedWatchlistContract.lifecycle.archiveRoute, 'DELETE /api/organizations/:organizationId/watchlists/:itemId')
+assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.watchlistItemIds.sort(), ownerSharedWatchlistContract.ownership.activeItemIds.sort())
+assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.deepEqual(ownerSharedWatchlistContract.alertExportBridge.blockedReasons, [])
 
 const readinessResponse = await app.inject({
     method: 'GET',
