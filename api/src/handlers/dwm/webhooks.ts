@@ -9,6 +9,7 @@ import {
 } from '#utils/organizations.ts'
 import {
     archiveDwmWebhookDestination,
+    buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
@@ -313,7 +314,7 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
 
     const input = buildDwmWebhookDeliveryRequestInput(req.body || {})
     const orgId = clean(input.orgId) || clean(input.organizationId) || clean(input.tenantId) || userId
-    const permissionError = await memberPermissionError(orgId, userId)
+    const permissionError = await configurationPermissionError(orgId, userId)
     if (permissionError) {
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
@@ -330,7 +331,16 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             auditEvents,
         }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries: ledgerDeliveries, auditEvents }),
-        destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries: ledgerDeliveries, auditEvents, viewerRole: 'member', canManage: false }),
+        destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries: ledgerDeliveries, auditEvents, viewerRole: 'admin', canManage: true }),
+        orgAlertDelivery: buildDwmOrgAlertWebhookDeliveryContract({
+            ownerId: userId,
+            input,
+            destinations,
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            viewerRole: 'admin',
+            canManage: true,
+        }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries: ledgerDeliveries, destinations }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',

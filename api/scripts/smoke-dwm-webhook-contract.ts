@@ -2,6 +2,7 @@ import {
     buildDwmAlertDeliveryPayload,
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
+    buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
@@ -256,6 +257,8 @@ const replayWorkflowAlert = {
         watchlistItemIds: ['watchlist_item_replay_contract'],
         evidenceCount: 3,
         recommendedRoute: 'identity_response',
+        captureIds: ['capture_replay_contract'],
+        primaryCaptureId: 'capture_replay_contract',
     },
     webhookContext: {
         alertId: 'alert_replay_contract',
@@ -266,6 +269,11 @@ const replayWorkflowAlert = {
         dedupeKey: 'dwm_dedupe_replay_contract',
         recommendedRoute: 'identity_response',
         casePath: '/v1/cases/case_replay_contract?alertId=alert_replay_contract&dedupeKey=dwm_dedupe_replay_contract',
+        provenance: {
+            captureIds: ['capture_replay_contract'],
+            sourceIds: ['source_replay_contract'],
+            primaryCaptureId: 'capture_replay_contract',
+        },
     },
     watchlist: {
         id: 'watchlist_item_replay_contract',
@@ -1222,6 +1230,44 @@ const memberLifecycle = buildDwmWebhookDestinationLifecycle({
     viewerRole: 'member',
     canManage: false,
 })
+const orgAlertDeliveryContract = buildDwmOrgAlertWebhookDeliveryContract({
+    ownerId: 'owner_contract',
+    liveDeliveryEnabled: false,
+    viewerRole: 'admin',
+    canManage: true,
+    destinations: auditDestinationRows,
+    deliveries: auditDeliveryRows,
+    auditEvents: [
+        ...auditEventContracts.map(item => ({
+            id: item.auditEventId,
+            ownerId: 'owner_contract',
+            actorId: item.actorId,
+            orgId: item.orgId,
+            destinationId: item.destinationId,
+            deliveryId: item.deliveryId,
+            action: item.action,
+            metadata: item.metadata,
+            createdAt: item.createdAt,
+        })),
+        {
+            id: 'audit_replay_duplicate_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_replay_duplicate_contract',
+            action: 'delivery.replayed',
+            metadata: { status: 'dry_run' },
+            createdAt: '2026-06-28T12:08:01.000Z',
+        },
+    ],
+    input: {
+        alert: replayWorkflowAlert,
+        eventType: 'dwm.alert.replayed',
+        dryRun: true,
+        live: false,
+    },
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -1233,6 +1279,8 @@ const adminReplayLifecycle = adminLifecycle.find(item => item.destinationId === 
 const adminRetryLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_live_contract')
 const adminDisabledLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_disabled_contract')
 const memberReplayLifecycle = memberLifecycle.find(item => item.destinationId === 'destination_replay_contract')
+const orgAlertReplayHealth = orgAlertDeliveryContract.destinationHealth.find(item => item.destinationId === 'destination_replay_contract')
+const orgAlertRetryLifecycle = orgAlertDeliveryContract.destinationLifecycle.find(item => item.destinationId === 'destination_live_contract')
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -1277,6 +1325,16 @@ expect(adminRetryLifecycle?.retry.deliveryId === 'delivery_live_failed_retry_con
 expect(adminDisabledLifecycle?.enabled === false && adminDisabledLifecycle.access.canDisable === false && adminDisabledLifecycle.lifecycle.disabled?.auditEventId === 'audit_destination_archived_contract', 'Destination lifecycle should expose disabled state and disable audit event.', adminDisabledLifecycle)
 expect(memberReplayLifecycle?.view === 'member' && memberReplayLifecycle.access.canUpdate === false && memberReplayLifecycle.access.canTest === false && memberReplayLifecycle.auditEventContracts.length === 0, 'Member lifecycle should expose safe read status without admin audit detail.', memberReplayLifecycle)
 expect(!JSON.stringify(adminLifecycle).includes(secret) && !JSON.stringify(memberLifecycle).includes(secret), 'Destination lifecycle should not leak endpoint, response, or audit secrets.', { adminLifecycle, memberLifecycle })
+expect(orgAlertDeliveryContract.schemaVersion === 'dwm.webhook.org_alert_delivery.v1' && orgAlertDeliveryContract.orgId === 'org_contract', 'Org alert delivery contract should normalize org alert context.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.eventType === 'dwm.alert.replayed' && orgAlertDeliveryContract.dryRun === true && orgAlertDeliveryContract.externalSendEnabled === false, 'Org alert delivery contract should preserve dry-run/no-network semantics.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.alert.id === 'alert_replay_contract' && orgAlertDeliveryContract.alert.casePath === replayWorkflowAlert.casePath && orgAlertDeliveryContract.alert.provenanceSummary.includes('captures'), 'Org alert delivery contract should expose alert case/provenance context.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.watchlist.id === 'watchlist_item_replay_contract' && orgAlertDeliveryContract.watchlist.terms.includes('acme-security.com'), 'Org alert delivery contract should expose watchlist identity.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.destinationSelection.selectedDestinations.some(item => item.id === 'destination_replay_contract' && item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Org alert delivery contract should expose destination idempotency keys.', orgAlertDeliveryContract)
+expect(orgAlertDeliveryContract.destinationSelection.skippedDestinations.some(item => item.id === 'destination_disabled_contract' && item.reason === 'disabled'), 'Org alert delivery contract should expose disabled destination skips.', orgAlertDeliveryContract)
+expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
+expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
+expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
+expect(!JSON.stringify(orgAlertDeliveryContract).includes(secret), 'Org alert delivery contract should not leak endpoint, response, or audit secrets.', orgAlertDeliveryContract)
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1327,6 +1385,12 @@ console.log(JSON.stringify({
         'destination lifecycle retry/backoff visibility',
         'destination lifecycle disabled state',
         'destination lifecycle secret redaction',
+        'org alert delivery contract normalization',
+        'org alert delivery watchlist/provenance context',
+        'org alert delivery destination selection',
+        'org alert delivery health/lifecycle linkage',
+        'org alert delivery audit/ledger linkage',
+        'org alert delivery secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',

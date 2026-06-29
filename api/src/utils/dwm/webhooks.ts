@@ -1110,6 +1110,102 @@ export function buildDwmWebhookDestinationLifecycle({
     })
 }
 
+export function buildDwmOrgAlertWebhookDeliveryContract({
+    ownerId,
+    input,
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+}: {
+    ownerId: string
+    input: DwmAlertNotificationInput
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+}) {
+    const normalizedInput = buildDwmWebhookDeliveryRequestInput(input)
+    const dryRun = parseBoolean(normalizedInput.dryRun ?? normalizedInput.dry_run, true)
+    const liveRequested = parseBoolean(normalizedInput.live, false)
+    const dispatchDestinations = destinations.map(destination => ({
+        id: destination.id,
+        org_id: destination.orgId,
+        name: destination.name,
+        kind: destination.kind,
+        status: destination.status,
+        events: destination.events,
+    }))
+    const dispatch = buildDwmAlertWebhookDispatchPlan({
+        ownerId,
+        input: normalizedInput,
+        destinations: dispatchDestinations,
+    })
+    const destinationHealth = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const destinationLifecycle = buildDwmWebhookDestinationLifecycle({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    })
+    const deliveryLedger = buildDwmWebhookDeliveryLedger({ deliveries, auditEvents })
+    const auditEventContracts = buildDwmWebhookAuditEventContracts({ destinations, deliveries, auditEvents })
+    const destinationId = clean(normalizedInput.destinationId ?? normalizedInput.destination_id)
+    const normalizedAlert = normalizeAlert(dispatch.alert)
+    const watchlist = normalizeWatchlist(dispatch.alert.watchlist)
+
+    return {
+        schemaVersion: 'dwm.webhook.org_alert_delivery.v1',
+        ownerId,
+        orgId: dispatch.orgId,
+        eventType: dispatch.eventType,
+        dryRun,
+        liveRequested,
+        liveDeliveryEnabled,
+        externalSendEnabled: liveRequested && !dryRun && liveDeliveryEnabled,
+        destinationSelection: {
+            requestedDestinationId: destinationId || null,
+            selectedCount: dispatch.selectedDestinations.length,
+            skippedCount: dispatch.skippedDestinations.length,
+            selectedDestinations: dispatch.selectedDestinations.map(destination => ({
+                id: destination.id,
+                orgId: destination.org_id,
+                label: destination.name,
+                type: destination.kind,
+                status: destination.status,
+                idempotencyKey: buildIdempotencyKey(dispatch.eventType, dispatch.orgId, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id),
+            })),
+            skippedDestinations: dispatch.skippedDestinations,
+        },
+        alert: {
+            id: normalizedAlert.id,
+            title: normalizedAlert.title,
+            severity: normalizedAlert.severity,
+            sourceFamily: normalizedAlert.sourceFamily,
+            evidenceCount: normalizedAlert.evidenceCount,
+            evidenceSummary: normalizedAlert.evidenceSummary,
+            route: normalizedAlert.route,
+            dedupeKey: normalizedAlert.dedupeKey,
+            casePath: normalizedAlert.casePath,
+            caseId: normalizedAlert.caseId,
+            alertUrl: normalizedAlert.alertUrl,
+            provenance: normalizedAlert.provenance,
+            provenanceSummary: normalizedAlert.provenanceSummary,
+        },
+        watchlist,
+        deliveryLedger,
+        destinationHealth,
+        destinationLifecycle,
+        auditEventContracts,
+    }
+}
+
 export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPublic) {
     const context = extractHanasandPayloadContext(delivery.payload)
     const payloadAlert = recordOrEmpty(context.alert)
