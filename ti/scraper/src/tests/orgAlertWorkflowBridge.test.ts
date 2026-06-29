@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
+  DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
+  buildOrgAlertWebhookFixtureContract,
   buildOrgAlertWorkflowBridgeReport
 } from "../product/orgAlertWorkflowBridge.ts";
 import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
@@ -81,6 +84,53 @@ describe("org alert workflow bridge", () => {
       matchedAlertIds: ["alert_acme_lumma"],
       ready: true
     });
+  });
+
+  test("builds a scoped webhook fixture from org alert workflow rows", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const contract = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: {
+        watch_acme_domains: ["webhook_discord"]
+      }
+    });
+
+    expect(contract).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      blockers: [],
+      deliveries: [{
+        alertId: "alert_acme_lumma",
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        ready: true,
+        blockerCodes: [],
+        destinationIds: ["webhook_discord"],
+        destinationKinds: ["discord"],
+        payload: {
+          schemaVersion: DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          alertId: "alert_acme_lumma",
+          watchlistId: "watch_acme_domains",
+          watchlistItemId: "watch_item_acme_com",
+          webhookDestinationIds: ["webhook_discord"],
+          deliveryKind: "discord",
+          alertDetailPath: "/v1/dwm/alerts/alert_acme_lumma?organizationId=org_acme&dedupeKey=dedupe_acme_lumma",
+          casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+          sourceFamilies: ["telegram_public", "darkweb_metadata"],
+          captureIds: ["cap_acme_initial", "cap_acme_followup"],
+          evidenceCount: 2,
+          workflowEventCount: 2
+        }
+      }]
+    });
+    expect(contract.deliveries[0].payload.idempotencyKey).toMatch(/^org_alert_webhook_idempotency_/);
+    expect(JSON.stringify(contract)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(contract)).not.toContain("https://discord.com");
   });
 
   test("returns owner-coded blockers for rows that cannot reach analyst workflow", () => {
@@ -168,6 +218,64 @@ describe("org alert workflow bridge", () => {
       blockerCodes: ["alert_not_generated"]
     });
   });
+
+  test("blocks webhook fixture delivery when destination belongs to another organization", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const contract = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [{
+        ...webhookDestination(),
+        organizationId: "org_other"
+      }],
+      destinationIdsByWatchlistId: {
+        watch_acme_domains: ["webhook_discord"]
+      }
+    });
+
+    expect(contract.ok).toBe(false);
+    expect(contract.deliveries[0]).toMatchObject({
+      ready: false,
+      destinationIds: ["webhook_discord"],
+      blockerCodes: ["webhook_destination_scope_mismatch"]
+    });
+    expect(contract.blockers).toEqual([
+      expect.objectContaining({
+        code: "webhook_destination_scope_mismatch",
+        ownerLane: "webhook",
+        destinationId: "webhook_discord",
+        path: "destinations[].organizationId"
+      })
+    ]);
+    expect(contract.deliveries[0].payload.organizationId).toBe("org_acme");
+  });
+
+  test("blocks webhook fixture delivery when the bridge has no alert event payload", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      watchlists: [watchlistFixture()],
+      alerts: [],
+      checkedAt: "2026-06-29T14:20:00.000Z"
+    });
+    const contract = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: {
+        watch_acme_domains: ["webhook_discord"]
+      }
+    });
+
+    expect(contract.ok).toBe(false);
+    expect(contract.deliveries[0]).toMatchObject({
+      ready: false,
+      alertId: "",
+      blockerCodes: ["bridge_row_not_ready", "missing_alert_event_payload"]
+    });
+    expect(contract.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "bridge_row_not_ready", ownerLane: "alert", path: "bridge.rows[].ready" }),
+      expect.objectContaining({ code: "missing_alert_event_payload", ownerLane: "alert", path: "bridge.rows[].eventPayloads" })
+    ]));
+  });
 });
 
 function watchlistFixture() {
@@ -227,5 +335,17 @@ function alertFixture() {
       contentHash: "hash_acme_initial",
       sourceFamily: "telegram_public"
     }]
+  };
+}
+
+function webhookDestination() {
+  return {
+    destinationId: "webhook_discord",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    kind: "discord",
+    status: "active",
+    verified: true,
+    endpointUrl: "https://discord.com/api/webhooks/acme/token"
   };
 }

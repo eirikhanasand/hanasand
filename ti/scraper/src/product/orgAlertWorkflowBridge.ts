@@ -7,6 +7,8 @@ import {
 } from "./alertWorkflowContract.ts";
 
 export const DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION = "dwm.org_alert_workflow_bridge.v1" as const;
+export const DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION = "dwm.org_alert_webhook_fixture.v1" as const;
+export const DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION = "dwm.org_alert_webhook_delivery_payload.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -88,6 +90,75 @@ export type OrgAlertWorkflowBridgeBlocker = {
   message: string;
 };
 
+export type OrgAlertWebhookDestinationRef = {
+  destinationId: string;
+  tenantId: string;
+  organizationId: string;
+  kind?: "discord" | "webhook" | string;
+  status?: "active" | "disabled" | "paused" | string;
+  verified?: boolean;
+};
+
+export type OrgAlertWebhookFixtureContract = {
+  schemaVersion: typeof DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  deliveries: OrgAlertWebhookFixtureDelivery[];
+  blockers: OrgAlertWebhookFixtureBlocker[];
+};
+
+export type OrgAlertWebhookFixtureDelivery = {
+  deliveryId: string;
+  rowId: string;
+  alertId: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  ready: boolean;
+  blockerCodes: OrgAlertWebhookFixtureBlocker["code"][];
+  destinationIds: string[];
+  destinationKinds: string[];
+  payload: OrgAlertWebhookDeliveryPayload;
+};
+
+export type OrgAlertWebhookDeliveryPayload = {
+  schemaVersion: typeof DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION;
+  tenantId: string;
+  organizationId: string;
+  alertId: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  webhookDestinationIds: string[];
+  deliveryKind: string;
+  alertDetailPath?: string;
+  casePaths: string[];
+  sourceFamilies: string[];
+  captureIds: string[];
+  evidenceCount: number;
+  workflowEventCount: number;
+  dedupeKey?: string;
+  idempotencyKey: string;
+};
+
+export type OrgAlertWebhookFixtureBlocker = {
+  code:
+    | "bridge_row_not_ready"
+    | "missing_alert_event_payload"
+    | "missing_webhook_destination"
+    | "webhook_destination_not_found"
+    | "webhook_destination_scope_mismatch"
+    | "webhook_destination_not_verified";
+  ownerLane: "watchlist" | "alert" | "case" | "source" | "webhook";
+  rowId: string;
+  alertId?: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  destinationId?: string;
+  path: string;
+  message: string;
+};
+
 export function buildOrgAlertWorkflowBridgeReport(input: {
   tenantId: string;
   organizationId: string;
@@ -116,6 +187,36 @@ export function buildOrgAlertWorkflowBridgeReport(input: {
     tenantId: input.tenantId,
     organizationId: input.organizationId,
     rows,
+    blockers
+  };
+}
+
+export function buildOrgAlertWebhookFixtureContract(input: {
+  bridge: OrgAlertWorkflowBridgeReport;
+  destinations: OrgAlertWebhookDestinationRef[];
+  destinationIdsByWatchlistId?: Record<string, string[]>;
+  destinationIdsByWatchlistItemId?: Record<string, string[]>;
+  checkedAt?: string;
+}): OrgAlertWebhookFixtureContract {
+  const destinationById = new Map(input.destinations.map((destination) => [destination.destinationId, destination]));
+  const deliveries = input.bridge.rows.flatMap((row) => {
+    const payloads = row.eventPayloads.length ? row.eventPayloads : [undefined];
+    return payloads.map((payload) => webhookDeliveryFor({
+      row,
+      payload,
+      bridge: input.bridge,
+      destinationById,
+      destinationIds: destinationIdsForRow(row, input.destinationIdsByWatchlistId, input.destinationIdsByWatchlistItemId)
+    }));
+  });
+  const blockers = deliveries.flatMap((delivery) => deliveryBlockers(delivery, input.bridge, destinationById));
+  return {
+    schemaVersion: DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
+    checkedAt: input.checkedAt ?? input.bridge.checkedAt,
+    ok: blockers.length === 0,
+    tenantId: input.bridge.tenantId,
+    organizationId: input.bridge.organizationId,
+    deliveries,
     blockers
   };
 }
@@ -283,6 +384,140 @@ function bridgeEventPayload(input: {
     workflowEventCount: contract.workflowEventCount,
     dedupeKey: contract.dedupeKey
   };
+}
+
+function webhookDeliveryFor(input: {
+  row: OrgAlertWorkflowBridgeRow;
+  payload?: OrgAlertWorkflowBridgeEventPayload;
+  bridge: OrgAlertWorkflowBridgeReport;
+  destinationById: Map<string, OrgAlertWebhookDestinationRef>;
+  destinationIds: string[];
+}): OrgAlertWebhookFixtureDelivery {
+  const destinations = input.destinationIds.map((destinationId) => input.destinationById.get(destinationId)).filter(Boolean) as OrgAlertWebhookDestinationRef[];
+  const destinationKinds = uniqueStrings(destinations.map((destination) => destination.kind ?? "webhook"));
+  const alertId = input.payload?.alertId ?? input.row.matchedAlertIds[0] ?? "";
+  const blockerCodes = uniqueStrings([
+    !input.row.ready ? "bridge_row_not_ready" : undefined,
+    !input.payload ? "missing_alert_event_payload" : undefined,
+    input.destinationIds.length === 0 ? "missing_webhook_destination" : undefined,
+    input.destinationIds.some((destinationId) => !input.destinationById.has(destinationId)) ? "webhook_destination_not_found" : undefined,
+    destinations.some((destination) => destination.tenantId !== input.bridge.tenantId || destination.organizationId !== input.bridge.organizationId) ? "webhook_destination_scope_mismatch" : undefined,
+    destinations.some((destination) => destination.status !== "active" || destination.verified !== true) ? "webhook_destination_not_verified" : undefined
+  ].filter(Boolean).map(String)) as OrgAlertWebhookFixtureBlocker["code"][];
+
+  return {
+    deliveryId: stableId("org_alert_webhook_delivery", `${input.bridge.tenantId}:${input.bridge.organizationId}:${input.row.rowId}:${alertId}:${input.destinationIds.join(",")}`),
+    rowId: input.row.rowId,
+    alertId,
+    watchlistId: input.row.watchlistId,
+    watchlistItemId: input.row.watchlistItemId,
+    ready: blockerCodes.length === 0,
+    blockerCodes,
+    destinationIds: input.destinationIds,
+    destinationKinds,
+    payload: {
+      schemaVersion: DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
+      tenantId: input.bridge.tenantId,
+      organizationId: input.bridge.organizationId,
+      alertId,
+      watchlistId: input.row.watchlistId,
+      watchlistItemId: input.row.watchlistItemId,
+      webhookDestinationIds: input.destinationIds,
+      deliveryKind: destinationKinds.includes("discord") ? "discord" : destinationKinds[0] ?? "webhook",
+      alertDetailPath: input.payload?.alertDetailPath,
+      casePaths: input.payload?.casePaths ?? input.row.casePaths,
+      sourceFamilies: input.payload?.sourceFamilies ?? input.row.sourceFamilies,
+      captureIds: input.payload?.captureIds ?? input.row.provenance.captureIds,
+      evidenceCount: input.payload?.evidenceCount ?? input.row.provenance.evidenceCount,
+      workflowEventCount: input.payload?.workflowEventCount ?? input.row.workflowEventCount,
+      dedupeKey: input.payload?.dedupeKey,
+      idempotencyKey: stableId("org_alert_webhook_idempotency", `${input.bridge.organizationId}:${alertId}:${input.row.watchlistId}:${input.row.watchlistItemId ?? ""}:${input.destinationIds.join(",")}`)
+    }
+  };
+}
+
+function destinationIdsForRow(
+  row: OrgAlertWorkflowBridgeRow,
+  byWatchlistId?: Record<string, string[]>,
+  byWatchlistItemId?: Record<string, string[]>
+): string[] {
+  return uniqueStrings([
+    ...(byWatchlistId?.[row.watchlistId] ?? []),
+    ...(row.watchlistItemId ? byWatchlistItemId?.[row.watchlistItemId] ?? [] : [])
+  ]);
+}
+
+function deliveryBlockers(
+  delivery: OrgAlertWebhookFixtureDelivery,
+  bridge: OrgAlertWorkflowBridgeReport,
+  destinationById: Map<string, OrgAlertWebhookDestinationRef>
+): OrgAlertWebhookFixtureBlocker[] {
+  return delivery.blockerCodes.flatMap((code) => {
+    if (code === "webhook_destination_not_found" || code === "webhook_destination_scope_mismatch" || code === "webhook_destination_not_verified") {
+      const destinationIds = delivery.destinationIds.length ? delivery.destinationIds : [undefined];
+      return destinationIds
+        .filter((destinationId) => shouldReportDestinationBlocker(code, destinationId, bridge, destinationById))
+        .map((destinationId) => webhookBlocker(code, delivery, destinationId));
+    }
+    return [webhookBlocker(code, delivery)];
+  });
+}
+
+function shouldReportDestinationBlocker(
+  code: OrgAlertWebhookFixtureBlocker["code"],
+  destinationId: string | undefined,
+  bridge: OrgAlertWorkflowBridgeReport,
+  destinationById: Map<string, OrgAlertWebhookDestinationRef>
+): boolean {
+  if (!destinationId) return false;
+  const destination = destinationById.get(destinationId);
+  if (code === "webhook_destination_not_found") return !destination;
+  if (!destination) return false;
+  if (code === "webhook_destination_scope_mismatch") return destination.tenantId !== bridge.tenantId || destination.organizationId !== bridge.organizationId;
+  if (code === "webhook_destination_not_verified") return destination.status !== "active" || destination.verified !== true;
+  return false;
+}
+
+function webhookBlocker(
+  code: OrgAlertWebhookFixtureBlocker["code"],
+  delivery: OrgAlertWebhookFixtureDelivery,
+  destinationId?: string
+): OrgAlertWebhookFixtureBlocker {
+  return {
+    code,
+    ownerLane: webhookOwnerLaneFor(code),
+    rowId: delivery.rowId,
+    alertId: delivery.alertId || undefined,
+    watchlistId: delivery.watchlistId,
+    watchlistItemId: delivery.watchlistItemId,
+    destinationId,
+    path: webhookPathFor(code),
+    message: webhookMessageFor(code)
+  };
+}
+
+function webhookOwnerLaneFor(code: OrgAlertWebhookFixtureBlocker["code"]): OrgAlertWebhookFixtureBlocker["ownerLane"] {
+  if (code === "bridge_row_not_ready") return "alert";
+  if (code === "missing_alert_event_payload") return "alert";
+  return "webhook";
+}
+
+function webhookPathFor(code: OrgAlertWebhookFixtureBlocker["code"]): string {
+  if (code === "bridge_row_not_ready") return "bridge.rows[].ready";
+  if (code === "missing_alert_event_payload") return "bridge.rows[].eventPayloads";
+  if (code === "missing_webhook_destination") return "destinationIdsByWatchlistId";
+  if (code === "webhook_destination_scope_mismatch") return "destinations[].organizationId";
+  if (code === "webhook_destination_not_verified") return "destinations[].verified";
+  return "destinations[].destinationId";
+}
+
+function webhookMessageFor(code: OrgAlertWebhookFixtureBlocker["code"]): string {
+  if (code === "bridge_row_not_ready") return "Org alert workflow bridge row is not ready for delivery.";
+  if (code === "missing_alert_event_payload") return "Org alert workflow bridge row has no alert event payload.";
+  if (code === "missing_webhook_destination") return "No webhook destination is mapped to this watchlist row.";
+  if (code === "webhook_destination_scope_mismatch") return "Webhook destination does not belong to the alert organization.";
+  if (code === "webhook_destination_not_verified") return "Webhook destination is not active and verified.";
+  return "Webhook destination is not available.";
 }
 
 function mergeProvenance(contracts: DwmAlertWorkflowContract[]): OrgAlertWorkflowBridgeRow["provenance"] {
