@@ -142,8 +142,11 @@ assert(actionability.watchlist.payloads.some(item => item.value === 'Microsoft')
 assert(actionability.watchlistRelevance.schemaVersion === 'ti.public_actor.watchlist_relevance.v1', 'Actionability should expose explicit watchlist relevance fields.')
 assert(actionability.watchlistRelevance.terms.some(item => item.value === 'Microsoft'), 'Watchlist relevance should include backed candidate terms.')
 assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability.createAlertHandoff.endpoint === '/v1/dwm/alerts/rebuild', 'Actionability should expose explicit alert handoff fields.')
+assert(actionability.createAlertHandoff.backedRoute === '/dashboard/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
 assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
+assert(actionability.caseHandoff.blocked && actionability.caseHandoff.missing.some(item => /DWM alert ID/i.test(item)), 'Blocked case handoff should expose missing alert dependency.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
+assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
@@ -253,6 +256,7 @@ assert(backed.exportPayloads.case.body.alertId === 'dwm_alert_1', 'Backed case e
 assert(!backed.exportPayloads.case.blocked, 'Backed case export should be open when case payload has no blockers.')
 assert(backed.createAlertHandoff.ready, 'Backed alert handoff should be ready when watchlist context exists.')
 assert(backed.caseHandoff.ready, 'Backed case handoff should be ready when case payload has no blockers.')
+assert(backed.caseHandoff.backedRoute === '/v1/cases/case_1?alertId=dwm_alert_1', 'Backed case handoff should preserve the open case route.')
 
 const quietFixture: TiSearchResponse = {
     ...fixture,
@@ -294,7 +298,12 @@ for (const phrase of bannedUiCopy) {
     assert(!pageClientSource.toLowerCase().includes(phrase), `Public TI page should not render prompt-shaped/internal copy: ${phrase}.`)
 }
 assert(pageClientSource.includes('Console handoff'), 'Public TI page should use professional console handoff language.')
-assert(pageClientSource.includes('Console packages'), 'Public TI page should label copied workflow payloads as console packages.')
+assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
+assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
+assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
+assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')
+assert(pageClientSource.includes('Open case'), 'Public TI decision flow should include case routing.')
+assert(pageClientSource.includes('Queue enrichment'), 'Public TI decision flow should include enrichment routing.')
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
