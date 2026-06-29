@@ -442,6 +442,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ))}
                             </div>
                         </Panel>
+                        {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
                     </aside>
                 </div>
             </section>
@@ -2595,6 +2596,41 @@ function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] })
     )
 }
 
+function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow'] }) {
+    const blockedCount = activation.actions.filter(action => action.execution === 'blocked').length
+    const approvalCount = activation.actions.filter(action => action.execution === 'human_approval_required').length
+    const state: DecisionStep['status'] = blockedCount ? 'blocked' : approvalCount || activation.dryRunOnly ? 'review' : 'ready'
+    return (
+        <Panel title='Source Activation' description='Source actions returned by collection policy. Public TI can stage review, but source changes require authenticated approval.' icon={<ShieldAlert className='h-4 w-4' />}>
+            <div data-ti-source-activation='true' className='grid min-w-0 gap-3'>
+                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Activation state</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {activation.dryRunOnly ? 'Actions are review-only until a console user approves source changes.' : 'Returned source actions are ready for authenticated review.'}
+                        </p>
+                    </div>
+                    <span className={decisionStepStatusClass(state)}>{decisionStepStatusLabel(state)}</span>
+                </div>
+                <div className='grid min-w-0 gap-2'>
+                    {activation.actions.map(action => (
+                        <div key={`${action.action}-${action.sourceId ?? 'none'}-${action.execution}`} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{sourceActivationActionLabel(action.action)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{action.reason}</p>
+                                </div>
+                                <span className={sourceActivationExecutionClass(action.execution)}>{sourceActivationExecutionLabel(action.execution)}</span>
+                            </div>
+                            {action.sourceId ? <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>source {action.sourceId}</p> : null}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </Panel>
+    )
+}
+
 function InfoTip({ label }: { label: string }) {
     return (
         <span className='group relative inline-flex'>
@@ -3009,6 +3045,25 @@ function sourceRoleLabel(value: string) {
     if (value === 'corroboration') return 'Corroboration'
     if (value === 'context_only') return 'Context'
     return formatLabel(value)
+}
+
+function sourceActivationActionLabel(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['action']) {
+    if (value === 'request_approval') return 'Request approval'
+    if (value === 'restore_source') return 'Restore source'
+    if (value === 'enable_metadata_only_queue') return 'Enable metadata-only queue'
+    return 'Keep blocked'
+}
+
+function sourceActivationExecutionLabel(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['execution']) {
+    if (value === 'human_approval_required') return 'approval required'
+    if (value === 'dry_run') return 'review only'
+    return 'blocked'
+}
+
+function sourceActivationExecutionClass(value: NonNullable<TiSearchResponse['analystLoop']>['sourceActivationWorkflow']['actions'][number]['execution']) {
+    if (value === 'dry_run') return decisionStepStatusClass('review')
+    if (value === 'human_approval_required') return decisionStepStatusClass('review')
+    return decisionStepStatusClass('blocked')
 }
 
 function sourceTypeLabel(value: string) {

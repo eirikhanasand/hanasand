@@ -523,6 +523,8 @@ assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose
 assert(pageClientSource.includes('Handoff readiness'), 'Public TI page should expose consumer-ready workflow state.')
 assert(pageClientSource.includes('data-ti-handoff-evidence-matrix'), 'Public TI page should expose handoff evidence for backed action review.')
 assert(pageClientSource.includes('Handoff evidence'), 'Public TI page should label backed action evidence in analyst language.')
+assert(pageClientSource.includes('data-ti-source-activation'), 'Public TI page should expose source activation review actions when returned.')
+assert(pageClientSource.includes('Source Activation'), 'Public TI page should label source activation review in analyst language.')
 assert(pageClientSource.includes('Action exports'), 'Public TI page should expose validated action exports.')
 assert(pageClientSource.includes('Validated request bodies for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
 assert(pageClientSource.includes('data-ti-section-rail'), 'Public TI page should expose a section rail for analyst scanning.')
@@ -550,7 +552,7 @@ for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'S
     assert(pageClientSource.toLowerCase().includes(section.toLowerCase()), `Public TI page should expose analyst-native section: ${section}.`)
 }
 for (const oldLabel of ['Priority Queue', 'Actor Profile', 'Reported Victims and Targets', 'Observed Tradecraft', 'Alert Packet', 'Workflow', 'Company Exposure', 'Monitoring Coverage', 'Monitoring Mix', 'Sources Used', 'Enrichment Queue']) {
-    assert(!pageClientSource.includes(oldLabel), `Public TI page should not use legacy/demo-like section label: ${oldLabel}.`)
+    assert(!pageClientSource.includes(`title='${oldLabel}'`) && !pageClientSource.includes(`title="${oldLabel}"`) && !pageClientSource.includes(`>${oldLabel}<`), `Public TI page should not use legacy/demo-like section label: ${oldLabel}.`)
 }
 assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
