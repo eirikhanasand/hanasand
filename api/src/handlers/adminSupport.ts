@@ -1127,6 +1127,22 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionAuditEvents({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit }),
     ])
     const timelineFilter = supportTimelineFilter({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit })
+    const auditTimelineFilters = {
+        org,
+        target: user || email,
+        request,
+        entity,
+        entityType,
+        supportSession,
+        action,
+        severity,
+        outcome,
+        source,
+        service,
+        from,
+        to,
+        limit,
+    }
     if (!organizations.length && !users.length && !memberships.length && !invites.length && !approvals.length && !audit.length) {
         return res.status(404).send(supportError('support_target_not_found', 'No support state matched the requested filters.', {
             filters: timelineFilter,
@@ -1237,14 +1253,24 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 schemaVersion: 'support.audit.filtered_timeline.v1',
                 filter: timelineFilter,
                 eventIds: timeline.map(event => event.id),
+                summary: auditTimelineSummary(timeline),
+                filterContract: supportAuditFilterContract(auditTimelineFilters, timeline),
+                exportProof: supportAuditExportProof(auditTimelineFilters, timeline),
                 events: timeline,
                 links: {
+                    timeline: auditFilterQuery(auditTimelineFilters),
+                    details: timeline.map(event => event.links?.detail).filter(Boolean),
                     inviteAssistance: auditTimelineLink({ org, target: email, request, action: 'invite_assist', outcome }),
                     accessRecovery: auditTimelineLink({ org, target: user || email, request, action: 'access_recovery', outcome }),
                     impersonation: auditTimelineLink({ target: user, request, action: 'impersonation', outcome }),
                     supportSession: supportSession ? auditTimelineLink({ request, action: 'support.session', outcome }) : null,
                 },
                 redacted: true,
+                copyText: [
+                    `Support timeline: ${auditFilterQuery(auditTimelineFilters)}`,
+                    `Events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
+                    `Outcomes: ${uniqueTimelineValues(timeline.map(event => event.outcome)).join(', ') || 'none'}`,
+                ].join('\n'),
             },
             controlledActions: {
                 inviteAssist: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
