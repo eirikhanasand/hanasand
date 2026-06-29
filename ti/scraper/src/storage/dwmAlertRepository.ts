@@ -1947,7 +1947,18 @@ export function buildDwmAlertWorkflowContext(input: {
   watchlists?: RuntimeDwmWatchlist[];
   generationCandidate?: DwmAlertGenerationCandidate;
 }) {
-  const captureIds = input.alert.provenance?.captureIds ?? (input.alert.evidence ?? []).map((item) => item.provenance?.captureId ?? item.id);
+  const evidence = input.alert.evidence ?? [];
+  const captureIds = uniqueStrings([
+    ...asStringArray(input.alert.provenance?.captureIds),
+    ...evidence.map((item) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)
+  ]);
+  const generationEvidenceWindow = normalizeGenerationEvidenceWindow(input.generationCandidate?.evidenceWindow) ?? normalizeGenerationEvidenceWindow({
+    captureIds,
+    sourceFamilies: [input.alert.sourceFamily],
+    contentHashes: evidence.map((item) => item.contentHash).filter(Boolean),
+    firstObservedAt: evidence.map((item) => item.observedAt ?? item.firstSeenAt).filter(Boolean).map(String).sort()[0],
+    lastObservedAt: evidence.map((item) => item.observedAt ?? item.firstSeenAt).filter(Boolean).map(String).sort().at(-1)
+  });
   const watchlists = input.watchlists ?? [];
   const watchlistIds = input.generationCandidate?.watchlistIds ?? watchlists.map((watchlist) => watchlist.id);
   const watchlistItemIds = input.generationCandidate?.watchlistItemIds ?? watchlists.flatMap((watchlist) => watchlistItemIdsFor(watchlist, input.alert.matchedTerm?.value));
@@ -1974,7 +1985,7 @@ export function buildDwmAlertWorkflowContext(input: {
       matchedTerm: input.alert.matchedTerm
     },
     provenance: input.alert.provenance,
-    generationEvidenceWindow: input.generationCandidate?.evidenceWindow,
+    generationEvidenceWindow,
     watchlistProvenance: input.generationCandidate?.watchlistTermContexts?.map((term) => ({
       watchlistId: term.watchlistId,
       watchlistItemId: term.watchlistItemId,
@@ -1989,7 +2000,7 @@ export function buildDwmAlertWorkflowContext(input: {
     sourceFamily: input.alert.sourceFamily,
     captureIds,
     primaryCaptureId: captureIds[0],
-    evidenceCount: (input.alert.evidence ?? []).length,
+    evidenceCount: evidence.length,
     dedupeKey,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
     casePath: `/v1/cases/${encodeURIComponent(caseIdCandidate)}?alertId=${encodeURIComponent(input.alert.id)}&dedupeKey=${encodeURIComponent(dedupeKey)}`,
@@ -2122,7 +2133,7 @@ function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: s
 }
 
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
-  return input.captures
+  return mergeCaptureRefs([], input.captures
     .filter((capture) => termMatchesText(captureText(capture), input.term.value))
     .map((capture) => {
       const source = input.sources.find((row) => row.id === capture.sourceId);
@@ -2133,13 +2144,16 @@ function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]
         contentHash: capture.contentHash,
         observedAt: capture.collectedAt
       };
-    });
+    }));
 }
 
 function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAlertGenerationCaptureRef[]): DwmAlertGenerationCaptureRef[] {
-  const byId = new Map(existing.map((ref) => [ref.captureId, ref]));
-  for (const ref of next) byId.set(ref.captureId, byId.get(ref.captureId) ?? ref);
-  return [...byId.values()];
+  const byIdentity = new Map<string, DwmAlertGenerationCaptureRef>();
+  for (const ref of [...existing, ...next]) {
+    const identity = ref.contentHash ? `${ref.sourceFamily}:${ref.contentHash}` : `capture:${ref.captureId}`;
+    byIdentity.set(identity, byIdentity.get(identity) ?? ref);
+  }
+  return [...byIdentity.values()];
 }
 
 function evidenceWindowForCaptureRefs(refs: DwmAlertGenerationCaptureRef[]) {
