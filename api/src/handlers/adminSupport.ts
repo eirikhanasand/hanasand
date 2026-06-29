@@ -851,6 +851,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
 
+    const inspectionAudit = supportInspectionAuditMetadata(req)
     const organization = await loadOrganizationSupportDetail(req.params.id)
     if (!organization) {
         await recordAdminAuditEvent(req, {
@@ -859,9 +860,12 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             targetType: 'organization',
             targetId: req.params.id,
             organizationId: req.params.id,
+            entityId: req.params.id,
+            requestId: inspectionAudit.requestId,
             severity: 'notice',
             outcome: 'failed',
-            context: { error: 'organization_not_found' },
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'organization_not_found' }),
         })
         return res.status(404).send({ error: 'Organization not found.' })
     }
@@ -916,13 +920,16 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         targetType: 'organization',
         targetId: organization.id,
         organizationId: organization.id,
+        entityId: organization.id,
+        requestId: inspectionAudit.requestId,
         severity: 'info',
         outcome: 'success',
-        context: {
+        reason: inspectionAudit.reason || undefined,
+        context: supportInspectionAuditContext(inspectionAudit, {
             memberCount: members.rows.length,
             pendingInviteCount: invites.rows.filter((invite: { status: string }) => invite.status === 'pending').length,
             watchlistItemCount: watchlists.rows.length,
-        },
+        }),
     })
 
     const watchlistItems = watchlists.rows as OrganizationWatchlistRow[]
@@ -930,6 +937,9 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
     const recentAuditTimeline = supportRecentAuditTimeline({
         org: organization.id,
         target: organization.id,
+        entity: organization.id,
+        request: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
         action: 'support.organization',
     }, audit.rows as Record<string, unknown>[])
     const alertReadinessBridge = supportTimelineAuditBridgeEvent({
@@ -940,15 +950,16 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         targetId: organization.id,
         organizationId: organization.id,
         entityId: organization.id,
-        requestId: supportRequestId(req),
+        requestId: inspectionAudit.requestId,
         severity: 'info',
         outcome: 'success',
-        reason: 'Support inspected organization alert readiness.',
+        reason: inspectionAudit.reason || 'Support inspected organization alert readiness.',
         source: 'support',
         service: 'hanasand-api',
         context: {
             watchlistItemCount: watchlistItems.length,
             generatedAlertReferenceCount: alertReferences.length,
+            supportContext: inspectionAudit.supportContext || null,
         },
         after: {
             generatedAlertReferenceCount: alertReferences.length,
@@ -991,6 +1002,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
 
+    const inspectionAudit = supportInspectionAuditMetadata(req)
     const user = await run(`
         SELECT id, name, avatar, active, reserved, deactivated_at, deactivated_by, deletion_requested_at, deletion_scheduled_at
         FROM users
@@ -1004,9 +1016,12 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
             actorId: actor.id,
             targetType: 'user',
             targetId: req.params.id,
+            entityId: req.params.id,
+            requestId: inspectionAudit.requestId,
             severity: 'notice',
             outcome: 'failed',
-            context: { error: 'user_not_found' },
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'user_not_found' }),
         })
         return res.status(404).send({ error: 'User not found.' })
     }
@@ -1051,19 +1066,24 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         actorId: actor.id,
         targetType: 'user',
         targetId: req.params.id,
+        entityId: req.params.id,
+        requestId: inspectionAudit.requestId,
         severity: 'info',
         outcome: 'success',
-        context: {
+        reason: inspectionAudit.reason || undefined,
+        context: supportInspectionAuditContext(inspectionAudit, {
             active: userRow.active,
             membershipCount: memberships.rows.length,
             pendingInviteCount: invites.rows.length,
             deletionScheduled: Boolean(userRow.deletion_scheduled_at),
-        },
+        }),
     })
 
     const recentAuditTimeline = supportRecentAuditTimeline({
         target: req.params.id,
         entity: req.params.id,
+        request: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
         action: 'support.user',
     }, audit.rows as Record<string, unknown>[])
     return res.send({
@@ -6005,6 +6025,26 @@ function accessRecoveryApprovalMetadata(input: {
 
 function cleanContext(value: unknown) {
     return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 1000) : ''
+}
+
+function supportInspectionAuditMetadata(req: FastifyRequest) {
+    const query = req.query as Record<string, unknown>
+    return {
+        requestId: text(query.request || query.requestId) || supportRequestId(req),
+        reason: text(query.reason),
+        supportContext: cleanContext(query.context),
+    }
+}
+
+function supportInspectionAuditContext(input: { requestId: string, reason: string, supportContext: string }, extra: Record<string, unknown>) {
+    return {
+        schemaVersion: 'support.inspection.audit_context.v1',
+        requestId: input.requestId,
+        reasonProvided: Boolean(input.reason),
+        supportContext: input.supportContext || null,
+        redactionRequired: true,
+        ...extra,
+    }
 }
 
 function supportRequestId(req: FastifyRequest) {
