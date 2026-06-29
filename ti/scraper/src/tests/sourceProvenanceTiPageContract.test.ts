@@ -1948,6 +1948,94 @@ describe("source provenance TI page contract", () => {
     expect(JSON.stringify(packet)).not.toContain("password");
   });
 
+  test("reports missing source freshness with typed operator next actions", () => {
+    const { lifecycle } = buildFreshSourceLifecycle();
+    const missingLifecycle = {
+      ...lifecycle,
+      id: `${lifecycle.id}:missing_freshness`,
+      actorCaseHandoffId: undefined,
+      enrichmentFreshness: {
+        state: "missing" as const,
+        readyCaseRows: 0,
+        blockedCaseRows: 0
+      },
+      stages: lifecycle.stages.map((stage) => stage.stage === "enrichment_freshness"
+        ? {
+          ...stage,
+          status: "blocked" as const,
+          nextAction: "repair_provenance" as const
+        }
+        : stage)
+    };
+    const packet = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle: missingLifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
+      ok: false,
+      freshness: {
+        state: "missing",
+        maxAgeDays: 7
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(packet.freshness.newestEvidenceAt).toBeUndefined();
+    expect(packet.gaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "missing_fresh_evidence",
+        ownerLane: "publicTI",
+        stage: "enrichment_freshness",
+        path: "enrichmentFreshness.newestEvidenceAt",
+        nextAction: "wait_for_case_handoff"
+      })
+    ]));
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        ownerLane: "publicTI",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/ti/APT28",
+          liveNetworkFetch: false
+        })
+      }),
+      expect.objectContaining({
+        consumer: "dashboard",
+        ownerLane: "dashboard",
+        ready: false,
+        requiredFields: expect.arrayContaining(["gaps[].nextAction", "lifecycle.blockedStages"])
+      }),
+      expect.objectContaining({
+        consumer: "alertRebuild",
+        ownerLane: "alert",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true }),
+          liveNetworkFetch: false
+        })
+      }),
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ownerLane: "source",
+        ready: true,
+        requiredFields: expect.arrayContaining(["gaps[].candidateId", "lifecycle.nextTransitions"])
+      })
+    ]));
+    expect(packet.lifecycle.blockedStages).toEqual(["enrichment_freshness"]);
+    expect(packet.lifecycle.nextTransitions).toEqual(["test_source", "repair_provenance"]);
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
