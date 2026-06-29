@@ -4691,6 +4691,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
             alertTitle: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
             severity: clean(alert.severity),
             sourceFamily: clean(alert.sourceFamily),
+            eventTimestamp: clean(alert.eventTimestamp) || clean(deliveryContext.eventTimestamp) || clean(context.occurredAt),
             evidenceCount: parseCount(alert.evidenceCount),
             watchlistId: clean(watchlist.id) || delivery.watchlistId,
             watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name) || delivery.watchlistName || '', 120)) || null,
@@ -5202,7 +5203,7 @@ export function buildDwmAlertDeliveryPayload({
     const context = {
         schemaVersion: 'dwm.webhook.v1',
         eventType,
-        occurredAt: new Date().toISOString(),
+        occurredAt: normalizedAlert.eventTimestamp,
         idempotencyKey,
         org: {
             id: destination.org_id,
@@ -5248,11 +5249,12 @@ export function buildDwmAlertDeliveryPayload({
                 title: discordText(normalizedAlert.title, DISCORD_EMBED_TITLE_LIMIT),
                 description: discordText(normalizedAlert.claimSummary, DISCORD_EMBED_DESCRIPTION_LIMIT),
                 color: severityColor(normalizedAlert.severity),
-                timestamp: normalizedAlert.firstSeenAt || context.occurredAt,
+                timestamp: normalizedAlert.eventTimestamp || normalizedAlert.firstSeenAt || context.occurredAt,
                 fields: [
                     discordField('Organization', context.org.name, true),
                     discordField('Severity', normalizedAlert.severity.toUpperCase(), true),
                     discordField('Company / domain', normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', true),
+                    discordField('Observed at', normalizedAlert.eventTimestamp, true),
                     watchlist.name || watchlist.terms.length ? discordField('Watchlist', [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), true) : null,
                     discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
                     normalizedAlert.confidence.label ? discordField('Confidence', [normalizedAlert.confidence.label, normalizedAlert.confidence.reason].filter(Boolean).join(' | '), true) : null,
@@ -6037,6 +6039,16 @@ function normalizeAlert(alert: Record<string, unknown>) {
         firstPresent(alert.confidence, alert.confidenceScore, webhookContext.confidence, webhookContext.confidenceScore, workflowContext.confidence, workflowContext.confidenceScore),
         firstClean(alert.confidenceReason, alert.confidenceRationale, alert.reasoning, webhookContext.confidenceReason, workflowContext.confidenceReason)
     )
+    const eventTimestamp = firstClean(
+        alert.eventTimestamp,
+        alert.occurredAt,
+        webhookContext.eventTimestamp,
+        workflowContext.eventTimestamp,
+        alert.replayedAt,
+        alert.updatedAt,
+        alert.firstSeenAt,
+        alert.createdAt
+    )
 
     return {
         id,
@@ -6051,7 +6063,8 @@ function normalizeAlert(alert: Record<string, unknown>) {
         matchedTerm,
         sourceFamily: firstClean(alert.sourceFamily, alert.source, webhookContext.sourceFamily, workflowContext.sourceFamily) || 'dark_web',
         artifactType: firstClean(alert.artifactType, alert.type, webhookContext.artifactType, workflowContext.artifactType) || 'mention',
-        firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
+        firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || eventTimestamp || new Date().toISOString(),
+        eventTimestamp: eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
         savedAt: clean(alert.savedAt) || null,
         reviewState: clean(alert.reviewState) || 'needs_review',
         deliveryState: clean(alert.deliveryState) || 'pending_review',

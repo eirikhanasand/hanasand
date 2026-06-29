@@ -95,6 +95,7 @@ const payload = buildDwmAlertDeliveryPayload({
         tenantId: 'tenant_contract',
         confidenceScore: 0.91,
         confidenceReason: 'Domain and company matched across two independent captures.',
+        createdAt: '2026-06-28T09:15:00.000Z',
         matchedTerm: { value: 'acme-security.com', kind: 'domain' },
         evidence: [
             { label: 'Victim claim', detail: 'Public leak-site metadata matched the watched domain.' },
@@ -115,9 +116,14 @@ const payload = buildDwmAlertDeliveryPayload({
 }) as Record<string, unknown>
 
 const serialized = JSON.stringify(payload)
+const payloadContext = payload._hanasand as Record<string, unknown>
+const payloadEmbed = (payload.embeds as Array<Record<string, unknown>>)[0]
+const payloadFields = payloadEmbed.fields as Array<Record<string, unknown>>
 expect(Array.isArray(payload.embeds), 'Discord payload should include embeds.', payload)
 expect(serialized.includes('Critical Acme domain exposure'), 'Payload should include alert title.', payload)
 expect(serialized.includes('CRITICAL'), 'Payload should include severity.', payload)
+expect(payloadContext.occurredAt === '2026-06-28T09:15:00.000Z' && payloadEmbed.timestamp === '2026-06-28T09:15:00.000Z', 'Payload should preserve real alert event timestamp.', payload)
+expect(payloadFields.some(field => field.name === 'Observed at' && field.value === '2026-06-28T09:15:00.000Z'), 'Discord payload should include an operator-readable observed timestamp field.', payloadFields)
 expect(serialized.includes('Acme Security'), 'Payload should include company context.', payload)
 expect(serialized.includes('acme-security.com'), 'Payload should include domain/matched term.', payload)
 expect(serialized.includes('ransomware_leak_site'), 'Payload should include source family.', payload)
@@ -305,6 +311,7 @@ const replayWorkflowAlert = {
     reviewState: 'needs_review',
     deliveryState: 'ready_to_send',
     replayCount: 2,
+    replayedAt: '2026-06-28T10:45:00.000Z',
     confidenceScore: 87,
     confidenceReason: 'Replay confidence comes from matched public source and case enrichment.',
     workflowContext: {
@@ -413,6 +420,7 @@ expect(replayDeliveryContext.replay === true, 'Replay payload should mark delive
 expect(replayDeliveryContext.dedupeKey === 'dwm_dedupe_replay_contract', 'Replay payload should link to the same alert dedupe key.', replayPayload)
 expect(replayDeliveryContext.casePath === replayWorkflowAlert.casePath, 'Replay payload should link to the same case path.', replayPayload)
 expect(replayDeliveryContext.alertUrl === replayWorkflowAlert.alertUrl, 'Replay payload should link to the alert URL/deep link.', replayPayload)
+expect(replayContext.occurredAt === '2026-06-28T10:45:00.000Z' && replaySerialized.includes('Observed at'), 'Replay payload should preserve replay event timestamp.', replayPayload)
 expect(replayAlertContext.deliveryState === 'ready_to_send', 'Replay payload should preserve alert delivery state.', replayPayload)
 expect((replayAlertContext.confidence as Record<string, unknown>).label === '87%' && replaySerialized.includes('Replay confidence comes from matched public source'), 'Replay payload should preserve confidence context.', replayPayload)
 expect((replayDeliveryContext.workflowState as Record<string, unknown>).delivery === 'ready_to_send' && replayDeliveryContext.replayCount === 2 && replaySerialized.includes('Workflow'), 'Replay payload should expose workflow and replay markers.', replayPayload)
@@ -2622,6 +2630,7 @@ expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl &
 expect(deliveryPreview.timestamps.updatedAt === '2026-06-28T12:00:05.000Z' && deliveryPreview.timestamps.createdAt === '2026-06-28T12:00:00.000Z', 'Test preview should expose persisted delivery created/updated timestamps.', deliveryPreview.timestamps)
 expect(deliveryPreview.sanitizedPayloadPreview.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryPreview.sanitizedPayloadPreview.payloadHash === 'payload_replay_hash', 'Test preview should expose a stable sanitized payload proof with payload hash.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Alert URL') && deliveryPreview.sanitizedPayloadPreview.context.watchlistId === 'watchlist_item_replay_contract', 'Sanitized payload preview should expose Discord field names and watchlist context without parsing raw payload.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Observed at') && deliveryPreview.sanitizedPayloadPreview.context.eventTimestamp === '2026-06-28T10:45:00.000Z', 'Sanitized payload preview should expose alert event timestamp context.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.context.casePath === replayWorkflowAlert.casePath && deliveryPreview.sanitizedPayloadPreview.links.includes(replayWorkflowAlert.alertUrl), 'Sanitized payload preview should expose case and alert action links.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.redaction.safeForCustomerDisplay === true && deliveryPreview.sanitizedPayloadPreview.redaction.endpointExposed === false, 'Sanitized payload preview should prove customer-safe redaction.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
@@ -2931,6 +2940,7 @@ console.log(JSON.stringify({
         'HTTPS-only customer endpoint validation',
         'Discord payload formatting',
         'Discord payload alert URL/deep link',
+        'Discord payload event timestamp context',
         'Discord payload confidence/workflow context',
         'Discord payload truncation limits',
         'destination selection',
