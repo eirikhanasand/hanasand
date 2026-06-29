@@ -1720,6 +1720,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
 }
 
 function RelatedRecordsPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
+    const caseIntake = actionability.caseReviewIntake
     const records = [
         ...actionability.relatedAlerts.map(alert => ({
             id: `alert:${alert.id}`,
@@ -1769,8 +1770,23 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 </div>
             ) : (
                 <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 dark:border-[#5a4316] dark:bg-[#231b0c]'>
-                    <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Blocked</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached to {query}; rebuild alerts after saving a matching watchlist term.</p>
+                    <div data-ti-case-review-intake='true' className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                        <div className='min-w-0'>
+                            <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Case review intake</p>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>
+                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {caseIntake.summary.alerts} alert{caseIntake.summary.alerts === 1 ? '' : 's'} · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
+                            </p>
+                        </div>
+                        <CopyPayloadButton label='Case review intake' payload={caseIntake} />
+                    </div>
+                    <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                        {caseIntake.items.slice(0, 3).map(item => (
+                            <span key={item.id} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
+                                {formatLabel(item.recommendedAction)} · {item.blockedBy.length} blocker{item.blockedBy.length === 1 ? '' : 's'}
+                            </span>
+                        ))}
+                    </div>
+                    <p className='mt-2 wrap-break-word text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached yet; rebuild alerts after saving a matching watchlist term or attach capture evidence before case creation.</p>
                 </div>
             )}
         </div>
@@ -2919,6 +2935,7 @@ function sectionOverviewFor(input: {
     watchlist: WatchlistRelevance
 }): SectionOverviewItem[] {
     const relatedRecords = input.actionability.relatedAlerts.length + input.actionability.relatedCases.length
+    const caseCandidates = input.actionability.caseReviewIntake.summary.total
     const readyActions = Object.values(input.actionability.actionPayloads.payloads).filter(payload => payload.ready).length
     const sourceRows = input.actorIntel.provenanceRows.length || input.actionability.sourceProvenance.length || input.result.sources.length
     return [
@@ -2929,7 +2946,7 @@ function sectionOverviewFor(input: {
         { label: 'Sources', value: `${sourceRows} provenance row${sourceRows === 1 ? '' : 's'}`, state: sourceRows ? 'ready' : 'blocked' },
         { label: 'Evidence', value: `${input.workItems.filter(item => item.evidence.length).length} supported`, state: input.workItems.some(item => item.evidence.length) ? 'ready' : 'blocked' },
         { label: 'Watchlist relevance', value: input.actionability.orgRelevance.organizationRefs.length ? `${input.actionability.orgRelevance.organizationRefs.length} matched` : `${input.actionability.orgRelevance.candidateTerms.length} candidate${input.actionability.orgRelevance.candidateTerms.length === 1 ? '' : 's'}`, state: input.actionability.orgRelevance.state },
-        { label: 'Related alerts/cases', value: `${relatedRecords} linked`, state: relatedRecords ? 'ready' : 'blocked' },
+        { label: 'Related alerts/cases', value: relatedRecords ? `${relatedRecords} linked` : `${caseCandidates} candidate${caseCandidates === 1 ? '' : 's'}`, state: relatedRecords ? 'ready' : caseCandidates ? 'review' : 'blocked' },
         { label: 'Collection gaps', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
         { label: 'Actions', value: `${readyActions}/5 ready`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
     ]

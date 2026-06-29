@@ -576,6 +576,8 @@ assert(pageClientSource.includes('Evidence ordered by severity, confidence, and 
 assert(pageClientSource.includes('Matched watchlists'), 'Public TI evidence fit should show matched organization watchlists when present.')
 assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
+assert(pageClientSource.includes('data-ti-case-review-intake'), 'Related alert/case empty state should expose case review intake candidates.')
+assert(pageClientSource.includes('actionability.caseReviewIntake.summary.total'), 'Related alert/case rail should summarize case review candidates.')
 assert(pageClientSource.includes('data-ti-source-coverage'), 'Public TI dossier should expose source coverage for render checks.')
 assert(pageClientSource.includes('Source coverage'), 'Public TI dossier should summarize source coverage.')
 assert(pageClientSource.includes('data-ti-freshness-gate'), 'Public TI dossier should expose a freshness gate for source and handoff readiness.')
