@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
   DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION,
   DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
+  buildOrgAlertCaseActionPacket,
   buildOrgAlertOperatorReadinessPacket,
   buildOrgAlertWebhookFixtureContract,
   buildOrgAlertSourceEvidenceReport,
@@ -278,6 +280,80 @@ describe("org alert workflow bridge", () => {
     });
   });
 
+  test("builds case action packet from ready operator workflow", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [sourceProvenanceSummary()],
+      checkedAt: "2026-06-29T15:00:00.000Z"
+    });
+    const webhookFixture = buildOrgAlertWebhookFixtureContract({
+      bridge,
+      destinations: [webhookDestination()],
+      destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+    });
+    const webhookReconciliation = reconcileOrgAlertWebhookDeliveries({
+      fixture: webhookFixture,
+      attempts: [webhookAttemptFixture(webhookFixture.deliveries[0].payload.idempotencyKey)],
+      checkedAt: "2026-06-29T15:01:00.000Z"
+    });
+    const readiness = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      sourceEvidence,
+      webhookFixture,
+      webhookReconciliation,
+      requireWebhookReconciliation: true
+    });
+    const packet = buildOrgAlertCaseActionPacket({ readiness, checkedAt: "2026-06-29T15:03:00.000Z" });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION,
+      checkedAt: "2026-06-29T15:03:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      blockers: [],
+      rows: [{
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        alertIds: ["alert_acme_lumma"],
+        casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+        alertDetailPaths: ["/v1/dwm/alerts/alert_acme_lumma?organizationId=org_acme&dedupeKey=dedupe_acme_lumma"],
+        webhookDestinationIds: ["webhook_discord"],
+        matchedDeliveryIds: ["delivery_acme_lumma"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        captureCount: 2,
+        ready: true,
+        blockedActions: []
+      }]
+    });
+    expect(packet.rows[0].allowedActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "open_case",
+        ownerLane: "case",
+        route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+        method: "GET"
+      }),
+      expect.objectContaining({
+        action: "review_alert",
+        ownerLane: "alert",
+        route: "/v1/dwm/alerts/alert_acme_lumma?organizationId=org_acme&dedupeKey=dedupe_acme_lumma",
+        method: "GET"
+      }),
+      expect.objectContaining({
+        action: "review_delivery",
+        ownerLane: "webhook",
+        route: "/v1/dwm/webhook-deliveries/delivery_acme_lumma",
+        method: "GET"
+      })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining(["rows[].allowedActions", "rows[].blockedActions", "blockers[]"]));
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(packet)).not.toContain("https://discord.com");
+  });
+
   test("requires source rebuild receipts when operator readiness depends on alert creation proof", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
     const packet = buildOrgAlertOperatorReadinessPacket({
@@ -339,6 +415,42 @@ describe("org alert workflow bridge", () => {
       expect.objectContaining({ code: "missing_webhook_fixture_report", ownerLane: "webhook", stage: "webhook_fixture" }),
       expect.objectContaining({ code: "missing_webhook_reconciliation_report", ownerLane: "webhook", stage: "webhook_reconciliation" })
     ]));
+  });
+
+  test("maps blocked operator readiness into case source webhook repair actions", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const readiness = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      requireWebhookReconciliation: true,
+      checkedAt: "2026-06-29T15:02:00.000Z"
+    });
+    const packet = buildOrgAlertCaseActionPacket({ readiness });
+
+    expect(packet.ok).toBe(false);
+    expect(packet.rows[0]).toMatchObject({
+      ready: false,
+      allowedActions: []
+    });
+    expect(packet.rows[0].blockedActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "restore_source_evidence",
+        ownerLane: "source",
+        route: "/v1/dwm/source-requests",
+        blockerCodes: expect.arrayContaining(["missing_source_evidence_report"])
+      }),
+      expect.objectContaining({
+        action: "deliver_webhook",
+        ownerLane: "webhook",
+        route: "/v1/dwm/webhooks/deliver",
+        blockerCodes: expect.arrayContaining(["missing_webhook_fixture_report", "missing_webhook_reconciliation_report"])
+      })
+    ]));
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_source_evidence_report", ownerLane: "source", path: "source_evidence" }),
+      expect.objectContaining({ code: "missing_webhook_fixture_report", ownerLane: "webhook", path: "webhook_fixture" })
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(packet)).not.toContain("https://discord.com");
   });
 
   test("proves bridge rows are backed by fresh source evidence", () => {
