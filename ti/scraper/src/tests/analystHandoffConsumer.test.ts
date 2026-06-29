@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import {
+  buildOrgScopedAlertWatchlistReadiness,
   orgWatchlistTermsToAlertGenerationRequest,
   persistedAlertToCaseHandoffPayload,
   persistedAlertToWebhookTriggerContext,
@@ -390,6 +391,10 @@ describe("analyst handoff consumer validation", () => {
         watchlistReadiness: { ready: true },
         alertExportReadiness: { ready: true, route: "GET /api/organizations/:id/watchlists/alert-terms" }
       }],
+      orgAlertWatchlistReadiness: [buildOrgScopedAlertWatchlistReadiness({
+        adapter: happy.stages.orgWatchlist!,
+        checkedAt: "2026-06-29T01:19:00.000Z"
+      })],
       supportExecutor: [{
         schemaVersion: "support.action_executor_readiness.v1",
         ready: true,
@@ -432,6 +437,35 @@ describe("analyst handoff consumer validation", () => {
         watchlistReadiness: { ready: false },
         alertExportReadiness: { ready: false, route: "GET /api/organizations/:id/watchlists/alert-terms" }
       }],
+      orgAlertWatchlistReadiness: [{
+        schemaVersion: "organization.watchlist_alert_readiness.v1",
+        ok: false,
+        ownerLane: "alert",
+        capability: "org_scoped_watchlist_alert_generation",
+        checkedAt: "2026-06-29T01:19:00.000Z",
+        route: "POST /v1/dwm/alerts/rebuild",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "org_scoped_alert_case_workflow",
+        expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+        proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoff.test.ts",
+        payloadShape: ["tenantId", "organizationId", "watchlistId", "watchlistItemIds", "publicTiHandoffId"],
+        blockers: [{
+          code: "missing_org",
+          field: "organizationId",
+          detail: "Org watchlist export is unavailable.",
+          recoverable: true,
+          ownerLane: "org",
+          route: "GET /api/organizations/:id/watchlists/alert-terms",
+          action: "export_shared_watchlist_terms"
+        }],
+        downstream: {
+          caseRoute: "/v1/cases",
+          webhookRoute: "/v1/dwm/webhooks/deliver",
+          requiresOrgScopedWatchlist: true,
+          requiresActiveWatchlistItems: true
+        }
+      }],
       supportExecutor: [{
         schemaVersion: "support.action_executor_readiness.v1",
         ready: false,
@@ -468,6 +502,7 @@ describe("analyst handoff consumer validation", () => {
     });
     expect(report.deployGate.rows.map((row) => row.kind)).toEqual(expect.arrayContaining([
       "public_ti_readiness",
+      "org_alert_watchlist_readiness",
       "alert_case_handoff",
       "webhook_destination",
       "org_lifecycle",
@@ -480,6 +515,19 @@ describe("analyst handoff consumer validation", () => {
       && Array.isArray(row.requiredFields)
     )).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "public_ti_readiness" && row.ownerLane === "publicTI" && row.blockerCodes.includes("missing_org") && row.route === "/dashboard/dwm")).toBe(true);
+    expect(report.deployGate.rows.some((row) =>
+      row.kind === "org_alert_watchlist_readiness"
+      && row.schemaVersion === "organization.watchlist_alert_readiness.v1"
+      && row.route === "POST /v1/dwm/alerts/rebuild"
+      && row.identity?.watchlistId === "watch_acme"
+      && row.requiredFields.includes("request.body.watchlistItemIds")
+    )).toBe(true);
+    expect(report.deployGate.rows.some((row) =>
+      row.kind === "org_alert_watchlist_readiness"
+      && row.ownerLane === "org"
+      && row.blockerCodes.includes("missing_org")
+      && row.route === "POST /v1/dwm/alerts/rebuild"
+    )).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "alert_case_handoff" && row.route === "/v1/cases" && row.identity?.alertId === "dwm_alert_acme")).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "webhook_destination" && row.ownerLane === "webhook" && row.blockerCodes.includes("no_live_endpoint"))).toBe(true);
     expect(report.deployGate.rows.some((row) => row.kind === "org_lifecycle" && row.ownerLane === "org" && row.blockerCodes.includes("watchlist_setup_required"))).toBe(true);
@@ -518,7 +566,12 @@ describe("analyst handoff consumer validation", () => {
     });
     expect(report.readinessMatrix.rows.find((row) => row.id === "org_scoped_alert_case_workflow")).toMatchObject({
       ownerLane: "alert",
-      status: "ready",
+      status: "blocked",
+      currentProofArtifact: {
+        schemaVersion: "organization.watchlist_alert_readiness.v1",
+        artifactId: "deploy_gate.org_alert_watchlist_readiness"
+      },
+      blockingGaps: ["missing_org"],
       requiredRoute: "/v1/cases",
       requiredAction: "create_case_from_org_alert"
     });

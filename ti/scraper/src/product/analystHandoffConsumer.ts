@@ -1,5 +1,6 @@
 import {
   ANALYST_HANDOFF_SCHEMA_VERSION,
+  ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION,
   mergeAnalystHandoffIdentity,
   type AlertCaseAdapterValue,
   type AlertGenerationAdapterValue,
@@ -11,6 +12,7 @@ import {
   type AnalystHandoffIdentityMismatchError,
   type AnalystHandoffKind,
   type ActorWatchlistAdapterValue,
+  type OrgScopedAlertWatchlistReadiness,
 } from "./analystHandoff.ts";
 import { nowIso } from "../utils.ts";
 
@@ -40,6 +42,7 @@ export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+  orgAlertWatchlistReadiness: ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION,
   validationReport: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
   publicTi: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
   orgAlertTermsExport: ORG_ALERT_TERMS_EXPORT_SCHEMA_VERSION,
@@ -459,6 +462,7 @@ export type AnalystHandoffConsumerBundle = {
   };
   deployGateEvidence?: {
     publicTiReadiness?: AnalystHandoffPublicTiReadinessRow[];
+    orgAlertWatchlistReadiness?: OrgScopedAlertWatchlistReadiness[];
     webhookDestinations?: AnalystHandoffWebhookDestinationAdminProofRow[];
     orgLifecycle?: AnalystHandoffOrgLifecycleReadinessRow[];
     supportExecutor?: AnalystHandoffSupportExecutorReadiness[];
@@ -536,6 +540,7 @@ export type AnalystHandoffValidationReport = {
 
 export type AnalystHandoffDeployGateRowKind =
   | "public_ti_readiness"
+  | "org_alert_watchlist_readiness"
   | "alert_case_handoff"
   | "webhook_destination"
   | "org_lifecycle"
@@ -551,7 +556,7 @@ export type AnalystHandoffDeployGateRow = {
   route?: string;
   blockerCodes: string[];
   requiredFields: string[];
-  identity?: Pick<AnalystHandoffIdentity, "organizationId" | "alertId" | "casePath" | "webhookDestinationIds">;
+  identity?: Pick<AnalystHandoffIdentity, "organizationId" | "watchlistId" | "watchlistItemIds" | "alertId" | "casePath" | "webhookDestinationIds">;
 };
 
 export type AnalystHandoffDeployGateAssertions = {
@@ -967,8 +972,11 @@ export function buildAnalystHandoffReadinessMatrix(input: Array<{
       id: "org_scoped_alert_case_workflow",
       ownerLane: "alert",
       capability: "org_scoped_alert_case_workflow",
-      proof: proofFromDeployGate(deployGate.rows, "alert_case_handoff") ?? proofFromBundle(bundles, ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION, "stages.caseHandoff"),
-      gaps: deployGateRowsByKind(deployGate.rows, "alert_case_handoff").flatMap((row) => row.blockerCodes),
+      proof: proofFromDeployGate(deployGate.rows, "org_alert_watchlist_readiness") ?? proofFromDeployGate(deployGate.rows, "alert_case_handoff") ?? proofFromBundle(bundles, ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION, "stages.caseHandoff"),
+      gaps: [
+        ...deployGateRowsByKind(deployGate.rows, "org_alert_watchlist_readiness").flatMap((row) => row.blockerCodes),
+        ...deployGateRowsByKind(deployGate.rows, "alert_case_handoff").flatMap((row) => row.blockerCodes)
+      ],
       requiredRoute: "/v1/cases",
       requiredAction: "create_case_from_org_alert",
       requiredProbe: "dwm.alert_case_handoff",
@@ -1945,6 +1953,43 @@ function deployGateRowsForBundle(
     });
   }
 
+  for (const row of bundle.deployGateEvidence?.orgAlertWatchlistReadiness || []) {
+    const blockerCodes = row.blockers.map((item) => item.code).filter(Boolean);
+    rows.push({
+      kind: "org_alert_watchlist_readiness",
+      ownerLane: row.blockers.some((item) => item.ownerLane === "org") ? "org" : "alert",
+      ok: row.schemaVersion === ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION && row.ok && !blockerCodes.length,
+      schemaVersion: row.schemaVersion,
+      sourceFile: file,
+      route: row.route,
+      action: "rebuild_org_scoped_dwm_alerts",
+      blockerCodes,
+      requiredFields: [
+        "schemaVersion",
+        "ok",
+        "route",
+        "routeHandler",
+        "storageModule",
+        "proofRowId",
+        "expectedAdapter",
+        "payloadShape",
+        "proofCommand",
+        "request.body.organizationId",
+        "request.body.watchlistId",
+        "request.body.watchlistItemIds",
+        "downstream.caseRoute",
+        "downstream.webhookRoute",
+        "blockers[].ownerLane"
+      ],
+      identity: {
+        ...deployGateIdentity(identity),
+        organizationId: row.handoff?.organizationId || identity?.organizationId,
+        watchlistId: row.handoff?.watchlistId || identity?.watchlistId,
+        watchlistItemIds: row.handoff?.watchlistItemIds?.length ? row.handoff.watchlistItemIds : identity?.watchlistItemIds
+      }
+    });
+  }
+
   if (bundle.stages?.caseHandoff || bundle.stages?.orgWatchlist) {
     const caseRequest = bundle.stages.caseHandoff?.request as AlertCaseAdapterValue["request"] | undefined;
     const orgRequest = bundle.stages.orgWatchlist?.request as AlertGenerationAdapterValue["request"] | undefined;
@@ -2072,6 +2117,8 @@ function deployGateIdentity(identity: AnalystHandoffIdentity | undefined): Analy
   if (!identity) return undefined;
   return {
     organizationId: identity.organizationId,
+    watchlistId: identity.watchlistId,
+    watchlistItemIds: identity.watchlistItemIds,
     alertId: identity.alertId,
     casePath: identity.casePath,
     webhookDestinationIds: identity.webhookDestinationIds

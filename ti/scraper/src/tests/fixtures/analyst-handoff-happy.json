@@ -57,6 +57,47 @@
         "route": "GET /api/organizations/:id/watchlists/alert-terms"
       }
     }],
+    "orgAlertWatchlistReadiness": [{
+      "schemaVersion": "organization.watchlist_alert_readiness.v1",
+      "ok": true,
+      "ownerLane": "alert",
+      "capability": "org_scoped_watchlist_alert_generation",
+      "checkedAt": "2026-06-29T00:13:00.000Z",
+      "route": "POST /v1/dwm/alerts/rebuild",
+      "routeHandler": "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+      "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+      "proofRowId": "org_scoped_alert_case_workflow",
+      "expectedAdapter": "orgWatchlistTermsToAlertGenerationRequest",
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoff.test.ts",
+      "payloadShape": ["tenantId", "organizationId", "watchlistId", "watchlistItemIds", "publicTiHandoffId"],
+      "blockers": [],
+      "request": {
+        "method": "POST",
+        "path": "/v1/dwm/alerts/rebuild",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "watchlistId": "watch_acme",
+          "watchlistItemIds": ["watch_item_acme_domain"],
+          "publicTiHandoffId": "handoff_public_ti"
+        }
+      },
+      "handoff": {
+        "handoffId": "handoff_org_watchlist",
+        "parentHandoffId": "handoff_public_ti",
+        "tenantId": "tenant_acme",
+        "organizationId": "org_acme",
+        "watchlistId": "watch_acme",
+        "watchlistItemIds": ["watch_item_acme_domain"],
+        "webhookDestinationIds": ["webhook_discord"]
+      },
+      "downstream": {
+        "caseRoute": "/v1/cases",
+        "webhookRoute": "/v1/dwm/webhooks/deliver",
+        "requiresOrgScopedWatchlist": true,
+        "requiresActiveWatchlistItems": true
+      }
+    }],
     "webhookDestinations": [{
       "schemaVersion": "dwm.webhook.destination_admin_proof_row.v1",
       "destinationId": "webhook_discord",
