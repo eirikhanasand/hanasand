@@ -6,6 +6,7 @@ export const DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION = "dwm.alert_workflow
 export const DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.alert_workflow_support_action_request.v1" as const;
 export const DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION = "dwm.alert_workflow_support_evidence_packet.v1" as const;
 export const DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION = "dwm.alert_provenance_consumer_packet.v1" as const;
+export const DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION = "dwm.alert_analyst_workflow_event.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -295,6 +296,91 @@ export type DwmAlertProvenanceConsumerBlocker = {
     | "missing_org_watchlist_scope"
     | "duplicate_alert_unresolved";
   ownerLane: "org" | "case" | "source" | "alert";
+  path: string;
+  message: string;
+};
+
+export type DwmAlertAnalystWorkflowAction =
+  | "assign"
+  | "escalate"
+  | "suppress"
+  | "close"
+  | "reopen"
+  | "replay_webhook"
+  | "add_note";
+
+export type DwmAlertAnalystWorkflowEvent = {
+  schemaVersion: typeof DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  casePath?: string;
+  actorId?: string;
+  action: DwmAlertAnalystWorkflowAction;
+  rationale?: string;
+  redacted: true;
+  transition: {
+    before: DwmAlertWorkflowLifecycleSnapshot;
+    after: DwmAlertWorkflowLifecycleSnapshot;
+    changedFields: string[];
+    expectedWorkflowEventCount?: number;
+    valid: boolean;
+    idempotencyKey: string;
+  };
+  provenance: {
+    redacted: true;
+    evidenceCount: number;
+    captureIds: string[];
+    sourceIds: string[];
+    contentHashCount: number;
+    sourceFamilies: string[];
+    orgWatchlistScope?: DwmAlertWorkflowContract["orgWatchlistScope"];
+  };
+  consumers: {
+    dashboard: DwmAlertAnalystWorkflowConsumerReadiness;
+    caseWorkflow: DwmAlertAnalystWorkflowConsumerReadiness;
+    webhook: DwmAlertAnalystWorkflowConsumerReadiness;
+    audit: DwmAlertAnalystWorkflowConsumerReadiness;
+  };
+  blockers: DwmAlertAnalystWorkflowEventBlocker[];
+  payloadShape: string[];
+};
+
+export type DwmAlertWorkflowLifecycleSnapshot = {
+  reviewState?: string;
+  deliveryState?: string;
+  workflowStatus?: string;
+  assignedOwner?: string;
+  severityOverride?: string;
+  caseId?: string;
+  casePath?: string;
+  workflowEventCount: number;
+};
+
+export type DwmAlertAnalystWorkflowConsumerReadiness = {
+  ready: boolean;
+  ownerLane: "dashboard" | "case" | "webhook" | "audit";
+  route?: string;
+  requiredFields: string[];
+  blockerCodes: DwmAlertAnalystWorkflowEventBlocker["code"][];
+};
+
+export type DwmAlertAnalystWorkflowEventBlocker = {
+  code:
+    | "missing_alert_id"
+    | "missing_org_scope"
+    | "missing_actor"
+    | "missing_case_route"
+    | "missing_rationale"
+    | "missing_provenance"
+    | "stale_workflow_version"
+    | "invalid_transition"
+    | "duplicate_workflow_event";
+  ownerLane: "alert" | "org" | "case" | "source" | "webhook";
   path: string;
   message: string;
 };
@@ -732,6 +818,86 @@ export function buildAlertProvenanceConsumerPacket(input: {
   };
 }
 
+export function buildAlertAnalystWorkflowEvent(input: {
+  before: DwmAlertWorkflowContract;
+  after: DwmAlertWorkflowContract;
+  action: DwmAlertAnalystWorkflowAction;
+  actorId?: string;
+  rationale?: string;
+  requestId?: string;
+  generatedAt?: string;
+  expectedWorkflowEventCount?: number;
+  existingEventIds?: string[];
+}): DwmAlertAnalystWorkflowEvent {
+  const before = input.before;
+  const after = input.after;
+  const changedFields = workflowChangedFields(before, after);
+  const idempotencyKey = stableId("dwm_alert_analyst_workflow_event", `${before.tenantId}:${before.organizationId ?? ""}:${before.alertId}:${input.action}:${input.actorId ?? ""}:${input.requestId ?? ""}:${after.workflowEventCount}`);
+  const blockers = analystWorkflowEventBlockers({ ...input, changedFields, idempotencyKey });
+  const consumerBlockers = {
+    dashboard: analystConsumerBlockerCodes(blockers, ["missing_alert_id", "missing_org_scope", "missing_actor", "invalid_transition", "duplicate_workflow_event"]),
+    caseWorkflow: analystConsumerBlockerCodes(blockers, ["missing_alert_id", "missing_org_scope", "missing_actor", "missing_case_route", "missing_rationale", "stale_workflow_version", "invalid_transition", "duplicate_workflow_event"]),
+    webhook: analystConsumerBlockerCodes(blockers, ["missing_alert_id", "missing_org_scope", "missing_case_route", "missing_rationale", "missing_provenance", "stale_workflow_version", "invalid_transition", "duplicate_workflow_event"]),
+    audit: analystConsumerBlockerCodes(blockers, ["missing_alert_id", "missing_org_scope", "missing_actor", "missing_rationale", "stale_workflow_version", "invalid_transition", "duplicate_workflow_event"])
+  };
+
+  return {
+    schemaVersion: DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION,
+    id: idempotencyKey,
+    generatedAt: input.generatedAt ?? after.checkedAt,
+    ok: blockers.length === 0,
+    tenantId: after.tenantId || before.tenantId,
+    organizationId: after.organizationId ?? before.organizationId,
+    alertId: after.alertId || before.alertId,
+    caseId: after.caseId ?? before.caseId,
+    casePath: after.casePath ?? before.casePath,
+    actorId: stringValue(input.actorId),
+    action: input.action,
+    rationale: stringValue(input.rationale),
+    redacted: true,
+    transition: {
+      before: workflowLifecycleSnapshot(before),
+      after: workflowLifecycleSnapshot(after),
+      changedFields,
+      expectedWorkflowEventCount: input.expectedWorkflowEventCount,
+      valid: blockers.length === 0,
+      idempotencyKey
+    },
+    provenance: {
+      redacted: true,
+      evidenceCount: after.provenance.evidenceCount,
+      captureIds: after.provenance.captureIds,
+      sourceIds: after.provenance.sourceIds,
+      contentHashCount: after.provenance.contentHashes.length,
+      sourceFamilies: after.provenance.sourceFamilies,
+      orgWatchlistScope: after.orgWatchlistScope
+    },
+    consumers: {
+      dashboard: analystWorkflowConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(after.alertId || before.alertId)}`, ["alertId", "organizationId", "action", "transition.changedFields"], consumerBlockers.dashboard),
+      caseWorkflow: analystWorkflowConsumerReadiness("case", after.casePath ?? before.casePath, ["alertId", "caseId", "casePath", "actorId", "rationale", "transition.after"], consumerBlockers.caseWorkflow),
+      webhook: analystWorkflowConsumerReadiness("webhook", input.action === "replay_webhook" ? "/v1/dwm/webhooks/deliver" : undefined, ["alertId", "organizationId", "caseId", "provenance.captureIds", "transition.idempotencyKey"], consumerBlockers.webhook),
+      audit: analystWorkflowConsumerReadiness("audit", "/api/admin/support/inspect", ["alertId", "organizationId", "actorId", "action", "rationale", "transition.idempotencyKey"], consumerBlockers.audit)
+    },
+    blockers,
+    payloadShape: [
+      "alertId",
+      "organizationId",
+      "caseId",
+      "actorId",
+      "action",
+      "rationale",
+      "transition.before",
+      "transition.after",
+      "transition.changedFields",
+      "transition.idempotencyKey",
+      "provenance.captureIds",
+      "provenance.sourceIds",
+      "provenance.orgWatchlistScope",
+      "consumers"
+    ]
+  };
+}
+
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
     + asStringArray(contract.provenance.captureIds).length
@@ -819,6 +985,125 @@ function alertProvenanceBlocker(
 }
 
 function uniqueAlertProvenanceBlockers(blockers: DwmAlertProvenanceConsumerBlocker[]): DwmAlertProvenanceConsumerBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function workflowLifecycleSnapshot(contract: DwmAlertWorkflowContract): DwmAlertWorkflowLifecycleSnapshot {
+  return {
+    reviewState: contract.reviewState,
+    deliveryState: contract.deliveryState,
+    workflowStatus: contract.workflowStatus,
+    assignedOwner: contract.assignedOwner,
+    severityOverride: contract.severityOverride,
+    caseId: contract.caseId,
+    casePath: contract.casePath,
+    workflowEventCount: contract.workflowEventCount
+  };
+}
+
+function workflowChangedFields(before: DwmAlertWorkflowContract, after: DwmAlertWorkflowContract): string[] {
+  const fields: Array<keyof DwmAlertWorkflowLifecycleSnapshot> = [
+    "reviewState",
+    "deliveryState",
+    "workflowStatus",
+    "assignedOwner",
+    "severityOverride",
+    "caseId",
+    "casePath",
+    "workflowEventCount"
+  ];
+  return fields.filter((field) => workflowLifecycleSnapshot(before)[field] !== workflowLifecycleSnapshot(after)[field]);
+}
+
+function analystWorkflowEventBlockers(input: {
+  before: DwmAlertWorkflowContract;
+  after: DwmAlertWorkflowContract;
+  action: DwmAlertAnalystWorkflowAction;
+  actorId?: string;
+  rationale?: string;
+  expectedWorkflowEventCount?: number;
+  existingEventIds?: string[];
+  changedFields: string[];
+  idempotencyKey: string;
+}): DwmAlertAnalystWorkflowEventBlocker[] {
+  const blockers: DwmAlertAnalystWorkflowEventBlocker[] = [];
+  const before = input.before;
+  const after = input.after;
+  if (!after.alertId && !before.alertId) blockers.push(analystWorkflowEventBlocker("missing_alert_id", "alert", "alertId", "Analyst workflow event requires alert identity."));
+  if (!after.organizationId && !before.organizationId) blockers.push(analystWorkflowEventBlocker("missing_org_scope", "org", "organizationId", "Analyst workflow event requires organization scope."));
+  if (!input.actorId) blockers.push(analystWorkflowEventBlocker("missing_actor", "alert", "actorId", "Analyst workflow event requires an actor id."));
+  if (!after.caseId || !after.casePath) blockers.push(analystWorkflowEventBlocker("missing_case_route", "case", !after.caseId ? "caseId" : "casePath", "Analyst workflow event requires a linked case route."));
+  if (requiresRationale(input.action) && !stringValue(input.rationale)) blockers.push(analystWorkflowEventBlocker("missing_rationale", "case", "rationale", "This analyst action requires a decision rationale."));
+  if ((input.action === "replay_webhook" || input.action === "escalate") && !hasActionProvenance(after)) blockers.push(analystWorkflowEventBlocker("missing_provenance", "source", "provenance", "This analyst action requires source provenance."));
+  if (input.expectedWorkflowEventCount !== undefined && before.workflowEventCount !== input.expectedWorkflowEventCount) blockers.push(analystWorkflowEventBlocker("stale_workflow_version", "alert", "expectedWorkflowEventCount", "Analyst workflow event was based on a stale workflow version."));
+  if (!validAnalystTransition(input.action, before, after, input.changedFields)) blockers.push(analystWorkflowEventBlocker("invalid_transition", input.action === "replay_webhook" ? "webhook" : "alert", "transition.changedFields", "Analyst workflow event transition does not match the requested action."));
+  if (input.existingEventIds?.includes(input.idempotencyKey)) blockers.push(analystWorkflowEventBlocker("duplicate_workflow_event", "alert", "transition.idempotencyKey", "Analyst workflow event idempotency key already exists."));
+  return uniqueAnalystWorkflowEventBlockers(blockers);
+}
+
+function requiresRationale(action: DwmAlertAnalystWorkflowAction): boolean {
+  return action === "escalate" || action === "suppress" || action === "close" || action === "reopen" || action === "replay_webhook";
+}
+
+function hasActionProvenance(contract: DwmAlertWorkflowContract): boolean {
+  return contract.provenance.evidenceCount > 0
+    && (contract.provenance.captureIds.length > 0 || contract.provenance.sourceIds.length > 0 || contract.provenance.contentHashes.length > 0);
+}
+
+function validAnalystTransition(
+  action: DwmAlertAnalystWorkflowAction,
+  before: DwmAlertWorkflowContract,
+  after: DwmAlertWorkflowContract,
+  changedFields: string[]
+): boolean {
+  if (changedFields.length === 0 && action !== "add_note") return false;
+  if (action === "assign") return Boolean(after.assignedOwner && after.assignedOwner !== before.assignedOwner);
+  if (action === "escalate") return after.reviewState === "escalated" || after.workflowStatus === "escalated" || after.severityOverride === "critical";
+  if (action === "suppress") return after.reviewState === "false_positive" || after.deliveryState === "muted";
+  if (action === "close") return after.workflowStatus === "closed" || after.reviewState === "closed";
+  if (action === "reopen") return before.workflowStatus === "closed" && after.workflowStatus !== "closed";
+  if (action === "replay_webhook") return after.deliveryState === "queued" || after.deliveryState === "ready_to_send" || changedFields.includes("workflowEventCount");
+  return changedFields.length === 0 || changedFields.every((field) => field === "workflowEventCount");
+}
+
+function analystWorkflowConsumerReadiness(
+  ownerLane: DwmAlertAnalystWorkflowConsumerReadiness["ownerLane"],
+  route: string | undefined,
+  requiredFields: string[],
+  blockerCodes: DwmAlertAnalystWorkflowEventBlocker["code"][]
+): DwmAlertAnalystWorkflowConsumerReadiness {
+  return {
+    ready: blockerCodes.length === 0,
+    ownerLane,
+    route,
+    requiredFields,
+    blockerCodes
+  };
+}
+
+function analystConsumerBlockerCodes(
+  blockers: DwmAlertAnalystWorkflowEventBlocker[],
+  codes: DwmAlertAnalystWorkflowEventBlocker["code"][]
+): DwmAlertAnalystWorkflowEventBlocker["code"][] {
+  return uniqueStrings(blockers.map((blocker) => blocker.code).filter((code) => codes.includes(code))) as DwmAlertAnalystWorkflowEventBlocker["code"][];
+}
+
+function analystWorkflowEventBlocker(
+  code: DwmAlertAnalystWorkflowEventBlocker["code"],
+  ownerLane: DwmAlertAnalystWorkflowEventBlocker["ownerLane"],
+  path: string,
+  message: string
+): DwmAlertAnalystWorkflowEventBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function uniqueAnalystWorkflowEventBlockers(blockers: DwmAlertAnalystWorkflowEventBlocker[]): DwmAlertAnalystWorkflowEventBlocker[] {
   const seen = new Set<string>();
   return blockers.filter((blocker) => {
     const key = `${blocker.code}:${blocker.path}`;

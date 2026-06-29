@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
   DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
+  buildAlertAnalystWorkflowEvent,
   buildAlertWorkflowAdminAuditAdapter,
   buildAlertWorkflowContract,
   buildAlertProvenanceConsumerPacket,
@@ -245,6 +247,169 @@ describe("alert workflow preservation contract", () => {
       expect.objectContaining({ consumer: "publicTI", transition: "refresh_public_ti_profile" }),
       expect.objectContaining({ consumer: "caseWorkflow", transition: "open_case_with_provenance" })
     ]));
+  });
+
+  test("builds analyst workflow event for role assignment consumers", () => {
+    const before = buildAlertWorkflowContract({
+      alert: alertFixture(),
+      checkedAt: "2026-06-29T13:10:00.000Z"
+    });
+    const after = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        assignedOwner: "analyst-2",
+        workflowEvents: [...alertFixture().workflowEvents, {
+          id: "event_assign_analyst_2",
+          at: "2026-06-29T13:11:00.000Z"
+        }]
+      },
+      checkedAt: "2026-06-29T13:11:00.000Z"
+    });
+    const event = buildAlertAnalystWorkflowEvent({
+      before,
+      after,
+      action: "assign",
+      actorId: "ir-lead",
+      requestId: "req_assign_analyst_2",
+      expectedWorkflowEventCount: 2,
+      generatedAt: "2026-06-29T13:12:00.000Z"
+    });
+
+    expect(event).toMatchObject({
+      schemaVersion: DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      actorId: "ir-lead",
+      action: "assign",
+      redacted: true,
+      transition: {
+        before: {
+          assignedOwner: "ir-lead",
+          workflowEventCount: 2
+        },
+        after: {
+          assignedOwner: "analyst-2",
+          workflowEventCount: 3
+        },
+        changedFields: expect.arrayContaining(["assignedOwner", "workflowEventCount"]),
+        expectedWorkflowEventCount: 2,
+        valid: true
+      },
+      provenance: {
+        redacted: true,
+        evidenceCount: 1,
+        captureIds: ["cap_acme_initial"],
+        sourceIds: ["src_acme_tg"],
+        contentHashCount: 1,
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        orgWatchlistScope: expect.objectContaining({
+          organizationId: "org_acme",
+          watchlistItemIds: ["watch_item_acme_domain"]
+        })
+      },
+      consumers: {
+        dashboard: {
+          ready: true,
+          ownerLane: "dashboard",
+          route: "/dashboard/dwm/alerts/alert_acme_lumma",
+          requiredFields: expect.arrayContaining(["alertId", "organizationId", "action", "transition.changedFields"])
+        },
+        caseWorkflow: {
+          ready: true,
+          ownerLane: "case",
+          route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+          requiredFields: expect.arrayContaining(["caseId", "actorId", "transition.after"])
+        },
+        webhook: {
+          ready: true,
+          ownerLane: "webhook",
+          blockerCodes: []
+        },
+        audit: {
+          ready: true,
+          ownerLane: "audit",
+          route: "/api/admin/support/inspect",
+          requiredFields: expect.arrayContaining(["actorId", "action", "transition.idempotencyKey"])
+        }
+      },
+      blockers: []
+    });
+    expect(event.transition.idempotencyKey).toMatch(/^dwm_alert_analyst_workflow_event_/);
+    expect(event.payloadShape).toEqual(expect.arrayContaining([
+      "transition.before",
+      "transition.after",
+      "provenance.orgWatchlistScope",
+      "consumers"
+    ]));
+    expect(JSON.stringify(event)).not.toContain("payloadBody");
+    expect(JSON.stringify(event)).not.toContain("rawEvidence");
+  });
+
+  test("blocks invalid stale duplicate analyst workflow replay events", () => {
+    const before = buildAlertWorkflowContract({
+      alert: alertFixture(),
+      checkedAt: "2026-06-29T13:10:00.000Z"
+    });
+    const after = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        casePath: undefined,
+        deliveryState: "delivered",
+        provenance: { captureIds: [] },
+        workflowContext: {},
+        webhookContext: {},
+        sourceProvenanceSummary: undefined,
+        evidence: []
+      },
+      checkedAt: "2026-06-29T13:11:00.000Z"
+    });
+    const firstAttempt = buildAlertAnalystWorkflowEvent({
+      before,
+      after,
+      action: "replay_webhook",
+      requestId: "req_replay_invalid",
+      expectedWorkflowEventCount: 0
+    });
+    const event = buildAlertAnalystWorkflowEvent({
+      before,
+      after,
+      action: "replay_webhook",
+      requestId: "req_replay_invalid",
+      expectedWorkflowEventCount: 0,
+      existingEventIds: [firstAttempt.id]
+    });
+
+    expect(event.ok).toBe(false);
+    expect(event.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_actor", ownerLane: "alert", path: "actorId" }),
+      expect.objectContaining({ code: "missing_case_route", ownerLane: "case" }),
+      expect.objectContaining({ code: "missing_rationale", ownerLane: "case", path: "rationale" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "provenance" }),
+      expect.objectContaining({ code: "stale_workflow_version", ownerLane: "alert", path: "expectedWorkflowEventCount" }),
+      expect.objectContaining({ code: "invalid_transition", ownerLane: "webhook", path: "transition.changedFields" }),
+      expect.objectContaining({ code: "duplicate_workflow_event", ownerLane: "alert", path: "transition.idempotencyKey" })
+    ]));
+    expect(event.consumers).toMatchObject({
+      caseWorkflow: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_case_route", "missing_rationale", "stale_workflow_version", "invalid_transition"])
+      },
+      webhook: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_case_route", "missing_rationale", "missing_provenance", "stale_workflow_version", "invalid_transition"])
+      },
+      audit: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_actor", "missing_rationale", "stale_workflow_version", "invalid_transition", "duplicate_workflow_event"])
+      }
+    });
+    expect(event.transition.valid).toBe(false);
+    expect(event.transition.changedFields).toEqual(expect.arrayContaining(["deliveryState", "caseId", "casePath"]));
   });
 
   test("emits redacted admin audit metadata for preserved alert workflow", () => {
