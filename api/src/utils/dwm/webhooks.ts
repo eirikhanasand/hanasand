@@ -4733,6 +4733,8 @@ function buildDwmWebhookDeliveryOperationLinks(delivery: DwmWebhookDeliveryPubli
         retryDryRun: 'POST /api/dwm/webhook-deliveries',
         destinationTest: destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : null,
         destinationDetail: destinationId ? `GET /api/dwm/webhooks?orgId=${orgId}&destinationId=${destinationId}` : null,
+        destinationDelete: destinationId ? `DELETE /api/dwm/webhook-destinations/${destinationId}` : null,
+        destinationArchive: destinationId ? `DELETE /api/dwm/webhook-destinations/${destinationId}` : null,
         dedupeHistory: dedupeKey ? `GET /api/dwm/webhook-deliveries?orgId=${orgId}&dedupeKey=${dedupeKey}` : null,
         casePath: delivery.casePath || null,
     }

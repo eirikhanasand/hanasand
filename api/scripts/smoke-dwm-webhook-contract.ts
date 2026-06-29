@@ -2660,6 +2660,7 @@ expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Observed at'
 expect(deliveryPreview.sanitizedPayloadPreview.context.casePath === replayWorkflowAlert.casePath && deliveryPreview.sanitizedPayloadPreview.links.includes(replayWorkflowAlert.alertUrl), 'Sanitized payload preview should expose case and alert action links.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.redaction.safeForCustomerDisplay === true && deliveryPreview.sanitizedPayloadPreview.redaction.endpointExposed === false, 'Sanitized payload preview should prove customer-safe redaction.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
+expect(deliveryPreview.operationLinks.destinationDelete === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract' && deliveryPreview.operationLinks.destinationArchive === deliveryPreview.operationLinks.destinationDelete, 'Test preview should expose destination archive/delete remediation links.', deliveryPreview.operationLinks)
 expect(deliveryPreview.operationLinks.dedupeHistory?.includes('dwm_dedupe_replay_contract') && deliveryPreview.operationLinks.casePath === replayWorkflowAlert.casePath, 'Test preview should expose dedupe history and case action links.', deliveryPreview.operationLinks)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
 expect(readiness.destinationCount === 3 && readiness.activeDestinationCount === 2 && readiness.disabledDestinationCount === 1, 'Readiness should roll up multiple destinations.', readiness)
@@ -2829,10 +2830,11 @@ expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') &&
 expect(deliveryReceiptReplay?.sanitizedPayloadPreview?.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryReceiptReplay.sanitizedPayloadPreview.context.alertId === 'alert_replay_contract', 'Delivery receipts should carry the sanitized payload preview proof for customer-safe history.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery receipts should expose persisted delivery updated timestamp.', deliveryReceiptReplay?.proof)
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.operationLinks?.destinationArchive === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract', 'Delivery receipts should expose destination archive/delete remediation links.', deliveryReceiptReplay?.operationLinks)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
 expect(deliveryReceiptMissingDestination?.destination.availability.code === 'destination_unavailable' && deliveryReceiptMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery receipts should expose typed blockers for missing destination outcomes.', deliveryReceiptMissingDestination)
-expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === null && deliveryReceiptMissingDestination.operationLinks.deliveryHistory.includes('alert_missing_destination_contract'), 'Missing destination receipts should avoid fake destination test links and keep alert-scoped history links.', deliveryReceiptMissingDestination)
+expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === null && deliveryReceiptMissingDestination.operationLinks.destinationArchive === null && deliveryReceiptMissingDestination.operationLinks.deliveryHistory.includes('alert_missing_destination_contract'), 'Missing destination receipts should avoid fake destination remediation links and keep alert-scoped history links.', deliveryReceiptMissingDestination)
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
 expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts should redact endpoint, response, and payload secrets.', deliveryReceipts)
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
@@ -3036,6 +3038,7 @@ console.log(JSON.stringify({
         'delivery receipts retry/backoff blockers',
         'delivery receipts terminal failure blocker',
         'delivery receipts audit/no-network linkage',
+        'delivery receipts destination archive remediation link',
         'delivery receipts secret redaction',
         'delivery timeline customer history grouping',
         'delivery timeline replay/audit proof',
@@ -3187,6 +3190,7 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].sanitizedPayloadPreview.context.alertId',
             'deliveryReceipts.receipts[].operationLinks.deliveryDetail',
             'deliveryReceipts.receipts[].operationLinks.destinationTest',
+            'deliveryReceipts.receipts[].operationLinks.destinationArchive',
             'deliveryReceipts.receipts[].retry.nextRetryAt',
             'deliveryReceipts.receipts[].blockers[].code',
             'deliveryTimeline.schemaVersion',
