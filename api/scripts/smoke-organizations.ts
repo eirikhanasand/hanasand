@@ -218,11 +218,34 @@ assert.deepEqual(alertTermsExport.alertBridgeContract.memberProvenance, {
     status: 'active',
 })
 assert.equal(alertTermsExport.alertBridgeContract.supportAccess.mode, 'support_contract_only')
+assert.equal(alertTermsExport.alertBridgeContract.supportVisibility.mode, 'redacted_summary_only')
+assert.equal(alertTermsExport.alertBridgeContract.supportVisibility.contract, 'admin_support')
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.safeFields.includes('activeTermCount'))
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.redactedFields.includes('activeTerms[].term'))
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.route, 'organization_watchlist')
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.pathTemplate, '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
+assert.deepEqual(alertTermsExport.alertBridgeContract.caseRouteExpectation.queryFields, ['organizationId', 'watchlistItemId'])
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.blockerCode, 'no_case_route')
+assert.deepEqual(alertTermsExport.alertBridgeContract.redactedSummary, {
+    schemaVersion: 'organization.watchlist_alert_bridge_redacted_summary.v1',
+    organizationId: 'org_acme',
+    tenantId: 'org_acme',
+    activeTermCount: 1,
+    termFamilies: ['keyword'],
+    pausedCount: 1,
+    archivedCount: 0,
+    visibilityPolicy: 'members',
+    allowedViewerRoles: ['owner', 'admin', 'member', 'viewer'],
+    containsRawTerms: false,
+})
 assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.nonmember, 'nonmember_denied')
 assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.revokedMember, 'revoked_member_denied')
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('activeTerms[].alertGenerationRef.dedupe.key'))
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.caseRouteExpectation.pathTemplate'))
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.redactedSummary'))
 assert.equal(alertTermsExport.alertBridgeContract.alertGeneratorKeyExpectation, 'alertGenerationRef.dedupe.key')
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_watchlist_terms'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_case_route'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_only_access'))
 assert.deepEqual(alertTermsExport.alertBridgeContract.typedBlockers, [{
     code: 'paused_watchlist_excluded',

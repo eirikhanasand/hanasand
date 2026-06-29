@@ -811,18 +811,42 @@ assert.deepEqual(alertTermsExport.alertBridgeContract.memberProvenance, {
 })
 assert.equal(alertTermsExport.alertBridgeContract.supportAccess.mode, 'support_contract_only')
 assert.equal(alertTermsExport.alertBridgeContract.supportAccess.blockerCode, 'support_only_access')
+assert.equal(alertTermsExport.alertBridgeContract.supportVisibility.mode, 'redacted_summary_only')
+assert.equal(alertTermsExport.alertBridgeContract.supportVisibility.contract, 'admin_support')
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.safeFields.includes('activeTermCount'))
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.safeFields.includes('termFamilies'))
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.redactedFields.includes('member.userId'))
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.redactedFields.includes('activeTerms[].term'))
+assert.ok(alertTermsExport.alertBridgeContract.supportVisibility.redactedFields.includes('activeTerms[].alertGenerationRef.lifecycle.createdBy'))
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.route, 'organization_watchlist')
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.pathTemplate, '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
+assert.deepEqual(alertTermsExport.alertBridgeContract.caseRouteExpectation.queryFields, ['organizationId', 'watchlistItemId'])
+assert.equal(alertTermsExport.alertBridgeContract.caseRouteExpectation.blockerCode, 'no_case_route')
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.schemaVersion, 'organization.watchlist_alert_bridge_redacted_summary.v1')
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.organizationId, organization.id)
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.tenantId, organization.id)
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.activeTermCount, 5)
+assert.deepEqual(alertTermsExport.alertBridgeContract.redactedSummary.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.pausedCount, 0)
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.archivedCount, 0)
+assert.equal(alertTermsExport.alertBridgeContract.redactedSummary.containsRawTerms, false)
+assert.ok(!('activeTerms' in alertTermsExport.alertBridgeContract.redactedSummary))
+assert.ok(!('member' in alertTermsExport.alertBridgeContract.redactedSummary))
 assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.nonmember, 'nonmember_denied')
 assert.equal(alertTermsExport.alertBridgeContract.deniedAccess.revokedMember, 'revoked_member_denied')
 assert.equal(alertTermsExport.alertBridgeContract.alertGeneratorKeyExpectation, 'alertGenerationRef.dedupe.key')
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('organizationId'))
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('member.userId'))
 assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('activeTerms[].alertGenerationRef'))
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.caseRouteExpectation.pathTemplate'))
+assert.ok(alertTermsExport.alertBridgeContract.requiredFields.includes('alertBridgeContract.redactedSummary'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_active_watchlist_terms'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('paused_watchlist_excluded'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('archived_watchlist_excluded'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('missing_org_tenant'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('revoked_member_denied'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_alert_ref'))
+assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('no_case_route'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('support_only_access'))
 assert.ok(alertTermsExport.alertBridgeContract.blockerCatalog.includes('nonmember_denied'))
 assert.deepEqual(alertTermsExport.alertBridgeContract.typedBlockers, [])
@@ -884,6 +908,26 @@ assert.deepEqual(memberAlertTermsExport.alertBridgeContract.memberProvenance, {
 })
 assert.ok(memberAlertTermsExport.activeTerms.every((term: Row) => term.alertGenerationRef.dedupe.key === term.alertGeneratorKey))
 
+const alertTermsRetryResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-alert-terms-ready-retry`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(alertTermsRetryResponse.statusCode, 200, alertTermsRetryResponse.body)
+const alertTermsRetryExport = parseBody(alertTermsRetryResponse.body).alertTermsExport
+assert.deepEqual(
+    alertTermsRetryExport.activeTerms.map((term: Row) => ({
+        watchlistItemId: term.watchlistItemId,
+        alertGeneratorKey: term.alertGeneratorKey,
+        alertGenerationRef: term.alertGenerationRef,
+    })),
+    alertTermsExport.activeTerms.map((term: Row) => ({
+        watchlistItemId: term.watchlistItemId,
+        alertGeneratorKey: term.alertGeneratorKey,
+        alertGenerationRef: term.alertGenerationRef,
+    }))
+)
+
 assert.equal(readiness.generatedAlertReferences.length, 5)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
 assert.ok(domainReference)
@@ -896,6 +940,7 @@ assert.equal(domainReference.alert.tenantId, organization.id)
 assert.equal(domainReference.alert.watchlistItemId, domainReference.watchlistItemId)
 assert.equal(domainReference.alert.watchlist.id, domainReference.watchlistItemId)
 assert.equal(domainReference.alert.route, 'organization_watchlist')
+assert.equal(domainReference.alert.casePath, `/dashboard/dwm?organizationId=${encodeURIComponent(organization.id)}&watchlistItemId=${encodeURIComponent(domainReference.watchlistItemId)}`)
 assert.equal(domainReference.alert.defaultWebhookPolicy, 'manual_selection')
 assert.equal(domainReference.alert.alertVisibilityPolicy, 'admins')
 assert.equal(domainReference.alert.memberCount, 4)

@@ -212,6 +212,7 @@ export type OrganizationWatchlistAlertBridgeBlockerCode =
     | 'missing_org_tenant'
     | 'revoked_member_denied'
     | 'no_alert_ref'
+    | 'no_case_route'
     | 'support_only_access'
     | 'nonmember_denied'
 
@@ -235,9 +236,34 @@ export type OrganizationWatchlistAlertBridgeContract = {
         blockerCode: 'support_only_access'
         message: string
     }
+    supportVisibility: {
+        mode: 'redacted_summary_only'
+        contract: 'admin_support'
+        safeFields: string[]
+        redactedFields: string[]
+        message: string
+    }
     deniedAccess: {
         nonmember: 'nonmember_denied'
         revokedMember: 'revoked_member_denied'
+    }
+    caseRouteExpectation: {
+        route: 'organization_watchlist'
+        pathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        queryFields: ['organizationId', 'watchlistItemId']
+        blockerCode: 'no_case_route'
+    }
+    redactedSummary: {
+        schemaVersion: 'organization.watchlist_alert_bridge_redacted_summary.v1'
+        organizationId: string
+        tenantId: string
+        activeTermCount: number
+        termFamilies: WatchlistKind[]
+        pausedCount: number
+        archivedCount: number
+        visibilityPolicy: OrganizationAlertVisibilityPolicy
+        allowedViewerRoles: OrganizationRole[]
+        containsRawTerms: false
     }
     requiredFields: string[]
     alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key'
@@ -951,9 +977,51 @@ export function organizationWatchlistAlertTermsExport(
                 blockerCode: 'support_only_access',
                 message: 'Support users must inspect org watchlist alert exports through the admin support contract, not member-scoped org routes.',
             },
+            supportVisibility: {
+                mode: 'redacted_summary_only',
+                contract: 'admin_support',
+                safeFields: [
+                    'organizationId',
+                    'tenantId',
+                    'activeTermCount',
+                    'termFamilies',
+                    'pausedCount',
+                    'archivedCount',
+                    'visibilityPolicy',
+                    'allowedViewerRoles',
+                ],
+                redactedFields: [
+                    'member.userId',
+                    'activeTerms[].term',
+                    'activeTerms[].value',
+                    'activeTerms[].terms',
+                    'activeTerms[].alertGenerationRef.term',
+                    'activeTerms[].alertGenerationRef.lifecycle.createdBy',
+                    'activeTerms[].alertGenerationRef.lifecycle.updatedBy',
+                ],
+                message: 'Support/admin consumers should use this summary unless an approved support action contract grants scoped member-visible inspection.',
+            },
             deniedAccess: {
                 nonmember: 'nonmember_denied',
                 revokedMember: 'revoked_member_denied',
+            },
+            caseRouteExpectation: {
+                route: 'organization_watchlist',
+                pathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+                queryFields: ['organizationId', 'watchlistItemId'],
+                blockerCode: 'no_case_route',
+            },
+            redactedSummary: {
+                schemaVersion: 'organization.watchlist_alert_bridge_redacted_summary.v1',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                activeTermCount: activeTerms.length,
+                termFamilies: alertGeneration.termFamilies,
+                pausedCount,
+                archivedCount,
+                visibilityPolicy: alertGeneration.visibilityPolicy,
+                allowedViewerRoles: alertGeneration.allowedViewerRoles,
+                containsRawTerms: false,
             },
             requiredFields: [
                 'organizationId',
@@ -968,6 +1036,8 @@ export function organizationWatchlistAlertTermsExport(
                 'activeTerms[].alertGenerationRef',
                 'activeTerms[].alertGenerationRef.dedupe.key',
                 'activeTerms[].alertGeneratorKey',
+                'alertBridgeContract.caseRouteExpectation.pathTemplate',
+                'alertBridgeContract.redactedSummary',
             ],
             alertGeneratorKeyExpectation: 'alertGenerationRef.dedupe.key',
             typedBlockers,
@@ -978,6 +1048,7 @@ export function organizationWatchlistAlertTermsExport(
                 'missing_org_tenant',
                 'revoked_member_denied',
                 'no_alert_ref',
+                'no_case_route',
                 'support_only_access',
                 'nonmember_denied',
             ],
