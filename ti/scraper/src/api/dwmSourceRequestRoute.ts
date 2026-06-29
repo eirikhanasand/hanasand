@@ -3132,6 +3132,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3451,6 +3452,11 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertEvidenceHandoff,
     alertGenerationConsumerHandoff
   });
+  const sourceOperationsHandoff = sourceActorPublicTiSourceOperationsHandoff({
+    query,
+    actorReadiness,
+    consumerProofLedger
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3489,12 +3495,102 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertEvidenceHandoff,
     alertGenerationConsumerHandoff,
     consumerProofLedger,
-    sourceOperationsHandoff: sourceActorPublicTiSourceOperationsHandoff({
+    sourceOperationsHandoff,
+    downstreamFixtureExport: sourceActorPublicTiDownstreamFixtureExport({
       query,
       actorReadiness,
-      consumerProofLedger
+      consumerProofLedger,
+      alertGenerationConsumerHandoff,
+      sourceOperationsHandoff
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiDownstreamFixtureExport(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  consumerProofLedger: Record<string, any>;
+  alertGenerationConsumerHandoff: Record<string, any>;
+  sourceOperationsHandoff: Record<string, any>;
+}) {
+  const rows = (input.consumerProofLedger.rows ?? []).map((row: any) => ({
+    schemaVersion: "ti.public_actor.downstream_fixture_row.v1",
+    proofId: stableId("ti_public_actor_downstream_fixture_row", `${input.query}:${row.family}:${row.state}:${row.parserStatus?.state}:${row.consumers?.alertGeneration?.ready === true}`),
+    query: input.query,
+    sourceFamily: row.family,
+    state: row.state,
+    parserStatus: row.parserStatus,
+    confidence: row.confidence,
+    confidenceTier: row.confidenceTier,
+    timestamps: row.timestamps,
+    provenance: {
+      evidenceProofId: row.provenance?.evidenceProofId,
+      sourceHealthProofId: row.provenance?.sourceHealthProofId,
+      parserProofId: row.provenance?.parserProofId,
+      intakeProofId: row.provenance?.intakeProofId,
+      sourceIds: row.provenance?.sourceIds ?? [],
+      candidateIds: row.provenance?.candidateIds ?? [],
+      privacyBoundary: row.provenance?.privacyBoundary
+    },
+    consumers: {
+      publicTi: row.consumers?.publicTi,
+      alertGeneration: row.consumers?.alertGeneration
+    },
+    gap: row.gap,
+    blockers: row.blockers ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  }));
+  return {
+    schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
+    proofId: stableId("ti_public_actor_downstream_fixture_export", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.parserStatus?.state}`).join(",")}`),
+    query: input.query,
+    mode: "no_network_fixture",
+    generatedFrom: {
+      actorReadinessProofId: input.actorReadiness.proofId,
+      consumerProofLedgerId: input.consumerProofLedger.proofId,
+      alertGenerationHandoffId: input.alertGenerationConsumerHandoff.proofId,
+      sourceOperationsHandoffId: input.sourceOperationsHandoff.proofId
+    },
+    publicTiContract: {
+      path: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
+      requiredFields: ["sourceFamily", "parserStatus", "confidence", "timestamps", "provenance", "gap", "safeOutput"]
+    },
+    alertGenerationContract: {
+      path: "/v1/dwm/alerts/rebuild",
+      requiredFields: ["sourceFamily", "consumers.alertGeneration", "provenance.evidenceProofId", "parserStatus", "blockers"]
+    },
+    rows,
+    operations: (input.sourceOperationsHandoff.operations ?? []).map((operation: any) => ({
+      operationId: operation.operationId,
+      type: operation.type,
+      family: operation.family,
+      priority: operation.priority,
+      route: operation.route,
+      blockers: operation.blockers ?? [],
+      safeOutput: operation.safeOutput
+    })),
+    summary: {
+      rowCount: rows.length,
+      publicTiReadyFamilies: input.consumerProofLedger.summary?.publicTiReadyFamilies ?? [],
+      alertReadyFamilies: input.consumerProofLedger.summary?.alertReadyFamilies ?? [],
+      gapFamilies: input.consumerProofLedger.summary?.gapFamilies ?? [],
+      retryFamilies: input.consumerProofLedger.summary?.retryFamilies ?? [],
+      operationTypes: input.sourceOperationsHandoff.summary?.actionTypes ?? [],
+      latestCaptureAt: input.consumerProofLedger.summary?.latestCaptureAt,
+      latestEnrichmentAt: input.consumerProofLedger.summary?.latestEnrichmentAt
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
