@@ -1,6 +1,7 @@
 import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
+import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
 import { json, readJson } from "./http.ts";
@@ -1379,6 +1380,17 @@ function buildDwmAlertQueueVisibility(input: {
   ].filter(Boolean));
   const watchlistItemIds = uniqueAlertStrings(input.alerts.flatMap((alert: any) => alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? []));
   const alertGeneratorKeys = uniqueAlertStrings(input.alerts.flatMap((alert: any) => alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? []));
+  const orgAlertWorkflowBridge = buildOrgAlertWorkflowBridgeReport({
+    tenantId: input.tenantId,
+    organizationId: input.organizationId ?? input.tenantId,
+    watchlists: orgAlertWorkflowBridgeRefs({
+      watchlists: (input.options.store as any).listDwmWatchlists?.() ?? [],
+      tenantId: input.tenantId,
+      organizationId: input.organizationId
+    }),
+    alerts: input.alerts,
+    checkedAt: nowIso()
+  });
   return {
     schemaVersion: "dwm.org_alert_queue_visibility.v1",
     organizationId: input.organizationId,
@@ -1420,6 +1432,7 @@ function buildDwmAlertQueueVisibility(input: {
       zeroAlertProof: generationReadiness.zeroAlertProof
     },
     zeroAlertProof: generationReadiness.zeroAlertProof,
+    orgAlertWorkflowBridge,
     consumerContract: {
       schemaVersion: "dwm.alert_queue_consumer_contract.v1",
       route: "/v1/dwm/alerts",
@@ -1432,6 +1445,7 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].alertEventSummary",
         "alerts[].evidenceFreshness",
         "alerts[].provenanceFreshness",
+        "alertQueueVisibility.orgAlertWorkflowBridge",
         "alertQueueVisibility.zeroAlertProof",
         "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
       ],
@@ -1467,6 +1481,33 @@ function buildDwmAlertQueueVisibility(input: {
     safeForDashboard: true,
     nonmemberEnumeration: false
   };
+}
+
+function orgAlertWorkflowBridgeRefs(input: {
+  watchlists: DwmWatchlist[];
+  tenantId: string;
+  organizationId?: string;
+}) {
+  return input.watchlists
+    .filter((watchlist: any) => watchlist.tenantId === input.tenantId && (!input.organizationId || watchlist.organizationId === input.organizationId))
+    .flatMap((watchlist: any) => (watchlist.terms ?? []).map((term: any, index: number) => {
+      const value = String(term.value ?? term.term ?? "").trim();
+      const normalizedTerm = String(term.normalizedTerm ?? value).trim().toLowerCase();
+      const watchlistItemId = String(term.id ?? term.itemId ?? term.watchlistItemId ?? `${watchlist.id}:${index}:${normalizedTerm}`);
+      const termFamily = String(term.kind ?? term.termFamily ?? term.category ?? "unknown").trim().toLowerCase();
+      const alertGenerationRef = term.alertGenerationRef ?? term.alertGenerationReference;
+      return {
+        watchlistId: String(alertGenerationRef?.watchlistId ?? term.watchlistId ?? watchlist.id),
+        watchlistItemId: String(alertGenerationRef?.watchlistItemId ?? watchlistItemId),
+        tenantId: String(alertGenerationRef?.tenantId ?? term.tenantId ?? watchlist.tenantId),
+        organizationId: String(alertGenerationRef?.organizationId ?? term.organizationId ?? watchlist.organizationId ?? input.organizationId ?? watchlist.tenantId),
+        term: String(alertGenerationRef?.term ?? value),
+        normalizedTerm: String(alertGenerationRef?.normalizedTerm ?? normalizedTerm),
+        status: String(alertGenerationRef?.status ?? watchlist.status ?? "active"),
+        alertGeneratorKey: String(term.alertGeneratorKey ?? alertGenerationRef?.dedupe?.key ?? `org:${watchlist.organizationId ?? input.organizationId ?? watchlist.tenantId}:watchlist:${watchlistItemId}:${termFamily}:${normalizedTerm}`)
+      };
+    }))
+    .filter((row: any) => row.term.length > 0);
 }
 
 function dwmAlertQueueAllowedActions(role: string, readOnly: boolean): string[] {

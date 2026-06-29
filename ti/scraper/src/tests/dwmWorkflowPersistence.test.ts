@@ -939,6 +939,27 @@ describe("dwm workflow persistence", () => {
         filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily"]),
         zeroAlertContract: "dwm.zero_alert_proof.v1"
       },
+      orgAlertWorkflowBridge: {
+        schemaVersion: "dwm.org_alert_workflow_bridge.v1",
+        ok: true,
+        organizationId: alphaOrg.id,
+        rows: [expect.objectContaining({
+          watchlistId: "watch_workflow_alpha_acme",
+          watchlistItemId: "watch_item_workflow_alpha_acme",
+          matchedAlertIds: [alphaDarkweb.id],
+          alertDetailPaths: [alphaDarkweb.alertDetailPath],
+          sourceFamilies: ["darkweb_metadata"],
+          eventPayloads: [expect.objectContaining({
+            alertId: alphaDarkweb.id,
+            organizationId: alphaOrg.id,
+            watchlistItemId: "watch_item_workflow_alpha_acme",
+            alertDetailPath: alphaDarkweb.alertDetailPath,
+            sourceFamilies: ["darkweb_metadata"],
+            captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
+          })],
+          blockerCodes: []
+        })]
+      },
       generationReadiness: {
         sourceFamilyCoverage: expect.arrayContaining([
           expect.objectContaining({ sourceFamily: "darkweb_metadata", captureRefCount: 2 }),
@@ -950,6 +971,7 @@ describe("dwm workflow persistence", () => {
       "alerts[].alertDetailPath",
       "alerts[].alertEventSummary",
       "alerts[].evidenceFreshness",
+      "alertQueueVisibility.orgAlertWorkflowBridge",
       "alertQueueVisibility.zeroAlertProof",
       "alertQueueVisibility.generationReadiness.sourceFamilyCoverage"
     ]));
