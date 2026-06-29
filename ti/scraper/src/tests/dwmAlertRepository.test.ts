@@ -386,6 +386,25 @@ describe("dwm alert repository", () => {
       recommendedRoute: "identity_response",
       hasWebhookRoute: true
     });
+    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertCreatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_created_event.v1",
+      eventType: "dwm.alert.created",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      sourceFamily: "telegram_public",
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      captureIds: ["cap_repo_tg_acme"],
+      evidenceCount: 1,
+      dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
+      recommendedRoute: "identity_response",
+      confidenceReasoning: expect.arrayContaining([expect.stringContaining("Watchlist term matched")]),
+      provenance: expect.objectContaining({
+        matchBasis: "watchlist_capture_text",
+        captureIds: ["cap_repo_tg_acme"]
+      })
+    });
+    expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertEvents).toHaveLength(1);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.webhookContext).toMatchObject({
       organizationId: "org_repo_acme",
       visibilityPolicy: "admins",
@@ -456,6 +475,8 @@ describe("dwm alert repository", () => {
     expect(preserved?.assignedOwner).toBe("analyst-1");
     expect(preserved?.workflowNote).toBe("Owner suppressed this as a duplicate customer-domain decision.");
     expect(preserved?.workflowEvents).toHaveLength(1);
+    expect(preserved?.alertCreatedEvent).toEqual(existing.alertCreatedEvent);
+    expect(preserved?.alertEvents).toEqual(existing.alertEvents);
     expect(preserved?.caseId).toBe("case_existing_repo");
     expect(preserved?.replayCount).toBe(2);
     expect(preserved?.lastReplayedAt).toBe("2026-06-28T13:13:00.000Z");

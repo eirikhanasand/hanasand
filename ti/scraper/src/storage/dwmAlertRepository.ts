@@ -688,6 +688,14 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       existing,
       generatedAt: snapshot.generatedAt
     });
+    const alertCreatedEvent = existing?.alertCreatedEvent ?? buildDwmAlertCreatedEvent({
+      alert: scopedAlert,
+      alertId,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? existing?.organizationId,
+      workflowContext,
+      generatedAt: snapshot.generatedAt
+    });
     return input.store.saveDwmAlert({
       ...scopedAlert,
       id: alertId,
@@ -698,6 +706,8 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       workflowContext,
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
       deliveryReadinessContext,
+      alertCreatedEvent,
+      alertEvents: existing?.alertEvents ?? [alertCreatedEvent],
       caseIdCandidate: workflowContext.caseIdCandidate,
       caseId: existing?.caseId,
       casePath: existing?.casePath ?? workflowContext.casePath,
@@ -1804,6 +1814,44 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     confidenceReasoning: alert.confidenceReasoning ?? [],
     provenance: alert.provenance,
     claimSummary: alert.claimSummary
+  };
+}
+
+function buildDwmAlertCreatedEvent(input: {
+  alert: DwmAlert & Record<string, any>;
+  alertId: string;
+  tenantId: string;
+  organizationId?: string;
+  workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext> & Record<string, any>;
+  generatedAt: string;
+}) {
+  const captureIds = uniqueStrings(input.workflowContext.captureIds ?? input.alert.provenance?.captureIds ?? []);
+  const dedupeKey = String(input.alert.dedupeKey ?? input.alert.webhookDelivery?.dedupeKey);
+  return {
+    schemaVersion: "dwm.alert_created_event.v1",
+    id: stableId("dwm_alert_created_event", `${input.tenantId}:${input.organizationId ?? ""}:${input.alertId}:${dedupeKey}`),
+    eventType: "dwm.alert.created",
+    at: input.generatedAt,
+    alertId: input.alertId,
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    sourceFamily: input.alert.sourceFamily,
+    watchlistIds: input.workflowContext.watchlistIds ?? [],
+    watchlistItemIds: input.workflowContext.watchlistItemIds ?? [],
+    alertGeneratorKeys: input.workflowContext.alertGeneratorKeys ?? [],
+    captureIds,
+    primaryCaptureId: captureIds[0],
+    evidenceCount: Number(input.workflowContext.evidenceCount ?? input.alert.evidence?.length ?? 0),
+    dedupeKey,
+    deliveryDedupeKey: String(input.alert.webhookDelivery?.dedupeKey ?? dedupeKey),
+    recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
+    confidence: input.alert.confidence,
+    confidenceReasoning: input.alert.confidenceReasoning ?? [],
+    provenance: {
+      matchBasis: input.alert.provenance?.matchBasis,
+      captureIds: input.alert.provenance?.captureIds ?? captureIds,
+      sourceIds: input.alert.provenance?.sourceIds ?? []
+    }
   };
 }
 

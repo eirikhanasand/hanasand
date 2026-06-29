@@ -192,7 +192,21 @@ describe("dwm workflow persistence", () => {
 
       expect(detailResponse.status).toBe(200);
       expect(detail.alert.id).toBe(rebuild.alerts[0].id);
+      expect(detail.alert.alertCreatedEvent).toMatchObject({
+        schemaVersion: "dwm.alert_created_event.v1",
+        eventType: "dwm.alert.created",
+        alertId: rebuild.alerts[0].id,
+        tenantId: "tenant_acme",
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      });
       expect(detail.evidenceReplay[0]).toMatchObject({ sourceName: "Workflow public Telegram", contentHash: "hash-workflow-acme" });
+      expect(detail.timeline[0]).toMatchObject({
+        type: "alert_created",
+        title: "Alert created"
+      });
       expect(detail.timeline.length).toBeGreaterThanOrEqual(2);
       expect(detail.nextActions).toContain("Send the customer webhook.");
 

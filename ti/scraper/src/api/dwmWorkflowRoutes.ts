@@ -1111,7 +1111,13 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
   const timeline = [
-    alert.savedAt ? { id: `${alert.id}:saved`, at: alert.savedAt, type: "saved", title: "Alert saved", detail: "Match saved to the customer queue." } : undefined,
+    alert.alertCreatedEvent ? {
+      id: alert.alertCreatedEvent.id,
+      at: alert.alertCreatedEvent.at,
+      type: "alert_created",
+      title: "Alert created",
+      detail: `${String(alert.alertCreatedEvent.sourceFamily ?? alert.sourceFamily).replaceAll("_", " ")} match saved with ${Number(alert.alertCreatedEvent.evidenceCount ?? 0)} evidence item(s).`
+    } : alert.savedAt ? { id: `${alert.id}:saved`, at: alert.savedAt, type: "saved", title: "Alert saved", detail: "Match saved to the customer queue." } : undefined,
     ...events.map((event: any) => ({
       id: event.id,
       at: event.at,
