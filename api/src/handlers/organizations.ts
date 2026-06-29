@@ -1011,6 +1011,13 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
                   WHERE organizations.id = organization_invites.organization_id
                     AND COALESCE(organizations.status, 'active') = 'active'
               )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM organization_members
+                  WHERE organization_members.organization_id = organization_invites.organization_id
+                    AND organization_members.user_id = $2
+                    AND organization_members.status = 'removed'
+              )
             RETURNING *
         ),
         member AS (
@@ -1065,9 +1072,19 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
                 LIMIT 1
             `, [invite.organization_id])
             : { rows: [] }
+        const memberStatusResult = invite
+            ? await run(`
+                SELECT status
+                FROM organization_members
+                WHERE organization_id = $1
+                  AND user_id = $2
+                LIMIT 1
+            `, [invite.organization_id, userId])
+            : { rows: [] }
         const denial = organizationInviteAcceptanceDenial({
             invite,
             organizationStatus: organizationStatusResult.rows[0]?.status,
+            memberStatus: memberStatusResult.rows[0]?.status,
             requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
         })
         if (invite) {

@@ -4649,6 +4649,7 @@ export function toInvite(row: OrganizationInviteRow) {
 export function organizationInviteAcceptanceDenial(input: {
     invite?: OrganizationInviteRow | null
     organizationStatus?: OrganizationLifecycleStatus | null
+    memberStatus?: OrganizationMemberRow['status'] | null
     requestId?: string | null
 }) {
     const status = input.invite?.status ?? null
@@ -4661,11 +4662,13 @@ export function organizationInviteAcceptanceDenial(input: {
                 ? 'org_deleted'
                 : status === 'accepted'
                     ? 'invite_already_accepted'
-                    : status === 'revoked'
+                    : input.memberStatus === 'removed'
                         ? 'member_revoked'
-                        : Date.parse(input.invite.expires_at) <= Date.now()
-                            ? 'invite_expired'
-                            : 'invite_not_pending'
+                        : status === 'revoked'
+                            ? 'member_revoked'
+                            : Date.parse(input.invite.expires_at) <= Date.now()
+                                ? 'invite_expired'
+                                : 'invite_not_pending'
 
     return {
         schemaVersion: 'organization.invite_acceptance_denial.v1' as const,
@@ -4675,8 +4678,10 @@ export function organizationInviteAcceptanceDenial(input: {
         acceptanceToken: input.invite?.id ?? null,
         inviteStatus: status,
         organizationStatus,
+        memberStatus: input.memberStatus ?? null,
         blockerCode,
         statusCode: input.invite ? 409 : 404,
+        removedMemberDenied: input.memberStatus === 'removed',
         nonmemberEnumeration: false as const,
         safeFields: [
             'schemaVersion',
@@ -4685,6 +4690,7 @@ export function organizationInviteAcceptanceDenial(input: {
             'inviteId',
             'inviteStatus',
             'organizationStatus',
+            'memberStatus',
             'blockerCode',
             'requestId',
         ],

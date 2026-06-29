@@ -3664,6 +3664,36 @@ const removeViewerResponse = await app.inject({
 assert.equal(removeViewerResponse.statusCode, 200, removeViewerResponse.body)
 assert.equal(parseBody(removeViewerResponse.body).member.status, 'removed')
 
+const staleRemovedViewerInvite = nowRow({
+    id: 'stale-removed-viewer-invite',
+    organization_id: organization.id,
+    email: 'viewer@example.test',
+    role: 'member',
+    invited_by: 'org_smoke_owner',
+    status: 'pending',
+    accepted_at: null,
+    accepted_by: null,
+    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+})
+invites.set(staleRemovedViewerInvite.id, staleRemovedViewerInvite)
+const staleRemovedViewerAcceptResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${staleRemovedViewerInvite.id}/accept`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(staleRemovedViewerAcceptResponse.statusCode, 409, staleRemovedViewerAcceptResponse.body)
+const staleRemovedViewerAcceptDenial = parseBody(staleRemovedViewerAcceptResponse.body).inviteAcceptanceDenial
+assert.equal(staleRemovedViewerAcceptDenial.schemaVersion, 'organization.invite_acceptance_denial.v1')
+assert.equal(staleRemovedViewerAcceptDenial.organizationId, organization.id)
+assert.equal(staleRemovedViewerAcceptDenial.inviteId, staleRemovedViewerInvite.id)
+assert.equal(staleRemovedViewerAcceptDenial.inviteStatus, 'pending')
+assert.equal(staleRemovedViewerAcceptDenial.memberStatus, 'removed')
+assert.equal(staleRemovedViewerAcceptDenial.blockerCode, 'member_revoked')
+assert.equal(staleRemovedViewerAcceptDenial.removedMemberDenied, true)
+assert.equal(staleRemovedViewerAcceptDenial.nonmemberEnumeration, false)
+assert.ok(staleRemovedViewerAcceptDenial.safeFields.includes('memberStatus'))
+assert.ok(staleRemovedViewerAcceptDenial.noLeakFields.includes('otherOrg.members'))
+
 const removedViewerInviteResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/invites`,
@@ -3749,6 +3779,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === invite.id && log.metadata.blockerCode === 'invite_already_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === pendingOpsInvite.id && log.metadata.blockerCode === 'member_revoked'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === expiredInvite.id && log.metadata.blockerCode === 'invite_expired'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_invite_acceptance_denied' && log.metadata.inviteId === staleRemovedViewerInvite.id && log.metadata.blockerCode === 'member_revoked'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_action_denied' && log.metadata.inviteId === invite.id && log.metadata.requestId === 'smoke-accepted-revoke-denied' && log.metadata.blockerCode === 'invite_already_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_management_denied' && log.metadata.requestId === 'smoke-member-invite-list-denied' && log.metadata.action === 'list_invites' && log.metadata.actorRole === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_management_denied' && log.metadata.requestId === 'smoke-member-invite-create-denied' && log.metadata.action === 'create_invite' && log.metadata.actorRole === 'member'))
@@ -3892,6 +3923,8 @@ async function fakeRun(query: string, params: any[] = []) {
         if (!invite || invite.status !== 'pending' || Date.parse(invite.expires_at) <= Date.now()) return rows([])
         const organization = organizations.get(invite.organization_id)
         if (!organization || (organization.status ?? 'active') !== 'active') return rows([])
+        const existingMember = members.get(memberKey(invite.organization_id, userId))
+        if (existingMember?.status === 'removed') return rows([])
         const acceptedAt = iso()
         const acceptedInvite = { ...invite, status: 'accepted', accepted_by: userId, accepted_at: acceptedAt }
         invites.set(inviteId, acceptedInvite)
@@ -3921,6 +3954,12 @@ async function fakeRun(query: string, params: any[] = []) {
             joined_at: member.joined_at,
             member_created_at: member.created_at,
         }])
+    }
+
+    if (compact.startsWith('SELECT status FROM organization_members')) {
+        const [organizationId, userId] = params
+        const member = members.get(memberKey(organizationId, userId))
+        return rows(member ? [{ status: member.status }] : [])
     }
 
     if (compact.includes('FROM organization_members om JOIN users u') && compact.includes('AND om.user_id = $2')) {
