@@ -20,6 +20,7 @@ import {
     organizationDownstreamAuthorizationExport,
     organizationReadinessProof,
     organizationSettingsFromRow,
+    organizationSharedWatchlistDownstreamProof,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
     organizationWatchlistAlertTermsExport,
@@ -985,6 +986,10 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
         alertGenerationBridge,
         downstreamAuthorization,
     })
+    const sharedWatchlistDownstreamProof = organizationSharedWatchlistDownstreamProof(bridgeOrganization, watchlistItems, {
+        userId,
+        role: organization.role ?? 'viewer',
+    }, alertGenerationBridge, downstreamAuthorization)
 
     return res.send({
         organization: toOrganization(organization),
@@ -1007,6 +1012,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             teamOnboardingReadiness,
             lifecycleReadiness,
             readinessProof,
+            sharedWatchlistDownstreamProof,
             alertGenerationBridge,
             downstreamAuthorization,
             watchlistItemCount: generatedAlertReferences.length,

@@ -458,6 +458,82 @@ export type OrganizationDownstreamAuthorizationExport = {
     }
 }
 
+export type OrganizationSharedWatchlistDownstreamProof = {
+    schemaVersion: 'organization.shared_watchlist_downstream_proof.v1'
+    organizationId: string
+    tenantId: string
+    ownerOrganizationId: string
+    actor: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+        canManageWatchlists: boolean
+        canExportActiveTerms: boolean
+        allowedActions: OrganizationAlertCaseAction[]
+    }
+    inviteLifecycle: {
+        pendingInviteCount: number
+        acceptedInviteCreatesMembership: true
+        acceptedInviteRevocationBlocked: true
+        expiredInviteBlocker: 'invite_expired'
+        revokedInviteBlocker: 'member_revoked'
+        removedMemberReinviteBlocked: true
+        deactivatedUserInviteBlocked: true
+    }
+    watchlistOwnership: {
+        activeIds: string[]
+        pausedIds: string[]
+        archivedIds: string[]
+        activeCount: number
+        pausedCount: number
+        archivedCount: number
+        ownerOrganizationId: string
+        isolatedByOrganizationId: true
+        duplicateTermScope: 'organization'
+        lifecycleStatuses: Array<{
+            watchlistItemId: string
+            organizationId: string
+            status: OrganizationWatchlistStatus
+            createdBy: string
+            updatedBy: string | null
+        }>
+    }
+    alertBridge: {
+        route: 'organization_watchlist'
+        canGenerateAlerts: boolean
+        activeWatchlistItemIds: string[]
+        alertGeneratorKeys: string[]
+        alertGenerationRefField: 'activeTerms[].alertGenerationRef'
+        dedupeScope: 'organization_watchlist_term'
+        expectedAlertFields: string[]
+        blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[]
+    }
+    caseBridge: {
+        route: 'POST /v1/cases'
+        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        expectedCaseFields: string[]
+        allowedActions: OrganizationAlertCaseAction[]
+        blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[]
+    }
+    webhookBridge: {
+        route: 'POST /v1/dwm/webhooks/deliver'
+        defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+        canUseDefaultDestinations: boolean
+        expectedDeliveryFields: string[]
+        blockerCodes: string[]
+    }
+    integration: {
+        expectedAdapter: 'organizationSharedWatchlistDownstreamProof'
+        payloadShape: string[]
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+        routeHandlers: string[]
+        storageModules: string[]
+        nonmemberEnumeration: false
+        containsRawTerms: false
+    }
+    blockers: string[]
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -473,6 +549,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     recommendedDownstreamRoute: 'organization_watchlist'
     alertBridgeContract: OrganizationWatchlistAlertBridgeContract
     downstreamAuthorization: OrganizationDownstreamAuthorizationExport
+    sharedWatchlistDownstreamProof: OrganizationSharedWatchlistDownstreamProof
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -1122,6 +1199,152 @@ export function organizationDownstreamAuthorizationExport(
             nonmember: 'nonmember_denied',
             roleNotAllowed: 'role_not_allowed',
         },
+    }
+}
+
+export function organizationSharedWatchlistDownstreamProof(
+    organization: Pick<OrganizationRow, 'id' | 'status' | 'pending_invite_count' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
+    items: OrganizationWatchlistRow[],
+    member: { userId: string, role: OrganizationRole },
+    alertGeneration: OrganizationWatchlistAlertGenerationContract,
+    downstreamAuthorization: OrganizationDownstreamAuthorizationExport
+): OrganizationSharedWatchlistDownstreamProof {
+    const watchlistStates = organizationWatchlistTerms(items)
+    const activeTerms = alertGeneration.activeWatchlistTerms
+    const activeIds = watchlistStates.filter(state => state.status === 'active').map(state => state.watchlistItemId)
+    const pausedIds = watchlistStates.filter(state => state.status === 'paused').map(state => state.watchlistItemId)
+    const archivedIds = watchlistStates.filter(state => state.status === 'archived').map(state => state.watchlistItemId)
+    const alertGeneratorKeys = activeTerms.map(term => organizationWatchlistAlertGenerationRef(term).dedupe.key)
+    const alertBlockers = Array.from(new Set([
+        ...alertGeneration.blockedReasons,
+        ...downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+    ])) as OrganizationWatchlistAlertBridgeBlockerCode[]
+    const caseBlockers = Array.from(new Set([
+        ...alertBlockers,
+        ...(!downstreamAuthorization.allowedActions.includes('link_case') ? ['role_not_allowed' as const] : []),
+    ]))
+    const webhookBlockers = Array.from(new Set([
+        ...alertBlockers,
+        downstreamAuthorization.downstream.webhook.denialReason,
+        downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
+    ].filter(Boolean).map(String)))
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_downstream_proof.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        actor: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+            canManageWatchlists: roleCanWriteWatchlist(member.role),
+            canExportActiveTerms: downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms,
+            allowedActions: downstreamAuthorization.allowedActions,
+        },
+        inviteLifecycle: {
+            pendingInviteCount: Number(organization.pending_invite_count ?? 0),
+            acceptedInviteCreatesMembership: true,
+            acceptedInviteRevocationBlocked: true,
+            expiredInviteBlocker: 'invite_expired',
+            revokedInviteBlocker: 'member_revoked',
+            removedMemberReinviteBlocked: true,
+            deactivatedUserInviteBlocked: true,
+        },
+        watchlistOwnership: {
+            activeIds,
+            pausedIds,
+            archivedIds,
+            activeCount: activeIds.length,
+            pausedCount: pausedIds.length,
+            archivedCount: archivedIds.length,
+            ownerOrganizationId: organization.id,
+            isolatedByOrganizationId: true,
+            duplicateTermScope: 'organization',
+            lifecycleStatuses: watchlistStates.map(term => ({
+                watchlistItemId: term.watchlistItemId,
+                organizationId: term.organizationId,
+                status: term.status,
+                createdBy: term.createdBy,
+                updatedBy: term.updatedBy,
+            })),
+        },
+        alertBridge: {
+            route: 'organization_watchlist',
+            canGenerateAlerts: alertGeneration.canGenerateAlerts,
+            activeWatchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+            alertGeneratorKeys,
+            alertGenerationRefField: 'activeTerms[].alertGenerationRef',
+            dedupeScope: 'organization_watchlist_term',
+            expectedAlertFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.alertGenerationRefs',
+                'workflowContext.alertGeneratorKeys',
+                'workflowContext.watchlistTermContexts',
+                'casePath',
+            ],
+            blockerCodes: alertBlockers,
+        },
+        caseBridge: {
+            route: 'POST /v1/cases',
+            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+            expectedCaseFields: [
+                'organizationId',
+                'tenantId',
+                'alertId',
+                'casePath',
+                'watchlistItemIds',
+                'allowedActions',
+                'visibilityDecision',
+            ],
+            allowedActions: downstreamAuthorization.allowedActions,
+            blockerCodes: caseBlockers,
+        },
+        webhookBridge: {
+            route: 'POST /v1/dwm/webhooks/deliver',
+            defaultWebhookPolicy: downstreamAuthorization.downstream.webhook.defaultPolicy,
+            canUseDefaultDestinations: downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+            expectedDeliveryFields: [
+                'organizationId',
+                'alertId',
+                'webhookDestinationIds',
+                'watchlistItemIds',
+                'deliveryId',
+                'casePath',
+                'auditEventContracts',
+            ],
+            blockerCodes: webhookBlockers,
+        },
+        integration: {
+            expectedAdapter: 'organizationSharedWatchlistDownstreamProof',
+            payloadShape: [
+                'organizationId',
+                'tenantId',
+                'actor.role',
+                'watchlistOwnership.activeIds',
+                'watchlistOwnership.lifecycleStatuses',
+                'alertBridge.alertGeneratorKeys',
+                'alertBridge.expectedAlertFields',
+                'caseBridge.expectedCaseFields',
+                'webhookBridge.expectedDeliveryFields',
+                'inviteLifecycle.pendingInviteCount',
+            ],
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+            routeHandlers: [
+                'api/src/handlers/organizations.ts',
+                'ti/scraper/src/api/dwmWorkflowRoutes.ts',
+                'ti/scraper/src/api/caseRoutes.ts',
+            ],
+            storageModules: [
+                'api/src/utils/organizations.ts',
+                'ti/scraper/src/storage/dwmAlertRepository.ts',
+            ],
+            nonmemberEnumeration: false,
+            containsRawTerms: false,
+        },
+        blockers: Array.from(new Set([...alertBlockers, ...caseBlockers, ...webhookBlockers])).sort(),
     }
 }
 
@@ -1941,6 +2164,7 @@ export function organizationWatchlistAlertTermsExport(
             ],
         },
         activeTerms,
+        sharedWatchlistDownstreamProof: organizationSharedWatchlistDownstreamProof(organization, items, member, alertGeneration, downstreamAuthorization),
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
