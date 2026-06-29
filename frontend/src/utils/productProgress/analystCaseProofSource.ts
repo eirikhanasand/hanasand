@@ -61,6 +61,50 @@ export function analystCasePayloadFromLedger(ledger: ProductAnalystCaseProofLedg
     }
 }
 
+export function analystCaseDetailPayloadFromLedger(ledger: ProductAnalystCaseProofLedger, caseId: string) {
+    const row = ledger.cases.find(item => item.id === caseId)
+    if (!row) return undefined
+    const updatedAt = row.updatedAt || row.createdAt || ledger.generatedAt
+    if (!updatedAt) return undefined
+
+    return {
+        schemaVersion: 'product.analyst_case_detail_proof.v1',
+        generatedAt: ledger.generatedAt || updatedAt,
+        access: {
+            mode: 'proof_ledger',
+            readOnly: true,
+            canMutate: false,
+        },
+        case: {
+            id: row.id,
+            alertId: row.alertId,
+            status: row.status,
+            assignedOwner: row.assignedOwner,
+            createdAt: row.createdAt || updatedAt,
+            updatedAt,
+        },
+        alert: {
+            id: row.alertId,
+        },
+        deliveries: [],
+        evidence: [],
+        timeline: [{
+            id: `${row.id}_proof_loaded`,
+            at: updatedAt,
+            title: 'Case proof loaded',
+            detail: 'Analyst case detail came from the product proof ledger.',
+            eventType: 'proof_ledger.case_detail',
+        }],
+        nextAllowedActions: [],
+        proofLedger: {
+            schemaVersion: ledger.schemaVersion,
+            generatedAt: ledger.generatedAt,
+            source: ledger.source,
+            ledgerPath: ledger.ledgerPath,
+        },
+    }
+}
+
 function parseJsonLedger(input: string | undefined, scope: { tenantId: string, organizationId?: string }) {
     if (!input?.trim()) return undefined
     try {
