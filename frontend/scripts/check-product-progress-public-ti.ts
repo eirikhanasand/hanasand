@@ -12,6 +12,9 @@ for (const token of [
     '/api/ti/search?q=${encoded}&limit=10',
     'publicTiAnswer',
     'evidenceLedgerReferences',
+    'ti.query.actionability.v1',
+    'actionabilityReady',
+    'handoffRouteCount',
     'ti.search.public_answer.v1',
 ]) {
     assert.ok(productProgressRouteSource.includes(token), `Product-progress route missing public-TI token: ${token}`)
@@ -46,6 +49,23 @@ globalThis.fetch = async (input: RequestInfo | URL) => {
                     { evidenceId: 'row_malpedia', sourceId: 'src_malpedia' },
                 ],
             },
+            actionability: {
+                schemaVersion: 'ti.query.actionability.v1',
+                watchlistCandidates: [{ kind: 'company', value: 'Apt49 supplier', reason: 'candidate exposure term' }],
+                watchlistMatches: [{ organizationId: 'org_acme', watchlistItemId: 'wli_acme', value: 'Apt49 supplier' }],
+                relatedAlerts: [{ id: 'alert_apt49', title: 'APT49 supplier mention', status: 'open' }],
+                relatedCases: [{ id: 'case_apt49', title: 'APT49 supplier review', status: 'open' }],
+                sourceProvenance: [
+                    { sourceId: 'src_aardvark', sourceName: 'Aardvark Infinity', provenance: 'https://example.test/aardvark' },
+                    { sourceId: 'src_malpedia', sourceName: 'Malpedia', provenance: 'https://example.test/malpedia', captureId: 'cap_malpedia' },
+                ],
+                enrichmentGaps: [{ id: 'capture-id-provenance' }],
+                handoffs: {
+                    watchlist: { method: 'POST', endpoint: '/api/organizations/:id/watchlists', missing: [] },
+                    alertRebuild: { method: 'POST', endpoint: '/v1/dwm/alerts/rebuild', missing: [] },
+                    caseCreate: { method: 'POST', endpoint: '/v1/cases', missing: [] },
+                },
+            },
             quality: { canPromoteToReady: true, publicWarningCodes: [] },
         })
     }
@@ -62,8 +82,43 @@ try {
     assert.equal(readyPayload.publicTiProvenance.query, 'apt49')
     assert.equal(readyPayload.publicTiProvenance.sourceCount, 2)
     assert.equal(readyPayload.publicTiProvenance.evidenceCount, 2)
-    assert.equal(readyPayload.publicTiProvenance.backendProofContractVersion, 'ti.search.public_answer.v1')
+    assert.equal(readyPayload.publicTiProvenance.actionabilityReady, true)
+    assert.equal(readyPayload.publicTiProvenance.sourceProvenanceCount, 2)
+    assert.equal(readyPayload.publicTiProvenance.watchlistCandidateCount, 1)
+    assert.equal(readyPayload.publicTiProvenance.dashboardHandoffCount, 3)
+    assert.equal(readyPayload.publicTiProvenance.handoffRouteCount, 3)
+    assert.equal(readyPayload.publicTiProvenance.backendProofContractVersion, 'ti.search.public_answer.v1 + ti.query.actionability.v1')
     assert.equal(readyPayload.publicTiProvenance.unavailableReason, undefined)
+
+    globalThis.fetch = async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/api/ti/search')) {
+            return jsonResponse({
+                query: 'apt49',
+                status: 'ready',
+                rows: [
+                    { id: 'row_aardvark', sourceId: 'src_aardvark', updatedAt: '2026-06-29T09:00:00.000Z' },
+                ],
+                publicTiAnswer: {
+                    status: 'ready',
+                    evidenceLedgerReferences: [
+                        { evidenceId: 'row_aardvark', sourceId: 'src_aardvark' },
+                    ],
+                },
+                quality: { canPromoteToReady: true, publicWarningCodes: [] },
+            })
+        }
+        if (url.includes('/api/ti/scraper/control')) {
+            return jsonResponse({ ok: false, generatedAt: '2026-06-29T09:00:00.000Z', query: 'apt49', baseConfigured: false })
+        }
+        return jsonResponse({}, { status: 503 })
+    }
+
+    const missingActionabilityResponse = await productProgressGet(request)
+    const missingActionabilityPayload = await missingActionabilityResponse.json()
+    assert.equal(missingActionabilityPayload.publicTiProvenance.status, 'needs_action')
+    assert.equal(missingActionabilityPayload.publicTiProvenance.actionabilityReady, false)
+    assert.ok(missingActionabilityPayload.publicTiProvenance.blockers.some((blocker: string) => blocker.includes('ti.query.actionability.v1')))
 
     globalThis.fetch = async (input: RequestInfo | URL) => {
         const url = String(input)
@@ -90,6 +145,7 @@ try {
     assert.equal(blockedPayload.publicTiProvenance.status, 'needs_action')
     assert.equal(blockedPayload.publicTiProvenance.unavailableReason, 'missing_public_ti_provenance_readiness_api')
     assert.ok(blockedPayload.publicTiProvenance.blockers.some((blocker: string) => blocker.includes('no evidence rows')))
+    assert.ok(blockedPayload.publicTiProvenance.blockers.some((blocker: string) => blocker.includes('ti.query.actionability.v1')))
 } finally {
     globalThis.fetch = originalFetch
 }

@@ -243,12 +243,40 @@ function publicTiProvenanceReadiness(input: {
             provenance?: Array<{ evidenceId?: string, sourceId?: string }>
         }
         quality?: { canPromoteToReady?: boolean, publicWarningCodes?: string[] }
+        actionability?: {
+            schemaVersion?: string
+            watchlistCandidates?: Array<{ value?: string }>
+            watchlistMatches?: Array<{ value?: string }>
+            relatedAlerts?: Array<{ id?: string }>
+            relatedCases?: Array<{ id?: string }>
+            sourceProvenance?: Array<{ sourceId?: string, provenance?: string, captureId?: string }>
+            enrichmentGaps?: Array<{ id?: string }>
+            handoffs?: {
+                watchlist?: { method?: string, endpoint?: string, missing?: string[] }
+                alertRebuild?: { method?: string, endpoint?: string, missing?: string[] }
+                caseCreate?: { method?: string, endpoint?: string, missing?: string[] }
+            }
+        }
     } | undefined
     const evidenceRows = rows(payload?.rows || payload?.results)
     const ledgerRefs = rows(payload?.publicTiAnswer?.evidenceLedgerReferences || payload?.actorProfile?.provenance)
+    const actionability = payload?.actionability
+    const actionabilityLoaded = actionability?.schemaVersion === 'ti.query.actionability.v1'
+    const sourceProvenance = Array.isArray(actionability?.sourceProvenance) ? actionability.sourceProvenance : []
+    const watchlistCandidates = Array.isArray(actionability?.watchlistCandidates) ? actionability.watchlistCandidates : []
+    const watchlistMatches = Array.isArray(actionability?.watchlistMatches) ? actionability.watchlistMatches : []
+    const relatedAlerts = Array.isArray(actionability?.relatedAlerts) ? actionability.relatedAlerts : []
+    const relatedCases = Array.isArray(actionability?.relatedCases) ? actionability.relatedCases : []
+    const enrichmentGaps = Array.isArray(actionability?.enrichmentGaps) ? actionability.enrichmentGaps : []
+    const handoffRoutes = [
+        actionability?.handoffs?.watchlist?.endpoint,
+        actionability?.handoffs?.alertRebuild?.endpoint,
+        actionability?.handoffs?.caseCreate?.endpoint,
+    ].filter(Boolean).map(String)
     const sourceIds = new Set([
         ...evidenceRows.map(row => String(row.sourceId || '')).filter(Boolean),
         ...ledgerRefs.map(row => String(row.sourceId || '')).filter(Boolean),
+        ...sourceProvenance.map(row => String(row.sourceId || '')).filter(Boolean),
     ])
     const latestArtifactAt = latestTimestamp(evidenceRows.map(row => String(row.lastSeenAt || row.updatedAt || row.collectedAt || row.firstSeenAt || '')))
     const warningCodes = Array.isArray(payload?.quality?.publicWarningCodes) ? payload.quality.publicWarningCodes.filter(Boolean).map(String) : []
@@ -256,6 +284,9 @@ function publicTiProvenanceReadiness(input: {
         && payload?.publicTiAnswer?.status === 'ready'
         && evidenceRows.length > 0
         && ledgerRefs.length > 0
+        && actionabilityLoaded
+        && sourceProvenance.length > 0
+        && handoffRoutes.length >= 3
         && sourceIds.size > 0
         && warningCodes.length === 0
     const blockers = [
@@ -263,6 +294,9 @@ function publicTiProvenanceReadiness(input: {
         payload?.publicTiAnswer ? '' : 'Public TI search route did not return publicTiAnswer.',
         evidenceRows.length > 0 ? '' : 'Public TI search route returned no evidence rows.',
         ledgerRefs.length > 0 ? '' : 'Public TI search route returned no evidence ledger references.',
+        actionabilityLoaded ? '' : 'Public TI search route did not return ti.query.actionability.v1.',
+        sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source provenance rows.',
+        handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned incomplete watchlist, alert, and case handoff routes.',
         sourceIds.size > 0 ? '' : 'Public TI search route returned no source references.',
         ...warningCodes.map(code => `Public TI quality warning: ${code}.`),
     ].filter(Boolean)
@@ -274,10 +308,17 @@ function publicTiProvenanceReadiness(input: {
         source: input.route,
         href: '/ti',
         query: payload?.query || input.query,
+        actionabilityReady: actionabilityLoaded && sourceProvenance.length > 0 && handoffRoutes.length >= 3,
         artifactCount: evidenceRows.length,
         sourceCount: sourceIds.size || payload?.actorProfile?.datasets?.sourceCount,
         evidenceCount: ledgerRefs.length,
-        dashboardHandoffCount: 0,
+        dashboardHandoffCount: watchlistMatches.length + relatedAlerts.length + relatedCases.length,
+        watchlistCandidateCount: watchlistCandidates.length,
+        sourceProvenanceCount: sourceProvenance.length,
+        relatedAlertCount: relatedAlerts.length,
+        relatedCaseCount: relatedCases.length,
+        enrichmentGapCount: enrichmentGaps.length,
+        handoffRouteCount: handoffRoutes.length,
         latestArtifactAt,
         blockers,
         ownerLane: 'public-ti' as const,
@@ -285,11 +326,11 @@ function publicTiProvenanceReadiness(input: {
         staleAfterSeconds: 3600,
         proofTimestamp: latestArtifactAt || input.generatedAt,
         expectedDashboardRowId: 'public_ti_provenance',
-        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, and evidenceLedgerReferences.',
-        backendProofContractVersion: 'ti.search.public_answer.v1',
+        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, evidenceLedgerReferences, and actionability.schemaVersion=ti.query.actionability.v1 with watchlist, alert, and case handoff routes.',
+        backendProofContractVersion: actionabilityLoaded ? 'ti.search.public_answer.v1 + ti.query.actionability.v1' : 'ti.search.public_answer.v1',
         detail: blockers.length
             ? blockers.join('; ')
-            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'}.`,
+            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'} and ${handoffRoutes.length} backed handoff route${handoffRoutes.length === 1 ? '' : 's'}.`,
     }
 }
 

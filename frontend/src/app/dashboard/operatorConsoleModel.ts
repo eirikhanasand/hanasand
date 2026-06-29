@@ -129,10 +129,17 @@ export type ProductReadinessSnapshotBase = {
 export type PublicTiProvenanceReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'ti.public_provenance.readiness.v1' | string
     query?: string
+    actionabilityReady?: boolean
     artifactCount?: number
     sourceCount?: number
     evidenceCount?: number
     dashboardHandoffCount?: number
+    watchlistCandidateCount?: number
+    sourceProvenanceCount?: number
+    relatedAlertCount?: number
+    relatedCaseCount?: number
+    enrichmentGapCount?: number
+    handoffRouteCount?: number
     latestArtifactAt?: string
 }
 
@@ -1678,6 +1685,9 @@ function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {
         typeof input.sourceCount === 'number' ? `${input.sourceCount} source${input.sourceCount === 1 ? '' : 's'}` : '',
         typeof input.evidenceCount === 'number' ? `${input.evidenceCount} evidence item${input.evidenceCount === 1 ? '' : 's'}` : '',
         typeof input.dashboardHandoffCount === 'number' ? `${input.dashboardHandoffCount} dashboard handoff${input.dashboardHandoffCount === 1 ? '' : 's'}` : '',
+        typeof input.sourceProvenanceCount === 'number' ? `${input.sourceProvenanceCount} provenance row${input.sourceProvenanceCount === 1 ? '' : 's'}` : '',
+        typeof input.watchlistCandidateCount === 'number' ? `${input.watchlistCandidateCount} watchlist candidate${input.watchlistCandidateCount === 1 ? '' : 's'}` : '',
+        typeof input.handoffRouteCount === 'number' ? `${input.handoffRouteCount} handoff route${input.handoffRouteCount === 1 ? '' : 's'}` : '',
     ].filter(Boolean)
     return counts.length ? `${query}${counts.join(', ')}.` : `${query}Public TI provenance snapshot loaded.`
 }
