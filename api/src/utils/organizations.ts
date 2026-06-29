@@ -1272,6 +1272,25 @@ export type OrganizationReadinessProof = {
         auditActions: Array<'organization_watchlist_alert_terms_export_denied' | 'organization_member_removed' | 'organization_invite_revoked'>
         nonmemberEnumeration: false
     }
+    inviteLifecycleProof: {
+        schemaVersion: 'organization.invite_lifecycle_readiness_proof.v1'
+        pendingInviteCount: number
+        inviteTenSupported: boolean
+        maxRecipientsPerRequest: 25
+        defaultExpiryDays: 14
+        acceptanceTokenField: 'invite.acceptanceToken'
+        acceptanceRoute: 'POST /api/organizations/invites/:inviteId/accept'
+        inviteRoute: 'POST /api/organizations/:id/invites'
+        actionRoute: 'POST /api/organizations/:id/invites/:inviteId/actions'
+        supportedActions: Array<'revoke' | 'resend'>
+        idempotentActions: Array<'revoke' | 'resend'>
+        duplicateInviteOutcome: 'updated_pending_invite'
+        blockedOutcomes: Array<'already_member' | 'blocked_removed_member' | 'blocked_deactivated_user'>
+        lifecycleBlockers: Array<'invite_expired' | 'member_revoked' | 'org_archived' | 'org_deleted'>
+        auditActions: Array<'organization_invites_created' | 'organization_invite_accepted' | 'organization_invite_revoked' | 'organization_invite_resent'>
+        requiredMetadataFields: Array<'requestId' | 'role' | 'recipientCount' | 'invitedCount' | 'skippedCount' | 'inviteId' | 'action' | 'previousStatus' | 'newStatus'>
+        nonmemberEnumeration: false
+    }
     uiProof: {
         safeFields: string[]
         redactedFields: string[]
@@ -3110,6 +3129,40 @@ export function organizationReadinessProof(input: {
             ],
             nonmemberEnumeration: false,
         },
+        inviteLifecycleProof: {
+            schemaVersion: 'organization.invite_lifecycle_readiness_proof.v1',
+            pendingInviteCount: input.lifecycleReadiness.counts.pendingInviteCount,
+            inviteTenSupported: input.lifecycleReadiness.counts.pendingInviteCount + input.lifecycleReadiness.counts.activeMemberCount >= 10,
+            maxRecipientsPerRequest: 25,
+            defaultExpiryDays: 14,
+            acceptanceTokenField: 'invite.acceptanceToken',
+            acceptanceRoute: 'POST /api/organizations/invites/:inviteId/accept',
+            inviteRoute: 'POST /api/organizations/:id/invites',
+            actionRoute: 'POST /api/organizations/:id/invites/:inviteId/actions',
+            supportedActions: ['revoke', 'resend'],
+            idempotentActions: ['revoke', 'resend'],
+            duplicateInviteOutcome: 'updated_pending_invite',
+            blockedOutcomes: ['already_member', 'blocked_removed_member', 'blocked_deactivated_user'],
+            lifecycleBlockers: ['invite_expired', 'member_revoked', 'org_archived', 'org_deleted'],
+            auditActions: [
+                'organization_invites_created',
+                'organization_invite_accepted',
+                'organization_invite_revoked',
+                'organization_invite_resent',
+            ],
+            requiredMetadataFields: [
+                'requestId',
+                'role',
+                'recipientCount',
+                'invitedCount',
+                'skippedCount',
+                'inviteId',
+                'action',
+                'previousStatus',
+                'newStatus',
+            ],
+            nonmemberEnumeration: false,
+        },
         uiProof: {
             safeFields: [
                 'organizationId',
@@ -3120,6 +3173,7 @@ export function organizationReadinessProof(input: {
                 'alertQueueProof',
                 'webhookDeliveryProof',
                 'memberLifecycleProof',
+                'inviteLifecycleProof',
                 'blockers',
                 'uiProof.nonmemberEnumeration',
             ],
