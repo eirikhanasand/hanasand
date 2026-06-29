@@ -30,6 +30,7 @@ export type ActorOrgRelevanceReviewRecord = {
   workflow: ActorOrgRelevanceWorkflowState;
   notes: ActorOrgRelevanceNote[];
   alertGenerationReceipts: ActorOrgRelevanceAlertGenerationReceipt[];
+  caseHandoffReceipts: ActorOrgRelevanceCaseHandoffReceipt[];
   nextActions: ActorOrgRelevanceNextAction[];
   timeline: ActorOrgRelevanceTimelineEvent[];
 };
@@ -55,6 +56,7 @@ export type ActorOrgRelevanceReviewSummary = {
   blockerCodes: string[];
   workflow: ActorOrgRelevanceWorkflowState;
   latestAlertGeneration?: ActorOrgRelevanceAlertGenerationReceipt;
+  latestCaseHandoff?: ActorOrgRelevanceCaseHandoffReceipt;
   nextActions: ActorOrgRelevanceNextAction[];
   routes: {
     publicTi: string;
@@ -77,7 +79,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested";
   summary: string;
   blockerCodes: string[];
 };
@@ -202,6 +204,49 @@ export type ActorOrgRelevanceAlertGenerationRequestResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceAlertGenerationReceipt }
   | { ok: false; code: string; message: string };
 
+export type ActorOrgRelevanceCaseHandoffReceipt = {
+  schemaVersion: "hanasand.actor_org_relevance.case_handoff_receipt.v1";
+  id: string;
+  tenantId: string;
+  organizationId: string;
+  reviewId: string;
+  actorId: string;
+  query: string;
+  createdAt: string;
+  createdBy?: string;
+  alertGenerationReceiptId: string;
+  idempotencyKey: string;
+  request: {
+    method: "POST";
+    path: "/v1/cases";
+    body: ActorOrgRelevanceHandoffValue["caseHandoff"]["request"]["body"] & {
+      actorOrgRelevanceReviewId: string;
+      alertGenerationReceiptId: string;
+    };
+  };
+  routing: {
+    casePath: string;
+    alertId: string;
+    recommendedRoute: string;
+    priority: string;
+  };
+  provenance: {
+    captureIds: string[];
+    sourceIds: string[];
+    sourceFamilies: string[];
+    evidenceCount: number;
+  };
+};
+
+export type ActorOrgRelevanceCaseHandoffRequestInput = {
+  actorId?: string;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceCaseHandoffRequestResult =
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceCaseHandoffReceipt }
+  | { ok: false; code: string; message: string };
+
 export type ActorOrgRelevanceQueue = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION;
   generatedAt: string;
@@ -277,6 +322,7 @@ export function buildActorOrgRelevanceReviewRecord(input: {
     workflow: input.existing?.workflow ?? { status: "new", updatedAt: generatedAt },
     notes: input.existing?.notes ?? [],
     alertGenerationReceipts: input.existing?.alertGenerationReceipts ?? [],
+    caseHandoffReceipts: input.existing?.caseHandoffReceipts ?? [],
     nextActions: nextActionsForReadiness(readiness),
     timeline: [...(input.existing?.timeline ?? []), timelineEvent]
   };
@@ -304,6 +350,7 @@ export function summarizeActorOrgRelevanceReview(record: ActorOrgRelevanceReview
     blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code)),
     workflow: record.workflow,
     latestAlertGeneration: record.alertGenerationReceipts.at(-1),
+    latestCaseHandoff: record.caseHandoffReceipts.at(-1),
     nextActions: record.nextActions,
     routes: {
       publicTi: `/ti/${encodeURIComponent(record.query)}`,
@@ -575,6 +622,80 @@ export function createActorOrgRelevanceAlertGenerationRequest(input: {
         actorId: input.request?.actorId,
         eventType: "alert_generation_requested",
         summary: `Prepared alert rebuild request for watchlist ${expectedWatchlistId}.`,
+        blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+      }]
+    }
+  };
+}
+
+export function createActorOrgRelevanceCaseHandoffRequest(input: {
+  record: ActorOrgRelevanceReviewRecord;
+  request?: ActorOrgRelevanceCaseHandoffRequestInput;
+}): ActorOrgRelevanceCaseHandoffRequestResult {
+  const record = input.record;
+  if (record.state !== "ready" || !record.handoff) {
+    return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before requesting case handoff." };
+  }
+  const alertGenerationReceipt = record.alertGenerationReceipts.at(-1);
+  if (!alertGenerationReceipt) {
+    return { ok: false, code: "missing_alert_generation_receipt", message: "Prepare the alert generation request before creating a case handoff." };
+  }
+  const generatedAt = input.request?.generatedAt || nowIso();
+  const caseBody = {
+    ...record.handoff.caseHandoff.request.body,
+    actorOrgRelevanceReviewId: record.id,
+    alertGenerationReceiptId: alertGenerationReceipt.id
+  };
+  const sourceIds = uniqueStrings(alertGenerationReceipt.downstream.sourceIds);
+  const receipt: ActorOrgRelevanceCaseHandoffReceipt = {
+    schemaVersion: "hanasand.actor_org_relevance.case_handoff_receipt.v1",
+    id: stableId("actor_org_relevance_case_handoff", `${record.id}:${alertGenerationReceipt.id}:${generatedAt}`),
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    reviewId: record.id,
+    actorId: record.actorId,
+    query: record.query,
+    createdAt: generatedAt,
+    createdBy: input.request?.actorId,
+    alertGenerationReceiptId: alertGenerationReceipt.id,
+    idempotencyKey: stableId("actor_org_relevance_case_handoff_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${alertGenerationReceipt.id}`),
+    request: {
+      method: "POST",
+      path: "/v1/cases",
+      body: caseBody
+    },
+    routing: {
+      casePath: record.handoff.caseHandoff.request.body.casePath,
+      alertId: record.handoff.caseHandoff.request.body.alertId,
+      recommendedRoute: record.handoff.caseHandoff.request.body.recommendedRoute,
+      priority: record.handoff.caseHandoff.request.body.priority
+    },
+    provenance: {
+      captureIds: record.handoff.caseHandoff.request.body.captureIds,
+      sourceIds,
+      sourceFamilies: uniqueStrings(record.handoff.caseHandoff.handoff.identity.sourceFamily ? [record.handoff.caseHandoff.handoff.identity.sourceFamily] : []),
+      evidenceCount: record.handoff.webhookTrigger.request.body.evidenceCount
+    }
+  };
+  return {
+    ok: true,
+    receipt,
+    record: {
+      ...record,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: input.request?.actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      caseHandoffReceipts: [...record.caseHandoffReceipts, receipt],
+      timeline: [...record.timeline, {
+        id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:case_handoff_requested:${alertGenerationReceipt.id}`),
+        occurredAt: generatedAt,
+        actorId: input.request?.actorId,
+        eventType: "case_handoff_requested",
+        summary: `Prepared case handoff for ${receipt.routing.casePath}.`,
         blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
       }]
     }
