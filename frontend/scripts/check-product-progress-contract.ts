@@ -323,8 +323,8 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 3600,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'helpdesk_audit',
-        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery and GET /api/backend/admin/audit-events must return recovery queue and audit events.',
-        backendProofContractVersion: 'support.audit.readiness.v1',
+        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery must return recovery queue state. GET /api/backend/admin/audit-events?limit=50 must return detail.exportProof.schemaVersion=support.audit.export_proof.v1. Replay query: ?limit=50. Worker proof route: /api/admin/audit-events.',
+        backendProofContractVersion: 'support.audit.export_proof.v1',
     },
     dwmProduct: {
         schemaVersion: 'dwm.product_snapshot.readiness.v1',
@@ -355,6 +355,7 @@ assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checke
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).webhookHealth?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).helpdeskAudit?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).dwmProduct?.status, 'ready')
+assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).helpdeskAudit?.backendProofContractVersion, 'support.audit.export_proof.v1')
 
 const organizationReadinessProof = {
     schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
@@ -609,6 +610,11 @@ for (const scopedProgressToken of [
     'readinessProof.actor.canExportActiveTerms',
     'webhookHealthReadiness',
     'helpdeskAuditReadiness',
+    'supportAuditExportProof',
+    'support.audit.export_proof.v1',
+    'detail.exportProof.schemaVersion=support.audit.export_proof.v1',
+    'Replay query:',
+    'Worker proof route:',
     'dwmProductReadiness',
     '/api/dwm/watchlists',
     '/api/dwm/product?demo=false',
