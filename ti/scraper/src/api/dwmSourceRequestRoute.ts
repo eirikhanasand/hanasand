@@ -3129,6 +3129,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3357,6 +3358,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
   }));
   const sourceHealthRows = (actorReadiness.sourceFamilyHealth?.rows ?? []).map((row: any) => ({
     family: row.family,
+    proofId: row.proofId,
     state: row.state,
     parserState: row.parserState,
     captureState: row.captureState,
@@ -3415,6 +3417,13 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       }
     };
   });
+  const alertEvidenceHandoff = sourceActorPublicTiAlertEvidenceHandoff({
+    query,
+    actorReadiness,
+    sectionRows,
+    evidenceRows,
+    sourceHealthRows
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3457,14 +3466,112 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       watchlistMatchReadiness: actorReadiness.alertGenerationReadiness?.watchlistMatchReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
     },
-    alertEvidenceHandoff: sourceActorPublicTiAlertEvidenceHandoff({
+    alertEvidenceHandoff,
+    alertGenerationConsumerHandoff: sourceActorAlertGenerationConsumerHandoff({
       query,
       actorReadiness,
-      sectionRows,
-      evidenceRows,
+      alertEvidenceHandoff,
       sourceHealthRows
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorAlertGenerationConsumerHandoff(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  alertEvidenceHandoff: Record<string, any>;
+  sourceHealthRows: Array<Record<string, any>>;
+}) {
+  const healthByFamily = new Map<string, Record<string, any>>(input.sourceHealthRows.map((row) => [String(row.family), row]));
+  const rows = (input.alertEvidenceHandoff.rows ?? []).map((row: any) => {
+    const health = healthByFamily.get(String(row.family));
+    const state = row.state === "ready" ? "ready_for_rebuild" : "blocked";
+    return {
+      schemaVersion: "ti.public_actor.alert_generation_consumer_row.v1",
+      proofId: stableId("ti_public_actor_alert_generation_consumer_row", `${input.query}:${row.watchlistTerm}:${row.family}:${state}`),
+      query: input.query,
+      watchlistTerm: row.watchlistTerm,
+      family: row.family,
+      state,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      evidenceProofId: row.evidenceProofId,
+      parserStatus: {
+        state: row.parserState ?? health?.parserState,
+        captureState: row.captureState ?? health?.captureState,
+        retryBackoff: health?.retryBackoff,
+        blockers: health?.blockers ?? []
+      },
+      confidence: row.confidence ?? health?.confidence ?? 0,
+      confidenceTier: row.confidenceTier ?? health?.confidenceTier,
+      matchableFields: row.matchableFields ?? [],
+      alertableFields: row.alertableFields ?? [],
+      timestamps: {
+        lastCaptureAt: row.timestamps?.lastCaptureAt ?? health?.timestamps?.lastCaptureAt,
+        lastEnrichmentAt: row.timestamps?.lastEnrichmentAt ?? health?.timestamps?.lastEnrichmentAt,
+        checkedAt: row.timestamps?.checkedAt ?? health?.timestamps?.checkedAt
+      },
+      provenance: {
+        sourceFamily: row.family,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        privacyBoundary: row.privacyBoundary ?? health?.privacyBoundary,
+        sourceTrust: health?.sourceTrust,
+        sourceHealthProofId: health?.proofId,
+        alertEvidenceProofId: row.proofId
+      },
+      blockers: row.blockers ?? [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  const readyRows = rows.filter((row: any) => row.state === "ready_for_rebuild");
+  const blockedRows = rows.filter((row: any) => row.state !== "ready_for_rebuild");
+  return {
+    schemaVersion: "ti.public_actor.alert_generation_consumer_handoff.v1",
+    proofId: stableId("ti_public_actor_alert_generation_consumer_handoff", `${input.query}:${rows.map((row: any) => `${row.watchlistTerm}:${row.family}:${row.state}`).join(",")}`),
+    query: input.query,
+    ready: input.actorReadiness.alertGenerationReadiness?.alertReady === true && readyRows.length > 0,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: input.query,
+        sourceFamilies: uniqueSourceReadinessStrings(readyRows.map((row: any) => row.family)),
+        watchlistTerms: uniqueSourceReadinessStrings(readyRows.map((row: any) => row.watchlistTerm)),
+        evidenceProofIds: readyRows.map((row: any) => row.evidenceProofId).filter(Boolean),
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    rows,
+    summary: {
+      readyRows: readyRows.length,
+      blockedRows: blockedRows.length,
+      sourceFamilies: uniqueSourceReadinessStrings(rows.map((row: any) => row.family)),
+      watchlistTerms: uniqueSourceReadinessStrings(rows.map((row: any) => row.watchlistTerm)),
+      parserStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.parserStatus?.state).filter(Boolean)),
+      matchableFields: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.matchableFields ?? [])),
+      alertableFields: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.alertableFields ?? [])),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.timestamps?.lastCaptureAt))
+    },
+    blockers: dedupeBlockers([
+      ...(input.alertEvidenceHandoff.blockers ?? []),
+      ...blockedRows.flatMap((row: any) => row.blockers ?? [])
+    ]),
+    gaps: input.actorReadiness.candidateGaps ?? [],
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
