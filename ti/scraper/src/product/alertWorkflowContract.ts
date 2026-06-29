@@ -28,6 +28,17 @@ export type DwmAlertWorkflowContract = {
     captureIds: string[];
     sourceIds: string[];
     contentHashes: string[];
+    sourceFamilies: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
+  orgWatchlistScope?: {
+    schemaVersion?: string;
+    organizationId?: string;
+    ownerOrganizationIds: string[];
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
   };
 };
 
@@ -46,6 +57,7 @@ export type DwmAlertWorkflowPreservationReport = {
     deliveryState: boolean;
     eventCountMonotonic: boolean;
     provenance: boolean;
+    orgWatchlistScope: boolean;
   };
   blockers: DwmAlertWorkflowPreservationBlocker[];
 };
@@ -59,7 +71,8 @@ export type DwmAlertWorkflowPreservationBlocker = {
     | "review_state_regressed"
     | "delivery_state_regressed"
     | "workflow_events_regressed"
-    | "provenance_dropped";
+    | "provenance_dropped"
+    | "org_watchlist_scope_dropped";
   ownerLane: "alert" | "case" | "source" | "webhook";
   path: string;
   message: string;
@@ -180,6 +193,8 @@ export function buildAlertWorkflowContract(input: {
   const workflowContext = alert.workflowContext ?? {};
   const webhookContext = alert.webhookContext ?? {};
   const deliveryReadinessContext = alert.deliveryReadinessContext ?? {};
+  const sourceProvenanceSummary = alert.sourceProvenanceSummary ?? {};
+  const orgWatchlistScope = normalizeOrgWatchlistScope(alert.orgWatchlistScope ?? alert.webhookContext?.orgWatchlistScope ?? alert.workflowContext?.orgWatchlistScope);
   const workflowEvents = Array.isArray(alert.workflowEvents) ? alert.workflowEvents : [];
   const provenance = alert.provenance ?? {};
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
@@ -204,10 +219,34 @@ export function buildAlertWorkflowContract(input: {
     latestWorkflowEventId: stringValue(workflowEvents.at(-1)?.id),
     provenance: {
       evidenceCount: Number(workflowContext.evidenceCount ?? webhookContext.evidenceCount ?? deliveryReadinessContext.evidenceCount ?? evidence.length ?? 0),
-      captureIds: uniqueStrings([...(provenance.captureIds ?? []), ...(workflowContext.captureIds ?? []), ...(webhookContext.captureIds ?? []), ...(deliveryReadinessContext.captureIds ?? [])].map(String)),
-      sourceIds: uniqueStrings(evidence.map((row: any) => row.sourceId).filter(Boolean).map(String)),
-      contentHashes: uniqueStrings(evidence.map((row: any) => row.contentHash).filter(Boolean).map(String))
-    }
+      captureIds: uniqueStrings([
+        ...asStringArray(provenance.captureIds),
+        ...asStringArray(workflowContext.captureIds),
+        ...asStringArray(webhookContext.captureIds),
+        ...asStringArray(deliveryReadinessContext.captureIds),
+        ...asStringArray(sourceProvenanceSummary.captureIds),
+        ...asStringArray(sourceProvenanceSummary.generationEvidenceWindow?.captureIds)
+      ]),
+      sourceIds: uniqueStrings([
+        ...evidence.map((row: any) => row.sourceId).filter(Boolean).map(String),
+        ...asStringArray(sourceProvenanceSummary.sourceIds)
+      ]),
+      contentHashes: uniqueStrings([
+        ...evidence.map((row: any) => row.contentHash).filter(Boolean).map(String),
+        ...asStringArray(sourceProvenanceSummary.contentHashes),
+        ...asStringArray(sourceProvenanceSummary.generationEvidenceWindow?.contentHashes)
+      ]),
+      sourceFamilies: uniqueStrings([
+        ...asStringArray(alert.sourceFamily),
+        ...asStringArray(provenance.sourceFamilies),
+        ...asStringArray(sourceProvenanceSummary.sourceFamily),
+        ...asStringArray(sourceProvenanceSummary.sourceFamilies),
+        ...asStringArray(sourceProvenanceSummary.generationEvidenceWindow?.sourceFamilies)
+      ]),
+      firstObservedAt: stringValue(sourceProvenanceSummary.firstObservedAt ?? sourceProvenanceSummary.generationEvidenceWindow?.firstObservedAt),
+      lastObservedAt: stringValue(sourceProvenanceSummary.lastObservedAt ?? sourceProvenanceSummary.generationEvidenceWindow?.lastObservedAt)
+    },
+    orgWatchlistScope
   };
 }
 
@@ -247,6 +286,9 @@ export function validateAlertWorkflowPreservation(input: {
   if (provenanceScore(after) < provenanceScore(before)) {
     blockers.push(blocker("provenance_dropped", "source", "provenance", "Alert provenance was dropped."));
   }
+  if (orgWatchlistScopeScore(after) < orgWatchlistScopeScore(before)) {
+    blockers.push(blocker("org_watchlist_scope_dropped", "alert", "orgWatchlistScope", "Alert org watchlist scope was dropped."));
+  }
 
   return {
     schemaVersion: DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
@@ -262,7 +304,8 @@ export function validateAlertWorkflowPreservation(input: {
       reviewState: input.allowReviewStateChange === true || !before.reviewState || !after.reviewState || before.reviewState === after.reviewState,
       deliveryState: input.allowDeliveryStateChange === true || !before.deliveryState || !after.deliveryState || before.deliveryState === after.deliveryState,
       eventCountMonotonic: after.workflowEventCount >= before.workflowEventCount,
-      provenance: provenanceScore(after) >= provenanceScore(before)
+      provenance: provenanceScore(after) >= provenanceScore(before),
+      orgWatchlistScope: orgWatchlistScopeScore(after) >= orgWatchlistScopeScore(before)
     },
     blockers
   };
@@ -404,9 +447,46 @@ export function buildAlertWorkflowSupportActionRequest(input: {
 
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
-    + contract.provenance.captureIds.length
-    + contract.provenance.sourceIds.length
-    + contract.provenance.contentHashes.length;
+    + asStringArray(contract.provenance.captureIds).length
+    + asStringArray(contract.provenance.sourceIds).length
+    + asStringArray(contract.provenance.contentHashes).length
+    + asStringArray(contract.provenance.sourceFamilies).length
+    + (contract.provenance.firstObservedAt ? 1 : 0)
+    + (contract.provenance.lastObservedAt ? 1 : 0);
+}
+
+function orgWatchlistScopeScore(contract: DwmAlertWorkflowContract) {
+  const scope = contract.orgWatchlistScope;
+  if (!scope) return 0;
+  return (scope.organizationId ? 1 : 0)
+    + scope.ownerOrganizationIds.length
+    + scope.watchlistIds.length
+    + scope.watchlistItemIds.length
+    + scope.alertGeneratorKeys.length;
+}
+
+function normalizeOrgWatchlistScope(value: any): DwmAlertWorkflowContract["orgWatchlistScope"] | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const organizationId = stringValue(value.organizationId);
+  const ownerOrganizationIds = uniqueStrings(asStringArray(value.ownerOrganizationIds));
+  const watchlistIds = uniqueStrings(asStringArray(value.watchlistIds));
+  const watchlistItemIds = uniqueStrings(asStringArray(value.watchlistItemIds));
+  const alertGeneratorKeys = uniqueStrings(asStringArray(value.alertGeneratorKeys));
+  if (!organizationId && !ownerOrganizationIds.length && !watchlistIds.length && !watchlistItemIds.length && !alertGeneratorKeys.length) return undefined;
+  return {
+    schemaVersion: stringValue(value.schemaVersion),
+    organizationId,
+    ownerOrganizationIds,
+    watchlistIds,
+    watchlistItemIds,
+    alertGeneratorKeys
+  };
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)].filter(Boolean);
 }
 
 function blocker(code: DwmAlertWorkflowPreservationBlocker["code"], ownerLane: DwmAlertWorkflowPreservationBlocker["ownerLane"], path: string, message: string): DwmAlertWorkflowPreservationBlocker {
@@ -417,6 +497,7 @@ function nextAuditAction(code: DwmAlertWorkflowPreservationBlocker["code"]): Dwm
   switch (code) {
     case "alert_identity_changed":
     case "organization_scope_changed":
+    case "org_watchlist_scope_dropped":
       return "inspect_alert_scope";
     case "case_route_dropped":
       return "restore_case_route";

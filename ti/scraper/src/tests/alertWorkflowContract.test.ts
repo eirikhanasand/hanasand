@@ -55,7 +55,18 @@ describe("alert workflow preservation contract", () => {
         evidenceCount: 1,
         captureIds: ["cap_acme_initial"],
         sourceIds: ["src_acme_tg"],
-        contentHashes: ["hash_acme_initial"]
+        contentHashes: ["hash_acme_initial"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        firstObservedAt: "2026-06-29T12:00:00.000Z",
+        lastObservedAt: "2026-06-29T12:05:00.000Z"
+      },
+      orgWatchlistScope: {
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_acme",
+        ownerOrganizationIds: ["org_acme"],
+        watchlistIds: ["watch_acme"],
+        watchlistItemIds: ["watch_item_acme_domain"],
+        alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com"]
       }
     });
     expect(report).toMatchObject({
@@ -211,6 +222,8 @@ describe("alert workflow preservation contract", () => {
         provenance: { captureIds: [] },
         workflowContext: {},
         webhookContext: {},
+        sourceProvenanceSummary: undefined,
+        orgWatchlistScope: undefined,
         evidence: []
       }
     });
@@ -228,13 +241,15 @@ describe("alert workflow preservation contract", () => {
       "review_state_regressed",
       "delivery_state_regressed",
       "workflow_events_regressed",
-      "provenance_dropped"
+      "provenance_dropped",
+      "org_watchlist_scope_dropped"
     ]));
     expect(report.blockers).toEqual(expect.arrayContaining([
       expect.objectContaining({ ownerLane: "alert", path: "organizationId" }),
       expect.objectContaining({ ownerLane: "case", path: "casePath" }),
       expect.objectContaining({ ownerLane: "webhook", path: "deliveryState" }),
-      expect.objectContaining({ ownerLane: "source", path: "provenance" })
+      expect.objectContaining({ ownerLane: "source", path: "provenance" }),
+      expect.objectContaining({ ownerLane: "alert", path: "orgWatchlistScope" })
     ]));
   });
 
@@ -254,6 +269,8 @@ describe("alert workflow preservation contract", () => {
         provenance: { captureIds: [] },
         workflowContext: {},
         webhookContext: {},
+        sourceProvenanceSummary: undefined,
+        orgWatchlistScope: undefined,
         evidence: []
       }
     });
@@ -314,6 +331,8 @@ describe("alert workflow preservation contract", () => {
         provenance: { captureIds: [] },
         workflowContext: {},
         webhookContext: {},
+        sourceProvenanceSummary: undefined,
+        orgWatchlistScope: undefined,
         evidence: []
       }
     });
@@ -372,7 +391,33 @@ function alertFixture() {
     caseIdCandidate: "case_acme_lumma",
     casePath: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
     dedupeKey: "dedupe_acme_lumma",
-    provenance: { captureIds: ["cap_acme_initial"] },
+    sourceFamily: "telegram_public",
+    provenance: { captureIds: ["cap_acme_initial"], sourceFamilies: ["telegram_public"] },
+    sourceProvenanceSummary: {
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      sourceFamily: "telegram_public",
+      sourceFamilies: ["telegram_public", "darkweb_metadata"],
+      captureIds: ["cap_acme_initial"],
+      sourceIds: ["src_acme_tg"],
+      contentHashes: ["hash_acme_initial"],
+      firstObservedAt: "2026-06-29T12:00:00.000Z",
+      lastObservedAt: "2026-06-29T12:05:00.000Z",
+      generationEvidenceWindow: {
+        captureIds: ["cap_acme_initial"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        contentHashes: ["hash_acme_initial"],
+        firstObservedAt: "2026-06-29T12:00:00.000Z",
+        lastObservedAt: "2026-06-29T12:05:00.000Z"
+      }
+    },
+    orgWatchlistScope: {
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      organizationId: "org_acme",
+      ownerOrganizationIds: ["org_acme"],
+      watchlistIds: ["watch_acme"],
+      watchlistItemIds: ["watch_item_acme_domain"],
+      alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com"]
+    },
     workflowContext: {
       organizationId: "org_acme",
       caseId: "case_acme_lumma",
