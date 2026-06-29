@@ -186,6 +186,28 @@ assert.equal(parseProductNorthStarScoreboard({
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockerRows: [],
+        needsActionRows: [...partialScoreboard.deployGate.needsActionRows, 'organizations'],
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'organizations' ? { ...row, state: 'needs_action' } : row),
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        actionNeededWorkflowLinks: partialScoreboard.deployGate.actionNeededWorkflowLinks.filter(href => href !== '/dashboard/ti/workbench'),
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
     rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, expectedDashboardRowId: '' } : row),
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
