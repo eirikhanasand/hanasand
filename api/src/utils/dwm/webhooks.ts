@@ -1262,6 +1262,17 @@ export function buildDwmWebhookDeliveryActionPlan({
         visibility,
     })
     const retryByIdempotencyKey = new Map(retryRequest.entries.map(entry => [entry.idempotencyKey, entry]))
+    const destinationTestsById = new Map(destinations.map(destination => {
+        const test = buildDwmWebhookDestinationTestContract({
+            destination,
+            deliveries,
+            auditEvents,
+            liveDeliveryEnabled,
+            viewerRole,
+            canManage,
+        })
+        return [destination.id, test]
+    }))
     const actions = timeline.timelines.map((item) => {
         const latest = item.latestReceipt
         const retryEntry = latest.idempotencyKey ? retryByIdempotencyKey.get(latest.idempotencyKey) || null : null
@@ -1308,6 +1319,7 @@ export function buildDwmWebhookDeliveryActionPlan({
                     dedupeKey: item.dedupeKey,
                     casePath: item.casePath,
                 },
+                payloadPreview: destinationTestsById.get(latest.destinationId)?.dryRunPayloadPreview || null,
                 blockers: blockers.filter(blocker => ['permission_denied', 'destination_unavailable'].includes(blocker.code)),
             }
             : null
