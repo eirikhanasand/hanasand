@@ -1,4 +1,4 @@
-import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 type AlertProofRow = {
     id?: string
@@ -23,6 +23,7 @@ export type ProductProgressEndpointInput = {
     alerts?: AlertProofRow[]
     deliveries?: DeliveryProofRow[]
     deploy?: Partial<DeployProbeReadiness>
+    entitlement?: EntitlementReadiness
 }
 
 export function buildProductProgressPayload(input: ProductProgressEndpointInput): ProductProgressReadinessPayload {
@@ -72,6 +73,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
         },
         orgAlertExport: unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
         webhookHealth: webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
+        entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
         dashboardEvidence: dashboardEvidenceFromRows({
             checkedAt,
             route: input.routes.dashboardAlerts || '/dashboard',
@@ -157,6 +159,47 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
         integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+    }
+}
+
+function entitlementReadiness(input: EntitlementReadiness | undefined, source: string, checkedAt: string): EntitlementReadiness {
+    if (!input) {
+        return {
+            schemaVersion: 'dwm.entitlement.readiness.v1',
+            status: 'unavailable',
+            checkedAt,
+            source,
+            href: '/dashboard/dwm',
+            detail: 'DWM entitlement readiness endpoint is not wired into product progress yet.',
+            blockers: ['Entitlement owner must expose policy, role, and allowed-action readiness before this can become ready.'],
+            ownerLane: 'org',
+            unavailableReason: 'missing_dwm_entitlement_readiness_api',
+            staleAfterSeconds: 900,
+            proofTimestamp: checkedAt,
+            expectedDashboardRowId: 'entitlement_readiness',
+            integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        }
+    }
+
+    const blockers = [
+        input.allowed ? '' : 'DWM entitlement policy does not allow this workflow.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+
+    return {
+        ...input,
+        status: blockers.length ? 'blocked' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || checkedAt,
+        source: input.source || source,
+        href: input.href || '/dashboard/dwm',
+        blockers,
+        ownerLane: input.ownerLane || 'org',
+        unavailableReason: blockers.length ? input.unavailableReason || 'missing_dwm_entitlement_readiness_api' : undefined,
+        staleAfterSeconds: input.staleAfterSeconds ?? 900,
+        proofTimestamp: input.proofTimestamp || input.checkedAt || checkedAt,
+        expectedDashboardRowId: input.expectedDashboardRowId || 'entitlement_readiness',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        detail: input.detail || (blockers.length ? blockers.join('; ') : 'DWM entitlement policy allows alert operations.'),
     }
 }
 

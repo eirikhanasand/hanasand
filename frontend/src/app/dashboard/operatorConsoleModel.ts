@@ -479,6 +479,12 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         href: '/dashboard/dwm',
         detail: 'DWM entitlement readiness is not loaded by product progress.',
         blockers: ['DWM entitlement readiness is not loaded by product progress.'],
+        ownerLane: 'org',
+        unavailableReason: 'missing_dwm_entitlement_readiness_api',
+        staleAfterSeconds: 900,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'entitlement_readiness',
+        integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
     }
 }
 
@@ -619,6 +625,12 @@ function normalizeEntitlementReadiness(input: EntitlementReadiness | undefined, 
         source: input.source || source,
         href: input.href || '/dashboard/dwm',
         blockers,
+        ownerLane: input.ownerLane || 'org',
+        unavailableReason: blockers.length ? input.unavailableReason || 'missing_dwm_entitlement_readiness_api' : undefined,
+        staleAfterSeconds: input.staleAfterSeconds ?? 900,
+        proofTimestamp: input.proofTimestamp || input.checkedAt || checkedAt,
+        expectedDashboardRowId: input.expectedDashboardRowId || 'entitlement_readiness',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
         detail: input.detail || (blockers.length ? blockers.join('; ') : entitlementDetail(input)),
     }
 }
