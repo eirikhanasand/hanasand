@@ -18,6 +18,7 @@ import {
     normalizeWatchlistRequestId,
     organizationLifecycleReadiness,
     organizationDownstreamAuthorizationExport,
+    organizationReadinessProof,
     organizationSettingsFromRow,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
@@ -979,6 +980,11 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
         ...organization,
         shared_watchlist_count: bridgeContext.sharedWatchlistCount,
     })
+    const readinessProof = organizationReadinessProof({
+        lifecycleReadiness,
+        alertGenerationBridge,
+        downstreamAuthorization,
+    })
 
     return res.send({
         organization: toOrganization(organization),
@@ -1000,6 +1006,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
             ready: generatedAlertReferences.length > 0,
             teamOnboardingReadiness,
             lifecycleReadiness,
+            readinessProof,
             alertGenerationBridge,
             downstreamAuthorization,
             watchlistItemCount: generatedAlertReferences.length,
@@ -1030,6 +1037,11 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'readinessStatus',
                 'teamOnboardingReadiness',
                 'lifecycleReadiness',
+                'readinessProof',
+                'readinessProof.routes',
+                'readinessProof.worker3Proof',
+                'readinessProof.uiProof',
+                'readinessProof.blockers',
                 'alertGenerationBridge',
                 'alertGenerationBridge.activeWatchlistTerms',
                 'alertGenerationBridge.activeWatchlistTerms.status',

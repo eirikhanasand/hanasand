@@ -676,6 +676,62 @@ export type OrganizationLifecycleReadiness = {
     readyForOnboarding: boolean
 }
 
+export type OrganizationReadinessProof = {
+    schemaVersion: 'organization.worker3_ui_readiness_proof.v1'
+    organizationId: string
+    tenantId: string
+    actor: {
+        role: OrganizationRole
+        canExportActiveTerms: boolean
+    }
+    counts: {
+        activeMemberCount: number
+        activeAdminCount: number
+        pendingInviteCount: number
+        activeWatchlistTermCount: number
+        pausedWatchlistCount: number
+        archivedWatchlistCount: number
+    }
+    readiness: {
+        organizationCanGenerateAlerts: boolean
+        actorCanExportActiveTerms: boolean
+        readyForWorker3Replay: boolean
+        readyForDashboard: boolean
+        cleanupRequired: boolean
+    }
+    routes: {
+        createOrganization: 'POST /api/organizations'
+        inviteMembers: 'POST /api/organizations/:id/invites'
+        acceptInvite: 'POST /api/organizations/invites/:inviteId/accept'
+        listWatchlists: 'GET /api/organizations/:id/watchlists'
+        mutateWatchlist: 'POST|PUT|DELETE /api/organizations/:id/watchlists'
+        alertReadiness: 'GET /api/organizations/:id/alert-readiness'
+        alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+        cleanupWatchlists: 'POST /api/organizations/:id/watchlists/cleanup'
+    }
+    worker3Proof: {
+        noNetworkRequired: true
+        replayRoute: 'organization_watchlist'
+        exportSchema: 'organization.watchlist_alert_terms_export.v1'
+        alertGenerationRefField: 'activeTerms[].alertGenerationRef'
+        alertGeneratorKeyField: 'activeTerms[].alertGenerationRef.dedupe.key'
+        expectedAlertFields: string[]
+        testCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
+    uiProof: {
+        safeFields: string[]
+        redactedFields: string[]
+        nonmemberEnumeration: false
+        dashboardFixture: 'organization_watchlist'
+    }
+    cleanupProof: {
+        cleanupIdempotent: true
+        cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
+        cleanupRequiredBlocker: 'cleanup_required'
+    }
+    blockers: string[]
+}
+
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const watchlistWriteRoles = new Set<OrganizationRole>(['owner', 'admin'])
 const inviteRoles = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
@@ -1188,6 +1244,100 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
             'cleanup_required',
         ],
         readyForOnboarding: typedBlockers.length === 0,
+    }
+}
+
+export function organizationReadinessProof(input: {
+    lifecycleReadiness: OrganizationLifecycleReadiness
+    alertGenerationBridge: OrganizationWatchlistAlertGenerationContract
+    downstreamAuthorization: OrganizationDownstreamAuthorizationExport
+}): OrganizationReadinessProof {
+    const watchlists = input.downstreamAuthorization.watchlists
+    const actorCanExportActiveTerms = input.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms
+    const organizationCanGenerateAlerts = input.alertGenerationBridge.canGenerateAlerts
+    const cleanupRequired = watchlists.pausedCount + watchlists.archivedCount > 0
+    const blockers = Array.from(new Set([
+        ...input.lifecycleReadiness.typedBlockers,
+        ...input.alertGenerationBridge.blockedReasons,
+        ...input.downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+        input.downstreamAuthorization.visibility.allowed ? undefined : input.downstreamAuthorization.visibility.reason,
+        cleanupRequired ? 'cleanup_required' : undefined,
+    ].filter(Boolean).map(String))).sort()
+
+    return {
+        schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
+        organizationId: input.downstreamAuthorization.organizationId,
+        tenantId: input.downstreamAuthorization.tenantId,
+        actor: {
+            role: input.downstreamAuthorization.member.role,
+            canExportActiveTerms: actorCanExportActiveTerms,
+        },
+        counts: {
+            activeMemberCount: input.lifecycleReadiness.counts.activeMemberCount,
+            activeAdminCount: input.lifecycleReadiness.counts.activeAdminCount,
+            pendingInviteCount: input.lifecycleReadiness.counts.pendingInviteCount,
+            activeWatchlistTermCount: input.alertGenerationBridge.activeWatchlistTerms.length,
+            pausedWatchlistCount: watchlists.pausedCount,
+            archivedWatchlistCount: watchlists.archivedCount,
+        },
+        readiness: {
+            organizationCanGenerateAlerts,
+            actorCanExportActiveTerms,
+            readyForWorker3Replay: organizationCanGenerateAlerts && actorCanExportActiveTerms && !blockers.some(blocker => blocker.startsWith('org_') || blocker === 'no_active_admin' || blocker === 'no_active_terms' || blocker === 'alert_export_unavailable'),
+            readyForDashboard: input.lifecycleReadiness.lifecycleStatus === 'active' && input.lifecycleReadiness.counts.activeAdminCount > 0,
+            cleanupRequired,
+        },
+        routes: {
+            createOrganization: 'POST /api/organizations',
+            inviteMembers: 'POST /api/organizations/:id/invites',
+            acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
+            listWatchlists: 'GET /api/organizations/:id/watchlists',
+            mutateWatchlist: 'POST|PUT|DELETE /api/organizations/:id/watchlists',
+            alertReadiness: 'GET /api/organizations/:id/alert-readiness',
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            cleanupWatchlists: 'POST /api/organizations/:id/watchlists/cleanup',
+        },
+        worker3Proof: {
+            noNetworkRequired: true,
+            replayRoute: 'organization_watchlist',
+            exportSchema: 'organization.watchlist_alert_terms_export.v1',
+            alertGenerationRefField: 'activeTerms[].alertGenerationRef',
+            alertGeneratorKeyField: 'activeTerms[].alertGenerationRef.dedupe.key',
+            expectedAlertFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.alertGenerationRefs',
+                'workflowContext.alertGeneratorKeys',
+                'casePath',
+            ],
+            testCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
+        uiProof: {
+            safeFields: [
+                'organizationId',
+                'tenantId',
+                'counts',
+                'readiness',
+                'routes',
+                'blockers',
+                'uiProof.nonmemberEnumeration',
+            ],
+            redactedFields: [
+                'activeTerms[].term',
+                'activeTerms[].value',
+                'member.userId',
+                'alertGenerationRef.lifecycle.createdBy',
+            ],
+            nonmemberEnumeration: false,
+            dashboardFixture: 'organization_watchlist',
+        },
+        cleanupProof: {
+            cleanupIdempotent: true,
+            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
+            cleanupRequiredBlocker: 'cleanup_required',
+        },
+        blockers,
     }
 }
 
