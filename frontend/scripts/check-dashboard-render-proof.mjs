@@ -164,6 +164,9 @@ for (const [id, spec] of Object.entries(readinessRows)) {
 for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'signal']) {
     assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
 }
+for (const consoleWarningGuard of ['consolewarnings', 'same key', 'encountered two children']) {
+    assert.ok(renderDomSource.toLowerCase().includes(consoleWarningGuard), `Rendered proof command missing console warning guard: ${consoleWarningGuard}`)
+}
 
 const worker3Matrix = {
     viewports: [

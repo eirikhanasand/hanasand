@@ -160,10 +160,11 @@ export default function DashboardSidebar({
                         <div className='grid gap-1 sm:grid-cols-2 lg:grid-cols-1'>
                             {section.items.map((item) => {
                                 const active = item.href === activeHref
+                                const itemKey = `${section.title}:${item.href}:${item.label}`
 
                                 return (
                                     <Link
-                                        key={item.href}
+                                        key={itemKey}
                                         href={item.href}
                                         title={item.label}
                                         className={`flex min-h-10 items-center rounded-lg border px-3 transition ${

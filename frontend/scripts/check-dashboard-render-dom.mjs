@@ -105,6 +105,7 @@ function resultSkeleton(spec, viewport, imagePath) {
         clippedTextCount: 0,
         bannedCopyList: [],
         highContrastTokenHits: [],
+        consoleWarnings: [],
         readinessRows: {},
     }
 }
@@ -314,12 +315,20 @@ async function run() {
                     { name: 'email', value: encodeURIComponent('dashboard-render-proof@hanasand.local'), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
                 ])
                 const page = await context.newPage()
+                const consoleWarnings = []
+                page.on('console', message => {
+                    if (!['warning', 'error'].includes(message.type())) return
+                    const text = message.text()
+                    if (/same key|encountered two children/i.test(text)) consoleWarnings.push(text)
+                })
                 try {
                     await page.goto(pageUrl(options.baseUrl, spec.path), { waitUntil: 'networkidle', timeout: 45000 })
                     await page.screenshot({ path: imagePath, fullPage: true })
                     const inspected = await inspectRenderedPage(page, spec)
                     Object.assign(result, inspected)
-                    result.passed = inspected.reasons.length === 0
+                    result.consoleWarnings = consoleWarnings
+                    for (const warning of consoleWarnings) result.reasons.push(`console warning: ${warning}`)
+                    result.passed = result.reasons.length === 0
                 } catch (error) {
                     result.reasons.push(error instanceof Error ? error.message : String(error))
                 } finally {
