@@ -565,10 +565,11 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
             </div>
 
-            <div className='mt-4 grid gap-3 xl:grid-cols-2'>
+            <div className='mt-4 grid gap-3 xl:grid-cols-3'>
                 <EvidencePanel title='Confidence reasoning'>
                     {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
                 </EvidencePanel>
+                <SourceCoveragePanel coverage={actor.sourceCoverage} />
                 <StructuredProvenancePanel rows={actor.provenanceRows} />
             </div>
         </section>
@@ -607,6 +608,50 @@ function StructuredProvenancePanel({ rows }: { rows: TiActorIntelligenceProfile[
                     </div>
                 )) : <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>No structured provenance rows returned.</p>}
             </div>
+        </div>
+    )
+}
+
+function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfile['sourceCoverage'] }) {
+    const metrics = [
+        { label: 'Source rows', value: String(coverage.totalRows) },
+        { label: 'Dated rows', value: String(coverage.datedRows) },
+        { label: 'Captures', value: String(coverage.captureRows) },
+        { label: 'Latest', value: coverage.latestReportDate ? formatDate(coverage.latestReportDate) : 'Not dated' },
+    ]
+    return (
+        <div data-ti-source-coverage='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source coverage</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {coverage.stale ? 'Refresh source coverage before alert-ready handoff.' : 'Evidence dates and source references meet freshness policy.'}
+                    </p>
+                </div>
+                <span className={coverage.stale ? 'rounded-md bg-[#fff4d6] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#2b220d] dark:text-[#ffd77a]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:bg-[#12281b] dark:text-[#83d9a1]'}>
+                    {coverage.stale ? 'review' : 'ready'}
+                </span>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                {metrics.map(metric => (
+                    <div key={metric.label} className='min-w-0 rounded-md border border-[#e4e9f1] bg-white p-2 dark:border-[#2a3547] dark:bg-[#0f1621]'>
+                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{metric.label}</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{metric.value}</p>
+                    </div>
+                ))}
+            </div>
+            <div className='mt-3 flex flex-wrap gap-1.5'>
+                {coverage.sourceFamilies.length ? coverage.sourceFamilies.map(item => (
+                    <span key={item.family} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        {formatLabel(item.family)} · {item.count}
+                    </span>
+                )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No source families returned.</span>}
+            </div>
+            {coverage.missing.length ? (
+                <div className='mt-3 rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                    Needs {coverage.missing.map(coverageMissingLabel).join(', ')}.
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -2478,6 +2523,14 @@ function rowToneClass(tone: 'ok' | 'watch' | 'bad') {
 
 function formatLabel(value: string) {
     return value.replaceAll('_', ' ')
+}
+
+function coverageMissingLabel(value: string) {
+    if (value.includes('captureId')) return 'capture references'
+    if (value.includes('reportDate')) return 'report dates'
+    if (value.includes('sourceId')) return 'source identifiers'
+    if (value.includes('structuredProvenance')) return 'structured provenance'
+    return formatLabel(value)
 }
 
 function humanResultStatus(value?: string) {

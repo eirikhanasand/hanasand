@@ -11,6 +11,20 @@ export type TiActorSourceProvenance = {
     shownBecause: string
 }
 
+export type TiActorSourceCoverage = {
+    totalRows: number
+    datedRows: number
+    captureRows: number
+    sourceIds: string[]
+    sourceFamilies: Array<{
+        family: string
+        count: number
+    }>
+    latestReportDate?: string
+    stale: boolean
+    missing: string[]
+}
+
 export type TiActorIntelligenceProfile = {
     actorClass: string
     attribution: string
@@ -27,6 +41,7 @@ export type TiActorIntelligenceProfile = {
     confidenceReasoning: string[]
     sourceProvenance: string[]
     provenanceRows: TiActorSourceProvenance[]
+    sourceCoverage: TiActorSourceCoverage
     freshness: {
         generatedAt: string
         lastSeen: string
@@ -56,6 +71,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         ...fallback.sourceProvenance,
     ]).slice(0, 10)
     const provenanceRows = buildProvenanceRows(result, fallback)
+    const sourceCoverage = buildSourceCoverage(provenanceRows, result.generatedAt)
     const indicators = unique([
         ...(contract?.indicators ?? []),
         ...fallback.indicators,
@@ -79,11 +95,12 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         confidenceReasoning: unique([...(contract?.confidenceReasoning ?? []), ...fallback.confidenceReasoning]).slice(0, 8),
         sourceProvenance: sourceProvenance.length ? sourceProvenance : fallback.sourceProvenance,
         provenanceRows,
+        sourceCoverage,
         freshness: freshnessFor(result.generatedAt, lastSeen),
     }
 }
 
-type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'freshness'>
+type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'freshness'>
 
 function fallbackActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceFallback {
     if (isApt29(result)) {
@@ -174,6 +191,58 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
         ...sourceRows,
         ...fallbackRows,
     ].filter(row => row.sourceName && row.provenance), row => `${row.sourceId ?? row.sourceName}:${row.provenance}`).slice(0, 12)
+}
+
+function buildSourceCoverage(rows: TiActorSourceProvenance[], generatedAt: string): TiActorSourceCoverage {
+    const sourceIds = unique(rows.map(row => row.sourceId).filter((value): value is string => Boolean(value)))
+    const datedRows = rows.filter(row => parseSourceDate(row.reportDate) !== null)
+    const captureRows = rows.filter(row => row.captureId).length
+    const latestReportDate = datedRows.map(row => row.reportDate).filter((value): value is string => Boolean(value)).sort((a, b) => {
+        const parsedA = parseSourceDate(a) ?? 0
+        const parsedB = parseSourceDate(b) ?? 0
+        return parsedB - parsedA
+    })[0]
+    const generated = Date.parse(generatedAt)
+    const latest = latestReportDate ? parseSourceDate(latestReportDate) : null
+    const families = rows.reduce((counts, row) => {
+        const family = sourceFamilyFor(row)
+        counts.set(family, (counts.get(family) ?? 0) + 1)
+        return counts
+    }, new Map<string, number>())
+    const missing = [
+        rows.length ? '' : 'actorIntelligence.structuredProvenance[]',
+        sourceIds.length ? '' : 'actorIntelligence.structuredProvenance[].sourceId',
+        datedRows.length ? '' : 'actorIntelligence.structuredProvenance[].reportDate',
+        captureRows ? '' : 'sourceProvenance[].captureId',
+    ].filter(Boolean)
+
+    return {
+        totalRows: rows.length,
+        datedRows: datedRows.length,
+        captureRows,
+        sourceIds,
+        sourceFamilies: Array.from(families.entries()).map(([family, count]) => ({ family, count })).sort((a, b) => b.count - a.count || a.family.localeCompare(b.family)),
+        latestReportDate,
+        stale: !latest || (Number.isFinite(generated) && generated - latest > 180 * 24 * 60 * 60 * 1000),
+        missing,
+    }
+}
+
+function sourceFamilyFor(row: TiActorSourceProvenance) {
+    const value = `${row.sourceId ?? ''} ${row.sourceName} ${row.provenance}`.toLowerCase()
+    if (row.captureId) return 'source_capture'
+    if (/cisa|government|advisory|allied|cert|ncsc|fbi|nsa|svr/.test(value)) return 'government_advisory'
+    if (/microsoft|google|mandiant|crowdstrike|proofpoint|sentinelone|palo alto|unit 42|recorded future|secureworks|hpe|solarwinds/.test(value)) return 'vendor_disclosure'
+    if (/actor profile reference/.test(value)) return 'actor_profile'
+    return 'public_ti'
+}
+
+function parseSourceDate(value?: string) {
+    if (!value) return null
+    const parsed = Date.parse(value)
+    if (Number.isFinite(parsed)) return parsed
+    const year = value.match(/\b(19|20)\d{2}\b/)?.[0]
+    return year ? Date.parse(`${year}-01-01`) : null
 }
 
 function freshnessFor(generatedAt: string, lastSeen: string): TiActorIntelligenceProfile['freshness'] {
