@@ -734,6 +734,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     }
 
     async function createSharedWatchlistTerm(item: WorkbenchCase) {
+        const disabledReason = watchlistMutationDisabledReason(orgContext, selectedCaseDetail)
+        if (disabledReason) {
+            setMessage({ ok: false, text: disabledReason })
+            return
+        }
         const term = suggestedWatchTerm(item)
         if (!term) {
             setMessage({ ok: false, text: 'No selected case term is available to create a shared watchlist entry.' })
@@ -791,6 +796,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     }
 
     async function upsertWatchlist(input: { watchlist: WorkbenchOrgContext['watchlists'][number], terms?: Array<{ value: string, kind?: string }>, status?: string }) {
+        const disabledReason = watchlistMutationDisabledReason(orgContext, selectedCaseDetail)
+        if (disabledReason) {
+            setMessage({ ok: false, text: disabledReason })
+            return
+        }
         await runPersistentAction(`watchlist:update:${input.watchlist.id}`, async () => {
             const body: WorkbenchWatchlistUpsertPayload = {
                 ...scopeBody(orgContext),
@@ -1005,12 +1015,12 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     const termCoverage = term ? watchlistCoverage(orgContext, term) : undefined
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
     const visibility = access?.visibilityDecision
-    const readOnly = access?.readOnly === true || visibility?.allowed === false
     const inviteBlockedReason = orgInviteDisabledReason(orgContext, caseDetail)
     const blockedReason = !orgContext
         ? 'Org operating context is not loaded into the root console.'
         : orgContext.readiness.blockedReasons[0]
-    const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered && !readOnly)
+    const watchlistBlockedReason = watchlistMutationDisabledReason(orgContext, caseDetail)
+    const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered && !watchlistBlockedReason)
     const activeWatchlists = (orgContext?.watchlists || []).filter(item => item.status === 'active')
 
     return (
@@ -1119,7 +1129,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                     <button
                         type='button'
                         disabled={!canCreateTerm || Boolean(busyAction)}
-                        title={!canCreateTerm ? blockedReason || (readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Term is already covered or unavailable.') : undefined}
+                        title={!canCreateTerm ? watchlistBlockedReason || blockedReason || 'Term is already covered or unavailable.' : undefined}
                         onClick={onCreateSharedWatchlistTerm}
                         className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
                     >
@@ -1147,8 +1157,8 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                         <button
                                             key={`${watchlist.id}:${termItem.value}`}
                                             type='button'
-                                            disabled={readOnly || Boolean(busyAction) || watchlist.terms.length <= 1}
-                                            title={watchlist.terms.length <= 1 ? 'Cannot remove the last term through POST /api/dwm/watchlists; pause the watchlist instead.' : readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Remove term via watchlist upsert.'}
+                                            disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction) || watchlist.terms.length <= 1}
+                                            title={watchlist.terms.length <= 1 ? 'Cannot remove the last term through POST /api/dwm/watchlists; pause the watchlist instead.' : watchlistBlockedReason || 'Remove term via watchlist upsert.'}
                                             onClick={() => onUpdateWatchlist({ watchlist, terms: watchlist.terms.filter(candidate => candidate.value !== termItem.value) })}
                                             className='rounded-full border border-[#d8dee9] bg-[#fbfcfe] px-2 py-0.5 text-[11px] font-semibold text-[#596170] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
                                         >
@@ -1158,8 +1168,8 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                 </div>
                                 <button
                                     type='button'
-                                    disabled={readOnly || Boolean(busyAction)}
-                                    title={readOnly ? 'Disabled because the selected case is read-only for this member.' : 'Pause via POST /api/dwm/watchlists with existing id and status=paused.'}
+                                    disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction)}
+                                    title={watchlistBlockedReason || 'Pause via POST /api/dwm/watchlists with existing id and status=paused.'}
                                     onClick={() => onUpdateWatchlist({ watchlist, status: 'paused' })}
                                     className='mt-2 inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
@@ -3065,6 +3075,13 @@ function orgInviteDisabledReason(orgContext: WorkbenchOrgContext | undefined, ca
     if (!orgContext?.organization) return 'Invite is blocked because no selected organization was returned from GET /api/organizations.'
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
     if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled because the case API marked this member read-only or visibility-blocked.'
+    return ''
+}
+
+function watchlistMutationDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
+    if (!orgContext?.createWatchlistAction) return orgContext?.readiness.blockedReasons[0] || 'POST /api/dwm/watchlists is not available because the org/watchlist backend is not configured.'
+    const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Watchlist update is disabled because the case API marked this member read-only or visibility-blocked.'
     return ''
 }
 
