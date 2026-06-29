@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/workbenchClient.tsx', import.meta.url), 'utf8')
 const modelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', import.meta.url), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', import.meta.url), 'utf8')
+const sourceOpsSource = readFileSync(new URL('../src/app/dashboard/ti/control/scraperControlClient.tsx', import.meta.url), 'utf8')
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
 const progressSource = readFileSync(new URL('../src/utils/productProgress/readiness.ts', import.meta.url), 'utf8')
 const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs', import.meta.url), 'utf8')
@@ -98,7 +99,7 @@ for (const requiredClass of [
     assert.ok(workbenchSource.includes(requiredClass), `Missing render guard class ${requiredClass}`)
 }
 
-for (const source of [workbenchSource, modelSource, pageSource]) {
+for (const source of [workbenchSource, modelSource, pageSource, sourceOpsSource]) {
     const lowered = source.toLowerCase()
     for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked']) {
         assert.equal(lowered.includes(bannedCopy), false, `Dashboard source includes banned copy: ${bannedCopy}`)
@@ -106,6 +107,14 @@ for (const source of [workbenchSource, modelSource, pageSource]) {
     for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
         assert.equal(source.includes(bannedClass), false, `Dashboard source includes high-contrast dark class: ${bannedClass}`)
     }
+}
+
+for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {
+    assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
+}
+
+for (const sourceOpsGuard of ['min-w-32', 'min-w-44', 'sm:whitespace-nowrap', 'dark:border-[#2a3d5c]', 'dark:bg-[#111827]', 'grid gap-2 sm:grid-cols-2']) {
+    assert.ok(sourceOpsSource.includes(sourceOpsGuard), `Source operations action guard missing: ${sourceOpsGuard}`)
 }
 
 for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'proofTimestamp', 'expectedDashboardRowId', 'integrationProbeHint', 'backendProofContractVersion']) {

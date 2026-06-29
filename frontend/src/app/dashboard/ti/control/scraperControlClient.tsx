@@ -80,7 +80,7 @@ type LocalControl = {
     decisions: Record<string, { status: string; reason: string; at: string }>
 }
 
-const defaultQuery = 'APT29'
+const defaultQuery = 'watchlist terms'
 
 export default function TiScraperControlClient() {
     const [query, setQuery] = useState(defaultQuery)
@@ -243,7 +243,7 @@ export default function TiScraperControlClient() {
                                 <MiniMetric label='Review' value={String(sourceNeedsReview)} />
                                 <MiniMetric label='Alerts' value={String(sourceGrowth.alertsGenerated)} />
                             </div>
-                            <div className='flex flex-wrap gap-2'>
+                            <div className='grid gap-2 sm:grid-cols-2 2xl:grid-cols-5'>
                                 <ActionButton compact busy={busyAction === 'run_query'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('run_query')}>Run</ActionButton>
                                 <ActionButton compact busy={busyAction === 'source_apply_plan'} icon={<FileSearch className='h-4 w-4' />} onClick={() => runAction('source_apply_plan')}>Plan</ActionButton>
                                 <ActionButton compact busy={busyAction === 'canary_run'} icon={<Activity className='h-4 w-4' />} onClick={() => runAction('canary_run')}>Canary</ActionButton>
@@ -407,7 +407,7 @@ export default function TiScraperControlClient() {
                                         placeholder='@channel or https://t.me/channel'
                                     />
                                 </label>
-                                <div className='flex flex-wrap gap-2'>
+                                <div className='grid gap-2 sm:grid-cols-2'>
                                     <ActionButton compact busy={busyAction === 'request_source'} icon={<PlayCircle className='h-4 w-4' />} onClick={() => runAction('request_source')}>Add Telegram</ActionButton>
                                     <ActionButton compact busy={busyAction === 'request_restricted_source'} icon={<DatabaseZap className='h-4 w-4' />} onClick={() => runAction('request_restricted_source')}>Request metadata</ActionButton>
                                 </div>
@@ -420,7 +420,7 @@ export default function TiScraperControlClient() {
                                         placeholder='company.com, vendor, product, brand'
                                     />
                                 </label>
-                                <div className='flex flex-wrap gap-2'>
+                                <div className='grid gap-2 sm:grid-cols-2'>
                                     <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
                                     <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
                                 </div>
@@ -858,10 +858,10 @@ function ActionButton({ children, icon, busy, compact, onClick }: { children: Re
             type='button'
             disabled={busy}
             onClick={onClick}
-            className={`inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white text-center text-sm font-semibold leading-tight text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#2a3d5c] ${compact ? 'min-h-8 px-2 py-1.5 text-xs' : 'min-h-10 px-3 py-2'}`}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white text-center text-sm font-semibold leading-tight text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#2a3d5c] dark:bg-[#111827] dark:text-[#d8deea] dark:hover:bg-[#172033] ${compact ? 'min-h-8 min-w-32 px-2 py-1.5 text-xs' : 'min-h-10 min-w-44 px-3 py-2'}`}
         >
             <span className='shrink-0'>{busy ? <RefreshCcw className='h-4 w-4 animate-spin' /> : icon}</span>
-            <span className='min-w-0 wrap-break-word'>{children}</span>
+            <span className='min-w-0 wrap-break-word whitespace-normal sm:whitespace-nowrap'>{children}</span>
         </button>
     )
 }

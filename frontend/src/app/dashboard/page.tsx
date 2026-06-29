@@ -345,7 +345,7 @@ function sourceProofQuery(watchlists: DwmWatchlistSummary[]) {
         .flatMap(watchlist => watchlist.terms || [])
         .map(term => term.value.trim())
         .filter(Boolean)
-    return terms.slice(0, 4).join(',') || 'APT29'
+    return terms.slice(0, 4).join(',') || 'watchlist terms'
 }
 
 async function loadDwmOrganizationState(): Promise<DwmOrganizationState> {
