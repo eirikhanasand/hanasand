@@ -1253,6 +1253,14 @@ assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSaf
 ])
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.requiredAuditEvent, 'organization_watchlist_alert_visibility_denied')
 assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.blockerCodes, [])
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.schemaVersion, 'organization.shared_watchlist_webhook_delivery_guardrails.v1')
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.ok, true)
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredIdempotencyFields, ['eventType', 'organizationId', 'destinationId', 'alert.dedupeKey'])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredEvidenceFields, ['deliveryId', 'destinationId', 'attemptedAt', 'status', 'casePath', 'watchlistItemIds', 'auditEventContracts'])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredRedactedFields, ['destination.endpoint', 'destination.secret', 'activeTerms[].term'])
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.destinationEnumerationAllowed, false)
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, organization.id)
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.blockerCodes, [])
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(alertTermsExport.alertBridgeContract.schemaVersion, 'organization.watchlist_alert_bridge_contract.v1')
 assert.equal(alertTermsExport.alertBridgeContract.recommendedDownstreamRoute, 'organization_watchlist')
@@ -1344,6 +1352,26 @@ assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.re
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.acknowledgeAllowed, true)
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.assignAllowed, true)
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.replayAllowed, true)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.schemaVersion, 'organization.shared_watchlist_alert_role_matrix.v1')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.actorRole, 'admin')
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.allowedActions, [
+    'create_watchlist',
+    'edit_watchlist_terms',
+    'archive_watchlist',
+    'restore_watchlist',
+    'acknowledge_alert',
+    'assign_case',
+    'link_case',
+    'manage_invites',
+])
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.roleGates.create_watchlist, ['owner', 'admin'])
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.roleGates.acknowledge_alert, ['owner', 'admin', 'analyst', 'member'])
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.allowedActionsByRole.viewer, [])
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.allowedActionsByRole.member, ['acknowledge_alert'])
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.downstreamConsumers.includes('alert_queue'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.downstreamConsumers.includes('case_workflow'))
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.deniedRoles, ['viewer', 'support', 'nonmember'])
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.denialReason, 'role_not_allowed')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.ownerOrganizationId, organization.id)
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.watchlistItemIds.sort(), alertTermsExport.activeTerms.map((term: Row) => term.watchlistItemId).sort())
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.alertGeneratorKeys.sort(), alertTermsExport.activeTerms.map((term: Row) => term.alertGeneratorKey).sort())
@@ -1575,6 +1603,10 @@ const deniedQueueContract = orgUtils.organizationSharedWatchlistAlertQueueVisibi
 assert.equal(deniedQueueContract.visibility.allowed, false)
 assert.equal(deniedQueueContract.visibility.denialReason, 'role_not_allowed')
 assert.equal(deniedQueueContract.actionGates.readAlertsAllowed, false)
+assert.equal(deniedQueueContract.roleActionMatrix.actorRole, 'member')
+assert.deepEqual(deniedQueueContract.roleActionMatrix.allowedActions, ['acknowledge_alert'])
+assert.deepEqual(deniedQueueContract.roleActionMatrix.allowedActionsByRole.viewer, [])
+assert.deepEqual(deniedQueueContract.roleActionMatrix.roleGates.manage_invites, ['owner', 'admin'])
 assert.equal(deniedQueueContract.denialResponseContract.blocked, true)
 assert.equal(deniedQueueContract.denialResponseContract.statusCode, 403)
 assert.equal(deniedQueueContract.denialResponseContract.errorCode, 'org_alert_visibility_denied')
@@ -1860,6 +1892,10 @@ assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.
 assert.notDeepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys, alertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.ok, true)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.blockerCodes, [])
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.ok, true)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, secondOrganization.id)
+assert.notEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId)
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.blockerCodes, [])
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.organizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.activeTermCount, 1)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.termFamilies, ['domain'])
@@ -1883,6 +1919,9 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.consu
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.requiredStorageBinding, 'workflowContext.organizationId')
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.ok, true)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.blockerCodes, [])
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.actorRole, 'owner')
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.roleGates.archive_watchlist, ['owner', 'admin'])
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.roleActionMatrix.allowedActionsByRole.support, [])
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.downstreamCorrelationFields.includes('alertBridge.alertGeneratorKeys'))
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.proofLogQuery, 'GET /api/logs?service=api&message=organization_watchlist')
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.redactedFields.includes('activeTerms[].term'))

@@ -702,6 +702,7 @@ export type OrganizationSharedWatchlistIntegrationGuardrailCode =
     | 'raw_terms_enabled'
     | 'redaction_missing'
     | 'denial_guardrail_missing'
+    | 'webhook_guardrail_missing'
     | 'route_missing'
 
 export type OrganizationSharedWatchlistIntegrationGuardrails = {
@@ -744,6 +745,16 @@ export type OrganizationSharedWatchlistIntegrationGuardrails = {
         requiredResponseFields: OrganizationSharedWatchlistAlertQueueVisibility['denialGuardrails']['requiredResponseFields']
         requiredAuditEvent: 'organization_watchlist_alert_visibility_denied'
         blockerCodes: OrganizationSharedWatchlistAlertQueueVisibility['denialGuardrails']['blockerCodes']
+    }
+    webhookSafety: {
+        schemaVersion: 'organization.shared_watchlist_webhook_delivery_guardrails.v1'
+        ok: boolean
+        requiredIdempotencyFields: Array<'eventType' | 'organizationId' | 'destinationId' | 'alert.dedupeKey'>
+        requiredEvidenceFields: Array<'deliveryId' | 'destinationId' | 'attemptedAt' | 'status' | 'casePath' | 'watchlistItemIds' | 'auditEventContracts'>
+        requiredRedactedFields: Array<'destination.endpoint' | 'destination.secret' | 'activeTerms[].term'>
+        destinationEnumerationAllowed: false
+        requiredDestinationOrgId: string
+        blockerCodes: Array<'webhook_idempotency_missing' | 'webhook_evidence_missing' | 'webhook_redaction_missing' | 'webhook_org_scope_missing' | 'webhook_destination_enumeration_enabled'>
     }
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[]
@@ -822,6 +833,16 @@ export type OrganizationSharedWatchlistAlertQueueVisibility = {
     }
     allowedActions: OrganizationAlertCaseAction[]
     actionGates: OrganizationSharedWatchlistDownstreamProof['alertBridge']['queueVisibilityContract']['actionGates']
+    roleActionMatrix: {
+        schemaVersion: 'organization.shared_watchlist_alert_role_matrix.v1'
+        actorRole: OrganizationRole
+        allowedActions: OrganizationAlertCaseAction[]
+        roleGates: Record<OrganizationAlertCaseAction, OrganizationAlertCaseRole[]>
+        allowedActionsByRole: Record<OrganizationAlertCaseRole, OrganizationAlertCaseAction[]>
+        downstreamConsumers: Array<'alert_queue' | 'case_workflow' | 'webhook_delivery' | 'support_redacted_read'>
+        deniedRoles: Array<'viewer' | 'support' | 'nonmember'>
+        denialReason: 'role_not_allowed'
+    }
     watchlistScope: {
         ownerOrganizationId: string
         watchlistItemIds: string[]
@@ -2074,6 +2095,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
     const alertContractKeys = [...proof.alertBridge.queueVisibilityContract.watchlistScope.alertGeneratorKeys].sort()
     const caseContractKeys = [...proof.caseBridge.caseWorkflowContract.watchlistScope.alertGeneratorKeys].sort()
     const alertQueueVisibility = organizationSharedWatchlistAlertQueueVisibility(proof)
+    const webhookSafety = organizationSharedWatchlistWebhookDeliveryGuardrails(proof)
 
     if (proof.schemaVersion !== 'organization.shared_watchlist_downstream_proof.v1') blockerCodes.push('schema_mismatch')
     if (proof.audit.schemaVersion !== 'organization.shared_watchlist_audit_contract.v1') blockerCodes.push('schema_mismatch')
@@ -2126,10 +2148,12 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         || !proof.caseBridge.caseWorkflowContract.redactedFields.includes('case.evidence.rawContent')
         || !proof.webhookBridge.deliveryContract.redactedFields.includes('destination.secret')
         || !alertQueueVisibility.denialGuardrails.ok
+        || !webhookSafety.ok
     ) {
         blockerCodes.push('redaction_missing')
     }
     if (!alertQueueVisibility.denialGuardrails.ok) blockerCodes.push('denial_guardrail_missing')
+    if (!webhookSafety.ok) blockerCodes.push('webhook_guardrail_missing')
     if (
         proof.alertBridge.queueVisibilityContract.routes.list !== 'GET /v1/dwm/alerts'
         || proof.alertBridge.queueVisibilityContract.routes.replay !== 'POST /v1/dwm/alerts/:id/replay'
@@ -2187,6 +2211,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
             requiredAuditEvent: alertQueueVisibility.denialGuardrails.requiredAuditEvent,
             blockerCodes: alertQueueVisibility.denialGuardrails.blockerCodes,
         },
+        webhookSafety,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         blockerCodes: uniqueBlockers,
     }
@@ -2195,6 +2220,60 @@ export function organizationSharedWatchlistIntegrationGuardrails(
 function sameStringSet(left: string[], right: string[]) {
     if (left.length !== right.length) return false
     return left.every((value, index) => value === right[index])
+}
+
+function organizationSharedWatchlistWebhookDeliveryGuardrails(
+    proof: OrganizationSharedWatchlistDownstreamProof
+): OrganizationSharedWatchlistIntegrationGuardrails['webhookSafety'] {
+    const delivery = proof.webhookBridge.deliveryContract
+    const requiredIdempotencyFields: OrganizationSharedWatchlistIntegrationGuardrails['webhookSafety']['requiredIdempotencyFields'] = [
+        'eventType',
+        'organizationId',
+        'destinationId',
+        'alert.dedupeKey',
+    ]
+    const requiredEvidenceFields: OrganizationSharedWatchlistIntegrationGuardrails['webhookSafety']['requiredEvidenceFields'] = [
+        'deliveryId',
+        'destinationId',
+        'attemptedAt',
+        'status',
+        'casePath',
+        'watchlistItemIds',
+        'auditEventContracts',
+    ]
+    const requiredRedactedFields: OrganizationSharedWatchlistIntegrationGuardrails['webhookSafety']['requiredRedactedFields'] = [
+        'destination.endpoint',
+        'destination.secret',
+        'activeTerms[].term',
+    ]
+    const blockerCodes: OrganizationSharedWatchlistIntegrationGuardrails['webhookSafety']['blockerCodes'] = []
+
+    if (!requiredIdempotencyFields.every(field => delivery.idempotency.keyFields.includes(field))) {
+        blockerCodes.push('webhook_idempotency_missing')
+    }
+    if (!requiredEvidenceFields.every(field => delivery.evidenceFields.includes(field))) {
+        blockerCodes.push('webhook_evidence_missing')
+    }
+    if (!requiredRedactedFields.every(field => delivery.redactedFields.includes(field))) {
+        blockerCodes.push('webhook_redaction_missing')
+    }
+    if (delivery.organizationId !== proof.organizationId || delivery.destinationSelection.requiredDestinationOrgId !== proof.organizationId) {
+        blockerCodes.push('webhook_org_scope_missing')
+    }
+    if (delivery.destinationSelection.nonmemberDestinationEnumeration) {
+        blockerCodes.push('webhook_destination_enumeration_enabled')
+    }
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_webhook_delivery_guardrails.v1',
+        ok: blockerCodes.length === 0,
+        requiredIdempotencyFields,
+        requiredEvidenceFields,
+        requiredRedactedFields,
+        destinationEnumerationAllowed: false,
+        requiredDestinationOrgId: delivery.destinationSelection.requiredDestinationOrgId,
+        blockerCodes,
+    }
 }
 
 export function organizationSharedWatchlistSupportInspection(input: {
@@ -2247,6 +2326,10 @@ export function organizationSharedWatchlistAlertQueueVisibility(
 ): OrganizationSharedWatchlistAlertQueueVisibility {
     const queue = proof.alertBridge.queueVisibilityContract
     const persistence = proof.alertBridge.persistenceContract
+    const roleContract = organizationAlertCaseRoleActionContract({
+        userId: proof.actor.userId,
+        role: proof.actor.role,
+    })
     const denialResponseContract: OrganizationSharedWatchlistAlertQueueVisibility['denialResponseContract'] = {
         appliesWhen: 'visibility.allowed_false',
         blocked: !queue.actorVisibility.allowed,
@@ -2300,6 +2383,24 @@ export function organizationSharedWatchlistAlertQueueVisibility(
         denialGuardrails: organizationSharedWatchlistAlertDenialGuardrails(denialResponseContract),
         allowedActions: proof.actor.allowedActions,
         actionGates: queue.actionGates,
+        roleActionMatrix: {
+            schemaVersion: 'organization.shared_watchlist_alert_role_matrix.v1',
+            actorRole: proof.actor.role,
+            allowedActions: roleContract.actor.allowedActions,
+            roleGates: roleContract.roleGates,
+            allowedActionsByRole: {
+                owner: organizationAlertCaseRoleActions('owner'),
+                admin: organizationAlertCaseRoleActions('admin'),
+                analyst: organizationAlertCaseRoleActions('analyst'),
+                member: organizationAlertCaseRoleActions('member'),
+                viewer: organizationAlertCaseRoleActions('viewer'),
+                support: organizationAlertCaseRoleActions('support'),
+                nonmember: organizationAlertCaseRoleActions('nonmember'),
+            },
+            downstreamConsumers: ['alert_queue', 'case_workflow', 'webhook_delivery', 'support_redacted_read'],
+            deniedRoles: ['viewer', 'support', 'nonmember'],
+            denialReason: 'role_not_allowed',
+        },
         watchlistScope: {
             ownerOrganizationId: proof.ownerOrganizationId,
             watchlistItemIds: queue.watchlistScope.watchlistItemIds,
@@ -2358,6 +2459,7 @@ export function organizationSharedWatchlistAlertQueueVisibility(
                 'visibility',
                 'allowedActions',
                 'actionGates',
+                'roleActionMatrix',
                 'watchlistScope.watchlistItemIds',
                 'watchlistScope.alertGeneratorKeys',
                 'watchlistScope.visibilityDecisionField',
@@ -2393,6 +2495,9 @@ export function organizationSharedWatchlistAlertQueueVisibility(
             'visibility.allowed',
             'allowedActions',
             'actionGates',
+            'roleActionMatrix.actorRole',
+            'roleActionMatrix.allowedActions',
+            'roleActionMatrix.roleGates',
             'watchlistScope.watchlistItemIds',
             'watchlistScope.alertGeneratorKeys',
             'lifecycleExclusions',
