@@ -439,6 +439,19 @@ describe("dwm alert repository", () => {
         dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         deliveryDedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         recommendedRoute: "identity_response",
+        sourceProvenanceSummary: {
+          schemaVersion: "dwm.alert_source_provenance.v1",
+          sourceFamily: "telegram_public",
+          captureIds: ["cap_repo_tg_acme"],
+          sourceIds: ["src_repo_tg"],
+          evidenceCount: 1
+        },
+        orgWatchlistScope: {
+          schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+          organizationId: "org_repo_acme",
+          watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+          watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]
+        },
         alertDetailPath: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertDetailPath,
         caseIdCandidate: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.caseIdCandidate,
         casePath: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.casePath,
@@ -539,6 +552,19 @@ describe("dwm alert repository", () => {
         redactionState: "metadata_only"
       }],
       recommendedRoute: "vendor_risk",
+      sourceProvenanceSummary: {
+        schemaVersion: "dwm.alert_source_provenance.v1",
+        sourceFamily: "darkweb_metadata",
+        captureIds: ["cap_repo_darkweb_acme"],
+        sourceIds: ["src_repo_darkweb"],
+        evidenceCount: 1
+      },
+      orgWatchlistScope: {
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_repo_acme",
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]
+      },
       provenance: {
         matchBasis: "watchlist_capture_text",
         captureIds: ["cap_repo_darkweb_acme"],
@@ -761,6 +787,19 @@ describe("dwm alert repository", () => {
         caseIdCandidate: existing.caseIdCandidate,
         casePath: existing.casePath,
         workflowEventCount: 1,
+        sourceProvenanceSummary: {
+          schemaVersion: "dwm.alert_source_provenance.v1",
+          sourceFamily: "telegram_public",
+          captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+          sourceIds: ["src_repo_tg"],
+          evidenceCount: 2
+        },
+        orgWatchlistScope: {
+          schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+          organizationId: "org_repo_acme",
+          watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+          watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]
+        },
         provenance: {
           matchBasis: "watchlist_capture_text",
           captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],

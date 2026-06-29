@@ -2872,6 +2872,13 @@ function buildDwmAlertEventConsumerPayload(input: {
     workflowEventCount: input.workflowEventCount ?? 0,
     confidence: input.alert.confidence,
     confidenceReasoning: input.alert.confidenceReasoning ?? [],
+    sourceProvenanceSummary: input.alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({
+      alert: input.alert,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      workflowContext: input.workflowContext
+    }),
+    orgWatchlistScope: input.alert.orgWatchlistScope ?? buildDwmAlertOrgWatchlistScope(input.workflowContext),
     provenance: {
       matchBasis: input.alert.provenance?.matchBasis,
       captureIds: input.alert.provenance?.captureIds ?? input.captureIds,
