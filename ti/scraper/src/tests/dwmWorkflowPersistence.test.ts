@@ -210,6 +210,19 @@ describe("dwm workflow persistence", () => {
         dedupeKey: rebuild.alerts[0].dedupeKey,
         recommendedRoute: "identity_response"
       });
+      expect(detail.alertCreatedDispatch).toMatchObject({
+        schemaVersion: "dwm.alert_created_event_dispatch.v1",
+        ready: false,
+        eventId: detail.alert.alertCreatedEvent.id,
+        eventType: "dwm.alert.created",
+        alertId: rebuild.alerts[0].id,
+        tenantId: "tenant_acme",
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        selectedCaptureIds: ["cap_workflow_acme"],
+        workflowEventCount: 1
+      });
+      expect(detail.alertCreatedDispatch.blockerCodes).toContain("delivery_disabled");
       expect(detail.evidenceReplay[0]).toMatchObject({ sourceName: "Workflow public Telegram", contentHash: "hash-workflow-acme" });
       expect(detail.timeline[0]).toMatchObject({
         type: "alert_created",
@@ -782,6 +795,15 @@ describe("dwm workflow persistence", () => {
         ready: true,
         caseId: "case_alpha_darkweb"
       }
+    });
+    expect(triage.alert.alertCreatedDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: true,
+      organizationId: alphaOrg.id,
+      sourceFamily: "darkweb_metadata",
+      selectedCaptureIds: ["cap_workflow_onion_acme"],
+      workflowEventCount: 1,
+      blockerCodes: []
     });
     expect(triage.alert.customerProofHandoff).toMatchObject({
       organizationId: alphaOrg.id,
