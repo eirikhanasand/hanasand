@@ -167,6 +167,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [relevanceMarks, setRelevanceMarks] = useState<Record<string, LocalRelevanceMark>>({})
+    const [stagedHandoffs, setStagedHandoffs] = useState<Record<string, StagedHandoff>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
     const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
@@ -238,6 +239,12 @@ function Results({ result }: { result: TiSearchResponse }) {
                 decidedAt: new Date().toISOString(),
             },
         }))
+    }
+
+    function stageSelectedHandoff() {
+        if (!selected || !reviewHandoff || !selectedSourceDrilldown || !selectedCaseDraft) return
+        const staged = stagedHandoffFor(result, selected, reviewHandoff, selectedSourceDrilldown, selectedCaseDraft, selectedRelevance)
+        setStagedHandoffs(current => ({ ...current, [staged.id]: staged }))
     }
 
     return (
@@ -433,8 +440,13 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                                 onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
+                                onStage={stageSelectedHandoff}
                             />
                         </div>
+                        <StagedHandoffQueuePanel
+                            items={Object.values(stagedHandoffs)}
+                            onClear={() => setStagedHandoffs({})}
+                        />
 
                         <Panel title='Evidence Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                             <div className='grid gap-3'>
@@ -653,6 +665,24 @@ type SelectedCaseDraft = {
     watchTerms: string[]
     sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'state' | 'missing'>>
     body: Record<string, unknown>
+}
+
+type StagedHandoff = {
+    schemaVersion: 'ti.public_actor.staged_handoff.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    id: string
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    relevanceState: LocalRelevanceMark['state'] | 'not_marked'
+    caseIntent: LocalRelevanceMark['caseIntent'] | 'not_set'
+    ready: boolean
+    blockers: string[]
+    reviewHandoff: SelectedReviewHandoff
+    sourceDrilldown: SelectedSourceDrilldown
+    caseDraft: SelectedCaseDraft
 }
 
 type EnrichmentTask = {
@@ -2399,7 +2429,7 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
@@ -2408,6 +2438,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNo
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
     onRelevance: (state: LocalRelevanceMark['state']) => void
+    onStage: () => void
 }) {
     const readyForCase = Boolean(reviewHandoff?.caseHandoff.ready)
     const readyForAlert = Boolean(reviewHandoff?.alertHandoff.ready)
@@ -2462,6 +2493,15 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNo
                     </div>
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                <button
+                    type='button'
+                    onClick={onStage}
+                    disabled={!reviewHandoff || !caseDraft}
+                    className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131] dark:disabled:bg-[#172131] dark:disabled:text-[#77869a]'
+                >
+                    <ClipboardList className='h-3.5 w-3.5' />
+                    Stage handoff
+                </button>
                 {reviewHandoff ? (
                     <div data-ti-selected-review-handoff='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
@@ -2526,6 +2566,63 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required case identifiers and evidence context are present.</p>
             )}
         </div>
+    )
+}
+
+function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; onClear: () => void }) {
+    const readyCount = items.filter(item => item.ready).length
+    const bundle = {
+        schemaVersion: 'ti.public_actor.staged_handoff_bundle.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        generatedAt: new Date().toISOString(),
+        count: items.length,
+        readyCount,
+        items,
+    }
+    return (
+        <Panel title='Staged Handoffs' description='Session-local queue for selected review, source, and case drafts. Nothing is saved until opened in the authenticated console.' icon={<ClipboardList className='h-4 w-4' />}>
+            <div data-ti-staged-handoff-queue='true' className='grid gap-3'>
+                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {items.length ? `${items.length} staged handoff${items.length === 1 ? '' : 's'} · ${readyCount} ready` : 'No handoffs staged in this browser session.'}
+                        </p>
+                    </div>
+                    <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                        <CopyPayloadButton label='Staged handoff queue' payload={bundle} />
+                        <button
+                            type='button'
+                            onClick={onClear}
+                            disabled={!items.length}
+                            className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131] dark:disabled:bg-[#172131] dark:disabled:text-[#77869a]'
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                {items.length ? (
+                    <div className='grid gap-2'>
+                        {items.slice(0, 4).map(item => (
+                            <div key={item.id} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'}
+                                        </p>
+                                    </div>
+                                    <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
+                                </div>
+                                {item.blockers.length ? (
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{item.blockers.slice(0, 2).join('; ')}</p>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+            </div>
+        </Panel>
     )
 }
 
@@ -2854,6 +2951,38 @@ function selectedCaseDraftFor(
         watchTerms,
         sourceRows,
         body,
+    }
+}
+
+function stagedHandoffFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    reviewHandoff: SelectedReviewHandoff,
+    sourceDrilldown: SelectedSourceDrilldown,
+    caseDraft: SelectedCaseDraft,
+    relevance: LocalRelevanceMark | undefined
+): StagedHandoff {
+    const blockers = unique([
+        ...reviewHandoff.blockers,
+        ...sourceDrilldown.blockers,
+        ...caseDraft.missing,
+    ]).slice(0, 10)
+    return {
+        schemaVersion: 'ti.public_actor.staged_handoff.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        id: `staged:${selected.id}:${Date.now()}`,
+        query: result.query,
+        generatedAt: new Date().toISOString(),
+        selectedItemId: selected.id,
+        title: selected.title,
+        relevanceState: relevance?.state ?? 'not_marked',
+        caseIntent: relevance?.caseIntent ?? caseDraft.caseIntent,
+        ready: caseDraft.ready && blockers.length === 0,
+        blockers,
+        reviewHandoff,
+        sourceDrilldown,
+        caseDraft,
     }
 }
 
@@ -3190,6 +3319,11 @@ function relevanceLabel(status: LocalRelevanceMark['state']) {
     if (status === 'context_only') return 'context'
     if (status === 'needs_source') return 'source review'
     return 'not relevant'
+}
+
+function relevanceLabelForStaged(status: StagedHandoff['relevanceState']) {
+    if (status === 'not_marked') return 'unmarked'
+    return relevanceLabel(status)
 }
 
 function readinessOwnerLabel(owner: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']) {
