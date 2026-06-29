@@ -1002,6 +1002,17 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
 
     const rows: OperatorActionRailRow[] = []
     const sourceCoverage = orgContext?.readiness.sourceCoverage
+    if (selected.kind === 'dwm_alert') {
+        const alertDetailHref = `/api/dwm/alerts/${encodeURIComponent(selected.id)}`
+        rows.push({
+            id: 'open_alert_detail',
+            label: 'Open alert detail',
+            detail: selected.persistent ? `GET ${alertDetailHref}.` : 'Alert detail is blocked for fallback rows until the DWM alerts API returns this item.',
+            tone: selected.persistent ? 'ready' : 'blocked',
+            href: selected.persistent ? alertDetailHref : undefined,
+            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
+        })
+    }
     if (selected.caseDetailHref) {
         rows.push({ id: 'open_case', label: 'Open selected case', detail: selected.caseDetailHref, tone: 'ready', href: selected.caseDetailHref })
     } else if (selected.kind === 'dwm_alert') {
@@ -1066,7 +1077,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })
-    return rows.slice(0, 7)
+    return rows.slice(0, 8)
 }
 
 function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
