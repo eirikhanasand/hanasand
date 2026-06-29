@@ -2893,6 +2893,10 @@ expect(deliveryPersistenceProof.schemaVersion === 'dwm.webhook.delivery_persiste
 expect(deliveryPersistenceReplay?.sanitizedPayloadPreview?.context.casePath === replayWorkflowAlert.casePath && deliveryPersistenceReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery persistence proof should preserve replay case context and audit linkage.', deliveryPersistenceReplay)
 expect(deliveryPersistenceRetry?.retry.retryable === true && deliveryPersistenceRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryPersistenceRetry.retry.lastErrorCategory === 'upstream_5xx', 'Delivery persistence proof should preserve retry/backoff metadata.', deliveryPersistenceRetry)
 expect(deliveryPersistenceProof.totals.retryScheduled >= 1 && deliveryPersistenceProof.audit.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery persistence proof should roll up retry and audit ids.', deliveryPersistenceProof)
+expect(deliveryPersistenceReplay?.actionRequests.deliveryHistory.query.alertId === 'alert_replay_contract' && deliveryPersistenceReplay.actionRequests.deliveryHistory.query.dedupeKey === 'dwm_dedupe_replay_contract', 'Delivery persistence proof should expose alert-scoped history query hints.', deliveryPersistenceReplay?.actionRequests.deliveryHistory)
+expect(deliveryPersistenceReplay?.actionRequests.dryRunReplay.canSend === true && deliveryPersistenceReplay.actionRequests.dryRunReplay.body?.dryRun === true && deliveryPersistenceReplay.actionRequests.dryRunReplay.body.destinationId === 'destination_replay_contract', 'Delivery persistence proof should expose a no-network dry-run replay request.', deliveryPersistenceReplay?.actionRequests.dryRunReplay)
+expect(deliveryPersistenceReplay?.actionRequests.liveReplay.canSend === false && deliveryPersistenceReplay.actionRequests.liveReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery persistence proof should keep live replay blocked unless explicitly enabled.', deliveryPersistenceReplay?.actionRequests.liveReplay)
+expect(deliveryPersistenceRetry?.actionRequests.dryRunReplay.body?.casePath === '/v1/cases/case_live_contract?alertId=alert_live_contract&dedupeKey=dwm_dedupe_live_contract' && deliveryPersistenceRetry.actionRequests.dryRunReplay.expectedAuditAction === 'delivery.replayed', 'Delivery persistence replay request should preserve retry row case path and audit action.', deliveryPersistenceRetry?.actionRequests.dryRunReplay)
 expect(emptyDeliveryPersistenceProof.ok === false && emptyDeliveryPersistenceProof.blockers.some(item => item.code === 'missing_delivery_attempt'), 'Delivery persistence proof should block clearly when no attempts match filters.', emptyDeliveryPersistenceProof)
 expect(!JSON.stringify(deliveryPersistenceProof).includes(secret), 'Delivery persistence proof should redact endpoint, response, and payload secrets.', deliveryPersistenceProof)
 expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.status === 'skipped', 'Delivery history should expose duplicate replay live-send guard skipped attempts.', duplicateReplayGuardHistory)
@@ -3282,6 +3286,9 @@ console.log(JSON.stringify({
             'deliveryPersistenceProof.rows[].sanitizedPayloadPreview.context.casePath',
             'deliveryPersistenceProof.rows[].retry.nextRetryAt',
             'deliveryPersistenceProof.rows[].audit.auditEventId',
+            'deliveryPersistenceProof.rows[].actionRequests.deliveryHistory.query',
+            'deliveryPersistenceProof.rows[].actionRequests.dryRunReplay.body',
+            'deliveryPersistenceProof.rows[].actionRequests.liveReplay.blockers[].code',
             'deliveryPersistenceProof.blockers[].code',
             'deliveryReceipts.schemaVersion',
             'deliveryReceipts.receipts[].proof.auditEventId',
