@@ -3,7 +3,7 @@ import { handleApiRequest } from "../api/server.ts";
 import { evaluateProposedDwmWatchlistEntitlement } from "../api/dwmEntitlementRoutes.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
-import type { SourceRecord } from "../types.ts";
+import type { RawCapture, SourceRecord } from "../types.ts";
 
 describe("dwm entitlement policy", () => {
   test("persists org-scoped limits, audits changes, and evaluates DWM watchlist usage", async () => {
@@ -347,6 +347,182 @@ describe("dwm entitlement policy", () => {
       const permissiveCreate = await permissiveCreateResponse.json() as any;
       expect(permissiveCreateResponse.status).toBe(201);
       expect(permissiveCreate.entitlement).toMatchObject({ persistedPolicy: false, blockedAction: null, projectedUsage: { activeWatchlists: 11, watchTerms: 11 } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("enforces alert rebuild daily entitlement without mutating denied rebuilds", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dwm-entitlement-rebuild-rate-"));
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const options = { store, frontier: new FocusedFrontier() };
+      const source: SourceRecord = {
+        id: "src_rebuild_rate",
+        name: "Rebuild rate public Telegram",
+        type: "telegram_public",
+        url: "https://t.me/rebuild_rate",
+        accessMethod: "public_http",
+        status: "active",
+        trustScore: 0.82,
+        legalNotes: "Public channel preview only.",
+        createdAt: "2026-06-29T10:00:00.000Z",
+        updatedAt: "2026-06-29T10:00:00.000Z"
+      } as SourceRecord;
+      const capture: RawCapture = {
+        id: "cap_rebuild_rate_acme",
+        sourceId: source.id,
+        url: "https://t.me/rebuild_rate/42",
+        collectedAt: "2026-06-29T10:05:00.000Z",
+        mediaType: "text/plain",
+        storageKind: "inline_text",
+        contentHash: "hash-rebuild-rate-acme",
+        sensitive: false,
+        body: "rate-limit.example appears in public Telegram chatter tied to credential exposure.",
+        metadata: { adapter: "telegram_public", channel: "rebuild_rate", messageId: 42 }
+      } as RawCapture;
+      store.saveSource(source);
+      store.saveCapture(capture);
+
+      const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild.example" },
+        body: JSON.stringify({ name: "Rebuild Rate Monitor", ownerEmail: "owner@rebuild.example", ownerUserId: "owner-rebuild" })
+      }), options);
+      const orgPayload = await orgResponse.json() as any;
+      const organizationId = orgPayload.organization.id;
+
+      const policyResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements`, {
+        method: "PUT",
+        headers: { "x-user-email": "owner@rebuild.example", "x-request-id": "req-rebuild-policy" },
+        body: JSON.stringify({
+          plan: "custom",
+          limits: { activeWatchlists: 5, watchTerms: 20, webhookDestinations: 5, sourcePacks: 5, alertRebuildsPerDay: 1, openCases: 5 },
+          reason: "Pilot contract allows one alert rebuild per day."
+        })
+      }), options);
+      expect(policyResponse.status).toBe(201);
+
+      const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild.example" },
+        body: JSON.stringify({ organizationId, id: "watch_rebuild_rate", terms: ["rate-limit.example"] })
+      }), options);
+      expect(watchlistResponse.status).toBe(201);
+
+      const firstRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild.example", "x-request-id": "req-rebuild-1" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const firstRebuild = await firstRebuildResponse.json() as any;
+      expect(firstRebuildResponse.status).toBe(200);
+      expect(firstRebuild.savedAlertCount).toBe(1);
+      expect(firstRebuild.entitlement).toMatchObject({
+        entitlementStatus: "active",
+        persistedPolicy: true,
+        blockedAction: null,
+        usageSnapshot: { alertRebuildsToday: 0, activeWatchlists: 1, watchTerms: 1 },
+        projectedUsage: { alertRebuildsToday: 1 },
+        audit: { requestId: "req-rebuild-1", actor: "owner@rebuild.example" }
+      });
+      expect(firstRebuild.entitlementUsageEvent).toMatchObject({
+        recordType: "dwm_entitlement_usage_event",
+        organizationId,
+        action: "alert_rebuild",
+        requestId: "req-rebuild-1",
+        metadata: { route: "rebuild_dwm_alerts", savedAlertCount: 1 }
+      });
+
+      const alertId = firstRebuild.alerts[0].id;
+      const updateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alertId}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "owner@rebuild.example" },
+        body: JSON.stringify({ organizationId, action: "investigate", assignedOwner: "iris", note: "Keep this workflow state across denied rebuilds." })
+      }), options);
+      expect(updateResponse.status).toBe(200);
+      const beforeDenied = (store as any).getDwmAlert(alertId);
+      expect(beforeDenied.workflowEvents).toHaveLength(1);
+
+      const deniedRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild.example", "x-request-id": "req-rebuild-denied" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const deniedRebuild = await deniedRebuildResponse.json() as any;
+      expect(deniedRebuildResponse.status).toBe(402);
+      expect(deniedRebuild.error).toMatchObject({ code: "dwm_entitlement_limit_exceeded", reason: "alert_rebuilds_today" });
+      expect(deniedRebuild.entitlement).toMatchObject({
+        blockedAction: "rebuild_dwm_alerts",
+        reason: "alert_rebuilds_today",
+        limit: { code: "alert_rebuilds_today", used: 2, limit: 1, remaining: 0 },
+        usageSnapshot: { alertRebuildsToday: 1 },
+        projectedUsage: { alertRebuildsToday: 2 },
+        audit: { requestId: "req-rebuild-denied", actor: "owner@rebuild.example" }
+      });
+      const afterDenied = (store as any).getDwmAlert(alertId);
+      expect(afterDenied.workflowEvents).toHaveLength(1);
+      expect(afterDenied.assignedOwner).toBe("iris");
+      expect((store as any).listPlans().filter((row: any) => row.recordType === "dwm_entitlement_usage_event" && row.action === "alert_rebuild" && row.organizationId === organizationId)).toHaveLength(1);
+
+      const deniedReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alertId}/replay`, {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild.example", "x-request-id": "req-replay-denied" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const deniedReplay = await deniedReplayResponse.json() as any;
+      expect(deniedReplayResponse.status).toBe(402);
+      expect(deniedReplay.entitlement).toMatchObject({
+        blockedAction: "replay_dwm_alert",
+        reason: "alert_rebuilds_today",
+        audit: { requestId: "req-replay-denied", actor: "owner@rebuild.example" }
+      });
+      expect((store as any).getDwmAlert(alertId).workflowEvents).toHaveLength(1);
+
+      const outsiderResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        headers: { "x-user-email": "outsider@rebuild.example" },
+        body: JSON.stringify({ organizationId })
+      }), options);
+      const outsiderPayload = await outsiderResponse.json() as any;
+      expect(outsiderResponse.status).toBe(403);
+      expect(outsiderPayload.error.code).toBe("organization_visibility_denied");
+      expect(outsiderPayload.entitlement).toBeUndefined();
+
+      const permissiveOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild-open.example" },
+        body: JSON.stringify({ name: "Open Rebuild Monitor", ownerEmail: "owner@rebuild-open.example", ownerUserId: "owner-rebuild-open" })
+      }), options);
+      const permissiveOrg = await permissiveOrgResponse.json() as any;
+      (store as any).saveDwmWatchlist({
+        id: "watch_rebuild_open",
+        organizationId: permissiveOrg.organization.id,
+        tenantId: permissiveOrg.organization.id,
+        name: "Open rebuild watch",
+        terms: [{ value: "rate-limit.example", kind: "domain" }],
+        status: "active",
+        createdAt: "2026-06-29T10:10:00.000Z",
+        updatedAt: "2026-06-29T10:10:00.000Z"
+      });
+      for (let index = 0; index < 100; index += 1) {
+        (store as any).savePlan({
+          id: `usage_open_rebuild_${index}`,
+          recordType: "dwm_entitlement_usage_event",
+          organizationId: permissiveOrg.organization.id,
+          tenantId: permissiveOrg.organization.id,
+          action: "alert_rebuild",
+          at: new Date().toISOString()
+        });
+      }
+      const permissiveRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+        method: "POST",
+        headers: { "x-user-email": "owner@rebuild-open.example", "x-request-id": "req-rebuild-open" },
+        body: JSON.stringify({ organizationId: permissiveOrg.organization.id })
+      }), options);
+      const permissiveRebuild = await permissiveRebuildResponse.json() as any;
+      expect(permissiveRebuildResponse.status).toBe(200);
+      expect(permissiveRebuild.entitlement).toMatchObject({ persistedPolicy: false, blockedAction: null, projectedUsage: { alertRebuildsToday: 101 } });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

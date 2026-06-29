@@ -59,6 +59,18 @@ export type DwmEntitlementAuditEvent = {
   changes: Record<string, unknown>;
 };
 
+export type DwmEntitlementUsageEvent = {
+  id: string;
+  recordType: "dwm_entitlement_usage_event";
+  organizationId: string;
+  tenantId: string;
+  action: "alert_rebuild";
+  at: string;
+  actor?: string;
+  requestId?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type DwmEntitlementIntegrationHints = {
   dashboard: {
     summaryRoute: string;
@@ -196,6 +208,46 @@ export function evaluateProposedDwmWatchlistEntitlement(options: ApiServerOption
   return { allowed: !denied, reason: denied, evaluation: { policy, status: policy.status, persistedPolicy: Boolean(storedPolicy), usage, projectedUsage, checks, integrationHints: policy.integrationHints } };
 }
 
+export function evaluateProposedDwmAlertRebuildEntitlement(options: ApiServerOptions, input: { organizationId?: string; tenantId: string }): { allowed: boolean; reason: string | null; evaluation?: DwmEntitlementPolicyEvaluation } {
+  if (!input.organizationId) return { allowed: true, reason: null, evaluation: undefined };
+  const organization = findOrganization(options, input.organizationId);
+  if (!organization) return { allowed: false, reason: "organization_not_found", evaluation: undefined };
+  const storedPolicy = getStoredEntitlementPolicy(options, organization.id);
+  const policy = storedPolicy ?? getOrDefaultEntitlementPolicy(options, organization);
+  const usage = buildEntitlementUsage(options, organization);
+  const projectedUsage = { ...usage, alertRebuildsToday: usage.alertRebuildsToday + 1 };
+  const checks = entitlementChecks(policy, projectedUsage);
+  const denied = storedPolicy
+    ? policy.status !== "active" ? "entitlement_suspended" : checks.find((check) => !check.allowed)?.code ?? null
+    : null;
+  return { allowed: !denied, reason: denied, evaluation: { policy, status: policy.status, persistedPolicy: Boolean(storedPolicy), usage, projectedUsage, checks, integrationHints: policy.integrationHints } };
+}
+
+export function recordDwmEntitlementUsageEvent(options: ApiServerOptions, input: {
+  organizationId?: string;
+  tenantId: string;
+  action: DwmEntitlementUsageEvent["action"];
+  actor?: string;
+  requestId?: string;
+  metadata?: Record<string, unknown>;
+  at?: string;
+}): DwmEntitlementUsageEvent | undefined {
+  if (!input.organizationId) return undefined;
+  const at = input.at ?? nowIso();
+  const event: DwmEntitlementUsageEvent = {
+    id: stableId("dwm_entitlement_usage", `${input.organizationId}:${input.action}:${input.requestId ?? ""}:${at}:${JSON.stringify(input.metadata ?? {})}`),
+    recordType: "dwm_entitlement_usage_event",
+    organizationId: input.organizationId,
+    tenantId: input.tenantId,
+    action: input.action,
+    at,
+    actor: input.actor,
+    requestId: input.requestId,
+    metadata: input.metadata
+  };
+  return (options.store as any).savePlan(event);
+}
+
 export function buildDwmEntitlementReadAdapter(input: {
   action: string;
   reason: string | null;
@@ -254,12 +306,15 @@ function buildEntitlementUsage(options: ApiServerOptions, organization: Organiza
     .filter((row: any) => row.organizationId === organization.id && !["closed", "suppressed"].includes(String(row.status ?? "")));
   const sourcePacks = ((options.store as any).listSources?.() ?? [])
     .filter((row: any) => row.organizationId === organization.id || row.tenantId === organization.tenantId || row.metadata?.organizationId === organization.id);
+  const alertRebuildsToday = ((options.store as any).listPlans?.() ?? [])
+    .filter((row: DwmEntitlementUsageEvent) => row.recordType === "dwm_entitlement_usage_event" && row.action === "alert_rebuild" && row.organizationId === organization.id && sameUtcDay(row.at, nowIso()))
+    .length;
   return {
     activeWatchlists: watchlists.length,
     watchTerms: watchlists.reduce((count: number, watchlist: any) => count + (watchlist.terms?.length ?? 0), 0),
     webhookDestinations: webhookDestinations.length,
     sourcePacks: sourcePacks.length,
-    alertRebuildsToday: 0,
+    alertRebuildsToday,
     openCases: cases.length
   };
 }
@@ -270,6 +325,7 @@ function entitlementChecks(policy: DwmEntitlementPolicy, usage: DwmEntitlementUs
     limitCheck("watch_terms", usage.watchTerms, policy.limits.watchTerms),
     limitCheck("webhook_destinations", usage.webhookDestinations, policy.limits.webhookDestinations),
     limitCheck("source_packs", usage.sourcePacks, policy.limits.sourcePacks),
+    limitCheck("alert_rebuilds_today", usage.alertRebuildsToday, policy.limits.alertRebuildsPerDay),
     limitCheck("open_cases", usage.openCases, policy.limits.openCases)
   ];
 }
@@ -389,4 +445,8 @@ function redactedLatestAuditEvent(policy: DwmEntitlementPolicy) {
     },
     reasonPreview: latest.reason.slice(0, 160)
   };
+}
+
+function sameUtcDay(left: string | undefined, right: string): boolean {
+  return String(left ?? "").slice(0, 10) === right.slice(0, 10);
 }

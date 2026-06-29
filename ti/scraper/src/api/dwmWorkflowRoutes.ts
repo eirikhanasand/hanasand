@@ -2,7 +2,7 @@ import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts"
 import { buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
-import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmWatchlistEntitlement } from "./dwmEntitlementRoutes.ts";
+import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -251,6 +251,8 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
   const access = authorizeDwmWorkflowAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
   if (existing.tenantId !== scope.tenantId) return json({ error: { code: "not_found", message: "DWM alert not found." } }, 404);
+  const entitlement = enforceDwmAlertRebuildEntitlement({ options, request, body, scope, access, action: "replay_dwm_alert" });
+  if (entitlement.error) return entitlement.error;
   const generatedAt = nowIso();
   const event = {
     id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:replay:${existing.workflowEvents?.length ?? 0}`),
@@ -269,7 +271,8 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
   });
-  return json(buildDwmAlertDetail(alert, options, access));
+  const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId: scope.tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "replay_dwm_alert", alertId: alert.id }, at: generatedAt });
+  return json({ ...buildDwmAlertDetail(alert, options, access), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
 }
 
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -309,8 +312,11 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
 
+  const entitlement = enforceDwmAlertRebuildEntitlement({ options, request, body, scope, access, action: "rebuild_dwm_alerts" });
+  if (entitlement.error) return entitlement.error;
   const rebuilt = rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, ...rebuilt });
+  const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "rebuild_dwm_alerts", savedAlertCount: rebuilt.savedAlertCount }, at: nowIso() });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent, ...rebuilt });
 }
 
 export async function deliverDwmWebhooks(request: Request, options: ApiServerOptions): Promise<Response> {
@@ -762,6 +768,35 @@ function enforceDwmWatchlistEntitlement(input: {
     };
   }
   return { adapter: buildDwmEntitlementReadAdapter({ action: input.action, reason: null, evaluation: result.evaluation, requestId, actor }) };
+}
+
+function enforceDwmAlertRebuildEntitlement(input: {
+  options: ApiServerOptions;
+  request: Request;
+  body: any;
+  scope: { organizationId?: string; tenantId: string };
+  access: DwmWorkflowAccessResult;
+  action: "rebuild_dwm_alerts" | "replay_dwm_alert";
+}): { adapter?: ReturnType<typeof buildDwmEntitlementReadAdapter>; error?: Response; requestId?: string; actor?: string } {
+  const result = evaluateProposedDwmAlertRebuildEntitlement(input.options, {
+    organizationId: input.scope.organizationId,
+    tenantId: input.scope.tenantId
+  });
+  if (!result.evaluation) return {};
+
+  const requestId = entitlementRequestId(input.request, input.body);
+  const actor = entitlementActor(input.request, input.body, input.access);
+  if (!result.allowed && result.reason) {
+    return {
+      requestId,
+      actor,
+      error: json({
+        ...buildDwmEntitlementBlocker({ action: input.action, reason: result.reason, evaluation: result.evaluation, requestId, actor }),
+        visibilityDecision: input.access.visibilityDecision
+      }, 402)
+    };
+  }
+  return { requestId, actor, adapter: buildDwmEntitlementReadAdapter({ action: input.action, reason: null, evaluation: result.evaluation, requestId, actor }) };
 }
 
 function findDwmAlertByDedupeKey(options: ApiServerOptions, dedupeKey: string | undefined) {
