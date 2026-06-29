@@ -1627,6 +1627,8 @@ function productReadinessWorkflow(item: WorkbenchProductReadinessItem): { ownerL
         case 'dashboard_alert':
         case 'dashboard_evidence':
             return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Open alert proof' : 'Open dashboard evidence' }
+        case 'analyst_workflow':
+            return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Review case workflow' : 'Open analyst cases' }
         case 'dwm_product_snapshot':
             return { ownerLane: 'DWM owner', operatorAction: item.status === 'ready' ? 'Inspect product snapshot' : 'Open DWM product proof' }
         case 'webhook_delivery':
