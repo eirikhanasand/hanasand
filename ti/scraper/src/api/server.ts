@@ -1,7 +1,7 @@
 import { buildDarkwebIndexStatus, searchDarkwebIndex } from "../adapters/darkwebIndex.ts";
 import { buildRestrictedMetadataOperationsStatus } from "../adapters/darknetMetadata.ts";
 import { getOrganizationEntitlements, upsertOrganizationEntitlements } from "./dwmEntitlementRoutes.ts";
-import { createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
+import { buildDwmSourcePackWorkerReadinessSnapshot, createDwmSourceRequest } from "./dwmSourceRequestRoute.ts";
 import { createDwmWatchlist, deliverDwmWebhooks, disableDwmWatchlist, getDwmAlertDetail, getDwmAlertGenerationReadiness, getDwmWatchlistDetail, listDwmAlerts, listDwmWatchlists, listDwmWebhookDeliveries, rebuildDwmAlerts, replayDwmAlert, storedWatchlistTerms, testDwmWebhook, updateDwmAlert, updateDwmWatchlist } from "./dwmWorkflowRoutes.ts";
 import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProduct.ts";
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
@@ -96,26 +96,42 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if ((url.pathname === "/v1/dwm/source-inventory" || url.pathname === "/api/dwm/source-inventory") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
       if (scope.error) return scope.error;
-      return json(buildDwmSourceInventory({
-      tenantId: scope.tenantId,
-      watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""),
-      sources: options.store.listSources(),
-      captures: options.store.listCaptures(),
-      includeCandidates: url.searchParams.get("full") === "true"
-    }));
+      const generatedAt = url.searchParams.get("generatedAt") ?? nowIso();
+      return json({
+        ...buildDwmSourceInventory({
+          tenantId: scope.tenantId,
+          watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""),
+          sources: options.store.listSources(),
+          captures: options.store.listCaptures(),
+          includeCandidates: url.searchParams.get("full") === "true",
+          generatedAt
+        }),
+        sourcePackWorker: buildDwmSourcePackWorkerReadinessSnapshot(options, { generatedAt })
+      });
     }
     if ((url.pathname === "/v1/dwm/source-packs" || url.pathname === "/api/dwm/source-packs") && request.method === "GET") {
-      const catalog = buildDwmSeedCatalog({ watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? "") });
+      const generatedAt = url.searchParams.get("generatedAt") ?? nowIso();
+      const catalog = buildDwmSeedCatalog({ watchlist: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? ""), generatedAt });
+      const sourcePackWorker = buildDwmSourcePackWorkerReadinessSnapshot(options, { generatedAt });
       return json({
         schemaVersion: "dwm.source_packs.v1",
-        generatedAt: nowIso(),
+        generatedAt,
         packs: catalog.packs,
         counts: {
           packCount: catalog.packs.length,
           candidateCount: catalog.candidates.length,
           telegramPublic: catalog.candidates.filter((candidate) => candidate.family === "telegram_public").length,
           darkwebMetadata: catalog.candidates.filter((candidate) => candidate.family === "darkweb_metadata").length
-        }
+        },
+        workerReadiness: sourcePackWorker.workerReadiness,
+        lastRun: sourcePackWorker.lastRun,
+        sourceGrowthCounters: sourcePackWorker.counters,
+        parserSourceFamilyCounts: sourcePackWorker.parserSourceFamilyCounts,
+        sourceFamilyCounts: sourcePackWorker.sourceFamilyCounts,
+        readiness: sourcePackWorker.readiness,
+        redactedSourcePackIds: sourcePackWorker.redactedSourcePackIds,
+        rejectedCandidates: sourcePackWorker.rejectedCandidates,
+        safeOutput: sourcePackWorker.safeOutput
       });
     }
     if (url.pathname === "/v1/dwm/watchlists" && request.method === "GET") return listDwmWatchlists(url, options, request);

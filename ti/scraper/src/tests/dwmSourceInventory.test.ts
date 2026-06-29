@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { applyDwmSeedCatalog, buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
+import { FileBackedDwmSourcePackWorkerStateAdapter, InMemoryDwmSourcePackRegistryAdapter } from "../storage/dwmSourcePackRegistry.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { SourceRecord } from "../types.ts";
 
@@ -116,5 +120,126 @@ describe("dwm source inventory", () => {
     expect(inventoryBody.schemaVersion).toBe("dwm.source_inventory.v1");
     expect(inventoryBody.counts.registeredTelegramPublic).toBe(10);
     expect(packsBody.counts.telegramPublic).toBeGreaterThanOrEqual(3000);
+  });
+
+  test("exposes restart-safe source-pack worker readiness for dashboard proxy consumption", async () => {
+    const tmp = mkdtempSync(join(tmpdir(), "source-pack-worker-proof-"));
+    try {
+      const store = new InMemoryScraperStore();
+      const sourcePackRegistry = new InMemoryDwmSourcePackRegistryAdapter();
+      const workerStatePath = join(tmp, "worker-state.json");
+      const workerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: workerStatePath });
+      const options = {
+        store,
+        frontier: new FocusedFrontier(),
+        sourcePackRegistry,
+        sourcePackValidationQueue: workerState.validationQueue,
+        sourcePackActiveSourceStore: workerState.activeSources,
+        sourcePackWorkerRunStore: workerState.workerRuns,
+        sourcePackCollectionReceiptStore: workerState.collectionReceipts
+      };
+
+      const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+        method: "POST",
+        body: JSON.stringify({
+          sourcePackId: "pack_inventory_worker_ready",
+          sourcePackLabel: "Inventory worker proof pack",
+          tenantId: "tenant_inventory",
+          scope: "APT29",
+          requestedBy: "source-growth-worker",
+          candidates: [
+            { target: "@inventory_worker_public_cti", type: "telegram_channel", family: "telegram" },
+            { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata", family: "darkweb_metadata" },
+            { target: "@inventory_worker_public_cti", type: "telegram_channel", family: "telegram" },
+            { target: "metadata://darkweb/password-dump", type: "restricted_metadata", family: "darkweb_onion" }
+          ]
+        })
+      }), options);
+      const createdBody = await created.json() as any;
+      expect(created.status).toBe(201);
+      expect(createdBody.summary).toMatchObject({ acceptedCount: 2, rejectedCount: 1, duplicateCount: 1 });
+
+      const firstRun = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+        method: "POST",
+        body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_inventory_worker_ready", chunkSize: 2 })
+      }), options);
+      const firstRunBody = await firstRun.json() as any;
+      expect(firstRun.status).toBe(200);
+      expect(firstRunBody.collectionQueue.summary).toMatchObject({ queuedCount: 2, duplicateCount: 0, taskCount: 2 });
+      expect(options.frontier.snapshot()).toHaveLength(2);
+
+      const reloadedWorkerState = new FileBackedDwmSourcePackWorkerStateAdapter({ snapshotPath: workerStatePath });
+      const reloadedOptions = {
+        store,
+        frontier: new FocusedFrontier(),
+        sourcePackRegistry,
+        sourcePackValidationQueue: reloadedWorkerState.validationQueue,
+        sourcePackActiveSourceStore: reloadedWorkerState.activeSources,
+        sourcePackWorkerRunStore: reloadedWorkerState.workerRuns,
+        sourcePackCollectionReceiptStore: reloadedWorkerState.collectionReceipts
+      };
+
+      const repeated = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+        method: "POST",
+        body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_inventory_worker_ready", chunkSize: 2 })
+      }), reloadedOptions);
+      const repeatedBody = await repeated.json() as any;
+      expect(repeated.status).toBe(200);
+      expect(repeatedBody.collectionQueue.summary).toMatchObject({ queuedCount: 0, duplicateCount: 2, taskCount: 2 });
+      expect(reloadedOptions.frontier.snapshot()).toHaveLength(0);
+
+      const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), reloadedOptions);
+      const inventoryBody = await inventory.json() as any;
+      const packs = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29"), reloadedOptions);
+      const packsBody = await packs.json() as any;
+
+      expect(inventory.status).toBe(200);
+      expect(inventoryBody.sourcePackWorker).toMatchObject({
+        freshness: "fresh",
+        counters: {
+          totalCandidates: 4,
+          accepted: 2,
+          restrictedBlocked: 1,
+          activeSourceRows: 2,
+          queuedCollectionTasks: 2,
+          collectionReadyRows: 2
+        },
+        readiness: { state: "ready", blockers: [] },
+        safeOutput: {
+          privateTelegramContentExposed: false,
+          restrictedMetadataLeaked: false,
+          liveNetworkScrapeStarted: false
+        }
+      });
+      expect(inventoryBody.counts.registeredTelegramPublic).toBe(1);
+      expect(inventoryBody.counts.registeredDarkwebMetadata).toBe(1);
+      expect(inventoryBody.sourcePackWorker.rejectedCandidates).toEqual(expect.arrayContaining([
+        expect.objectContaining({ family: "darkweb_onion", status: "disabled", reason: expect.any(String), targetRef: expect.objectContaining({ rawStored: false }) }),
+        expect.objectContaining({ family: "telegram", status: "disabled", reason: expect.stringContaining("Duplicate"), targetRef: expect.objectContaining({ rawStored: false }) })
+      ]));
+      expect(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.telegram).toMatchObject({ telegram_public_parser_ready: 1 });
+      expect(Object.values(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.telegram).reduce((sum: number, count: any) => sum + Number(count), 0)).toBe(2);
+      expect(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.darkweb_metadata).toMatchObject({ restricted_metadata_parser_ready: 1 });
+      expect(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.darkweb_onion).toMatchObject({ intake_blocked: 1 });
+      expect(JSON.stringify(inventoryBody.sourcePackWorker)).not.toContain("password-dump");
+
+      expect(packs.status).toBe(200);
+      expect(packsBody).toMatchObject({
+        workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
+        sourceGrowthCounters: { queuedCollectionTasks: 2, restrictedBlocked: 1 },
+        readiness: { state: "ready" },
+        safeOutput: { rawTargetsExposed: false }
+      });
+
+      const stale = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29&generatedAt=2030-01-01T00:00:00.000Z"), reloadedOptions);
+      const staleBody = await stale.json() as any;
+      expect(stale.status).toBe(200);
+      expect(staleBody.readiness).toMatchObject({
+        state: "stale",
+        blockers: expect.arrayContaining(["source-pack worker last run is older than 120 minutes"])
+      });
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

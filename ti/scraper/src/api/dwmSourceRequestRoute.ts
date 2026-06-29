@@ -223,6 +223,88 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
   }, 201);
 }
 
+export function buildDwmSourcePackWorkerReadinessSnapshot(
+  options: ApiServerOptions,
+  input: { generatedAt?: string; staleAfterMinutes?: number } = {}
+) {
+  const generatedAt = input.generatedAt ?? nowIso();
+  const staleAfterMinutes = Math.max(1, input.staleAfterMinutes ?? 120);
+  const packs = sourcePackStore(options).list({ limit: 500 }).items;
+  const workerState = sourcePackWorkerStateForPacks(packs, options);
+  const growth = sourcePackGrowthCounters(packs, options);
+  const lastRun = workerState.lastRun;
+  const lastRunTime = lastRun?.completedAt ?? lastRun?.startedAt;
+  const ageMinutes = lastRunTime ? Math.max(0, Math.floor((Date.parse(generatedAt) - Date.parse(lastRunTime)) / 60000)) : undefined;
+  const freshness = !lastRun
+    ? "missing"
+    : ageMinutes !== undefined && ageMinutes > staleAfterMinutes
+      ? "stale"
+      : "fresh";
+  return {
+    schemaVersion: "dwm.source_pack_worker_readiness.v1",
+    generatedAt,
+    freshness,
+    staleAfterMinutes,
+    lastRun: lastRun ? {
+      id: lastRun.id,
+      status: lastRun.status,
+      startedAt: lastRun.startedAt,
+      completedAt: lastRun.completedAt,
+      ageMinutes
+    } : undefined,
+    counters: {
+      totalCandidates: growth.totalCandidates,
+      accepted: growth.accepted,
+      rejected: growth.rejected,
+      queued: growth.queued,
+      duplicate: growth.duplicateOrUpserted,
+      metadataOnly: growth.metadataOnly,
+      restrictedBlocked: growth.restrictedBlocked,
+      activeSourceRows: growth.activeSourceRows,
+      queuedCollectionTasks: growth.queuedCollectionTasks,
+      collectionReadyRows: workerState.readiness.collectionReadyRows
+    },
+    workerReadiness: workerState.readiness,
+    parserSourceFamilyCounts: growth.parserSourceFamilyCounts,
+    sourceFamilyCounts: growth.sourceFamilyCounts,
+    redactedSourcePackIds: packs.map((pack) => ({
+      id: pack.id,
+      label: pack.label,
+      candidateCount: pack.candidates.length,
+      safeRef: stableId("dwm_source_pack_ref", pack.id),
+      rawTargetsExposed: false
+    })),
+    rejectedCandidates: packs.flatMap((pack) => pack.candidates
+      .filter((candidate) => ["rejected", "failed", "disabled", "duplicate", "suppressed", "approval_required"].includes(candidate.status) || candidate.failure)
+      .map((candidate) => ({
+        sourcePackId: pack.id,
+        candidateId: candidate.id,
+        family: candidate.declaredFamily,
+        status: candidate.status,
+        reason: candidate.reason ?? String(candidate.failure?.message ?? candidate.failure?.code ?? candidate.decision ?? "blocked"),
+        retryHint: candidate.retryHint,
+        targetRef: candidate.targetRef
+      }))),
+    readiness: {
+      state: freshness === "fresh" && (workerState.readiness.collectionReadyRows > 0 || workerState.readiness.activeSourceRows > 0)
+        ? "ready"
+        : freshness,
+      blockers: [
+        ...(!lastRun ? ["source-pack worker has not run"] : []),
+        ...(freshness === "stale" ? [`source-pack worker last run is older than ${staleAfterMinutes} minutes`] : []),
+        ...(workerState.readiness.collectionReadyRows === 0 && workerState.readiness.activeSourceRows === 0 ? ["no active or collection-ready source-pack rows"] : [])
+      ]
+    },
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServerOptions) {
   const generatedAt = nowIso();
   const limit = Math.max(1, Math.min(body.limit ?? 100, 100));
