@@ -177,6 +177,35 @@ export type OrgAlertCaptureRef = {
   collectedAt?: string;
 };
 
+export type OrgAlertSourceProvenanceSummaryRef = {
+  schemaVersion?: "dwm.alert_source_provenance.v1" | string;
+  alertId?: string;
+  tenantId?: string;
+  organizationId?: string;
+  sourceFamily?: string;
+  sourceFamilies?: string[];
+  captureIds?: string[];
+  sourceIds?: string[];
+  contentHashes?: string[];
+  evidenceCount?: number;
+  firstObservedAt?: string;
+  lastObservedAt?: string;
+  evidenceExcerpts?: Array<{
+    captureId?: string;
+    sourceId?: string;
+    sourceFamily?: string;
+    observedAt?: string;
+    contentHash?: string;
+  }>;
+  generationEvidenceWindow?: {
+    captureIds?: string[];
+    sourceFamilies?: string[];
+    contentHashes?: string[];
+    firstObservedAt?: string;
+    lastObservedAt?: string;
+  };
+};
+
 export type OrgAlertSourceEvidenceReport = {
   schemaVersion: typeof DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION;
   checkedAt: string;
@@ -207,6 +236,8 @@ export type OrgAlertSourceEvidenceBlocker = {
   code:
     | "bridge_row_not_ready"
     | "missing_source_family"
+    | "missing_source_provenance_summary"
+    | "source_provenance_identity_mismatch"
     | "missing_source_ref"
     | "inactive_source"
     | "missing_capture_ref"
@@ -372,6 +403,7 @@ export function buildOrgAlertSourceEvidenceReport(input: {
   bridge: OrgAlertWorkflowBridgeReport;
   sources: OrgAlertSourceRef[];
   captures: OrgAlertCaptureRef[];
+  sourceProvenanceSummaries?: OrgAlertSourceProvenanceSummaryRef[];
   checkedAt?: string;
   maxAgeHours?: number;
 }): OrgAlertSourceEvidenceReport {
@@ -379,10 +411,14 @@ export function buildOrgAlertSourceEvidenceReport(input: {
   const maxAgeHours = input.maxAgeHours ?? 24;
   const sourceById = new Map(input.sources.map((source) => [source.sourceId, source]));
   const captureById = new Map(input.captures.map((capture) => [capture.captureId, capture]));
+  const summaryByAlertId = new Map((input.sourceProvenanceSummaries ?? []).map((summary) => [String(summary.alertId ?? ""), summary]));
   const rows = input.bridge.rows.map((row) => sourceEvidenceRow({
     row,
     sourceById,
     captureById,
+    summaryByAlertId,
+    tenantId: input.bridge.tenantId,
+    organizationId: input.bridge.organizationId,
     checkedAt,
     maxAgeHours
   }));
@@ -403,37 +439,74 @@ function sourceEvidenceRow(input: {
   row: OrgAlertWorkflowBridgeRow;
   sourceById: Map<string, OrgAlertSourceRef>;
   captureById: Map<string, OrgAlertCaptureRef>;
+  summaryByAlertId: Map<string, OrgAlertSourceProvenanceSummaryRef>;
+  tenantId: string;
+  organizationId: string;
   checkedAt: string;
   maxAgeHours: number;
 }): OrgAlertSourceEvidenceRow {
   const captures = input.row.provenance.captureIds.map((captureId) => input.captureById.get(captureId)).filter(Boolean) as OrgAlertCaptureRef[];
+  const summaries = input.row.matchedAlertIds.map((alertId) => input.summaryByAlertId.get(alertId)).filter(Boolean) as OrgAlertSourceProvenanceSummaryRef[];
+  const missingSummary = input.summaryByAlertId.size > 0 && input.row.matchedAlertIds.some((alertId) => !input.summaryByAlertId.has(alertId));
+  const identityMismatch = summaries.some((summary) => {
+    const tenantId = String(summary.tenantId ?? "");
+    const organizationId = String(summary.organizationId ?? "");
+    return (tenantId && tenantId !== input.tenantId) || (organizationId && organizationId !== input.organizationId);
+  });
   const sourceIds = uniqueStrings([
     ...input.row.provenance.sourceIds,
-    ...captures.map((capture) => capture.sourceId)
+    ...captures.map((capture) => capture.sourceId),
+    ...summaries.flatMap((summary) => asStringArray(summary.sourceIds)),
+    ...summaries.flatMap((summary) => summary.evidenceExcerpts?.map((excerpt) => excerpt.sourceId).filter(Boolean).map(String) ?? [])
   ].filter(Boolean).map(String));
   const sources = sourceIds.map((sourceId) => input.sourceById.get(sourceId)).filter(Boolean) as OrgAlertSourceRef[];
   const sourceFamilies = uniqueStrings([
     ...input.row.sourceFamilies,
     ...sources.map((source) => source.sourceFamily),
-    ...captures.map((capture) => capture.sourceFamily)
+    ...captures.map((capture) => capture.sourceFamily),
+    ...summaries.flatMap((summary) => [
+      ...asStringArray(summary.sourceFamily),
+      ...asStringArray(summary.sourceFamilies),
+      ...asStringArray(summary.generationEvidenceWindow?.sourceFamilies),
+      ...(summary.evidenceExcerpts?.map((excerpt) => excerpt.sourceFamily).filter(Boolean).map(String) ?? [])
+    ])
   ].filter(Boolean).map(String));
   const contentHashes = uniqueStrings([
     ...input.row.provenance.contentHashes,
-    ...captures.map((capture) => capture.contentHash)
+    ...captures.map((capture) => capture.contentHash),
+    ...summaries.flatMap((summary) => [
+      ...asStringArray(summary.contentHashes),
+      ...asStringArray(summary.generationEvidenceWindow?.contentHashes),
+      ...(summary.evidenceExcerpts?.map((excerpt) => excerpt.contentHash).filter(Boolean).map(String) ?? [])
+    ])
   ].filter(Boolean).map(String));
   const captureContentHashes = uniqueStrings(captures.map((capture) => capture.contentHash).filter(Boolean).map(String));
+  const summaryContentHashes = uniqueStrings(summaries.flatMap((summary) => [
+    ...asStringArray(summary.contentHashes),
+    ...asStringArray(summary.generationEvidenceWindow?.contentHashes),
+    ...(summary.evidenceExcerpts?.map((excerpt) => excerpt.contentHash).filter(Boolean).map(String) ?? [])
+  ]));
+  const summaryCaptureIds = uniqueStrings(summaries.flatMap((summary) => [
+    ...asStringArray(summary.captureIds),
+    ...asStringArray(summary.generationEvidenceWindow?.captureIds),
+    ...(summary.evidenceExcerpts?.map((excerpt) => excerpt.captureId).filter(Boolean).map(String) ?? [])
+  ]));
   const newestEvidenceAt = newestTimestamp([
     ...captures.map((capture) => capture.collectedAt),
-    ...sources.map((source) => source.lastCollectedAt ?? source.updatedAt)
+    ...sources.map((source) => source.lastCollectedAt ?? source.updatedAt),
+    ...summaries.map((summary) => summary.lastObservedAt ?? summary.generationEvidenceWindow?.lastObservedAt),
+    ...summaries.flatMap((summary) => summary.evidenceExcerpts?.map((excerpt) => excerpt.observedAt) ?? [])
   ]);
   const ageHours = newestEvidenceAt ? hoursBetween(newestEvidenceAt, input.checkedAt) : undefined;
   const blockerCodes = uniqueStrings([
     !input.row.ready ? "bridge_row_not_ready" : undefined,
     sourceFamilies.length === 0 ? "missing_source_family" : undefined,
+    missingSummary ? "missing_source_provenance_summary" : undefined,
+    identityMismatch ? "source_provenance_identity_mismatch" : undefined,
     sourceIds.some((sourceId) => !input.sourceById.has(sourceId)) ? "missing_source_ref" : undefined,
     sources.some((source) => source.status !== "active") ? "inactive_source" : undefined,
-    input.row.provenance.captureIds.some((captureId) => !input.captureById.has(captureId)) ? "missing_capture_ref" : undefined,
-    input.row.provenance.contentHashes.some((hash) => !captureContentHashes.includes(hash)) ? "content_hash_mismatch" : undefined,
+    input.row.provenance.captureIds.some((captureId) => !input.captureById.has(captureId) && !summaryCaptureIds.includes(captureId)) ? "missing_capture_ref" : undefined,
+    input.row.provenance.contentHashes.some((hash) => !captureContentHashes.includes(hash) && !summaryContentHashes.includes(hash)) ? "content_hash_mismatch" : undefined,
     ageHours === undefined || ageHours > input.maxAgeHours ? "stale_evidence" : undefined
   ].filter(Boolean).map(String)) as OrgAlertSourceEvidenceBlocker["code"][];
 
@@ -471,6 +544,8 @@ function sourceEvidenceBlockers(row: OrgAlertSourceEvidenceRow): OrgAlertSourceE
 function sourceEvidencePathFor(code: OrgAlertSourceEvidenceBlocker["code"]): string {
   if (code === "bridge_row_not_ready") return "bridge.rows[].ready";
   if (code === "missing_source_family") return "bridge.rows[].sourceFamilies";
+  if (code === "missing_source_provenance_summary") return "sourceProvenanceSummaries[].alertId";
+  if (code === "source_provenance_identity_mismatch") return "sourceProvenanceSummaries[].organizationId";
   if (code === "missing_source_ref") return "sources[].sourceId";
   if (code === "inactive_source") return "sources[].status";
   if (code === "missing_capture_ref") return "captures[].captureId";
@@ -481,6 +556,8 @@ function sourceEvidencePathFor(code: OrgAlertSourceEvidenceBlocker["code"]): str
 function sourceEvidenceMessageFor(code: OrgAlertSourceEvidenceBlocker["code"]): string {
   if (code === "bridge_row_not_ready") return "Org alert workflow bridge row is not ready.";
   if (code === "missing_source_family") return "No source family is attached to the alert evidence.";
+  if (code === "missing_source_provenance_summary") return "A matched alert is missing its persisted source provenance summary.";
+  if (code === "source_provenance_identity_mismatch") return "Persisted source provenance summary does not match the alert organization.";
   if (code === "missing_source_ref") return "Alert provenance references a source that is not present in the source evidence set.";
   if (code === "inactive_source") return "One or more evidence sources are not active.";
   if (code === "missing_capture_ref") return "Alert provenance references a capture that is not present in the source evidence set.";
@@ -940,6 +1017,12 @@ function messageFor(code: OrgAlertWorkflowBridgeBlocker["code"]): string {
 
 function normalizeTerm(value: string) {
   return String(value).trim().toLowerCase();
+}
+
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)];
 }
 
 function newestTimestamp(values: Array<string | undefined>) {

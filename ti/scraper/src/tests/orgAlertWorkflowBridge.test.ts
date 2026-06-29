@@ -205,6 +205,62 @@ describe("org alert workflow bridge", () => {
     });
   });
 
+  test("accepts persisted alert source provenance summaries as evidence input", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const report = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [sourceProvenanceSummary()],
+      checkedAt: "2026-06-29T15:00:00.000Z",
+      maxAgeHours: 24
+    });
+
+    expect(report).toMatchObject({
+      ok: true,
+      rows: [{
+        watchlistItemId: "watch_item_acme_com",
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        sourceIds: ["src_acme_tg", "src_acme_forum"],
+        captureIds: ["cap_acme_initial", "cap_acme_followup"],
+        contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+        newestEvidenceAt: "2026-06-29T14:30:00.000Z",
+        ageHours: 0.5,
+        ready: true,
+        blockerCodes: []
+      }]
+    });
+  });
+
+  test("blocks persisted source provenance summaries from another organization", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const report = buildOrgAlertSourceEvidenceReport({
+      bridge,
+      sources: sourceRefs(),
+      captures: [],
+      sourceProvenanceSummaries: [{
+        ...sourceProvenanceSummary(),
+        organizationId: "org_other"
+      }],
+      checkedAt: "2026-06-29T15:00:00.000Z",
+      maxAgeHours: 24
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.rows[0]).toMatchObject({
+      watchlistItemId: "watch_item_acme_com",
+      ready: false,
+      blockerCodes: ["source_provenance_identity_mismatch"]
+    });
+    expect(report.blockers).toEqual([
+      expect.objectContaining({
+        code: "source_provenance_identity_mismatch",
+        ownerLane: "source",
+        path: "sourceProvenanceSummaries[].organizationId"
+      })
+    ]);
+  });
+
   test("blocks source evidence when captures are missing or stale", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
     const report = buildOrgAlertSourceEvidenceReport({
@@ -544,6 +600,43 @@ function captureRefs() {
     contentHash: "hash_acme_followup",
     collectedAt: "2026-06-29T14:30:00.000Z"
   }];
+}
+
+function sourceProvenanceSummary() {
+  return {
+    schemaVersion: "dwm.alert_source_provenance.v1",
+    alertId: "alert_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    sourceFamily: "telegram_public",
+    sourceFamilies: ["telegram_public", "darkweb_metadata"],
+    captureIds: ["cap_acme_initial", "cap_acme_followup"],
+    sourceIds: ["src_acme_tg", "src_acme_forum"],
+    contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+    evidenceCount: 2,
+    firstObservedAt: "2026-06-29T14:05:00.000Z",
+    lastObservedAt: "2026-06-29T14:30:00.000Z",
+    evidenceExcerpts: [{
+      captureId: "cap_acme_initial",
+      sourceId: "src_acme_tg",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-29T14:05:00.000Z",
+      contentHash: "hash_acme_initial"
+    }, {
+      captureId: "cap_acme_followup",
+      sourceId: "src_acme_forum",
+      sourceFamily: "darkweb_metadata",
+      observedAt: "2026-06-29T14:30:00.000Z",
+      contentHash: "hash_acme_followup"
+    }],
+    generationEvidenceWindow: {
+      captureIds: ["cap_acme_initial", "cap_acme_followup"],
+      sourceFamilies: ["telegram_public", "darkweb_metadata"],
+      contentHashes: ["hash_acme_initial", "hash_acme_followup"],
+      firstObservedAt: "2026-06-29T14:05:00.000Z",
+      lastObservedAt: "2026-06-29T14:30:00.000Z"
+    }
+  };
 }
 
 function happyWebhookFixtureContract() {
