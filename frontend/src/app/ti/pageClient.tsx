@@ -1608,7 +1608,12 @@ function VictimObservationRow({ item }: { item: ReturnType<typeof victimObservat
             </div>
             <p className='text-xs text-[#667085]'>{item.sector} · {item.timeframe}</p>
             <p className='text-sm leading-6 text-[#596170]'>{item.incident}</p>
-            <p className='text-xs text-[#667085]'>Source basis: {item.source}</p>
+            <p className='text-xs leading-5 text-[#667085]'>
+                Source basis: {item.source} · {formatDate(item.reportDate)} · {Math.round(item.confidence * 100)}% confidence{item.sourceIds.length ? ` · ${item.sourceIds.map(sourceId => `source ${sourceId}`).join(', ')}` : ''}
+            </p>
+            {item.provenanceRefs.length ? (
+                <p className='wrap-break-word text-[11px] leading-5 text-[#667085]'>Provenance: {item.provenanceRefs.slice(0, 2).join(' · ')}</p>
+            ) : null}
         </div>
     )
 }
@@ -2400,6 +2405,15 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                 <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5'>
                     <p className='font-semibold text-[#344054]'>{handoff.watchlistTerm ? `${handoff.watchlistTerm.kind}: ${handoff.watchlistTerm.value}` : 'Enrichment task'}</p>
                     <p className='mt-1 leading-5 text-[#667085]'>{handoff.watchlistTerm?.reason ?? handoff.enrichmentTask}</p>
+                    {handoff.evidenceRows.length ? (
+                        <div data-ti-geo-provenance='true' className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2'>
+                            {handoff.evidenceRows.slice(0, 2).map(row => (
+                                <p key={`${point.code}-${row.victim}-${row.reportDate}`} className='wrap-break-word text-[11px] leading-5 text-[#667085]'>
+                                    {row.victim} · {formatDate(row.reportDate)} · {Math.round(row.confidence * 100)}% · {row.sourceIds.length ? row.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : row.source}
+                                </p>
+                            ))}
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
         </button>

@@ -309,6 +309,14 @@ export type GeographyHandoff = {
     watchlistTerm?: { kind: WatchlistCandidate['kind']; value: string; reason: string }
     enrichmentTask: string
     provenanceSummary: string
+    evidenceRows: Array<{
+        victim: string
+        source: string
+        sourceIds: string[]
+        provenanceRefs: string[]
+        reportDate: string
+        confidence: number
+    }>
 }
 
 export type SourceCluster = {
@@ -1820,6 +1828,14 @@ function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: Vi
             provenanceSummary: observations.length
                 ? observations.slice(0, 2).map(item => `${item.victim} · ${item.source}`).join(' | ')
                 : 'Country is present in profile target geography without a named victim row.',
+            evidenceRows: observations.map(item => ({
+                victim: item.victim,
+                source: item.source,
+                sourceIds: item.sourceIds,
+                provenanceRefs: item.provenanceRefs,
+                reportDate: item.reportDate,
+                confidence: item.confidence,
+            })),
         }
     })
 
@@ -1833,6 +1849,14 @@ function buildGeographyHandoffs(result: TiSearchResponse, victimObservations: Vi
         observationCount: 1,
         enrichmentTask: `Keep ${origin.label} as attribution context; do not use operator origin by itself as a customer alert condition.`,
         provenanceSummary: 'Actor attribution context from public APT29/SVR reporting.',
+        evidenceRows: [{
+            victim: 'Operator attribution',
+            source: 'public APT29/SVR reporting',
+            sourceIds: ['svr-attribution'],
+            provenanceRefs: ['CISA and allied government SVR/APT29 advisories'],
+            reportDate: result.generatedAt,
+            confidence: Math.max(result.confidence, 0.76),
+        }],
     }] : []
 
     return [...originRows, ...targetRows].slice(0, 12)

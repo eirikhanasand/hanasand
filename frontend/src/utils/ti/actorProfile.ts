@@ -20,6 +20,10 @@ export type VictimObservation = {
     incident: string
     timeframe: string
     source: string
+    sourceIds: string[]
+    provenanceRefs: string[]
+    reportDate: string
+    confidence: number
 }
 
 export const countries: Record<string, MapCountry> = {
@@ -108,10 +112,15 @@ export function countryFromValue(value: string) {
 }
 
 export function victimObservationsFor(result: TiSearchResponse): VictimObservation[] {
+    const sourceById = new Map(result.sources.map(source => [source.id, source]))
     const fromActivity = result.recentActivity
         .filter(item => item.victimName || item.claimType === 'victim_claim')
         .map(item => {
             const country = item.countries?.map(countryFromValue).find((entry): entry is MapCountry => Boolean(entry))
+            const provenanceRefs = item.sourceIds
+                .map(sourceId => sourceById.get(sourceId))
+                .map(source => source?.url || source?.provenance || source?.name)
+                .filter((value): value is string => Boolean(value))
             return {
                 victim: item.victimName || item.title,
                 country: country?.label ?? 'Country not stated',
@@ -119,6 +128,10 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
                 incident: item.impact || item.detail,
                 timeframe: item.firstReportedAt || item.date || 'Date not stated',
                 source: activitySourceLabel(item.sourceIds.length),
+                sourceIds: item.sourceIds,
+                provenanceRefs,
+                reportDate: item.firstReportedAt || item.date || result.generatedAt,
+                confidence: item.confidence,
             }
         })
 
@@ -145,6 +158,10 @@ export function victimObservationsFor(result: TiSearchResponse): VictimObservati
             incident: target.rationale,
             timeframe: 'Profile observation',
             source: 'profile target evidence',
+            sourceIds: [],
+            provenanceRefs: [],
+            reportDate: result.generatedAt,
+            confidence: target.confidence,
         }
     })).filter(item => countryFromValue(item.country)).slice(0, 8)
 }
@@ -181,6 +198,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'Reported intrusion activity connected to the 2016 U.S. election cycle and attributed in public reporting to Russian intelligence-linked operators.',
             timeframe: '2015-2016',
             source: 'public attribution reporting',
+            sourceIds: ['public-attribution'],
+            provenanceRefs: ['Public attribution reporting'],
+            reportDate: '2016',
+            confidence: 0.76,
         },
         {
             victim: 'SolarWinds Orion customers and U.S. federal agencies',
@@ -189,6 +210,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'SolarWinds Orion compromise enabled downstream access into government and enterprise environments; public reporting tied the campaign to SVR/APT29 activity.',
             timeframe: '2020',
             source: 'public government and vendor reporting',
+            sourceIds: ['cisa', 'solarwinds-public-reporting'],
+            provenanceRefs: ['CISA and allied government SVR/APT29 advisories', 'Public SolarWinds and vendor incident reporting'],
+            reportDate: '2020',
+            confidence: 0.82,
         },
         {
             victim: 'Microsoft corporate email accounts',
@@ -197,6 +222,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'Microsoft disclosed Midnight Blizzard access to corporate email accounts, including senior leadership and security/legal teams.',
             timeframe: '2024',
             source: 'vendor disclosure',
+            sourceIds: ['microsoft'],
+            provenanceRefs: ['Microsoft Midnight Blizzard disclosures'],
+            reportDate: '2024-01-25',
+            confidence: 0.82,
         },
         {
             victim: 'Hewlett Packard Enterprise',
@@ -205,6 +234,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'HPE disclosed unauthorized access to cloud-based email connected to Midnight Blizzard activity.',
             timeframe: '2023-2024 disclosure',
             source: 'vendor disclosure',
+            sourceIds: ['hpe'],
+            provenanceRefs: ['HPE public cloud email intrusion disclosure'],
+            reportDate: '2024',
+            confidence: 0.74,
         },
         {
             victim: 'Diplomatic and government entities',
@@ -213,6 +246,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'Public advisories describe SVR/APT29 targeting of government, diplomatic, think tank, and policy organizations.',
             timeframe: 'multi-year reporting',
             source: 'public advisory reporting',
+            sourceIds: ['government-advisory'],
+            provenanceRefs: ['CISA and allied government SVR/APT29 advisories'],
+            reportDate: 'multi-year reporting',
+            confidence: 0.76,
         },
         {
             victim: 'Government and policy organizations',
@@ -221,6 +258,10 @@ function apt29VictimObservations(): VictimObservation[] {
             incident: 'Public APT29/SVR reporting includes European government and policy-sector targeting, including German government and policy organizations.',
             timeframe: 'multi-year reporting',
             source: 'public advisory reporting',
+            sourceIds: ['government-advisory'],
+            provenanceRefs: ['CISA and allied government SVR/APT29 advisories'],
+            reportDate: 'multi-year reporting',
+            confidence: 0.76,
         },
     ]
 }

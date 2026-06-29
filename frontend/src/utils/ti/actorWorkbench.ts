@@ -142,8 +142,18 @@ export function buildActorArtifacts(
                 evidence: unique([
                     item.provenanceSummary,
                     ...victims.map(victim => `${victim.victim}: ${victim.sector}; ${victim.timeframe}; ${victim.incident}`),
+                    ...item.evidenceRows.map(row => `${row.victim}: ${row.reportDate}; ${Math.round(row.confidence * 100)}% confidence; ${row.source}`),
                 ]),
-                provenance: unique([item.provenanceSummary, ...victims.map(victim => victim.source), ...provenance]).slice(0, 6),
+                provenance: unique([
+                    item.provenanceSummary,
+                    ...item.evidenceRows.flatMap(row => [
+                        row.source,
+                        ...row.sourceIds.map(sourceId => `source ${sourceId}`),
+                        ...row.provenanceRefs,
+                    ]),
+                    ...victims.map(victim => victim.source),
+                    ...provenance,
+                ]).slice(0, 8),
                 watchlistTerms: item.watchlistTerm ? [{
                     kind: item.watchlistTerm.kind,
                     value: item.watchlistTerm.value,

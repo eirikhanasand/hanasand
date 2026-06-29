@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { buildActorIntelligence, containsToyThreatIntelCopy } from '../src/utils/ti/actorIntelligence'
-import { actorGeoProfile } from '../src/utils/ti/actorProfile'
+import { actorGeoProfile, victimObservationsFor } from '../src/utils/ti/actorProfile'
 import { buildTiActionability } from '../src/utils/ti/actionability'
 import {
     PUBLIC_TI_HANDOFF_ACTIONS,
@@ -106,10 +106,17 @@ const victims = [{
     incident: 'SolarWinds Orion compromise enabled downstream access into government and enterprise environments.',
     timeframe: '2020',
     source: 'public government and vendor reporting',
+    sourceIds: ['cisa', 'solarwinds-public-reporting'],
+    provenanceRefs: ['CISA and allied government SVR/APT29 advisories', 'Public SolarWinds and vendor incident reporting'],
+    reportDate: '2020',
+    confidence: 0.82,
 }]
 const profile = buildActorIntelligence(fixture, victims)
 const actionability = buildTiActionability(fixture, profile, victims)
 const artifacts = buildActorArtifacts(fixture, profile, victims, actionability)
+const fullPublicVictims = victimObservationsFor(fixture)
+const fullPublicProfile = buildActorIntelligence(fixture, fullPublicVictims)
+const fullPublicActionability = buildTiActionability(fixture, fullPublicProfile, fullPublicVictims)
 const geo = actorGeoProfile(fixture)
 const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
@@ -205,7 +212,10 @@ assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/en
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
 assert(actionability.handoffs.caseBlockers.some(item => /DWM alert ID/i.test(item)), 'No-alert fixture should explain missing case dependency.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.watchlistTerm?.value.includes('SolarWinds')), 'APT29 geography should map country observations to watchlist actions.')
+assert(actionability.geographyHandoffs.some(item => item.code === 'US' && item.evidenceRows.some(row => row.sourceIds.includes('cisa') && row.reportDate === '2020' && row.confidence === 0.82)), 'APT29 geography should carry source IDs, report dates, and confidence for target observations.')
+assert(fullPublicActionability.geographyHandoffs.some(item => item.code === 'DE' && item.evidenceRows.some(row => row.provenanceRefs.some(ref => /government SVR/i.test(ref)))), 'APT29 full public geography should carry provenance references for European government targeting.')
 assert(actionability.geographyHandoffs.some(item => item.code === 'RU' && item.role === 'operator' && !item.watchlistTerm), 'Operator-origin geography should remain attribution/enrichment context, not an alert term.')
+assert(actionability.geographyHandoffs.some(item => item.code === 'RU' && item.role === 'operator' && item.evidenceRows.some(row => row.sourceIds.includes('svr-attribution'))), 'Operator-origin geography should carry attribution provenance instead of becoming a target condition.')
 assert(geo.points.some(item => item.code === 'RU' && item.role === 'operator'), 'APT29 map should include country-level operator attribution.')
 assert(geo.points.some(item => item.code === 'US' && item.role === 'target'), 'APT29 map should include country-level target observations.')
 assert(!geo.points.some(item => /europe|continent|global/i.test(item.label)), 'APT29 map should reject broad region buckets.')
@@ -221,6 +231,7 @@ assert(Array.isArray(actionability.exportPayloads.webhookDelivery.body.requiredB
 assert(actionability.exportPayloads.enrichment.schemaVersion === 'ti.public_actor.enrichment_queue.v1', 'Enrichment queue handoff should be shaped for source/capture work.')
 assert(JSON.stringify(actionability.exportPayloads.enrichment.body).includes('capture'), 'Enrichment handoff should include capture/source work.')
 assert(artifacts.some(item => item.kind === 'country' && item.label === 'United States' && item.watchlistTerms.some(term => /SolarWinds/i.test(term.value))), 'APT29 artifact workbench should turn geography into watchlist-relevant evidence.')
+assert(artifacts.some(item => item.kind === 'country' && item.label === 'United States' && item.provenance.some(row => /source cisa/i.test(row)) && item.evidence.some(row => /2020/.test(row))), 'APT29 country artifacts should carry source IDs and report dates into the selected workbench.')
 assert(artifacts.some(item => item.kind === 'tool' && item.label === 'SUNBURST'), 'APT29 artifact workbench should expose malware/tool artifacts.')
 assert(artifacts.some(item => item.kind === 'campaign' && /SolarWinds/i.test(item.label)), 'APT29 artifact workbench should expose campaign artifacts.')
 const usArtifact = artifacts.find(item => item.kind === 'country' && item.label === 'United States')
@@ -495,6 +506,7 @@ assert(!pageClientSource.includes('Case payload'), 'Public TI page should not ex
 assert(!pageClientSource.includes('API work'), 'Public TI enrichment labels should not expose implementation-literal API work copy.')
 assert(pageClientSource.includes('whitespace-nowrap'), 'Public TI action buttons should prevent stacked action text.')
 assert(pageClientSource.includes('break-all font-mono'), 'Public TI source/provenance rows should wrap long technical values.')
+assert(pageClientSource.includes('data-ti-geo-provenance'), 'Public TI map rows should expose geography provenance for render checks.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
 assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
