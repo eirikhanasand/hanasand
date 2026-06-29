@@ -231,10 +231,10 @@ function Results({ result }: { result: TiSearchResponse }) {
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
                 <div className='grid gap-3 border-b border-[#e8edf5] bg-white p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                     <div className='min-w-0'>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            <h1 className='wrap-break-word text-2xl font-semibold text-[#171a21] md:text-3xl'>{humanizeSlug(result.query)}</h1>
+                        <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
+                            <h1 className='min-w-0 max-w-full wrap-break-word text-2xl font-semibold text-[#171a21] md:text-3xl'>{humanizeSlug(result.query)}</h1>
                             {result.status ? (
-                                <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase text-[#3056d3]'>
+                                <span className='max-w-full wrap-break-word rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold uppercase leading-5 text-[#3056d3]'>
                                     {humanResultStatus(result.status)}
                                 </span>
                             ) : null}
@@ -1785,7 +1785,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
 function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabilityModel }) {
     const readyStages = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+        <div data-ti-consumer-readiness='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff readiness</p>
@@ -1805,6 +1805,21 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                     <span className={decisionStepStatusClass(stage.state)}>{decisionStepStatusLabel(stage.state)}</span>
                                 </div>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{stage.detail}</p>
+                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {stage.request ? (
+                                        <span className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                            {stage.request.method} {stage.request.path}
+                                        </span>
+                                    ) : null}
+                                    <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                        {stage.payload.provenance.length} provenance row{stage.payload.provenance.length === 1 ? '' : 's'}
+                                    </span>
+                                    {stage.missing.length ? (
+                                        <span className='max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                                            {stage.missing.length} blocker{stage.missing.length === 1 ? '' : 's'}
+                                        </span>
+                                    ) : null}
+                                </div>
                                 {stage.missing.length ? (
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{stage.missing.slice(0, 2).join('; ')}</p>
                                 ) : null}
