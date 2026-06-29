@@ -762,6 +762,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     }
 
     async function inviteOrganizationMember() {
+        const disabledReason = orgInviteDisabledReason(orgContext, selectedCaseDetail)
+        if (disabledReason) {
+            setMessage({ ok: false, text: disabledReason })
+            return
+        }
         const organizationId = orgContext?.organization?.id
         if (!organizationId) {
             setMessage({ ok: false, text: 'Invite is blocked because no selected organization was returned from GET /api/organizations.' })
@@ -1001,9 +1006,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
     const visibility = access?.visibilityDecision
     const readOnly = access?.readOnly === true || visibility?.allowed === false
-    const inviteBlockedReason = !orgContext?.organization
-        ? 'Invite is blocked because no selected organization was returned from GET /api/organizations.'
-        : readOnly ? 'Invite is disabled for this case context because the server marked the member read-only or visibility-blocked.' : ''
+    const inviteBlockedReason = orgInviteDisabledReason(orgContext, caseDetail)
     const blockedReason = !orgContext
         ? 'Org operating context is not loaded into the root console.'
         : orgContext.readiness.blockedReasons[0]
@@ -3056,6 +3059,13 @@ function sendDeliveryDisabledReason(item: WorkbenchCase, orgContext: WorkbenchOr
     if (action?.disabledReason) return action.disabledReason
     if (!hasSendDeliveryDestination(action, orgContext)) return 'Send delivery requires an active organization webhook destination or action-scoped webhook target.'
     return undefined
+}
+
+function orgInviteDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
+    if (!orgContext?.organization) return 'Invite is blocked because no selected organization was returned from GET /api/organizations.'
+    const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled because the case API marked this member read-only or visibility-blocked.'
+    return ''
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
