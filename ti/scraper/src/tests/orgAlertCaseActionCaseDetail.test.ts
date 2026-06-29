@@ -104,16 +104,25 @@ describe("org alert case action ledger in case detail", () => {
 
     const byReceipt = await listCases(options, "q=receipt_acme_open_case");
     const byAudit = await listCases(options, "q=org_alert_case_action_audit");
+    const byReceiptFilter = await listCases(options, "caseActionReceiptId=receipt_acme_open_case");
+    const auditId = byReceiptFilter.payload.items[0].latestCaseAction.related.caseActionAuditEventId;
+    const byAuditFilter = await listCases(options, `caseActionAuditEventId=${encodeURIComponent(auditId)}`);
     const byWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T15:05:00.000Z")}&to=${encodeURIComponent("2026-06-29T15:07:00.000Z")}`);
     const outsideWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T16:00:00.000Z")}&to=${encodeURIComponent("2026-06-29T17:00:00.000Z")}`);
     const unrelatedQuery = await listCases(options, "q=receipt_other_open_case");
+    const wrongReceipt = await listCases(options, "caseActionReceiptId=receipt_other_open_case");
+    const wrongAudit = await listCases(options, "caseActionAuditEventId=audit_missing");
 
     expect(byReceipt.payload.items).toHaveLength(1);
     expect(byReceipt.payload.items[0].latestCaseAction.related.caseActionReceiptId).toBe("receipt_acme_open_case");
     expect(byAudit.payload.items).toHaveLength(1);
+    expect(byReceiptFilter.payload.items).toHaveLength(1);
+    expect(byAuditFilter.payload.items).toHaveLength(1);
     expect(byWindow.payload.items).toHaveLength(1);
     expect(outsideWindow.payload.items).toEqual([]);
     expect(unrelatedQuery.payload.items).toEqual([]);
+    expect(wrongReceipt.payload.items).toEqual([]);
+    expect(wrongAudit.payload.items).toEqual([]);
   });
 
   test("does not leak case actions to the wrong organization or nonmembers", async () => {

@@ -24,6 +24,7 @@ export type DwmAlertGenerationBlockerCode =
   | "no_active_watchlist_terms"
   | "no_matching_captures"
   | "source_family_inactive"
+  | "source_family_stale"
   | "entitlement_denied"
   | "missing_evidence"
   | "case_route_unavailable"
@@ -49,6 +50,7 @@ export type DwmZeroAlertProof = {
     | "blocked_no_watchlist"
     | "blocked_no_matching_capture"
     | "blocked_inactive_source"
+    | "blocked_stale_source"
     | "blocked_entitlement"
     | "blocked_org_lifecycle"
     | "blocked_route"
@@ -902,12 +904,12 @@ export type DwmAlertGenerationReadiness = {
   sourceFamilyGaps: Array<{
     schemaVersion: "dwm.alert_source_family_gap.v1";
     sourceFamily: string;
-    state: "matched" | "active_no_match" | "inactive_or_unconfigured";
+    state: "matched" | "active_no_match" | "stale_source" | "inactive_or_unconfigured";
     active: boolean;
     candidateCount: number;
     captureRefCount: number;
     watchlistIds: string[];
-    blockerCode?: "no_matching_captures" | "source_family_inactive";
+    blockerCode?: "no_matching_captures" | "source_family_inactive" | "source_family_stale";
     detail: string;
   }>;
   webhookReadiness: {
@@ -2520,6 +2522,16 @@ function buildGenerationReadinessBlockers(input: {
       sourceFamilies: inactiveFamilies
     }));
   }
+  const staleFamilies = staleCandidateSourceFamilies(input.plan.candidates, input.sources);
+  if (staleFamilies.length) {
+    blockers.push(generationBlocker({
+      code: "source_family_stale",
+      field: "sources.status",
+      detail: "A matching capture exists, but its source family is marked stale and needs refreshed collection before customer alert generation.",
+      recoverable: true,
+      sourceFamilies: staleFamilies
+    }));
+  }
   if (input.candidateIdsMissingRoute.length) {
     blockers.push(generationBlocker({
       code: "case_route_unavailable",
@@ -2600,6 +2612,7 @@ function zeroAlertState(input: {
   if (input.counts.matchedCandidateCount > 0 && input.counts.captureRefCount > 0 && !codes.size) return "alerts_expected";
   if (codes.has("org_archived") || codes.has("org_deleted") || codes.has("member_revoked") || codes.has("role_not_allowed")) return "blocked_org_lifecycle";
   if (codes.has("entitlement_denied") || codes.has("org_export_unavailable") || codes.has("no_org_export")) return "blocked_entitlement";
+  if (codes.has("source_family_stale")) return "blocked_stale_source";
   if (codes.has("source_family_inactive")) return "blocked_inactive_source";
   if (codes.has("no_active_watchlist_terms") || input.counts.activeWatchlists === 0 || input.counts.candidateCount === 0) return "blocked_no_watchlist";
   if (codes.has("no_matching_captures")) return "blocked_no_matching_capture";
@@ -2612,6 +2625,7 @@ function zeroAlertNextAction(state: DwmZeroAlertProof["state"]): string {
   if (state === "alerts_expected") return "Run alert rebuild and verify persisted alert delta.";
   if (state === "blocked_org_lifecycle") return "Restore active organization/member/watchlist export lifecycle before rebuilding alerts.";
   if (state === "blocked_entitlement") return "Resolve organization entitlement or alert-generation export blockers.";
+  if (state === "blocked_stale_source") return "Refresh stale source collection before rebuilding customer alerts.";
   if (state === "blocked_inactive_source") return "Activate an approved source family that matches the watchlist term.";
   if (state === "blocked_no_watchlist") return "Create or reactivate an org-scoped shared watchlist term.";
   if (state === "blocked_no_matching_capture") return "Add or collect a recent capture containing the active watchlist term.";
@@ -2641,12 +2655,31 @@ function inactiveCandidateSourceFamilies(candidates: DwmAlertGenerationCandidate
       .filter((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()))
       .map((source) => sourceFamilyFor(source, {} as RawCapture))
   );
+  const staleFamilies = new Set(
+    sources
+      .filter((source) => isStaleSourceStatus((source as any).status))
+      .map((source) => sourceFamilyFor(source, {} as RawCapture))
+  );
   const candidateFamilies = uniqueStrings(candidates.flatMap((candidate) => candidate.captureRefs.map((ref) => ref.sourceFamily)));
-  return candidateFamilies.filter((family) => !activeFamilies.has(family));
+  return candidateFamilies.filter((family) => !activeFamilies.has(family) && !staleFamilies.has(family));
+}
+
+function staleCandidateSourceFamilies(candidates: DwmAlertGenerationCandidate[], sources: SourceRecord[]): string[] {
+  const staleFamilies = new Set(
+    sources
+      .filter((source) => isStaleSourceStatus((source as any).status))
+      .map((source) => sourceFamilyFor(source, {} as RawCapture))
+  );
+  const candidateFamilies = uniqueStrings(candidates.flatMap((candidate) => candidate.captureRefs.map((ref) => ref.sourceFamily)));
+  return candidateFamilies.filter((family) => staleFamilies.has(family));
 }
 
 function alertSourceFamilyActive(sources: SourceRecord[], sourceFamily: string): boolean {
   return sources.some((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()) && sourceFamilyFor(source, {} as RawCapture) === sourceFamily);
+}
+
+function isStaleSourceStatus(status: unknown): boolean {
+  return ["stale", "expired", "outdated"].includes(String(status ?? "").toLowerCase());
 }
 
 export function buildDwmAlertWorkflowContext(input: {
@@ -3324,6 +3357,9 @@ function buildSourceFamilyGaps(input: {
   const activeFamilies = new Set(input.sources
     .filter((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()))
     .map((source) => sourceFamilyFor(source, {} as RawCapture)));
+  const staleFamilies = new Set(input.sources
+    .filter((source) => isStaleSourceStatus((source as any).status))
+    .map((source) => sourceFamilyFor(source, {} as RawCapture)));
   const activeWatchlistIds = uniqueStrings(input.candidates.flatMap((candidate) => candidate.watchlistIds));
   const families = uniqueStrings([
     ...firstClassAlertSourceFamilies,
@@ -3333,10 +3369,11 @@ function buildSourceFamilyGaps(input: {
   return families.map((sourceFamily) => {
     const coverage = coverageByFamily.get(sourceFamily);
     const active = activeFamilies.has(sourceFamily);
+    const stale = staleFamilies.has(sourceFamily);
     const candidateCount = coverage?.candidateCount ?? 0;
     const captureRefCount = coverage?.captureRefCount ?? 0;
     const state: DwmAlertGenerationReadiness["sourceFamilyGaps"][number]["state"] =
-      captureRefCount > 0 ? "matched" : active ? "active_no_match" : "inactive_or_unconfigured";
+      captureRefCount > 0 && stale && !active ? "stale_source" : captureRefCount > 0 ? "matched" : active ? "active_no_match" : "inactive_or_unconfigured";
     return {
       schemaVersion: "dwm.alert_source_family_gap.v1" as const,
       sourceFamily,
@@ -3345,7 +3382,7 @@ function buildSourceFamilyGaps(input: {
       candidateCount,
       captureRefCount,
       watchlistIds: coverage?.watchlistIds ?? activeWatchlistIds,
-      blockerCode: state === "active_no_match" ? "no_matching_captures" as const : state === "inactive_or_unconfigured" ? "source_family_inactive" as const : undefined,
+      blockerCode: state === "active_no_match" ? "no_matching_captures" as const : state === "stale_source" ? "source_family_stale" as const : state === "inactive_or_unconfigured" ? "source_family_inactive" as const : undefined,
       detail: sourceFamilyGapDetail(sourceFamily, state)
     };
   }).sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
@@ -3354,6 +3391,7 @@ function buildSourceFamilyGaps(input: {
 function sourceFamilyGapDetail(sourceFamily: string, state: DwmAlertGenerationReadiness["sourceFamilyGaps"][number]["state"]): string {
   if (state === "matched") return `Active watchlist terms matched ${sourceFamily} capture evidence.`;
   if (state === "active_no_match") return `${sourceFamily} has an active source, but no recent capture matched the active watchlist terms.`;
+  if (state === "stale_source") return `${sourceFamily} has matching capture evidence, but the source is stale and must be refreshed before customer alert generation.`;
   return `${sourceFamily} has no active source row for this rebuild; alert generation must not invent evidence for this family.`;
 }
 

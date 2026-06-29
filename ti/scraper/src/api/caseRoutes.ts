@@ -611,6 +611,8 @@ type CaseFilters = {
   dedupeKey?: string;
   webhookDeliveryId?: string;
   webhookStatus?: string;
+  caseActionReceiptId?: string;
+  caseActionAuditEventId?: string;
   from?: string;
   to?: string;
   query?: string;
@@ -627,6 +629,8 @@ function caseFiltersFromUrl(url: URL): CaseFilters {
     dedupeKey: normalizeFilter(url.searchParams.get("dedupeKey")),
     webhookDeliveryId: normalizeFilter(url.searchParams.get("webhookDeliveryId") ?? url.searchParams.get("deliveryId")),
     webhookStatus: normalizeFilter(url.searchParams.get("webhookStatus") ?? url.searchParams.get("deliveryStatus")),
+    caseActionReceiptId: normalizeFilter(url.searchParams.get("caseActionReceiptId") ?? url.searchParams.get("receiptId")),
+    caseActionAuditEventId: normalizeFilter(url.searchParams.get("caseActionAuditEventId") ?? url.searchParams.get("auditEventId")),
     from: normalizeFilter(url.searchParams.get("from") ?? url.searchParams.get("since")),
     to: normalizeFilter(url.searchParams.get("to") ?? url.searchParams.get("until")),
     query: normalizeFilter(url.searchParams.get("q") ?? url.searchParams.get("query") ?? url.searchParams.get("text"))
@@ -646,6 +650,8 @@ function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, optio
   if (filters.dedupeKey && normalizeFilter(alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.workflowContext?.dedupeKey) !== filters.dedupeKey) return false;
   if (filters.webhookDeliveryId && !deliveries.some((delivery: any) => delivery.id === filters.webhookDeliveryId)) return false;
   if (filters.webhookStatus && !deliveries.some((delivery: any) => normalizeFilter(delivery.status) === filters.webhookStatus)) return false;
+  if (filters.caseActionReceiptId && !caseActionLedger.rows.some((row) => normalizeFilter(row.receiptId) === filters.caseActionReceiptId)) return false;
+  if (filters.caseActionAuditEventId && !caseActionLedger.rows.some((row) => normalizeFilter(row.provenance.auditEventId) === filters.caseActionAuditEventId)) return false;
   if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters, caseActionLedger.rows)) return false;
   if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries, caseActionLedger.rows).includes(filters.query)) return false;
   return true;

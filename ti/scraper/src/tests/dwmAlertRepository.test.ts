@@ -1409,6 +1409,52 @@ describe("dwm alert repository", () => {
     expect(inactiveRebuild.savedAlertCount).toBe(0);
     expect((inactiveStore as any).listDwmAlerts()).toEqual([]);
 
+    const staleStore = new InMemoryScraperStore();
+    staleStore.saveSource({ ...telegramSource, id: "src_repo_tg_stale", status: "stale" } as SourceRecord);
+    staleStore.saveCapture({ ...telegramCapture, id: "cap_repo_stale_acme", sourceId: "src_repo_tg_stale" } as RawCapture);
+    (staleStore as any).saveDwmWatchlist({
+      id: "watch_repo_stale",
+      tenantId: "tenant_repo_stale",
+      organizationId: "org_repo_stale",
+      terms: [{ id: "watch_item_stale", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_stale",
+      status: "active"
+    });
+    const staleReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: (staleStore as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_stale",
+      organizationId: "org_repo_stale",
+      sources: staleStore.listSources(),
+      captures: staleStore.listCaptures()
+    });
+    expect(staleReadiness.blockerCodes).toContain("source_family_stale");
+    expect(staleReadiness.blockerCodes).not.toContain("source_family_inactive");
+    expect(staleReadiness.zeroAlertProof).toMatchObject({
+      zeroAlert: true,
+      state: "blocked_stale_source",
+      expectedAlertDelta: 0,
+      blockerCodes: expect.arrayContaining(["source_family_stale"]),
+      sourceFamilyGaps: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram_public",
+          state: "stale_source",
+          active: false,
+          candidateCount: 1,
+          captureRefCount: 1,
+          blockerCode: "source_family_stale"
+        })
+      ]),
+      nextAction: "Refresh stale source collection before rebuilding customer alerts."
+    });
+    expect(staleReadiness.typedBlockers.find((blocker) => blocker.code === "source_family_stale")).toMatchObject({
+      field: "sources.status",
+      recoverable: true,
+      sourceFamilies: ["telegram_public"]
+    });
+    const staleRebuild = rebuildDwmRuntimeAlerts({ store: staleStore as any, tenantId: "tenant_repo_stale", organizationId: "org_repo_stale" });
+    expect(staleRebuild.savedAlertCount).toBe(0);
+    expect((staleStore as any).listDwmAlerts()).toEqual([]);
+
     const deniedStore = new InMemoryScraperStore();
     deniedStore.saveSource(telegramSource);
     deniedStore.saveCapture(telegramCapture);
