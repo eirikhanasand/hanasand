@@ -9,9 +9,11 @@ import {
   recordOrgAlertCaseActionReceipt
 } from "../product/orgAlertWorkflowBridge.ts";
 import {
+  buildOrgAlertCaseActionLedgerApiList,
   InMemoryOrgAlertCaseActionLedgerRepository,
   orgAlertCaseActionLedgerRecordFromPostgresRows,
-  orgAlertCaseActionLedgerRecordToPostgresRows
+  orgAlertCaseActionLedgerRecordToPostgresRows,
+  writeOrgAlertCaseActionLedgerApiRecord
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
 
@@ -84,6 +86,118 @@ describe("org alert case action ledger postgres adapter", () => {
     expect(repository.listByCasePath("tenant_acme", "org_acme", "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma")).toHaveLength(1);
   });
 
+  test("writes and lists case action ledger records through API-safe contracts", () => {
+    const receipt = readyActionReceipt();
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const write = writeOrgAlertCaseActionLedgerApiRecord({
+      repository,
+      receipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      recordedAt: "2026-06-29T15:05:00.000Z"
+    });
+    const duplicate = writeOrgAlertCaseActionLedgerApiRecord({
+      repository,
+      receipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      recordedAt: "2026-06-29T15:06:00.000Z"
+    });
+    const byAlert = buildOrgAlertCaseActionLedgerApiList({
+      repository,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma"
+    });
+    const byReceipt = buildOrgAlertCaseActionLedgerApiList({
+      repository,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      receiptId: receipt.id
+    });
+
+    expect(write).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_action_ledger_api_write.v1",
+      ok: true,
+      statusCode: 201,
+      created: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      record: {
+        receiptId: receipt.id,
+        alertIds: ["alert_acme_lumma"],
+        casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+        action: "open_case",
+        execution: "ready",
+        auditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+      },
+      blockers: []
+    });
+    expect(duplicate).toMatchObject({
+      ok: true,
+      statusCode: 200,
+      created: false,
+      record: { receiptId: receipt.id },
+      blockers: []
+    });
+    expect(byAlert).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_action_ledger_api_list.v1",
+      ok: true,
+      statusCode: 200,
+      query: { alertId: "alert_acme_lumma" },
+      records: [expect.objectContaining({ receiptId: receipt.id, organizationId: "org_acme" })],
+      blockers: []
+    });
+    expect(byReceipt.records).toHaveLength(1);
+    expect(byReceipt.payloadShape).toEqual(expect.arrayContaining(["records[].auditEventId", "blockers[]"]));
+    expect(JSON.stringify(byAlert)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(byAlert)).not.toContain("https://discord.com");
+  });
+
+  test("blocks API ledger access without tenant and organization scope", () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository([readyLedgerRecord()]);
+    const list = buildOrgAlertCaseActionLedgerApiList({ repository, tenantId: "tenant_acme" });
+    const write = writeOrgAlertCaseActionLedgerApiRecord({
+      repository,
+      receipt: readyActionReceipt(),
+      organizationId: "org_acme"
+    });
+
+    expect(list).toMatchObject({
+      ok: false,
+      statusCode: 400,
+      records: [],
+      blockers: [expect.objectContaining({ code: "missing_organization_scope", path: "organizationId" })]
+    });
+    expect(write).toMatchObject({
+      ok: false,
+      statusCode: 400,
+      created: false,
+      blockers: [expect.objectContaining({ code: "missing_tenant_scope", path: "tenantId" })]
+    });
+  });
+
+  test("keeps API writes scoped to receipt organization", () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const response = writeOrgAlertCaseActionLedgerApiRecord({
+      repository,
+      receipt: readyActionReceipt(),
+      tenantId: "tenant_acme",
+      organizationId: "org_other"
+    });
+
+    expect(response).toMatchObject({
+      ok: false,
+      statusCode: 400,
+      created: false,
+      blockers: [expect.objectContaining({
+        code: "organization_scope_mismatch",
+        path: "receipt.organizationId"
+      })]
+    });
+    expect(repository.listScoped("tenant_acme", "org_other")).toEqual([]);
+  });
+
   test("rejects missing audit rows during persistence replay", () => {
     const rows = orgAlertCaseActionLedgerRecordToPostgresRows(readyLedgerRecord());
     expect(() => orgAlertCaseActionLedgerRecordFromPostgresRows({
@@ -94,6 +208,19 @@ describe("org alert case action ledger postgres adapter", () => {
 });
 
 function readyLedgerRecord() {
+  const receipt = readyActionReceipt();
+  const result = recordOrgAlertCaseActionReceipt({
+    records: [],
+    receipt,
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    recordedAt: "2026-06-29T15:05:00.000Z"
+  });
+  if (!result.record) throw new Error("Expected case action ledger record.");
+  return result.record;
+}
+
+function readyActionReceipt() {
   const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
   const sourceEvidence = buildOrgAlertSourceEvidenceReport({
     bridge,
@@ -119,15 +246,7 @@ function readyLedgerRecord() {
     analystId: "analyst_acme",
     checkedAt: "2026-06-29T15:04:00.000Z"
   });
-  const result = recordOrgAlertCaseActionReceipt({
-    records: [],
-    receipt,
-    tenantId: "tenant_acme",
-    organizationId: "org_acme",
-    recordedAt: "2026-06-29T15:05:00.000Z"
-  });
-  if (!result.record) throw new Error("Expected case action ledger record.");
-  return result.record;
+  return receipt;
 }
 
 function webhookDestination() {
