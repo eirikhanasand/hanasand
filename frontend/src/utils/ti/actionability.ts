@@ -134,6 +134,9 @@ export type PublicTiOrgRelevanceProof = {
         stale: boolean
         reason: string
     }
+    actorIdentity: PublicTiActorIdentity
+    sourceCoverage: PublicTiOrgSourceCoverage[]
+    enrichmentGaps: PublicTiOrgRelevanceEnrichmentGap[]
     organizationRefs: Array<{
         tenantId?: string
         organizationId?: string
@@ -186,6 +189,37 @@ export type PublicTiOrgRelevanceProof = {
 }
 
 export type PublicTiOrgSourceFamily = 'actor_profile' | 'source_capture' | 'watchlist' | 'alert' | 'case' | 'geography' | 'indicator' | 'vendor_disclosure' | 'webhook' | 'public_ti'
+
+export type PublicTiActorIdentity = {
+    canonicalName: string
+    aliases: string[]
+    actorClass: string
+    sectors: string[]
+    regions: string[]
+    motivations: string[]
+}
+
+export type PublicTiOrgSourceCoverage = {
+    sourceId?: string
+    sourceName: string
+    sourceFamily: PublicTiOrgSourceFamily
+    provenance: string
+    captureId?: string
+    confidence?: number
+    status: 'capture_ready' | 'public_reference' | 'missing_capture'
+    lastCollectedAt?: string
+    supportsTerms: string[]
+}
+
+export type PublicTiOrgRelevanceEnrichmentGap = {
+    code: 'missing_actor_aliases' | 'missing_target_sectors' | 'missing_target_regions' | 'missing_source_coverage' | 'missing_provenance' | 'stale_evidence'
+    ownerLane: PublicTiReadinessBlocker['ownerLane']
+    field: string
+    detail: string
+    route: string
+    sourceFamily: PublicTiOrgSourceFamily
+    recoverable: boolean
+}
 
 export type PublicTiAffectedEntity = {
     kind: 'vendor' | 'domain' | 'region'
@@ -710,6 +744,14 @@ function buildOrgRelevanceProof(input: {
         captureIds: uniqueStrings([...(alert.captureIds ?? []), ...(alert.deliveryReadinessContext?.selectedCaptureIds ?? [])]),
         webhookDestinationIds: uniqueStrings([...(alert.webhookDestinationIds ?? []), ...(alert.deliveryReadinessContext?.webhookDestinationIds ?? [])]),
     }))
+    const actorIdentity = actorIdentityForOrgRelevance(input.result, input.actor)
+    const sourceCoverage = sourceCoverageForOrgRelevance(sourceEvidence, input.readiness.blockers)
+    const orgEnrichmentGaps = orgRelevanceEnrichmentGaps({
+        actorIdentity,
+        sourceCoverage,
+        sourceEvidence,
+        freshness: input.actor.freshness,
+    })
     const affectedEntities = buildAffectedEntities({
         result: input.result,
         actor: input.actor,
@@ -735,6 +777,7 @@ function buildOrgRelevanceProof(input: {
         sourceEvidence,
         alertCaseRefs,
         enrichmentGaps: input.enrichmentGaps,
+        orgEnrichmentGaps,
         blockers,
     })
     const state: PublicTiOrgRelevanceProof['state'] = blockers.length === 0
@@ -748,6 +791,9 @@ function buildOrgRelevanceProof(input: {
         query: input.result.query,
         generatedAt: input.result.generatedAt,
         freshness: input.actor.freshness,
+        actorIdentity,
+        sourceCoverage,
+        enrichmentGaps: orgEnrichmentGaps,
         organizationRefs: input.matches.map(match => ({
             tenantId: match.tenantId,
             organizationId: match.organizationId,
@@ -790,6 +836,67 @@ function actorEvidenceForSource(actor: TiActorIntelligenceProfile, source: NonNu
             || row.provenance === source.provenance
         )
     })
+}
+
+function actorIdentityForOrgRelevance(result: TiSearchResponse, actor: TiActorIntelligenceProfile): PublicTiActorIdentity {
+    return {
+        canonicalName: result.query,
+        aliases: uniqueStrings(result.aliases),
+        actorClass: actor.actorClass,
+        sectors: uniqueStrings(actor.targetSectors),
+        regions: uniqueStrings(actor.geographies),
+        motivations: uniqueStrings(actor.motivation),
+    }
+}
+
+function sourceCoverageForOrgRelevance(sourceEvidence: PublicTiOrgRelevanceProof['sourceEvidence'], blockers: PublicTiReadinessBlocker[]): PublicTiOrgSourceCoverage[] {
+    const missingCapture = blockers.some(blocker => blocker.code === 'missing_capture')
+    return sourceEvidence.map(source => ({
+        sourceId: source.sourceId,
+        sourceName: source.sourceName,
+        sourceFamily: sourceFamilyForEvidence(source),
+        provenance: source.provenance,
+        captureId: source.captureId,
+        confidence: source.confidence,
+        status: source.captureId ? 'capture_ready' : missingCapture ? 'missing_capture' : 'public_reference',
+        lastCollectedAt: source.reportDate,
+        supportsTerms: uniqueStrings(source.supportsTerms),
+    }))
+}
+
+function orgRelevanceEnrichmentGaps(input: {
+    actorIdentity: PublicTiActorIdentity
+    sourceCoverage: PublicTiOrgSourceCoverage[]
+    sourceEvidence: PublicTiOrgRelevanceProof['sourceEvidence']
+    freshness: TiActorIntelligenceProfile['freshness']
+}): PublicTiOrgRelevanceEnrichmentGap[] {
+    const gaps: PublicTiOrgRelevanceEnrichmentGap[] = []
+    if (!input.actorIdentity.aliases.length) gaps.push(orgGap('missing_actor_aliases', 'public-ti', 'actorIdentity.aliases', 'Add known aliases before alert or watchlist handoff.', '/dashboard/ti/enrichment', 'actor_profile'))
+    if (!input.actorIdentity.sectors.length) gaps.push(orgGap('missing_target_sectors', 'public-ti', 'actorIdentity.sectors', 'Attach target-sector evidence before routing this actor to a customer watchlist.', '/dashboard/ti/enrichment', 'actor_profile'))
+    if (!input.actorIdentity.regions.length) gaps.push(orgGap('missing_target_regions', 'public-ti', 'actorIdentity.regions', 'Attach target-region evidence before regional exposure review.', '/dashboard/ti/enrichment', 'geography'))
+    if (!input.sourceCoverage.length) gaps.push(orgGap('missing_source_coverage', 'source', 'sourceCoverage', 'Attach at least one source coverage row for this actor result.', '/dashboard/ti/sources', 'source_capture'))
+    if (!input.sourceEvidence.length) gaps.push(orgGap('missing_provenance', 'source', 'sourceEvidence', 'Source provenance is required before org relevance can be reviewed.', '/dashboard/ti/enrichment', 'source_capture'))
+    if (input.freshness.stale) gaps.push(orgGap('stale_evidence', 'source', 'freshness.lastSeen', input.freshness.reason, '/dashboard/ti/enrichment', 'source_capture'))
+    return uniqueBy(gaps, gap => `${gap.code}:${gap.field}`)
+}
+
+function orgGap(
+    code: PublicTiOrgRelevanceEnrichmentGap['code'],
+    ownerLane: PublicTiOrgRelevanceEnrichmentGap['ownerLane'],
+    field: string,
+    detail: string,
+    route: string,
+    sourceFamily: PublicTiOrgSourceFamily,
+): PublicTiOrgRelevanceEnrichmentGap {
+    return {
+        code,
+        ownerLane,
+        field,
+        detail,
+        route,
+        sourceFamily,
+        recoverable: true,
+    }
 }
 
 function buildAffectedEntities(input: {
@@ -843,6 +950,7 @@ function buildOrgRelevanceRows(input: {
     sourceEvidence: PublicTiOrgRelevanceProof['sourceEvidence']
     alertCaseRefs: PublicTiOrgRelevanceProof['alertCaseRefs']
     enrichmentGaps: NonNullable<TiActionabilityContract['enrichmentGaps']>
+    orgEnrichmentGaps: PublicTiOrgRelevanceEnrichmentGap[]
     blockers: PublicTiReadinessBlocker[]
 }): PublicTiOrgRelevanceRow[] {
     const rowBlockers = (codes: PublicTiReadinessBlocker['code'][]) => input.blockers.filter(blocker => codes.includes(blocker.code))
@@ -982,6 +1090,26 @@ function buildOrgRelevanceRows(input: {
         })
     }
 
+    for (const gap of input.orgEnrichmentGaps) {
+        rows.push({
+            rowId: `org-gap:${gap.code}:${gap.field}`,
+            kind: 'enrichment_gap',
+            state: gap.code === 'stale_evidence' || gap.code === 'missing_provenance' || gap.code === 'missing_source_coverage' ? 'blocked' : 'review',
+            ownerLane: gap.ownerLane,
+            label: formatGapCode(gap.code),
+            action: gap.detail,
+            route: gap.route,
+            sourceFamily: gap.sourceFamily,
+            provenanceRefs: uniqueStrings([gap.field]),
+            captureIds: [],
+            webhookDestinationIds: [],
+            evidence: {
+                summary: gap.detail,
+            },
+            blockers: [],
+        })
+    }
+
     for (const blocker of input.blockers) {
         if (rows.some(row => row.blockers.some(rowBlocker => rowBlocker.code === blocker.code && rowBlocker.field === blocker.field))) continue
         rows.push({
@@ -1004,6 +1132,10 @@ function buildOrgRelevanceRows(input: {
     }
 
     return uniqueBy(rows, row => row.rowId).slice(0, 48)
+}
+
+function formatGapCode(code: PublicTiOrgRelevanceEnrichmentGap['code']) {
+    return code.replace(/_/g, ' ')
 }
 
 function sourceRefsForTerm(value: string, sources: PublicTiOrgRelevanceProof['sourceEvidence']) {
