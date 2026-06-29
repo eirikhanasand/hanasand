@@ -3055,6 +3055,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
   const scraperEnrichmentLifecycle = publicTiQueryAdapter.scraperEnrichmentLifecycle;
   const parserHealthAlerts = publicTiQueryAdapter.parserHealthAlerts;
   const enrichmentGapQueue = publicTiQueryAdapter.enrichmentGapQueue;
+  const sourceGrowthFixturePlan = publicTiQueryAdapter.sourceGrowthFixturePlan;
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
     proofId: actorReadiness.proofId,
@@ -3086,7 +3087,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness,
       scraperEnrichmentLifecycle,
       parserHealthAlerts,
-      enrichmentGapQueue
+      enrichmentGapQueue,
+      sourceGrowthFixturePlan
     },
     dashboardSourceReadiness: {
       schemaVersion: "dwm.dashboard.source_readiness_row.v1",
@@ -3109,6 +3111,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       scraperEnrichmentLifecycle,
       parserHealthAlerts,
       enrichmentGapQueue,
+      sourceGrowthFixturePlan,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3167,6 +3170,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.parserHealthAlerts.rows | all(has(\"sourceFamily\") and has(\"alertType\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"alertGenerationImpact\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.enrichmentGapQueue.items | all(has(\"sourceFamily\") and has(\"gapType\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.publicTiQueryAdapter.sourceGrowthFixturePlan.schemaVersion == \"ti.public_actor.source_growth_fixture_plan.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourceGrowthFixturePlan.fixtures | all(has(\"sourceFamily\") and has(\"fixtureKey\") and has(\"parserProfile\") and has(\"policyStatus\") and has(\"activationTest\") and has(\"route\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
@@ -3174,6 +3179,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.parserHealthAlerts.schemaVersion == \"ti.public_actor.parser_health_alerts.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.enrichmentGapQueue.schemaVersion == \"ti.public_actor.enrichment_gap_queue.v1\"",
+      ".proofArtifacts.dashboardSourceReadiness.sourceGrowthFixturePlan.schemaVersion == \"ti.public_actor.source_growth_fixture_plan.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
     ],
     safeOutput: {
@@ -3718,6 +3724,11 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     scraperEnrichmentLifecycle,
     parserHealthAlerts
   });
+  const sourceGrowthFixturePlan = sourceActorPublicTiSourceGrowthFixturePlan({
+    query,
+    enrichmentGapQueue,
+    sourcePackIntakeHandoff
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3767,6 +3778,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     scraperEnrichmentLifecycle,
     parserHealthAlerts,
     enrichmentGapQueue,
+    sourceGrowthFixturePlan,
     gaps: actorReadiness.candidateGaps ?? [],
     safeOutput: {
       rawTargetsExposed: false,
@@ -4146,6 +4158,94 @@ function sourceActorPublicTiEnrichmentGapQueue(input: {
       actionTypes: uniqueSourceReadinessStrings(items.map((item: any) => item.operatorAction)),
       retryableFamilies: uniqueSourceReadinessStrings(items.filter((item: any) => item.retryState?.retryable === true).map((item: any) => item.sourceFamily)),
       alertImpactedFamilies: uniqueSourceReadinessStrings(items.filter((item: any) => item.alertGenerationImpact?.blockedAlertRows > 0 || item.alertGenerationImpact?.ready !== true).map((item: any) => item.sourceFamily))
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiSourceGrowthFixturePlan(input: {
+  query: string;
+  enrichmentGapQueue: Record<string, any>;
+  sourcePackIntakeHandoff: Record<string, any>;
+}) {
+  const fixtureByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.fixtureManifest?.fixtures ?? []).map((fixture: any) => [String(fixture.family), fixture]));
+  const readinessByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.fixtureManifest?.fixtureReadiness ?? []).map((row: any) => [String(row.family), row]));
+  const candidateByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((candidate: any) => [String(candidate.family), candidate]));
+  const fixtures = (input.enrichmentGapQueue.items ?? []).map((item: any) => {
+    const family = String(item.sourceFamily);
+    const fixture = fixtureByFamily.get(family);
+    const readiness = readinessByFamily.get(family);
+    const candidate = candidateByFamily.get(family);
+    const activationRoute = readiness?.testRun?.route ?? item.route;
+    return {
+      schemaVersion: "ti.public_actor.source_growth_fixture_plan_item.v1",
+      fixturePlanId: stableId("ti_public_actor_source_growth_fixture_plan_item", `${input.query}:${family}:${item.itemId}:${fixture?.fixtureKey ?? ""}`),
+      query: input.query,
+      sourceFamily: family,
+      gapQueueItemId: item.itemId,
+      fixtureKey: fixture?.fixtureKey ?? `fixture://ti-source-pack/${encodeURIComponent(input.query.toLowerCase())}/${family}/missing`,
+      fixtureId: fixture?.fixtureId,
+      parserProfile: fixture?.parserProfile ?? candidate?.parserExpectation?.profile ?? item.parserStatus?.state ?? "unknown",
+      parserExpectation: fixture?.parserExpectation ?? candidate?.parserExpectation,
+      expectedCaptureType: fixture?.expectedCaptureType,
+      policyStatus: item.policyStatus,
+      activationTest: {
+        canRun: readiness?.testRun?.canRun === true || item.route?.dryRunSupported === true,
+        mode: "no_network_fixture",
+        operatorAction: item.operatorAction,
+        route: {
+          method: activationRoute?.method ?? "POST",
+          path: activationRoute?.path ?? "/v1/dwm/source-requests",
+          body: {
+            ...(activationRoute?.body ?? {}),
+            action: activationRoute?.body?.action ?? item.route?.body?.action ?? "test",
+            sourceFamily: family,
+            dryRun: true
+          },
+          dryRunSupported: true,
+          liveNetworkFetch: false
+        }
+      },
+      validation: {
+        ready: readiness?.validation?.ready === true || candidate?.policyResult?.allowed === true,
+        checks: readiness?.validation?.checks ?? fixture?.validationChecks ?? [],
+        blockers: dedupeBlockers([
+          ...(item.blockers ?? []),
+          ...(readiness?.validation?.blockers ?? [])
+        ])
+      },
+      provenance: {
+        gapQueueProofId: input.enrichmentGapQueue.proofId,
+        candidateProofId: candidate?.proofId ?? fixture?.candidateProofId,
+        fixtureReadinessProofId: readiness?.proofId,
+        sourceProofIds: item.audit?.sourceProofIds ?? []
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.source_growth_fixture_plan.v1",
+    proofId: stableId("ti_public_actor_source_growth_fixture_plan", `${input.query}:${fixtures.map((fixture: any) => `${fixture.sourceFamily}:${fixture.fixtureKey}:${fixture.activationTest.canRun}`).join(",")}`),
+    query: input.query,
+    mode: "no_network_fixture",
+    fixtures,
+    summary: {
+      totalFixtures: fixtures.length,
+      sourceFamilies: uniqueSourceReadinessStrings(fixtures.map((fixture: any) => fixture.sourceFamily)),
+      runnableFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture: any) => fixture.activationTest.canRun).map((fixture: any) => fixture.sourceFamily)),
+      metadataOnlyFamilies: uniqueSourceReadinessStrings(fixtures.filter((fixture: any) => fixture.policyStatus?.metadataOnly === true).map((fixture: any) => fixture.sourceFamily)),
+      parserProfiles: uniqueSourceReadinessStrings(fixtures.map((fixture: any) => fixture.parserProfile)),
+      expectedCaptureTypes: uniqueSourceReadinessStrings(fixtures.map((fixture: any) => fixture.expectedCaptureType).filter(Boolean))
     },
     safeOutput: {
       rawTargetsExposed: false,
