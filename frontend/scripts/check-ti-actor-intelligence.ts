@@ -373,6 +373,19 @@ assert(backed.readiness.backedIds.alertIds.includes('dwm_alert_1'), 'Backed read
 assert(backed.readiness.backedIds.casePaths.includes('/v1/cases/case_1?alertId=dwm_alert_1'), 'Backed readiness should carry case paths.')
 assert(backed.readiness.backedIds.captureIds.includes('capture_1'), 'Backed readiness should carry capture IDs.')
 assert(backed.readiness.backedIds.webhookDestinationIds.includes('webhook_1'), 'Backed readiness should carry webhook destination IDs.')
+assert(backed.orgRelevance.watchlistIntersections.some(item =>
+    item.value === 'Microsoft'
+    && item.state === 'ready'
+    && item.organizationId === 'org_1'
+    && item.watchlistId === 'watchlist_1'
+    && item.watchlistItemId === 'watch_1'
+    && item.alertIds.includes('dwm_alert_1')
+    && item.casePaths.includes('/v1/cases/case_1?alertId=dwm_alert_1')
+    && item.captureIds.includes('capture_1')
+    && item.webhookDestinationIds.includes('webhook_1')
+    && item.recommendedAction === 'open_case'
+), 'Backed org relevance should carry customer watchlist/source/alert/case intersections.')
+assert(JSON.stringify(backed.actionPayloads.payloads.analystHandoffBundle.body).includes('watchlistIntersections'), 'Backed analyst handoff should export watchlist intersections.')
 assert(backed.readiness.blockers.some(blocker => blocker.code === 'unavailable_contract' && blocker.ownerLane === 'entitlement'), 'Backed readiness should call out missing entitlement readiness when org context exists.')
 assert(backed.consumerReadiness.ready, 'Backed consumer readiness should be ready when watchlist, alert, case, capture, and webhook context exist.')
 assert(backed.consumerReadiness.stages.every(stage => stage.state === 'ready'), 'Backed consumer readiness stages should all be ready.')

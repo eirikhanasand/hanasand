@@ -24,9 +24,24 @@ assert(apt29.orgRelevance.sourceCoverage.some(source =>
     && source.supportsTerms.includes('microsoft.com')
 ), 'APT29 relevance should carry source family, capture, and supported watchlist term.')
 assert(apt29.orgRelevance.enrichmentGaps.length === 0, 'APT29 relevance should have no enrichment gaps when actor, source, and org data are present.')
+assert(apt29.orgRelevance.watchlistIntersections.some(item =>
+    item.kind === 'domain'
+    && item.value === 'microsoft.com'
+    && item.state === 'ready'
+    && item.organizationId === 'org_acme'
+    && item.watchlistId === 'watchlist_acme_vendors'
+    && item.watchlistItemId === 'item_microsoft'
+    && item.alertIds.includes('alert_apt29_microsoft')
+    && item.casePaths.includes('/dashboard/dwm/cases/case_apt29_microsoft')
+    && item.captureIds.includes('capture_microsoft_apt29_2024')
+    && item.webhookDestinationIds.includes('webhook_security_ops')
+    && item.sourceFamilies.includes('vendor_disclosure')
+    && item.recommendedAction === 'open_case'
+), 'APT29 relevance should carry backed org/watchlist/source/alert/case intersections.')
 assert(apt29.orgRelevance.handoffRows.some(row => row.kind === 'alert_case' && row.alertId === 'alert_apt29_microsoft'), 'APT29 relevance should expose linked alert/case handoff rows.')
 assert(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).actorIdentity, 'Analyst handoff bundle should include org relevance actor identity.')
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).sourceCoverage).some(item => readObject(item).status === 'capture_ready'), 'Analyst handoff bundle should include source coverage readiness.')
+assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).watchlistIntersections).some(item => readObject(item).recommendedAction === 'open_case'), 'Analyst handoff bundle should include org watchlist intersections.')
 
 const blocked = (() => {
     const result: TiSearchResponse = {
@@ -63,6 +78,7 @@ const gapCodes = blocked.orgRelevance.enrichmentGaps.map(gap => gap.code).sort()
 assert(blocked.orgRelevance.state === 'blocked', 'Incomplete actor relevance should be blocked.')
 assert(blocked.orgRelevance.actorIdentity.aliases.length === 0, 'Incomplete actor relevance should expose missing aliases.')
 assert(blocked.orgRelevance.sourceCoverage.length === 0, 'Incomplete actor relevance should expose missing source coverage.')
+assert(blocked.orgRelevance.watchlistIntersections.length === 0, 'Incomplete actor relevance should not invent org watchlist intersections.')
 assert(JSON.stringify(gapCodes) === JSON.stringify([
     'missing_actor_aliases',
     'missing_provenance',
