@@ -1086,6 +1086,29 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             })
         }
     }
+    if (selected.kind === 'support_readiness') {
+        rows.push({
+            id: 'open_helpdesk_workbench',
+            label: 'Open helpdesk',
+            detail: selected.missingDependency || 'Review recovery requests and admin audit export from the support workbench.',
+            tone: selected.missingDependency ? 'needs_action' : 'ready',
+            href: '/dashboard/system/impersonation',
+        })
+        rows.push({
+            id: 'support_recovery_api',
+            label: 'Recovery queue',
+            detail: 'GET /api/backend/admin/support/access-recovery.',
+            tone: 'ready',
+            href: '/api/backend/admin/support/access-recovery',
+        })
+        rows.push({
+            id: 'admin_audit_api',
+            label: 'Admin audit',
+            detail: 'GET /api/backend/admin/audit-events?limit=50.',
+            tone: 'ready',
+            href: '/api/backend/admin/audit-events?limit=50',
+        })
+    }
     rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })

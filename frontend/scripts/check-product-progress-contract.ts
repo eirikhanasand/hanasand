@@ -694,6 +694,10 @@ assert.ok(workbenchSource.includes('run_canary_collection'), 'Operator action ra
 assert.ok(workbenchSource.includes('insertedCaptureCount'), 'Canary collection action should report inserted capture count.')
 assert.ok(workbenchSource.includes('failedTaskCount'), 'Canary collection action should report failed task count.')
 assert.ok(workbenchSource.includes('telegramPublicCreated'), 'Source coverage action should report source request summary fields.')
+assert.ok(workbenchSource.includes('support_readiness'), 'Operator action rail should recognize support readiness items.')
+assert.ok(workbenchSource.includes('open_helpdesk_workbench'), 'Support readiness should deep-link to the helpdesk workbench.')
+assert.ok(workbenchSource.includes('support_recovery_api'), 'Support readiness should expose the recovery queue API.')
+assert.ok(workbenchSource.includes('admin_audit_api'), 'Support readiness should expose the admin audit API.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 
