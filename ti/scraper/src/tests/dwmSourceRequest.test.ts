@@ -1404,6 +1404,13 @@ describe("dwm source requests", () => {
           activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
           matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"])
         },
+        alertCaseHandoffReadiness: {
+          schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
+          alertReady: true,
+          caseReady: true,
+          canOpenCase: true,
+          blockers: []
+        },
         safeOutput: {
           liveNetworkScrapeStarted: false,
           privateTelegramContentExposed: false,
@@ -1535,8 +1542,17 @@ describe("dwm source requests", () => {
         enrichable: expect.arrayContaining(["telegram"])
       },
       freshness: {
-        stale: false,
+        stale: true,
+        captureFreshness: expect.objectContaining({ state: "needs_capture" }),
         lastSuccessfulEnrichmentAt: expect.any(String)
+      },
+      alertCaseHandoffReadiness: {
+        alertReady: false,
+        caseReady: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "capture_required", severity: "blocking" }),
+          expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
+        ])
       },
       safeOutput: {
         liveNetworkScrapeStarted: false,
@@ -1589,6 +1605,54 @@ describe("dwm source requests", () => {
       }
     });
     expect(frontier.snapshot()).toHaveLength(1);
+
+    const source = store.listSources().find((item: any) => item.metadata?.sourceGrowthFamily === "telegram");
+    expect(source?.id).toBeTruthy();
+    const failed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "collection_failed",
+        sourceId: source?.id,
+        errorCode: "parser_timeout",
+        reason: "Telegram preview parser timed out"
+      })
+    }), options);
+    expect(failed.status).toBe(200);
+
+    const retryReadiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "actor_enrichment_readiness",
+        sourcePackId: "pack_actor_gap_partial",
+        query: "APT28",
+        tenantId: "tenant_acme",
+        orgId: "org_acme"
+      })
+    }), options);
+    const retryBody = await retryReadiness.json() as any;
+    expect(retryReadiness.status).toBe(200);
+    expect(retryBody.actorReadiness).toMatchObject({
+      state: "partial",
+      sourceFamilies: {
+        failed: expect.arrayContaining(["telegram"])
+      },
+      retryBlockers: expect.arrayContaining([
+        expect.objectContaining({
+          family: "telegram",
+          retryBackoff: expect.objectContaining({
+            retryable: true,
+            failureCategories: expect.arrayContaining(["parser_timeout"])
+          })
+        })
+      ]),
+      alertCaseHandoffReadiness: {
+        alertReady: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "capture_required" }),
+          expect.objectContaining({ code: "retry_required", family: "telegram" })
+        ])
+      }
+    });
   });
 
   test("retrieves source packs across scraper store restarts through durable adapter", async () => {

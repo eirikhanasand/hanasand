@@ -1292,8 +1292,13 @@ function sourceActivationProof(input: {
   const family = input.candidate.declaredFamily;
   const state = sourceOperationalState(input.source, input.candidate, input.receipt);
   const policy = sourceActivationPolicyResult(input.candidate, input.source);
-  const parserStatus = input.candidate.parserStatus ?? input.activeRow?.parserStatus ?? (input.source ? parserStatusForSource(input.source) : "not_scheduled");
-  const parserAvailable = !String(parserStatus).includes("blocked") && !String(parserStatus).includes("failed") && !isRejectedPolicySourcePackCandidate(input.candidate);
+  const sourceCandidateMetadata = input.source ? sourceCandidate(input.source) : undefined;
+  const parserStatus = sourceCandidateMetadata?.parserStatus
+    ?? input.source?.metadata?.parserStatus
+    ?? input.candidate.parserStatus
+    ?? input.activeRow?.parserStatus
+    ?? (input.source ? parserStatusForSource(input.source) : "not_scheduled");
+  const parserAvailable = !String(parserStatus).includes("blocked") && !String(parserStatus).includes("failed") && !String(parserStatus).includes("retry") && !isRejectedPolicySourcePackCandidate(input.candidate);
   const captureType = expectedCaptureTypeForFamily(family);
   const alertableFields = alertableFieldsForFamily(family);
   const watchlistTerms = String(input.scope ?? "").split(/[,\n]/).map((term) => term.trim()).filter(Boolean);
@@ -1366,8 +1371,11 @@ function sourceActivationPolicyResult(candidate: SourcePackRegistryCandidate, so
 }
 
 function sourceOperationalState(source: SourceRecord | undefined, candidate: SourcePackRegistryCandidate, receipt?: DwmSourcePackCollectionQueueReceiptRecord): "canary" | "active" | "paused" | "failed" | "blocked" {
+  const sourceCandidateMetadata = source ? sourceCandidate(source) : undefined;
+  const parserStatus = sourceCandidateMetadata?.parserStatus ?? source?.metadata?.parserStatus ?? candidate.parserStatus;
+  const lastCollectionOutcome = sourceCandidateMetadata?.lastCollectionOutcome ?? source?.metadata?.lastCollectionOutcome;
   if (isRejectedPolicySourcePackCandidate(candidate) || candidate.status === "disabled") return "blocked";
-  if (candidate.failure || String(candidate.parserStatus ?? "").includes("failed") || receipt?.status === "blocked") return "failed";
+  if (candidate.failure || lastCollectionOutcome?.status === "failed" || String(parserStatus ?? "").includes("failed") || String(parserStatus ?? "").includes("retry") || receipt?.status === "blocked") return "failed";
   if (source?.status === "active" && source.metadata?.canaryPortfolio === true) return "canary";
   if (source?.status === "active") return "active";
   if (source?.status === "suppressed" || candidate.status === "suppressed") return "paused";
@@ -1381,7 +1389,7 @@ function sourceHealthOperationalState(
   receipt?: DwmSourcePackCollectionQueueReceiptRecord
 ): "canary" | "active" | "paused" | "failed" | "blocked" {
   if (isRejectedPolicySourcePackCandidate(candidate) || candidate.status === "disabled") return "blocked";
-  if (candidate.failure || receipt?.status === "blocked" || String(candidate.parserStatus ?? "").includes("failed")) return "failed";
+  if (candidate.failure || (candidate as any).lastCollectionOutcome?.status === "failed" || receipt?.status === "blocked" || String(candidate.parserStatus ?? "").includes("failed") || String(candidate.parserStatus ?? "").includes("retry")) return "failed";
   if (activeRow && candidate.status === "active") return "canary";
   if (activeRow) return "active";
   if (candidate.status === "retry_scheduled" || String(candidate.parserStatus ?? "").includes("retry")) return "failed";
@@ -3065,6 +3073,23 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       blockers: value?.blockers ?? [{ code: "missing_source_family", severity: "warning", retryable: true }]
     }));
   const freshnessRows = ledgerRows.filter((row: any) => row.lastCaptureAt || row.lastEnrichmentAt);
+  const latestCaptureAt = latestIso(freshnessRows.map((row: any) => row.lastCaptureAt));
+  const latestEnrichmentAt = latestIso(freshnessRows.map((row: any) => row.lastEnrichmentAt));
+  const captureFreshness = sourceActorCaptureFreshness(latestCaptureAt, readinessArtifact.generatedAt);
+  const alertability = {
+    activeSourceFamilies: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
+    matchableFields: readinessArtifact.sharedWatchlistAlertability?.matchableFields ?? [],
+    sourceTrust: readinessArtifact.sharedWatchlistAlertability?.sourceTrust,
+    blockerReasons: readinessArtifact.sharedWatchlistAlertability?.blockerReasons ?? [],
+    sourcePolicyLimits: readinessArtifact.sharedWatchlistAlertability?.sourcePolicyLimits ?? []
+  };
+  const retryBlockers = ledgerRows
+    .filter((row: any) => row.retryBackoff?.retryable || (row.blockerCodes ?? []).length > 0)
+    .map((row: any) => ({
+      family: row.family,
+      retryBackoff: row.retryBackoff,
+      blockerCodes: row.blockerCodes ?? []
+    }));
   return {
     query,
     state: candidateGaps.some((gap: any) => gap.state === "policy_blocked")
@@ -3086,32 +3111,86 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     missingSections,
     provenance,
     freshness: {
-      lastSuccessfulCaptureAt: latestIso(freshnessRows.map((row: any) => row.lastCaptureAt)),
-      lastSuccessfulEnrichmentAt: latestIso(freshnessRows.map((row: any) => row.lastEnrichmentAt)),
-      stale: freshnessRows.length === 0,
+      lastSuccessfulCaptureAt: latestCaptureAt,
+      lastSuccessfulEnrichmentAt: latestEnrichmentAt,
+      stale: captureFreshness.state !== "fresh",
+      captureFreshness,
       checkedAt: readinessArtifact.generatedAt
     },
     candidateGaps,
-    retryBlockers: ledgerRows
-      .filter((row: any) => row.retryBackoff?.retryable || (row.blockerCodes ?? []).length > 0)
-      .map((row: any) => ({
-        family: row.family,
-        retryBackoff: row.retryBackoff,
-        blockerCodes: row.blockerCodes ?? []
-      })),
-    alertability: {
-      activeSourceFamilies: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
-      matchableFields: readinessArtifact.sharedWatchlistAlertability?.matchableFields ?? [],
-      sourceTrust: readinessArtifact.sharedWatchlistAlertability?.sourceTrust,
-      blockerReasons: readinessArtifact.sharedWatchlistAlertability?.blockerReasons ?? [],
-      sourcePolicyLimits: readinessArtifact.sharedWatchlistAlertability?.sourcePolicyLimits ?? []
-    },
+    retryBlockers,
+    alertability,
+    alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
+      query,
+      alertability,
+      latestCaptureAt,
+      candidateGaps,
+      retryBlockers,
+      missingSections
+    }),
     safeOutput: {
       rawTargetsExposed: false,
       privateTelegramContentExposed: false,
       restrictedMetadataLeaked: false,
       liveNetworkScrapeStarted: false,
       restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActorCaptureFreshness(latestCaptureAt: string | undefined, generatedAt: string | undefined) {
+  if (!latestCaptureAt) return { state: "needs_capture", staleAfterHours: 24, ageHours: undefined };
+  const ageMs = Math.max(0, Date.parse(String(generatedAt ?? nowIso())) - Date.parse(latestCaptureAt));
+  const ageHours = Math.round((ageMs / 3600000) * 10) / 10;
+  return {
+    state: ageHours > 24 ? "stale" : "fresh",
+    staleAfterHours: 24,
+    ageHours,
+    latestCaptureAt
+  };
+}
+
+function sourceActorAlertCaseHandoffReadiness(input: {
+  query: string;
+  alertability: Record<string, any>;
+  latestCaptureAt?: string;
+  candidateGaps: Array<Record<string, any>>;
+  retryBlockers: Array<Record<string, any>>;
+  missingSections: Array<Record<string, any>>;
+}) {
+  const blockers = [
+    ...(!input.latestCaptureAt ? [{ code: "capture_required", severity: "blocking", retryable: true }] : []),
+    ...(input.alertability.activeSourceFamilies.length === 0 ? [{ code: "no_active_source_family", severity: "blocking", retryable: true }] : []),
+    ...(input.alertability.matchableFields.length === 0 ? [{ code: "no_matchable_fields", severity: "blocking", retryable: true }] : []),
+    ...input.candidateGaps.filter((gap) => gap.state === "policy_blocked").map((gap) => ({ code: "policy_blocked_source", severity: "blocking", family: gap.family, retryable: false })),
+    ...input.retryBlockers.map((row) => ({ code: "retry_required", severity: "warning", family: row.family, retryable: true })),
+    ...input.missingSections.map((row) => ({ code: "missing_actor_section_source", severity: "warning", section: row.section, retryable: true }))
+  ];
+  const blocking = blockers.some((blocker) => blocker.severity === "blocking");
+  return {
+    schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
+    query: input.query,
+    alertReady: !blocking,
+    caseReady: !blocking && Boolean(input.latestCaptureAt),
+    requiresWatchlist: true,
+    canOpenCase: !blocking,
+    routes: {
+      alertRebuild: "/v1/dwm/alerts/rebuild",
+      caseHandoff: "/v1/cases",
+      sourceRetry: "/v1/dwm/source-requests"
+    },
+    blockers: dedupeBlockers(blockers),
+    proof: {
+      latestCaptureAt: input.latestCaptureAt,
+      activeSourceFamilies: input.alertability.activeSourceFamilies,
+      matchableFields: input.alertability.matchableFields,
+      sourcePolicyLimits: input.alertability.sourcePolicyLimits
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
     }
   };
 }
