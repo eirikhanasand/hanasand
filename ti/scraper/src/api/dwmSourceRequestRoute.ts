@@ -3052,6 +3052,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
     actorReadiness,
     publicTiQueryAdapter
   });
+  const scraperEnrichmentLifecycle = publicTiQueryAdapter.scraperEnrichmentLifecycle;
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
     proofId: actorReadiness.proofId,
@@ -3080,7 +3081,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceSectionReadiness: actorReadiness.sourceSectionReadiness,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
-      alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
+      alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness,
+      scraperEnrichmentLifecycle
     },
     dashboardSourceReadiness: {
       schemaVersion: "dwm.dashboard.source_readiness_row.v1",
@@ -3100,6 +3102,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       sourceEnrichmentProfile: actorReadiness.sourceEnrichmentProfile,
       sourceOperationsAdapter: dashboardSourceOperationsAdapter,
+      scraperEnrichmentLifecycle,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3152,10 +3155,13 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.alertEnrichmentHandoff.schemaVersion == \"ti.public_actor.alert_enrichment_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.scraperEnrichmentLifecycle.rows | all(has(\"sourceFamily\") and has(\"policyStatus\") and has(\"parserStatus\") and has(\"retryState\") and has(\"provenance\") and has(\"freshness\") and has(\"enrichmentGap\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.dashboardSourceReadiness.scraperEnrichmentLifecycle.schemaVersion == \"ti.public_actor.scraper_enrichment_lifecycle.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
     ],
     safeOutput: {
@@ -3679,6 +3685,17 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     watchlistAlertabilityBridge,
     sourceOperationsReadiness: downstreamFixtureExport.sourceOperationsReadiness
   });
+  const scraperEnrichmentLifecycle = sourceActorPublicTiScraperEnrichmentLifecycle({
+    query,
+    actorReadiness,
+    parserStatusLedger,
+    sourcePackIntakeHandoff,
+    sourcePackActivationPreview,
+    sourceEnrichmentFreshnessLedger,
+    alertEnrichmentHandoff,
+    watchlistAlertabilityBridge,
+    downstreamFixtureExport
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3725,7 +3742,204 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     sourceEnrichmentFreshnessLedger,
     alertEnrichmentHandoff,
     watchlistAlertabilityBridge,
+    scraperEnrichmentLifecycle,
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiScraperEnrichmentLifecycle(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  parserStatusLedger: Record<string, any>;
+  sourcePackIntakeHandoff: Record<string, any>;
+  sourcePackActivationPreview: Record<string, any>;
+  sourceEnrichmentFreshnessLedger: Record<string, any>;
+  alertEnrichmentHandoff: Record<string, any>;
+  watchlistAlertabilityBridge: Record<string, any>;
+  downstreamFixtureExport: Record<string, any>;
+}) {
+  const parserByFamily = new Map<string, Record<string, any>>((input.parserStatusLedger.rows ?? []).map((row: any) => [String(row.family), row]));
+  const freshnessByFamily = new Map<string, Record<string, any>>((input.sourceEnrichmentFreshnessLedger.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => [String(row.family), row]));
+  const operationByFamily = new Map<string, Record<string, any>>((input.downstreamFixtureExport.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const watchlistByFamily = new Map<string, Record<string, any>>((input.watchlistAlertabilityBridge.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const alertRowsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const row of input.alertEnrichmentHandoff.rows ?? []) {
+    const family = String(row.sourceFamily);
+    alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
+  }
+  const activationActionsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const action of input.sourcePackActivationPreview.actions ?? []) {
+    const family = String(action.family);
+    activationActionsByFamily.set(family, [...(activationActionsByFamily.get(family) ?? []), action]);
+  }
+  const families = uniqueSourceReadinessStrings([
+    ...(input.parserStatusLedger.rows ?? []).map((row: any) => row.family),
+    ...(input.sourceEnrichmentFreshnessLedger.rows ?? []).map((row: any) => row.sourceFamily),
+    ...(input.sourcePackIntakeHandoff.candidates ?? []).map((row: any) => row.family),
+    ...(input.downstreamFixtureExport.sourceOperationsReadiness?.rows ?? []).map((row: any) => row.sourceFamily),
+    ...(input.watchlistAlertabilityBridge.rows ?? []).map((row: any) => row.sourceFamily),
+    ...(input.alertEnrichmentHandoff.rows ?? []).map((row: any) => row.sourceFamily)
+  ]);
+  const rows = families.map((family) => {
+    const parser = parserByFamily.get(family);
+    const freshness = freshnessByFamily.get(family);
+    const intake = intakeByFamily.get(family);
+    const operations = operationByFamily.get(family);
+    const watchlist = watchlistByFamily.get(family);
+    const alertRows = alertRowsByFamily.get(family) ?? [];
+    const activationActions = activationActionsByFamily.get(family) ?? [];
+    const blockers = dedupeBlockers([
+      ...(parser?.blockers ?? []),
+      ...(freshness?.blockers ?? []),
+      ...(intake?.blockers ?? []),
+      ...(operations?.blockers ?? []),
+      ...(watchlist?.blockers ?? []),
+      ...alertRows.flatMap((row) => row.blockers ?? []),
+      ...activationActions.flatMap((action) => action.blockers ?? [])
+    ]);
+    const retryBackoff = parser?.retryBackoff ?? freshness?.parserStatus?.retryBackoff ?? operations?.parserStatus?.retryBackoff;
+    const sourceIds = uniqueSourceReadinessStrings([
+      ...(parser?.sourceIds ?? []),
+      ...(freshness?.provenance?.sourceIds ?? []),
+      ...(operations?.provenance?.sourceIds ?? []),
+      ...alertRows.flatMap((row) => row.provenance?.sourceIds ?? [])
+    ]);
+    const candidateIds = uniqueSourceReadinessStrings([
+      ...(parser?.candidateIds ?? []),
+      ...(freshness?.provenance?.candidateIds ?? []),
+      ...(operations?.candidateIntake?.candidateIds ?? []),
+      ...(intake?.provenance?.candidateIds ?? []),
+      ...activationActions.flatMap((action) => action.candidateIds ?? []),
+      ...alertRows.flatMap((row) => row.provenance?.candidateIds ?? [])
+    ]);
+    const captureIds = uniqueSourceReadinessStrings([
+      ...(freshness?.provenance?.captureIds ?? []),
+      ...(operations?.provenance?.captureIds ?? []),
+      ...alertRows.flatMap((row) => row.provenance?.captureIds ?? [])
+    ]);
+    return {
+      schemaVersion: "ti.public_actor.scraper_enrichment_lifecycle_row.v1",
+      proofId: stableId("ti_public_actor_scraper_enrichment_lifecycle_row", `${input.query}:${family}:${parser?.parserState}:${freshness?.freshnessState}:${blockers.map((blocker: any) => blocker.code).join(",")}`),
+      query: input.query,
+      sourceFamily: family,
+      sourceIds,
+      candidateIds,
+      policyStatus: {
+        state: intake?.policyResult?.allowed === false || blockers.some((blocker: any) => String(blocker.code).includes("policy")) ? "blocked" : intake?.policyResult?.metadataOnly || freshness?.provenance?.privacyBoundary === "metadata_only" ? "metadata_only" : "allowed",
+        publicOnly: intake?.policyResult?.publicOnly === true,
+        metadataOnly: intake?.policyResult?.metadataOnly === true || freshness?.provenance?.privacyBoundary === "metadata_only",
+        restricted: intake?.policyResult?.restricted === true || String(family).includes("darkweb"),
+        liveNetworkFetch: false
+      },
+      parserStatus: {
+        state: parser?.parserState ?? freshness?.parserStatus?.state ?? operations?.parserStatus?.state ?? "unknown",
+        captureState: parser?.captureState ?? freshness?.parserStatus?.captureState ?? operations?.parserStatus?.captureState,
+        lastSuccessAt: latestIso([parser?.timestamps?.lastSuccessAt, freshness?.timestamps?.lastCaptureAt, operations?.freshness?.lastCaptureAt]),
+        lastFailureAt: latestIso([parser?.timestamps?.lastFailureAt, operations?.parserStatus?.lastFailureAt]),
+        lastFailure: parser?.lastFailure ?? operations?.parserStatus?.lastFailure
+      },
+      retryState: {
+        retryable: retryBackoff?.retryable === true || activationActions.some((action) => action.action === "retry"),
+        nextRetryAt: retryBackoff?.nextRetryAt ?? activationActions.find((action) => action.action === "retry")?.route?.body?.nextRetryAt,
+        actionIds: uniqueSourceReadinessStrings(activationActions.map((action) => action.proofId ?? action.idempotencyKey))
+      },
+      provenance: {
+        sourceHealthProofId: freshness?.provenance?.sourceHealthProofId ?? operations?.provenance?.sourceHealthProofId,
+        parserProofId: freshness?.provenance?.parserProofId ?? parser?.proofId,
+        freshnessProofId: freshness?.proofId,
+        sourceOperationsProofId: operations?.proofId,
+        alertEnrichmentProofIds: uniqueSourceReadinessStrings(alertRows.flatMap((row) => row.provenance?.enrichmentProofIds ?? [])),
+        captureIds,
+        sourceIds,
+        candidateIds,
+        privacyBoundary: freshness?.provenance?.privacyBoundary ?? intake?.policyResult?.policyBoundary
+      },
+      freshness: {
+        state: freshness?.freshnessState ?? "missing",
+        lastCaptureAt: freshness?.timestamps?.lastCaptureAt ?? operations?.freshness?.lastCaptureAt,
+        lastEnrichmentAt: freshness?.timestamps?.lastEnrichmentAt ?? operations?.freshness?.lastEnrichmentAt,
+        checkedAt: freshness?.timestamps?.checkedAt ?? input.actorReadiness.freshness?.checkedAt,
+        sla: freshness?.freshnessSla
+      },
+      enrichmentGap: {
+        type: freshness?.gap?.state ?? parser?.gap?.state ?? operations?.state ?? "unknown",
+        missingFields: uniqueSourceReadinessStrings([
+          ...(freshness?.gap?.missingFields ?? []),
+          ...(parser?.gap?.missingFields ?? []),
+          ...(operations?.candidateIntake?.missingFields ?? [])
+        ]),
+        matchableFields: uniqueSourceReadinessStrings([
+          ...(watchlist?.matchableFields ?? []),
+          ...(freshness?.alertability?.matchableFields ?? []),
+          ...alertRows.flatMap((row) => row.matchContext?.matchableFields ?? [])
+        ]),
+        alertableFields: uniqueSourceReadinessStrings([
+          ...(watchlist?.alertableFields ?? []),
+          ...(freshness?.alertability?.alertableFields ?? []),
+          ...alertRows.flatMap((row) => row.matchContext?.alertableFields ?? [])
+        ])
+      },
+      activationTest: {
+        ready: activationActions.some((action) => action.action === "activate" || action.action === "test" || action.action === "request_candidate"),
+        actionTypes: uniqueSourceReadinessStrings(activationActions.map((action) => action.action)),
+        routes: activationActions.map((action) => ({
+          path: action.route?.path ?? "/v1/dwm/source-requests",
+          method: action.route?.method ?? "POST",
+          dryRunSupported: action.route?.dryRunSupported !== false,
+          liveNetworkFetch: false
+        }))
+      },
+      alertGeneration: {
+        ready: alertRows.some((row) => row.state === "ready"),
+        watchlistTerms: uniqueSourceReadinessStrings(alertRows.map((row) => row.watchlistTerm)),
+        webhookConsumable: alertRows.some((row) => row.webhookPayload?.canConsume === true)
+      },
+      blockers,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.scraper_enrichment_lifecycle.v1",
+    proofId: stableId("ti_public_actor_scraper_enrichment_lifecycle", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.parserStatus.state}:${row.freshness.state}`).join(",")}`),
+    query: input.query,
+    mode: "no_network_fixture",
+    rows,
+    summary: {
+      totalFamilies: rows.length,
+      sourceFamilies: rows.map((row: any) => row.sourceFamily),
+      activeSourceFamilies: input.actorReadiness.alertability?.activeSourceFamilies ?? [],
+      policyBlockedFamilies: rows.filter((row: any) => row.policyStatus.state === "blocked").map((row: any) => row.sourceFamily),
+      retryableFamilies: rows.filter((row: any) => row.retryState.retryable === true).map((row: any) => row.sourceFamily),
+      freshFamilies: rows.filter((row: any) => row.freshness.state === "fresh").map((row: any) => row.sourceFamily),
+      gapFamilies: rows.filter((row: any) => row.enrichmentGap.type && row.enrichmentGap.type !== "ready").map((row: any) => row.sourceFamily),
+      alertReadyFamilies: rows.filter((row: any) => row.alertGeneration.ready === true).map((row: any) => row.sourceFamily),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.freshness.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.freshness.lastEnrichmentAt))
+    },
+    lifecycleFields: [
+      "sourceId",
+      "sourceFamily",
+      "policyStatus",
+      "parserStatus",
+      "lastSuccess",
+      "lastFailure",
+      "retryState",
+      "provenance",
+      "freshness",
+      "enrichmentGap"
+    ],
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
