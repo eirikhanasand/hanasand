@@ -483,7 +483,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
 
     if (!org && !user && !email && !request && !entity && !entityType && !action) {
-        return res.status(400).send({ error: 'Add org, user, email, request, entity, entityType, or action to inspect support state.' })
+        return res.status(400).send(supportError('missing_support_target', 'Add org, user, email, request, entity, entityType, or action to inspect support state.'))
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
@@ -514,6 +514,20 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         users,
         availabilityByOrg,
         invites,
+    })
+    const caseSummary = buildSupportCaseSummary({
+        org,
+        user,
+        email,
+        request,
+        organizationIds,
+        organizations,
+        users,
+        memberships,
+        invites,
+        approvalDetails,
+        recoveryEligibility,
+        timeline,
     })
 
     await recordAdminAuditEvent(req, {
@@ -551,6 +565,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             invites: invites.map(toSupportInvite),
             pendingInvites: invites.filter(row => row.status === 'pending').map(toSupportInvite),
             approvalRequests: approvalDetails,
+            caseSummary,
             recoveryEligibility,
             auditEventIds: timeline.map(event => event.id),
             auditTimeline: timeline,
@@ -1404,11 +1419,11 @@ async function decideSupportAccessRecovery(
 async function requireAdminSupport(req: FastifyRequest, res: FastifyReply) {
     const actor = await tokenWrapper(req, res)
     if (!actor.valid || !actor.id || actor.impersonating) {
-        res.status(401).send({ error: actor.error || 'Unauthorized.' })
+        res.status(401).send(supportError('support_auth_required', actor.error || 'Unauthorized.'))
         return null
     }
     if (!await actorHasAdminSupportAccess(actor.id)) {
-        res.status(403).send({ error: 'Only admins can use support operations.' })
+        res.status(403).send(supportError('support_role_required', 'Only admins can use support operations.'))
         return null
     }
     return { id: actor.id }
@@ -1975,6 +1990,142 @@ function buildRecoveryEligibility(input: {
     })
 }
 
+function buildSupportCaseSummary(input: {
+    org: string
+    user: string
+    email: string
+    request: string
+    organizationIds: string[]
+    organizations: Record<string, unknown>[]
+    users: Record<string, unknown>[]
+    memberships: Record<string, unknown>[]
+    invites: Record<string, unknown>[]
+    approvalDetails: Array<Record<string, any>>
+    recoveryEligibility: Array<Record<string, unknown>>
+    timeline: Array<Record<string, any>>
+}) {
+    const pendingInvites = input.invites.filter(row => row.status === 'pending')
+    const activeMemberships = input.memberships.filter(row => row.status === 'active')
+    const removedMemberships = input.memberships.filter(row => row.status === 'removed')
+    const recoveryRequests = input.approvalDetails.map(approval => ({
+        requestId: approval.requestId,
+        organizationId: approval.organizationId,
+        inviteId: approval.inviteId,
+        targetUserId: approval.targetUserId,
+        status: approval.status,
+        outcome: approval.outcome,
+        approvalRequired: approval.approvalRequired,
+        auditEventIds: approval.auditEventIds || [],
+        audit: approval.audit,
+    }))
+    const impersonationEvents = input.timeline
+        .filter(event => String(event.action || '').startsWith('impersonation.'))
+        .map(event => ({
+            id: event.id,
+            action: event.action,
+            outcome: event.outcome,
+            severity: event.severity,
+            requestId: event.requestId,
+            targetUserId: event.target?.id || event.entityId,
+            durationMinutes: event.context?.durationMinutes ?? null,
+            scope: event.context?.scope ?? null,
+            expiresAt: event.context?.expiresAt ?? null,
+            createdAt: event.createdAt,
+            audit: auditTimelineLink({
+                request: event.requestId,
+                action: event.action,
+                outcome: event.outcome,
+            }),
+        }))
+    const target = {
+        organizationIds: input.organizationIds,
+        userId: input.user || null,
+        email: input.email || null,
+        requestId: input.request || null,
+    }
+    const blockers = [
+        input.organizationIds.length ? '' : 'organization_not_identified',
+        input.user || input.email ? '' : 'user_or_email_not_identified',
+        input.timeline.length ? '' : 'no_timeline_events_matched',
+    ].filter(Boolean)
+    const nextActions = {
+        inspectAuditTimeline: auditTimelineLink({ org: input.org, target: input.user || input.email, request: input.request }),
+        impersonationTimeline: auditTimelineLink({ target: input.user, request: input.request, action: 'impersonation' }),
+        inviteAssist: {
+            available: Boolean(input.organizationIds.length && input.email),
+            reasonRequired: true,
+            scopeRequired: true,
+            endpoints: input.organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
+        },
+        accessRecovery: {
+            available: Boolean(input.organizationIds.length && (input.email || input.user)),
+            reasonRequired: true,
+            expiryRequired: true,
+            approvalState: recoveryRequests[0]?.status || 'not_requested',
+            endpoints: input.organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/access-recovery`),
+        },
+        impersonationRequest: {
+            available: Boolean(input.user),
+            reasonRequired: true,
+            scopeRequired: true,
+            durationRequired: true,
+            approvalState: 'not_required',
+            endpoint: '/api/impersonation/start',
+        },
+    }
+
+    return {
+        schemaVersion: 'support.case_summary.v1',
+        target,
+        state: {
+            organizations: input.organizations.map(row => toOrganization(row as OrganizationRow)),
+            users: input.users.map(toSupportUser),
+            activeMembershipCount: activeMemberships.length,
+            removedMembershipCount: removedMemberships.length,
+            pendingInviteCount: pendingInvites.length,
+            recoveryRequestCount: recoveryRequests.length,
+            impersonationEventCount: impersonationEvents.length,
+            memberships: input.memberships.map(toSupportMemberDetail),
+            pendingInvites: pendingInvites.map(toSupportInvite),
+            recoveryRequests,
+            impersonationRequests: impersonationEvents,
+        },
+        recoveryEligibility: input.recoveryEligibility,
+        nextActions,
+        audit: {
+            eventIds: input.timeline.map(event => event.id),
+            timelineQuery: nextActions.inspectAuditTimeline.api,
+            impersonationTimelineQuery: nextActions.impersonationTimeline.api,
+            redacted: true,
+        },
+        blockers,
+        copyText: [
+            `Support case summary org=${input.org || input.organizationIds.join(',') || '*'} user=${input.user || '*'} email=${input.email || '*'} request=${input.request || '*'}`,
+            `Memberships: active=${activeMemberships.length} removed=${removedMemberships.length}`,
+            `Pending invites: ${pendingInvites.length}`,
+            `Recovery requests: ${recoveryRequests.length}`,
+            `Impersonation events: ${impersonationEvents.length}`,
+            `Audit events: ${input.timeline.map(event => event.id).join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
+function auditTimelineLink(input: { org?: string | null, target?: string | null, request?: string | null, action?: string | null, outcome?: string | null }) {
+    const params = new URLSearchParams()
+    if (input.org) params.set('org', input.org)
+    if (input.target) params.set('target', input.target)
+    if (input.request) params.set('request', input.request)
+    if (input.action) params.set('action', input.action)
+    if (input.outcome) params.set('outcome', input.outcome)
+    params.set('source', 'admin')
+    params.set('service', 'hanasand-api')
+    const query = params.toString()
+    return {
+        api: `/api/admin/audit-events?${query}`,
+        href: `/dashboard/system/impersonation?${query}`,
+    }
+}
+
 function toSupportInvite(row: Record<string, unknown>) {
     return {
         id: row.id,
@@ -2006,7 +2157,7 @@ function inviteSnapshot(row: OrganizationInviteRow) {
 
 function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
     const event = row as Record<string, any>
-    const context = event.context && typeof event.context === 'object' ? event.context : {}
+    const context = redactAuditValue(event.context && typeof event.context === 'object' ? event.context : {}) as Record<string, unknown>
     const beforeAfter = auditBeforeAfter(context)
     return {
         id: Number(event.id),
@@ -2033,6 +2184,17 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
         context,
         createdAt: event.created_at,
         copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} entity=${event.entity_id || event.target_id || ''} request=${event.request_id || ''}`,
+    }
+}
+
+function supportError(code: string, message: string) {
+    return {
+        error: message,
+        detail: {
+            schemaVersion: 'support.error.v1',
+            code,
+            outcome: 'denied',
+        },
     }
 }
 
