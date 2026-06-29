@@ -965,6 +965,34 @@ export type DwmOrgAlertPipelineProof = {
     sourceFamilyGaps: DwmAlertGenerationReadiness["sourceFamilyGaps"];
     zeroAlertProof: DwmZeroAlertProof;
   };
+  consumerAdapters: {
+    schemaVersion: "dwm.org_alert_pipeline_consumer_adapters.v1";
+    dashboard: {
+      canConsume: boolean;
+      route: "/v1/dwm/alerts";
+      stableFields: string[];
+      gapFields: string[];
+    };
+    webhook: {
+      canConsume: boolean;
+      route: "/v1/dwm/webhooks/deliver";
+      stableFields: string[];
+      gapFields: string[];
+    };
+    publicTI: {
+      canConsume: boolean;
+      redacted: true;
+      stableFields: string[];
+      gapFields: string[];
+    };
+    analystPortal: {
+      canConsume: boolean;
+      route: "/v1/dwm/alerts";
+      stableFields: string[];
+      workflowFields: string[];
+      gapFields: string[];
+    };
+  };
   candidates: Array<{
     candidateId: string;
     normalizedTerm: string;
@@ -1581,6 +1609,12 @@ export function buildDwmOrgAlertPipelineProof(input: {
       sourceFamilyGaps: readiness.sourceFamilyGaps,
       zeroAlertProof: readiness.zeroAlertProof
     },
+    consumerAdapters: buildDwmOrgAlertPipelineConsumerAdapters({
+      readiness,
+      alertRows,
+      gaps,
+      state
+    }),
     candidates,
     alerts: alertRows,
     gaps,
@@ -1588,6 +1622,101 @@ export function buildDwmOrgAlertPipelineProof(input: {
       "bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmOrgAlertPipelineProof.test.ts",
       "bun test src/tests/dwmWorkflowPersistence.test.ts"
     ]
+  };
+}
+
+function buildDwmOrgAlertPipelineConsumerAdapters(input: {
+  readiness: DwmAlertGenerationReadiness;
+  alertRows: DwmOrgAlertPipelineProof["alerts"];
+  gaps: DwmOrgAlertPipelineProof["gaps"];
+  state: DwmOrgAlertPipelineProof["state"];
+}): DwmOrgAlertPipelineProof["consumerAdapters"] {
+  const hasAlerts = input.alertRows.length > 0;
+  const hasBlockingGaps = input.gaps.length > 0 || input.readiness.zeroAlertProof.zeroAlert;
+  const sharedStableFields = [
+    "tenantId",
+    "organizationId",
+    "state",
+    "readiness.blockerCodes",
+    "readiness.zeroAlertProof",
+    "readiness.sourceFamilyGaps",
+    "candidates.watchlistIds",
+    "candidates.watchlistItemIds",
+    "alerts.alertId",
+    "alerts.dedupeKey",
+    "alerts.sourceFamily",
+    "gaps.blockerCodes"
+  ];
+  const gapFields = [
+    "readiness.zeroAlertProof.state",
+    "readiness.zeroAlertProof.nextAction",
+    "readiness.sourceFamilyGaps.state",
+    "readiness.sourceFamilyGaps.blockerCode",
+    "gaps.ownerLane",
+    "gaps.route"
+  ];
+  return {
+    schemaVersion: "dwm.org_alert_pipeline_consumer_adapters.v1",
+    dashboard: {
+      canConsume: hasAlerts || hasBlockingGaps,
+      route: "/v1/dwm/alerts",
+      stableFields: [
+        ...sharedStableFields,
+        "alerts.caseReady",
+        "alerts.deliveryReady",
+        "alerts.downstreamBlockerCodes"
+      ],
+      gapFields
+    },
+    webhook: {
+      canConsume: hasAlerts || input.readiness.readyForCustomerDelivery,
+      route: "/v1/dwm/webhooks/deliver",
+      stableFields: [
+        "tenantId",
+        "organizationId",
+        "state",
+        "alerts.alertId",
+        "alerts.dedupeKey",
+        "alerts.deliveryReady",
+        "alerts.deliveryHistoryRefs",
+        "candidates.webhookDestinationIds",
+        "gaps.blockerCodes"
+      ],
+      gapFields
+    },
+    publicTI: {
+      canConsume: hasAlerts || hasBlockingGaps,
+      redacted: true,
+      stableFields: [
+        "tenantId",
+        "organizationId",
+        "state",
+        "readiness.zeroAlertProof",
+        "readiness.sourceFamilyGaps",
+        "alerts.sourceFamily",
+        "gaps.detail"
+      ],
+      gapFields
+    },
+    analystPortal: {
+      canConsume: hasAlerts || input.state === "ready_to_generate_alerts",
+      route: "/v1/dwm/alerts",
+      stableFields: [
+        ...sharedStableFields,
+        "alerts.caseReady",
+        "alerts.deliveryReady",
+        "alerts.delivered",
+        "proofCommands"
+      ],
+      workflowFields: [
+        "alerts.alertId",
+        "alerts.dedupeKey",
+        "alerts.downstreamBlockerCodes",
+        "readiness.zeroAlertProof.watchlistTerms",
+        "gaps"
+      ],
+      gapFields
+    }
   };
 }
 

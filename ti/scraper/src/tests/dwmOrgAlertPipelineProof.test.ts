@@ -189,6 +189,29 @@ describe("dwm org alert pipeline proof", () => {
       delivered: true,
       deliveryHistoryRefs: ["delivery_pipeline_acme"]
     });
+    expect(proof.consumerAdapters).toMatchObject({
+      schemaVersion: "dwm.org_alert_pipeline_consumer_adapters.v1",
+      dashboard: {
+        canConsume: true,
+        route: "/v1/dwm/alerts"
+      },
+      webhook: {
+        canConsume: true,
+        route: "/v1/dwm/webhooks/deliver"
+      },
+      publicTI: {
+        canConsume: true,
+        redacted: true
+      },
+      analystPortal: {
+        canConsume: true,
+        route: "/v1/dwm/alerts"
+      }
+    });
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("readiness.zeroAlertProof");
+    expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.deliveryHistoryRefs");
+    expect(proof.consumerAdapters.publicTI.gapFields).toContain("readiness.sourceFamilyGaps.blockerCode");
+    expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("readiness.zeroAlertProof.watchlistTerms");
     expect(proof.gaps).toEqual([]);
   });
 
@@ -305,5 +328,19 @@ describe("dwm org alert pipeline proof", () => {
         blockerCodes: ["alert_not_generated"]
       })
     ]);
+    expect(proof.consumerAdapters).toMatchObject({
+      schemaVersion: "dwm.org_alert_pipeline_consumer_adapters.v1",
+      dashboard: { canConsume: true, route: "/v1/dwm/alerts" },
+      webhook: { canConsume: false, route: "/v1/dwm/webhooks/deliver" },
+      publicTI: { canConsume: true, redacted: true },
+      analystPortal: { canConsume: false, route: "/v1/dwm/alerts" }
+    });
+    expect(proof.consumerAdapters.dashboard.gapFields).toEqual(expect.arrayContaining([
+      "readiness.zeroAlertProof.nextAction",
+      "readiness.sourceFamilyGaps.blockerCode",
+      "gaps.ownerLane"
+    ]));
+    expect(proof.consumerAdapters.publicTI.stableFields).toContain("readiness.sourceFamilyGaps");
+    expect(proof.consumerAdapters.webhook.gapFields).toContain("gaps.route");
   });
 });
