@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { AlertCircle, CheckCircle2, CircleDashed, Clock3, ExternalLink } from 'lucide-react'
-import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDirection, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDeployBlocker, type ProductNorthStarDirection, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
@@ -57,6 +57,8 @@ export default async function Page({
                     )}
                 </div>
 
+                <DeployGatePanel scoreboard={scoreboard} />
+
                 <section className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'>
                     <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
                         <div>
@@ -81,6 +83,89 @@ export default async function Page({
                 </div>
             </section>
         </main>
+    )
+}
+
+function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
+    const blockers = scoreboard.deployGate.blockingProofRows
+    return (
+        <section
+            className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'
+            data-north-star-deploy-gate='true'
+            data-north-star-deploy-state={scoreboard.deployGate.state}
+            data-north-star-deploy-ready-rows={scoreboard.deployGate.readyRows}
+            data-north-star-deploy-total-rows={scoreboard.deployGate.totalRows}
+            data-north-star-deploy-blocking-rows={blockers.map(row => row.rowId).join(',')}
+        >
+            <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
+                <div>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Release blockers</p>
+                    <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>What still needs proof</h2>
+                </div>
+                <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                    The release gate is derived from backend contracts. A blocker disappears only when the linked proof row becomes ready.
+                </p>
+            </div>
+            {scoreboard.deployGate.fullChainReady ? (
+                <div className='mt-5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2 text-sm font-semibold text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'>
+                    All readiness rows are backed by fresh proof.
+                </div>
+            ) : (
+                <div className='mt-5 grid gap-3 lg:grid-cols-2'>
+                    {blockers.map(row => (
+                        <DeployBlockerCard key={row.rowId} row={row} />
+                    ))}
+                </div>
+            )}
+        </section>
+    )
+}
+
+function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
+    const tone = row.state === 'blocked'
+        ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+        : row.state === 'needs_action'
+            ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+            : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+    const Icon = row.state === 'blocked' ? AlertCircle : row.state === 'needs_action' ? Clock3 : CircleDashed
+    return (
+        <article
+            className='min-w-0 rounded-xl border border-[#d9e2ef] bg-[#fbfcfe] p-4 dark:border-[#26364f] dark:bg-[#0b1422]'
+            data-north-star-blocker-row-id={row.rowId}
+            data-north-star-blocker-state={row.state}
+            data-north-star-blocker-owner-lane={row.ownerLane}
+            data-north-star-blocker-proof-timestamp={row.proofTimestamp}
+            data-north-star-blocker-stale-after-seconds={row.staleAfterSeconds}
+            data-north-star-blocker-contract={row.backendProofContractVersion}
+            data-north-star-blocker-dashboard-row-id={row.expectedDashboardRowId}
+        >
+            <div className='flex items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <h3 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-white'>{readableId(row.rowId)}</h3>
+                    <p className='mt-1 text-xs font-semibold text-[#667085] dark:text-[#97a6bd]'>Owner: {row.ownerLane}</p>
+                </div>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${tone}`}>
+                    <Icon className='h-3.5 w-3.5' />
+                    {stateLabel(row.state)}
+                </span>
+            </div>
+            <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                {row.blocker}
+            </p>
+            <dl className='mt-4 grid gap-2 text-xs'>
+                <Fact label='Contract' value={row.backendProofContractVersion} />
+                <Fact label='Checked' value={formatChecked(row.proofTimestamp)} />
+                <Fact label='Stale after' value={formatDuration(row.staleAfterSeconds)} />
+                <Fact label='Row id' value={row.expectedDashboardRowId} />
+            </dl>
+            <div className='mt-4 flex flex-col gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f] sm:flex-row sm:items-center sm:justify-between'>
+                <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{row.integrationProbeHint}</p>
+                <Link href={row.href} className='inline-flex min-h-9 w-fit shrink-0 items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+                    Inspect
+                    <ExternalLink className='h-3.5 w-3.5' />
+                </Link>
+            </div>
+        </article>
     )
 }
 
@@ -236,6 +321,10 @@ function firstParam(value: string | string[] | undefined) {
 
 function stateLabel(state: ProductNorthStarRow['state']) {
     return state === 'needs_action' ? 'needs action' : state
+}
+
+function readableId(value: string) {
+    return value.replaceAll('_', ' ')
 }
 
 function formatChecked(value: string) {
