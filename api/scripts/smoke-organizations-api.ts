@@ -3477,9 +3477,35 @@ assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTrans
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.enabledAfter, false)
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.disabledReasonAfter, 'watchlist_archived')
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.mutationAfterArchiveDeniedByLookup, true)
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.lookupDenialBlockerAfter, 'watchlist_not_found_or_cross_org')
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.status, 'archived')
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.enabled, false)
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.disabledReason, 'watchlist_archived')
+
+const archivedActorUpdateDeniedResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/watchlists/${actorWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: {
+        kind: 'actor',
+        value: 'retired actor renamed',
+        reason: 'Archived watchlists must stay excluded from active alert matching.',
+        requestId: 'smoke-archived-watchlist-update-denied',
+    },
+})
+assert.equal(archivedActorUpdateDeniedResponse.statusCode, 404, archivedActorUpdateDeniedResponse.body)
+const archivedActorUpdateDenied = parseBody(archivedActorUpdateDeniedResponse.body).watchlistLookupDenial
+assert.equal(archivedActorUpdateDenied.schemaVersion, 'organization.watchlist_lookup_denial.v1')
+assert.equal(archivedActorUpdateDenied.organizationId, organization.id)
+assert.equal(archivedActorUpdateDenied.tenantId, organization.id)
+assert.equal(archivedActorUpdateDenied.actorRole, 'owner')
+assert.equal(archivedActorUpdateDenied.action, 'update_watchlist')
+assert.equal(archivedActorUpdateDenied.itemId, actorWatchlistItem.id)
+assert.equal(archivedActorUpdateDenied.blockerCode, 'watchlist_not_found_or_cross_org')
+assert.equal(archivedActorUpdateDenied.nonmemberEnumeration, false)
+assert.ok(archivedActorUpdateDenied.noLeakFields.includes('activeTerms[]'))
+assert.equal(archivedActorUpdateDenied.requestId, 'smoke-archived-watchlist-update-denied')
 
 const archivedWatchlistsResponse = await app.inject({
     method: 'GET',
@@ -3923,6 +3949,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutati
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-cleanup-denied' && log.metadata.action === 'cleanup_watchlists' && log.metadata.actorRole === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.action === 'read_watchlist' && log.metadata.itemId === ownerWatchlistItem.id && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-wrong-org-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-archived-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))

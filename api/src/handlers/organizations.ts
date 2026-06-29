@@ -2824,6 +2824,10 @@ function organizationWatchlistOperation(
             activeTermsExportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
             cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
             blockerAfter: nextLifecycle.disabledReasonAfter,
+            mutationAfterArchiveDeniedByLookup: nextLifecycle.statusAfter === 'archived',
+            lookupDenialBlockerAfter: nextLifecycle.statusAfter === 'archived'
+                ? 'watchlist_not_found_or_cross_org' as const
+                : null,
         },
     }
 }
