@@ -5541,6 +5541,14 @@ export function buildDwmWebhookDeliveryAttemptContract({
     const plan = buildDwmAlertWebhookDispatchPlan({ ownerId, input: normalizedInput, destinations: dispatchDestinations })
     const alert = normalizeAlert(plan.alert)
     const watchlist = normalizeWatchlist(plan.alert.watchlist)
+    const payloadContract = buildDwmWebhookDeliveryPayloadFieldContract({
+        input: normalizedInput,
+        plan,
+        alert,
+        watchlist,
+        dryRun,
+        live,
+    })
     const requiredBlockers = deliveryAttemptContractBlockers({ input: normalizedInput, plan, alert, watchlist })
     const existingByIdempotencyKey = new Map<string, DwmWebhookDeliveryPublic[]>()
     for (const delivery of deliveries) {
@@ -5688,6 +5696,7 @@ export function buildDwmWebhookDeliveryAttemptContract({
         externalSendEnabled: live && !dryRun && liveDeliveryEnabled,
         noNetwork: !(live && !dryRun && liveDeliveryEnabled),
         normalizedInput,
+        payloadContract,
         requiredFields: {
             orgId: Boolean(firstClean(normalizedInput.orgId, normalizedInput.organizationId, normalizedInput.tenantId, (normalizedInput.alert as Record<string, unknown> | undefined)?.organizationId, (normalizedInput.alert as Record<string, unknown> | undefined)?.orgId, (normalizedInput.alert as Record<string, unknown> | undefined)?.tenantId)),
             destinationId: Boolean(clean(normalizedInput.destinationId ?? normalizedInput.destination_id)) || plan.selectedDestinations.length > 0,
@@ -5708,6 +5717,64 @@ export function buildDwmWebhookDeliveryAttemptContract({
         },
         attempts,
         blockers: requiredBlockers,
+    }
+}
+
+function deliveryPayloadField(key: string, paths: string[], present: boolean) {
+    return { key, paths, present }
+}
+
+function buildDwmWebhookDeliveryPayloadFieldContract({
+    input,
+    plan,
+    alert,
+    watchlist,
+    dryRun,
+    live,
+}: {
+    input: DwmAlertNotificationInput
+    plan: DwmAlertWebhookDispatchPlan
+    alert: ReturnType<typeof normalizeAlert>
+    watchlist: ReturnType<typeof normalizeWatchlist>
+    dryRun: boolean
+    live: boolean
+}) {
+    const inputRecord = recordOrEmpty(input)
+    const inputAlert = recordOrEmpty(input.alert)
+    const required = [
+        deliveryPayloadField('orgId', ['orgId', 'organizationId', 'tenantId', 'alert.organizationId', 'alert.orgId', 'alert.tenantId'], Boolean(firstClean(input.orgId, input.organizationId, input.tenantId, inputAlert.organizationId, inputAlert.orgId, inputAlert.tenantId))),
+        deliveryPayloadField('destinationId', ['destinationId', 'destination_id', 'destinations[].id'], Boolean(clean(input.destinationId ?? input.destination_id)) || plan.selectedDestinations.length > 0),
+        deliveryPayloadField('alertId', ['alertId', 'alert.id'], Boolean(firstClean(input.alertId, inputAlert.id))),
+        deliveryPayloadField('watchlistId', ['watchlistItemId', 'watchlistId', 'alert.watchlist.id'], Boolean(watchlist.id || clean(input.watchlistItemId) || clean(input.watchlistId))),
+        deliveryPayloadField('severity', ['alert.severity'], Boolean(firstClean(inputAlert.severity))),
+        deliveryPayloadField('title', ['alert.title'], Boolean(firstClean(inputAlert.title))),
+        deliveryPayloadField('sourceFamily', ['sourceFamily', 'alert.sourceFamily'], Boolean(firstClean(input.sourceFamily, inputAlert.sourceFamily))),
+        deliveryPayloadField('evidence', ['alert.evidence', 'alert.evidenceCount'], alert.evidenceCount > 0 || alert.evidence.length > 0),
+        deliveryPayloadField('provenance', ['alert.provenance', 'alert.provenanceSummary'], Boolean(alert.provenanceSummary)),
+        deliveryPayloadField('timestamp', ['alert.eventTimestamp', 'alert.detectedAt', 'alert.createdAt', 'alert.updatedAt'], Boolean(alert.eventTimestamp)),
+        deliveryPayloadField('link', ['alert.alertUrl', 'alert.casePath', 'casePath', 'caseUrl'], Boolean(alert.alertUrl || alert.casePath)),
+        deliveryPayloadField('dedupeKey', ['dedupeKey', 'alert.dedupeKey'], Boolean(firstClean(input.dedupeKey, inputAlert.dedupeKey))),
+    ]
+    const optional = [
+        deliveryPayloadField('caseId', ['caseId', 'alert.caseId'], Boolean(firstClean(inputRecord.caseId, inputAlert.caseId))),
+        deliveryPayloadField('casePath', ['casePath', 'caseUrl', 'alert.casePath', 'alert.caseUrl'], Boolean(alert.casePath)),
+        deliveryPayloadField('route', ['route', 'recommendedRoute', 'alert.route', 'alert.recommendedRoute'], Boolean(alert.route)),
+        deliveryPayloadField('confidence', ['alert.confidence', 'alert.confidenceScore', 'alert.confidenceReason'], Boolean(firstClean(inputAlert.confidence, inputAlert.confidenceScore, inputAlert.confidenceReason))),
+        deliveryPayloadField('dryRunState', ['dryRun', 'dry_run'], true),
+        deliveryPayloadField('liveState', ['live'], live),
+        deliveryPayloadField('replayState', ['eventType', 'event_type'], plan.eventType === 'dwm.alert.replayed'),
+    ]
+    const missingRequired = required.filter(field => !field.present).map(field => field.key)
+    return {
+        schemaVersion: 'dwm.webhook.delivery_payload_contract.v1',
+        noNetworkDefault: true,
+        dryRun,
+        liveRequested: live,
+        replay: plan.eventType === 'dwm.alert.replayed',
+        eventType: plan.eventType,
+        required,
+        optional,
+        missingRequired,
     }
 }
 

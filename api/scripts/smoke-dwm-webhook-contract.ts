@@ -568,6 +568,8 @@ expect(apiDeliveryRequestInput.casePath === replayWorkflowAlert.casePath && apiD
 expect(apiDeliveryRequestInput.dryRun === true && apiDeliveryRequestInput.live === false, 'API delivery bridge should preserve dry-run/live gate.', apiDeliveryRequestInput)
 expect(deliveryAttemptContract.schemaVersion === 'dwm.webhook.delivery_attempt_contract.v1' && deliveryAttemptContract.ok === true && deliveryAttemptContract.noNetwork === true, 'Delivery attempt contract should accept typed alert payloads without network.', deliveryAttemptContract)
 expect(deliveryAttemptContract.requiredFields.orgId === true && deliveryAttemptContract.requiredFields.watchlistId === true && deliveryAttemptContract.requiredFields.provenance === true, 'Delivery attempt contract should prove required org/watchlist/provenance fields.', deliveryAttemptContract.requiredFields)
+expect(deliveryAttemptContract.payloadContract.schemaVersion === 'dwm.webhook.delivery_payload_contract.v1' && deliveryAttemptContract.payloadContract.required.every(item => item.present), 'Delivery attempt contract should expose a typed payload field contract.', deliveryAttemptContract.payloadContract)
+expect(deliveryAttemptContract.payloadContract.required.some(item => item.key === 'dedupeKey' && item.paths.includes('alert.dedupeKey')) && deliveryAttemptContract.payloadContract.optional.some(item => item.key === 'replayState' && item.present), 'Delivery attempt payload contract should document dedupe and replay fields.', deliveryAttemptContract.payloadContract)
 expect(deliveryAttemptContract.destinationSelection.selectedDestinationIds.join(',') === 'destination_replay_contract' && deliveryAttemptContract.attempts.length === 1, 'Delivery attempt contract should resolve the org-scoped destination.', deliveryAttemptContract)
 expect(deliveryAttemptContract.attempts[0]?.status === 'dry_run' && deliveryAttemptContract.attempts[0]?.replay === true && deliveryAttemptContract.attempts[0]?.retry.attemptCount === 2, 'Delivery attempt contract should produce a persisted dry-run replay attempt with retry count.', deliveryAttemptContract.attempts[0])
 expect(deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract', 'Delivery attempt contract should include Discord-ready payload preview context.', deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview)
@@ -578,6 +580,7 @@ expect(deliveryAttemptPersistence.rows[0]?.persistedDeliveryId === 'prior_attemp
 expect(deliveryAttemptPersistence.rows[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptPersistence.rows[0]?.replay === true, 'Delivery attempt persistence should preserve Discord preview and replay context.', deliveryAttemptPersistence.rows[0])
 expect(deliveryAttemptPersistence.rows[0]?.redactedDestination.endpointExposed === false && deliveryAttemptPersistence.rows[0]?.redactedDestination.endpointHash === 'endpoint_replay_contract', 'Delivery attempt persistence should expose only redacted destination metadata.', deliveryAttemptPersistence.rows[0]?.redactedDestination)
 expect(missingFieldAttemptContract.ok === false && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_alert_title') && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_destination'), 'Delivery attempt contract should block missing required payload fields.', missingFieldAttemptContract)
+expect(missingFieldAttemptContract.payloadContract.missingRequired.includes('orgId') && missingFieldAttemptContract.payloadContract.missingRequired.includes('title') && missingFieldAttemptContract.payloadContract.missingRequired.includes('dedupeKey'), 'Delivery attempt payload contract should list missing required typed fields.', missingFieldAttemptContract.payloadContract)
 expect(wrongOrgAttemptContract.ok === false && wrongOrgAttemptContract.destinationSelection.skippedDestinations.some(item => item.reason === 'org_mismatch') && wrongOrgAttemptContract.attempts.every(item => item.orgId === 'org_contract' && item.destinationId !== 'destination_wrong_org_contract'), 'Delivery attempt contract should not persist wrong-org destination attempts.', wrongOrgAttemptContract)
 expect(unsupportedDestinationAttemptContract.ok === false && unsupportedDestinationAttemptContract.blockers.some(item => item.code === 'unsupported_destination_type') && unsupportedDestinationAttemptContract.attempts[0]?.redactedDestination.endpointExposed === false, 'Delivery attempt contract should block unsupported destination types with redacted metadata.', unsupportedDestinationAttemptContract)
 expect(!JSON.stringify([deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract, unsupportedDestinationAttemptContract]).includes(secret), 'Delivery attempt contract should not leak endpoint secrets.', { deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract, unsupportedDestinationAttemptContract })
@@ -3457,6 +3460,7 @@ console.log(JSON.stringify({
         'dry-run Discord payload preview fields',
         'delivery evidence replay/live/dry-run distinction',
         'delivery attempt typed payload contract',
+        'delivery attempt field contract',
         'delivery attempt required field blockers',
         'delivery attempt wrong-org isolation',
         'delivery attempt unsupported destination blocker',
@@ -3501,6 +3505,8 @@ console.log(JSON.stringify({
             'deliveryPersistenceProof.rows[].actionRequests.liveReplay.blockers[].code',
             'deliveryPersistenceProof.blockers[].code',
             'deliveryAttemptContract.schemaVersion',
+            'deliveryAttemptContract.payloadContract.required[].paths',
+            'deliveryAttemptContract.payloadContract.missingRequired',
             'deliveryAttemptContract.attempts[].sanitizedPayloadPreview.discord.fieldNames',
             'deliveryAttemptContract.attempts[].retry.attemptCount',
             'deliveryAttemptContract.blockers[].code',
