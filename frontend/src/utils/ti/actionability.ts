@@ -24,6 +24,7 @@ export type TiActionabilityModel = {
     evidencePriority: PublicTiEvidencePriority[]
     sourceHealthQueue: PublicTiSourceHealthQueue
     sourceEnrichmentIntake: PublicTiSourceEnrichmentIntake
+    caseReviewIntake: PublicTiCaseReviewIntake
     watchlistRelevance: WatchlistRelevanceContract
     orgRelevance: PublicTiOrgRelevanceProof
     createAlertHandoff: WorkflowHandoffContract
@@ -435,6 +436,43 @@ export type PublicTiSourceEnrichmentIntakeItem = {
     nextAction: string
 }
 
+export type PublicTiCaseReviewIntake = {
+    schemaVersion: 'ti.public_actor.case_review_intake.v1'
+    query: string
+    generatedAt: string
+    route: '/v1/cases'
+    items: PublicTiCaseReviewIntakeItem[]
+    summary: {
+        total: number
+        ready: number
+        review: number
+        blocked: number
+        alerts: number
+        caseRoutes: number
+        captures: number
+    }
+}
+
+export type PublicTiCaseReviewIntakeItem = {
+    schemaVersion: 'ti.public_actor.case_review_intake_item.v1'
+    id: string
+    evidenceRowId: string
+    title: string
+    score: number
+    state: PublicTiEvidencePriority['state']
+    route: string
+    priority: 'critical' | 'high' | 'medium' | 'low'
+    alertIds: string[]
+    casePaths: string[]
+    captureIds: string[]
+    sourceIds: string[]
+    watchlistTerms: string[]
+    reasons: string[]
+    blockedBy: PublicTiReadinessBlocker[]
+    recommendedAction: 'open_case' | 'open_alert' | 'rebuild_alert' | 'attach_capture' | 'refresh_evidence'
+    nextAction: string
+}
+
 type WatchlistCandidate = {
     kind: 'company' | 'domain' | 'vendor'
     value: string
@@ -607,6 +645,11 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         sourceHealthQueue,
         readiness,
     })
+    const caseReviewIntake = buildPublicTiCaseReviewIntake({
+        result,
+        evidencePriority,
+        readiness,
+    })
     const actionPayloads = buildPublicTiActionPayloads({
         result,
         actor,
@@ -618,6 +661,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         enrichmentGapQueue,
         sourceHealthQueue,
         sourceEnrichmentIntake,
+        caseReviewIntake,
     })
 
     return {
@@ -642,6 +686,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         evidencePriority,
         sourceHealthQueue,
         sourceEnrichmentIntake,
+        caseReviewIntake,
         watchlistRelevance: buildWatchlistRelevance({
             state: matches.length ? 'backed_matches' : candidates.length ? 'candidate_handoff' : 'missing_terms',
             endpoint: watchlistEndpoint,
@@ -813,6 +858,7 @@ function buildPublicTiActionPayloads(input: {
     enrichmentGapQueue: EnrichmentGapQueueItem[]
     sourceHealthQueue: PublicTiSourceHealthQueue
     sourceEnrichmentIntake: PublicTiSourceEnrichmentIntake
+    caseReviewIntake: PublicTiCaseReviewIntake
 }): PublicTiActionPayloadSet {
     const actorId = actorIdForQuery(input.result.query)
     const sourceIds = uniqueStrings(input.sourceProvenance.map(source => source.sourceId))
@@ -874,6 +920,7 @@ function buildPublicTiActionPayloads(input: {
                 body: {
                     ...input.exportPayloads.case.body,
                     ...commonContext,
+                    caseReviewIntake: input.caseReviewIntake,
                     source: 'public_ti',
                     noMutation: true,
                 },
@@ -908,6 +955,8 @@ function buildPublicTiActionPayloads(input: {
                     ...commonContext,
                     stages: input.consumerReadiness.bundlePreview.stages,
                     readiness: input.readiness,
+                    caseReviewIntake: input.caseReviewIntake,
+                    sourceEnrichmentIntake: input.sourceEnrichmentIntake,
                     actionRoutes: {
                         watchlist: '/v1/dwm/watchlists',
                         alertRebuild: '/v1/dwm/alerts/rebuild',
@@ -1956,6 +2005,82 @@ function sourceIntakeAction(row: PublicTiSourceHealthRow, blockers: PublicTiRead
     if (blockers.some(blocker => blocker.code === 'stale_provenance')) return 'refresh_source'
     if (!row.captureId) return 'attach_capture'
     return 'queue_enrichment'
+}
+
+function buildPublicTiCaseReviewIntake(input: {
+    result: TiSearchResponse
+    evidencePriority: PublicTiEvidencePriority[]
+    readiness: PublicTiReadinessContract
+}): PublicTiCaseReviewIntake {
+    const items = input.evidencePriority.map((row): PublicTiCaseReviewIntakeItem => {
+        const blockedBy = caseIntakeBlockers(row, input.readiness)
+        const state: PublicTiEvidencePriority['state'] = row.state === 'ready' && blockedBy.length ? 'review' : row.state
+        return {
+            schemaVersion: 'ti.public_actor.case_review_intake_item.v1',
+            id: `case-intake:${row.rowId}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            evidenceRowId: row.rowId,
+            title: row.label,
+            score: row.score,
+            state,
+            route: row.casePaths[0] || row.route || '/dashboard/ti/workbench',
+            priority: casePriorityForScore(row.score),
+            alertIds: row.alertIds,
+            casePaths: row.casePaths,
+            captureIds: row.captureIds,
+            sourceIds: row.sourceIds,
+            watchlistTerms: row.watchlistTerms,
+            reasons: row.reasons,
+            blockedBy,
+            recommendedAction: caseIntakeAction(row, blockedBy),
+            nextAction: row.nextAction,
+        }
+    })
+
+    return {
+        schemaVersion: 'ti.public_actor.case_review_intake.v1',
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        route: '/v1/cases',
+        items,
+        summary: {
+            total: items.length,
+            ready: items.filter(item => item.state === 'ready').length,
+            review: items.filter(item => item.state === 'review').length,
+            blocked: items.filter(item => item.state === 'blocked').length,
+            alerts: uniqueStrings(items.flatMap(item => item.alertIds)).length,
+            caseRoutes: uniqueStrings(items.flatMap(item => item.casePaths)).length,
+            captures: uniqueStrings(items.flatMap(item => item.captureIds)).length,
+        },
+    }
+}
+
+function caseIntakeBlockers(row: PublicTiEvidencePriority, readiness: PublicTiReadinessContract): PublicTiReadinessBlocker[] {
+    return uniqueBy([
+        ...row.blockers,
+        ...readiness.blockers.filter(blocker => {
+            if (blocker.code === 'missing_alert') return !row.alertIds.length
+            if (blocker.code === 'missing_capture') return !row.captureIds.length
+            if (blocker.code === 'missing_case_route') return !row.casePaths.length
+            if (blocker.code === 'missing_org' || blocker.code === 'missing_org_watchlist') return !row.watchlistTerms.length
+            if (blocker.code === 'stale_provenance') return row.state !== 'ready'
+            return false
+        }),
+    ], blocker => `${blocker.code}:${blocker.stage}:${blocker.field}`)
+}
+
+function caseIntakeAction(row: PublicTiEvidencePriority, blockers: PublicTiReadinessBlocker[]): PublicTiCaseReviewIntakeItem['recommendedAction'] {
+    if (row.casePaths.length) return 'open_case'
+    if (row.alertIds.length) return 'open_alert'
+    if (blockers.some(blocker => blocker.code === 'missing_capture')) return 'attach_capture'
+    if (blockers.some(blocker => blocker.code === 'stale_provenance')) return 'refresh_evidence'
+    return 'rebuild_alert'
+}
+
+function casePriorityForScore(score: number): PublicTiCaseReviewIntakeItem['priority'] {
+    if (score >= 85) return 'critical'
+    if (score >= 70) return 'high'
+    if (score >= 45) return 'medium'
+    return 'low'
 }
 
 function sourceHealthFamilyForGap(sourceFamily: EnrichmentGapQueueItem['sourceFamily']): PublicTiOrgSourceFamily {
