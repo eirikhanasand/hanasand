@@ -2154,6 +2154,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                         <>
                             <TimelineRows title='Case timeline' rows={caseDetail.detail.timeline || []} />
                             <CaseEvidenceRows evidence={caseDetail.detail.evidence || []} />
+                            <CaseWatchlistRows watchlists={caseDetail.detail.watchlists || []} orgContext={orgContext} />
                         </>
                     )}
                     {caseDetail?.status !== 'ready' && alertEvidence.length ? <AlertEvidenceRows evidence={alertEvidence} /> : null}
@@ -2388,6 +2389,37 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
                     </div>
                 ))}
                 {!evidence.length && <p className='text-xs text-[#667085]'>No evidence returned by the case API.</p>}
+            </div>
+        </div>
+    )
+}
+
+function CaseWatchlistRows({ watchlists, orgContext }: { watchlists: CaseWatchlist[], orgContext?: WorkbenchOrgContext }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <h4 className='text-sm font-semibold text-[#171a21]'>Watchlist scope</h4>
+                <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                    Open watchlists
+                    <ExternalLink className='h-3.5 w-3.5' />
+                </Link>
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {watchlists.map(watchlist => (
+                    <div key={watchlist.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <span className='break-words text-sm font-semibold text-[#171a21]'>{watchlist.name || watchlist.id}</span>
+                            <span className={workflowStatusClass(watchlist.status === 'active' ? 'ready' : 'needs_action')}>{label(watchlist.status)}</span>
+                            {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>delivery scoped</span> : null}
+                        </div>
+                        <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                            <p><span className='font-semibold text-[#475467]'>Terms:</span> {watchlist.termCount ?? watchlist.matchedTerms?.length ?? 0}</p>
+                            <p className='break-all'><span className='font-semibold text-[#475467]'>Destination:</span> {watchlist.webhookDestinationId || (watchlist.hasWebhookUrl ? 'watchlist webhook url' : 'not returned')}</p>
+                            <p className='break-all sm:col-span-2'><span className='font-semibold text-[#475467]'>Matched:</span> {(watchlist.matchedTerms || []).map(term => `${term.kind || 'term'}:${term.value || 'unknown'}`).join(', ') || 'No matched terms returned.'}</p>
+                        </div>
+                    </div>
+                ))}
+                {!watchlists.length && <p className='text-xs leading-5 text-[#667085]'>No watchlist scope returned by the case API. Open the scoped watchlists endpoint to verify alert coverage.</p>}
             </div>
         </div>
     )
@@ -3222,6 +3254,14 @@ function caseExportHref(caseDetailHref: string) {
     params.set('evidence', 'true')
     params.set('nextActionPayloads', 'true')
     return `${path.replace(/\/$/, '')}/export?${params.toString()}`
+}
+
+function watchlistLedgerHref(orgContext: WorkbenchOrgContext | undefined) {
+    const params = new URLSearchParams()
+    if (orgContext?.organization?.id || orgContext?.scope.organizationId) params.set('organizationId', orgContext.organization?.id || orgContext.scope.organizationId || '')
+    if (orgContext?.scope.tenantId) params.set('tenantId', orgContext.scope.tenantId)
+    const query = params.toString()
+    return `/api/dwm/watchlists${query ? `?${query}` : ''}`
 }
 
 function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined, selected?: WorkbenchCase, delivery?: WorkbenchDeliveryEvidence | CaseDelivery) {
