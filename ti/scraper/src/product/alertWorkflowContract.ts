@@ -2,6 +2,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 
 export const DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION = "dwm.alert_workflow_contract.v1" as const;
 export const DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION = "dwm.alert_workflow_preservation.v1" as const;
+export const DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION = "dwm.alert_workflow_admin_audit.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -61,6 +62,67 @@ export type DwmAlertWorkflowPreservationBlocker = {
   ownerLane: "alert" | "case" | "source" | "webhook";
   path: string;
   message: string;
+};
+
+export type DwmAlertWorkflowAdminAuditAdapter = {
+  schemaVersion: typeof DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  casePath?: string;
+  audit: {
+    eventType: "dwm.alert.workflow_preservation_checked";
+    source: "alert_workflow_preservation";
+    outcome: "allowed" | "blocked";
+    actorId?: string;
+    requestId?: string;
+    redacted: true;
+    entity: {
+      type: "dwm_alert";
+      id: string;
+      tenantId: string;
+      organizationId?: string;
+    };
+    blockerCodes: DwmAlertWorkflowPreservationBlocker["code"][];
+    ownerLanes: DwmAlertWorkflowPreservationBlocker["ownerLane"][];
+  };
+  helpdesk: {
+    redacted: true;
+    lookupKey: string;
+    supportSummary: string;
+    customerVisible: false;
+    blockedAction?: "preserve_alert_workflow";
+    routeHints: {
+      alertDetail: string;
+      caseDetail?: string;
+    };
+  };
+  workflow: {
+    beforeEventCount: number;
+    afterEventCount: number;
+    latestWorkflowEventId?: string;
+    reviewState?: string;
+    deliveryState?: string;
+    assignedOwner?: string;
+    preserved: DwmAlertWorkflowPreservationReport["preserved"];
+  };
+  proof: {
+    reportSchemaVersion: typeof DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION;
+    checkedAt: string;
+    beforeContractId: string;
+    afterContractId: string;
+    provenance: DwmAlertWorkflowContract["provenance"];
+  };
+  nextActions: {
+    ownerLane: DwmAlertWorkflowPreservationBlocker["ownerLane"];
+    action: "inspect_alert_scope" | "restore_case_route" | "restore_assignee" | "review_workflow_transition" | "restore_delivery_state" | "restore_provenance";
+    blockerCode: DwmAlertWorkflowPreservationBlocker["code"];
+    path: string;
+  }[];
 };
 
 export function buildAlertWorkflowContract(input: {
@@ -159,6 +221,87 @@ export function validateAlertWorkflowPreservation(input: {
   };
 }
 
+export function buildAlertWorkflowAdminAuditAdapter(input: {
+  report: DwmAlertWorkflowPreservationReport;
+  actorId?: string;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmAlertWorkflowAdminAuditAdapter {
+  const report = input.report;
+  const before = report.before;
+  const after = report.after;
+  const tenantId = after.tenantId || before.tenantId;
+  const organizationId = after.organizationId || before.organizationId;
+  const alertId = after.alertId || before.alertId;
+  const caseId = after.caseId || before.caseId || after.caseIdCandidate || before.caseIdCandidate;
+  const casePath = after.casePath || before.casePath;
+  const blockerCodes = report.blockers.map((item) => item.code);
+  const ownerLanes = uniqueStrings(report.blockers.map((item) => item.ownerLane)) as DwmAlertWorkflowPreservationBlocker["ownerLane"][];
+
+  return {
+    schemaVersion: DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
+    id: stableId("dwm_alert_workflow_admin_audit", `${tenantId}:${organizationId ?? ""}:${alertId}:${report.checkedAt}:${blockerCodes.join(",")}`),
+    generatedAt: input.generatedAt ?? report.checkedAt,
+    ok: report.ok,
+    tenantId,
+    organizationId,
+    alertId,
+    caseId,
+    casePath,
+    audit: {
+      eventType: "dwm.alert.workflow_preservation_checked",
+      source: "alert_workflow_preservation",
+      outcome: report.ok ? "allowed" : "blocked",
+      actorId: stringValue(input.actorId),
+      requestId: stringValue(input.requestId),
+      redacted: true,
+      entity: {
+        type: "dwm_alert",
+        id: alertId,
+        tenantId,
+        organizationId
+      },
+      blockerCodes,
+      ownerLanes
+    },
+    helpdesk: {
+      redacted: true,
+      lookupKey: organizationId ?? tenantId,
+      supportSummary: report.ok
+        ? "Alert workflow state is preserved across refresh."
+        : "Alert workflow preservation is blocked and needs owner review before customer action.",
+      customerVisible: false,
+      blockedAction: report.ok ? undefined : "preserve_alert_workflow",
+      routeHints: {
+        alertDetail: `/v1/dwm/alerts/${encodeURIComponent(alertId)}`,
+        caseDetail: casePath ?? (caseId ? `/v1/cases/${encodeURIComponent(caseId)}` : undefined)
+      }
+    },
+    workflow: {
+      beforeEventCount: before.workflowEventCount,
+      afterEventCount: after.workflowEventCount,
+      latestWorkflowEventId: after.latestWorkflowEventId ?? before.latestWorkflowEventId,
+      reviewState: after.reviewState ?? before.reviewState,
+      deliveryState: after.deliveryState ?? before.deliveryState,
+      assignedOwner: after.assignedOwner ?? before.assignedOwner,
+      preserved: report.preserved
+    },
+    proof: {
+      reportSchemaVersion: DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
+      checkedAt: report.checkedAt,
+      beforeContractId: before.id,
+      afterContractId: after.id,
+      provenance: after.provenance
+    },
+    nextActions: report.blockers.map((item) => ({
+      ownerLane: item.ownerLane,
+      action: nextAuditAction(item.code),
+      blockerCode: item.code,
+      path: item.path
+    }))
+  };
+}
+
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
     + contract.provenance.captureIds.length
@@ -168,6 +311,25 @@ function provenanceScore(contract: DwmAlertWorkflowContract) {
 
 function blocker(code: DwmAlertWorkflowPreservationBlocker["code"], ownerLane: DwmAlertWorkflowPreservationBlocker["ownerLane"], path: string, message: string): DwmAlertWorkflowPreservationBlocker {
   return { code, ownerLane, path, message };
+}
+
+function nextAuditAction(code: DwmAlertWorkflowPreservationBlocker["code"]): DwmAlertWorkflowAdminAuditAdapter["nextActions"][number]["action"] {
+  switch (code) {
+    case "alert_identity_changed":
+    case "organization_scope_changed":
+      return "inspect_alert_scope";
+    case "case_route_dropped":
+      return "restore_case_route";
+    case "owner_dropped":
+      return "restore_assignee";
+    case "delivery_state_regressed":
+      return "restore_delivery_state";
+    case "provenance_dropped":
+      return "restore_provenance";
+    case "review_state_regressed":
+    case "workflow_events_regressed":
+      return "review_workflow_transition";
+  }
 }
 
 function stringValue(value: unknown): string | undefined {
