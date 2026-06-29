@@ -3025,6 +3025,7 @@ function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, opti
     actorReadiness,
     sourceReadinessArtifact: config.sourceReadinessArtifact,
     candidateIntakeContract: sourceActorCandidateIntakeContract(query, actorReadiness),
+    proofArtifacts: sourceActorReadinessProofArtifacts(query, actorReadiness),
     safeOutput: {
       rawTargetsExposed: false,
       rawUnsafeRowsStored: false,
@@ -3032,6 +3033,53 @@ function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, opti
       restrictedMetadataLeaked: false,
       liveNetworkScrapeStarted: false,
       restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Record<string, any>) {
+  return {
+    schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
+    query,
+    publicTiActorPage: {
+      schemaVersion: "ti.public_actor.source_readiness.v1",
+      query,
+      state: actorReadiness.state,
+      sections: actorReadiness.actorSections,
+      provenance: actorReadiness.provenance,
+      freshness: actorReadiness.freshness,
+      missingDataGaps: actorReadiness.candidateGaps,
+      alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
+    },
+    dashboardSourceReadiness: {
+      schemaVersion: "dwm.dashboard.source_readiness_row.v1",
+      query,
+      activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
+      matchableFields: actorReadiness.alertability.matchableFields,
+      retryBlockers: actorReadiness.retryBlockers,
+      blockerCount: [
+        ...(actorReadiness.candidateGaps ?? []),
+        ...(actorReadiness.retryBlockers ?? []),
+        ...(actorReadiness.missingSections ?? [])
+      ].length,
+      freshnessState: actorReadiness.freshness?.captureFreshness?.state,
+      alertReady: actorReadiness.alertCaseHandoffReadiness?.alertReady === true,
+      caseReady: actorReadiness.alertCaseHandoffReadiness?.caseReady === true
+    },
+    worker3Assertions: [
+      ".schemaVersion == \"dwm.actor_page_source_readiness.v1\"",
+      ".actorReadiness.safeOutput.liveNetworkScrapeStarted == false",
+      ".actorReadiness.freshness.captureFreshness.state | IN(\"fresh\",\"needs_capture\",\"stale\")",
+      ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
+      ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
+      ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
     }
   };
 }

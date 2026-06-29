@@ -1426,6 +1426,26 @@ describe("dwm source requests", () => {
           liveNetworkFetch: false,
           rawRestrictedPayloadStorage: false
         }
+      },
+      proofArtifacts: {
+        schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
+        publicTiActorPage: {
+          schemaVersion: "ti.public_actor.source_readiness.v1",
+          state: "ready",
+          freshness: expect.objectContaining({
+            captureFreshness: expect.objectContaining({ state: "fresh" })
+          })
+        },
+        dashboardSourceReadiness: {
+          schemaVersion: "dwm.dashboard.source_readiness_row.v1",
+          alertReady: true,
+          caseReady: true,
+          freshnessState: "fresh"
+        },
+        worker3Assertions: expect.arrayContaining([
+          ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
+          ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
+        ])
       }
     });
     expect(actorReadinessBody.actorReadiness.actorSections).toMatchObject({
@@ -1448,6 +1468,36 @@ describe("dwm source requests", () => {
       })
     ]));
     expect(actorReadinessBody.actorReadiness.candidateGaps).toEqual([]);
+    const staleActorReadiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "actor_enrichment_readiness",
+        sourcePackId: "pack_activation_proof_mixed",
+        query: "APT29",
+        tenantId: "tenant_acme",
+        orgId: "org_acme",
+        scope: "APT29,example.com",
+        generatedAt: "2026-07-02T00:00:00.000Z"
+      })
+    }), options);
+    const staleActorReadinessBody = await staleActorReadiness.json() as any;
+    expect(staleActorReadiness.status).toBe(200);
+    expect(staleActorReadinessBody.actorReadiness.freshness).toMatchObject({
+      stale: true,
+      captureFreshness: expect.objectContaining({ state: "stale", staleAfterHours: 24 })
+    });
+    expect(staleActorReadinessBody.proofArtifacts).toMatchObject({
+      publicTiActorPage: {
+        freshness: expect.objectContaining({
+          captureFreshness: expect.objectContaining({ state: "stale" })
+        })
+      },
+      dashboardSourceReadiness: {
+        freshnessState: "stale",
+        alertReady: true,
+        caseReady: true
+      }
+    });
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
     expect(frontier.snapshot()).toHaveLength(6);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
@@ -1604,6 +1654,22 @@ describe("dwm source requests", () => {
         rawRestrictedPayloadStorage: false
       }
     });
+    expect(body.proofArtifacts).toMatchObject({
+      publicTiActorPage: {
+        schemaVersion: "ti.public_actor.source_readiness.v1",
+        state: "partial",
+        missingDataGaps: expect.arrayContaining([
+          expect.objectContaining({ family: "darkweb_onion", state: "missing" }),
+          expect.objectContaining({ family: "actor_page", state: "missing" })
+        ])
+      },
+      dashboardSourceReadiness: {
+        schemaVersion: "dwm.dashboard.source_readiness_row.v1",
+        alertReady: false,
+        caseReady: false,
+        freshnessState: "needs_capture"
+      }
+    });
     expect(frontier.snapshot()).toHaveLength(1);
 
     const source = store.listSources().find((item: any) => item.metadata?.sourceGrowthFamily === "telegram");
@@ -1651,6 +1717,22 @@ describe("dwm source requests", () => {
           expect.objectContaining({ code: "capture_required" }),
           expect.objectContaining({ code: "retry_required", family: "telegram" })
         ])
+      }
+    });
+    expect(retryBody.proofArtifacts).toMatchObject({
+      dashboardSourceReadiness: {
+        alertReady: false,
+        caseReady: false,
+        retryBlockers: expect.arrayContaining([
+          expect.objectContaining({ family: "telegram" })
+        ])
+      },
+      publicTiActorPage: {
+        alertCaseHandoffReadiness: expect.objectContaining({
+          blockers: expect.arrayContaining([
+            expect.objectContaining({ code: "retry_required", family: "telegram" })
+          ])
+        })
       }
     });
   });
