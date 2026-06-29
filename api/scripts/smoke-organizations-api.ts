@@ -1235,6 +1235,24 @@ assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.webh
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.safety.nonmemberEnumeration, false)
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.safety.containsRawTerms, false)
 assert.ok(alertTermsExport.sharedWatchlistIntegrationGuardrails.safety.redactedFields.includes('destination.secret'))
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.schemaVersion, 'organization.shared_watchlist_alert_denial_guardrails.v1')
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.ok, true)
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.requiredNoLeakFields, [
+    'activeTerms',
+    'watchlistScope.alertGeneratorKeys',
+    'persistedAlertContract',
+    'member.userId',
+])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.requiredResponseFields, [
+    'error',
+    'message',
+    'organizationId',
+    'visibilityDecision',
+    'allowedRoles',
+    'requestId',
+])
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.requiredAuditEvent, 'organization_watchlist_alert_visibility_denied')
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.blockerCodes, [])
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(alertTermsExport.alertBridgeContract.schemaVersion, 'organization.watchlist_alert_bridge_contract.v1')
 assert.equal(alertTermsExport.alertBridgeContract.recommendedDownstreamRoute, 'organization_watchlist')
@@ -1333,6 +1351,24 @@ assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.visibilityDecisionField, 'workflowContext.visibilityDecision')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.dedupeScope, 'organization_watchlist_term')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.crossTenantCollisionAllowed, false)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.schemaVersion, 'organization.shared_watchlist_alert_tenant_isolation.v1')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.partitionKey, 'organizationId')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.tenantIdField, 'tenantId')
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.requiredAlertFields.includes('workflowContext.organizationId'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.requiredAlertFields.includes('workflowContext.alertGeneratorKeys'))
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.dedupeKeyFields, [
+    'organizationId',
+    'watchlistItemId',
+    'termFamily',
+    'normalizedTerm',
+])
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.watchlistItemScope, 'organization_owned')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.crossTenantCollisionAllowed, false)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.nonmemberEnumeration, false)
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.lifecycleBlockers.includes('org_archived'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.lifecycleBlockers.includes('watchlist_archived'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.proofAssertions.includes('two_org_overlapping_terms'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.proofAssertions.includes('visibility_query_requires_organization_id'))
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.lifecycleExclusions.excludedStatuses, ['paused', 'archived'])
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.lifecycleExclusions.pausedWatchlistIds, [])
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.lifecycleExclusions.archivedWatchlistIds, [])
@@ -1822,6 +1858,8 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.ok, 
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.organizationId, secondOrganization.id)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.watchlistItemIds, [secondOrgWatchlistItem.id])
 assert.notDeepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys, alertTermsExport.sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.ok, true)
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.denialSafety.blockerCodes, [])
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.organizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.activeTermCount, 1)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.termFamilies, ['domain'])
@@ -1833,6 +1871,11 @@ assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.w
 assert.notDeepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.alertGeneratorKeys, alertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.alertGeneratorKeys)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.ownerOrganizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.watchlistScope.crossTenantCollisionAllowed, false)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.partitionKey, 'organizationId')
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.crossTenantCollisionAllowed, false)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.nonmemberEnumeration, false)
+assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.proofAssertions.includes('two_org_overlapping_terms'))
+assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantIsolation.proofAssertions.includes('distinct_alert_generator_keys'))
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.nonmemberEnumeration, false)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.support.mode, 'redacted_summary_only')
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.support.redactionRequired, true)

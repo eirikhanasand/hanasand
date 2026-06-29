@@ -701,6 +701,7 @@ export type OrganizationSharedWatchlistIntegrationGuardrailCode =
     | 'nonmember_enumeration_enabled'
     | 'raw_terms_enabled'
     | 'redaction_missing'
+    | 'denial_guardrail_missing'
     | 'route_missing'
 
 export type OrganizationSharedWatchlistIntegrationGuardrails = {
@@ -735,6 +736,14 @@ export type OrganizationSharedWatchlistIntegrationGuardrails = {
         nonmemberEnumeration: false
         containsRawTerms: false
         redactedFields: string[]
+    }
+    denialSafety: {
+        schemaVersion: 'organization.shared_watchlist_alert_denial_guardrails.v1'
+        ok: boolean
+        requiredNoLeakFields: OrganizationSharedWatchlistAlertQueueVisibility['denialGuardrails']['requiredNoLeakFields']
+        requiredResponseFields: OrganizationSharedWatchlistAlertQueueVisibility['denialGuardrails']['requiredResponseFields']
+        requiredAuditEvent: 'organization_watchlist_alert_visibility_denied'
+        blockerCodes: OrganizationSharedWatchlistAlertQueueVisibility['denialGuardrails']['blockerCodes']
     }
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[]
@@ -821,6 +830,18 @@ export type OrganizationSharedWatchlistAlertQueueVisibility = {
         visibilityDecisionField: 'workflowContext.visibilityDecision'
         dedupeScope: 'organization_watchlist_term'
         crossTenantCollisionAllowed: false
+    }
+    tenantIsolation: {
+        schemaVersion: 'organization.shared_watchlist_alert_tenant_isolation.v1'
+        partitionKey: 'organizationId'
+        tenantIdField: 'tenantId'
+        requiredAlertFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.organizationId' | 'workflowContext.alertGeneratorKeys' | 'dedupeKey'>
+        dedupeKeyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
+        watchlistItemScope: 'organization_owned'
+        crossTenantCollisionAllowed: false
+        nonmemberEnumeration: false
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'watchlist_paused' | 'watchlist_archived' | 'member_revoked' | 'nonmember_denied'>
+        proofAssertions: Array<'two_org_overlapping_terms' | 'distinct_alert_generator_keys' | 'org_scoped_watchlist_ids' | 'visibility_query_requires_organization_id'>
     }
     lifecycleExclusions: {
         excludedStatuses: Array<'paused' | 'archived'>
@@ -2052,6 +2073,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
     const persistenceContractKeys = [...proof.alertBridge.persistenceContract.watchlistScope.alertGeneratorKeys].sort()
     const alertContractKeys = [...proof.alertBridge.queueVisibilityContract.watchlistScope.alertGeneratorKeys].sort()
     const caseContractKeys = [...proof.caseBridge.caseWorkflowContract.watchlistScope.alertGeneratorKeys].sort()
+    const alertQueueVisibility = organizationSharedWatchlistAlertQueueVisibility(proof)
 
     if (proof.schemaVersion !== 'organization.shared_watchlist_downstream_proof.v1') blockerCodes.push('schema_mismatch')
     if (proof.audit.schemaVersion !== 'organization.shared_watchlist_audit_contract.v1') blockerCodes.push('schema_mismatch')
@@ -2103,9 +2125,11 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         !proof.alertBridge.queueVisibilityContract.redactedFields.includes('activeTerms[].term')
         || !proof.caseBridge.caseWorkflowContract.redactedFields.includes('case.evidence.rawContent')
         || !proof.webhookBridge.deliveryContract.redactedFields.includes('destination.secret')
+        || !alertQueueVisibility.denialGuardrails.ok
     ) {
         blockerCodes.push('redaction_missing')
     }
+    if (!alertQueueVisibility.denialGuardrails.ok) blockerCodes.push('denial_guardrail_missing')
     if (
         proof.alertBridge.queueVisibilityContract.routes.list !== 'GET /v1/dwm/alerts'
         || proof.alertBridge.queueVisibilityContract.routes.replay !== 'POST /v1/dwm/alerts/:id/replay'
@@ -2154,6 +2178,14 @@ export function organizationSharedWatchlistIntegrationGuardrails(
                     ...proof.webhookBridge.deliveryContract.redactedFields,
                 ]),
             ].sort(),
+        },
+        denialSafety: {
+            schemaVersion: alertQueueVisibility.denialGuardrails.schemaVersion,
+            ok: alertQueueVisibility.denialGuardrails.ok,
+            requiredNoLeakFields: alertQueueVisibility.denialGuardrails.requiredNoLeakFields,
+            requiredResponseFields: alertQueueVisibility.denialGuardrails.requiredResponseFields,
+            requiredAuditEvent: alertQueueVisibility.denialGuardrails.requiredAuditEvent,
+            blockerCodes: alertQueueVisibility.denialGuardrails.blockerCodes,
         },
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         blockerCodes: uniqueBlockers,
@@ -2276,6 +2308,30 @@ export function organizationSharedWatchlistAlertQueueVisibility(
             visibilityDecisionField: persistence.visibilityDecisionField,
             dedupeScope: queue.watchlistScope.dedupeScope,
             crossTenantCollisionAllowed: persistence.dedupe.crossTenantCollisionAllowed,
+        },
+        tenantIsolation: {
+            schemaVersion: 'organization.shared_watchlist_alert_tenant_isolation.v1',
+            partitionKey: 'organizationId',
+            tenantIdField: 'tenantId',
+            requiredAlertFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.organizationId',
+                'workflowContext.alertGeneratorKeys',
+                'dedupeKey',
+            ],
+            dedupeKeyFields: persistence.dedupe.keyFields,
+            watchlistItemScope: 'organization_owned',
+            crossTenantCollisionAllowed: persistence.dedupe.crossTenantCollisionAllowed,
+            nonmemberEnumeration: queue.actorVisibility.nonmemberEnumeration,
+            lifecycleBlockers: persistence.lifecycleBlockers,
+            proofAssertions: [
+                'two_org_overlapping_terms',
+                'distinct_alert_generator_keys',
+                'org_scoped_watchlist_ids',
+                'visibility_query_requires_organization_id',
+            ],
         },
         lifecycleExclusions: {
             excludedStatuses: ['paused', 'archived'],
