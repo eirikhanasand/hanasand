@@ -5231,6 +5231,7 @@ export function buildDwmAlertDeliveryPayload({
     const watchlist = normalizeWatchlist(alert.watchlist)
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const displayDedupeKey = normalizedAlert.dedupeKey || idempotencyKey
+    const analystLink = normalizedAlert.alertUrl || normalizedAlert.casePath
     const context = {
         schemaVersion: 'dwm.webhook.v1',
         eventType,
@@ -5256,6 +5257,7 @@ export function buildDwmAlertDeliveryPayload({
             route: normalizedAlert.route,
             casePath: normalizedAlert.casePath,
             alertUrl: normalizedAlert.alertUrl,
+            analystLink,
             dedupeKey: displayDedupeKey,
             replayCount: normalizedAlert.replayCount,
             workflowState: normalizedAlert.workflowState,
@@ -5297,6 +5299,7 @@ export function buildDwmAlertDeliveryPayload({
                     normalizedAlert.caseId ? discordField('Case ID', normalizedAlert.caseId, true) : null,
                     normalizedAlert.casePath ? discordField('Case', normalizedAlert.casePath, false) : null,
                     normalizedAlert.alertUrl ? discordField('Alert URL', normalizedAlert.alertUrl, false) : null,
+                    analystLink ? discordField('Analyst link', analystLink, false) : null,
                     normalizedAlert.provenanceSummary ? discordField('Provenance', normalizedAlert.provenanceSummary, false) : null,
                     discordField('Recommended action', normalizedAlert.recommendedAction, false),
                 ].filter(Boolean).slice(0, DISCORD_EMBED_FIELD_LIMIT),

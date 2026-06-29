@@ -136,6 +136,7 @@ expect(serialized.includes('dwm.alert.replayed:org_contract:destination_contract
 expect(serialized.includes('case_contract'), 'Payload should include case id.', payload)
 expect(serialized.includes('/dashboard/dwm?alert=alert_contract'), 'Payload should include case path.', payload)
 expect(serialized.includes('Alert URL') && serialized.includes('https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include alert URL/deep link.', payload)
+expect(serialized.includes('Analyst link') && ((payloadContext.delivery as Record<string, unknown>).analystLink === 'https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include a single analyst action/deep link.', payload)
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(serialized.includes('Workflow') && serialized.includes('replayed') && serialized.includes('tenant_contract'), 'Payload should include workflow and tenant routing context.', payload)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
@@ -2686,6 +2687,7 @@ expect(deliveryPreview.retry.retryable === false && deliveryPreview.retry.attemp
 expect(retryDeliveryPreview.retry.retryable === true && retryDeliveryPreview.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryDeliveryPreview.retry.errorClass === 'upstream_5xx' && retryDeliveryPreview.response.summary && !retryDeliveryPreview.response.summary.includes(secret), 'Failed delivery preview should expose persisted retry metadata with redacted response.', retryDeliveryPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryPreview.sanitizedPayloadPreview.payloadHash === 'payload_replay_hash', 'Test preview should expose a stable sanitized payload proof with payload hash.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Alert URL') && deliveryPreview.sanitizedPayloadPreview.context.watchlistId === 'watchlist_item_replay_contract', 'Sanitized payload preview should expose Discord field names and watchlist context without parsing raw payload.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Analyst link'), 'Sanitized payload preview should expose the analyst action link field.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Observed at') && deliveryPreview.sanitizedPayloadPreview.context.eventTimestamp === '2026-06-28T10:45:00.000Z', 'Sanitized payload preview should expose alert event timestamp context.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.context.casePath === replayWorkflowAlert.casePath && deliveryPreview.sanitizedPayloadPreview.links.includes(replayWorkflowAlert.alertUrl), 'Sanitized payload preview should expose case and alert action links.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.redaction.safeForCustomerDisplay === true && deliveryPreview.sanitizedPayloadPreview.redaction.endpointExposed === false, 'Sanitized payload preview should prove customer-safe redaction.', deliveryPreview.sanitizedPayloadPreview)
@@ -3000,6 +3002,7 @@ console.log(JSON.stringify({
         'HTTPS-only customer endpoint validation',
         'Discord payload formatting',
         'Discord payload alert URL/deep link',
+        'Discord payload analyst action link',
         'Discord payload event timestamp context',
         'Discord payload confidence/workflow context',
         'Discord payload truncation limits',
