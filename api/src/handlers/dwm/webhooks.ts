@@ -11,6 +11,7 @@ import {
     archiveDwmWebhookDestination,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDestinationHealth,
+    buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
@@ -59,9 +60,11 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
     if (!userId) return
 
     const orgId = orgIdFromQuery(req.query)
-    if (orgId && orgId !== userId && !await loadOrganizationMembership(orgId, userId)) {
+    const membership = orgId && orgId !== userId ? await loadOrganizationMembership(orgId, userId) : null
+    if (orgId && orgId !== userId && !membership) {
         return res.status(404).send({ error: 'Organization not found.' })
     }
+    const lifecycleAccess = destinationLifecycleAccess(orgId, userId, membership)
 
     const destinations = await listDwmWebhookDestinations(userId, orgId || undefined)
     const deliveries = await listDwmWebhookDeliveries(userId, orgId || undefined)
@@ -71,6 +74,7 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
         destinations,
         destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents }),
+        destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries, auditEvents, ...lifecycleAccess }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
@@ -93,6 +97,7 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], auditEvents })[0],
+            destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], auditEvents, viewerRole: 'owner', canManage: true })[0],
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, destinations: [destination] }),
         })
     } catch (error) {
@@ -126,6 +131,7 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
             destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
+            destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
         })
     } catch (error) {
@@ -157,6 +163,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
         destination,
         destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
+        destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0],
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
     })
 }
@@ -191,6 +198,9 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
             : null,
         destinationHealth: destination
             ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0]
+            : null,
+        destinationLifecycle: destination
+            ? buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0]
             : null,
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
@@ -272,6 +282,12 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             deliveries,
             auditEvents,
         }),
+        destinationLifecycle: buildDwmWebhookDestinationLifecycle({
+            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            deliveries,
+            auditEvents,
+            ...destinationLifecycleAccess(orgId, userId, visibility),
+        }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
             deliveries,
@@ -314,6 +330,7 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             auditEvents,
         }),
         destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries: ledgerDeliveries, auditEvents }),
+        destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries: ledgerDeliveries, auditEvents, viewerRole: 'member', canManage: false }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries: ledgerDeliveries, destinations }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
@@ -370,6 +387,14 @@ async function memberPermissionError(orgId: string, userId: string) {
         return { status: 404, message: 'Organization not found.' }
     }
     return null
+}
+
+function destinationLifecycleAccess(orgId: string, userId: string, membership: Membership | null) {
+    const role = orgId && orgId !== userId ? membership?.role || null : 'owner'
+    return {
+        viewerRole: role,
+        canManage: roleCanManageOrganization(role || undefined),
+    }
 }
 
 async function loadOrganizationMembership(orgId: string, userId: string): Promise<Membership | null> {

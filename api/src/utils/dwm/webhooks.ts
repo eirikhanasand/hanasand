@@ -1020,6 +1020,96 @@ export function filterDwmWebhookDestinationHealthForVisibility({
     }
 }
 
+export function buildDwmWebhookDestinationLifecycle({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+}) {
+    const healthRows = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const auditContracts = buildDwmWebhookAuditEventContracts({ destinations, deliveries, auditEvents })
+    const auditByDestination = new Map<string, typeof auditContracts>()
+    for (const audit of auditContracts) {
+        if (!audit.destinationId) continue
+        const audits = auditByDestination.get(audit.destinationId) || []
+        audits.push(audit)
+        auditByDestination.set(audit.destinationId, audits)
+    }
+
+    return healthRows.map((health) => {
+        const audits = auditByDestination.get(health.destinationId) || []
+        const created = audits.find(audit => audit.action === 'destination.created') || null
+        const updated = audits.find(audit => audit.action === 'destination.updated') || null
+        const disabled = audits.find(audit => audit.action === 'destination.archived') || null
+        const replay = health.recentAttempts.find(attempt => attempt.eventType === 'dwm.alert.replayed') || null
+        const adminAuditEvents = canManage ? audits : []
+
+        return {
+            schemaVersion: 'dwm.webhook.destination_lifecycle.v1',
+            destinationId: health.destinationId,
+            orgId: health.orgId,
+            type: health.type,
+            label: health.label,
+            status: health.status,
+            enabled: health.enabled,
+            view: canManage ? 'admin' : 'member',
+            access: {
+                role: clean(viewerRole) || null,
+                canReadStatus: true,
+                canManage,
+                canUpdate: canManage,
+                canTest: canManage,
+                canDisable: canManage && health.enabled,
+                memberSafe: !canManage,
+            },
+            redactedEndpoint: health.redactedEndpoint,
+            lifecycle: {
+                created: lifecycleEvent(created, canManage),
+                updated: lifecycleEvent(updated, canManage),
+                disabled: lifecycleEvent(disabled, canManage),
+                lastDryRun: health.lastDryRun,
+                lastTest: health.lastTest,
+                lastReplay: replay,
+                lastDelivery: health.lastDelivery,
+                lastFailure: health.lastFailure,
+                lastLiveDisabled: health.lastLiveDisabled,
+            },
+            retry: {
+                retryable: health.retry.retryable,
+                nextRetryAt: health.retry.nextRetryAt,
+                attemptCount: health.retry.attemptCount,
+                lastErrorCategory: health.retry.errorClass,
+                reason: health.retry.reason,
+                requestId: health.lastFailure?.requestId || health.latestAttempt?.requestId || null,
+                deliveryId: health.lastFailure?.deliveryId || health.latestAttempt?.deliveryId || null,
+                dedupeKey: health.lastFailure?.dedupeKey || health.latestAttempt?.dedupeKey || null,
+                redactedEndpoint: health.redactedEndpoint,
+            },
+            health: {
+                status: health.health,
+                ready: health.ready,
+                blockers: health.blockers,
+                liveDeliveryEnabled: health.liveDeliveryEnabled,
+                idempotencyCoverage: health.idempotencyCoverage,
+            },
+            auditEventIds: health.auditEventIds,
+            latestAuditEventId: health.latestAuditEventId,
+            auditEventContracts: adminAuditEvents,
+            updatedAt: health.updatedAt,
+            createdAt: health.createdAt,
+        }
+    })
+}
+
 export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPublic) {
     const context = extractHanasandPayloadContext(delivery.payload)
     const payloadAlert = recordOrEmpty(context.alert)
@@ -2041,6 +2131,22 @@ function auditEventIdForDelivery(
 ) {
     if (!deliveryId) return null
     return audits.find(audit => audit.deliveryId === deliveryId)?.auditEventId || null
+}
+
+function lifecycleEvent(
+    audit: ReturnType<typeof buildDwmWebhookAuditEventContracts>[number] | null,
+    includeActor: boolean
+) {
+    if (!audit) return null
+    return {
+        auditEventId: audit.auditEventId,
+        action: audit.action,
+        outcome: audit.outcome,
+        severity: audit.severity,
+        actorId: includeActor ? audit.actorId : null,
+        requestId: audit.requestId,
+        createdAt: audit.createdAt,
+    }
 }
 
 function firstClean(...values: unknown[]) {

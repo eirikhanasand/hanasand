@@ -4,6 +4,7 @@ import {
     buildDwmAlertWebhookDispatchPlan,
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDestinationHealth,
+    buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
@@ -1170,6 +1171,57 @@ const nonmemberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility
     destinationHealth,
     visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
 })
+const adminLifecycle = buildDwmWebhookDestinationLifecycle({
+    liveDeliveryEnabled: false,
+    destinations: auditDestinationRows,
+    deliveries: auditDeliveryRows,
+    auditEvents: [
+        ...auditEventContracts.map(item => ({
+            id: item.auditEventId,
+            ownerId: 'owner_contract',
+            actorId: item.actorId,
+            orgId: item.orgId,
+            destinationId: item.destinationId,
+            deliveryId: item.deliveryId,
+            action: item.action,
+            metadata: item.metadata,
+            createdAt: item.createdAt,
+        })),
+        {
+            id: 'audit_replay_duplicate_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_replay_duplicate_contract',
+            action: 'delivery.replayed',
+            metadata: { status: 'dry_run' },
+            createdAt: '2026-06-28T12:08:01.000Z',
+        },
+    ],
+    viewerRole: 'admin',
+    canManage: true,
+})
+const memberLifecycle = buildDwmWebhookDestinationLifecycle({
+    liveDeliveryEnabled: false,
+    destinations: auditDestinationRows,
+    deliveries: auditDeliveryRows,
+    auditEvents: [
+        {
+            id: 'audit_delivery_test_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_test_contract',
+            action: 'delivery.tested',
+            metadata: { status: 'dry_run', endpointHint: endpoint, dryRun: true },
+            createdAt: '2026-06-28T12:04:01.000Z',
+        },
+    ],
+    viewerRole: 'member',
+    canManage: false,
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -1177,6 +1229,10 @@ const replayHealth = destinationHealth.find(item => item.destinationId === 'dest
 const retryHealth = destinationHealth.find(item => item.destinationId === 'destination_live_contract')
 const disabledHealth = destinationHealth.find(item => item.destinationId === 'destination_disabled_contract')
 const skippedHealth = destinationHealth.find(item => item.destinationId === 'destination_skipped_contract')
+const adminReplayLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_replay_contract')
+const adminRetryLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_live_contract')
+const adminDisabledLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_disabled_contract')
+const memberReplayLifecycle = memberLifecycle.find(item => item.destinationId === 'destination_replay_contract')
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -1213,6 +1269,14 @@ expect(skippedHealth?.lastLiveDisabled?.errorClass === 'live_delivery_disabled' 
 expect(memberHealthVisibility.decision.allowed === true && memberHealthVisibility.destinationHealth.length === destinationHealth.length, 'Members policy should allow active members to inspect safe destination health.', memberHealthVisibility)
 expect(nonmemberHealthVisibility.decision.allowed === false && nonmemberHealthVisibility.destinationHealth.length === 0, 'Destination health visibility should deny nonmembers without leaking metadata.', nonmemberHealthVisibility)
 expect(!JSON.stringify(destinationHealth).includes(secret), 'Destination health should not leak endpoint, response, or audit secrets.', destinationHealth)
+expect(adminReplayLifecycle?.view === 'admin' && adminReplayLifecycle.access.canUpdate === true && adminReplayLifecycle.access.canTest === true && adminReplayLifecycle.access.canDisable === true, 'Destination lifecycle should expose admin capabilities for owner/admin users.', adminReplayLifecycle)
+expect(adminReplayLifecycle?.lifecycle.created?.actorId === 'owner_contract' && adminReplayLifecycle.auditEventContracts.length > 0, 'Admin lifecycle should expose audit actors and redacted audit event contracts.', adminReplayLifecycle)
+expect(adminReplayLifecycle?.lifecycle.lastReplay?.deliveryId === 'delivery_replay_duplicate_contract' && adminReplayLifecycle.health.idempotencyCoverage.duplicateKeyCount === 1, 'Destination lifecycle should expose replay dedupe and latest replay request.', adminReplayLifecycle)
+expect(adminRetryLifecycle?.retry.retryable === true && adminRetryLifecycle.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && adminRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Destination lifecycle should expose retry/backoff visibility.', adminRetryLifecycle)
+expect(adminRetryLifecycle?.retry.deliveryId === 'delivery_live_failed_retry_contract' && adminRetryLifecycle.retry.dedupeKey === 'dwm_dedupe_live_contract', 'Destination lifecycle retry state should include delivery/request and dedupe context.', adminRetryLifecycle)
+expect(adminDisabledLifecycle?.enabled === false && adminDisabledLifecycle.access.canDisable === false && adminDisabledLifecycle.lifecycle.disabled?.auditEventId === 'audit_destination_archived_contract', 'Destination lifecycle should expose disabled state and disable audit event.', adminDisabledLifecycle)
+expect(memberReplayLifecycle?.view === 'member' && memberReplayLifecycle.access.canUpdate === false && memberReplayLifecycle.access.canTest === false && memberReplayLifecycle.auditEventContracts.length === 0, 'Member lifecycle should expose safe read status without admin audit detail.', memberReplayLifecycle)
+expect(!JSON.stringify(adminLifecycle).includes(secret) && !JSON.stringify(memberLifecycle).includes(secret), 'Destination lifecycle should not leak endpoint, response, or audit secrets.', { adminLifecycle, memberLifecycle })
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1257,6 +1321,12 @@ console.log(JSON.stringify({
         'destination health duplicate replay dedupe',
         'destination health org visibility allowed/denied',
         'destination health secret redaction',
+        'destination lifecycle admin capabilities',
+        'destination lifecycle member-safe view',
+        'destination lifecycle replay dedupe',
+        'destination lifecycle retry/backoff visibility',
+        'destination lifecycle disabled state',
+        'destination lifecycle secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',
