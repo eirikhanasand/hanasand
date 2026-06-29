@@ -659,32 +659,84 @@ describe("analyst handoff consumer validation", () => {
       "public_ti_actor_relevance"
     ]);
     expect(beta.rows.every((row) => row.persistenceMode === "real_persistence")).toBe(true);
-    expect(beta.rows.every((row) => row.expectedAdapter && row.payloadShape.length && row.proofCommand)).toBe(true);
+    expect(beta.rows.every((row) =>
+      row.expectedAdapter
+      && row.payloadShape.length
+      && row.proofCommand
+      && row.workflowContract?.route
+      && row.workflowContract.routeHandler
+      && row.workflowContract.storageModule
+      && row.workflowContract.proofRowId
+      && row.workflowContract.testName
+    )).toBe(true);
     expect(beta.rows.find((row) => row.id === "invite_teammate")).toMatchObject({
       ownerLane: "support",
       customerVisibleState: "ready",
       requiredNextAction: "verify_team_invitation_action",
-      expectedAdapter: "supportActionExecutorReadiness"
+      expectedAdapter: "supportActionExecutorReadiness",
+      workflowContract: {
+        route: "POST /api/admin/support/organizations/:id/invites",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "support_executor"
+      }
+    });
+    expect(beta.rows.find((row) => row.id === "create_shared_watchlist")).toMatchObject({
+      workflowContract: {
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "shared_watchlist_alert_export"
+      }
+    });
+    expect(beta.rows.find((row) => row.id === "generate_alert")).toMatchObject({
+      workflowContract: {
+        route: "POST /v1/dwm/alerts/rebuild",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "org_scoped_alert_case_workflow"
+      }
     });
     expect(beta.rows.find((row) => row.id === "work_alert")).toMatchObject({
       ownerLane: "dashboard",
       uiQualityProofStatus: "present",
-      customerVisibleState: "ready"
+      customerVisibleState: "ready",
+      workflowContract: {
+        route: "/dashboard",
+        routeHandler: "dashboard.operator_workspace",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "dashboard_operator_workspace"
+      }
     });
     expect(beta.rows.find((row) => row.id === "open_link_case")).toMatchObject({
       ownerLane: "alert",
       expectedAdapter: "persistedAlertToCaseHandoffPayload",
-      customerVisibleState: "ready"
+      customerVisibleState: "ready",
+      workflowContract: {
+        route: "POST /v1/cases",
+        routeHandler: "ti/scraper/src/api/caseRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts"
+      }
     });
     expect(beta.rows.find((row) => row.id === "deliver_discord_webhook")).toMatchObject({
       ownerLane: "webhook",
       expectedAdapter: "persistedAlertToWebhookTriggerContext",
-      customerVisibleState: "ready"
+      customerVisibleState: "ready",
+      workflowContract: {
+        route: "POST /v1/dwm/webhooks/deliver",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts"
+      }
     });
     expect(beta.rows.find((row) => row.id === "public_ti_actor_relevance")).toMatchObject({
       ownerLane: "publicTI",
       customerVisibleState: "ready",
-      requiredNextAction: "verify_source_backed_ti_coverage"
+      requiredNextAction: "verify_source_backed_ti_coverage",
+      workflowContract: {
+        route: "/ti",
+        routeHandler: "ti.actor_profile_surface",
+        storageModule: "api/src/utils/ti/search.ts",
+        proofRowId: "public_ti_actor_handoff"
+      }
     });
     expect(validateBetaReadinessArtifact(beta)).toMatchObject({ ok: true, blockerCodes: [] });
     const serialized = JSON.stringify(beta);
@@ -702,8 +754,15 @@ describe("analyst handoff consumer validation", () => {
     expect(nearlySellable.rows.find((row) => row.id === "configure_destinations")).toMatchObject({
       ownerLane: "webhook",
       persistenceMode: "real_persistence",
-      customerVisibleState: "ready"
+      customerVisibleState: "ready",
+      workflowContract: {
+        route: "POST /api/organizations/:id/webhooks",
+        routeHandler: "api/src/handlers/dwm/webhooks.ts",
+        storageModule: "api/src/utils/dwm/webhooks.ts",
+        proofRowId: "webhook_destination"
+      }
     });
+    expect(nearlySellable.rows.every((row) => row.workflowContract.proofRowId && row.workflowContract.testName)).toBe(true);
 
     expect(validateBetaReadinessArtifact(blocked)).toMatchObject({ ok: true, blockerCodes: [] });
     expect(blocked.ok).toBe(false);
@@ -768,6 +827,9 @@ describe("analyst handoff consumer validation", () => {
       capabilityLabel: "Control room signal"
     };
     expect(validateBetaReadinessArtifact(badBeta).blockerCodes).toContain("prompt_shaped_language");
+    const missingWorkflowContract = clone(report.betaReadiness) as BetaReadinessArtifact;
+    delete (missingWorkflowContract.rows[0] as Partial<(typeof missingWorkflowContract.rows)[number]>).workflowContract;
+    expect(validateBetaReadinessArtifact(missingWorkflowContract).blockerCodes).toContain("missing_workflow_contract");
   });
 });
 

@@ -11,7 +11,12 @@
       "id": "create_organization",
       "ownerLane": "org",
       "capabilityLabel": "Organization creation",
-      "proofArtifact": { "schemaVersion": "organization.lifecycle_readiness.v1", "artifactId": "deploy_gate.org_lifecycle", "route": "GET /api/organizations/:id/readiness-lifecycle", "probeId": "org.lifecycle_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "organization.lifecycle_readiness.v1",
+        "artifactId": "deploy_gate.org_lifecycle",
+        "route": "GET /api/organizations/:id/readiness-lifecycle",
+        "probeId": "org.lifecycle_readiness"
+      },
       "latestCommitOrCheck": "8a87ba41",
       "customerVisibleState": "ready",
       "blockers": [],
@@ -21,14 +26,31 @@
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "organizationLifecycleReadiness",
-      "payloadShape": ["organizationId", "tenantId", "readyForOnboarding", "typedBlockers"],
-      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts"
+      "payloadShape": [
+        "organizationId",
+        "tenantId",
+        "readyForOnboarding",
+        "typedBlockers"
+      ],
+      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts",
+      "workflowContract": {
+        "route": "POST /api/organizations",
+        "routeHandler": "api/src/handlers/organizations.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "organization_lifecycle",
+        "testName": "api/scripts/smoke-organizations-api.ts"
+      }
     },
     {
       "id": "invite_teammate",
       "ownerLane": "support",
       "capabilityLabel": "Team invitation workflow",
-      "proofArtifact": { "schemaVersion": "support.action_executor_readiness.v1", "artifactId": "deploy_gate.support_executor", "route": "/api/admin/support/readiness", "probeId": "support.action_executor_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "support.action_executor_readiness.v1",
+        "artifactId": "deploy_gate.support_executor",
+        "route": "/api/admin/support/readiness",
+        "probeId": "support.action_executor_readiness"
+      },
       "latestCommitOrCheck": "26371c0a",
       "customerVisibleState": "ready",
       "blockers": [],
@@ -38,14 +60,32 @@
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "supportActionExecutorReadiness",
-      "payloadShape": ["action", "executorContract.path", "executorContract.requiredHeaders", "executorContract.requiredBody", "blockers"],
-      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+      "payloadShape": [
+        "action",
+        "executorContract.path",
+        "executorContract.requiredHeaders",
+        "executorContract.requiredBody",
+        "blockers"
+      ],
+      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts",
+      "workflowContract": {
+        "route": "POST /api/admin/support/organizations/:id/invites",
+        "routeHandler": "api/src/handlers/adminSupport.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "support_executor",
+        "testName": "api/scripts/smoke-admin-support-contract.ts"
+      }
     },
     {
       "id": "create_shared_watchlist",
       "ownerLane": "watchlist",
       "capabilityLabel": "Shared watchlist monitoring",
-      "proofArtifact": { "schemaVersion": "organization.watchlist_alert_terms_export.v1", "artifactId": "org_watchlist.alert_terms_export", "route": "GET /api/organizations/:id/watchlists/alert-terms", "probeId": "org.watchlist_alert_terms_export" },
+      "proofArtifact": {
+        "schemaVersion": "organization.watchlist_alert_terms_export.v1",
+        "artifactId": "org_watchlist.alert_terms_export",
+        "route": "GET /api/organizations/:id/watchlists/alert-terms",
+        "probeId": "org.watchlist_alert_terms_export"
+      },
       "latestCommitOrCheck": "38518474",
       "customerVisibleState": "ready",
       "blockers": [],
@@ -55,82 +95,181 @@
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "orgWatchlistTermsToAlertGenerationRequest",
-      "payloadShape": ["organizationId", "tenantId", "watchlistId", "watchlistItemIds", "activeTerms[].alertGenerationRef"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts"
+      "payloadShape": [
+        "organizationId",
+        "tenantId",
+        "watchlistId",
+        "watchlistItemIds",
+        "activeTerms[].alertGenerationRef"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts",
+      "workflowContract": {
+        "route": "GET /api/organizations/:id/watchlists/alert-terms",
+        "routeHandler": "api/src/handlers/organizations.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "shared_watchlist_alert_export",
+        "testName": "analystHandoffConsumer.test.ts"
+      }
     },
     {
       "id": "activate_source_coverage",
       "ownerLane": "source",
       "capabilityLabel": "Source coverage activation",
-      "proofArtifact": { "schemaVersion": "dwm.source_worker_readiness.v1", "artifactId": "dwm.source_worker_readiness", "route": "GET /v1/dwm/source-requests/readiness", "probeId": "dwm.source_worker_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "dwm.source_worker_readiness.v1",
+        "artifactId": "dwm.source_worker_readiness",
+        "route": "GET /v1/dwm/source-requests/readiness",
+        "probeId": "dwm.source_worker_readiness"
+      },
       "latestCommitOrCheck": "source-readiness-policy",
       "customerVisibleState": "blocked",
-      "blockers": ["source_policy_inactive"],
+      "blockers": [
+        "source_policy_inactive"
+      ],
       "blockingReason": "source_policy_inactive",
       "deployRisk": "high",
       "requiredNextAction": "verify_source_coverage_activation",
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "buildDwmSourceReadinessArtifact",
-      "payloadShape": ["sourceIds", "freshProvenance", "blockers", "checkedAt"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts"
+      "payloadShape": [
+        "sourceIds",
+        "freshProvenance",
+        "blockers",
+        "checkedAt"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts",
+      "workflowContract": {
+        "route": "GET /v1/dwm/source-requests/readiness",
+        "routeHandler": "ti/scraper/src/api/dwmSourceRequestRoute.ts",
+        "storageModule": "ti/scraper/src/storage/dwmSourcePackRegistry.ts",
+        "proofRowId": "source_activation_and_provenance",
+        "testName": "dwmSourceRequest.test.ts"
+      }
     },
     {
       "id": "generate_alert",
       "ownerLane": "alert",
       "capabilityLabel": "Alert generation",
-      "proofArtifact": { "schemaVersion": "hanasand.analyst_handoff.consumer.v1", "artifactId": "deploy_gate.alert_case_handoff", "route": "/v1/cases", "probeId": "dwm.alert_case_handoff" },
+      "proofArtifact": {
+        "schemaVersion": "hanasand.analyst_handoff.consumer.v1",
+        "artifactId": "deploy_gate.alert_case_handoff",
+        "route": "/v1/cases",
+        "probeId": "dwm.alert_case_handoff"
+      },
       "latestCommitOrCheck": "dwm-alert-repository-typecheck",
       "customerVisibleState": "blocked",
-      "blockers": ["source_coverage_required_for_alert_generation"],
+      "blockers": [
+        "source_coverage_required_for_alert_generation"
+      ],
       "blockingReason": "source_coverage_required_for_alert_generation",
       "deployRisk": "high",
       "requiredNextAction": "verify_alert_generation",
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "orgWatchlistTermsToAlertGenerationRequest",
-      "payloadShape": ["organizationId", "watchlistId", "watchlistItemIds", "sourceFamily", "captureIds", "dedupeKey"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmWorkflowPersistence.test.ts"
+      "payloadShape": [
+        "organizationId",
+        "watchlistId",
+        "watchlistItemIds",
+        "sourceFamily",
+        "captureIds",
+        "dedupeKey"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmWorkflowPersistence.test.ts",
+      "workflowContract": {
+        "route": "POST /v1/dwm/alerts/rebuild",
+        "routeHandler": "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "org_scoped_alert_case_workflow",
+        "testName": "dwmAlertRepository.test.ts"
+      }
     },
     {
       "id": "configure_destinations",
       "ownerLane": "webhook",
       "capabilityLabel": "Notification destination configuration",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "configure_destinations.missing_proof", "route": "GET /api/dwm/webhooks?orgId=<org_id>", "probeId": "dwm.webhook_destination_lifecycle" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "configure_destinations.missing_proof",
+        "route": "GET /api/dwm/webhooks?orgId=<org_id>",
+        "probeId": "dwm.webhook_destination_lifecycle"
+      },
       "latestCommitOrCheck": "webhook-destination-proof",
       "customerVisibleState": "blocked",
-      "blockers": ["missing_webhook_destination"],
+      "blockers": [
+        "missing_webhook_destination"
+      ],
       "blockingReason": "missing_webhook_destination",
       "deployRisk": "high",
       "requiredNextAction": "verify_webhook_destination_configuration",
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "webhookDestinationLifecycle",
-      "payloadShape": ["destinationId", "orgId", "type", "status", "health.ready", "retry.lastErrorCategory"],
-      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhook-contract.ts"
+      "payloadShape": [
+        "destinationId",
+        "orgId",
+        "type",
+        "status",
+        "health.ready",
+        "retry.lastErrorCategory"
+      ],
+      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhook-contract.ts",
+      "workflowContract": {
+        "route": "POST /api/organizations/:id/webhooks",
+        "routeHandler": "api/src/handlers/dwm/webhooks.ts",
+        "storageModule": "api/src/utils/dwm/webhooks.ts",
+        "proofRowId": "webhook_destination",
+        "testName": "api/scripts/smoke-dwm-webhook-contract.ts"
+      }
     },
     {
       "id": "work_alert",
       "ownerLane": "dashboard",
       "capabilityLabel": "Analyst alert workflow",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "work_alert.missing_proof", "route": "/dashboard", "probeId": "dashboard.ui_quality" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "work_alert.missing_proof",
+        "route": "/dashboard",
+        "probeId": "dashboard.ui_quality"
+      },
       "latestCommitOrCheck": "dashboard-render-proof",
       "customerVisibleState": "blocked",
-      "blockers": ["missing_dashboard_ui_quality_proof"],
+      "blockers": [
+        "missing_dashboard_ui_quality_proof"
+      ],
       "blockingReason": "missing_dashboard_ui_quality_proof",
       "deployRisk": "high",
       "requiredNextAction": "verify_dashboard_alert_workflow",
       "uiQualityProofStatus": "missing",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "persistedAlertToCaseHandoffPayload",
-      "payloadShape": ["alertId", "casePath", "captureIds", "watchlistItemIds", "workflowState"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      "payloadShape": [
+        "alertId",
+        "casePath",
+        "captureIds",
+        "watchlistItemIds",
+        "workflowState"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts",
+      "workflowContract": {
+        "route": "/dashboard",
+        "routeHandler": "dashboard.operator_workspace",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "dashboard_operator_workspace",
+        "testName": "dwmCaseWorkflow.test.ts"
+      }
     },
     {
       "id": "open_link_case",
       "ownerLane": "alert",
       "capabilityLabel": "Case link workflow",
-      "proofArtifact": { "schemaVersion": "hanasand.analyst_handoff.consumer.v1", "artifactId": "deploy_gate.alert_case_handoff", "route": "/v1/cases", "probeId": "dwm.alert_case_handoff" },
+      "proofArtifact": {
+        "schemaVersion": "hanasand.analyst_handoff.consumer.v1",
+        "artifactId": "deploy_gate.alert_case_handoff",
+        "route": "/v1/cases",
+        "probeId": "dwm.alert_case_handoff"
+      },
       "latestCommitOrCheck": "case-route-proof",
       "customerVisibleState": "ready",
       "blockers": [],
@@ -140,31 +279,70 @@
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "persistedAlertToCaseHandoffPayload",
-      "payloadShape": ["caseIdCandidate", "casePath", "alertId", "dedupeKey", "captureIds"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      "payloadShape": [
+        "caseIdCandidate",
+        "casePath",
+        "alertId",
+        "dedupeKey",
+        "captureIds"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts",
+      "workflowContract": {
+        "route": "POST /v1/cases",
+        "routeHandler": "ti/scraper/src/api/caseRoutes.ts",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "alert_case_handoff",
+        "testName": "dwmCaseWorkflow.test.ts"
+      }
     },
     {
       "id": "deliver_discord_webhook",
       "ownerLane": "webhook",
       "capabilityLabel": "Discord webhook delivery",
-      "proofArtifact": { "schemaVersion": "missing", "artifactId": "deliver_discord_webhook.missing_proof", "route": "GET /api/dwm/webhooks?orgId=<org_id>", "probeId": "dwm.webhook_destination_lifecycle" },
+      "proofArtifact": {
+        "schemaVersion": "missing",
+        "artifactId": "deliver_discord_webhook.missing_proof",
+        "route": "GET /api/dwm/webhooks?orgId=<org_id>",
+        "probeId": "dwm.webhook_destination_lifecycle"
+      },
       "latestCommitOrCheck": "webhook-delivery-proof",
       "customerVisibleState": "blocked",
-      "blockers": ["missing_webhook_destination"],
+      "blockers": [
+        "missing_webhook_destination"
+      ],
       "blockingReason": "missing_webhook_destination",
       "deployRisk": "high",
       "requiredNextAction": "verify_discord_webhook_delivery",
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "persistedAlertToWebhookTriggerContext",
-      "payloadShape": ["organizationId", "alertId", "webhookDestinationIds", "deliveryId", "casePath", "captureIds"],
-      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts"
+      "payloadShape": [
+        "organizationId",
+        "alertId",
+        "webhookDestinationIds",
+        "deliveryId",
+        "casePath",
+        "captureIds"
+      ],
+      "proofCommand": "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts",
+      "workflowContract": {
+        "route": "POST /v1/dwm/webhooks/deliver",
+        "routeHandler": "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        "storageModule": "ti/scraper/src/storage/dwmAlertRepository.ts",
+        "proofRowId": "webhook_destination",
+        "testName": "dwmWebhookDelivery.test.ts"
+      }
     },
     {
       "id": "support_access_recovery",
       "ownerLane": "support",
       "capabilityLabel": "Support access recovery",
-      "proofArtifact": { "schemaVersion": "support.action_executor_readiness.v1", "artifactId": "deploy_gate.support_executor", "route": "/api/admin/support/readiness", "probeId": "support.action_executor_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "support.action_executor_readiness.v1",
+        "artifactId": "deploy_gate.support_executor",
+        "route": "/api/admin/support/readiness",
+        "probeId": "support.action_executor_readiness"
+      },
       "latestCommitOrCheck": "26371c0a",
       "customerVisibleState": "ready",
       "blockers": [],
@@ -174,25 +352,59 @@
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "supportActionExecutionHandoff",
-      "payloadShape": ["action", "idempotencyKey", "executorReadiness.ready", "execution.path", "audit.blockerCode"],
-      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+      "payloadShape": [
+        "action",
+        "idempotencyKey",
+        "executorReadiness.ready",
+        "execution.path",
+        "audit.blockerCode"
+      ],
+      "proofCommand": "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts",
+      "workflowContract": {
+        "route": "POST /api/admin/support/organizations/:id/access-recovery",
+        "routeHandler": "api/src/handlers/adminSupport.ts",
+        "storageModule": "api/src/utils/organizations.ts",
+        "proofRowId": "support_executor",
+        "testName": "api/scripts/smoke-admin-support-contract.ts"
+      }
     },
     {
       "id": "public_ti_actor_relevance",
       "ownerLane": "publicTI",
       "capabilityLabel": "Source-backed threat intelligence coverage",
-      "proofArtifact": { "schemaVersion": "dwm.source_worker_readiness.v1", "artifactId": "dwm.source_worker_readiness", "route": "GET /v1/dwm/source-requests/readiness", "probeId": "dwm.source_worker_readiness" },
+      "proofArtifact": {
+        "schemaVersion": "dwm.source_worker_readiness.v1",
+        "artifactId": "dwm.source_worker_readiness",
+        "route": "GET /v1/dwm/source-requests/readiness",
+        "probeId": "dwm.source_worker_readiness"
+      },
       "latestCommitOrCheck": "source-readiness-policy",
       "customerVisibleState": "blocked",
-      "blockers": ["source_policy_inactive"],
+      "blockers": [
+        "source_policy_inactive"
+      ],
       "blockingReason": "source_policy_inactive",
       "deployRisk": "high",
       "requiredNextAction": "verify_source_backed_ti_coverage",
       "uiQualityProofStatus": "not_required",
       "persistenceMode": "real_persistence",
       "expectedAdapter": "publicTiArtifactToOrgWatchlistCreate",
-      "payloadShape": ["artifactId", "query", "provenance", "watchlistTerms", "backedIds.organizationIds", "backedIds.alertIds"],
-      "proofCommand": "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts"
+      "payloadShape": [
+        "artifactId",
+        "query",
+        "provenance",
+        "watchlistTerms",
+        "backedIds.organizationIds",
+        "backedIds.alertIds"
+      ],
+      "proofCommand": "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts",
+      "workflowContract": {
+        "route": "/ti",
+        "routeHandler": "ti.actor_profile_surface",
+        "storageModule": "api/src/utils/ti/search.ts",
+        "proofRowId": "public_ti_actor_handoff",
+        "testName": "check-ti-org-relevance.ts"
+      }
     }
   ]
 }

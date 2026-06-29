@@ -435,6 +435,13 @@ describe("analyst handoff contract", () => {
         tenantId: "tenant_microsoft",
         orgRelevance: {
           ...publicTiOrgRelevanceFixture(),
+          actorIdentity: undefined,
+          sourceCoverage: [],
+          affectedEntities: {
+            vendors: [],
+            domains: [],
+            regions: []
+          },
           organizationRefs: [],
           sourceEvidence: [],
           alertCaseRefs: [],
@@ -459,6 +466,13 @@ describe("analyst handoff contract", () => {
       ok: true,
       actorId: "actor:apt29-microsoft",
       query: "apt29 microsoft",
+      actor: {
+        canonicalName: "APT29",
+        aliasCount: 2,
+        sectorCount: 1,
+        regionCount: 1,
+        sourceCoverageCount: 1
+      },
       handoffs: { watchlist: true, alertGeneration: true, caseHandoff: true, webhookTrigger: true },
       coverage: {
         organizationRefs: 1,
@@ -473,6 +487,17 @@ describe("analyst handoff contract", () => {
       }
     });
     expect(ready?.provenance.some(row => row.sourceId === "microsoft" && row.captureId === "capture_microsoft_apt29")).toBe(true);
+    expect(ready?.enrichmentGaps).toEqual([]);
+    const blocked = report.rows.find(row => row.file === "blocked.json");
+    const expectedGapCodes = [
+      "missing_actor_aliases",
+      "missing_provenance",
+      "missing_source_coverage",
+      "missing_target_regions",
+      "missing_target_sectors",
+      "stale_evidence"
+    ] as const;
+    expect(blocked?.enrichmentGaps.map(gap => gap.code).sort()).toEqual([...expectedGapCodes].sort());
     expect(report.productReadiness.org.blockerCodes).toContain("missing_org");
     expect(report.productReadiness.source.blockerCodes).toContain("missing_provenance");
     expect(report.productReadiness.case.blockerCodes).toContain("missing_case_route");
@@ -487,12 +512,29 @@ function publicTiOrgRelevanceFixture() {
     actorId: "actor:apt29-microsoft",
     query: "apt29 microsoft",
     generatedAt: "2026-06-29T08:00:00.000Z",
+    actorIdentity: {
+      canonicalName: "APT29",
+      aliases: ["Midnight Blizzard", "Nobelium"],
+      actorClass: "State-linked espionage actor",
+      sectors: ["Technology"],
+      regions: ["United States"],
+      motivations: ["Strategic intelligence collection"]
+    },
     freshness: {
       generatedAt: "2026-06-29T08:00:00.000Z",
       lastSeen: "2026-06-29T00:00:00.000Z",
       stale: false,
       reason: "Fresh source evidence is attached."
     },
+    sourceCoverage: [{
+      sourceId: "microsoft",
+      sourceName: "Microsoft",
+      sourceFamily: "vendor_disclosure",
+      status: "active",
+      lastCollectedAt: "2026-06-29T00:00:00.000Z",
+      coverage: "primary",
+      captureIds: ["capture_microsoft_apt29"]
+    }],
     organizationRefs: [{
       tenantId: "tenant_microsoft",
       organizationId: "org_microsoft",

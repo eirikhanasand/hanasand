@@ -670,6 +670,14 @@ export type BetaReadinessCapabilityId =
 
 export type BetaReadinessPersistenceMode = "real_persistence" | "local_proof" | "session_state" | "demo_fixture";
 
+export type BetaReadinessWorkflowContract = {
+  route: string;
+  routeHandler: string;
+  storageModule: string;
+  proofRowId: string;
+  testName: string;
+};
+
 export type BetaReadinessRow = {
   id: BetaReadinessCapabilityId;
   ownerLane: ProductReadinessOwnerLane | "integration";
@@ -686,6 +694,7 @@ export type BetaReadinessRow = {
   expectedAdapter: string;
   payloadShape: string[];
   proofCommand: string;
+  workflowContract: BetaReadinessWorkflowContract;
 };
 
 export type BetaReadinessArtifact = {
@@ -1174,7 +1183,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "organizationLifecycleReadiness",
       payloadShape: ["organizationId", "tenantId", "readyForOnboarding", "typedBlockers"],
-      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts"
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-organizations-api.ts",
+      workflowContract: {
+        route: "POST /api/organizations",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "organization_lifecycle",
+        testName: "api/scripts/smoke-organizations-api.ts"
+      }
     }),
     betaRowFromProduct({
       id: "invite_teammate",
@@ -1186,6 +1202,13 @@ export function buildBetaReadinessArtifact(input: Array<{
       expectedAdapter: "supportActionExecutorReadiness",
       payloadShape: ["action", "executorContract.path", "executorContract.requiredHeaders", "executorContract.requiredBody", "blockers"],
       proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts",
+      workflowContract: {
+        route: "POST /api/admin/support/organizations/:id/invites",
+        routeHandler: "api/src/handlers/adminSupport.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "support_executor",
+        testName: "api/scripts/smoke-admin-support-contract.ts"
+      },
       customerVisibleStateOverride: supportInviteReady(input) ? undefined : "blocked",
       extraBlockers: supportInviteReady(input) ? [] : ["missing_invite_teammate_executor"]
     }),
@@ -1198,7 +1221,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
       payloadShape: ["organizationId", "tenantId", "watchlistId", "watchlistItemIds", "activeTerms[].alertGenerationRef"],
-      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts"
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoffConsumer.test.ts",
+      workflowContract: {
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        routeHandler: "api/src/handlers/organizations.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "shared_watchlist_alert_export",
+        testName: "analystHandoffConsumer.test.ts"
+      }
     }),
     betaRowFromProduct({
       id: "activate_source_coverage",
@@ -1209,7 +1239,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "buildDwmSourceReadinessArtifact",
       payloadShape: ["sourceIds", "freshProvenance", "blockers", "checkedAt"],
-      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts"
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmSourceRequest.test.ts",
+      workflowContract: {
+        route: "GET /v1/dwm/source-requests/readiness",
+        routeHandler: "ti/scraper/src/api/dwmSourceRequestRoute.ts",
+        storageModule: "ti/scraper/src/storage/dwmSourcePackRegistry.ts",
+        proofRowId: "source_activation_and_provenance",
+        testName: "dwmSourceRequest.test.ts"
+      }
     }),
     betaRowFromProduct({
       id: "generate_alert",
@@ -1221,6 +1258,13 @@ export function buildBetaReadinessArtifact(input: Array<{
       expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
       payloadShape: ["organizationId", "watchlistId", "watchlistItemIds", "sourceFamily", "captureIds", "dedupeKey"],
       proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmWorkflowPersistence.test.ts",
+      workflowContract: {
+        route: "POST /v1/dwm/alerts/rebuild",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "org_scoped_alert_case_workflow",
+        testName: "dwmAlertRepository.test.ts"
+      },
       extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_alert_generation"]
     }),
     betaRowFromProduct({
@@ -1232,7 +1276,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "webhookDestinationLifecycle",
       payloadShape: ["destinationId", "orgId", "type", "status", "health.ready", "retry.lastErrorCategory"],
-      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhook-contract.ts"
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-dwm-webhook-contract.ts",
+      workflowContract: {
+        route: "POST /api/organizations/:id/webhooks",
+        routeHandler: "api/src/handlers/dwm/webhooks.ts",
+        storageModule: "api/src/utils/dwm/webhooks.ts",
+        proofRowId: "webhook_destination",
+        testName: "api/scripts/smoke-dwm-webhook-contract.ts"
+      }
     }),
     betaRowFromProduct({
       id: "work_alert",
@@ -1244,6 +1295,13 @@ export function buildBetaReadinessArtifact(input: Array<{
       expectedAdapter: "persistedAlertToCaseHandoffPayload",
       payloadShape: ["alertId", "casePath", "captureIds", "watchlistItemIds", "workflowState"],
       proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts",
+      workflowContract: {
+        route: "/dashboard",
+        routeHandler: "dashboard.operator_workspace",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "dashboard_operator_workspace",
+        testName: "dwmCaseWorkflow.test.ts"
+      },
       uiQualityProofStatus: dashboard?.uiQualityProofExists ? "present" : "missing",
       extraBlockers: dashboard?.uiQualityProofExists ? [] : ["missing_dashboard_ui_quality_proof"]
     }),
@@ -1256,7 +1314,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "persistedAlertToCaseHandoffPayload",
       payloadShape: ["caseIdCandidate", "casePath", "alertId", "dedupeKey", "captureIds"],
-      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts"
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmCaseWorkflow.test.ts",
+      workflowContract: {
+        route: "POST /v1/cases",
+        routeHandler: "ti/scraper/src/api/caseRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "alert_case_handoff",
+        testName: "dwmCaseWorkflow.test.ts"
+      }
     }),
     betaRowFromProduct({
       id: "deliver_discord_webhook",
@@ -1267,7 +1332,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "persistedAlertToWebhookTriggerContext",
       payloadShape: ["organizationId", "alertId", "webhookDestinationIds", "deliveryId", "casePath", "captureIds"],
-      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts"
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/dwmWebhookDelivery.test.ts",
+      workflowContract: {
+        route: "POST /v1/dwm/webhooks/deliver",
+        routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+        storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+        proofRowId: "webhook_destination",
+        testName: "dwmWebhookDelivery.test.ts"
+      }
     }),
     betaRowFromProduct({
       id: "support_access_recovery",
@@ -1278,7 +1350,14 @@ export function buildBetaReadinessArtifact(input: Array<{
       persistenceMode: "real_persistence",
       expectedAdapter: "supportActionExecutionHandoff",
       payloadShape: ["action", "idempotencyKey", "executorReadiness.ready", "execution.path", "audit.blockerCode"],
-      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts"
+      proofCommand: "cd api && /Users/eirikhanasand/.bun/bin/bun scripts/smoke-admin-support-contract.ts",
+      workflowContract: {
+        route: "POST /api/admin/support/organizations/:id/access-recovery",
+        routeHandler: "api/src/handlers/adminSupport.ts",
+        storageModule: "api/src/utils/organizations.ts",
+        proofRowId: "support_executor",
+        testName: "api/scripts/smoke-admin-support-contract.ts"
+      }
     }),
     betaRowFromProduct({
       id: "public_ti_actor_relevance",
@@ -1290,6 +1369,13 @@ export function buildBetaReadinessArtifact(input: Array<{
       expectedAdapter: "publicTiArtifactToOrgWatchlistCreate",
       payloadShape: ["artifactId", "query", "provenance", "watchlistTerms", "backedIds.organizationIds", "backedIds.alertIds"],
       proofCommand: "cd frontend && /Users/eirikhanasand/.bun/bin/bun scripts/check-ti-org-relevance.ts",
+      workflowContract: {
+        route: "/ti",
+        routeHandler: "ti.actor_profile_surface",
+        storageModule: "api/src/utils/ti/search.ts",
+        proofRowId: "public_ti_actor_handoff",
+        testName: "check-ti-org-relevance.ts"
+      },
       extraBlockers: source?.customerVisibleState === "ready" ? [] : ["source_coverage_required_for_ti"]
     })
   ];
@@ -1346,12 +1432,26 @@ export function validateBetaReadinessArtifact(input: unknown): BetaReadinessVali
     if (!typed.expectedAdapter) blockers.push({ code: "missing_expected_adapter", rowId, field: "expectedAdapter", detail: "Every beta row needs an adapter contract name." });
     if (!Array.isArray(typed.payloadShape) || !typed.payloadShape.length) blockers.push({ code: "missing_payload_shape", rowId, field: "payloadShape", detail: "Every beta row needs a payload shape." });
     if (!typed.proofCommand) blockers.push({ code: "missing_proof_command", rowId, field: "proofCommand", detail: "Every beta row needs a proof command." });
+    if (!typed.workflowContract) {
+      blockers.push({ code: "missing_workflow_contract", rowId, field: "workflowContract", detail: "Every beta row needs route, storage, proof row, and test mapping." });
+    } else {
+      if (!typed.workflowContract.route) blockers.push({ code: "missing_workflow_route", rowId, field: "workflowContract.route", detail: "Every beta workflow needs the route it proves." });
+      if (!typed.workflowContract.routeHandler) blockers.push({ code: "missing_route_handler", rowId, field: "workflowContract.routeHandler", detail: "Every beta workflow needs the route handler module." });
+      if (!typed.workflowContract.storageModule) blockers.push({ code: "missing_storage_module", rowId, field: "workflowContract.storageModule", detail: "Every beta workflow needs the persistence module." });
+      if (!typed.workflowContract.proofRowId) blockers.push({ code: "missing_proof_row_id", rowId, field: "workflowContract.proofRowId", detail: "Every beta workflow needs the proof row id Worker 3 can match." });
+      if (!typed.workflowContract.testName) blockers.push({ code: "missing_workflow_test", rowId, field: "workflowContract.testName", detail: "Every beta workflow needs the focused test or smoke proof." });
+    }
     const uiFacing = [
       typed.capabilityLabel,
       typed.requiredNextAction,
       typed.expectedAdapter,
       typed.proofCommand,
       typed.proofArtifact?.artifactId,
+      typed.workflowContract?.route,
+      typed.workflowContract?.routeHandler,
+      typed.workflowContract?.storageModule,
+      typed.workflowContract?.proofRowId,
+      typed.workflowContract?.testName,
       ...(typed.blockers || [])
     ].filter(Boolean).join(" ").toLowerCase();
     for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) {
@@ -1378,6 +1478,7 @@ function betaRowFromProduct(input: {
   expectedAdapter: string;
   payloadShape: string[];
   proofCommand: string;
+  workflowContract: BetaReadinessWorkflowContract;
   uiQualityProofStatus?: BetaReadinessRow["uiQualityProofStatus"];
   customerVisibleStateOverride?: ProductReadinessState;
   extraBlockers?: string[];
@@ -1399,7 +1500,8 @@ function betaRowFromProduct(input: {
     persistenceMode: input.persistenceMode,
     expectedAdapter: input.expectedAdapter,
     payloadShape: input.payloadShape,
-    proofCommand: input.proofCommand
+    proofCommand: input.proofCommand,
+    workflowContract: input.workflowContract
   };
 }
 

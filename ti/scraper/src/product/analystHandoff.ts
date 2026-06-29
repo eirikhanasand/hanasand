@@ -191,6 +191,23 @@ export type PublicTiOrgRelevanceProofLike = {
     stale: boolean;
     reason: string;
   };
+  actorIdentity?: {
+    canonicalName?: string;
+    aliases?: string[];
+    actorClass?: string;
+    sectors?: string[];
+    regions?: string[];
+    motivations?: string[];
+  };
+  sourceCoverage?: Array<{
+    sourceId?: string;
+    sourceName: string;
+    sourceFamily?: string;
+    status?: "active" | "partial" | "missing" | "stale" | string;
+    lastCollectedAt?: string;
+    coverage?: "primary" | "corroborating" | "gap" | string;
+    captureIds?: string[];
+  }>;
   organizationRefs?: Array<{
     tenantId?: string;
     organizationId?: string;
@@ -306,6 +323,13 @@ export type ActorOrgRelevanceReadinessRow = {
     lastSeen?: string;
     reason?: string;
   };
+  actor: {
+    canonicalName?: string;
+    aliasCount: number;
+    sectorCount: number;
+    regionCount: number;
+    sourceCoverageCount: number;
+  };
   coverage: {
     organizationRefs: number;
     watchlistTerms: number;
@@ -333,7 +357,17 @@ export type ActorOrgRelevanceReadinessRow = {
     confidence?: number;
     shownBecause?: string;
   }>;
+  enrichmentGaps: ActorOrgRelevanceEnrichmentGap[];
   blockers: Array<AnalystHandoffBlocker & { ownerLane: ActorOrgRelevanceReadinessOwner; route?: string; action?: string }>;
+};
+
+export type ActorOrgRelevanceEnrichmentGap = {
+  code: "missing_actor_aliases" | "missing_target_sectors" | "missing_target_regions" | "missing_source_coverage" | "missing_provenance" | "stale_evidence";
+  ownerLane: ActorOrgRelevanceReadinessOwner;
+  field: string;
+  detail: string;
+  route: string;
+  recoverable: boolean;
 };
 
 export type AnalystAlertLike = DwmAlert & {
@@ -822,6 +856,7 @@ function actorOrgReadinessRow(
       lastSeen: orgRelevance.freshness?.lastSeen,
       reason: orgRelevance.freshness?.reason
     },
+    actor: actorCoverageForOrgRelevance(orgRelevance),
     coverage: {
       organizationRefs: orgRelevance.organizationRefs?.length ?? 0,
       watchlistTerms: orgRelevance.candidateTerms?.length ?? 0,
@@ -841,6 +876,7 @@ function actorOrgReadinessRow(
       webhookTrigger: handoff.ok || !blockers.some(blocker => ["missing_webhook_destination", "absent_alert_id", "missing_provenance"].includes(blocker.code))
     },
     provenance: provenanceRowsForOrgRelevance(orgRelevance),
+    enrichmentGaps: actorEnrichmentGapsForOrgRelevance(orgRelevance),
     blockers
   };
 }
@@ -852,6 +888,12 @@ function actorOrgReadinessErrorRow(file: string | undefined, error: unknown): Ac
     ok: false,
     state: "blocked",
     freshness: { stale: false },
+    actor: {
+      aliasCount: 0,
+      sectorCount: 0,
+      regionCount: 0,
+      sourceCoverageCount: 0
+    },
     coverage: {
       organizationRefs: 0,
       watchlistTerms: 0,
@@ -871,6 +913,14 @@ function actorOrgReadinessErrorRow(file: string | undefined, error: unknown): Ac
       webhookTrigger: false
     },
     provenance: [],
+    enrichmentGaps: [{
+      code: "missing_provenance",
+      ownerLane: "publicTI",
+      field: "orgRelevance",
+      detail,
+      route: "/ti",
+      recoverable: true
+    }],
     blockers: [{
       ...blocker("missing_provenance", "orgRelevance", detail, true),
       ownerLane: "publicTI",
@@ -878,6 +928,32 @@ function actorOrgReadinessErrorRow(file: string | undefined, error: unknown): Ac
       action: "Return orgRelevance from the public TI actor response."
     }]
   };
+}
+
+function actorCoverageForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLike): ActorOrgRelevanceReadinessRow["actor"] {
+  return {
+    canonicalName: orgRelevance.actorIdentity?.canonicalName || orgRelevance.query,
+    aliasCount: orgRelevance.actorIdentity?.aliases?.length ?? 0,
+    sectorCount: orgRelevance.actorIdentity?.sectors?.length ?? 0,
+    regionCount: orgRelevance.actorIdentity?.regions?.length ?? orgRelevance.affectedEntities?.regions?.length ?? 0,
+    sourceCoverageCount: orgRelevance.sourceCoverage?.length ?? 0
+  };
+}
+
+function actorEnrichmentGapsForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLike): ActorOrgRelevanceEnrichmentGap[] {
+  const gaps: ActorOrgRelevanceEnrichmentGap[] = [];
+  const identity = orgRelevance.actorIdentity;
+  if (!identity?.aliases?.length) gaps.push(actorGap("missing_actor_aliases", "actorIdentity.aliases", "Actor aliases are required for stable lookup and duplicate matching.", "/dashboard/ti/enrichment", "publicTI"));
+  if (!identity?.sectors?.length) gaps.push(actorGap("missing_target_sectors", "actorIdentity.sectors", "Target sectors are required before routing actor relevance by customer exposure.", "/dashboard/ti/enrichment", "publicTI"));
+  if (!identity?.regions?.length && !orgRelevance.affectedEntities?.regions?.length) gaps.push(actorGap("missing_target_regions", "actorIdentity.regions", "Target regions or affected-region evidence are required for geographic relevance.", "/dashboard/ti/enrichment", "publicTI"));
+  if (!orgRelevance.sourceCoverage?.length) gaps.push(actorGap("missing_source_coverage", "sourceCoverage", "Source coverage rows are required to show which collectors back the actor profile.", "/dashboard/ti/enrichment", "source"));
+  if (!orgRelevance.sourceEvidence?.length) gaps.push(actorGap("missing_provenance", "sourceEvidence", "Source evidence is required before actor relevance can be trusted.", "/dashboard/ti/enrichment", "source"));
+  if (orgRelevance.freshness?.stale) gaps.push(actorGap("stale_evidence", "freshness.lastSeen", orgRelevance.freshness.reason || "Actor evidence is stale.", "/dashboard/ti/enrichment", "source"));
+  return gaps;
+}
+
+function actorGap(code: ActorOrgRelevanceEnrichmentGap["code"], field: string, detail: string, route: string, ownerLane: ActorOrgRelevanceReadinessOwner): ActorOrgRelevanceEnrichmentGap {
+  return { code, field, detail, route, ownerLane, recoverable: true };
 }
 
 function provenanceRowsForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLike): ActorOrgRelevanceReadinessRow["provenance"] {
