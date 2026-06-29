@@ -1,5 +1,9 @@
 import { readFileSync } from "node:fs";
 import { ANALYST_HANDOFF_SCHEMA_VERSION, type AnalystHandoffEnvelope, type AnalystHandoffKind } from "../src/product/analystHandoff.ts";
+import {
+  ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+  summarizeAnalystHandoffConsumerBundle
+} from "../src/product/analystHandoffConsumer.ts";
 
 const file = Bun.argv[2];
 
@@ -9,6 +13,12 @@ if (!file) {
 }
 
 const payload = JSON.parse(readFileSync(file, "utf8"));
+
+if ((payload.bundle || payload).schemaVersion === ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION) {
+  console.log(JSON.stringify(summarizeAnalystHandoffConsumerBundle(payload.bundle || payload), null, 2));
+  process.exit(0);
+}
+
 const handoff = (payload.handoff || payload) as Partial<AnalystHandoffEnvelope<AnalystHandoffKind, unknown>>;
 const blockers: string[] = [];
 

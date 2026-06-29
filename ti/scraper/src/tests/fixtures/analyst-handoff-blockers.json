@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "hanasand.analyst_handoff.consumer.v1",
+  "generatedAt": "2026-06-29T00:14:00.000Z",
+  "staleEvidenceBefore": "2026-06-01T00:00:00.000Z",
+  "entitlement": {
+    "allowed": false,
+    "reason": "Current plan has reached the DWM alert rebuild limit."
+  },
+  "membership": {
+    "userId": "other_user",
+    "organizationId": "other_org",
+    "role": "viewer",
+    "status": "disabled",
+    "allowedRoles": ["owner", "admin", "analyst"]
+  },
+  "stages": {
+    "publicTi": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_public_ti_bad",
+        "kind": "actor_watchlist_candidate",
+        "createdAt": "2026-06-29T00:10:00.000Z",
+        "source": "public_ti",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "artifactKind": "tool",
+          "normalizedWatchTerm": "acme.com",
+          "watchTermKind": "domain"
+        },
+        "payload": {
+          "query": "Lumma C2",
+          "artifact": {
+            "id": "artifact_lumma_acme",
+            "kind": "tool",
+            "label": "Lumma C2",
+            "freshness": "2026-05-01T00:00:00.000Z",
+            "provenance": []
+          },
+          "terms": [],
+          "missing": ["watchlist_term"]
+        }
+      },
+      "request": {
+        "method": "GET",
+        "path": "/v1/dwm/watchlists",
+        "body": {
+          "tenantId": "tenant_acme",
+          "terms": []
+        }
+      }
+    },
+    "orgWatchlist": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_org_watchlist_bad",
+        "kind": "watchlist_alert_generation_request",
+        "createdAt": "2026-06-29T00:11:00.000Z",
+        "source": "dwm_watchlist",
+        "parentHandoffId": "handoff_public_ti_bad",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "normalizedWatchTerm": "acme.com"
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/dwm/alerts/rebuild",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_acme",
+            "watchlistItemIds": []
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/dwm/alerts/rebuild",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "watchlistItemIds": []
+        }
+      },
+      "termsExport": {
+        "schemaVersion": "organization.watchlist_alert_terms_export.v1",
+        "organizationId": "org_other",
+        "tenantId": "tenant_other",
+        "member": {
+          "userId": "other_user",
+          "role": "viewer",
+          "status": "active"
+        },
+        "allowedViewerRoles": ["owner", "admin"],
+        "activeTerms": [{
+          "watchlistItemId": "watch_item_other",
+          "termFamily": "domain",
+          "term": "other.example",
+          "source": "organization_shared_watchlist"
+        }],
+        "activeWatchlistTerms": [],
+        "blockedReasons": ["member_not_allowed"],
+        "canGenerateAlerts": false
+      }
+    },
+    "caseHandoff": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_case_bad",
+        "kind": "alert_case_handoff",
+        "createdAt": "2026-06-29T00:12:00.000Z",
+        "source": "dwm_alert",
+        "parentHandoffId": "handoff_org_watchlist_bad",
+        "identity": {
+          "tenantId": "tenant_other",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst"
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/cases",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_acme",
+            "dedupeKey": "dwm_dedupe_acme",
+            "captureIds": [],
+            "watchlistItemIds": []
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/cases",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "dedupeKey": "dwm_dedupe_acme",
+          "captureIds": [],
+          "watchlistItemIds": []
+        }
+      }
+    },
+    "webhookTrigger": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_webhook_bad",
+        "kind": "alert_webhook_trigger",
+        "createdAt": "2026-06-29T00:13:00.000Z",
+        "source": "webhook_delivery",
+        "parentHandoffId": "handoff_case_bad",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "alertId": "dwm_alert_acme",
+          "captureIds": []
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/wrong/webhook",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_other",
+            "alertId": "dwm_alert_acme",
+            "webhookDestinationIds": [],
+            "captureIds": []
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/wrong/webhook",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_other",
+          "alertId": "dwm_alert_acme",
+          "webhookDestinationIds": [],
+          "captureIds": []
+        }
+      },
+      "idempotencyKey": "idempotency_acme",
+      "auditEvents": [{
+        "schemaVersion": "dwm.webhook.audit_event.v1",
+        "auditEventId": "audit_wrong",
+        "action": "delivery.dry_run",
+        "orgId": "org_acme",
+        "actorId": "user_analyst",
+        "destinationId": "webhook_other",
+        "deliveryId": "delivery_other",
+        "delivery": {
+          "alertId": "other_alert",
+          "status": "dry_run",
+          "dryRun": true,
+          "idempotencyKey": "other_key"
+        },
+        "createdAt": "2026-06-29T00:13:30.000Z"
+      }]
+    }
+  }
+}

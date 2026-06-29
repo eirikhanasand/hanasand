@@ -1,0 +1,283 @@
+{
+  "schemaVersion": "hanasand.analyst_handoff.consumer.v1",
+  "generatedAt": "2026-06-29T00:14:00.000Z",
+  "staleEvidenceBefore": "2026-06-01T00:00:00.000Z",
+  "entitlement": {
+    "allowed": true
+  },
+  "membership": {
+    "userId": "user_analyst",
+    "organizationId": "org_acme",
+    "role": "admin",
+    "status": "active",
+    "allowedRoles": ["owner", "admin", "analyst"]
+  },
+  "stages": {
+    "publicTi": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_public_ti",
+        "kind": "actor_watchlist_candidate",
+        "createdAt": "2026-06-29T00:10:00.000Z",
+        "source": "public_ti",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "artifactKind": "tool",
+          "normalizedWatchTerm": "acme.com",
+          "watchTermKind": "domain"
+        },
+        "payload": {
+          "query": "Lumma C2",
+          "artifact": {
+            "id": "artifact_lumma_acme",
+            "kind": "tool",
+            "label": "Lumma C2",
+            "confidence": 91,
+            "freshness": "2026-06-29T00:10:00.000Z",
+            "provenance": ["public TI profile", "telegram broker-room capture"],
+            "watchlistTerms": [{ "kind": "domain", "value": "acme.com", "notes": "Observed in Lumma C2 broker-room context." }]
+          },
+          "terms": [{ "kind": "domain", "value": "acme.com", "notes": "Observed in Lumma C2 broker-room context." }],
+          "missing": []
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/dwm/watchlists",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "name": "Lumma C2 exposure watchlist",
+          "terms": [{ "kind": "domain", "value": "acme.com" }]
+        }
+      }
+    },
+    "orgWatchlist": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_org_watchlist",
+        "kind": "watchlist_alert_generation_request",
+        "createdAt": "2026-06-29T00:11:00.000Z",
+        "source": "dwm_watchlist",
+        "parentHandoffId": "handoff_public_ti",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "artifactKind": "tool",
+          "watchlistId": "watch_acme",
+          "watchlistItemIds": ["watch_item_acme_domain"],
+          "normalizedWatchTerm": "acme.com",
+          "watchTermKind": "domain"
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/dwm/alerts/rebuild",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_acme",
+            "watchlistId": "watch_acme",
+            "watchlistItemIds": ["watch_item_acme_domain"],
+            "publicTiHandoffId": "handoff_public_ti"
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/dwm/alerts/rebuild",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "watchlistId": "watch_acme",
+          "watchlistItemIds": ["watch_item_acme_domain"],
+          "publicTiHandoffId": "handoff_public_ti"
+        }
+      },
+      "termsExport": {
+        "schemaVersion": "organization.watchlist_alert_terms_export.v1",
+        "organizationId": "org_acme",
+        "tenantId": "tenant_acme",
+        "member": {
+          "userId": "user_analyst",
+          "role": "admin",
+          "status": "active"
+        },
+        "allowedViewerRoles": ["owner", "admin", "analyst"],
+        "activeTerms": [{
+          "watchlistItemId": "watch_item_acme_domain",
+          "itemId": "item_acme_domain",
+          "termFamily": "domain",
+          "term": "acme.com",
+          "source": "organization_shared_watchlist",
+          "alertGenerationReference": {
+            "schemaVersion": "organization.watchlist_item_alert_reference.v1",
+            "organizationId": "org_acme",
+            "tenantId": "tenant_acme",
+            "watchlistItemId": "watch_item_acme_domain",
+            "itemId": "item_acme_domain",
+            "termFamily": "domain",
+            "term": "acme.com",
+            "status": "active"
+          }
+        }],
+        "activeWatchlistTerms": [{
+          "organizationId": "org_acme",
+          "tenantId": "tenant_acme",
+          "watchlistItemId": "watch_item_acme_domain",
+          "itemId": "item_acme_domain",
+          "termFamily": "domain",
+          "term": "acme.com",
+          "status": "active"
+        }],
+        "blockedReasons": [],
+        "canGenerateAlerts": true
+      }
+    },
+    "caseHandoff": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_case",
+        "kind": "alert_case_handoff",
+        "createdAt": "2026-06-29T00:12:00.000Z",
+        "source": "dwm_alert",
+        "parentHandoffId": "handoff_org_watchlist",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "artifactKind": "tool",
+          "watchlistId": "watch_acme",
+          "watchlistItemIds": ["watch_item_acme_domain"],
+          "normalizedWatchTerm": "acme.com",
+          "watchTermKind": "domain",
+          "alertId": "dwm_alert_acme",
+          "alertDedupeKey": "dwm_dedupe_acme",
+          "sourceFamily": "telegram_public",
+          "captureIds": ["cap_consumer_acme"],
+          "caseIdCandidate": "case_acme_lumma",
+          "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/cases",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_acme",
+            "alertId": "dwm_alert_acme",
+            "dedupeKey": "dwm_dedupe_acme",
+            "caseIdCandidate": "case_acme_lumma",
+            "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme",
+            "title": "Lumma C2 mention of acme.com",
+            "priority": "high",
+            "recommendedRoute": "identity_response",
+            "captureIds": ["cap_consumer_acme"],
+            "watchlistItemIds": ["watch_item_acme_domain"]
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/cases",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "alertId": "dwm_alert_acme",
+          "dedupeKey": "dwm_dedupe_acme",
+          "caseIdCandidate": "case_acme_lumma",
+          "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme",
+          "title": "Lumma C2 mention of acme.com",
+          "priority": "high",
+          "recommendedRoute": "identity_response",
+          "captureIds": ["cap_consumer_acme"],
+          "watchlistItemIds": ["watch_item_acme_domain"]
+        }
+      }
+    },
+    "webhookTrigger": {
+      "handoff": {
+        "schemaVersion": "hanasand.analyst_handoff.v1",
+        "handoffId": "handoff_webhook",
+        "kind": "alert_webhook_trigger",
+        "createdAt": "2026-06-29T00:13:00.000Z",
+        "source": "webhook_delivery",
+        "parentHandoffId": "handoff_case",
+        "identity": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "requestedByUserId": "user_analyst",
+          "actorQuery": "lumma c2",
+          "artifactId": "artifact_lumma_acme",
+          "artifactKind": "tool",
+          "watchlistId": "watch_acme",
+          "watchlistItemIds": ["watch_item_acme_domain"],
+          "normalizedWatchTerm": "acme.com",
+          "watchTermKind": "domain",
+          "alertId": "dwm_alert_acme",
+          "alertDedupeKey": "dwm_dedupe_acme",
+          "sourceFamily": "telegram_public",
+          "captureIds": ["cap_consumer_acme"],
+          "caseIdCandidate": "case_acme_lumma",
+          "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme",
+          "webhookDestinationIds": ["webhook_discord"]
+        },
+        "payload": {
+          "method": "POST",
+          "path": "/v1/dwm/webhooks/deliver",
+          "body": {
+            "tenantId": "tenant_acme",
+            "organizationId": "org_acme",
+            "alertId": "dwm_alert_acme",
+            "dedupeKey": "dwm_dedupe_acme",
+            "idempotencyKey": "idempotency_acme",
+            "webhookDestinationIds": ["webhook_discord"],
+            "captureIds": ["cap_consumer_acme"],
+            "dryRun": true
+          }
+        }
+      },
+      "request": {
+        "method": "POST",
+        "path": "/v1/dwm/webhooks/deliver",
+        "body": {
+          "tenantId": "tenant_acme",
+          "organizationId": "org_acme",
+          "alertId": "dwm_alert_acme",
+          "dedupeKey": "dwm_dedupe_acme",
+          "idempotencyKey": "idempotency_acme",
+          "webhookDestinationIds": ["webhook_discord"],
+          "captureIds": ["cap_consumer_acme"],
+          "dryRun": true
+        }
+      },
+      "idempotencyKey": "idempotency_acme",
+      "auditEvents": [{
+        "schemaVersion": "dwm.webhook.audit_event.v1",
+        "auditEventId": "audit_webhook_acme",
+        "action": "delivery.dry_run",
+        "orgId": "org_acme",
+        "actorId": "user_analyst",
+        "destinationId": "webhook_discord",
+        "deliveryId": "delivery_acme",
+        "delivery": {
+          "alertId": "dwm_alert_acme",
+          "eventType": "darkweb.monitoring.match",
+          "status": "dry_run",
+          "dryRun": true,
+          "idempotencyKey": "idempotency_acme",
+          "watchlistId": "watch_acme",
+          "route": "identity_response",
+          "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"
+        },
+        "createdAt": "2026-06-29T00:13:30.000Z"
+      }]
+    }
+  }
+}
