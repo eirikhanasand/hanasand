@@ -7,6 +7,7 @@ import {
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDeliveryActionPlan,
     buildDwmWebhookDeliveryAuditTrail,
+    buildDwmWebhookCustomerSetupProof,
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookDestinationAdminProof,
     buildDwmWebhookDestinationDeliveryMatrix,
@@ -2087,6 +2088,24 @@ const dashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
     auditEvents: operationAuditEvents,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const customerSetup = buildDwmWebhookCustomerSetupProof({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberCustomerSetup = buildDwmWebhookCustomerSetupProof({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const policyBlockedDashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2596,6 +2615,8 @@ const dashboardSecretMissing = dashboardReadiness.destinations.find(item => item
 const dashboardRetry = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const dashboardTerminal = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_terminal_contract')
 const dashboardTestFailed = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_test_failed_contract')
+const customerSetupDryRunStep = customerSetup.setupSteps.find(item => item.id === 'dry_run_test')
+const customerSetupDeliveryStep = customerSetup.setupSteps.find(item => item.id === 'deliver_org_alert')
 const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
@@ -2667,6 +2688,13 @@ expect(policyBlockedDashboardReadiness.summary.policyBlockedCount === 1 && polic
 expect(archivedOrgDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && archivedOrgDashboardReadiness.blockers.some(item => item.reason === 'org_archived'), 'Dashboard readiness should expose archived org policy blockers.', archivedOrgDashboardReadiness)
 expect(retiredWatchlistDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && retiredWatchlistDashboardReadiness.blockers.some(item => item.reason === 'watchlist_retired'), 'Dashboard readiness should expose retired watchlist policy blockers.', retiredWatchlistDashboardReadiness)
 expect(!JSON.stringify(dashboardReadiness).includes(secret), 'Dashboard readiness should not leak endpoint secrets.', dashboardReadiness)
+expect(customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && customerSetup.summary.destinationCount === operationDestinations.length, 'Customer setup proof should summarize org destinations.', customerSetup)
+expect(customerSetup.access.canCreate === true && customerSetup.access.canTest === true && customerSetup.routes.test.includes('/api/dwm/webhook-destinations/'), 'Customer setup proof should expose owner/admin setup routes.', customerSetup)
+expect(customerSetupDryRunStep?.status === 'complete' && customerSetup.dryRunTestRequest?.noNetwork === true && customerSetup.dryRunTestRequest.externalSendEnabled === false, 'Customer setup proof should expose no-network dry-run test request.', customerSetup)
+expect(customerSetupDeliveryStep?.route === 'POST /api/dwm/webhook-deliveries' && customerSetup.blockers.some(item => item.code === 'live_delivery_disabled'), 'Customer setup proof should expose delivery route and live-disabled blocker.', customerSetup)
+expect(customerSetup.summary.retryScheduledCount >= 1 && customerSetup.summary.terminalFailureCount >= 1, 'Customer setup proof should surface retry and terminal failure counts.', customerSetup)
+expect(nonmemberCustomerSetup.status === 'permission_denied' && nonmemberCustomerSetup.setupSteps.length === 0 && nonmemberCustomerSetup.blockers.some(item => item.code === 'permission_denied'), 'Customer setup proof should deny nonmembers without leaking setup details.', nonmemberCustomerSetup)
+expect(!JSON.stringify(customerSetup).includes(secret), 'Customer setup proof should redact endpoint, response, and payload secrets.', customerSetup)
 expect(deliveryOperationDetail.total === 1 && deliveryOperationDetail.recentDeliveries[0]?.deliveryId === 'delivery_replay_duplicate_contract', 'Delivery operations should retrieve a delivery by request id.', deliveryOperationDetail)
 expect(deliveryOperationByCase.recentDeliveries.every(item => item.casePath === replayWorkflowAlert.casePath && item.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery operations should filter by case path and dedupe key.', deliveryOperationByCase)
 expect(retryEligibleContract.canRetry === true && retryEligibleContract.blockers.length === 0 && retryEligibleContract.deliveryOperations.total >= 1, 'Retry contract should allow eligible failed dry-run retry without network.', retryEligibleContract)
@@ -2844,6 +2872,13 @@ console.log(JSON.stringify({
         'dashboard readiness policy-blocked denial',
         'dashboard readiness retired watchlist blocker',
         'dashboard readiness secret redaction',
+        'customer setup proof summary',
+        'customer setup proof setup routes',
+        'customer setup proof dry-run request',
+        'customer setup proof live-disabled blocker',
+        'customer setup proof retry/terminal counts',
+        'customer setup proof nonmember denial',
+        'customer setup proof secret redaction',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
         'delivery retry role gate',
@@ -2973,6 +3008,12 @@ console.log(JSON.stringify({
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',
             'dashboardReadiness.destinations[].retry.nextRetryAt',
+            'customerSetup.schemaVersion',
+            'customerSetup.summary.destinationCount',
+            'customerSetup.setupSteps[].status',
+            'customerSetup.dryRunTestRequest.noNetwork',
+            'customerSetup.routes.test',
+            'customerSetup.blockers[].code',
             'orgAlertDelivery.alertDestinationReadiness.schemaVersion',
             'orgAlertDelivery.alertDestinationReadiness.destinationSelection.selectedDestinationIds',
             'orgAlertDelivery.alertDestinationReadiness.deliveryRetryPersistence.deliveryKeys[]',

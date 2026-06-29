@@ -2876,6 +2876,182 @@ export function buildDwmWebhookDeliveryReadiness({
     }
 }
 
+export function buildDwmWebhookCustomerSetupProof({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+    visibility = null,
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+    visibility?: DwmWebhookEvidenceVisibilityInput | null
+}) {
+    const decision = visibility
+        ? organizationVisibilityDecision(visibility)
+        : {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'members' as const,
+            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        }
+    const access = {
+        role: clean(viewerRole) || null,
+        canRead: decision.allowed,
+        canCreate: decision.allowed && canManage,
+        canUpdate: decision.allowed && canManage,
+        canTest: decision.allowed && canManage,
+        canDeliver: decision.allowed && canManage,
+        memberSafe: decision.allowed && !canManage,
+    }
+    if (!decision.allowed) {
+        return {
+            schemaVersion: 'dwm.webhook.customer_setup.v1',
+            liveDeliveryEnabled,
+            noNetwork: true,
+            externalSendEnabled: false,
+            visibility: decision,
+            access,
+            status: 'permission_denied',
+            summary: {
+                destinationCount: 0,
+                activeDestinationCount: 0,
+                verifiedDryRunCount: 0,
+                recentOrgAlertDeliveryCount: 0,
+                retryScheduledCount: 0,
+                terminalFailureCount: 0,
+            },
+            blockers: [retryQueueBlocker('permission_denied', 'Webhook destination setup is not visible for this organization membership.', null, true)],
+            routes: webhookSetupRoutes(),
+            setupSteps: [],
+        }
+    }
+
+    const readiness = buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const destinationTests = destinations.map(destination => buildDwmWebhookDestinationTestContract({
+        destination,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    }))
+    const adminProof = buildDwmWebhookDestinationAdminProof({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+        visibility: null,
+    })
+    const replayGuard = buildDwmWebhookDeliveryReplayGuard({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+        visibility: null,
+    })
+    const activeDestinations = readiness.destinations.filter(destination => destination.enabled)
+    const verifiedTests = destinationTests.filter(test => test.status === 'verified')
+    const recentOrgAlertDeliveries = readiness.recentAttempts.filter(attempt => attempt.eventType !== 'dwm.alert.test')
+    const retryScheduled = readiness.destinations.filter(destination => destination.retryState.retryable)
+    const terminalFailures = replayGuard.entries.filter(entry => entry.retry.terminalFailure)
+    const firstActiveDestination = activeDestinations[0] || null
+    const blockers = []
+    if (destinations.length === 0) blockers.push(retryQueueBlocker('missing_webhook_destination', 'Create a Discord or webhook destination before enabling customer alert delivery.', null, true))
+    if (destinations.length > 0 && activeDestinations.length === 0) blockers.push(retryQueueBlocker('no_active_destination', 'All webhook destinations are disabled.', null, true))
+    if (activeDestinations.length > 0 && verifiedTests.length === 0) blockers.push(retryQueueBlocker('no_verified_dry_run', 'Run a dry-run destination test before relying on customer notifications.', firstActiveDestination?.destinationId || null, true))
+    if (recentOrgAlertDeliveries.length === 0) blockers.push(retryQueueBlocker('no_recent_org_alert_delivery', 'No org alert delivery attempt has been recorded yet.', firstActiveDestination?.destinationId || null, false))
+    if (retryScheduled.length > 0) blockers.push(retryQueueBlocker('retry_scheduled', 'One or more destinations have retryable failed deliveries.', retryScheduled[0]?.destinationId || null, false))
+    if (terminalFailures.length > 0) blockers.push(retryQueueBlocker('terminal_failure', 'One or more destinations have terminal delivery failures that need remediation.', terminalFailures[0]?.destinationId || null, true))
+    if (!liveDeliveryEnabled) blockers.push(retryQueueBlocker('live_delivery_disabled', 'Live webhook delivery is disabled; setup can still be verified with dry-run tests.', firstActiveDestination?.destinationId || null, false))
+    const uniqueBlockers = uniqueRetryQueueBlockers(blockers)
+    const blockingCodes = uniqueBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+    const status = blockingCodes.length > 0
+        ? destinations.length === 0
+            ? 'missing_destination'
+            : 'blocked'
+        : verifiedTests.length > 0
+            ? 'verified'
+            : 'needs_test'
+
+    return {
+        schemaVersion: 'dwm.webhook.customer_setup.v1',
+        liveDeliveryEnabled,
+        noNetwork: true,
+        externalSendEnabled: liveDeliveryEnabled && blockingCodes.length === 0,
+        visibility: decision,
+        access,
+        status,
+        summary: {
+            destinationCount: destinations.length,
+            activeDestinationCount: activeDestinations.length,
+            verifiedDryRunCount: verifiedTests.length,
+            recentOrgAlertDeliveryCount: recentOrgAlertDeliveries.length,
+            retryScheduledCount: retryScheduled.length,
+            terminalFailureCount: terminalFailures.length,
+        },
+        routes: webhookSetupRoutes(firstActiveDestination?.destinationId || '<destination_id>'),
+        blockers: uniqueBlockers,
+        blockerCodes: blockingCodes,
+        setupSteps: [
+            {
+                id: 'create_destination',
+                label: 'Create destination',
+                status: destinations.length > 0 ? 'complete' : access.canCreate ? 'available' : 'blocked',
+                route: 'POST /api/dwm/webhooks',
+                blockers: destinations.length > 0 ? [] : uniqueBlockers.filter(blocker => blocker.code === 'permission_denied'),
+            },
+            {
+                id: 'dry_run_test',
+                label: 'Run dry-run test',
+                status: verifiedTests.length > 0 ? 'complete' : activeDestinations.length > 0 && access.canTest ? 'available' : 'blocked',
+                route: firstActiveDestination ? `POST /api/dwm/webhook-destinations/${firstActiveDestination.destinationId}/test` : 'POST /api/dwm/webhook-destinations/:id/test',
+                noNetwork: true,
+                externalSendEnabled: false,
+                blockers: uniqueBlockers.filter(blocker => ['no_active_destination', 'missing_webhook_destination', 'permission_denied'].includes(blocker.code)),
+            },
+            {
+                id: 'deliver_org_alert',
+                label: 'Deliver org alert',
+                status: recentOrgAlertDeliveries.length > 0 ? 'complete' : blockingCodes.length === 0 && access.canDeliver ? 'available' : 'blocked',
+                route: 'POST /api/dwm/webhook-deliveries',
+                noNetwork: true,
+                externalSendEnabled: liveDeliveryEnabled && blockingCodes.length === 0,
+                blockers: uniqueBlockers,
+            },
+        ],
+        dryRunTestRequest: firstActiveDestination
+            ? {
+                method: 'POST',
+                route: `POST /api/dwm/webhook-destinations/${firstActiveDestination.destinationId}/test`,
+                noNetwork: true,
+                externalSendEnabled: false,
+                body: {
+                    dryRun: true,
+                    live: false,
+                    eventType: 'dwm.alert.test',
+                    destinationId: firstActiveDestination.destinationId,
+                    orgId: firstActiveDestination.orgId,
+                },
+            }
+            : null,
+        deliveryReadiness: readiness,
+        destinationTests,
+        destinationAdminProof: adminProof,
+        deliveryReplayGuard: replayGuard,
+    }
+}
+
 export function buildDwmWebhookDestinationHealth({
     destinations,
     deliveries = [],
@@ -5425,6 +5601,18 @@ function uniqueRetryQueueBlockers(blockers: ReturnType<typeof retryQueueBlocker>
         unique.push(blocker)
     }
     return unique
+}
+
+function webhookSetupRoutes(destinationId = '<destination_id>') {
+    return {
+        list: 'GET /api/dwm/webhooks?orgId=<org_id>',
+        create: 'POST /api/dwm/webhooks',
+        update: `PUT /api/dwm/webhook-destinations/${destinationId}`,
+        disable: `DELETE /api/dwm/webhook-destinations/${destinationId}`,
+        test: `POST /api/dwm/webhook-destinations/${destinationId}/test`,
+        deliver: 'POST /api/dwm/webhook-deliveries',
+        deliveryHistory: 'GET /api/dwm/webhook-deliveries?orgId=<org_id>&destinationId=<destination_id>',
+    }
 }
 
 function auditTrailBlocker(
