@@ -857,6 +857,16 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       alertCreatedEventId: alertCreatedEvent.id,
       alertCreatedAt: alertCreatedEvent.at
     };
+    const alertUpdatedEvent = existing ? buildDwmAlertUpdatedEvent({
+      existing,
+      alert: scopedAlert,
+      alertId,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? existing?.organizationId,
+      workflowContext,
+      generatedAt: snapshot.generatedAt
+    }) : undefined;
+    const alertEvents = mergeAlertEvents(existing?.alertEvents ?? [alertCreatedEvent], alertUpdatedEvent);
     return input.store.saveDwmAlert({
       ...scopedAlert,
       id: alertId,
@@ -868,7 +878,8 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
       deliveryReadinessContext: persistedDeliveryReadinessContext,
       alertCreatedEvent,
-      alertEvents: existing?.alertEvents ?? [alertCreatedEvent],
+      alertUpdatedEvent: alertUpdatedEvent ?? existing?.alertUpdatedEvent,
+      alertEvents,
       caseIdCandidate: workflowContext.caseIdCandidate,
       caseId: existing?.caseId,
       casePath: existing?.casePath ?? workflowContext.casePath,
@@ -2141,6 +2152,63 @@ function buildDwmAlertCreatedEvent(input: {
       sourceIds: input.alert.provenance?.sourceIds ?? []
     }
   };
+}
+
+function buildDwmAlertUpdatedEvent(input: {
+  existing: Record<string, any>;
+  alert: DwmAlert & Record<string, any>;
+  alertId: string;
+  tenantId: string;
+  organizationId?: string;
+  workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext> & Record<string, any>;
+  generatedAt: string;
+}) {
+  const previousCaptureIds = uniqueStrings([
+    ...asStringArray(input.existing.deliveryReadinessContext?.selectedCaptureIds),
+    ...asStringArray(input.existing.workflowContext?.captureIds),
+    ...asStringArray(input.existing.provenance?.captureIds)
+  ]);
+  const captureIds = uniqueStrings(asStringArray(input.workflowContext.captureIds ?? input.alert.provenance?.captureIds));
+  const addedCaptureIds = captureIds.filter((captureId) => !previousCaptureIds.includes(captureId));
+  const removedCaptureIds = previousCaptureIds.filter((captureId) => !captureIds.includes(captureId));
+  const evidenceCount = Number(input.workflowContext.evidenceCount ?? input.alert.evidence?.length ?? 0);
+  const previousEvidenceCount = Number(input.existing.workflowContext?.evidenceCount ?? input.existing.webhookContext?.evidenceCount ?? input.existing.evidence?.length ?? 0);
+  if (!addedCaptureIds.length && !removedCaptureIds.length && evidenceCount === previousEvidenceCount) return undefined;
+  const dedupeKey = String(input.alert.dedupeKey ?? input.alert.webhookDelivery?.dedupeKey);
+  return {
+    schemaVersion: "dwm.alert_updated_event.v1",
+    id: stableId("dwm_alert_updated_event", `${input.tenantId}:${input.organizationId ?? ""}:${input.alertId}:${dedupeKey}:${captureIds.join("|")}:${evidenceCount}`),
+    eventType: "dwm.alert.updated",
+    at: input.generatedAt,
+    alertId: input.alertId,
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    sourceFamily: input.alert.sourceFamily,
+    watchlistIds: input.workflowContext.watchlistIds ?? [],
+    watchlistItemIds: input.workflowContext.watchlistItemIds ?? [],
+    alertGeneratorKeys: input.workflowContext.alertGeneratorKeys ?? [],
+    captureIds,
+    addedCaptureIds,
+    removedCaptureIds,
+    evidenceCount,
+    previousEvidenceCount,
+    dedupeKey,
+    deliveryDedupeKey: String(input.alert.webhookDelivery?.dedupeKey ?? dedupeKey),
+    recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
+    generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
+    provenance: {
+      matchBasis: input.alert.provenance?.matchBasis,
+      captureIds: input.alert.provenance?.captureIds ?? captureIds,
+      sourceIds: input.alert.provenance?.sourceIds ?? []
+    }
+  };
+}
+
+function mergeAlertEvents(existingEvents: any[], nextEvent: any | undefined): any[] {
+  const events = [...existingEvents];
+  if (!nextEvent) return events;
+  if (events.some((event) => event?.id === nextEvent.id)) return events;
+  return [...events, nextEvent];
 }
 
 function scopeAlertForGenerationCandidate(alert: DwmAlert, candidate: DwmAlertGenerationCandidate | undefined, input: RebuildDwmRuntimeAlertsInput): DwmAlert {

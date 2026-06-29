@@ -541,7 +541,26 @@ describe("dwm alert repository", () => {
     expect(preserved?.workflowNote).toBe("Owner suppressed this as a duplicate customer-domain decision.");
     expect(preserved?.workflowEvents).toHaveLength(1);
     expect(preserved?.alertCreatedEvent).toEqual(existing.alertCreatedEvent);
-    expect(preserved?.alertEvents).toEqual(existing.alertEvents);
+    expect(preserved?.alertEvents).toHaveLength(2);
+    expect(preserved?.alertEvents[0]).toEqual(existing.alertCreatedEvent);
+    expect(preserved?.alertUpdatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_updated_event.v1",
+      eventType: "dwm.alert.updated",
+      alertId: existing.id,
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      addedCaptureIds: ["cap_repo_tg_acme_followup"],
+      removedCaptureIds: [],
+      evidenceCount: 2,
+      previousEvidenceCount: 1,
+      dedupeKey: existing.dedupeKey,
+      deliveryDedupeKey: existing.dedupeKey,
+      recommendedRoute: "identity_response"
+    });
+    expect(preserved?.alertUpdatedEvent.id).toMatch(/^dwm_alert_updated_event_/);
+    expect(preserved?.alertEvents[1]).toEqual(preserved?.alertUpdatedEvent);
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).createdEvent).toMatchObject({
       eventId: existing.alertCreatedEvent.id,
       captureIds: ["cap_repo_tg_acme"]
@@ -593,9 +612,14 @@ describe("dwm alert repository", () => {
       blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),
       alertCreatedEventId: existing.alertCreatedEvent.id,
       alertCreatedAt: existing.alertCreatedEvent.at,
-      selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       deliveryHistoryRefs: []
     });
+    expect(preserved?.deliveryReadinessContext.selectedCaptureIds).toContain("cap_repo_tg_acme");
+    expect(preserved?.deliveryReadinessContext.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
+    const third = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme", visibilityPolicy: "admins" });
+    const stable = third.alerts.find((alert) => alert.id === existing.id);
+    expect(stable?.alertEvents.map((event: any) => event.eventType)).toEqual(["dwm.alert.created", "dwm.alert.updated"]);
+    expect(stable?.alertUpdatedEvent).toEqual(preserved?.alertUpdatedEvent);
   });
 
   test("isolates overlapping org watchlist terms across tenants, dedupe, workflow, and case handoff", () => {
