@@ -72,6 +72,14 @@ export type WatchlistActionInput = {
     request_id?: unknown
 }
 
+export type WatchlistCleanupInput = {
+    itemIds?: unknown
+    item_ids?: unknown
+    reason?: unknown
+    requestId?: unknown
+    request_id?: unknown
+}
+
 export type OrganizationRow = {
     id: string
     name: string
@@ -486,6 +494,26 @@ export function normalizeWatchlistActionInput(body: WatchlistActionInput | undef
     const reason = normalizeWatchlistReason(body?.reason)
     const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
     return { action: action as OrganizationWatchlistAction, reason, requestId }
+}
+
+export function normalizeWatchlistCleanupInput(body: WatchlistCleanupInput | undefined) {
+    const rawIds = Array.isArray(body?.itemIds)
+        ? body?.itemIds
+        : Array.isArray(body?.item_ids)
+            ? body?.item_ids
+            : []
+    const itemIds = Array.from(new Set(rawIds.map(id => cleanText(id)).filter(Boolean)))
+    if (!itemIds.length) {
+        throw new Error('Add at least one watchlist item id to clean up.')
+    }
+
+    if (itemIds.length > 50) {
+        throw new Error('Clean up at most 50 watchlist items at a time.')
+    }
+
+    const reason = normalizeWatchlistReason(body?.reason)
+    const requestId = normalizeWatchlistRequestId(body?.requestId ?? body?.request_id)
+    return { itemIds, reason, requestId }
 }
 
 export function roleCanManageOrganization(role: OrganizationRole | undefined) {

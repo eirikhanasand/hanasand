@@ -161,6 +161,7 @@ import {
     postOrganizationOwnershipTransfer,
     postOrganizationWatchlist,
     postOrganizationWatchlistAction,
+    postOrganizationWatchlistCleanup,
     patchOrganizationMemberRole,
     putOrganizationSettings,
     putOrganizationWatchlist,
@@ -315,6 +316,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/watchlists/alert-terms', getOrganizationWatchlistAlertTerms)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
+    fastify.post('/organizations/:id/watchlists/cleanup', postOrganizationWatchlistCleanup)
     fastify.put('/organizations/:organizationId/watchlists/:itemId', putOrganizationWatchlist)
     fastify.post('/organizations/:organizationId/watchlists/:itemId/actions', postOrganizationWatchlistAction)
     fastify.delete('/organizations/:organizationId/watchlists/:itemId', deleteOrganizationWatchlist)

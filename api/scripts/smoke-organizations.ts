@@ -5,6 +5,7 @@ import {
     normalizeOrganizationInput,
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
+    normalizeWatchlistCleanupInput,
     normalizeWatchlistInput,
     buildOrganizationBridgeContext,
     buildOrganizationDwmAlertReference,
@@ -81,6 +82,16 @@ assert.deepEqual(normalizeWatchlistInput({ kind: 'company', value: ' Example Hol
     requestId: undefined,
 })
 assert.throws(() => normalizeWatchlistInput({ kind: 'user', value: 'local only' }), /company, domain, vendor, actor, or keyword/)
+assert.deepEqual(normalizeWatchlistCleanupInput({
+    itemIds: ['watch_1', 'watch_1', 'watch_2'],
+    reason: 'Cleanup live proof terms.',
+    requestId: 'cleanup-request',
+}), {
+    itemIds: ['watch_1', 'watch_2'],
+    reason: 'Cleanup live proof terms.',
+    requestId: 'cleanup-request',
+})
+assert.throws(() => normalizeWatchlistCleanupInput({ itemIds: [] }), /at least one watchlist item id/)
 
 const alertReference = buildOrganizationDwmAlertReference(
     {
@@ -214,6 +225,7 @@ assert.match(routes, /fastify\.get\('\/organizations\/:id\/alert-readiness'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/watchlists\/alert-terms'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/watchlists'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:id\/watchlists'/)
+assert.match(routes, /fastify\.post\('\/organizations\/:id\/watchlists\/cleanup'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:organizationId\/watchlists\/:itemId\/actions'/)
 assert.match(routes, /fastify\.delete\('\/organizations\/:organizationId\/watchlists\/:itemId'/)
 

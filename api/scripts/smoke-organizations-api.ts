@@ -60,6 +60,7 @@ app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertR
 app.get('/api/organizations/:id/watchlists/alert-terms', handlers.getOrganizationWatchlistAlertTerms)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
+app.post('/api/organizations/:id/watchlists/cleanup', handlers.postOrganizationWatchlistCleanup)
 app.put('/api/organizations/:organizationId/watchlists/:itemId', handlers.putOrganizationWatchlist)
 app.post('/api/organizations/:organizationId/watchlists/:itemId/actions', handlers.postOrganizationWatchlistAction)
 app.delete('/api/organizations/:organizationId/watchlists/:itemId', handlers.deleteOrganizationWatchlist)
@@ -805,6 +806,94 @@ assert.equal(alertTermsAfterArchive.activeTerms.length, 4)
 assert.equal(alertTermsAfterArchive.excluded.archivedCount, 1)
 assert.ok(!alertTermsAfterArchive.activeTerms.some((term: Row) => term.watchlistItemId === actorWatchlistItem.id))
 
+const cleanupCompanyResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { kind: 'company', value: 'Live Proof Cleanup Holdings', reason: 'Disposable proof cleanup fixture.', requestId: 'smoke-cleanup-create-company' },
+})
+assert.equal(cleanupCompanyResponse.statusCode, 201, cleanupCompanyResponse.body)
+const cleanupCompanyItem = parseBody(cleanupCompanyResponse.body).watchlistItem
+
+const cleanupKeywordResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { kind: 'keyword', value: 'Live Proof Cleanup Phrase', reason: 'Disposable proof cleanup fixture.', requestId: 'smoke-cleanup-create-keyword' },
+})
+assert.equal(cleanupKeywordResponse.statusCode, 201, cleanupKeywordResponse.body)
+const cleanupKeywordItem = parseBody(cleanupKeywordResponse.body).watchlistItem
+
+const memberCleanupDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/cleanup`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+    payload: { itemIds: [cleanupCompanyItem.id], reason: 'Member cleanup denied.', requestId: 'smoke-member-cleanup-denied' },
+})
+assert.equal(memberCleanupDeniedResponse.statusCode, 403, memberCleanupDeniedResponse.body)
+
+const cleanupBeforeArchiveExportResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-cleanup-export-before`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(cleanupBeforeArchiveExportResponse.statusCode, 200, cleanupBeforeArchiveExportResponse.body)
+const cleanupBeforeArchiveExport = parseBody(cleanupBeforeArchiveExportResponse.body).alertTermsExport
+assert.ok(cleanupBeforeArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupCompanyItem.id))
+assert.ok(cleanupBeforeArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
+
+const cleanupArchiveResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/cleanup`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: {
+        itemIds: [cleanupCompanyItem.id, cleanupKeywordItem.id, 'missing-cleanup-item'],
+        reason: 'Archive disposable live proof watchlists.',
+        requestId: 'smoke-proof-cleanup',
+    },
+})
+assert.equal(cleanupArchiveResponse.statusCode, 200, cleanupArchiveResponse.body)
+const cleanupArchive = parseBody(cleanupArchiveResponse.body).cleanup
+assert.equal(cleanupArchive.schemaVersion, 'organization.watchlist_cleanup.v1')
+assert.equal(cleanupArchive.organizationId, organization.id)
+assert.equal(cleanupArchive.actorId, 'org_smoke_owner')
+assert.equal(cleanupArchive.archivedCount, 2)
+assert.deepEqual(cleanupArchive.archivedItemIds.sort(), [cleanupCompanyItem.id, cleanupKeywordItem.id].sort())
+assert.deepEqual(cleanupArchive.skippedItemIds, ['missing-cleanup-item'])
+assert.equal(cleanupArchive.requestId, 'smoke-proof-cleanup')
+assert.equal(parseBody(cleanupArchiveResponse.body).archivedItems[0].status, 'archived')
+
+const cleanupArchiveRepeatResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/cleanup`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { item_ids: [cleanupCompanyItem.id], reason: 'Repeat cleanup should be safe.', request_id: 'smoke-proof-cleanup-repeat' },
+})
+assert.equal(cleanupArchiveRepeatResponse.statusCode, 200, cleanupArchiveRepeatResponse.body)
+assert.equal(parseBody(cleanupArchiveRepeatResponse.body).cleanup.archivedCount, 0)
+assert.deepEqual(parseBody(cleanupArchiveRepeatResponse.body).cleanup.skippedItemIds, [cleanupCompanyItem.id])
+
+const cleanupArchivedListResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists?status=archived`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(cleanupArchivedListResponse.statusCode, 200, cleanupArchivedListResponse.body)
+const cleanupArchivedIds = parseBody(cleanupArchivedListResponse.body).watchlistItems.map((item: Row) => item.id)
+assert.ok(cleanupArchivedIds.includes(cleanupCompanyItem.id))
+assert.ok(cleanupArchivedIds.includes(cleanupKeywordItem.id))
+
+const cleanupAfterArchiveExportResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-cleanup-export-after`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(cleanupAfterArchiveExportResponse.statusCode, 200, cleanupAfterArchiveExportResponse.body)
+const cleanupAfterArchiveExport = parseBody(cleanupAfterArchiveExportResponse.body).alertTermsExport
+assert.ok(!cleanupAfterArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupCompanyItem.id))
+assert.ok(!cleanupAfterArchiveExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
+assert.equal(cleanupAfterArchiveExport.excluded.archivedCount, 3)
+
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
     url: `/api/organizations/${organization.id}/members/org_smoke_viewer`,
@@ -915,6 +1004,13 @@ const outsiderAlertTermsResponse = await app.inject({
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderAlertTermsResponse.statusCode, 404, outsiderAlertTermsResponse.body)
+const outsiderCleanupResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/cleanup`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+    payload: { itemIds: [ownerWatchlistItem.id], reason: 'Outsider cannot clean up.', requestId: 'smoke-outsider-cleanup-denied' },
+})
+assert.equal(outsiderCleanupResponse.statusCode, 404, outsiderCleanupResponse.body)
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
@@ -923,6 +1019,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_paused
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resumed' && log.metadata.requestId === 'smoke-resume-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
@@ -1192,6 +1289,19 @@ async function fakeRun(query: string, params: any[] = []) {
             .filter(item => !kind || item.kind === kind)
             .filter(item => !status || item.status === status)
             .sort((a, b) => `${a.status}:${a.kind}:${a.value}`.localeCompare(`${b.status}:${b.kind}:${b.value}`)))
+    }
+
+    if (compact.startsWith('UPDATE organization_watchlist_items SET status = \'archived\'') && compact.includes('id = ANY')) {
+        const [organizationId, itemIds, updatedBy, reason, requestId] = params
+        const archived: Row[] = []
+        for (const itemId of itemIds) {
+            const existing = watchlists.get(itemId)
+            if (!existing || existing.organization_id !== organizationId || existing.archived_at) continue
+            const archivedItem = { ...existing, status: 'archived', archived_at: iso(), updated_by: updatedBy, lifecycle_reason: reason, lifecycle_request_id: requestId, updated_at: iso() }
+            watchlists.set(itemId, archivedItem)
+            archived.push(archivedItem)
+        }
+        return rows(archived)
     }
 
     if (compact.startsWith('UPDATE organization_watchlist_items SET status = \'archived\'')) {

@@ -13,6 +13,7 @@ import {
     normalizeOrganizationSettingsInput,
     normalizeOwnershipTransferInput,
     normalizeWatchlistActionInput,
+    normalizeWatchlistCleanupInput,
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationSettingsFromRow,
@@ -36,6 +37,7 @@ import {
     type OrganizationOwnershipTransferInput,
     type OrganizationSettingsInput,
     type WatchlistActionInput,
+    type WatchlistCleanupInput,
     type WatchlistKind,
     type WatchlistInput,
     type OrganizationWatchlistRow,
@@ -1297,6 +1299,78 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
             reason: input.reason,
             serviceLogAction,
         }),
+    })
+}
+
+export async function postOrganizationWatchlistCleanup(req: FastifyRequest<{ Params: OrganizationParams, Body: WatchlistCleanupInput }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    if (!roleCanWriteWatchlist(organization.role)) {
+        return res.status(403).send({ error: 'Only organization owners and admins can clean up watchlists.' })
+    }
+
+    let input
+    try {
+        input = normalizeWatchlistCleanupInput(req.body)
+    } catch (error) {
+        return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid watchlist cleanup.' })
+    }
+
+    const result = await run(`
+        UPDATE organization_watchlist_items
+        SET status = 'archived',
+            archived_at = COALESCE(archived_at, NOW()),
+            updated_by = $3,
+            lifecycle_reason = $4,
+            lifecycle_request_id = $5,
+            updated_at = NOW()
+        WHERE organization_id = $1
+          AND id = ANY($2::text[])
+          AND archived_at IS NULL
+        RETURNING *
+    `, [req.params.id, input.itemIds, userId, input.reason ?? null, input.requestId ?? null])
+    const archivedItems = result.rows as OrganizationWatchlistRow[]
+    const archivedIds = new Set(archivedItems.map(item => item.id))
+    const skippedItemIds = input.itemIds.filter(itemId => !archivedIds.has(itemId))
+
+    if (archivedItems.length > 0) {
+        await touchOrganization(req.params.id)
+    }
+
+    const serviceLogAction = 'organization_watchlist_cleanup_archived'
+    logOrganizationEvent(req, serviceLogAction, req.params.id, userId, {
+        requestId: input.requestId,
+        reason: input.reason,
+        requestedItemIds: input.itemIds,
+        archivedItemIds: archivedItems.map(item => item.id),
+        skippedItemIds,
+        archivedCount: archivedItems.length,
+    })
+
+    return res.send({
+        cleanup: {
+            schemaVersion: 'organization.watchlist_cleanup.v1',
+            organizationId: req.params.id,
+            tenantId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            requestId: input.requestId ?? null,
+            reason: input.reason ?? null,
+            requestedItemIds: input.itemIds,
+            archivedItemIds: archivedItems.map(item => item.id),
+            skippedItemIds,
+            archivedCount: archivedItems.length,
+            serviceLogAction,
+        },
+        archivedItems: archivedItems.map(toWatchlistItem),
     })
 }
 
