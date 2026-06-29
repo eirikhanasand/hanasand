@@ -1378,7 +1378,7 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
     })
 }
 
-export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
+export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ Params: OrganizationParams, Querystring: { requestId?: string, request_id?: string } }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
         return res.status(401).send({ error: 'Unauthorized.' })
@@ -1422,6 +1422,14 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
     } as const
 
     if (!visibility.allowed) {
+        const requestId = typeof req.query?.requestId === 'string' ? req.query.requestId : typeof req.query?.request_id === 'string' ? req.query.request_id : null
+        logOrganizationEvent(req, 'organization_alert_case_visibility_denied', organization.id, userId, {
+            requestId,
+            role: organization.role ?? 'viewer',
+            allowedRoles: visibility.allowedRoles,
+            denialReason: visibility.reason ?? 'role_not_allowed',
+            blockerCodes: [visibility.reason ?? 'role_not_allowed'],
+        })
         return res.status(403).send({
             error: 'Organization alert visibility does not allow this member to list org alerts or cases.',
             organization: toOrganization(organization),
@@ -1478,6 +1486,22 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
                         'destination.secret',
                     ],
                     nonmemberEnumeration: false,
+                },
+                auditProof: {
+                    schemaVersion: 'organization.alert_case_visibility_denial_audit.v1',
+                    organizationId: organization.id,
+                    tenantId: organization.id,
+                    memberRole: organization.role ?? 'viewer',
+                    serviceLogAction: 'organization_alert_case_visibility_denied',
+                    requestId,
+                    requiredMetadataFields: ['requestId', 'role', 'allowedRoles', 'denialReason', 'blockerCodes'],
+                    redactedFields: [
+                        'activeTerms[]',
+                        'watchlistScope.alertGeneratorKeys',
+                        'case.evidence.rawContent',
+                        'destination.secret',
+                    ],
+                    proofLogQuery: 'GET /api/logs?service=api&message=organization_alert_case_visibility_denied',
                 },
                 proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
             },

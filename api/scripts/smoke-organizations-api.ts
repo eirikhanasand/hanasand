@@ -1485,7 +1485,7 @@ assert.ok(readiness.sharedWatchlistDownstreamProof.audit.eventActions.includes('
 
 const memberAlertCaseVisibilityResponse = await app.inject({
     method: 'GET',
-    url: `/api/organizations/${organization.id}/alert-case-visibility`,
+    url: `/api/organizations/${organization.id}/alert-case-visibility?requestId=smoke-member-alert-case-denied`,
     headers: authHeaders('org_smoke_member', 'member-token'),
 })
 assert.equal(memberAlertCaseVisibilityResponse.statusCode, 403, memberAlertCaseVisibilityResponse.body)
@@ -1517,6 +1517,16 @@ assert.equal(memberAlertCaseVisibility.analystPortalAdapter.actionMatrix.review_
 assert.equal(memberAlertCaseVisibility.analystPortalAdapter.actionMatrix.assign_case.allowed, false)
 assert.ok(memberAlertCaseVisibility.analystPortalAdapter.redactedFields.includes('watchlistScope.alertGeneratorKeys'))
 assert.equal(memberAlertCaseVisibility.analystPortalAdapter.nonmemberEnumeration, false)
+assert.equal(memberAlertCaseVisibility.auditProof.schemaVersion, 'organization.alert_case_visibility_denial_audit.v1')
+assert.equal(memberAlertCaseVisibility.auditProof.organizationId, organization.id)
+assert.equal(memberAlertCaseVisibility.auditProof.tenantId, organization.id)
+assert.equal(memberAlertCaseVisibility.auditProof.memberRole, 'member')
+assert.equal(memberAlertCaseVisibility.auditProof.serviceLogAction, 'organization_alert_case_visibility_denied')
+assert.equal(memberAlertCaseVisibility.auditProof.requestId, 'smoke-member-alert-case-denied')
+assert.ok(memberAlertCaseVisibility.auditProof.requiredMetadataFields.includes('allowedRoles'))
+assert.ok(memberAlertCaseVisibility.auditProof.requiredMetadataFields.includes('denialReason'))
+assert.ok(memberAlertCaseVisibility.auditProof.redactedFields.includes('destination.secret'))
+assert.equal(memberAlertCaseVisibility.auditProof.proofLogQuery, 'GET /api/logs?service=api&message=organization_alert_case_visibility_denied')
 assert.equal(memberAlertCaseVisibility.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const outsiderAlertCaseVisibilityResponse = await app.inject({
@@ -3548,6 +3558,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-member-alert-terms-ready' && log.metadata.allowedRoles.includes('admin')))
+assert.ok(serviceLogs.some(log => log.message === 'organization_alert_case_visibility_denied' && log.metadata.requestId === 'smoke-member-alert-case-denied' && log.metadata.denialReason === 'role_not_allowed' && log.metadata.allowedRoles.includes('admin')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
