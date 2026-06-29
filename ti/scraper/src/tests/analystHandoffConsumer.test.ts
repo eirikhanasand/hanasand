@@ -8,6 +8,7 @@ import {
 } from "../product/analystHandoff.ts";
 import {
   ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+  ANALYST_HANDOFF_CONTRACT_VERSIONS,
   ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
   buildAnalystHandoffValidationReport,
   validateAnalystHandoffConsumerBundle,
@@ -260,6 +261,7 @@ describe("analyst handoff consumer validation", () => {
     });
 
     expect(report.schemaVersion).toBe(ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION);
+    expect(report.contractVersions).toEqual(ANALYST_HANDOFF_CONTRACT_VERSIONS);
     expect(report.ok).toBe(false);
     expect(report.bundleCount).toBe(9);
     expect(report.passedCount).toBe(1);
@@ -276,6 +278,78 @@ describe("analyst handoff consumer validation", () => {
     const publicTiResult = report.results.find((item) => item.file === "public-ti-provenance-missing.json");
     expect(publicTiResult?.productReadiness.publicTI.recommendedOwnerLane).toBe("publicTI");
     expect(publicTiResult?.blockers.some((item) => item.ownerLane === "publicTI")).toBe(true);
+  });
+
+  test("includes compatibility action metadata from entitlement, source, and helpdesk contracts", () => {
+    const happy = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    happy.compatibility = {
+      entitlementBlockers: [{
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "entitlement",
+        actionId: "alert_rebuild",
+        action: "rebuild_dwm_alerts",
+        blockerCode: "alert_rebuilds_per_day",
+        blockedAction: "rebuild_dwm_alerts",
+        status: "blocked",
+        route: "/v1/dwm/alerts/rebuild",
+        requestId: "req-entitlement",
+        nextStep: "Upgrade plan or wait for quota reset.",
+        supportText: "Alert rebuild quota reached.",
+        dashboardText: "Alert rebuild quota reached.",
+        source: "entitlement"
+      }],
+      sourceActions: [{
+        schemaVersion: "dwm.source_pack_action_contract.v1",
+        mode: "prepare",
+        action: "activate",
+        requestedAction: "approve",
+        allowed: false,
+        idempotencyKey: "source-action-key",
+        sourcePackId: "pack_telegram",
+        candidateId: "candidate_private_channel",
+        blockers: [{ code: "stale_worker", severity: "blocking", message: "source worker is stale", retryable: true }]
+      }],
+      supportActions: [{
+        schemaVersion: "support.action_execution_handoff.v1",
+        executable: false,
+        action: "access_recovery",
+        idempotencyKey: "support-key",
+        correlationId: "req-support",
+        requestId: "req-support",
+        blockers: ["missing_approval"],
+        execution: { method: "POST", path: "/api/admin/support/organizations/org_acme/access-recovery" },
+        audit: { blockerCode: "missing_approval" }
+      }]
+    };
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:10:00.000Z",
+      results: [{ file: "compatibility.json", bundle: happy }]
+    });
+
+    expect(report.ok).toBe(false);
+    expect(report.productReadiness.entitlement.blockerCodes).toContain("entitlement_blocked");
+    expect(report.productReadiness.source.blockerCodes).toContain("source_worker_not_ready");
+    expect(report.productReadiness.helpdesk.blockerCodes).toContain("helpdesk_action_unavailable");
+    expect(report.results[0]?.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ownerLane: "entitlement",
+        action: "rebuild_dwm_alerts",
+        route: "/v1/dwm/alerts/rebuild",
+        evidenceSchemaVersion: "dwm.entitlement_blocker.v1"
+      }),
+      expect.objectContaining({
+        ownerLane: "source",
+        action: "activate",
+        route: "dwm_source_pack_action",
+        evidenceSchemaVersion: "dwm.source_pack_action_contract.v1"
+      }),
+      expect.objectContaining({
+        ownerLane: "helpdesk",
+        action: "access_recovery",
+        route: "/api/admin/support/organizations/org_acme/access-recovery",
+        evidenceSchemaVersion: "support.action_execution_handoff.v1"
+      })
+    ]));
   });
 });
 

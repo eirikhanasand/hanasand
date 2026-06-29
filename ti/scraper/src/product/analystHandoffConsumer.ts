@@ -25,6 +25,9 @@ export const DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION = "dwm.entitlement_read_m
 export const DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION = "dwm.source_worker_readiness.v1" as const;
 export const CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION = "case.route_availability.v1" as const;
 export const HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION = "helpdesk.action_availability.v1" as const;
+export const DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION = "dwm.entitlement_blocker.v1" as const;
+export const DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION = "dwm.source_pack_action_contract.v1" as const;
+export const SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION = "support.action_execution_handoff.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -37,7 +40,10 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   entitlementReadModel: DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION,
   sourceWorkerReadiness: DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION,
   caseRouteAvailability: CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION,
-  helpdeskActionAvailability: HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION
+  helpdeskActionAvailability: HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION,
+  entitlementBlocker: DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION,
+  sourcePackActionContract: DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION,
+  supportActionExecutionHandoff: SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION
 } as const;
 
 export type AnalystHandoffConsumerBlockerCode =
@@ -72,6 +78,9 @@ export type AnalystHandoffOwnerLane =
 export type AnalystHandoffConsumerBlocker = Omit<AnalystHandoffBlocker, "code"> & {
   code: AnalystHandoffConsumerBlockerCode;
   stage: AnalystHandoffConsumerStageName | "bundle" | "membership" | "entitlement" | "org_terms_export" | "webhook_audit" | "webhook_lifecycle" | "source_readiness" | "case_route" | "public_ti" | "helpdesk";
+  action?: string;
+  route?: string;
+  evidenceSchemaVersion?: string;
 };
 
 export type AnalystHandoffConsumerStageName = "publicTi" | "orgWatchlist" | "caseHandoff" | "webhookTrigger";
@@ -140,6 +149,52 @@ export type AnalystHandoffHelpdeskActionAvailability = {
   route?: string;
   reason?: string;
   checkedAt: string;
+};
+
+export type AnalystHandoffEntitlementBlockerContract = {
+  schemaVersion: typeof DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION;
+  ownerLane: string;
+  actionId: string;
+  action: string;
+  blockerCode: string;
+  blockedAction: string | null;
+  status: string;
+  route?: string;
+  requestId?: string;
+  nextStep: string;
+  supportText: string;
+  dashboardText: string;
+  source: "entitlement" | "visibility" | "missing_prerequisite" | "analyst_handoff";
+};
+
+export type AnalystHandoffSourcePackActionContract = {
+  schemaVersion: typeof DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION;
+  mode: "prepare" | "execute";
+  action: string;
+  requestedAction?: string;
+  allowed: boolean;
+  idempotencyKey: string;
+  sourcePackId?: string;
+  candidateId?: string;
+  sourceId?: string;
+  blockers: Array<{ code?: string; severity?: string; message?: string; retryable?: boolean }>;
+};
+
+export type AnalystHandoffSupportActionExecution = {
+  schemaVersion: typeof SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION;
+  executable: boolean;
+  action: string;
+  idempotencyKey: string;
+  correlationId?: string;
+  requestId?: string;
+  blockers: string[];
+  execution?: {
+    method?: string;
+    path?: string;
+  };
+  audit?: {
+    blockerCode?: string | null;
+  };
 };
 
 export type OrgWatchlistAlertTermsExportContract = {
@@ -292,6 +347,11 @@ export type AnalystHandoffConsumerBundle = {
   sourceReadiness?: AnalystHandoffSourceWorkerReadiness;
   caseRoute?: AnalystHandoffCaseRouteAvailability;
   helpdeskAction?: AnalystHandoffHelpdeskActionAvailability;
+  compatibility?: {
+    entitlementBlockers?: AnalystHandoffEntitlementBlockerContract[];
+    sourceActions?: AnalystHandoffSourcePackActionContract[];
+    supportActions?: AnalystHandoffSupportActionExecution[];
+  };
   stages: Partial<{
     publicTi: ActorWatchlistAdapterValue;
     orgWatchlist: AlertGenerationAdapterValue & {
@@ -334,6 +394,7 @@ export type AnalystHandoffLaneReadiness = {
 
 export type AnalystHandoffValidationReport = {
   schemaVersion: typeof ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION;
+  contractVersions: typeof ANALYST_HANDOFF_CONTRACT_VERSIONS;
   checkedAt: string;
   ok: boolean;
   bundleCount: number;
@@ -347,7 +408,7 @@ export type AnalystHandoffValidationReport = {
     schemaVersion: typeof ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION;
     blockerCount: number;
     blockerCodes: AnalystHandoffConsumerBlockerCode[];
-    blockers: Array<Pick<AnalystHandoffConsumerBlocker, "code" | "stage" | "field" | "detail" | "recoverable"> & { ownerLane: AnalystHandoffOwnerLane }>;
+    blockers: Array<Pick<AnalystHandoffConsumerBlocker, "code" | "stage" | "field" | "detail" | "recoverable" | "action" | "route" | "evidenceSchemaVersion"> & { ownerLane: AnalystHandoffOwnerLane }>;
     productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
     contracts: AnalystHandoffConsumerValidation["contracts"] | null;
     identity?: AnalystHandoffIdentity;
@@ -401,6 +462,7 @@ export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHan
   blockers.push(...validateSourceReadiness(bundle.sourceReadiness, identity));
   blockers.push(...validateCaseRouteAvailability(bundle.caseRoute));
   blockers.push(...validateHelpdeskAction(bundle.helpdeskAction));
+  blockers.push(...validateCompatibilityEvidence(bundle.compatibility));
 
   return {
     schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -498,6 +560,7 @@ export function buildAnalystHandoffValidationReport(input: {
   const allBlockers = results.flatMap((item) => item.blockers.map(({ ownerLane: _ownerLane, ...blocker }) => blocker as AnalystHandoffConsumerBlocker));
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
+    contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
     checkedAt: input.checkedAt || nowIso(),
     ok: results.every((item) => item.ok),
     bundleCount: results.length,
@@ -801,6 +864,63 @@ function validateHelpdeskAction(action: AnalystHandoffHelpdeskActionAvailability
   return [];
 }
 
+function validateCompatibilityEvidence(compatibility: AnalystHandoffConsumerBundle["compatibility"] | undefined): AnalystHandoffConsumerBlocker[] {
+  if (!compatibility) return [];
+  const blockers: AnalystHandoffConsumerBlocker[] = [];
+  for (const item of compatibility.entitlementBlockers || []) {
+    if (item.schemaVersion !== DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION) {
+      blockers.push(blocker("unsupported_schema", "entitlement", "compatibility.entitlementBlockers.schemaVersion", `Expected ${DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION}.`, false, {
+        action: item.action,
+        route: item.route,
+        evidenceSchemaVersion: String(item.schemaVersion)
+      }));
+      continue;
+    }
+    if (item.status === "blocked" || item.status === "needs_input" || item.blockerCode) {
+      blockers.push(blocker("entitlement_blocked", "entitlement", `compatibility.entitlementBlockers.${item.actionId}`, item.supportText || item.nextStep || item.blockerCode, true, {
+        action: item.action,
+        route: item.route,
+        evidenceSchemaVersion: item.schemaVersion
+      }));
+    }
+  }
+  for (const item of compatibility.sourceActions || []) {
+    if (item.schemaVersion !== DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION) {
+      blockers.push(blocker("unsupported_schema", "source_readiness", "compatibility.sourceActions.schemaVersion", `Expected ${DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION}.`, false, {
+        action: item.action,
+        evidenceSchemaVersion: String(item.schemaVersion)
+      }));
+      continue;
+    }
+    const blocking = item.blockers.filter((candidate) => candidate.severity === "blocking");
+    if (!item.allowed || blocking.length) {
+      blockers.push(blocker("source_worker_not_ready", "source_readiness", `compatibility.sourceActions.${item.candidateId || item.sourcePackId || item.action}`, blocking.map((candidate) => candidate.code || candidate.message || "source_action_blocked").join(", ") || "Source action contract is blocked.", true, {
+        action: item.action,
+        route: "dwm_source_pack_action",
+        evidenceSchemaVersion: item.schemaVersion
+      }));
+    }
+  }
+  for (const item of compatibility.supportActions || []) {
+    if (item.schemaVersion !== SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION) {
+      blockers.push(blocker("unsupported_schema", "helpdesk", "compatibility.supportActions.schemaVersion", `Expected ${SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION}.`, false, {
+        action: item.action,
+        route: item.execution?.path,
+        evidenceSchemaVersion: String(item.schemaVersion)
+      }));
+      continue;
+    }
+    if (!item.executable || item.blockers.length) {
+      blockers.push(blocker("helpdesk_action_unavailable", "helpdesk", `compatibility.supportActions.${item.action}`, item.audit?.blockerCode || item.blockers[0] || "Support action execution handoff is not executable.", true, {
+        action: item.action,
+        route: item.execution?.path,
+        evidenceSchemaVersion: item.schemaVersion
+      }));
+    }
+  }
+  return blockers;
+}
+
 function identityMismatchBlocker(stage: AnalystHandoffConsumerStageName, error: unknown): AnalystHandoffConsumerBlocker {
   const typed = error as AnalystHandoffIdentityMismatchError;
   return blocker("identity_mismatch", stage, `${stage}.handoff.identity.${String(typed.field || "unknown")}`, error instanceof Error ? error.message : "Handoff identity changed between stages.", false);
@@ -857,9 +977,10 @@ function blocker(
   stage: AnalystHandoffConsumerBlocker["stage"],
   field: string,
   detail: string,
-  recoverable: boolean
+  recoverable: boolean,
+  metadata: Pick<AnalystHandoffConsumerBlocker, "action" | "route" | "evidenceSchemaVersion"> = {}
 ): AnalystHandoffConsumerBlocker {
-  return { code, stage, field, detail, recoverable };
+  return { code, stage, field, detail, recoverable, ...metadata };
 }
 
 function isStale(value: string | undefined, staleEvidenceBefore: string | undefined) {
