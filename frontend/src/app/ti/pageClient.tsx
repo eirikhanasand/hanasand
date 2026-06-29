@@ -166,14 +166,16 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
     const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
+    const [relevanceMarks, setRelevanceMarks] = useState<Record<string, LocalRelevanceMark>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
     const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
     const selectedArtifactHandoffs = selectedArtifact ? buildActorArtifactHandoffs(result, selectedArtifact, actionability) : null
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
+    const selectedRelevance = selected ? relevanceMarks[selected.id] : undefined
     const selectedNote = selected ? notes[selected.id] ?? '' : ''
     const alertPacket = selected ? alertPacketFor(result, selected, watchlist) : null
-    const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedNote) : null
+    const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedRelevance, selectedNote) : null
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
@@ -186,6 +188,15 @@ function Results({ result }: { result: TiSearchResponse }) {
             at: decision.decidedAt ?? result.generatedAt,
             label: `${decisionLabel(decision.status)}${item ? `: ${item.title}` : ''}`,
             detail: decision.reason || 'No rationale recorded.',
+        }
+    })
+    const relevanceEvents = Object.entries(relevanceMarks).map(([id, mark]) => {
+        const item = workItems.find(entry => entry.id === id)
+        return {
+            id: `${id}-${mark.markedAt}`,
+            at: mark.markedAt ?? result.generatedAt,
+            label: `${relevanceLabel(mark.state)}${item ? `: ${item.title}` : ''}`,
+            detail: mark.rationale || 'No relevance rationale recorded.',
         }
     })
     const queueCounts = queueCountsFor(workItems, localDecisions)
@@ -415,15 +426,17 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <ActionPanel
                                 note={selectedNote}
                                 decision={selectedDecision}
+                                relevance={selectedRelevance}
                                 reviewHandoff={reviewHandoff}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
+                                onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
                             />
                         </div>
 
                         <Panel title='Evidence Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                             <div className='grid gap-3'>
-                                {[...timelineFor(result, selected), ...sessionEvents].slice(0, 8).map(event => (
+                                {[...timelineFor(result, selected), ...sessionEvents, ...relevanceEvents].slice(0, 8).map(event => (
                                     <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
                                         <p className='text-xs font-semibold text-[#171a21]'>{event.label}</p>
                                         <p className='mt-1 text-[11px] text-[#667085]'>{formatDate(event.at)}</p>
@@ -509,6 +522,14 @@ type LocalDecision = {
     decidedAt: string
 }
 
+type LocalRelevanceMark = {
+    state: 'customer_relevant' | 'context_only' | 'needs_source' | 'not_relevant'
+    rationale: string
+    watchTerms: string[]
+    caseIntent: 'case_candidate' | 'watchlist_context' | 'source_review' | 'no_case'
+    markedAt: string
+}
+
 type WatchlistRelevance = {
     terms: string[]
     matchedTerms: string[]
@@ -545,6 +566,13 @@ type SelectedReviewHandoff = {
         status: LocalDecision['status'] | 'not_recorded'
         rationale: string
         decidedAt?: string
+    }
+    localRelevance: {
+        state: LocalRelevanceMark['state'] | 'not_marked'
+        rationale: string
+        watchTerms: string[]
+        caseIntent: LocalRelevanceMark['caseIntent'] | 'not_set'
+        markedAt?: string
     }
     watchlist: {
         terms: string[]
@@ -2350,12 +2378,14 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function ActionPanel({ note, decision, reviewHandoff, onNoteChange, onDecision }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, onNoteChange, onDecision, onRelevance }: {
     note: string
     decision?: LocalDecision
+    relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
+    onRelevance: (state: LocalRelevanceMark['state']) => void
 }) {
     const readyForCase = Boolean(reviewHandoff?.caseHandoff.ready)
     const readyForAlert = Boolean(reviewHandoff?.alertHandoff.ready)
@@ -2384,6 +2414,30 @@ function ActionPanel({ note, decision, reviewHandoff, onNoteChange, onDecision }
                     <ActionButton icon={<ShieldAlert className='h-3.5 w-3.5' />} onClick={() => onDecision('suppressed')}>Suppress</ActionButton>
                     <ActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={() => onDecision('closed')}>Close</ActionButton>
                     <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onDecision('reopened')}>Reopen</ActionButton>
+                </div>
+                <div data-ti-local-relevance='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                    <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                        <div className='min-w-0'>
+                            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Relevance mark</p>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                Session-local mark for watchlist, source review, or case preparation.
+                            </p>
+                        </div>
+                        <span className={relevance ? decisionStepStatusClass(relevance.state === 'not_relevant' ? 'blocked' : relevance.state === 'needs_source' ? 'review' : 'ready') : decisionStepStatusClass('review')}>
+                            {relevance ? relevanceLabel(relevance.state) : 'unmarked'}
+                        </span>
+                    </div>
+                    {relevance ? (
+                        <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {relevance.rationale} {relevance.watchTerms.length ? `Terms: ${relevance.watchTerms.slice(0, 3).join(', ')}.` : ''}
+                        </p>
+                    ) : null}
+                    <div className='mt-3 grid grid-cols-2 gap-2'>
+                        <ActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={() => onRelevance('customer_relevant')}>Customer</ActionButton>
+                        <ActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={() => onRelevance('context_only')}>Context</ActionButton>
+                        <ActionButton icon={<Database className='h-3.5 w-3.5' />} onClick={() => onRelevance('needs_source')}>Source</ActionButton>
+                        <ActionButton icon={<XCircle className='h-3.5 w-3.5' />} onClick={() => onRelevance('not_relevant')}>Not relevant</ActionButton>
+                    </div>
                 </div>
                 {reviewHandoff ? (
                     <div data-ti-selected-review-handoff='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -2620,6 +2674,7 @@ function selectedReviewHandoffFor(
     alertPacket: AlertPacket,
     actionability: TiActionabilityModel,
     decision: LocalDecision | undefined,
+    relevance: LocalRelevanceMark | undefined,
     note: string
 ): SelectedReviewHandoff {
     const rationale = note.trim() || decision?.reason || 'No session rationale recorded.'
@@ -2646,6 +2701,13 @@ function selectedReviewHandoffFor(
             status: decision?.status ?? 'not_recorded',
             rationale,
             decidedAt: decision?.decidedAt,
+        },
+        localRelevance: {
+            state: relevance?.state ?? 'not_marked',
+            rationale: relevance?.rationale ?? 'No session relevance mark recorded.',
+            watchTerms: relevance?.watchTerms ?? [],
+            caseIntent: relevance?.caseIntent ?? 'not_set',
+            markedAt: relevance?.markedAt,
         },
         watchlist: {
             terms: alertPacket.watchTerms,
@@ -2875,6 +2937,42 @@ function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, Loca
     }, { open: 0, high: 0, closed: 0 })
 }
 
+function relevanceMarkFor(
+    state: LocalRelevanceMark['state'],
+    selected: AnalystWorkItem,
+    watchlist: WatchlistRelevance,
+    actionability: TiActionabilityModel,
+    note: string
+): LocalRelevanceMark {
+    const watchTerms = unique([
+        ...watchlist.matchedTerms,
+        ...watchlist.terms,
+        ...actionability.watchlistRelevance.terms.map(term => `${term.kind}: ${term.value}`),
+    ]).slice(0, 8)
+    const sourceBlocked = actionability.readiness.blockers.some(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'public-ti')
+    const caseIntent: LocalRelevanceMark['caseIntent'] = state === 'not_relevant'
+        ? 'no_case'
+        : state === 'needs_source' || sourceBlocked
+            ? 'source_review'
+            : state === 'customer_relevant' && (selected.kind === 'exposure' || actionability.caseHandoff.ready || actionability.createAlertHandoff.ready)
+                ? 'case_candidate'
+                : 'watchlist_context'
+    const defaultRationale = state === 'customer_relevant'
+        ? 'Marked for customer relevance review from selected evidence and watchlist context.'
+        : state === 'context_only'
+            ? 'Marked as actor context for watchlist and detection enrichment.'
+            : state === 'needs_source'
+                ? 'Marked for source or capture enrichment before customer-facing action.'
+                : 'Marked as not relevant for current watchlist or case work.'
+    return {
+        state,
+        rationale: note.trim() || defaultRationale,
+        watchTerms,
+        caseIntent,
+        markedAt: new Date().toISOString(),
+    }
+}
+
 function unique(values: string[]) {
     const seen = new Set<string>()
     return values.map(value => value.trim()).filter(value => {
@@ -2959,6 +3057,13 @@ function decisionLabel(status: LocalDecision['status']) {
     if (status === 'suppressed') return 'Suppressed'
     if (status === 'reopened') return 'Reopened'
     return 'Closed'
+}
+
+function relevanceLabel(status: LocalRelevanceMark['state']) {
+    if (status === 'customer_relevant') return 'customer'
+    if (status === 'context_only') return 'context'
+    if (status === 'needs_source') return 'source review'
+    return 'not relevant'
 }
 
 function readinessOwnerLabel(owner: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']) {
