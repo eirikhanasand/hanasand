@@ -1558,8 +1558,40 @@ describe("dwm source requests", () => {
         actorMetadata: {
           actorId: expect.any(String),
           displayName: "APT29",
+          aliases: expect.arrayContaining(["APT29"]),
           backedBySourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
           noSyntheticActorClaims: true
+        },
+        sourceEnrichmentProfile: {
+          schemaVersion: "ti.public_actor.enrichment_profile.v1",
+          fields: expect.arrayContaining([
+            expect.objectContaining({
+              field: "aliases",
+              state: "value_ready",
+              values: expect.arrayContaining(["APT29"]),
+              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+              provenance: expect.arrayContaining([
+                expect.objectContaining({ family: "telegram", safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false }) })
+              ]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              field: "infrastructure",
+              state: expect.stringMatching(/source_backed_pending_extraction|value_ready/),
+              sourceFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              confidence: expect.any(Number)
+            }),
+            expect.objectContaining({
+              field: "techniques",
+              sourceFamilies: expect.arrayContaining(["public_advisory", "clear_web"])
+            })
+          ]),
+          summary: expect.objectContaining({
+            valueReadyFields: expect.arrayContaining(["aliases"]),
+            pendingExtractionFields: expect.arrayContaining(["infrastructure"]),
+            sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"])
+          }),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
         state: "ready",
         sourceCoverage: expect.arrayContaining([
@@ -1921,7 +1953,20 @@ describe("dwm source requests", () => {
         publicTiQueryAdapter: {
           schemaVersion: "ti.public_actor.query_adapter.v1",
           route: expect.objectContaining({ path: "/ti/apt29", liveNetworkFetch: false }),
-          actor: expect.objectContaining({ displayName: "APT29", noSyntheticActorClaims: true }),
+          actor: expect.objectContaining({
+            displayName: "APT29",
+            enrichmentProfile: expect.objectContaining({
+              schemaVersion: "ti.public_actor.enrichment_profile.v1",
+              fields: expect.arrayContaining([
+                expect.objectContaining({
+                  field: "aliases",
+                  state: "value_ready",
+                  values: expect.arrayContaining(["APT29"])
+                })
+              ])
+            }),
+            noSyntheticActorClaims: true
+          }),
           readiness: expect.objectContaining({
             state: "ready",
             publicTiReady: true,
@@ -2367,6 +2412,12 @@ describe("dwm source requests", () => {
             readiness: expect.objectContaining({ publicTiReady: true })
           }),
           actorMetadata: expect.objectContaining({ displayName: "APT29", noSyntheticActorClaims: true }),
+          sourceEnrichmentProfile: expect.objectContaining({
+            schemaVersion: "ti.public_actor.enrichment_profile.v1",
+            fields: expect.arrayContaining([
+              expect.objectContaining({ field: "aliases", values: expect.arrayContaining(["APT29"]) })
+            ])
+          }),
           state: "ready",
           sourceCoverage: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", state: "canary" })

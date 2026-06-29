@@ -3063,6 +3063,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       query,
       queryAdapter: publicTiQueryAdapter,
       actorMetadata: actorReadiness.actorMetadata,
+      sourceEnrichmentProfile: actorReadiness.sourceEnrichmentProfile,
       state: actorReadiness.state,
       sections: actorReadiness.actorSections,
       provenance: actorReadiness.provenance,
@@ -3312,10 +3313,21 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourceOperationsQueue,
     candidateGaps
   });
+  const actorMetadata = sourceActorMetadata(query, provenance, coverage);
+  const sourceEnrichmentProfile = sourceActorEnrichmentProfile({
+    query,
+    actorMetadata,
+    sourceFamilyHealth,
+    sourceSectionReadiness,
+    evidenceReadiness,
+    freshness,
+    candidateGaps
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
-    actorMetadata: sourceActorMetadata(query, provenance, coverage),
+    actorMetadata,
+    sourceEnrichmentProfile,
     state: candidateGaps.some((gap: any) => gap.state === "policy_blocked")
       ? "blocked"
       : missingSections.length > 0
@@ -3676,6 +3688,7 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       actorId: actorReadiness.actorMetadata?.actorId,
       displayName: actorReadiness.actorMetadata?.displayName ?? query,
       aliases: actorReadiness.actorMetadata?.aliases ?? [],
+      enrichmentProfile: actorReadiness.sourceEnrichmentProfile,
       noSyntheticActorClaims: true
     },
     readiness: {
@@ -6092,6 +6105,123 @@ function sourceActorMetadata(query: string, provenance: Array<Record<string, any
     backedBySourceFamilies: uniqueSourceReadinessStrings(provenance.map((row) => row.family)),
     sectionCoverageState: Object.fromEntries(Object.entries(coverage.actorSections ?? {}).map(([section, value]: [string, any]) => [section, value?.covered === true ? "covered" : "missing_source"])),
     noSyntheticActorClaims: true
+  };
+}
+
+function sourceActorEnrichmentProfile(input: {
+  query: string;
+  actorMetadata: Record<string, any>;
+  sourceFamilyHealth: Record<string, any>;
+  sourceSectionReadiness: Record<string, any>;
+  evidenceReadiness: Record<string, any>;
+  freshness: Record<string, any>;
+  candidateGaps: Array<Record<string, any>>;
+}) {
+  const healthRows = input.sourceFamilyHealth.rows ?? [];
+  const evidenceRows = input.evidenceReadiness.rows ?? [];
+  const sectionRows = input.sourceSectionReadiness.sections ?? [];
+  const evidenceByFamily = new Map<string, Record<string, any>>(evidenceRows.map((row: any) => [String(row.family), row]));
+  const gapByFamily = new Map<string, Record<string, any>>(input.candidateGaps.map((gap) => [String(gap.family), gap]));
+  const fieldSpecs = [
+    { field: "aliases", sections: ["overview"], fields: ["aliases", "actorName"], value: input.actorMetadata.displayName ? [input.actorMetadata.displayName] : [] },
+    { field: "motivations", sections: ["overview"], fields: ["motivations", "actorMotivation"], value: [] },
+    { field: "sectors", sections: ["targeting"], fields: ["targetSectors", "sector", "victimSector"], value: [] },
+    { field: "regions", sections: ["targeting"], fields: ["targetRegions", "region", "victimRegion"], value: [] },
+    { field: "infrastructure", sections: ["infrastructure"], fields: ["infrastructure", "linkedUrls", "domains", "onionService"], value: [] },
+    { field: "techniques", sections: ["evidence"], fields: ["ttps", "techniques", "cve"], value: [] },
+    { field: "campaigns", sections: ["evidence"], fields: ["campaignNames", "campaign"], value: [] }
+  ];
+  const rows = fieldSpecs.map((spec) => {
+    const supportingSections = sectionRows.filter((section: any) => spec.sections.includes(String(section.section)));
+    const supportingFamilies = uniqueSourceReadinessStrings(supportingSections.flatMap((section: any) => section.sourceFamilies ?? []));
+    const supportingHealth = healthRows.filter((row: any) => supportingFamilies.includes(String(row.family)));
+    const matchingEvidence = supportingHealth.filter((row: any) => {
+      const evidence = evidenceByFamily.get(String(row.family));
+      const fields = uniqueSourceReadinessStrings([
+        ...(row.alertability?.matchableFields ?? []),
+        ...(row.alertability?.alertableFields ?? []),
+        ...(evidence?.evidenceFields ?? [])
+      ]);
+      return spec.fields.some((field) => fields.includes(field));
+    });
+    const missingFamilies = uniqueSourceReadinessStrings(supportingSections.flatMap((section: any) => section.missingFamilies ?? []));
+    const confidenceRows = matchingEvidence.length > 0 ? matchingEvidence : supportingHealth;
+    const confidence = confidenceRows.length > 0
+      ? Math.round((confidenceRows.reduce((sum: number, row: any) => sum + Number(row.confidence ?? 0), 0) / confidenceRows.length) * 100) / 100
+      : 0;
+    const values = uniqueSourceReadinessStrings(spec.value);
+    const state = values.length > 0 && matchingEvidence.length > 0
+      ? "value_ready"
+      : matchingEvidence.length > 0 || supportingHealth.length > 0
+        ? "source_backed_pending_extraction"
+        : "missing_source";
+    const blockers = dedupeBlockers([
+      ...(values.length > 0 || matchingEvidence.length > 0 ? [] : [{ code: "field_value_not_extracted", severity: "warning", field: spec.field, retryable: true }]),
+      ...missingFamilies.map((family) => ({ code: "missing_source_family", severity: "warning", field: spec.field, family, retryable: true })),
+      ...supportingHealth.flatMap((row: any) => row.blockers ?? []),
+      ...missingFamilies.map((family) => gapByFamily.get(family)?.blockers ?? []).flat()
+    ]);
+    return {
+      schemaVersion: "ti.public_actor.enrichment_profile_field.v1",
+      proofId: stableId("ti_public_actor_enrichment_profile_field", `${input.query}:${spec.field}:${state}:${supportingFamilies.join(",")}:${confidence}`),
+      query: input.query,
+      field: spec.field,
+      state,
+      values,
+      valueCount: values.length,
+      sourceFamilies: supportingFamilies,
+      missingFamilies,
+      confidence,
+      confidenceTier: confidence >= 0.85 ? "high" : confidence >= 0.6 ? "medium" : confidence > 0 ? "low" : "missing",
+      freshness: {
+        lastCaptureAt: latestIso(supportingHealth.map((row: any) => row.timestamps?.lastCaptureAt)),
+        lastEnrichmentAt: latestIso(supportingHealth.map((row: any) => row.timestamps?.lastEnrichmentAt)),
+        state: supportingHealth.some((row: any) => row.freshnessState === "fresh") ? "fresh" : input.freshness.captureFreshness?.state ?? "needs_capture"
+      },
+      provenance: supportingHealth.map((row: any) => ({
+        family: row.family,
+        proofId: row.proofId,
+        evidenceProofId: evidenceByFamily.get(String(row.family))?.proofId,
+        sourceIds: row.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? [],
+        parserState: row.parserState,
+        privacyBoundary: row.privacyBoundary,
+        safeOutput: row.safeOutput
+      })),
+      gaps: blockers.map((blocker: any) => ({
+        code: blocker.code,
+        family: blocker.family,
+        field: spec.field,
+        retryable: blocker.retryable === true
+      })),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.enrichment_profile.v1",
+    proofId: stableId("ti_public_actor_enrichment_profile", `${input.query}:${rows.map((row) => `${row.field}:${row.state}:${row.confidenceTier}`).join(",")}`),
+    query: input.query,
+    fields: rows,
+    summary: {
+      valueReadyFields: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "value_ready").map((row) => row.field)),
+      pendingExtractionFields: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "source_backed_pending_extraction").map((row) => row.field)),
+      missingSourceFields: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "missing_source").map((row) => row.field)),
+      sourceFamilies: uniqueSourceReadinessStrings(rows.flatMap((row) => row.sourceFamilies)),
+      gapCodes: uniqueSourceReadinessStrings(rows.flatMap((row) => row.gaps.map((gap: any) => gap.code))),
+      latestCaptureAt: latestIso(rows.map((row) => row.freshness.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row) => row.freshness.lastEnrichmentAt))
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
   };
 }
 
