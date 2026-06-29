@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { loadProductSourceProxyProofLedger, sourceProxyFromLedger } from '@/utils/productProgress/sourceProofSource'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,10 +24,15 @@ type ControlActionBody = {
 
 export async function GET(request: NextRequest) {
     const base = scraperBase()
-    if (!base) return unavailable('TI_SCRAPER_API_BASE is not configured.')
-
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'APT29'
     const tenantId = request.headers.get('x-tenant-id') || 'default'
+    if (!base) {
+        const proofLedger = await loadProductSourceProxyProofLedger(query)
+        if (proofLedger) {
+            return NextResponse.json(sourceProxyFromLedger(proofLedger, query), { headers: { 'cache-control': 'no-store' } })
+        }
+        return unavailable('TI_SCRAPER_API_BASE is not configured.')
+    }
 
     const [
         health,
