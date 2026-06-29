@@ -1,5 +1,5 @@
 import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
@@ -1064,6 +1064,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     safeToShow: item.redactionState !== "raw_sensitive",
     handling: item.redactionState === "metadata_only" ? "Only metadata is retained for this source." : "Public-safe excerpt retained for review."
   }));
+  const downstreamHandoff = buildDwmAlertDownstreamHandoff({ alert, deliveries, ...downstreamLifecycleForAlert(options, alert) });
 
   return {
     schemaVersion: "dwm.alert_detail.v1",
@@ -1073,7 +1074,8 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
-    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries, ...downstreamLifecycleForAlert(options, alert) }),
+    downstreamHandoff,
+    retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
@@ -1094,12 +1096,14 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
 function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries?: any[]) {
   const alertDeliveries = deliveries ?? ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const workflowSummary = buildDwmAlertWorkflowSummary(alert);
+  const downstreamHandoff = buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries, ...downstreamLifecycleForAlert(options, alert) });
   return {
     ...alert,
     workflowSummary,
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
-    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries, ...downstreamLifecycleForAlert(options, alert) }),
+    downstreamHandoff,
+    retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries: alertDeliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),

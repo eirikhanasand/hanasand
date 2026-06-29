@@ -615,6 +615,39 @@ describe("DWM org watchlist bridge", () => {
         webhookDestinationIds: ["webhook_lifecycle_active"]
       }
     });
+    expect(activeDetail.retentionAudit).toMatchObject({
+      schemaVersion: "dwm.alert_retention_audit.v1",
+      retentionState: "active_monitoring",
+      reasonCodes: expect.arrayContaining(["has_evidence", "customer_proof_required"]),
+      preserve: {
+        alertRecord: true,
+        evidenceRefs: true,
+        provenance: true,
+        dedupeKeys: true,
+        customerProof: true
+      },
+      cleanup: {
+        deleteEligible: false,
+        reviewRequired: false,
+        retiredWatchlistIds: [],
+        disabledDestinationIds: []
+      },
+      helpdeskAudit: {
+        redacted: true,
+        auditRoute: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}`
+      }
+    });
+    const activeListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${activeOrgId}`, {
+      headers: { "x-user-email": "owner-active@lifecycle.example" }
+    }), options);
+    const activeList = await activeListResponse.json() as any;
+    expect(activeListResponse.status).toBe(200);
+    expect(activeList.alerts).toHaveLength(1);
+    expect(activeList.alerts[0].retentionAudit).toMatchObject({
+      schemaVersion: "dwm.alert_retention_audit.v1",
+      retentionState: "active_monitoring",
+      reasonCodes: expect.arrayContaining(["has_evidence", "customer_proof_required"])
+    });
 
     store.saveDwmWatchlist({ ...store.getDwmWatchlist("watch_lifecycle_active"), status: "paused", lifecycleStatus: "archived", updatedAt: "2026-06-28T19:10:00.000Z" });
     store.saveWebhookDestination({ ...store.getWebhookDestination("webhook_lifecycle_active"), status: "paused", updatedAt: "2026-06-28T19:10:00.000Z" });
@@ -643,6 +676,29 @@ describe("DWM org watchlist bridge", () => {
       },
       replay: { canReplay: false },
       deliveryReadiness: { destinationReady: false }
+    });
+    expect(lifecycleDetail.retentionAudit).toMatchObject({
+      schemaVersion: "dwm.alert_retention_audit.v1",
+      retentionState: "lifecycle_blocked_retained",
+      reasonCodes: expect.arrayContaining(["retired_watchlist", "disabled_destination", "no_active_source_match", "has_evidence", "customer_proof_required"]),
+      preserve: {
+        alertRecord: true,
+        evidenceRefs: true,
+        provenance: true,
+        dedupeKeys: true,
+        customerProof: true
+      },
+      cleanup: {
+        deleteEligible: false,
+        reviewRequired: true,
+        purgeBlockedReasons: expect.arrayContaining(["evidence_refs_present", "capture_provenance_present", "dedupe_keys_present", "customer_proof_required"]),
+        retiredWatchlistIds: ["watch_lifecycle_active"],
+        disabledDestinationIds: ["webhook_lifecycle_active"]
+      },
+      helpdeskAudit: {
+        redacted: true,
+        auditRoute: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}`
+      }
     });
 
     const replayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
