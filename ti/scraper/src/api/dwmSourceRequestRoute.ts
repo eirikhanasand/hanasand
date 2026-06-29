@@ -6359,6 +6359,8 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     const parserStatus = candidate.parserStatus ?? "not_scheduled";
     parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] = (parserSourceFamilyCounts[candidate.declaredFamily][parserStatus] ?? 0) + 1;
   }
+  const fixtureLoadReadiness = sourcePackFixtureLoadReadiness(candidates);
+  const sourceFamilyCounts = sourceFamilyCoverage({ sources, registry: packs[0] });
 
   return {
     totalCandidates: candidates.length,
@@ -6379,12 +6381,168 @@ function sourcePackGrowthCounters(packs: SourcePackRegistry[], options: ApiServe
     lastRunTime: lastRun?.completedAt,
     lastRunStatus: lastRun?.status,
     parserSourceFamilyCounts,
-    fixtureLoadReadiness: sourcePackFixtureLoadReadiness(candidates),
-    sourceFamilyCounts: sourceFamilyCoverage({ sources, registry: packs[0] }),
+    fixtureLoadReadiness,
+    sourceFamilyCounts,
+    sourceFamilyBreakdown: sourcePackFamilyBreakdown({
+      candidates,
+      sources,
+      activeRows,
+      frontierTasks,
+      persistedQueueReceipts,
+      parserSourceFamilyCounts,
+      fixtureLoadReadiness,
+      sourceFamilyCounts,
+      lastRun
+    }),
     activeSourceRows: activeRows.length,
     queuedCollectionTasks: queuedTaskIds.size,
     safeOutput: sourcePackSafeOutput()
   };
+}
+
+function sourcePackFamilyBreakdown(input: {
+  candidates: SourcePackRegistryCandidate[];
+  sources: SourceRecord[];
+  activeRows: Array<Record<string, any>>;
+  frontierTasks: Array<Record<string, any>>;
+  persistedQueueReceipts: Array<Record<string, any>>;
+  parserSourceFamilyCounts: Record<SourceGrowthFamily, Record<string, number>>;
+  fixtureLoadReadiness: Record<string, any>;
+  sourceFamilyCounts: Record<SourceGrowthFamily, Record<string, any>>;
+  lastRun?: Record<string, any>;
+}) {
+  const fixtureRows = new Map<string, Record<string, any>>((input.fixtureLoadReadiness.rows ?? []).map((row: Record<string, any>) => [String(row.family), row]));
+  const activeRowsByFamily = countRecordsByFamily(input.activeRows, (row) => row.sourceFamily ?? row.family);
+  const queuedTaskIdsByFamily = sourcePackQueuedTaskIdsByFamily(input.frontierTasks, input.persistedQueueReceipts);
+
+  const rows = SOURCE_GROWTH_FAMILIES.map((family) => {
+    const familyCandidates = input.candidates.filter((candidate) => candidate.declaredFamily === family);
+    const statusCounts = countRecordsByFamilyStatus(familyCandidates);
+    const fixtureRow: Record<string, any> = fixtureRows.get(family) ?? {};
+    const sourceCounts = input.sourceFamilyCounts[family] ?? {};
+    const queuedCollectionTasks = queuedTaskIdsByFamily.get(family)?.size ?? 0;
+    const activeSourceRows = Math.max(Number(sourceCounts.active ?? 0), activeRowsByFamily.get(family) ?? 0);
+    const blockedCandidates = familyCandidates.filter((candidate) => {
+      return ["rejected", "failed", "disabled", "suppressed", "duplicate"].includes(String(candidate.status)) || Boolean(candidate.failure);
+    });
+    const parserStatuses = input.parserSourceFamilyCounts[family] ?? {};
+    const fixtureReadyCandidates = Number(fixtureRow.fixtureReadyCandidates ?? 0);
+    const canProduceAlertGradeEvidence = activeSourceRows > 0 && (
+      family === "telegram"
+      || family === "darkweb_metadata"
+      || family === "darkweb_onion"
+      || familyCandidates.some((candidate) => (candidate as any).sourceHealth?.canProduceAlertGradeEvidence === true)
+    );
+    return {
+      schemaVersion: "dwm.source_pack_family_breakdown_row.v1",
+      family,
+      totalCandidates: familyCandidates.length,
+      statusCounts,
+      acceptedCandidates: familyCandidates.filter((candidate) => !["rejected", "duplicate", "suppressed", "disabled", "failed"].includes(candidate.status)).length,
+      rejectedCandidates: familyCandidates.filter((candidate) => candidate.status === "rejected" || candidate.status === "failed").length,
+      duplicateCandidates: familyCandidates.filter((candidate) => candidate.status === "duplicate").length,
+      suppressedCandidates: familyCandidates.filter((candidate) => candidate.status === "suppressed").length,
+      pendingCandidates: familyCandidates.filter((candidate) => ["queued", "approval_required", "candidate", "retry_scheduled"].includes(String(candidate.status))).length,
+      blockedCandidates: blockedCandidates.length,
+      activeSourceRows,
+      queuedCollectionTasks,
+      collectionReady: activeSourceRows > 0 && queuedCollectionTasks > 0,
+      parserStatuses,
+      fixtureReadiness: {
+        fixtureReadyCandidates,
+        blockedCandidates: Number(fixtureRow.blockedCandidates ?? 0),
+        parserProfile: fixtureRow.parserProfile ?? parserProfileForFamily(family),
+        expectedCaptureType: fixtureRow.expectedCaptureType ?? expectedCaptureTypeForFamily(family),
+        fixtureKeys: fixtureRow.fixtureKeys ?? [],
+        loadPlan: fixtureRow.loadPlan ?? {
+          mode: "no_network_fixture",
+          action: "pack_worker_run",
+          liveNetworkFetch: false,
+          rawRestrictedPayloadStorage: false
+        }
+      },
+      alertability: {
+        canProduceAlertGradeEvidence,
+        matchableFields: alertableFieldsForFamily(family),
+        evidenceSource: "source_pack_worker_readiness"
+      },
+      policyBoundary: sourcePackFixturePolicyBoundaryForFamily(family),
+      lastWorkerRun: input.lastRun ? {
+        id: input.lastRun.id,
+        status: input.lastRun.status,
+        completedAt: input.lastRun.completedAt
+      } : undefined,
+      blockers: dedupeBlockers([
+        ...(fixtureRow.blockers ?? []),
+        ...blockedCandidates.map((candidate) => ({
+          code: candidate.failure?.code ?? candidate.status,
+          severity: "warning",
+          family,
+          candidateId: candidate.id,
+          retryable: candidate.status !== "rejected"
+        }))
+      ]),
+      safeOutput: sourcePackSafeOutput()
+    };
+  });
+  return {
+    schemaVersion: "dwm.source_pack_family_breakdown.v1",
+    rows,
+    summary: {
+      activeFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.activeSourceRows > 0).map((row) => row.family)),
+      collectionReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.collectionReady).map((row) => row.family)),
+      fixtureReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.fixtureReadiness.fixtureReadyCandidates > 0).map((row) => row.family)),
+      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.blockedCandidates > 0 || row.fixtureReadiness.blockedCandidates > 0).map((row) => row.family)),
+      parserStatuses: Object.fromEntries(rows.map((row) => [row.family, row.parserStatuses])),
+      alertableFamilies: uniqueSourceReadinessStrings(rows.filter((row) => row.alertability.canProduceAlertGradeEvidence).map((row) => row.family))
+    },
+    safeOutput: sourcePackSafeOutput()
+  };
+}
+
+function countRecordsByFamily(records: Array<Record<string, any>>, familyFor: (record: Record<string, any>) => unknown): Map<SourceGrowthFamily, number> {
+  const counts = new Map<SourceGrowthFamily, number>();
+  for (const record of records) {
+    const family = sourceGrowthFamilyFromUnknown(familyFor(record));
+    counts.set(family, (counts.get(family) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function sourcePackQueuedTaskIdsByFamily(frontierTasks: Array<Record<string, any>>, receipts: Array<Record<string, any>>): Map<SourceGrowthFamily, Set<string>> {
+  const taskIdsByFamily = new Map<SourceGrowthFamily, Set<string>>();
+  const add = (family: SourceGrowthFamily, taskId: string) => {
+    const ids = taskIdsByFamily.get(family) ?? new Set<string>();
+    ids.add(taskId);
+    taskIdsByFamily.set(family, ids);
+  };
+  for (const task of frontierTasks) {
+    add(sourceGrowthFamilyFromUnknown(task.planning?.sourcePack?.family ?? task.sourceFamily ?? task.sourceType), String(task.id ?? task.taskId ?? stableId("source_pack_task", JSON.stringify(task))));
+  }
+  for (const receipt of receipts) {
+    add(sourceGrowthFamilyFromUnknown(receipt.sourceFamily ?? receipt.family ?? receipt.sourceType), String(receipt.taskId ?? receipt.id ?? stableId("source_pack_receipt", JSON.stringify(receipt))));
+  }
+  return taskIdsByFamily;
+}
+
+function countRecordsByFamilyStatus(candidates: SourcePackRegistryCandidate[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const candidate of candidates) {
+    const status = String(candidate.status ?? "unknown");
+    counts[status] = (counts[status] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function sourceGrowthFamilyFromUnknown(value: unknown): SourceGrowthFamily {
+  const raw = String(value ?? "").toLowerCase();
+  if (SOURCE_GROWTH_FAMILIES.includes(raw as SourceGrowthFamily)) return raw as SourceGrowthFamily;
+  if (raw.includes("telegram")) return "telegram";
+  if (raw.includes("onion")) return "darkweb_onion";
+  if (raw.includes("darkweb") || raw.includes("tor_metadata") || raw.includes("restricted_metadata")) return "darkweb_metadata";
+  if (raw.includes("actor")) return "actor_page";
+  if (raw.includes("advisory") || raw.includes("cisa") || raw.includes("cert")) return "public_advisory";
+  return "clear_web";
 }
 
 function sourcePackFixtureLoadReadiness(candidates: Array<Record<string, any>>) {
