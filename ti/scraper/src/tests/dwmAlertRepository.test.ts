@@ -472,6 +472,22 @@ describe("dwm alert repository", () => {
       captureIds: ["cap_repo_tg_acme"],
       recommendedRoute: "identity_response"
     });
+    expect(buildDwmAlertWorkflowExecutionReadiness({
+      alert: telegramAlert,
+      organizationId: "org_repo_acme",
+      action: "assign",
+      actorRole: "analyst"
+    })).toMatchObject({
+      ready: true,
+      createdEvent: {
+        schemaVersion: "dwm.alert_created_event.v1",
+        eventId: telegramAlert?.alertCreatedEvent.id,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_repo_tg_acme"],
+        dedupeKey: telegramAlert?.dedupeKey,
+        recommendedRoute: "identity_response"
+      }
+    });
 
     const existing = first.alerts[0];
     store.saveDwmAlert({
@@ -501,6 +517,21 @@ describe("dwm alert repository", () => {
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).createdEvent).toMatchObject({
       eventId: existing.alertCreatedEvent.id,
       captureIds: ["cap_repo_tg_acme"]
+    });
+    expect(buildDwmAlertWorkflowExecutionReadiness({
+      alert: preserved,
+      organizationId: "org_repo_acme",
+      action: "replay",
+      expectedWorkflowEventCount: 0
+    })).toMatchObject({
+      ready: false,
+      blockerCodes: ["stale_workflow_version"],
+      createdEvent: {
+        eventId: existing.alertCreatedEvent.id,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_repo_tg_acme"],
+        recommendedRoute: "identity_response"
+      }
     });
     expect(preserved?.caseId).toBe("case_existing_repo");
     expect(preserved?.replayCount).toBe(2);

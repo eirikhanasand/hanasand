@@ -117,6 +117,17 @@ export type DwmAlertWorkflowExecutionReadiness = {
   schemaVersion: "dwm.alert_workflow_execution_readiness.v1";
   alertId?: string;
   organizationId?: string;
+  createdEvent?: {
+    schemaVersion: "dwm.alert_created_event.v1";
+    eventId?: string;
+    eventType?: string;
+    at?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    dedupeKey?: string;
+    deliveryDedupeKey?: string;
+    recommendedRoute?: string;
+  };
   ready: boolean;
   action: "assign" | "note" | "transition" | "case_link" | "replay" | "close" | "reopen" | "suppress" | "deliver";
   expectedWorkflowEventCount?: number;
@@ -406,6 +417,9 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
   }) : undefined;
   const currentWorkflowEventCount = alert ? (alert.workflowEvents ?? []).length : undefined;
   const currentUpdatedAt = alert?.updatedAt;
+  const workflowContext = alert?.deliveryReadinessContext ?? alert?.workflowContext ?? alert?.webhookContext ?? {};
+  const selectedCaptureIds = uniqueStrings(asStringArray(workflowContext.selectedCaptureIds ?? workflowContext.captureIds ?? alert?.provenance?.captureIds));
+  const createdEvent = normalizeDwmAlertCreatedEvent(alert, workflowContext, selectedCaptureIds);
   const lifecycleBlockers = (uniqueStrings(input.lifecycleBlockers ?? []) as DwmAlertWorkflowExecutionBlockerCode[]).map((code) =>
     workflowExecutionBlocker(code, "lifecycle", workflowLifecycleBlockerDetail(code), code !== "retired_watchlist")
   );
@@ -428,6 +442,7 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
     schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
     alertId: alert?.id,
     organizationId: input.organizationId ?? alert?.organizationId,
+    createdEvent,
     ready: blockers.length === 0,
     action,
     expectedWorkflowEventCount: input.expectedWorkflowEventCount,
