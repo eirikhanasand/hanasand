@@ -399,6 +399,94 @@ export function buildOrgAlertSourceEvidenceReport(input: {
   };
 }
 
+function sourceEvidenceRow(input: {
+  row: OrgAlertWorkflowBridgeRow;
+  sourceById: Map<string, OrgAlertSourceRef>;
+  captureById: Map<string, OrgAlertCaptureRef>;
+  checkedAt: string;
+  maxAgeHours: number;
+}): OrgAlertSourceEvidenceRow {
+  const captures = input.row.provenance.captureIds.map((captureId) => input.captureById.get(captureId)).filter(Boolean) as OrgAlertCaptureRef[];
+  const sourceIds = uniqueStrings([
+    ...input.row.provenance.sourceIds,
+    ...captures.map((capture) => capture.sourceId)
+  ].filter(Boolean).map(String));
+  const sources = sourceIds.map((sourceId) => input.sourceById.get(sourceId)).filter(Boolean) as OrgAlertSourceRef[];
+  const sourceFamilies = uniqueStrings([
+    ...input.row.sourceFamilies,
+    ...sources.map((source) => source.sourceFamily),
+    ...captures.map((capture) => capture.sourceFamily)
+  ].filter(Boolean).map(String));
+  const contentHashes = uniqueStrings([
+    ...input.row.provenance.contentHashes,
+    ...captures.map((capture) => capture.contentHash)
+  ].filter(Boolean).map(String));
+  const newestEvidenceAt = newestTimestamp([
+    ...captures.map((capture) => capture.collectedAt),
+    ...sources.map((source) => source.lastCollectedAt ?? source.updatedAt)
+  ]);
+  const ageHours = newestEvidenceAt ? hoursBetween(newestEvidenceAt, input.checkedAt) : undefined;
+  const blockerCodes = uniqueStrings([
+    !input.row.ready ? "bridge_row_not_ready" : undefined,
+    sourceFamilies.length === 0 ? "missing_source_family" : undefined,
+    sourceIds.some((sourceId) => !input.sourceById.has(sourceId)) ? "missing_source_ref" : undefined,
+    sources.some((source) => source.status !== "active") ? "inactive_source" : undefined,
+    input.row.provenance.captureIds.some((captureId) => !input.captureById.has(captureId)) ? "missing_capture_ref" : undefined,
+    input.row.provenance.contentHashes.some((hash) => !contentHashes.includes(hash)) ? "content_hash_mismatch" : undefined,
+    ageHours === undefined || ageHours > input.maxAgeHours ? "stale_evidence" : undefined
+  ].filter(Boolean).map(String)) as OrgAlertSourceEvidenceBlocker["code"][];
+
+  return {
+    rowId: input.row.rowId,
+    alertIds: input.row.matchedAlertIds,
+    watchlistId: input.row.watchlistId,
+    watchlistItemId: input.row.watchlistItemId,
+    sourceFamilies,
+    sourceIds,
+    captureIds: input.row.provenance.captureIds,
+    contentHashes,
+    newestEvidenceAt,
+    ageHours,
+    ready: blockerCodes.length === 0,
+    blockerCodes
+  };
+}
+
+function sourceEvidenceBlockers(row: OrgAlertSourceEvidenceRow): OrgAlertSourceEvidenceBlocker[] {
+  return row.blockerCodes.map((code) => ({
+    code,
+    ownerLane: code === "bridge_row_not_ready" ? "alert" : "source",
+    rowId: row.rowId,
+    alertId: row.alertIds[0],
+    watchlistId: row.watchlistId,
+    watchlistItemId: row.watchlistItemId,
+    sourceId: row.sourceIds[0],
+    captureId: row.captureIds[0],
+    path: sourceEvidencePathFor(code),
+    message: sourceEvidenceMessageFor(code)
+  }));
+}
+
+function sourceEvidencePathFor(code: OrgAlertSourceEvidenceBlocker["code"]): string {
+  if (code === "bridge_row_not_ready") return "bridge.rows[].ready";
+  if (code === "missing_source_family") return "bridge.rows[].sourceFamilies";
+  if (code === "missing_source_ref") return "sources[].sourceId";
+  if (code === "inactive_source") return "sources[].status";
+  if (code === "missing_capture_ref") return "captures[].captureId";
+  if (code === "content_hash_mismatch") return "captures[].contentHash";
+  return "captures[].collectedAt";
+}
+
+function sourceEvidenceMessageFor(code: OrgAlertSourceEvidenceBlocker["code"]): string {
+  if (code === "bridge_row_not_ready") return "Org alert workflow bridge row is not ready.";
+  if (code === "missing_source_family") return "No source family is attached to the alert evidence.";
+  if (code === "missing_source_ref") return "Alert provenance references a source that is not present in the source evidence set.";
+  if (code === "inactive_source") return "One or more evidence sources are not active.";
+  if (code === "missing_capture_ref") return "Alert provenance references a capture that is not present in the source evidence set.";
+  if (code === "content_hash_mismatch") return "Capture hash does not match the alert provenance hash.";
+  return "Alert evidence is older than the allowed freshness window.";
+}
+
 function bridgeRow(input: {
   watchlist: OrgAlertWorkflowWatchlistRef;
   alerts: Record<string, any>[];
@@ -851,4 +939,19 @@ function messageFor(code: OrgAlertWorkflowBridgeBlocker["code"]): string {
 
 function normalizeTerm(value: string) {
   return String(value).trim().toLowerCase();
+}
+
+function newestTimestamp(values: Array<string | undefined>) {
+  const timestamps = values
+    .map((value) => Date.parse(String(value ?? "")))
+    .filter((value) => Number.isFinite(value));
+  if (!timestamps.length) return undefined;
+  return new Date(Math.max(...timestamps)).toISOString();
+}
+
+function hoursBetween(from: string, to: string) {
+  const fromMs = Date.parse(from);
+  const toMs = Date.parse(to);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return undefined;
+  return Math.max(0, (toMs - fromMs) / 3600000);
 }
