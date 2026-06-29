@@ -6,6 +6,7 @@ const modelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleMo
 const pageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', import.meta.url), 'utf8')
 const checkerSource = readFileSync(new URL('./check-product-progress-contract.ts', import.meta.url), 'utf8')
 const progressSource = readFileSync(new URL('../src/utils/productProgress/readiness.ts', import.meta.url), 'utf8')
+const renderDomSource = readFileSync(new URL('./check-dashboard-render-dom.mjs', import.meta.url), 'utf8')
 
 const readinessRows = {
     dashboard_evidence: {
@@ -107,6 +108,29 @@ for (const field of ['ownerLane', 'unavailableReason', 'staleAfterSeconds', 'pro
     assert.ok(progressSource.includes(field), `Product-progress dependency proof field missing: ${field}`)
 }
 
+for (const requiredToken of [
+    'hanasand.dashboard.render-proof.v1',
+    '/dashboard/ti/control',
+    'screenshotPath',
+    'selectorCounts',
+    'overlapCount',
+    'bannedCopyList',
+    'narrowActionCount',
+    'highContrastTokenHits',
+    '--base-url=',
+]) {
+    assert.ok(renderDomSource.includes(requiredToken), `Rendered proof command missing ${requiredToken}`)
+}
+
+for (const [id, spec] of Object.entries(readinessRows)) {
+    assert.ok(renderDomSource.includes(id), `Rendered proof command missing row ${id}`)
+    assert.ok(renderDomSource.includes(spec.href), `Rendered proof command missing href ${spec.href}`)
+}
+
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3']) {
+    assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
+}
+
 const worker3Matrix = {
     viewports: [
         { name: 'desktop', width: 1440, height: 1000 },
@@ -115,7 +139,12 @@ const worker3Matrix = {
     screenshots: [
         '/tmp/hanasand-dashboard-desktop.png',
         '/tmp/hanasand-dashboard-mobile.png',
+        '/tmp/hanasand-dashboard_ti_control-desktop.png',
+        '/tmp/hanasand-dashboard_ti_control-mobile.png',
     ],
+    command: 'node scripts/check-dashboard-render-dom.mjs --base-url=http://127.0.0.1:3010 --out-dir=/tmp',
+    artifact: '/tmp/hanasand-dashboard-render-proof.json',
+    schema: 'hanasand.dashboard.render-proof.v1',
     rows: readinessRows,
     failureConditions: [
         'missing readiness row selector',
@@ -125,6 +154,8 @@ const worker3Matrix = {
         'unavailable row without unavailable reason',
         'visible prompt/coordinator wording',
         'white translucent dark-mode borders',
+        'missing screenshot or acceptance JSON artifact',
+        'overlapping readiness rows or source operation actions',
         'action/status text clipped or stacked vertically',
     ],
 }

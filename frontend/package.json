@@ -8,6 +8,8 @@
     "start": "PORT=${PORT:-3000} bun --bun next start --hostname 0.0.0.0 --port ${PORT:-3000}",
     "start:docker": "PORT=${PORT:-3001} bun --bun next start --hostname 0.0.0.0 --port ${PORT:-3001}",
     "check:startup": "bun scripts/check-ai-hooks.mjs",
+    "check:dashboard-render": "node scripts/check-dashboard-render-proof.mjs",
+    "check:dashboard-render-dom": "node scripts/check-dashboard-render-dom.mjs",
     "check:upload-limit": "node scripts/check-upload-proxy-limit.mjs",
     "lint:guardrails": "node scripts/lint-guardrails.mjs",
     "lint:eslint": "eslint ./src ./tests ./scripts",
