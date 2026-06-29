@@ -521,6 +521,8 @@ for (const phrase of publicTiImplementationPhrases) {
 assert(pageClientSource.includes('Console handoff'), 'Public TI page should use professional console handoff language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
 assert(pageClientSource.includes('Handoff readiness'), 'Public TI page should expose consumer-ready workflow state.')
+assert(pageClientSource.includes('data-ti-handoff-evidence-matrix'), 'Public TI page should expose handoff evidence for backed action review.')
+assert(pageClientSource.includes('Handoff evidence'), 'Public TI page should label backed action evidence in analyst language.')
 assert(pageClientSource.includes('Action exports'), 'Public TI page should expose validated action exports.')
 assert(pageClientSource.includes('Validated request bodies for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
 assert(pageClientSource.includes('data-ti-section-rail'), 'Public TI page should expose a section rail for analyst scanning.')

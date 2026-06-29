@@ -1191,6 +1191,117 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
     )
 }
 
+function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabilityModel }) {
+    const rows = [
+        {
+            id: 'watchlist',
+            label: 'Watchlist',
+            state: actionability.actionPayloads.payloads.watchlistAdd.ready,
+            route: actionability.actionPayloads.payloads.watchlistAdd.backedRoute ?? actionability.actionPayloads.payloads.watchlistAdd.route,
+            ids: [
+                ...actionability.readiness.backedIds.organizationIds.slice(0, 2).map(id => `org ${id}`),
+                ...actionability.readiness.backedIds.watchlistItemIds.slice(0, 2).map(id => `item ${id}`),
+            ],
+            provenance: actionability.actionPayloads.payloads.watchlistAdd.provenance,
+            blocker: actionability.actionPayloads.payloads.watchlistAdd.blockedBy[0],
+            missing: actionability.actionPayloads.payloads.watchlistAdd.blockedBy.map(blocker => blocker.handoff),
+        },
+        {
+            id: 'alert',
+            label: 'Alert rebuild',
+            state: actionability.createAlertHandoff.ready,
+            route: actionability.createAlertHandoff.backedRoute || actionability.createAlertHandoff.endpoint,
+            ids: actionability.readiness.backedIds.alertIds.slice(0, 3).map(id => `alert ${id}`),
+            provenance: actionability.actionPayloads.payloads.analystHandoffBundle.provenance,
+            blocker: actionability.actionPayloads.payloads.analystHandoffBundle.blockedBy.find(blocker => blocker.ownerLane === 'alert'),
+            missing: actionability.createAlertHandoff.missing,
+        },
+        {
+            id: 'case',
+            label: 'Case',
+            state: actionability.caseHandoff.ready,
+            route: actionability.caseHandoff.backedRoute || actionability.caseHandoff.endpoint,
+            ids: [
+                ...actionability.readiness.backedIds.caseIds.slice(0, 2).map(id => `case ${id}`),
+                ...actionability.readiness.backedIds.casePaths.slice(0, 1),
+            ],
+            provenance: actionability.actionPayloads.payloads.caseHandoff.provenance,
+            blocker: actionability.actionPayloads.payloads.caseHandoff.blockedBy[0],
+            missing: actionability.caseHandoff.missing,
+        },
+        {
+            id: 'delivery',
+            label: 'Delivery',
+            state: actionability.webhookDeliveryHandoff.ready,
+            route: actionability.webhookDeliveryHandoff.backedRoute || actionability.webhookDeliveryHandoff.endpoint,
+            ids: actionability.readiness.backedIds.webhookDestinationIds.slice(0, 3).map(id => `destination ${id}`),
+            provenance: actionability.actionPayloads.payloads.webhookDelivery.provenance,
+            blocker: actionability.actionPayloads.payloads.webhookDelivery.blockedBy[0],
+            missing: actionability.webhookDeliveryHandoff.missing,
+        },
+        {
+            id: 'source',
+            label: 'Source enrichment',
+            state: actionability.actionPayloads.payloads.sourceEnrichment.ready,
+            route: actionability.actionPayloads.payloads.sourceEnrichment.backedRoute ?? actionability.actionPayloads.payloads.sourceEnrichment.route,
+            ids: actionability.readiness.backedIds.captureIds.slice(0, 3).map(id => `capture ${id}`),
+            provenance: actionability.actionPayloads.payloads.sourceEnrichment.provenance,
+            blocker: actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.find(blocker => blocker.ownerLane === 'source') ?? actionability.actionPayloads.payloads.sourceEnrichment.blockedBy[0],
+            missing: actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.map(blocker => blocker.handoff),
+        },
+    ]
+    const readyCount = rows.filter(row => row.state).length
+
+    return (
+        <div data-ti-handoff-evidence-matrix='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff evidence</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {readyCount} of {rows.length} handoffs have backed IDs, route, and provenance ready for authenticated review.
+                    </p>
+                </div>
+                <span className={readyCount === rows.length ? decisionStepStatusClass('ready') : readyCount ? decisionStepStatusClass('review') : decisionStepStatusClass('blocked')}>
+                    {readyCount}/{rows.length} ready
+                </span>
+            </div>
+            <div className='mt-3 grid min-w-0 gap-2'>
+                {rows.map(row => (
+                    <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
+                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                            </div>
+                            <span className={row.state ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                                {row.state ? 'ready' : 'blocked'}
+                            </span>
+                        </div>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                            {row.ids.length ? row.ids.map(id => (
+                                <span key={id} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{id}</span>
+                            )) : <span className='rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>ID needed</span>}
+                            {row.provenance.slice(0, 2).map(item => (
+                                <span key={`${row.id}-source-${item.sourceName}-${item.provenance}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{item.sourceName}</span>
+                            ))}
+                            {row.provenance.filter(item => item.captureId).slice(0, 2).map(item => (
+                                <span key={`${row.id}-capture-${item.captureId}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>capture {item.captureId}</span>
+                            ))}
+                        </div>
+                        {row.blocker ? (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{readinessOwnerLabel(row.blocker.ownerLane)}: {row.blocker.handoff}</p>
+                        ) : row.missing.length ? (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{row.missing.slice(0, 2).join('; ')}</p>
+                        ) : (
+                            <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required identifiers and provenance are present.</p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     return (
         <Panel title='Evidence' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
@@ -1236,6 +1347,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
         <Panel title='Actions' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
+                <HandoffEvidenceMatrix actionability={actionability} />
                 <ConsumerReadinessPanel actionability={actionability} />
                 <ReadinessBlockersPanel actionability={actionability} />
                 <ActionPayloadsPanel actionability={actionability} />
