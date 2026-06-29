@@ -35,6 +35,9 @@ type AuditQuery = {
     idempotency?: string
     idempotencyKey?: string
     idempotency_key?: string
+    session?: string
+    supportSession?: string
+    supportSessionId?: string
     reason?: string
     outcome?: string
     from?: string
@@ -166,6 +169,30 @@ type SupportAccessRecoveryDecisionBody = {
     context?: unknown
 }
 
+type SupportSessionParams = {
+    sessionId: string
+}
+
+type SupportSessionBody = {
+    reason?: unknown
+    context?: unknown
+    org?: unknown
+    orgId?: unknown
+    organizationId?: unknown
+    user?: unknown
+    userId?: unknown
+    targetUserId?: unknown
+    actions?: unknown
+    allowedActions?: unknown
+    scope?: unknown
+    durationMinutes?: unknown
+    duration_minutes?: unknown
+    expiresAt?: unknown
+    expires_at?: unknown
+    requestId?: unknown
+    request_id?: unknown
+}
+
 type AccessRecoveryApprovalRow = {
     request_id: string
     organization_id: string
@@ -279,6 +306,9 @@ const adminAuditFilters = new Set([
     'idempotency',
     'idempotencyKey',
     'idempotency_key',
+    'session',
+    'supportSession',
+    'supportSessionId',
     'reason',
     'outcome',
     'from',
@@ -311,6 +341,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const request = text(query.request || query.requestId)
     const correlation = text(query.correlation || query.correlationId)
     const idempotency = text(query.idempotency || query.idempotencyKey || query.idempotency_key)
+    const supportSession = text(query.session || query.supportSession || query.supportSessionId)
     const reason = text(query.reason)
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
@@ -365,6 +396,10 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
         where.push('(e.request_id ILIKE ' + placeholder + ' OR e.context->>\'correlationId\' ILIKE ' + placeholder + ')')
     }
     if (idempotency) where.push(`e.context->>'idempotencyKey' ILIKE ${add(`%${idempotency}%`)}`)
+    if (supportSession) {
+        const placeholder = add(`%${supportSession}%`)
+        where.push('(e.entity_id ILIKE ' + placeholder + ' OR e.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
+    }
     if (reason) where.push(`e.reason ILIKE ${add(`%${reason}%`)}`)
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
@@ -403,7 +438,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
 
     const events = result.rows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, reason, outcome, from, to, limit }
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, reason, outcome, from, to, limit }
     return res.send({
         events,
         filters,
@@ -416,6 +451,165 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
+    })
+}
+
+export async function postSupportSession(req: FastifyRequest<{ Body: SupportSessionBody }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    let reason: string
+    try {
+        reason = requireAuditReason(req.body?.reason, 'Support session reason')
+    } catch (error) {
+        return res.status(400).send(supportError('missing_support_reason', error instanceof Error ? error.message : 'Support session reason is required.'))
+    }
+
+    const organizationId = text(req.body?.organizationId || req.body?.orgId || req.body?.org)
+    const targetUserId = text(req.body?.targetUserId || req.body?.userId || req.body?.user)
+    if (!organizationId && !targetUserId) {
+        return res.status(400).send(supportError('missing_support_target', 'Support session requires a target organization or user.'))
+    }
+
+    const actions = normalizeSupportSessionActions(req.body?.allowedActions || req.body?.actions)
+    const scope = normalizeSupportSessionScope(req.body?.scope)
+    const duration = normalizeSupportSessionDuration(req.body?.durationMinutes ?? req.body?.duration_minutes)
+    const expiry = normalizeSupportSessionExpiry(req.body?.expiresAt ?? req.body?.expires_at, duration.value)
+    if (actions.error) return res.status(400).send(actions.error)
+    if (scope.error) return res.status(400).send(scope.error)
+    if (duration.error) return res.status(400).send(duration.error)
+    if (expiry.error) return res.status(400).send(expiry.error)
+
+    const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
+    const supportSessionId = `support_session_${randomUUID()}`
+    const context = {
+        schemaVersion: 'support.scoped_session.v1',
+        supportSessionId,
+        requestId,
+        targetOrganizationId: organizationId || null,
+        targetUserId: targetUserId || null,
+        allowedActions: actions.value,
+        scope: scope.value,
+        durationMinutes: duration.value,
+        expiresAt: expiry.value,
+        status: 'active',
+        revokedAt: null,
+        revokedBy: null,
+        supportContext: cleanContext(req.body?.context),
+        immutableAudit: true,
+        redactionRequired: true,
+    }
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.session.create',
+        actorId: actor.id,
+        targetType: targetUserId ? 'user' : 'organization',
+        targetId: targetUserId || organizationId,
+        organizationId: organizationId || null,
+        entityId: supportSessionId,
+        requestId,
+        severity: 'notice',
+        outcome: 'success',
+        reason,
+        context,
+    })
+    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType: 'support.session.create', entityId: supportSessionId })
+
+    return res.status(201).send({
+        supportSession: supportSessionResponse({
+            supportSessionId,
+            actorId: actor.id,
+            reason,
+            requestId,
+            organizationId,
+            targetUserId,
+            allowedActions: actions.value,
+            scope: scope.value,
+            durationMinutes: duration.value,
+            expiresAt: expiry.value,
+            status: 'active',
+            auditEventIds,
+        }),
+    })
+}
+
+export async function postSupportSessionRevoke(req: FastifyRequest<{ Params: SupportSessionParams, Body: SupportSessionBody }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    let reason: string
+    try {
+        reason = requireAuditReason(req.body?.reason, 'Support session revoke reason')
+    } catch (error) {
+        return res.status(400).send(supportError('missing_support_reason', error instanceof Error ? error.message : 'Support session revoke reason is required.'))
+    }
+
+    const supportSessionId = text(req.params.sessionId)
+    const state = await loadSupportSessionState(supportSessionId)
+    const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
+    if (!state) {
+        await recordSupportSessionRevokeAudit(req, {
+            actorId: actor.id,
+            supportSessionId,
+            requestId,
+            reason,
+            outcome: 'failed',
+            blocker: 'support_session_not_found',
+        })
+        return res.status(404).send(supportError('support_session_not_found', 'Support session not found.', { supportSessionId }))
+    }
+    if (state.revokedAt) {
+        await recordSupportSessionRevokeAudit(req, {
+            actorId: actor.id,
+            supportSessionId,
+            requestId,
+            reason,
+            organizationId: state.organizationId,
+            targetUserId: state.targetUserId,
+            outcome: 'failed',
+            blocker: 'support_session_revoked',
+        })
+        return res.status(409).send(supportError('support_session_revoked', 'Support session is already revoked.', {
+            supportSession: supportSessionResponse({ ...state, actorId: state.actorId, reason: state.reason, requestId: state.requestId, auditEventIds: state.auditEventIds, status: 'revoked' }),
+        }))
+    }
+    if (Date.parse(state.expiresAt) <= Date.now()) {
+        await recordSupportSessionRevokeAudit(req, {
+            actorId: actor.id,
+            supportSessionId,
+            requestId,
+            reason,
+            organizationId: state.organizationId,
+            targetUserId: state.targetUserId,
+            outcome: 'denied',
+            blocker: 'support_session_expired',
+        })
+        return res.status(409).send(supportError('support_session_expired', 'Support session has expired; create a new scoped session.', {
+            supportSession: supportSessionResponse({ ...state, actorId: state.actorId, reason: state.reason, requestId: state.requestId, auditEventIds: state.auditEventIds, status: 'expired' }),
+        }))
+    }
+
+    await recordSupportSessionRevokeAudit(req, {
+        actorId: actor.id,
+        supportSessionId,
+        requestId,
+        reason,
+        organizationId: state.organizationId,
+        targetUserId: state.targetUserId,
+        outcome: 'success',
+        blocker: null,
+    })
+    const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType: 'support.session.revoke', entityId: supportSessionId })
+    return res.send({
+        supportSession: supportSessionResponse({
+            ...state,
+            actorId: state.actorId,
+            reason: state.reason,
+            requestId,
+            status: 'revoked',
+            revokedBy: actor.id,
+            revokedAt: new Date().toISOString(),
+            auditEventIds,
+        }),
     })
 }
 
@@ -2507,6 +2701,171 @@ async function loadAdminAuditEventIds(input: { requestId: string, actionType: st
     return result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id))
 }
 
+async function loadSupportSessionState(supportSessionId: string) {
+    const result = await run(`
+        SELECT id, action_type, actor_id, target_id, organization_id, entity_id, request_id, reason, outcome, context, created_at
+        FROM admin_audit_events
+        WHERE entity_id = $1
+          AND action_type IN ('support.session.create', 'support.session.revoke')
+        ORDER BY created_at ASC, id ASC
+    `, [supportSessionId])
+    const create = result.rows.find((row: Record<string, unknown>) => row.action_type === 'support.session.create') as Record<string, any> | undefined
+    if (!create) return null
+    const revoke = [...result.rows].reverse().find((row: Record<string, unknown>) => row.action_type === 'support.session.revoke' && row.outcome === 'success') as Record<string, any> | undefined
+    const context = create.context as Record<string, unknown>
+    return {
+        supportSessionId,
+        actorId: text(create.actor_id),
+        reason: text(create.reason),
+        requestId: text(create.request_id),
+        organizationId: text(context.targetOrganizationId || create.organization_id),
+        targetUserId: text(context.targetUserId || create.target_id),
+        allowedActions: Array.isArray(context.allowedActions) ? context.allowedActions.map(action => text(action)).filter(Boolean) : [],
+        scope: Array.isArray(context.scope) ? context.scope.map(item => text(item)).filter(Boolean) : [],
+        durationMinutes: Number(context.durationMinutes || 0),
+        expiresAt: text(context.expiresAt),
+        status: revoke ? 'revoked' : Date.parse(text(context.expiresAt)) <= Date.now() ? 'expired' : 'active',
+        revokedBy: revoke ? text(revoke.actor_id) : null,
+        revokedAt: revoke ? text(revoke.created_at) : null,
+        auditEventIds: result.rows.map((row: Record<string, unknown>) => Number(row.id)).filter(id => Number.isFinite(id)),
+    }
+}
+
+async function recordSupportSessionRevokeAudit(req: FastifyRequest, input: {
+    actorId: string
+    supportSessionId: string
+    requestId: string
+    reason: string
+    organizationId?: string | null
+    targetUserId?: string | null
+    outcome: 'success' | 'denied' | 'failed'
+    blocker: string | null
+}) {
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.session.revoke',
+        actorId: input.actorId,
+        targetType: input.targetUserId ? 'user' : 'support_session',
+        targetId: input.targetUserId || input.supportSessionId,
+        organizationId: input.organizationId || null,
+        entityId: input.supportSessionId,
+        requestId: input.requestId,
+        severity: 'notice',
+        outcome: input.outcome,
+        reason: input.reason,
+        context: {
+            schemaVersion: 'support.scoped_session.revoke.v1',
+            supportSessionId: input.supportSessionId,
+            targetOrganizationId: input.organizationId || null,
+            targetUserId: input.targetUserId || null,
+            revokedBy: input.actorId,
+            revokedAt: new Date().toISOString(),
+            blockerCode: input.blocker,
+            immutableAudit: true,
+            redactionRequired: true,
+        },
+    })
+}
+
+function supportSessionResponse(input: {
+    supportSessionId: string
+    actorId: string
+    reason: string
+    requestId: string
+    organizationId?: string | null
+    targetUserId?: string | null
+    allowedActions?: string[]
+    scope?: string[]
+    durationMinutes?: number
+    expiresAt: string
+    status: string
+    revokedBy?: string | null
+    revokedAt?: string | null
+    auditEventIds: number[]
+}) {
+    return {
+        schemaVersion: 'support.scoped_session.v1',
+        id: input.supportSessionId,
+        status: input.status,
+        actorId: input.actorId,
+        target: {
+            organizationId: input.organizationId || null,
+            userId: input.targetUserId || null,
+        },
+        reason: input.reason,
+        allowedActions: input.allowedActions || [],
+        scope: input.scope || [],
+        durationMinutes: input.durationMinutes || null,
+        expiresAt: input.expiresAt,
+        revokedBy: input.revokedBy || null,
+        revokedAt: input.revokedAt || null,
+        requestId: input.requestId,
+        outcome: input.status === 'active' ? 'success' : input.status === 'revoked' ? 'success' : 'denied',
+        auditEventIds: input.auditEventIds,
+        audit: {
+            actionType: input.status === 'revoked' ? 'support.session.revoke' : 'support.session.create',
+            source: 'admin',
+            service: 'hanasand-api',
+            eventIds: input.auditEventIds,
+            query: `/api/admin/audit-events?supportSession=${encodeURIComponent(input.supportSessionId)}&source=admin&service=hanasand-api`,
+        },
+        copyText: [
+            `Support session ${input.status}`,
+            `Session: ${input.supportSessionId}`,
+            `Org: ${input.organizationId || '*'}`,
+            `User: ${input.targetUserId || '*'}`,
+            `Expires: ${input.expiresAt}`,
+            `Request: ${input.requestId}`,
+            `Audit events: ${input.auditEventIds.join(', ') || 'pending index refresh'}`,
+            `Reason: ${input.reason}`,
+        ].join('\n'),
+    }
+}
+
+function normalizeSupportSessionActions(value: unknown): { value: string[], error: Record<string, unknown> | null } {
+    const allowed = new Set(['invite_assist', 'invite_resend', 'invite_revoke', 'member_role_recovery', 'access_recovery', 'impersonation'])
+    const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : ['invite_assist', 'invite_resend', 'invite_revoke', 'member_role_recovery']
+    const actions = Array.from(new Set(raw.map(item => text(item).toLowerCase()).filter(Boolean)))
+    const unsupported = actions.filter(action => !allowed.has(action))
+    if (unsupported.length) {
+        return { value: [], error: supportError('invalid_scope', `Unsupported support session action: ${unsupported[0]}.`, { supportedActions: Array.from(allowed) }) }
+    }
+    return { value: actions, error: null }
+}
+
+function normalizeSupportSessionScope(value: unknown): { value: string[], error: Record<string, unknown> | null } {
+    const allowed = new Set(['invite:create', 'invite:resend', 'invite:revoke', 'member:role_recovery', 'recovery:invite', 'recovery:approve', 'recovery:deny', 'read_profile', 'read_org', 'support_debug'])
+    const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : ['invite:create', 'invite:resend', 'invite:revoke', 'member:role_recovery']
+    const scope = Array.from(new Set(raw.map(item => text(item).toLowerCase()).filter(Boolean)))
+    const unsupported = scope.filter(item => !allowed.has(item))
+    if (unsupported.length) {
+        return { value: [], error: supportError('invalid_scope', `Unsupported support session scope: ${unsupported[0]}.`, { supportedScopes: Array.from(allowed) }) }
+    }
+    return { value: scope, error: null }
+}
+
+function normalizeSupportSessionDuration(value: unknown): { value: number, error: Record<string, unknown> | null } {
+    if (value === undefined || value === null || value === '') return { value: 60, error: null }
+    const parsed = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(parsed) || parsed !== Math.trunc(parsed) || parsed < 5 || parsed > 240) {
+        return { value: 0, error: supportError('invalid_duration', 'Support session duration must be between 5 and 240 minutes.') }
+    }
+    return { value: parsed, error: null }
+}
+
+function normalizeSupportSessionExpiry(value: unknown, durationMinutes: number): { value: string, error: Record<string, unknown> | null } {
+    if (value === undefined || value === null || value === '') {
+        return { value: new Date(Date.now() + durationMinutes * 60 * 1000).toISOString(), error: null }
+    }
+    const timestamp = Date.parse(text(value))
+    if (Number.isNaN(timestamp) || timestamp <= Date.now()) {
+        return { value: '', error: supportError('invalid_expiry', 'Support session expiry must be a future timestamp.') }
+    }
+    if (timestamp > Date.now() + 240 * 60 * 1000) {
+        return { value: '', error: supportError('invalid_expiry', 'Support session expiry must be within 240 minutes.') }
+    }
+    return { value: new Date(timestamp).toISOString(), error: null }
+}
+
 async function loadSupportInviteAssistByIdempotencyKey(input: { organizationId: string, idempotencyKey: string }) {
     const result = await run(`
         SELECT id, request_id, entity_id, context
@@ -3134,6 +3493,7 @@ function supportWorkbenchReadinessProof(input: {
             requestId: input.request || null,
         },
         supportActionsAvailable: {
+            scopedSession: Boolean(input.organizationIds.length || input.user),
             inviteAssistance: input.inviteAssistAvailable && input.noAdminAvailable,
             inviteResendRevoke: input.pendingInviteCount > 0 && input.noAdminAvailable,
             memberRoleRecovery: input.activeMembershipCount > 0 && input.noAdminAvailable,
@@ -3147,7 +3507,7 @@ function supportWorkbenchReadinessProof(input: {
             durationFor: ['impersonation'],
             idempotencyKey: true,
         },
-        auditFiltersAvailable: ['org', 'target', 'actor', 'action', 'outcome', 'request', 'entity', 'from', 'to', 'correlation', 'idempotency', 'reason'],
+        auditFiltersAvailable: ['org', 'target', 'actor', 'action', 'outcome', 'request', 'entity', 'from', 'to', 'correlation', 'idempotency', 'supportSession', 'reason'],
         timelineFilter: input.timelineFilter,
         lastProof: lastProof ? {
             eventId: lastProof.id,
