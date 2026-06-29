@@ -703,6 +703,7 @@ export type OrganizationSharedWatchlistIntegrationGuardrailCode =
     | 'redaction_missing'
     | 'denial_guardrail_missing'
     | 'webhook_guardrail_missing'
+    | 'case_guardrail_missing'
     | 'route_missing'
 
 export type OrganizationSharedWatchlistIntegrationGuardrails = {
@@ -755,6 +756,18 @@ export type OrganizationSharedWatchlistIntegrationGuardrails = {
         destinationEnumerationAllowed: false
         requiredDestinationOrgId: string
         blockerCodes: Array<'webhook_idempotency_missing' | 'webhook_evidence_missing' | 'webhook_redaction_missing' | 'webhook_org_scope_missing' | 'webhook_destination_enumeration_enabled'>
+    }
+    caseSafety: {
+        schemaVersion: 'organization.shared_watchlist_case_workflow_guardrails.v1'
+        ok: boolean
+        requiredCaseFields: Array<'organizationId' | 'tenantId' | 'alertId' | 'casePath' | 'watchlistItemIds' | 'allowedActions' | 'visibilityDecision' | 'evidence.provenance'>
+        requiredTimelineEvents: Array<'case.opened' | 'case.linked_alert' | 'case.assigned' | 'case.status_changed' | 'case.note_added'>
+        requiredEvidenceFields: Array<'alertId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'matchedTerms' | 'source' | 'capturedAt' | 'casePath'>
+        requiredRedactedFields: Array<'activeTerms[].term' | 'case.evidence.rawContent'>
+        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        actorCanOpenCase: boolean
+        actorCanAssignCase: boolean
+        blockerCodes: Array<'case_org_scope_missing' | 'case_path_missing' | 'case_fields_missing' | 'case_timeline_missing' | 'case_evidence_missing' | 'case_redaction_missing' | 'case_role_gate_missing'>
     }
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[]
@@ -970,6 +983,14 @@ export type OrganizationWatchlistAlertTermsExportDenial = {
     redactedFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys'>
     blockerCodes: Array<OrganizationVisibilityDenyReason | 'alert_export_unavailable'>
     nonmemberEnumeration: false
+    auditProof: {
+        schemaVersion: 'organization.watchlist_alert_terms_denial_audit.v1'
+        serviceLogAction: 'organization_watchlist_alert_terms_export_denied'
+        requestId: string | null
+        requiredMetadataFields: Array<'requestId' | 'role' | 'alertVisibilityPolicy' | 'allowedRoles' | 'denialReason' | 'blockerCodes'>
+        redactedFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys'>
+        proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist_alert_terms_export_denied'
+    }
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
@@ -2096,6 +2117,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
     const caseContractKeys = [...proof.caseBridge.caseWorkflowContract.watchlistScope.alertGeneratorKeys].sort()
     const alertQueueVisibility = organizationSharedWatchlistAlertQueueVisibility(proof)
     const webhookSafety = organizationSharedWatchlistWebhookDeliveryGuardrails(proof)
+    const caseSafety = organizationSharedWatchlistCaseWorkflowGuardrails(proof)
 
     if (proof.schemaVersion !== 'organization.shared_watchlist_downstream_proof.v1') blockerCodes.push('schema_mismatch')
     if (proof.audit.schemaVersion !== 'organization.shared_watchlist_audit_contract.v1') blockerCodes.push('schema_mismatch')
@@ -2149,11 +2171,13 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         || !proof.webhookBridge.deliveryContract.redactedFields.includes('destination.secret')
         || !alertQueueVisibility.denialGuardrails.ok
         || !webhookSafety.ok
+        || !caseSafety.ok
     ) {
         blockerCodes.push('redaction_missing')
     }
     if (!alertQueueVisibility.denialGuardrails.ok) blockerCodes.push('denial_guardrail_missing')
     if (!webhookSafety.ok) blockerCodes.push('webhook_guardrail_missing')
+    if (!caseSafety.ok) blockerCodes.push('case_guardrail_missing')
     if (
         proof.alertBridge.queueVisibilityContract.routes.list !== 'GET /v1/dwm/alerts'
         || proof.alertBridge.queueVisibilityContract.routes.replay !== 'POST /v1/dwm/alerts/:id/replay'
@@ -2212,6 +2236,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
             blockerCodes: alertQueueVisibility.denialGuardrails.blockerCodes,
         },
         webhookSafety,
+        caseSafety,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         blockerCodes: uniqueBlockers,
     }
@@ -2273,6 +2298,81 @@ function organizationSharedWatchlistWebhookDeliveryGuardrails(
         destinationEnumerationAllowed: false,
         requiredDestinationOrgId: delivery.destinationSelection.requiredDestinationOrgId,
         blockerCodes,
+    }
+}
+
+function organizationSharedWatchlistCaseWorkflowGuardrails(
+    proof: OrganizationSharedWatchlistDownstreamProof
+): OrganizationSharedWatchlistIntegrationGuardrails['caseSafety'] {
+    const workflow = proof.caseBridge.caseWorkflowContract
+    const requiredCaseFields: OrganizationSharedWatchlistIntegrationGuardrails['caseSafety']['requiredCaseFields'] = [
+        'organizationId',
+        'tenantId',
+        'alertId',
+        'casePath',
+        'watchlistItemIds',
+        'allowedActions',
+        'visibilityDecision',
+        'evidence.provenance',
+    ]
+    const requiredTimelineEvents: OrganizationSharedWatchlistIntegrationGuardrails['caseSafety']['requiredTimelineEvents'] = [
+        'case.opened',
+        'case.linked_alert',
+        'case.assigned',
+        'case.status_changed',
+        'case.note_added',
+    ]
+    const requiredEvidenceFields: OrganizationSharedWatchlistIntegrationGuardrails['caseSafety']['requiredEvidenceFields'] = [
+        'alertId',
+        'watchlistItemIds',
+        'alertGeneratorKeys',
+        'matchedTerms',
+        'source',
+        'capturedAt',
+        'casePath',
+    ]
+    const requiredRedactedFields: OrganizationSharedWatchlistIntegrationGuardrails['caseSafety']['requiredRedactedFields'] = [
+        'activeTerms[].term',
+        'case.evidence.rawContent',
+    ]
+    const blockerCodes: OrganizationSharedWatchlistIntegrationGuardrails['caseSafety']['blockerCodes'] = []
+
+    if (workflow.organizationId !== proof.organizationId || workflow.tenantId !== proof.organizationId) {
+        blockerCodes.push('case_org_scope_missing')
+    }
+    if (workflow.casePathTemplate !== '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId') {
+        blockerCodes.push('case_path_missing')
+    }
+    if (!requiredCaseFields.every(field => workflow.requiredCaseFields.includes(field))) {
+        blockerCodes.push('case_fields_missing')
+    }
+    if (!requiredTimelineEvents.every(event => workflow.timelineEventTypes.includes(event))) {
+        blockerCodes.push('case_timeline_missing')
+    }
+    if (!requiredEvidenceFields.every(field => workflow.evidenceFields.includes(field))) {
+        blockerCodes.push('case_evidence_missing')
+    }
+    if (!requiredRedactedFields.every(field => workflow.redactedFields.includes(field))) {
+        blockerCodes.push('case_redaction_missing')
+    }
+    if (workflow.actorActions.canOpenCase && !workflow.actorActions.allowedActions.includes('link_case')) {
+        blockerCodes.push('case_role_gate_missing')
+    }
+    if (workflow.actorActions.canAssignCase && !workflow.actorActions.allowedActions.includes('assign_case')) {
+        blockerCodes.push('case_role_gate_missing')
+    }
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_case_workflow_guardrails.v1',
+        ok: blockerCodes.length === 0,
+        requiredCaseFields,
+        requiredTimelineEvents,
+        requiredEvidenceFields,
+        requiredRedactedFields,
+        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+        actorCanOpenCase: workflow.actorActions.canOpenCase,
+        actorCanAssignCase: workflow.actorActions.canAssignCase,
+        blockerCodes: [...new Set(blockerCodes)],
     }
 }
 
@@ -2566,7 +2666,14 @@ export function organizationWatchlistAlertTermsExportDenial(input: {
         role: OrganizationRole
     }
     visibility: OrganizationVisibilityDecision
+    requestId?: string | null
 }): OrganizationWatchlistAlertTermsExportDenial {
+    const redactedFields: OrganizationWatchlistAlertTermsExportDenial['redactedFields'] = [
+        'activeTerms[]',
+        'activeWatchlistTerms[]',
+        'alertGeneratorKeys[]',
+        'watchlistScope.alertGeneratorKeys',
+    ]
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export_denial.v1',
         organizationId: input.organizationId,
@@ -2594,14 +2701,24 @@ export function organizationWatchlistAlertTermsExportDenial(input: {
             'routes',
             'blockerCodes',
         ],
-        redactedFields: [
-            'activeTerms[]',
-            'activeWatchlistTerms[]',
-            'alertGeneratorKeys[]',
-            'watchlistScope.alertGeneratorKeys',
-        ],
+        redactedFields,
         blockerCodes: [input.visibility.reason ?? 'alert_export_unavailable'],
         nonmemberEnumeration: false,
+        auditProof: {
+            schemaVersion: 'organization.watchlist_alert_terms_denial_audit.v1',
+            serviceLogAction: 'organization_watchlist_alert_terms_export_denied',
+            requestId: input.requestId ?? null,
+            requiredMetadataFields: [
+                'requestId',
+                'role',
+                'alertVisibilityPolicy',
+                'allowedRoles',
+                'denialReason',
+                'blockerCodes',
+            ],
+            redactedFields,
+            proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist_alert_terms_export_denied',
+        },
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
 }

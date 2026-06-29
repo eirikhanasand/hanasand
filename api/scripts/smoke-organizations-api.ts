@@ -709,6 +709,13 @@ assert.equal(alertTermsWhilePausedDenied.visibility.allowed, false)
 assert.equal(alertTermsWhilePausedDenied.visibility.reason, 'role_not_allowed')
 assert.ok(alertTermsWhilePausedDenied.redactedFields.includes('activeTerms[]'))
 assert.ok(!('activeTerms' in alertTermsWhilePausedDenied))
+assert.equal(alertTermsWhilePausedDenied.auditProof.schemaVersion, 'organization.watchlist_alert_terms_denial_audit.v1')
+assert.equal(alertTermsWhilePausedDenied.auditProof.serviceLogAction, 'organization_watchlist_alert_terms_export_denied')
+assert.equal(alertTermsWhilePausedDenied.auditProof.requestId, 'smoke-alert-terms-paused')
+assert.ok(alertTermsWhilePausedDenied.auditProof.requiredMetadataFields.includes('allowedRoles'))
+assert.ok(alertTermsWhilePausedDenied.auditProof.requiredMetadataFields.includes('denialReason'))
+assert.ok(alertTermsWhilePausedDenied.auditProof.redactedFields.includes('watchlistScope.alertGeneratorKeys'))
+assert.equal(alertTermsWhilePausedDenied.auditProof.proofLogQuery, 'GET /api/logs?service=api&message=organization_watchlist_alert_terms_export_denied')
 
 const ownerResumesCompanyResponse = await app.inject({
     method: 'POST',
@@ -1261,6 +1268,16 @@ assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSa
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.destinationEnumerationAllowed, false)
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, organization.id)
 assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.blockerCodes, [])
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.schemaVersion, 'organization.shared_watchlist_case_workflow_guardrails.v1')
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.ok, true)
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.requiredCaseFields, ['organizationId', 'tenantId', 'alertId', 'casePath', 'watchlistItemIds', 'allowedActions', 'visibilityDecision', 'evidence.provenance'])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.requiredTimelineEvents, ['case.opened', 'case.linked_alert', 'case.assigned', 'case.status_changed', 'case.note_added'])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.requiredEvidenceFields, ['alertId', 'watchlistItemIds', 'alertGeneratorKeys', 'matchedTerms', 'source', 'capturedAt', 'casePath'])
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.requiredRedactedFields, ['activeTerms[].term', 'case.evidence.rawContent'])
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.casePathTemplate, '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId')
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.actorCanOpenCase, true)
+assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.actorCanAssignCase, true)
+assert.deepEqual(alertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes, [])
 assert.equal(alertTermsExport.sharedWatchlistIntegrationGuardrails.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(alertTermsExport.alertBridgeContract.schemaVersion, 'organization.watchlist_alert_bridge_contract.v1')
 assert.equal(alertTermsExport.alertBridgeContract.recommendedDownstreamRoute, 'organization_watchlist')
@@ -1598,6 +1615,18 @@ assert.ok(memberAlertTermsDenial.redactedFields.includes('activeTerms[]'))
 assert.ok(memberAlertTermsDenial.redactedFields.includes('watchlistScope.alertGeneratorKeys'))
 assert.deepEqual(memberAlertTermsDenial.blockerCodes, ['role_not_allowed'])
 assert.equal(memberAlertTermsDenial.nonmemberEnumeration, false)
+assert.equal(memberAlertTermsDenial.auditProof.schemaVersion, 'organization.watchlist_alert_terms_denial_audit.v1')
+assert.equal(memberAlertTermsDenial.auditProof.serviceLogAction, 'organization_watchlist_alert_terms_export_denied')
+assert.equal(memberAlertTermsDenial.auditProof.requestId, 'smoke-member-alert-terms-ready')
+assert.deepEqual(memberAlertTermsDenial.auditProof.requiredMetadataFields, [
+    'requestId',
+    'role',
+    'alertVisibilityPolicy',
+    'allowedRoles',
+    'denialReason',
+    'blockerCodes',
+])
+assert.ok(memberAlertTermsDenial.auditProof.redactedFields.includes('activeTerms[]'))
 assert.equal(memberAlertTermsDenial.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 const deniedQueueContract = orgUtils.organizationSharedWatchlistAlertQueueVisibility(readiness.sharedWatchlistDownstreamProof)
 assert.equal(deniedQueueContract.visibility.allowed, false)
@@ -1624,6 +1653,11 @@ assert.ok(deniedQueueContract.denialResponseContract.noLeakFields.includes('memb
 assert.equal(deniedQueueContract.denialResponseContract.auditEventAction, 'organization_watchlist_alert_visibility_denied')
 assert.equal(deniedQueueContract.denialGuardrails.ok, true)
 assert.deepEqual(deniedQueueContract.denialGuardrails.blockerCodes, [])
+const deniedIntegrationGuardrails = orgUtils.organizationSharedWatchlistIntegrationGuardrails(readiness.sharedWatchlistDownstreamProof)
+assert.equal(deniedIntegrationGuardrails.caseSafety.ok, true)
+assert.equal(deniedIntegrationGuardrails.caseSafety.actorCanOpenCase, false)
+assert.equal(deniedIntegrationGuardrails.caseSafety.actorCanAssignCase, false)
+assert.deepEqual(deniedIntegrationGuardrails.caseSafety.blockerCodes, [])
 
 const archiveOrganizationResponse = await app.inject({
     method: 'PUT',
@@ -1896,6 +1930,10 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webh
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, secondOrganization.id)
 assert.notEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId, alertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.requiredDestinationOrgId)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.webhookSafety.blockerCodes, [])
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.ok, true)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.actorCanOpenCase, true)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.actorCanAssignCase, true)
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes, [])
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.organizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.activeTermCount, 1)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.termFamilies, ['domain'])
@@ -2351,6 +2389,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archiv
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_restored' && log.metadata.requestId === 'smoke-restore-cleanup-keyword'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-member-alert-terms-ready' && log.metadata.allowedRoles.includes('admin')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))

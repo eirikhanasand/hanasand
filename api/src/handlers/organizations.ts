@@ -1121,6 +1121,7 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
                 role: organization.role ?? 'viewer',
             },
             visibility,
+            requestId,
         })
         logOrganizationEvent(req, 'organization_watchlist_alert_terms_export_denied', req.params.id, userId, {
             requestId,
