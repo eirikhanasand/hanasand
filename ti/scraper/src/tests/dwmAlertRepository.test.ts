@@ -449,6 +449,10 @@ describe("dwm alert repository", () => {
       webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"],
       blockerCodes: ["missing_org_ref"]
     });
+    expect(telegramSql.delivery_readiness_context).toMatchObject({
+      alertCreatedEventId: telegramAlert?.alertCreatedEvent.id,
+      alertCreatedAt: telegramAlert?.alertCreatedEvent.at
+    });
     expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
 
@@ -491,6 +495,8 @@ describe("dwm alert repository", () => {
     expect(preserved?.deliveryReadinessContext).toMatchObject({
       state: "delivered",
       blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),
+      alertCreatedEventId: existing.alertCreatedEvent.id,
+      alertCreatedAt: existing.alertCreatedEvent.at,
       selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       deliveryHistoryRefs: []
     });

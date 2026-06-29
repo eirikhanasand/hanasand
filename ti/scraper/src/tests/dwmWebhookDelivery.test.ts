@@ -72,6 +72,15 @@ describe("dwm webhook delivery", () => {
       selectedCaptureIds: ["cap_webhook_acme"],
       evidenceCount: 1,
       recommendedRoute: "identity_response",
+      alertCreatedEvent: {
+        schemaVersion: "dwm.alert_created_event.v1",
+        eventType: "dwm.alert.created",
+        tenantId: "tenant_acme",
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_webhook_acme"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      },
       deliveryReadinessContext: {
         schemaVersion: "dwm.alert_delivery_persistence.v1",
         selectedCaptureIds: ["cap_webhook_acme"],
@@ -80,6 +89,12 @@ describe("dwm webhook delivery", () => {
         replayMarker: expect.any(String)
       }
     });
+    expect(typeof seen[0].body.alertCreatedEvent.id).toBe("string");
+    expect(seen[0].body.alertCreatedEvent.id).toMatch(/^dwm_alert_created_event_/);
+    expect(seen[0].body.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
+    expect(seen[0].body.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
+    expect(seen[0].body.deliveryReadinessContext.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
+    expect(seen[0].body.deliveryReadinessContext.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
     expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
     expect(seen[0].body.casePath).toContain(`/v1/cases/${seen[0].body.caseIdCandidate}`);
     expect(seen[0].body.watchlistItemIds[0]).toContain("acme.com");
@@ -209,6 +224,14 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].url).toBe("https://hooks.example.com/chosen");
     expect(seen[0].body.webhookDestinationId).toBe("webhook_selection_chosen");
     expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme"]);
+    expect(seen[0].body.alertCreatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_created_event.v1",
+      organizationId: "org_webhook_selection",
+      sourceFamily: "telegram_public",
+      watchlistIds: [rebuild.alerts[0].watchlistIds[0]],
+      captureIds: ["cap_webhook_acme"]
+    });
+    expect(seen[0].body.deliveryReadinessContext.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
   });
 
   test("records skipped delivery when the watchlist has no webhook URL", async () => {

@@ -598,6 +598,8 @@ export type DwmPersistedDeliveryReadinessContext = {
   sourceFamily: string;
   evidenceCount: number;
   recommendedRoute?: string;
+  alertCreatedEventId?: string;
+  alertCreatedAt?: string;
   caseIdCandidate?: string;
   caseId?: string;
   casePath?: string;
@@ -696,6 +698,11 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       workflowContext,
       generatedAt: snapshot.generatedAt
     });
+    const persistedDeliveryReadinessContext = {
+      ...deliveryReadinessContext,
+      alertCreatedEventId: alertCreatedEvent.id,
+      alertCreatedAt: alertCreatedEvent.at
+    };
     return input.store.saveDwmAlert({
       ...scopedAlert,
       id: alertId,
@@ -705,7 +712,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       watchlistItemIds: workflowContext.watchlistItemIds,
       workflowContext,
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
-      deliveryReadinessContext,
+      deliveryReadinessContext: persistedDeliveryReadinessContext,
       alertCreatedEvent,
       alertEvents: existing?.alertEvents ?? [alertCreatedEvent],
       caseIdCandidate: workflowContext.caseIdCandidate,
@@ -797,6 +804,8 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
     sourceFamily: String(input.alert.sourceFamily ?? input.workflowContext.sourceFamily ?? "unknown"),
     evidenceCount,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute ?? input.workflowContext.recommendedRoute,
+    alertCreatedEventId: input.existing?.alertCreatedEvent?.id ?? previousContext.alertCreatedEventId,
+    alertCreatedAt: input.existing?.alertCreatedEvent?.at ?? previousContext.alertCreatedAt,
     caseIdCandidate: input.workflowContext.caseIdCandidate,
     caseId: input.existing?.caseId ?? input.workflowContext.caseId,
     casePath: input.existing?.casePath ?? input.workflowContext.casePath,
