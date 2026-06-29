@@ -169,6 +169,35 @@ describe("org alert case action ledger route contract", () => {
       })]
     });
   });
+
+  test("uses an injected server repository so integration can share the ledger", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const options = {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier(),
+      orgAlertCaseActionLedgerRepository: repository
+    };
+    const receipt = readyActionReceipt();
+
+    const created = await handleApiRequest(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        receipt
+      })
+    }), options);
+
+    expect(created.status).toBe(201);
+    expect(repository.listScoped("tenant_acme", "org_acme")).toEqual([
+      expect.objectContaining({
+        receiptId: receipt.id,
+        alertIds: ["alert_acme_lumma"],
+        tenantId: "tenant_acme",
+        organizationId: "org_acme"
+      })
+    ]);
+  });
 });
 
 async function route(request: Request, repository: InMemoryOrgAlertCaseActionLedgerRepository): Promise<Response> {

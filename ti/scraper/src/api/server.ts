@@ -204,10 +204,10 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
 }
 
 function orgAlertCaseActionLedgerRepository(options: ApiServerOptions): InMemoryOrgAlertCaseActionLedgerRepository {
-  const existing = (options as any).orgAlertCaseActionLedgerRepository;
-  if (existing) return existing as InMemoryOrgAlertCaseActionLedgerRepository;
+  const existing = options.orgAlertCaseActionLedgerRepository;
+  if (existing) return existing;
   const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
-  (options as any).orgAlertCaseActionLedgerRepository = repository;
+  options.orgAlertCaseActionLedgerRepository = repository;
   return repository;
 }
 

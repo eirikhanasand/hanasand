@@ -1,6 +1,7 @@
 import type { RuntimeConfig } from "../config/runtimeConfig.ts";
 import type { FocusedFrontier } from "../frontier/frontier.ts";
 import type { ScraperStore } from "../storage/memoryStore.ts";
+import type { InMemoryOrgAlertCaseActionLedgerRepository } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 
 export interface ApiServerOptions {
   port?: number;
@@ -10,6 +11,7 @@ export interface ApiServerOptions {
   supervisor?: { snapshot(): unknown[] };
   objectStore?: unknown;
   canaryLoop?: unknown;
+  orgAlertCaseActionLedgerRepository?: InMemoryOrgAlertCaseActionLedgerRepository;
   [key: string]: unknown;
 }
 
