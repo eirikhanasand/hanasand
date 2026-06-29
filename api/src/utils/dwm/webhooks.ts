@@ -4746,6 +4746,62 @@ function buildSanitizedDwmWebhookPayloadPreview(
     }
 }
 
+function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
+    const record = recordOrEmpty(payload)
+    const context = recordOrEmpty(record._hanasand)
+    const alert = recordOrEmpty(context.alert)
+    const watchlist = recordOrEmpty(context.watchlist)
+    const delivery = recordOrEmpty(context.delivery)
+    const org = recordOrEmpty(context.org)
+    const source = recordOrEmpty(context.source)
+    const embeds = Array.isArray(record.embeds) ? record.embeds.map(recordOrEmpty).slice(0, 1) : []
+    const firstEmbed = embeds[0] || {}
+    const fields = Array.isArray(firstEmbed.fields) ? firstEmbed.fields.map(recordOrEmpty).slice(0, DISCORD_EMBED_FIELD_LIMIT) : []
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_test_payload_preview.v1',
+        noNetwork: true,
+        eventType: 'dwm.alert.test' as DwmAlertEventType,
+        payloadType: Array.isArray(record.embeds) ? 'discord' : 'webhook',
+        discord: {
+            content: redactDeliveryEvidenceText(truncate(clean(record.content), DISCORD_CONTENT_LIMIT)) || null,
+            allowedMentions: record.allowed_mentions || null,
+            embedCount: embeds.length,
+            title: redactDeliveryEvidenceText(truncate(clean(firstEmbed.title), DISCORD_EMBED_TITLE_LIMIT)) || null,
+            description: redactDeliveryEvidenceText(truncate(clean(firstEmbed.description), DISCORD_EMBED_DESCRIPTION_LIMIT)) || null,
+            fieldNames: fields.map(field => redactDeliveryEvidenceText(truncate(clean(field.name), 80))).filter(Boolean),
+            fields: fields.map(field => ({
+                name: redactDeliveryEvidenceText(truncate(clean(field.name), 80)),
+                valuePreview: redactDeliveryEvidenceText(truncate(clean(field.value), 180)),
+                inline: field.inline === true,
+            })),
+        },
+        context: {
+            orgId: clean(org.id),
+            orgName: redactDeliveryEvidenceText(truncate(clean(org.name), 120)) || null,
+            destinationId: clean(recordOrEmpty(context.destination).id),
+            alertId: clean(alert.id),
+            title: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
+            severity: clean(alert.severity),
+            sourceFamily: clean(alert.sourceFamily) || clean(source.family),
+            evidenceCount: parseCount(alert.evidenceCount),
+            watchlistId: clean(watchlist.id),
+            watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name), 120)) || null,
+            route: clean(delivery.route),
+            casePath: clean(delivery.casePath),
+            analystLink: clean(delivery.analystLink),
+            dedupeKey: clean(delivery.dedupeKey) || clean(context.idempotencyKey),
+            replay: delivery.replay === true,
+            occurredAt: clean(context.occurredAt),
+        },
+        redaction: {
+            endpointExposed: false,
+            secretFields: [],
+            safeForCustomerDisplay: true,
+        },
+    }
+}
+
 function buildDwmWebhookDeliveryOperationLinks(delivery: DwmWebhookDeliveryPublic) {
     const orgId = encodeURIComponent(delivery.orgId)
     const deliveryId = encodeURIComponent(delivery.id)
@@ -4834,6 +4890,20 @@ export function buildDwmWebhookDestinationTestContract({
         }
         : null
     const preview = latestTest ? buildDwmWebhookDeliveryPreview(latestTest) : null
+    const testPayload = destination
+        ? buildDwmAlertDeliveryPayload({
+            destination: {
+                id: destination.id,
+                kind: destination.kind,
+                name: destination.name,
+                org_id: destination.orgId,
+            },
+            alert: buildTestAlert({ org_id: destination.orgId }),
+            eventType: 'dwm.alert.test',
+            deliveryId: `destination-test-preview:${destination.id}`,
+        })
+        : null
+    const dryRunPayloadPreview = testPayload ? buildDwmWebhookDestinationTestPayloadPreview(testPayload) : null
     const health = destination
         ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents, liveDeliveryEnabled })[0] || null
         : null
@@ -4913,6 +4983,7 @@ export function buildDwmWebhookDestinationTestContract({
                 payloadHash: preview.payloadHash,
             }
             : null,
+        dryRunPayloadPreview,
         health: health
             ? {
                 status: health.health,
@@ -6214,7 +6285,7 @@ function provenanceSummary(value: unknown) {
     return truncate(parts.join(' | '), 500)
 }
 
-function buildTestAlert(destination: DwmWebhookDestinationRow) {
+function buildTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>) {
     return {
         id: 'webhook_test',
         orgName: destination.org_id,
