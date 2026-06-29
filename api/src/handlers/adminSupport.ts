@@ -105,6 +105,15 @@ type SupportInviteActionBody = {
     action?: unknown
     reason?: unknown
     context?: unknown
+    requestId?: unknown
+    request_id?: unknown
+    scope?: unknown
+    correlationId?: unknown
+    correlation_id?: unknown
+    idempotencyKey?: unknown
+    idempotency_key?: unknown
+    handoffExpiresAt?: unknown
+    handoff_expires_at?: unknown
     expiresAt?: unknown
     expires_at?: unknown
 }
@@ -1050,6 +1059,42 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const requestId = text(req.body?.requestId || req.body?.request_id) || supportRequestId(req)
+    const actionType = action === 'revoke'
+        ? 'support.organization.invite_revoke'
+        : 'support.organization.invite_resend'
+    const controls = supportInviteActionExecutorControls(req, req.body, requestId, action as 'revoke' | 'resend')
+    if (controls.error) {
+        await recordSupportInviteActionExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            inviteId: req.params.inviteId,
+            requestId,
+            action: action as 'revoke' | 'resend',
+            actionType,
+            reason,
+            blocker: controls.error.code,
+            controls: controls.value,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(controls.error.status).send(supportError(controls.error.code, controls.error.message, {
+            executorBlocker: supportInviteActionExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: controls.value,
+                invite: null,
+                before: null,
+                after: null,
+                outcome: 'denied',
+                blockers: [controls.error.code],
+            }),
+        }))
+    }
+    const executorControls = controls.value
+
     const existing = await run(`
         SELECT *
         FROM organization_invites
@@ -1062,10 +1107,95 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         return res.status(404).send({ error: 'Invite not found for organization.' })
     }
 
-    const requestId = supportRequestId(req)
-    const actionType = action === 'revoke'
-        ? 'support.organization.invite_revoke'
-        : 'support.organization.invite_resend'
+    const duplicate = await loadSupportInviteActionByIdempotencyKey({
+        organizationId: organization.id,
+        inviteId: invite.id,
+        actionType,
+        idempotencyKey: executorControls.idempotencyKey,
+    })
+    if (duplicate) {
+        return res.send({
+            inviteAction: {
+                schemaVersion: 'support.invite_action.v1',
+                action,
+                requestId: duplicate.request_id,
+                actorId: actor.id,
+                organization: toOrganization(organization),
+                invite: toInvite(invite),
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                reason,
+                outcome: 'success',
+                idempotentReplay: true,
+                blockers: ['duplicate_idempotency_key'],
+                auditEventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                noSilentMembershipMutation: true,
+                controlledExecutor: supportInviteActionExecutorDetail({
+                    organizationId: organization.id,
+                    requestId: duplicate.request_id,
+                    action: action as 'revoke' | 'resend',
+                    actionType,
+                    reason,
+                    controls: executorControls,
+                    invite,
+                    before: inviteSnapshot(invite),
+                    after: inviteSnapshot(invite),
+                    outcome: 'success',
+                    blockers: ['duplicate_idempotency_key'],
+                }),
+                audit: {
+                    actionType,
+                    source: 'admin',
+                    service: 'hanasand-api',
+                    outcome: 'success',
+                    severity: action === 'revoke' ? 'warning' : 'notice',
+                    eventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                    query: supportInviteActionAuditQuery({
+                        requestId: duplicate.request_id,
+                        organizationId: organization.id,
+                        inviteId: invite.id,
+                        correlationId: executorControls.correlationId,
+                        idempotencyKey: executorControls.idempotencyKey,
+                        reason,
+                        actionType,
+                        outcome: 'success',
+                    }),
+                },
+            },
+        })
+    }
+
+    const availability = await loadOrganizationAvailability([organization.id])
+    if (availability[0]?.hasAvailableAdmin === true) {
+        await recordSupportInviteActionExecutorBlock(req, {
+            actorId: actor.id,
+            organizationId: organization.id,
+            inviteId: invite.id,
+            requestId,
+            action: action as 'revoke' | 'resend',
+            actionType,
+            reason,
+            blocker: 'active_admin_available',
+            controls: executorControls,
+            supportContext: cleanContext(req.body?.context),
+        })
+        return res.status(409).send(supportError('active_admin_available', 'An active organization admin is available; support invite action requires unavailable org administration.', {
+            executorBlocker: supportInviteActionExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite,
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                outcome: 'denied',
+                blockers: ['active_admin_available'],
+            }),
+        }))
+    }
+
     if (invite.status === 'accepted') {
         await recordAdminAuditEvent(req, {
             actionType,
@@ -1087,6 +1217,23 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 role: invite.role,
                 before: inviteSnapshot(invite),
                 after: inviteSnapshot(invite),
+                correlationId: executorControls.correlationId,
+                idempotencyKey: executorControls.idempotencyKey,
+                scope: executorControls.scope,
+                handoffExpiresAt: executorControls.handoffExpiresAt,
+                executor: supportInviteActionExecutorDetail({
+                    organizationId: organization.id,
+                    requestId,
+                    action: action as 'revoke' | 'resend',
+                    actionType,
+                    reason,
+                    controls: executorControls,
+                    invite,
+                    before: inviteSnapshot(invite),
+                    after: inviteSnapshot(invite),
+                    outcome: 'failed',
+                    blockers: ['accepted_invite_not_mutable_by_support_action'],
+                }),
                 noSilentMembershipMutation: true,
                 error: 'accepted_invite_not_mutable_by_support_action',
                 supportContext: cleanContext(req.body?.context),
@@ -1107,6 +1254,19 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 outcome: 'failed',
                 auditEventIds,
                 noSilentMembershipMutation: true,
+                controlledExecutor: supportInviteActionExecutorDetail({
+                    organizationId: organization.id,
+                    requestId,
+                    action: action as 'revoke' | 'resend',
+                    actionType,
+                    reason,
+                    controls: executorControls,
+                    invite,
+                    before: inviteSnapshot(invite),
+                    after: inviteSnapshot(invite),
+                    outcome: 'failed',
+                    blockers: ['accepted_invite_not_mutable_by_support_action'],
+                }),
             },
         })
     }
@@ -1160,6 +1320,23 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             role: updatedInvite.role,
             before,
             after,
+            correlationId: executorControls.correlationId,
+            idempotencyKey: executorControls.idempotencyKey,
+            scope: executorControls.scope,
+            handoffExpiresAt: executorControls.handoffExpiresAt,
+            executor: supportInviteActionExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite: updatedInvite,
+                before,
+                after,
+                outcome: 'success',
+                blockers: [],
+            }),
             noSilentMembershipMutation: true,
             mutation: 'invite_row_only',
             supportContext: cleanContext(req.body?.context),
@@ -1179,8 +1356,23 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             after,
             reason,
             outcome: 'success',
+            idempotencyKey: executorControls.idempotencyKey,
+            correlationId: executorControls.correlationId,
             auditEventIds,
             noSilentMembershipMutation: true,
+            controlledExecutor: supportInviteActionExecutorDetail({
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite: updatedInvite,
+                before,
+                after,
+                outcome: 'success',
+                blockers: [],
+            }),
             audit: {
                 actionType,
                 source: 'admin',
@@ -1188,7 +1380,16 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 outcome: 'success',
                 severity: action === 'revoke' ? 'warning' : 'notice',
                 eventIds: auditEventIds,
-                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&entity=${encodeURIComponent(updatedInvite.id)}&outcome=success&source=admin&service=hanasand-api`,
+                query: supportInviteActionAuditQuery({
+                    requestId,
+                    organizationId: organization.id,
+                    inviteId: updatedInvite.id,
+                    correlationId: executorControls.correlationId,
+                    idempotencyKey: executorControls.idempotencyKey,
+                    reason,
+                    actionType,
+                    outcome: 'success',
+                }),
             },
             copyText: [
                 `Support invite ${action} for ${updatedInvite.email}`,
@@ -1196,6 +1397,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 `Invite: ${updatedInvite.id}`,
                 `Status: ${before.status} -> ${after.status}`,
                 `Request: ${requestId}`,
+                `Idempotency: ${executorControls.idempotencyKey}`,
                 `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
                 `Reason: ${reason}`,
             ].join('\n'),
@@ -2087,6 +2289,21 @@ async function loadSupportInviteAssistByIdempotencyKey(input: { organizationId: 
         ORDER BY created_at ASC, id ASC
         LIMIT 1
     `, [input.organizationId, input.idempotencyKey])
+    return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
+}
+
+async function loadSupportInviteActionByIdempotencyKey(input: { organizationId: string, inviteId: string, actionType: string, idempotencyKey: string }) {
+    const result = await run(`
+        SELECT id, request_id, entity_id, context
+        FROM admin_audit_events
+        WHERE action_type = $1
+          AND organization_id = $2
+          AND entity_id = $3
+          AND outcome = 'success'
+          AND context->>'idempotencyKey' = $4
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+    `, [input.actionType, input.organizationId, input.inviteId, input.idempotencyKey])
     return result.rows[0] as { id: number, request_id: string, entity_id: string | null, context: Record<string, unknown> } | undefined
 }
 
@@ -3246,6 +3463,201 @@ function supportInviteAssistAuditQuery(input: {
     params.set('reason', input.reason)
     params.set('action', 'support.organization.invite_assist')
     params.set('outcome', 'success')
+    params.set('source', 'admin')
+    params.set('service', 'hanasand-api')
+    return `/api/admin/audit-events?${params.toString()}`
+}
+
+function supportInviteActionExecutorControls(
+    req: FastifyRequest,
+    body: SupportInviteActionBody | undefined,
+    requestId: string,
+    action: 'revoke' | 'resend',
+): {
+    value: {
+        schemaVersion: string
+        requestId: string
+        correlationId: string
+        idempotencyKey: string
+        scope: string[]
+        handoffExpiresAt: string | null
+        staleBlocker: string
+        duplicateBlocker: string
+    },
+    error: { code: string, message: string, status: number } | null,
+} {
+    const requiredScope = action === 'revoke' ? 'invite:revoke' : 'invite:resend'
+    const idempotencyKey = supportActionIdempotencyKey(
+        headerText(req.headers['x-idempotency-key']) || body?.idempotencyKey || body?.idempotency_key || requestId,
+        `invite_${action}`,
+    )
+    const correlationId = text(headerText(req.headers['x-correlation-id']) || body?.correlationId || body?.correlation_id || requestId) || requestId
+    const scopeResult = normalizeSupportPreparationScope(body?.scope || requiredScope, 'invite_assist')
+    const base = {
+        schemaVersion: 'support.action_execute.controls.v1',
+        requestId,
+        correlationId,
+        idempotencyKey,
+        scope: scopeResult.value,
+        handoffExpiresAt: null as string | null,
+        staleBlocker: 'stale_prepare_payload',
+        duplicateBlocker: 'duplicate_idempotency_key',
+    }
+    if (scopeResult.error || !scopeResult.value.includes(requiredScope)) {
+        return { value: base, error: { code: 'invalid_scope', message: `Invite ${action} execution requires ${requiredScope} scope.`, status: 400 } }
+    }
+
+    const handoffExpiresAt = text(headerText(req.headers['x-support-handoff-expires-at']) || body?.handoffExpiresAt || body?.handoff_expires_at)
+    if (!handoffExpiresAt) {
+        return { value: base, error: null }
+    }
+    const timestamp = Date.parse(handoffExpiresAt)
+    if (Number.isNaN(timestamp)) {
+        return { value: base, error: { code: 'invalid_expiry', message: `Support invite ${action} handoff expiry must be a valid timestamp.`, status: 400 } }
+    }
+    const value = { ...base, handoffExpiresAt: new Date(timestamp).toISOString() }
+    if (timestamp <= Date.now()) {
+        return { value, error: { code: 'stale_prepare_payload', message: `Support invite ${action} handoff has expired; prepare a fresh action before executing.`, status: 409 } }
+    }
+    return { value, error: null }
+}
+
+async function recordSupportInviteActionExecutorBlock(req: FastifyRequest, input: {
+    actorId: string
+    organizationId: string
+    inviteId: string
+    requestId: string
+    action: 'revoke' | 'resend'
+    actionType: string
+    reason: string
+    blocker: string
+    controls: ReturnType<typeof supportInviteActionExecutorControls>['value']
+    supportContext: string
+}) {
+    await recordAdminAuditEvent(req, {
+        actionType: input.actionType,
+        actorId: input.actorId,
+        targetType: 'invite',
+        targetId: input.inviteId,
+        organizationId: input.organizationId,
+        entityId: input.inviteId,
+        requestId: input.requestId,
+        severity: input.action === 'revoke' ? 'warning' : 'notice',
+        outcome: 'denied',
+        reason: input.reason,
+        context: {
+            schemaVersion: 'support.action_executor_blocker.v1',
+            action: input.action,
+            blocker: input.blocker,
+            blockerCode: input.blocker,
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            targetOrganizationId: input.organizationId,
+            inviteId: input.inviteId,
+            scope: input.controls.scope,
+            handoffExpiresAt: input.controls.handoffExpiresAt,
+            noSilentMembershipMutation: true,
+            mutation: 'none',
+            redactionRequired: true,
+            supportContext: input.supportContext,
+        },
+    })
+}
+
+function supportInviteActionExecutorDetail(input: {
+    organizationId: string
+    requestId: string
+    action: 'revoke' | 'resend'
+    actionType: string
+    reason: string
+    controls: ReturnType<typeof supportInviteActionExecutorControls>['value']
+    invite: OrganizationInviteRow | null
+    before: Record<string, unknown> | null
+    after: Record<string, unknown> | null
+    outcome: 'success' | 'denied' | 'failed'
+    blockers: string[]
+}) {
+    return {
+        schemaVersion: 'support.action_execute.invite_action.v1',
+        mutationMode: 'controlled_invite_row_only',
+        action: input.action,
+        actionType: input.actionType,
+        supportRoleRequired: true,
+        reasonRequired: true,
+        contextRequired: true,
+        scopeRequired: true,
+        expiryRequired: input.action === 'resend',
+        noSilentMembershipMutation: true,
+        requestId: input.requestId,
+        correlationId: input.controls.correlationId,
+        idempotencyKey: input.controls.idempotencyKey,
+        staleBlocker: input.controls.staleBlocker,
+        duplicateBlocker: input.controls.duplicateBlocker,
+        target: {
+            organizationId: input.organizationId,
+            inviteId: input.invite?.id || null,
+            email: input.invite?.email || null,
+        },
+        scope: input.controls.scope,
+        handoffExpiresAt: input.controls.handoffExpiresAt,
+        before: input.before,
+        after: input.after,
+        outcome: input.outcome,
+        blockers: input.blockers,
+        blockerCatalog: [
+            'support_role_required',
+            'missing_support_reason',
+            'stale_prepare_payload',
+            'duplicate_idempotency_key',
+            'ambiguous_target',
+            'active_admin_available',
+            'invite_unavailable',
+            'accepted_invite_not_mutable_by_support_action',
+            'mutation_unavailable',
+            'audit_unavailable',
+            'redaction_required',
+            'unsafe_impersonation',
+        ],
+        redactedAuditPreview: redactAuditValue({
+            schemaVersion: 'support.action_execute.audit_preview.v1',
+            actionType: input.actionType,
+            source: 'admin',
+            service: 'hanasand-api',
+            requestId: input.requestId,
+            correlationId: input.controls.correlationId,
+            idempotencyKey: input.controls.idempotencyKey,
+            organizationId: input.organizationId,
+            inviteId: input.invite?.id || null,
+            email: input.invite?.email || null,
+            reason: input.reason,
+            scope: input.controls.scope,
+            outcome: input.outcome,
+            blockerCode: input.blockers[0] || null,
+            redactionRequired: true,
+        }),
+    }
+}
+
+function supportInviteActionAuditQuery(input: {
+    requestId: string
+    organizationId: string
+    inviteId: string
+    correlationId: string
+    idempotencyKey: string
+    reason: string
+    actionType: string
+    outcome: string
+}) {
+    const params = new URLSearchParams()
+    params.set('request', input.requestId)
+    params.set('correlation', input.correlationId)
+    params.set('idempotency', input.idempotencyKey)
+    params.set('org', input.organizationId)
+    params.set('entity', input.inviteId)
+    params.set('reason', input.reason)
+    params.set('action', input.actionType)
+    params.set('outcome', input.outcome)
     params.set('source', 'admin')
     params.set('service', 'hanasand-api')
     return `/api/admin/audit-events?${params.toString()}`
