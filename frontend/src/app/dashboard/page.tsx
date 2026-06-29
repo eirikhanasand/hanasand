@@ -8,7 +8,7 @@ import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope, type ProductProgressReadinessPayload } from './operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,7 +54,10 @@ export default async function Page({
         loadDwmOperations(scope, viewerIdentity),
         loadDwmDeliveries(scope, viewerIdentity),
     ])
-    const sourceProofReadiness = await loadDashboardSourceProof(Headers, watchlists)
+    const [sourceProofReadiness, productProgressReadiness] = await Promise.all([
+        loadDashboardSourceProof(Headers, watchlists),
+        loadProductProgressReadiness(Headers),
+    ])
     const liveAlerts = alertLoad.alerts
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
@@ -81,7 +84,12 @@ export default async function Page({
         deliveries,
         liveAlertCount: liveAlerts.length,
         liveAlertIds: liveAlerts.map(alert => alert.id),
-        externalReadiness: { sourceGrowth: sourceProofReadiness },
+        externalReadiness: {
+            ...productProgressReadiness,
+            sourceGrowth: productProgressReadiness.sourceGrowth?.status !== 'unavailable'
+                ? productProgressReadiness.sourceGrowth
+                : sourceProofReadiness,
+        },
     })
     const handoffCases = buildPublicTiHandoffCase({
         decode: publicTiHandoff,
@@ -283,6 +291,41 @@ async function loadDashboardSourceProof(Headers: Headers, watchlists: DwmWatchli
             checkedAt: new Date().toISOString(),
         })
     }
+}
+
+async function loadProductProgressReadiness(Headers: Headers) {
+    const route = productProgressRoute(Headers)
+    if (!route.url) {
+        return buildProductProgressExternalState(null, {
+            checkedAt: new Date().toISOString(),
+        })
+    }
+
+    try {
+        const response = await fetch(route.url, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
+        if (!response.ok) {
+            return buildProductProgressExternalState(null, {
+                checkedAt: new Date().toISOString(),
+            })
+        }
+        const payload = await response.json() as ProductProgressReadinessPayload
+        return buildProductProgressExternalState(payload, {
+            checkedAt: new Date().toISOString(),
+            staleAfterMinutes: 120,
+        })
+    } catch {
+        return buildProductProgressExternalState(null, {
+            checkedAt: new Date().toISOString(),
+        })
+    }
+}
+
+function productProgressRoute(Headers: Headers) {
+    const host = Headers.get('x-forwarded-host') || Headers.get('host')
+    const proto = Headers.get('x-forwarded-proto') || 'http'
+    const label = '/api/product-progress'
+    if (!host) return { label }
+    return { url: new URL(label, `${proto}://${host}`), label }
 }
 
 function sourceProofRoute(Headers: Headers, watchlists: DwmWatchlistSummary[]) {

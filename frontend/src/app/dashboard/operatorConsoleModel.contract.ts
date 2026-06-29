@@ -323,6 +323,27 @@ const missingDashboardProductProgress = buildProductProgressExternalState({
     checkedAt: '2026-06-28T10:20:00.000Z',
     staleAfterMinutes: 120,
 })
+const missingWebhookHealthProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    webhookHealth: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingOrgExportProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    orgAlertExport: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingHelpdeskProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    helpdeskAudit: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
 
 const cases = buildReadinessCases({
     backendConfigured: true,
@@ -448,6 +469,39 @@ const missingDashboardEvidenceOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: missingDashboardProductProgress,
+})
+const missingWebhookHealthOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingWebhookHealthProductProgress,
+})
+const missingOrgExportOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingOrgExportProductProgress,
+})
+const missingHelpdeskOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingHelpdeskProductProgress,
 })
 const staleWorkerOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -875,6 +929,12 @@ void (staleDeployOrgContext.readiness.fullChainBlockedBy[0] satisfies string | u
 void expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'dashboard_evidence', 'needs_action')
 void expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'deploy_probe', 'needs_action')
 void (missingDashboardEvidenceOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingWebhookHealthOrgContext, 'webhook_health', 'unavailable')
+void (missingWebhookHealthOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingOrgExportOrgContext, 'org_alert_export', 'unavailable')
+void (missingOrgExportOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingHelpdeskOrgContext, 'helpdesk_audit', 'unavailable')
+void (missingHelpdeskOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(staleWorkerOrgContext, 'source_inventory_probe', 'needs_action')
 void (staleWorkerOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(missingWorkerOrgContext, 'source_inventory_probe', 'needs_action')

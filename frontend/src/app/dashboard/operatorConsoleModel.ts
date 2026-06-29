@@ -839,7 +839,7 @@ export function buildOrgOperatingContext(input: {
         latestDelivery,
         externalReadiness: input.externalReadiness,
     })
-    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'deploy_probe']
+    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe']
     const fullChainBlockedBy = productReadiness
         .filter(item => item.status !== 'ready' && fullChainGateIds.includes(item.id))
         .map(item => `${item.label}: ${item.detail}`)

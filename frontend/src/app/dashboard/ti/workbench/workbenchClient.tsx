@@ -1033,7 +1033,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
 }
 
 function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
-    const priority = ['source_inventory_probe', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
+    const priority = ['dashboard_evidence', 'source_inventory_probe', 'org_alert_export', 'webhook_health', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
     return (orgContext?.readiness.productReadiness || [])
         .filter(item => item.status !== 'ready' && priority.includes(item.id))
         .sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id))
