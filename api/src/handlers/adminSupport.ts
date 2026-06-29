@@ -60,6 +60,8 @@ type SupportInspectionQuery = {
     action?: string
     severity?: string
     outcome?: string
+    source?: string
+    service?: string
     from?: string
     to?: string
     limit?: string
@@ -158,6 +160,45 @@ type SupportOrganizationAvailability = {
     hasAvailableOwner: boolean
     hasAvailableAdmin: boolean
 }
+
+type SupportTimelineFilter = {
+    org: string
+    user: string
+    email: string
+    request: string
+    entity: string
+    entityType: string
+    action: string
+    severity: string
+    outcome: string
+    source: string
+    service: string
+    from: string
+    to: string
+    limit: number
+    unsupported: string[]
+}
+
+const supportInspectionFilters = new Set([
+    'org',
+    'orgId',
+    'user',
+    'userId',
+    'email',
+    'request',
+    'requestId',
+    'entity',
+    'entityId',
+    'entityType',
+    'action',
+    'severity',
+    'outcome',
+    'source',
+    'service',
+    'from',
+    'to',
+    'limit',
+])
 
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
@@ -475,12 +516,18 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const entity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const action = text(query.action)
+    const source = text(query.source)
+    const service = text(query.service)
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 50)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
+    const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit })
+    if (filterError) {
+        return res.status(400).send(filterError)
+    }
 
     if (!org && !user && !email && !request && !entity && !entityType && !action) {
         return res.status(400).send(supportError('missing_support_target', 'Add org, user, email, request, entity, entityType, or action to inspect support state.'))
@@ -492,8 +539,15 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionMemberships({ org, user, request, limit }),
         loadInspectionInvites({ org, email, request, limit }),
         loadInspectionApprovals({ org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit }),
+        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit }),
     ])
+    const timelineFilter = supportTimelineFilter({ org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit })
+    if (!organizations.length && !users.length && !memberships.length && !invites.length && !approvals.length && !audit.length) {
+        return res.status(404).send(supportError('support_target_not_found', 'No support state matched the requested filters.', {
+            filters: timelineFilter,
+            unavailableFilters: [],
+        }))
+    }
 
     const organizationIds = Array.from(new Set([
         ...organizations.map(row => String(row.id)),
@@ -528,6 +582,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         approvalDetails,
         recoveryEligibility,
         timeline,
+        timelineFilter,
     })
 
     await recordAdminAuditEvent(req, {
@@ -542,7 +597,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         outcome: 'success',
         context: {
             schemaVersion: 'support.inspection.v1',
-            filters: { org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit },
+            filters: { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit },
             organizationCount: organizations.length,
             membershipCount: memberships.length,
             pendingInviteCount: invites.filter(row => row.status === 'pending').length,
@@ -555,7 +610,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         inspection: {
             schemaVersion: 'support.inspection.v1',
             generatedAt: new Date().toISOString(),
-            filters: { org, user, email, request, entity, entityType, action, severity, outcome, from, to, limit },
+            filters: { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit },
             organizations: organizations.map(row => ({
                 ...toOrganization(row as OrganizationRow),
                 adminAvailability: availabilityByOrg.get(String(row.id)) || null,
@@ -569,6 +624,18 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             recoveryEligibility,
             auditEventIds: timeline.map(event => event.id),
             auditTimeline: timeline,
+            filteredTimeline: {
+                schemaVersion: 'support.audit.filtered_timeline.v1',
+                filter: timelineFilter,
+                eventIds: timeline.map(event => event.id),
+                events: timeline,
+                links: {
+                    inviteAssistance: auditTimelineLink({ org, target: email, request, action: 'invite_assist', outcome }),
+                    accessRecovery: auditTimelineLink({ org, target: user || email, request, action: 'access_recovery', outcome }),
+                    impersonation: auditTimelineLink({ target: user, request, action: 'impersonation', outcome }),
+                },
+                redacted: true,
+            },
             controlledActions: {
                 inviteAssist: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/invites`),
                 inviteActions: invites.map(invite => `/api/admin/support/organizations/${encodeURIComponent(String(invite.organization_id))}/invites/${encodeURIComponent(String(invite.id))}/actions`),
@@ -1673,7 +1740,7 @@ async function loadInspectionApprovals(input: { org: string, user: string, email
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, action: string, severity: string, outcome: string, from: string, to: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, action: string, severity: string, outcome: string, source: string, service: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -1701,6 +1768,8 @@ async function loadInspectionAuditEvents(input: { org: string, user: string, ema
     if (input.action) where.push(`event.action_type ILIKE ${add(`%${input.action}%`)}`)
     if (input.severity) where.push(`event.severity = ${add(input.severity)}`)
     if (input.outcome) where.push(`event.outcome = ${add(input.outcome)}`)
+    if (input.source) where.push(`event.source ILIKE ${add(`%${input.source}%`)}`)
+    if (input.service) where.push(`event.service ILIKE ${add(`%${input.service}%`)}`)
     if (input.from && !Number.isNaN(Date.parse(input.from))) where.push(`event.created_at >= ${add(new Date(input.from).toISOString())}`)
     if (input.to && !Number.isNaN(Date.parse(input.to))) where.push(`event.created_at <= ${add(new Date(input.to).toISOString())}`)
     if (!where.length) return []
@@ -2003,6 +2072,7 @@ function buildSupportCaseSummary(input: {
     approvalDetails: Array<Record<string, any>>
     recoveryEligibility: Array<Record<string, unknown>>
     timeline: Array<Record<string, any>>
+    timelineFilter: SupportTimelineFilter
 }) {
     const pendingInvites = input.invites.filter(row => row.status === 'pending')
     const activeMemberships = input.memberships.filter(row => row.status === 'active')
@@ -2096,6 +2166,7 @@ function buildSupportCaseSummary(input: {
             eventIds: input.timeline.map(event => event.id),
             timelineQuery: nextActions.inspectAuditTimeline.api,
             impersonationTimelineQuery: nextActions.impersonationTimeline.api,
+            filter: input.timelineFilter,
             redacted: true,
         },
         blockers,
@@ -2107,6 +2178,64 @@ function buildSupportCaseSummary(input: {
             `Impersonation events: ${impersonationEvents.length}`,
             `Audit events: ${input.timeline.map(event => event.id).join(', ') || 'none'}`,
         ].join('\n'),
+    }
+}
+
+function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: Omit<SupportTimelineFilter, 'unsupported'>) {
+    const unsupported = Object.keys(rawQuery as Record<string, unknown>).filter(key => !supportInspectionFilters.has(key))
+    if (unsupported.length) {
+        return supportError('unsupported_support_filter', `Unsupported support inspection filter: ${unsupported[0]}.`, {
+            unavailableFilters: unsupported,
+            supportedFilters: Array.from(supportInspectionFilters),
+        })
+    }
+    if (rawQuery.severity && !filter.severity) {
+        return supportError('invalid_support_filter', 'Unsupported audit severity filter.', {
+            filter: 'severity',
+            supportedValues: ['info', 'notice', 'warning', 'critical'],
+        })
+    }
+    if (rawQuery.outcome && !filter.outcome) {
+        return supportError('invalid_support_filter', 'Unsupported audit outcome filter.', {
+            filter: 'outcome',
+            supportedValues: ['success', 'denied', 'failed'],
+        })
+    }
+    if (filter.from && Number.isNaN(Date.parse(filter.from))) {
+        return supportError('invalid_support_filter', 'Invalid audit timeline start time.', { filter: 'from' })
+    }
+    if (filter.to && Number.isNaN(Date.parse(filter.to))) {
+        return supportError('invalid_support_filter', 'Invalid audit timeline end time.', { filter: 'to' })
+    }
+    if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
+        return supportError('invalid_support_filter', 'Support inspection limit must be a positive number.', { filter: 'limit' })
+    }
+    const hasTarget = Boolean(filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType)
+    if (!hasTarget && Boolean(filter.action || filter.source || filter.service || filter.severity || filter.outcome || filter.from || filter.to)) {
+        return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, or entityType with audit timeline filters.', {
+            filters: supportTimelineFilter(filter),
+        })
+    }
+    return null
+}
+
+function supportTimelineFilter(input: Omit<SupportTimelineFilter, 'unsupported'>): SupportTimelineFilter {
+    return {
+        org: input.org,
+        user: input.user,
+        email: input.email,
+        request: input.request,
+        entity: input.entity,
+        entityType: input.entityType,
+        action: input.action,
+        severity: input.severity,
+        outcome: input.outcome,
+        source: input.source,
+        service: input.service,
+        from: input.from,
+        to: input.to,
+        limit: input.limit,
+        unsupported: [],
     }
 }
 
@@ -2187,13 +2316,14 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
     }
 }
 
-function supportError(code: string, message: string) {
+function supportError(code: string, message: string, extra: Record<string, unknown> = {}) {
     return {
         error: message,
         detail: {
             schemaVersion: 'support.error.v1',
             code,
             outcome: 'denied',
+            ...extra,
         },
     }
 }
