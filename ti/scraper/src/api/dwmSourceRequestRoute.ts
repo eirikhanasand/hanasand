@@ -3128,6 +3128,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.sections | all(has(\"section\") and has(\"state\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3446,6 +3447,10 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       actorReadiness,
       sourceHealthRows
     }),
+    sourcePackIntakeHandoff: sourceActorPublicTiSourcePackIntakeHandoff({
+      query,
+      actorReadiness
+    }),
     alertability: {
       matchableFields: actorReadiness.alertability?.matchableFields ?? [],
       activeSourceFamilies: actorReadiness.alertability?.activeSourceFamilies ?? [],
@@ -3460,6 +3465,48 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
       sourceHealthRows
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiSourcePackIntakeHandoff(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+}) {
+  const intake = sourceActorCandidateIntakeContract(input.query, input.actorReadiness);
+  const previews = intake.candidatePreviews ?? [];
+  return {
+    schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
+    proofId: stableId("ti_public_actor_source_pack_intake_handoff", `${input.query}:${previews.map((preview: any) => `${preview.family}:${preview.policyResult?.boundary}`).join(",")}`),
+    query: input.query,
+    ready: previews.length > 0,
+    sourcePackWorkflow: intake.sourcePackWorkflow,
+    route: intake.route,
+    validationSummary: intake.validationSummary,
+    policyValidation: intake.policyValidation,
+    candidates: previews.map((preview: any) => ({
+      schemaVersion: "ti.public_actor.source_pack_intake_candidate.v1",
+      proofId: preview.proofId,
+      family: preview.family,
+      candidate: preview.candidate,
+      policyResult: preview.policyResult,
+      parserExpectation: preview.parserExpectation,
+      activationReadiness: preview.activationReadiness,
+      alertability: preview.alertability,
+      blockers: preview.blockers ?? [],
+      provenance: {
+        gapState: (input.actorReadiness.candidateGaps ?? []).find((gap: any) => gap.family === preview.family)?.state,
+        sourceFamily: preview.family,
+        query: input.query
+      },
+      safeOutput: preview.safeOutput
+    })),
+    gaps: input.actorReadiness.candidateGaps ?? [],
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,

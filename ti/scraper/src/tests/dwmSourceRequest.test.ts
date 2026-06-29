@@ -1825,6 +1825,22 @@ describe("dwm source requests", () => {
             ]),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           },
+          sourcePackIntakeHandoff: {
+            schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
+            ready: false,
+            validationSummary: expect.objectContaining({
+              totalCandidates: 0,
+              accepted: 0,
+              blocked: 0
+            }),
+            candidates: [],
+            gaps: [],
+            policyValidation: expect.objectContaining({
+              liveNetworkFetch: false,
+              rawRestrictedPayloadStorage: false
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          },
           alertability: expect.objectContaining({
             matchableFields: expect.arrayContaining(["text", "victimName"]),
             watchlistMatchReadiness: expect.objectContaining({
@@ -2009,6 +2025,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.schemaVersion == \"ti.public_actor.query_adapter.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.alertEvidenceHandoff.schemaVersion == \"ti.public_actor.alert_evidence_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.parserStatusLedger.schemaVersion == \"ti.public_actor.parser_status_ledger.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2617,6 +2634,46 @@ describe("dwm source requests", () => {
             })
           ])
         }),
+        sourcePackIntakeHandoff: expect.objectContaining({
+          schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
+          ready: true,
+          validationSummary: expect.objectContaining({
+            totalCandidates: expect.any(Number),
+            accepted: expect.any(Number),
+            metadataOnly: expect.any(Number)
+          }),
+          sourcePackWorkflow: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
+            steps: expect.arrayContaining([
+              expect.objectContaining({ step: "create_source_pack", liveNetworkFetch: false }),
+              expect.objectContaining({ step: "validate_candidates", body: expect.objectContaining({ action: "pack_worker_run", dryRun: true }) }),
+              expect.objectContaining({ step: "review_activation", body: expect.objectContaining({ action: "pack_review", packAction: "approve" }) })
+            ])
+          }),
+          candidates: expect.arrayContaining([
+            expect.objectContaining({
+              family: "darkweb_onion",
+              policyResult: expect.objectContaining({
+                allowed: true,
+                metadataOnly: true,
+                liveNetworkFetch: false
+              }),
+              parserExpectation: expect.objectContaining({
+                profile: "restricted_metadata",
+                expectedCaptureType: "darkweb_onion_metadata_observation"
+              }),
+              activationReadiness: expect.objectContaining({
+                requiresOperatorApproval: true,
+                requiresMetadataOnlyApproval: true
+              }),
+              provenance: expect.objectContaining({
+                gapState: "missing",
+                sourceFamily: "darkweb_onion"
+              }),
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ])
+        }),
         alertEvidenceHandoff: expect.objectContaining({
           schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
           ready: false,
@@ -3010,6 +3067,28 @@ describe("dwm source requests", () => {
                 ])
               })
             ])
+          }),
+          sourcePackIntakeHandoff: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
+            ready: true,
+            candidates: expect.arrayContaining([
+              expect.objectContaining({
+                family: "telegram",
+                policyResult: expect.objectContaining({ allowed: true, publicOnly: true }),
+                parserExpectation: expect.objectContaining({ profile: "public_channel_handoff" }),
+                provenance: expect.objectContaining({ gapState: "failed" })
+              }),
+              expect.objectContaining({
+                family: "actor_page",
+                parserExpectation: expect.objectContaining({ profile: "actor_page_metadata" }),
+                activationReadiness: expect.objectContaining({ requiresOperatorApproval: true })
+              })
+            ]),
+            sourcePackWorkflow: expect.objectContaining({
+              steps: expect.arrayContaining([
+                expect.objectContaining({ step: "validate_candidates", liveNetworkFetch: false })
+              ])
+            })
           }),
           alertEvidenceHandoff: expect.objectContaining({
             schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
