@@ -1451,6 +1451,22 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     } else {
         rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'No active organization webhook destination is loaded.', tone: 'needs_action', href: '/dashboard/automations?setup=dwm' })
     }
+    if (selected.kind === 'webhook_readiness') {
+        rows.push({
+            id: 'inspect_webhook_delivery_history',
+            label: 'Delivery history',
+            detail: `GET ${deliveryLedgerHref(orgContext, selected)} returns delivery attempts for the selected organization or tenant scope.`,
+            tone: selected.deliveryEvidence?.length ? 'ready' : 'needs_action',
+            href: deliveryLedgerHref(orgContext, selected),
+        })
+        rows.push({
+            id: 'open_webhook_configuration',
+            label: 'Delivery setup',
+            detail: activeWebhook && orgContext?.organization ? 'Open the organization webhook route used by Test webhook and Send queued alerts.' : 'Open delivery setup before sending alerts.',
+            tone: activeWebhook ? 'ready' : 'needs_action',
+            href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/dashboard/automations?setup=dwm',
+        })
+    }
     if (sourceCoverage) {
         rows.push({
             id: 'source_health',
