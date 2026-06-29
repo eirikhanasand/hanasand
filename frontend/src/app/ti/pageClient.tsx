@@ -903,7 +903,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     }))
 
     return (
-        <section data-ti-selected-artifact='true' className='rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4'>
+        <section data-ti-selected-artifact='true' className='max-w-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:p-4'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#3056d3]'>Selected Intelligence</p>
@@ -931,7 +931,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{task}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
                     </EvidencePanel>
                 </div>
-                <div className='grid min-w-0 max-w-full content-start gap-2'>
+                <div className='grid min-w-0 max-w-full content-start gap-2 overflow-hidden'>
                     <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Console handoff</p>
                         <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
@@ -947,6 +947,27 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             <span className={bridge.stale ? 'rounded-md bg-[#fff1f0] px-2 py-1 text-[11px] font-semibold text-[#b42318]' : 'rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]'}>
                                 {bridge.stale ? 'stale' : 'fresh enough'}
                             </span>
+                        </div>
+                        <div data-ti-artifact-source-requests='true' className='mt-3 grid min-w-0 w-full max-w-[calc(100vw-7rem)] gap-2 overflow-hidden sm:max-w-full'>
+                            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source requests</p>
+                            {bridge.payload.sourceRequests.length ? bridge.payload.sourceRequests.slice(0, 3).map(request => (
+                                <div key={`${request.sourceName}-${request.provenance}-${request.captureId ?? 'missing'}`} className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                                    <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between'>
+                                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{request.sourceName}</p>
+                                        <span className={sourceRequestCaptureClass(Boolean(request.captureId))}>
+                                            {request.captureId ? 'capture attached' : 'capture needed'}
+                                        </span>
+                                    </div>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.captureId ?? request.provenance}</p>
+                                    {request.missing.length || typeof request.confidence === 'number' ? (
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                            {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing].filter(Boolean).join(' · ')}
+                                        </p>
+                                    ) : null}
+                                </div>
+                            )) : (
+                                <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source request rows returned for this artifact.</p>
+                            )}
                         </div>
                         {bridge.missing.length ? (
                             <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
@@ -1910,6 +1931,12 @@ function consumerFieldClass(state: DecisionStep['status']) {
     if (state === 'ready') return 'max-w-full wrap-break-word rounded-md border border-[#d6eadf] bg-[#f1fbf5] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:border-[#214833] dark:bg-[#102218] dark:text-[#83d9a1]'
     if (state === 'review') return 'max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'
     return 'max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'
+}
+
+function sourceRequestCaptureClass(ready: boolean) {
+    return ready
+        ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b] dark:bg-[#102218] dark:text-[#83d9a1]'
+        : 'max-w-full wrap-break-word rounded-md bg-[#fff1f0] px-1.5 py-0.5 text-[10px] font-semibold text-[#b42318] dark:bg-[#2b1716] dark:text-[#ffaaa3]'
 }
 
 type DecisionStep = {
