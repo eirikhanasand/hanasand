@@ -995,6 +995,36 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         action: 'support.organization',
     }, audit.rows as Record<string, unknown>[])
     const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const organizationTimelineFilter = supportTimelineFilter({
+        q: '',
+        org: organization.id,
+        user: '',
+        email: '',
+        request: inspectionAudit.requestId,
+        entity: organization.id,
+        entityType: 'organization',
+        supportSession: '',
+        action: 'support.organization',
+        severity: '',
+        outcome: '',
+        source: 'admin',
+        service: 'hanasand-api',
+        blocker: '',
+        reason: inspectionAudit.reason,
+        context: inspectionAudit.supportContext,
+        from: '',
+        to: '',
+        limit: 25,
+    })
+    const organizationRecoveryEligibility = buildRecoveryEligibility({
+        email: '',
+        user: '',
+        organizationIds: [organization.id],
+        memberships: members.rows as Record<string, unknown>[],
+        users: members.rows as Record<string, unknown>[],
+        availabilityByOrg,
+        invites: invites.rows as Record<string, unknown>[],
+    })
     const organizationAccessStatus = buildSupportAccessStatus({
         org: organization.id,
         user: '',
@@ -1005,17 +1035,23 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         memberships: members.rows as Record<string, unknown>[],
         invites: invites.rows as Record<string, unknown>[],
         approvalDetails: [],
-        recoveryEligibility: buildRecoveryEligibility({
-            email: '',
-            user: '',
-            organizationIds: [organization.id],
-            memberships: members.rows as Record<string, unknown>[],
-            users: members.rows as Record<string, unknown>[],
-            availabilityByOrg,
-            invites: invites.rows as Record<string, unknown>[],
-        }),
+        recoveryEligibility: organizationRecoveryEligibility,
         availabilityByOrg,
         timeline: recentAuditTimeline.events,
+    })
+    const accessRecoveryPlan = buildSupportAccessRecoveryPlan({
+        org: organization.id,
+        user: '',
+        email: '',
+        request: inspectionAudit.requestId,
+        organizationIds: [organization.id],
+        memberships: members.rows as Record<string, unknown>[],
+        invites: invites.rows as Record<string, unknown>[],
+        approvalDetails: [],
+        recoveryEligibility: organizationRecoveryEligibility,
+        availabilityByOrg,
+        timeline: recentAuditTimeline.events,
+        timelineFilter: organizationTimelineFilter,
     })
     const authorization = buildSupportInspectionAuthorization({
         actorId: actor.id,
@@ -1057,6 +1093,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         organization: toOrganization(organization),
         authorization,
         accessStatus: organizationAccessStatus,
+        accessRecoveryPlan,
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
@@ -1127,6 +1164,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
     const [memberships, invites, audit, approvals] = await Promise.all([
         run(`
             SELECT
+                om.user_id,
                 om.organization_id,
                 organizations.name AS organization_name,
                 organizations.slug AS organization_slug,
@@ -1193,6 +1231,36 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
     ]))
     const availability = organizationIds.length ? await loadOrganizationAvailability(organizationIds) : []
     const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const userTimelineFilter = supportTimelineFilter({
+        q: '',
+        org: '',
+        user: req.params.id,
+        email: '',
+        request: inspectionAudit.requestId,
+        entity: req.params.id,
+        entityType: 'user',
+        supportSession: '',
+        action: 'support.user',
+        severity: '',
+        outcome: '',
+        source: 'admin',
+        service: 'hanasand-api',
+        blocker: '',
+        reason: inspectionAudit.reason,
+        context: inspectionAudit.supportContext,
+        from: '',
+        to: '',
+        limit: 25,
+    })
+    const userRecoveryEligibility = buildRecoveryEligibility({
+        email: '',
+        user: req.params.id,
+        organizationIds,
+        memberships: memberships.rows as Record<string, unknown>[],
+        users: [userRow],
+        availabilityByOrg,
+        invites: invites.rows as Record<string, unknown>[],
+    })
     const userAccessStatus = buildSupportAccessStatus({
         org: '',
         user: req.params.id,
@@ -1203,17 +1271,23 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         memberships: memberships.rows as Record<string, unknown>[],
         invites: invites.rows as Record<string, unknown>[],
         approvalDetails,
-        recoveryEligibility: buildRecoveryEligibility({
-            email: '',
-            user: req.params.id,
-            organizationIds,
-            memberships: memberships.rows as Record<string, unknown>[],
-            users: [userRow],
-            availabilityByOrg,
-            invites: invites.rows as Record<string, unknown>[],
-        }),
+        recoveryEligibility: userRecoveryEligibility,
         availabilityByOrg,
         timeline: recentAuditTimeline.events,
+    })
+    const accessRecoveryPlan = buildSupportAccessRecoveryPlan({
+        org: '',
+        user: req.params.id,
+        email: '',
+        request: inspectionAudit.requestId,
+        organizationIds,
+        memberships: memberships.rows as Record<string, unknown>[],
+        invites: invites.rows as Record<string, unknown>[],
+        approvalDetails,
+        recoveryEligibility: userRecoveryEligibility,
+        availabilityByOrg,
+        timeline: recentAuditTimeline.events,
+        timelineFilter: userTimelineFilter,
     })
     const authorization = buildSupportInspectionAuthorization({
         actorId: actor.id,
@@ -1232,6 +1306,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         user: toSupportUser(userRow),
         authorization,
         accessStatus: userAccessStatus,
+        accessRecoveryPlan,
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
         approvalRequests: approvalDetails,
