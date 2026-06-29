@@ -1197,6 +1197,74 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                 <EvidenceMetric label='Last seen' value={formatDate(proof.freshness.lastSeen)} />
                 <EvidenceMetric label='Freshness' value={proof.freshness.stale ? proof.freshness.reason : 'Current enough for review'} />
             </div>
+            <div data-ti-org-actor-identity='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                <div className='flex flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Actor identity</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{proof.actorIdentity.canonicalName} · {proof.actorIdentity.actorClass}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {proof.actorIdentity.aliases.length ? `${proof.actorIdentity.aliases.slice(0, 4).join(', ')}` : 'Aliases not attached'} · {proof.actorIdentity.sectors.length} sector{proof.actorIdentity.sectors.length === 1 ? '' : 's'} · {proof.actorIdentity.regions.length} region{proof.actorIdentity.regions.length === 1 ? '' : 's'}
+                        </p>
+                    </div>
+                    <span className={proof.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? decisionStepStatusClass('review') : decisionStepStatusClass('ready')}>
+                        {proof.enrichmentGaps.some(gap => gap.code.startsWith('missing_actor') || gap.code.startsWith('missing_target')) ? 'Review' : 'Ready'}
+                    </span>
+                </div>
+                <div className='mt-2 flex flex-wrap gap-1.5'>
+                    {[...proof.actorIdentity.sectors.slice(0, 4), ...proof.actorIdentity.regions.slice(0, 4)].map(value => (
+                        <span key={value} className='max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#16213a] dark:text-[#9db4ff]'>{value}</span>
+                    ))}
+                </div>
+            </div>
+            <div data-ti-org-source-coverage='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source coverage</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {proof.sourceCoverage.length} source{proof.sourceCoverage.length === 1 ? '' : 's'} · {proof.sourceCoverage.filter(source => source.status === 'capture_ready').length} capture-ready · {proof.sourceCoverage.filter(source => source.status === 'missing_capture').length} missing capture
+                        </p>
+                    </div>
+                    <span className={proof.sourceCoverage.some(source => source.status === 'missing_capture') || !proof.sourceCoverage.length ? decisionStepStatusClass('blocked') : decisionStepStatusClass('ready')}>
+                        {proof.sourceCoverage.some(source => source.status === 'missing_capture') || !proof.sourceCoverage.length ? 'Blocked' : 'Ready'}
+                    </span>
+                </div>
+                <div className='mt-2 grid gap-2'>
+                    {proof.sourceCoverage.length ? proof.sourceCoverage.slice(0, 3).map(source => (
+                        <div key={`${source.sourceId ?? source.sourceName}-${source.provenance}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{source.sourceName}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                        {formatLabel(source.sourceFamily)} · {formatLabel(source.status)}{source.lastCollectedAt ? ` · ${formatDate(source.lastCollectedAt)}` : ''}
+                                    </p>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{source.captureId ? `capture ${source.captureId}` : source.provenance}</p>
+                                </div>
+                                {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-[#667085] dark:text-[#9aa8bd]'>{Math.round(source.confidence * 100)}%</span> : null}
+                            </div>
+                        </div>
+                    )) : (
+                        <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source coverage row is attached to this actor result.</p>
+                    )}
+                </div>
+            </div>
+            {proof.enrichmentGaps.length ? (
+                <div data-ti-org-enrichment-gaps='true' className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 dark:border-[#5a4316] dark:bg-[#231b0c]'>
+                    <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Enrichment needed</p>
+                    <div className='mt-2 grid gap-2'>
+                        {proof.enrichmentGaps.slice(0, 4).map(gap => (
+                            <div key={`${gap.code}-${gap.field}`} className='rounded-md border border-[#ffe6a3] bg-white/70 p-2 dark:border-[#5a4316] dark:bg-[#1a1409]'>
+                                <div className='flex flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <p className='wrap-break-word text-xs font-semibold text-[#8a5a00]'>{formatLabel(gap.code)}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{gap.detail}</p>
+                                    </div>
+                                    <span className='shrink-0 rounded-md bg-[#fff4cc] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#33270d]'>{readinessOwnerLabel(gap.ownerLane)}</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
             {affectedEntities.length ? (
                 <div className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Affected context</p>
