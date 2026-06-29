@@ -1,5 +1,5 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { PRODUCT_PROGRESS_SCHEMA_VERSION, PRODUCT_READINESS_PROOF_ROW_IDS, applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductProgressReadinessPayload, type ProductReadinessExternalState } from './operatorConsoleModel'
+import { PRODUCT_PROGRESS_SCHEMA_VERSION, PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS, PRODUCT_READINESS_PROOF_ROW_IDS, applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductProgressReadinessPayload, type ProductReadinessExternalState } from './operatorConsoleModel'
 import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
@@ -875,6 +875,14 @@ function expectProductReadinessStatus(context: WorkbenchOrgContext, id: string, 
     return item
 }
 
+function expectProductReadinessLink(context: WorkbenchOrgContext, id: string, href: string) {
+    const item = context.readiness.productReadiness.find(row => row.id === id)
+    if (!item || item.href !== href || item.deepLinkTarget !== href) {
+        throw new Error(`Expected ${id} to link to ${href}, got ${item?.href || 'missing'}.`)
+    }
+    return item
+}
+
 const blockedFallbackAlert = {
     ...selectedLiveAlert,
     id: 'fallback_alert_acme',
@@ -979,11 +987,23 @@ void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefi
 void (parsedProductProgressPayload satisfies ProductProgressReadinessPayload | null)
 void (malformedProductProgressPayload satisfies ProductProgressReadinessPayload | null)
 void (PRODUCT_READINESS_PROOF_ROW_IDS satisfies readonly string[])
+void (PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS satisfies readonly string[])
 void expectProductReadinessStatus(absentProductProgressOrgContext, 'dashboard_evidence', 'unavailable')
 void expectProductReadinessStatus(absentProductProgressOrgContext, 'source_inventory_probe', 'needs_action')
 void expectProductReadinessStatus(absentProductProgressOrgContext, 'webhook_health', 'unavailable')
 void expectProductReadinessStatus(malformedProductProgressOrgContext, 'dashboard_evidence', 'unavailable')
 void expectProductReadinessStatus(malformedProductProgressOrgContext, 'deploy_probe', 'unavailable')
+void (expectProductReadinessStatus(malformedProductProgressOrgContext, 'deploy_probe', 'unavailable').unavailableReason satisfies string | undefined)
+void (expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'dashboard_evidence', 'needs_action').blockerCount satisfies number | undefined)
+void (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').blockerCount satisfies number | undefined)
+void expectProductReadinessLink(productProgressOrgContext, 'dashboard_evidence', '/dashboard?case=alert_acme_1')
+void expectProductReadinessLink(productProgressOrgContext, 'source_inventory_probe', '/dashboard/ti/sources')
+void expectProductReadinessLink(productProgressOrgContext, 'webhook_delivery', '/dashboard/automations?setup=dwm')
+void expectProductReadinessLink(productProgressOrgContext, 'org_alert_export', '/dashboard/dwm')
+void expectProductReadinessLink(productProgressOrgContext, 'webhook_health', '/dashboard/automations?setup=dwm')
+void expectProductReadinessLink(productProgressOrgContext, 'helpdesk_audit', '/dashboard/system/impersonation')
+void expectProductReadinessLink(productProgressOrgContext, 'deploy_probe', '/status')
+void expectProductReadinessLink(productProgressOrgContext, 'public_ti_provenance', '/ti/akira')
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')

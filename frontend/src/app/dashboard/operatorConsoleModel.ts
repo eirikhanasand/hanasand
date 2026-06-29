@@ -218,6 +218,8 @@ export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_wat
 
 export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
 
+export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
+
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
     generatedAt?: string
@@ -1095,7 +1097,26 @@ function buildProductReadiness(input: {
             href: '/status',
             checkedAt: deployProbe?.checkedAt || deployProbe?.latestProbeAt,
         },
-    ]
+    ].map(withProductReadinessWorkflowMetadata)
+}
+
+function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessItem): WorkbenchProductReadinessItem {
+    const blockerCount = item.status === 'ready' ? 0 : countReadinessBlockers(item.detail)
+    return {
+        ...item,
+        blockerCount,
+        deepLinkTarget: item.href,
+        proofTimestamp: item.checkedAt,
+        unavailableReason: item.status === 'unavailable' ? item.source : undefined,
+    }
+}
+
+function countReadinessBlockers(detail: string) {
+    const parts = detail
+        .split(';')
+        .map(part => part.trim())
+        .filter(Boolean)
+    return Math.max(1, parts.length)
 }
 
 function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {

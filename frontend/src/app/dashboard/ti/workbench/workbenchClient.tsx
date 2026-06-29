@@ -163,6 +163,10 @@ export type WorkbenchProductReadinessItem = {
     source: string
     href?: string
     checkedAt?: string
+    blockerCount?: number
+    deepLinkTarget?: string
+    proofTimestamp?: string
+    unavailableReason?: string
 }
 
 export type WorkbenchOrgContext = {
@@ -1216,9 +1220,17 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                 {items.map(item => {
                     const tone = productReadinessTone(item.status)
                     const content = (
-                        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-white px-3 py-2 text-left transition hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'>
+                        <div
+                            className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-white px-3 py-2 text-left transition hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'
+                            data-readiness-row-id={item.id}
+                            data-readiness-state={item.status}
+                            data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
+                            data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
+                            data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
+                            data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
+                        >
                             <div className='min-w-0'>
-                                <p className='truncate text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
+                                <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
                                 <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.detail}</p>
                                 <p className='mt-1 break-all text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{item.source}</p>
                             </div>
