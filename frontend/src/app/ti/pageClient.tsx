@@ -180,6 +180,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
+    const sourceHealthRows = sourceHealthRowsFor(result, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
     const openGapCount = actionability.enrichmentGapQueue.length
@@ -429,6 +430,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} />
+                        <SourceHealthPanel rows={sourceHealthRows} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
                             <ActionPanel
@@ -691,6 +693,23 @@ type EnrichmentTask = {
     detail: string
 }
 
+type SourceHealthRow = {
+    id: string
+    sourceName: string
+    sourceFamily: string
+    provenance: string
+    timestamp: string
+    parserStatus: string
+    state: 'ready' | 'review' | 'blocked'
+    confidence?: number
+    captureId?: string
+    sourceId?: string
+    route: string
+    requestedFields: string[]
+    ownerLane: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
+    nextAction: string
+}
+
 function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
     actionability: TiActionabilityModel
@@ -787,7 +806,7 @@ function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligen
                     <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source blockers</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {sourceBlockers.length ? sourceBlockers.slice(0, 3).map(blocker => (
-                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {blocker.handoff}</li>
+                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
                         )) : actor.sourceCoverage.missing.length ? actor.sourceCoverage.missing.slice(0, 3).map(item => (
                             <li key={item} className='wrap-break-word'>Source collection: attach {coverageMissingLabel(item)}.</li>
                         )) : <li>Source evidence is sufficient for review.</li>}
@@ -797,7 +816,7 @@ function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligen
                     <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff blockers</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {workflowBlockers.length ? workflowBlockers.slice(0, 3).map(blocker => (
-                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {blocker.handoff}</li>
+                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {displayRequirementText(blocker.handoff)}</li>
                         )) : <li>Required handoff identifiers are present.</li>}
                     </ul>
                 </div>
@@ -1046,10 +1065,10 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
     const bridge = handoffs.authBridge
     const payloadRows = [
-        { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffs.watchlist.missing.join('; ') : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
-        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffs.alertRebuild.missing.join('; ') : 'Ready to rebuild from this selected artifact.' },
-        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffs.case.missing.join('; ') : 'Ready to open with this selected artifact.' },
-        { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffs.enrichment.missing.join('; ') : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
+        { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffMissingLabel(handoffs.watchlist.missing) : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
+        { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffMissingLabel(handoffs.alertRebuild.missing) : 'Ready to rebuild from this selected artifact.' },
+        { id: 'case', label: 'Case package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case], route: bridge.links.case.href, blocked: handoffs.case.blocked, detail: handoffs.case.missing.length ? handoffMissingLabel(handoffs.case.missing) : 'Ready to open with this selected artifact.' },
+        { id: 'enrichment', label: 'Enrichment item', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment], route: bridge.links.enrichment.href, blocked: handoffs.enrichment.blocked, detail: handoffs.enrichment.missing.length ? handoffMissingLabel(handoffs.enrichment.missing) : `${artifact.enrichmentTasks.length} enrichment task${artifact.enrichmentTasks.length === 1 ? '' : 's'}` },
     ]
     const workflowRows = payloadRows.map(row => ({
         ...row,
@@ -1135,7 +1154,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         </div>
                         {bridge.missing.length ? (
                             <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
-                                {bridge.missing.slice(0, 4).map(item => <li key={item}>{item}</li>)}
+                                {bridge.missing.slice(0, 4).map(item => <li key={item}>{displayRequirementText(item)}</li>)}
                             </ul>
                         ) : null}
                         {bridge.payload.evidenceRefs ? (
@@ -1180,7 +1199,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             </div>
                             <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.endpoint}</p>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                {row.readiness?.missing.length ? row.readiness.missing.slice(0, 2).join('; ') : row.missing.length ? row.missing.slice(0, 2).join('; ') : 'Required artifact context is present.'}
+                                {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
                             </p>
                             {row.readiness ? (
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -1232,7 +1251,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                     </div>
                     {priority.blockers.length ? (
                         <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>
-                            {priority.blockers.slice(0, 3).map(blocker => <li key={`${blocker.code}-${blocker.field}`}>{blocker.detail}</li>)}
+                            {priority.blockers.slice(0, 3).map(blocker => <li key={`${blocker.code}-${blocker.field}`}>{displayRequirementText(blocker.detail)}</li>)}
                         </ul>
                     ) : null}
                 </div>
@@ -1274,7 +1293,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                             </span>
                         </div>
                         <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : row.provenance}</p>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.handoff}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.handoff)}</p>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
                                 {readinessOwnerLabel(row.ownerLane === 'public-ti' ? 'public-ti' : row.ownerLane)}
@@ -1290,7 +1309,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                             ) : null}
                         </div>
                         {row.missing.length ? (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{row.missing.slice(0, 2).join('; ')}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.missing.slice(0, 2))}</p>
                         ) : null}
                     </div>
                 )) : (
@@ -1305,7 +1324,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                 <SourceDrilldownHandoff label='Case handoff' ready={drilldown.caseHandoff.ready} endpoint={drilldown.caseHandoff.route || drilldown.caseHandoff.endpoint} missing={drilldown.caseHandoff.missing} />
             </div>
             {drilldown.blockers.length ? (
-                <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{drilldown.blockers.slice(0, 3).join('; ')}</p>
+                <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(drilldown.blockers.slice(0, 3))}</p>
             ) : null}
         </div>
     )
@@ -1322,7 +1341,7 @@ function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: st
                 <span className={ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{ready ? 'ready' : 'blocked'}</span>
             </div>
             <p className={ready ? 'mt-1 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]' : 'mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'}>
-                {ready ? 'Required source and routing context is present.' : missing.slice(0, 2).join('; ') || 'Required source and routing context is not attached.'}
+                {ready ? 'Required source and routing context is present.' : displayRequirementList(missing.slice(0, 2)) || 'Required source and routing context is not attached.'}
             </p>
         </div>
     )
@@ -1584,9 +1603,9 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                             ))}
                         </div>
                         {row.blocker ? (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{readinessOwnerLabel(row.blocker.ownerLane)}: {row.blocker.handoff}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{readinessOwnerLabel(row.blocker.ownerLane)}: {displayRequirementText(row.blocker.handoff)}</p>
                         ) : row.missing.length ? (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{row.missing.slice(0, 2).join('; ')}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.missing.slice(0, 2))}</p>
                         ) : (
                             <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required identifiers and provenance are present.</p>
                         )}
@@ -1693,7 +1712,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                             Open related case
                         </a>
                     ) : (
-                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex min-h-9 w-fit max-w-full cursor-not-allowed items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 py-2 text-xs font-semibold text-[#98a2b3] dark:border-[#314057] dark:bg-[#172131] dark:text-[#77869a]'>
+                        <button type='button' disabled title={displayRequirementList(actionability.handoffs.caseBlockers)} className='inline-flex min-h-9 w-fit max-w-full cursor-not-allowed items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 py-2 text-xs font-semibold text-[#98a2b3] dark:border-[#314057] dark:bg-[#172131] dark:text-[#77869a]'>
                             <ClipboardList className='h-3.5 w-3.5' />
                             Create case
                         </button>
@@ -1703,7 +1722,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                 {!casePath && actionability.handoffs.casePayload ? (
                     <PayloadHandoffRow
                         label='Case handoff'
-                        detail={actionability.caseHandoff.blocked ? `Blocked until ${actionability.caseHandoff.missing.slice(0, 2).join('; ')}.` : 'Case request is prepared for authenticated review.'}
+                        detail={actionability.caseHandoff.blocked ? `Blocked until ${displayRequirementList(actionability.caseHandoff.missing.slice(0, 2))}.` : 'Case request is prepared for authenticated review.'}
                         payload={actionability.exportPayloads.case.body}
                         route={actionability.caseHandoff.backedRoute}
                         blocked={actionability.caseHandoff.blocked}
@@ -1874,7 +1893,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                                         {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
                                     </p>
-                                    {item.blockers.length ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{item.blockers[0].handoff}</p> : null}
+                                    {item.blockers.length ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementText(item.blockers[0].handoff)}</p> : null}
                                 </div>
                                 <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                             </div>
@@ -1894,7 +1913,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                 <div className='flex flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-xs font-semibold text-[#8a5a00]'>{formatLabel(gap.code)}</p>
-                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{gap.detail}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementText(gap.detail)}</p>
                                     </div>
                                     <span className='shrink-0 rounded-md bg-[#fff4cc] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:bg-[#33270d]'>{readinessOwnerLabel(gap.ownerLane)}</span>
                                 </div>
@@ -1945,8 +1964,8 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                             <div key={row.rowId} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
                                 <div className='flex flex-wrap items-start justify-between gap-2'>
                                     <div className='min-w-0'>
-                                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
-                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.action} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}</p>
+                                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(row.label)}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.action)} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}</p>
                                         <p data-ti-org-row-evidence='true' className='mt-1 wrap-break-word text-[11px] leading-5 text-[#475467] dark:text-[#c3cee0]'>
                                             {evidenceMeta.length ? evidenceMeta.join(' · ') : 'Evidence metadata pending'} · {row.evidence.summary}
                                         </p>
@@ -1956,7 +1975,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                                 {[row.alertId ? `alert ${row.alertId}` : '', row.watchlistItemId ? `watchlist item ${row.watchlistItemId}` : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
                                             </p>
                                         ) : null}
-                                        {rowBlocker ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{rowBlocker.handoff}</p> : null}
+                                        {rowBlocker ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementText(rowBlocker.handoff)}</p> : null}
                                     </div>
                                     <span className={decisionStepStatusClass(row.state)}>{decisionStepStatusLabel(row.state)}</span>
                                 </div>
@@ -1966,7 +1985,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                 </div>
             ) : null}
             {firstBlocker ? (
-                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(firstBlocker.ownerLane)}: {firstBlocker.handoff}</p>
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(firstBlocker.ownerLane)}: {displayRequirementText(firstBlocker.handoff)}</p>
             ) : null}
         </div>
     )
@@ -2005,7 +2024,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                     </div>
                                     <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{payload.route}</p>
                                     {primaryBlocker ? (
-                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {primaryBlocker.handoff}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(primaryBlocker.ownerLane)}: {displayRequirementText(primaryBlocker.handoff)}</p>
                                     ) : (
                                         <p className='mt-1 text-[11px] leading-5 text-[#147a3b]'>Required IDs and provenance are present.</p>
                                     )}
@@ -2064,8 +2083,8 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#8a5a00]'>{readinessOwnerLabel(blocker.ownerLane)}</p>
                                 <span className='shrink-0 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00] dark:bg-[#2b210e]'>{formatLabel(blocker.code)}</span>
                             </div>
-                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>{blocker.detail}</p>
-                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{blocker.handoff}</p>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>{displayRequirementText(blocker.detail)}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementText(blocker.handoff)}</p>
                         </div>
                     ))}
                 </div>
@@ -2122,7 +2141,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                     ))}
                                 </div>
                                 {stage.missing.length ? (
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{stage.missing.slice(0, 2).join('; ')}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementList(stage.missing.slice(0, 2))}</p>
                                 ) : null}
                             </div>
                             <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -2206,6 +2225,71 @@ function consumerFieldClass(state: DecisionStep['status']) {
     return 'max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'
 }
 
+function sourceHealthChipClass(state: SourceHealthRow['state']) {
+    if (state === 'ready') return 'max-w-full wrap-break-word rounded-md border border-[#d6eadf] bg-[#f1fbf5] px-2 py-1 text-[11px] font-semibold text-[#147a3b] dark:border-[#214833] dark:bg-[#102218] dark:text-[#83d9a1]'
+    if (state === 'review') return 'max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'
+    return 'max-w-full wrap-break-word rounded-md border border-[#fff0c2] bg-[#fffdf2] px-2 py-1 text-[11px] font-semibold text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'
+}
+
+function sourceHealthEvidenceLabel(row: SourceHealthRow) {
+    if (row.captureId) return `capture ${row.captureId}`
+    const hasFieldPath = row.provenance.includes('[') || row.provenance.includes(']') || /sourceProvenance|relatedAlerts|handoffs|actorIntelligence/i.test(row.provenance)
+    if (hasFieldPath) {
+        return `${formatLabel(row.sourceFamily)} evidence request`
+    }
+    return row.provenance
+}
+
+function sourceHealthFieldLabel(value: string) {
+    if (/captureId/i.test(value)) return 'capture ID'
+    if (/sourceRequestId/i.test(value)) return 'source request ID'
+    if (/reportDate|lastSeen|firstReportedAt/i.test(value)) return 'report date'
+    if (/sourceId/i.test(value)) return 'source ID'
+    if (/provenance|sourceUrl|url/i.test(value)) return 'source reference'
+    if (/relatedAlerts.*id|alertId/i.test(value)) return 'alert ID'
+    if (/casePath|caseId/i.test(value)) return 'case route'
+    if (/webhookDestination/i.test(value)) return 'webhook destination'
+    if (/organizationId|tenantId/i.test(value)) return 'organization scope'
+    if (/watchlistItem|watchlistId/i.test(value)) return 'watchlist item'
+    if (/endpoint|route/i.test(value)) return 'workflow route'
+    return formatLabel(value.replace(/\[\]/g, '').replace(/\./g, ' '))
+}
+
+function handoffMissingLabel(values: string[]) {
+    return unique(values.map(value => {
+        if (/sourceProvenance|capture|source request|source URL|source hash|url/i.test(value)) return sourceHealthFieldLabel(value)
+        if (/organization|org|tenant/i.test(value)) return 'organization scope'
+        if (/watchlist/i.test(value)) return 'watchlist item'
+        if (/alert/i.test(value)) return 'alert ID'
+        if (/case/i.test(value)) return 'case route'
+        if (/webhook|destination/i.test(value)) return 'webhook destination'
+        if (/fresh|stale|after/i.test(value)) return 'fresh source evidence'
+        return value
+    })).join('; ')
+}
+
+function displayRequirementText(value: string) {
+    return value
+        .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')
+        .replace(/actorIntelligence\.structuredProvenance\[\]\.reportDate/gi, 'source report date')
+        .replace(/sourceProvenance\[\]\.sourceRequestId/gi, 'source request ID')
+        .replace(/sourceProvenance\[\]\.captureId/gi, 'capture ID')
+        .replace(/sourceProvenance\[\]\.sourceId/gi, 'source ID')
+        .replace(/sourceProvenance\[\]\.provenance/gi, 'source reference')
+        .replace(/relatedAlerts\[\]\.casePath/gi, 'alert case route')
+        .replace(/relatedAlerts\[\]\.id/gi, 'alert ID')
+        .replace(/relatedCases\[\]\.path/gi, 'case route')
+        .replace(/handoffs\.alertRebuild\.endpoint/gi, 'alert rebuild route')
+        .replace(/sourceProvenance\[\]/gi, 'source evidence')
+        .replace(/actorIntelligence\./gi, 'actor intelligence ')
+        .replace(/handoffs\./gi, '')
+        .replace(/relatedAlerts\[\]/gi, 'related alerts')
+}
+
+function displayRequirementList(values: string[]) {
+    return unique(values.map(displayRequirementText)).join('; ')
+}
+
 function sourceRequestCaptureClass(ready: boolean) {
     return ready
         ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b] dark:bg-[#102218] dark:text-[#83d9a1]'
@@ -2273,7 +2357,7 @@ function DecisionFlow({ steps, disposition, shouldAlert, rationale }: { steps: D
                                 </div>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{step.detail}</p>
                                 {step.missing.length ? (
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{step.missing.slice(0, 2).join('; ')}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementList(step.missing.slice(0, 2))}</p>
                                 ) : null}
                             </div>
                             <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -2429,6 +2513,58 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
+function SourceHealthPanel({ rows, payload }: { rows: SourceHealthRow[]; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
+    const readyCount = rows.filter(row => row.state === 'ready').length
+    const blockedCount = rows.filter(row => row.state === 'blocked').length
+
+    return (
+        <Panel title='Source Health' description='Source family, timestamp, parser status, and enrichment route for source-backed review.' icon={<Database className='h-4 w-4' />}>
+            <div data-ti-source-health-queue='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
+                <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                    <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {rows.length} source row{rows.length === 1 ? '' : 's'} · {readyCount} ready · {blockedCount} blocked
+                    </p>
+                    <CopyPayloadButton label='Source health queue' payload={{ schemaVersion: 'ti.public_actor.source_health_queue.v1', rows, enrichmentPayload: payload }} />
+                </div>
+                {rows.length ? rows.slice(0, 5).map(row => (
+                    <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                    {formatLabel(row.sourceFamily)} · {formatDate(row.timestamp)} · {row.parserStatus}
+                                </p>
+                                <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    {sourceHealthEvidenceLabel(row)}
+                                </p>
+                            </div>
+                            <span className={decisionStepStatusClass(row.state)}>{decisionStepStatusLabel(row.state)}</span>
+                        </div>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                            {row.sourceId ? <span className={sourceHealthChipClass('review')}>source {row.sourceId}</span> : null}
+                            <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
+                            {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{Math.round(row.confidence * 100)}% confidence</span> : null}
+                            <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
+                        </div>
+                        {row.requestedFields.length ? (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs: {row.requestedFields.slice(0, 4).map(sourceHealthFieldLabel).join(', ')}</p>
+                        ) : null}
+                        <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                            <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            <a href={row.route} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                <ExternalLink className='h-3.5 w-3.5' />
+                                Open
+                            </a>
+                        </div>
+                    </div>
+                )) : (
+                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source health row is attached yet. Queue source enrichment before routing this actor to customer workflows.</p>
+                )}
+            </div>
+        </Panel>
+    )
+}
+
 function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
@@ -2525,7 +2661,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNo
                             </span>
                         </div>
                         {reviewHandoff.blockers.length ? (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{reviewHandoff.blockers.slice(0, 2).join('; ')}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(reviewHandoff.blockers.slice(0, 2))}</p>
                         ) : null}
                     </div>
                 ) : null}
@@ -2561,7 +2697,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 {!draft.watchTerms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
             </div>
             {draft.missing.length ? (
-                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{draft.missing.slice(0, 3).join('; ')}</p>
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(draft.missing.slice(0, 3))}</p>
             ) : (
                 <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Required case identifiers and evidence context are present.</p>
             )}
@@ -2615,7 +2751,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                                     <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
                                 </div>
                                 {item.blockers.length ? (
-                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{item.blockers.slice(0, 2).join('; ')}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(item.blockers.slice(0, 2))}</p>
                                 ) : null}
                             </div>
                         ))}
@@ -3142,7 +3278,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
     const actionabilityTasks: EnrichmentTask[] = actionability.enrichmentGapQueue.map(gap => ({
         title: gap.title,
         status: gap.severity === 'high' ? 'needs_api' : 'needs_review',
-        detail: `${gap.detail} Route: ${gap.route}. Source family: ${formatLabel(gap.sourceFamily)}. Required fields: ${gap.requestedFields.join(', ')}. Dependency: ${gap.dependency}.`,
+        detail: `${gap.detail} Source family: ${formatLabel(gap.sourceFamily)}. Needs: ${gap.requestedFields.map(sourceHealthFieldLabel).join(', ')}. Route: ${sourceRequestRouteLabel(gap.route)}.`,
     }))
     return [
         ...actionabilityTasks,
@@ -3180,6 +3316,75 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
                 : 'No stable related case id is attached; this page can export a handoff payload but cannot persist the case from public context.',
         },
     ]
+}
+
+function sourceHealthRowsFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): SourceHealthRow[] {
+    const coverageRows = actionability.orgRelevance.sourceCoverage.map((source): SourceHealthRow => {
+        const matchingProvenance = actor.provenanceRows.find(row => row.sourceId === source.sourceId || row.sourceName === source.sourceName || row.provenance === source.provenance)
+        const matchingGaps = actionability.orgRelevance.enrichmentGaps.filter(gap =>
+            gap.sourceFamily === source.sourceFamily
+            || /source|capture|provenance/i.test(gap.field)
+            || (source.status === 'missing_capture' && /capture/i.test(gap.field))
+        )
+        const requestedFields = unique([
+            ...matchingGaps.map(gap => gap.field),
+            ...(!source.captureId ? ['sourceProvenance[].captureId', 'sourceProvenance[].sourceRequestId'] : []),
+            ...(!matchingProvenance?.reportDate && !source.lastCollectedAt ? ['actorIntelligence.structuredProvenance[].reportDate'] : []),
+        ])
+        const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
+        const stale = actor.freshness.stale || actor.sourceCoverage.stale
+        const state: SourceHealthRow['state'] = source.status === 'capture_ready'
+            ? stale ? 'review' : 'ready'
+            : source.status === 'missing_capture'
+                ? 'blocked'
+                : stale || requestedFields.length ? 'review' : 'ready'
+        return {
+            id: `source-health:${source.sourceId ?? source.sourceName}:${source.provenance}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: source.sourceName,
+            sourceFamily: source.sourceFamily,
+            provenance: source.provenance,
+            timestamp,
+            parserStatus: source.status === 'capture_ready'
+                ? stale ? 'capture linked; freshness review' : 'capture linked'
+                : source.status === 'missing_capture'
+                    ? 'capture needed'
+                    : stale ? 'public reference; freshness review' : 'public reference',
+            state,
+            confidence: source.confidence,
+            captureId: source.captureId,
+            sourceId: source.sourceId,
+            route: matchingGaps[0]?.route || actionability.exportPayloads.enrichment.backedRoute || '/dashboard/ti/enrichment',
+            requestedFields,
+            ownerLane: source.status === 'missing_capture' ? 'source' : stale ? 'public-ti' : 'source',
+            nextAction: source.status === 'capture_ready'
+                ? stale ? 'Refresh this source before using it as customer-facing evidence.' : 'Inspect this capture and attach it to the selected case draft when relevant.'
+                : source.status === 'missing_capture'
+                    ? 'Attach a capture ID or source request ID in source enrichment.'
+                    : 'Verify report date and source capture before routing to alert or case work.',
+        }
+    })
+
+    const coverageKeys = new Set(coverageRows.map(row => `${row.sourceFamily}:${row.sourceName}`.toLowerCase()))
+    const gapRows = actionability.enrichmentGapQueue
+        .filter(gap => !coverageKeys.has(`${gap.sourceFamily}:${gap.title}`.toLowerCase()))
+        .map((gap): SourceHealthRow => ({
+            id: `source-health-gap:${gap.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: gap.title,
+            sourceFamily: gap.sourceFamily,
+            provenance: gap.dependency,
+            timestamp: actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt,
+            parserStatus: 'enrichment queued',
+            state: gap.severity === 'high' ? 'blocked' : 'review',
+            route: gap.route,
+            requestedFields: gap.requestedFields,
+            ownerLane: gap.sourceFamily === 'alert' ? 'alert' : gap.sourceFamily === 'case' ? 'case' : gap.sourceFamily === 'watchlist' ? 'org' : 'source',
+            nextAction: gap.detail,
+        }))
+
+    return uniqueBy([...coverageRows, ...gapRows], row => row.id).sort((a, b) => {
+        const stateRank = { blocked: 0, review: 1, ready: 2 }
+        return stateRank[a.state] - stateRank[b.state] || a.sourceName.localeCompare(b.sourceName)
+    }).slice(0, 10)
 }
 
 function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, LocalDecision>) {
