@@ -2352,12 +2352,19 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
                     const provenance = typeof item.provenance === 'string'
                         ? item.provenance
                         : [item.provenance?.sourceId, item.provenance?.captureId, item.provenance?.captureMode].filter(Boolean).join(' · ')
+                    const sourceHref = typeof item.provenance === 'object' && item.provenance?.sourceId ? sourceProfileHref(item.provenance.sourceId) : undefined
                     return (
                         <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
                                 {item.redactionState && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
                                 {item.captureMode && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
+                                {sourceHref ? (
+                                    <Link href={sourceHref} className='inline-flex min-h-7 items-center gap-1 rounded-lg border border-[#d8dee9] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                                        Open source
+                                        <ExternalLink className='h-3 w-3' />
+                                    </Link>
+                                ) : null}
                             </div>
                             <p className='mt-2 text-xs leading-5 text-[#596170]'>{item.excerpt || 'No safe excerpt returned.'}</p>
                             <div className='mt-2 grid gap-1 text-xs text-[#667085]'>
@@ -3286,6 +3293,10 @@ function alertSourceProfileHref(detail: AlertDetailPayload | undefined) {
     const sourceId = evidence
         .map(item => typeof item.provenance === 'object' ? stringValue(item.provenance?.sourceId) : undefined)
         .find(Boolean)
+    return sourceProfileHref(sourceId)
+}
+
+function sourceProfileHref(sourceId: string | undefined) {
     return sourceId ? `/dashboard/ti/sources/${encodeURIComponent(sourceId)}` : undefined
 }
 

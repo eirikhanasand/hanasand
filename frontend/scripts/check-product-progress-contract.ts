@@ -741,6 +741,8 @@ assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selecte
 assert.ok(workbenchSource.includes('Fallback alerts cannot load /api/dwm/alerts/:id.'), 'Fallback alerts should block alert detail loading honestly.')
 assert.ok(workbenchSource.includes('inspect_alert_source_health'), 'Selected alert detail should expose source-health drill-in when evidence provenance returns a source id.')
 assert.ok(workbenchSource.includes('alertSourceProfileHref'), 'Alert source-health action should derive source profile links from backed alert evidence provenance.')
+assert.ok(workbenchSource.includes('sourceProfileHref(item.provenance.sourceId)'), 'Alert evidence rows should deep-link individual evidence provenance to source profiles.')
+assert.ok(workbenchSource.includes('sourceProfileHref(sourceId)'), 'Alert source-health rail and evidence rows should share source profile URL construction.')
 assert.ok(workbenchSource.includes('/dashboard/ti/sources/${encodeURIComponent(sourceId)}'), 'Alert source-health drill-in should deep-link to the source inventory profile.')
 assert.ok(workbenchSource.includes('replay_alert'), 'Operator action rail should expose backed DWM alert replay.')
 assert.ok(workbenchSource.includes('/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay'), 'Replay action should call the selected alert replay endpoint.')
