@@ -17,7 +17,6 @@ import {
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationLifecycleReadiness,
-    organizationAlertCaseRoleActions,
     organizationDownstreamAuthorizationExport,
     organizationReadinessProof,
     organizationSettingsFromRow,
@@ -1113,8 +1112,7 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
         userActive: true,
         alertVisibilityPolicy: organization.alert_visibility_policy,
     })
-    const allowedActions = organizationAlertCaseRoleActions(organization.role)
-    if (!visibility.allowed && allowedActions.length === 0) {
+    if (!visibility.allowed) {
         const deniedExport = organizationWatchlistAlertTermsExportDenial({
             organizationId: organization.id,
             tenantId: organization.id,
@@ -1150,31 +1148,6 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
         userId,
         role: organization.role ?? 'viewer',
     })
-    if (!exportContract.downstreamAuthorization.visibility.allowed && exportContract.excluded.archivedCount === 0) {
-        const denial = organizationWatchlistAlertTermsExportDenial({
-            organizationId: organization.id,
-            tenantId: organization.id,
-            member: {
-                userId,
-                role: organization.role ?? 'viewer',
-            },
-            visibility: exportContract.downstreamAuthorization.visibility,
-        })
-        logOrganizationEvent(req, 'organization_watchlist_alert_terms_export_denied', req.params.id, userId, {
-            requestId,
-            role: organization.role,
-            alertVisibilityPolicy: denial.visibility.alertVisibilityPolicy,
-            allowedRoles: denial.visibility.allowedRoles,
-            denialReason: denial.visibility.reason,
-            blockerCodes: denial.blockerCodes,
-        })
-
-        return res.status(403).send({
-            error: 'Organization alert visibility does not allow this member to export alert terms.',
-            organization: toOrganization(organization),
-            alertTermsExportDenial: denial,
-        })
-    }
 
     logOrganizationEvent(req, 'organization_watchlist_alert_terms_exported', req.params.id, userId, {
         requestId,
