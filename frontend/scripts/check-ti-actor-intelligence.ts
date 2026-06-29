@@ -530,6 +530,8 @@ assert(pageClientSource.includes('Open console'), 'Public TI page should route a
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
 assert(pageClientSource.includes('data-ti-source-coverage'), 'Public TI dossier should expose source coverage for render checks.')
 assert(pageClientSource.includes('Source coverage'), 'Public TI dossier should summarize source coverage.')
+assert(pageClientSource.includes('data-ti-freshness-gate'), 'Public TI dossier should expose a freshness gate for source and handoff readiness.')
+assert(pageClientSource.includes('Freshness gate'), 'Public TI dossier should label freshness readiness in analyst language.')
 assert(pageClientSource.includes('data-ti-technique-coverage'), 'Public TI dossier should expose technique coverage for render checks.')
 assert(pageClientSource.includes('data-ti-campaign-timeline'), 'Public TI dossier should expose campaign timeline for render checks.')
 assert(pageClientSource.includes('source gap'), 'Public TI enrichment statuses should use source-gap language instead of implementation labels.')

@@ -305,6 +305,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
                                 <ActorIntelligenceDossier
                                     actor={actorIntel}
+                                    actionability={actionability}
                                     result={result}
                                     artifacts={actorArtifacts}
                                     selectedArtifactId={selectedArtifact?.id}
@@ -534,8 +535,9 @@ type EnrichmentTask = {
     detail: string
 }
 
-function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId, onSelectArtifact }: {
+function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
     result: TiSearchResponse
     artifacts: ActorArtifact[]
     selectedArtifactId?: string
@@ -559,6 +561,8 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 </div>
             </div>
 
+            <FreshnessGatePanel actor={actor} actionability={actionability} />
+
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 <DossierList title='Motivation' values={actor.motivation} />
                 <DossierList title='Tooling' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
@@ -579,6 +583,73 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <StructuredProvenancePanel rows={actor.provenanceRows} />
             </div>
         </section>
+    )
+}
+
+function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel }) {
+    const sourceBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'public-ti')
+    const workflowBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'org' || blocker.ownerLane === 'alert' || blocker.ownerLane === 'case' || blocker.ownerLane === 'webhook' || blocker.ownerLane === 'entitlement')
+    const sourceState: DecisionStep['status'] = actor.freshness.stale || sourceBlockers.length || actor.sourceCoverage.missing.length ? 'review' : 'ready'
+    const handoffState: DecisionStep['status'] = actionability.readiness.state === 'ready' ? 'ready' : workflowBlockers.length ? 'blocked' : 'review'
+    const nextOwner = actionability.readiness.blockers[0]?.ownerLane ?? (actor.sourceCoverage.missing.length ? 'source' : undefined)
+    const summary = actor.freshness.stale
+        ? actor.freshness.reason
+        : sourceState === 'review'
+            ? 'Evidence dates are usable, but source coverage still needs capture or provenance references before stronger handoff.'
+            : 'Evidence dates and source coverage are current enough for review.'
+    const rows = [
+        { label: 'Newest evidence', value: actor.sourceCoverage.latestReportDate ? formatDate(actor.sourceCoverage.latestReportDate) : 'Not dated' },
+        { label: 'Generated', value: formatDate(actor.freshness.generatedAt) },
+        { label: 'Source rows', value: String(actor.sourceCoverage.totalRows) },
+        { label: 'Capture rows', value: String(actor.sourceCoverage.captureRows) },
+    ]
+
+    return (
+        <div data-ti-freshness-gate='true' className='mt-4 min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Freshness gate</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {summary}
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center gap-1.5'>
+                    <span className={decisionStepStatusClass(sourceState)}>sources {decisionStepStatusLabel(sourceState)}</span>
+                    <span className={decisionStepStatusClass(handoffState)}>handoff {decisionStepStatusLabel(handoffState)}</span>
+                </div>
+            </div>
+            <div className='mt-3 grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4'>
+                {rows.map(row => (
+                    <div key={row.label} className='min-w-0 rounded-md border border-[#e4e9f1] bg-white p-2 dark:border-[#2a3547] dark:bg-[#0f1621]'>
+                        <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{row.label}</p>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</p>
+                    </div>
+                ))}
+            </div>
+            <div className='mt-3 grid min-w-0 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
+                <div className='min-w-0 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source blockers</p>
+                    <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {sourceBlockers.length ? sourceBlockers.slice(0, 3).map(blocker => (
+                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {blocker.handoff}</li>
+                        )) : actor.sourceCoverage.missing.length ? actor.sourceCoverage.missing.slice(0, 3).map(item => (
+                            <li key={item} className='wrap-break-word'>Source collection: attach {coverageMissingLabel(item)}.</li>
+                        )) : <li>Source evidence is sufficient for review.</li>}
+                    </ul>
+                </div>
+                <div className='min-w-0 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff blockers</p>
+                    <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {workflowBlockers.length ? workflowBlockers.slice(0, 3).map(blocker => (
+                            <li key={`${blocker.code}-${blocker.field}`} className='wrap-break-word'>{readinessOwnerLabel(blocker.ownerLane)}: {blocker.handoff}</li>
+                        )) : <li>Required handoff identifiers are present.</li>}
+                    </ul>
+                </div>
+            </div>
+            <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                {nextOwner ? `Next owner: ${readinessOwnerLabel(nextOwner)}.` : 'Next owner: none returned.'}
+            </p>
+        </div>
     )
 }
 
