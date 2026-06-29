@@ -1004,6 +1004,11 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         reason: inspectionAudit.reason,
         action: 'support.organization',
     }, audit.rows as Record<string, unknown>[])
+    const supportActivityRollup = supportOrganizationActivityRollup({
+        organizationId: organization.id,
+        requestId: inspectionAudit.requestId,
+        timeline: recentAuditTimeline.events,
+    })
     const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
     const organizationTimelineFilter = supportTimelineFilter({
         q: '',
@@ -1130,6 +1135,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
             audit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}`,
         },
+        supportActivityRollup,
         recentAuditEvents: recentAuditTimeline.events,
         recentAuditTimeline,
         copyText: [
@@ -7290,6 +7296,70 @@ function supportRecentAuditTimeline(filters: Record<string, unknown>, rows: Reco
             `Support recent timeline: ${auditFilterQuery(filters)}`,
             `Events: ${events.map(event => event.id).join(', ') || 'none'}`,
             `Outcomes: ${uniqueTimelineValues(events.map(event => event.outcome)).join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
+function supportOrganizationActivityRollup(input: {
+    organizationId: string
+    requestId: string
+    timeline: Array<Record<string, any>>
+}) {
+    const supportEvents = input.timeline.filter(event => text(event.action).startsWith('support.') || text(event.action).startsWith('impersonation.'))
+    const actions = {
+        inviteAssistance: supportEvents.filter(event => text(event.action).includes('invite')),
+        accessRecovery: supportEvents.filter(event => text(event.action).includes('access_recovery')),
+        memberRoleRecovery: supportEvents.filter(event => text(event.action).includes('member_role_recovery')),
+        impersonation: supportEvents.filter(event => text(event.action).startsWith('impersonation.')),
+        supportSessions: supportEvents.filter(event => text(event.action).startsWith('support.session')),
+    }
+    const eventIds = supportEvents.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const blockerCodes = uniqueTimelineValues(supportEvents.flatMap(event => [
+        event.actionEvidence?.blockers,
+        event.context?.blockerCode,
+        event.context?.blocker,
+    ].flat()))
+    return {
+        schemaVersion: 'support.organization.activity_rollup.v1',
+        generatedAt: new Date().toISOString(),
+        organizationId: input.organizationId,
+        requestId: input.requestId || null,
+        eventCount: supportEvents.length,
+        eventIds,
+        actionCounts: {
+            inviteAssistance: actions.inviteAssistance.length,
+            accessRecovery: actions.accessRecovery.length,
+            memberRoleRecovery: actions.memberRoleRecovery.length,
+            impersonation: actions.impersonation.length,
+            supportSessions: actions.supportSessions.length,
+        },
+        outcomes: uniqueTimelineValues(supportEvents.map(event => event.outcome)),
+        severities: uniqueTimelineValues(supportEvents.map(event => event.severity)),
+        requestIds: uniqueTimelineValues(supportEvents.map(event => event.requestId)),
+        actorIds: uniqueTimelineValues(supportEvents.map(event => event.actor?.id)),
+        targetIds: uniqueTimelineValues(supportEvents.map(event => event.target?.id)),
+        blockerCodes,
+        links: {
+            timeline: auditFilterQuery({ org: input.organizationId, source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ org: input.organizationId, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+            inviteAssistance: auditFilterQuery({ org: input.organizationId, action: 'invite', source: 'admin', service: 'hanasand-api' }),
+            accessRecovery: auditFilterQuery({ org: input.organizationId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
+            memberRoleRecovery: auditFilterQuery({ org: input.organizationId, action: 'member_role_recovery', source: 'admin', service: 'hanasand-api' }),
+            impersonation: auditFilterQuery({ org: input.organizationId, action: 'impersonation', source: 'admin', service: 'hanasand-api' }),
+        },
+        guardrails: {
+            supportRoleRequired: true,
+            reasonRequiredForActions: true,
+            contextRequiredForActions: true,
+            noSilentMembershipMutation: true,
+            redactionRequired: true,
+        },
+        redacted: true,
+        copyText: [
+            `Support activity org=${input.organizationId}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Invite/access/member/impersonation: ${actions.inviteAssistance.length}/${actions.accessRecovery.length}/${actions.memberRoleRecovery.length}/${actions.impersonation.length}`,
+            `Denied replay: ${auditFilterQuery({ org: input.organizationId, outcome: 'denied', source: 'admin', service: 'hanasand-api' })}`,
         ].join('\n'),
     }
 }
