@@ -1661,6 +1661,24 @@ describe("dwm alert repository", () => {
         sourceFamily: "telegram_public"
       }]
     });
+    const gapProof = buildDwmAlertCustomerProofHandoffRow({
+      alert,
+      generatedAt: "2026-06-28T13:34:00.000Z"
+    });
+    expect(gapProof.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_no_url_acme"],
+      provenanceGaps: [expect.objectContaining({ code: "missing_source_url", evidenceId: "cap_repo_tg_no_url_acme" })],
+      evidenceExcerpts: [expect.objectContaining({
+        captureId: "cap_repo_tg_no_url_acme",
+        sourceKey: "src_repo_tg_no_url",
+        sourceUrl: undefined
+      })]
+    });
+    expect(gapProof.consumerContract.queue.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
+    expect(gapProof.consumerContract.detail.stableFields).toContain("sourceProvenanceSummary.evidenceExcerpts");
+    expect(gapProof.consumerContract.publicTI.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
 
     (store as any).saveDwmAlert({
       ...alert,
@@ -1878,6 +1896,14 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_customer",
       sourceFamily: "telegram_public",
       evidenceCount: 2,
+      sourceProvenanceSummary: {
+        schemaVersion: "dwm.alert_source_provenance.v1",
+        sourceFamily: "telegram_public",
+        captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+        sourceIds: ["src_repo_tg"],
+        evidenceCount: 2,
+        provenanceGaps: []
+      },
       updatedEvent: {
         schemaVersion: "dwm.alert_updated_event.v1",
         eventType: "dwm.alert.updated",
@@ -1987,16 +2013,20 @@ describe("dwm alert repository", () => {
     });
     expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
     expect(proof.consumerContract.queue.stableFields).toContain("workflow.transitionEvents");
+    expect(proof.consumerContract.queue.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
     expect(proof.consumerContract.queue.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.queue.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.detail.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.detail.stableFields).toContain("generationEvidenceWindow");
+    expect(proof.consumerContract.detail.stableFields).toContain("sourceProvenanceSummary.evidenceExcerpts");
     expect(proof.consumerContract.detail.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.publicTI.stableFields).toContain("provenance.captureIds");
+    expect(proof.consumerContract.publicTI.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
     expect(proof.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.createdEvent?.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.consumerAdapter.dashboard.fields).toContain("updatedEvent");
     expect(proof.consumerAdapter.dashboard.fields).toContain("workflow.transitionEvents");
+    expect(proof.consumerAdapter.dashboard.fields).toContain("sourceProvenanceSummary.provenanceGaps");
     expect(proof.consumerAdapter.dashboard.fields).toContain("alertDetailPath");
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));

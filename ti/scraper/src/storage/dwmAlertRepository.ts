@@ -235,6 +235,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     sourceIds: string[];
     generatedAt?: string;
   };
+  sourceProvenanceSummary: DwmAlertSourceProvenanceSummary;
   createdEvent?: {
     schemaVersion: "dwm.alert_created_event.v1";
     eventId?: string;
@@ -1765,6 +1766,12 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const hasCaseRoute = Boolean(context.casePath ?? alert.casePath ?? workflow.casePath);
   const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
   const updatedEvent = normalizeDwmAlertUpdatedEvent(alert, context, selectedCaptureIds);
+  const sourceProvenanceSummary = alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({
+    alert,
+    tenantId: alert.tenantId ?? workflow.tenantId ?? webhook.tenantId,
+    organizationId: alert.organizationId ?? workflow.organizationId ?? webhook.organizationId,
+    workflowContext: workflow
+  });
   const blockers = [
     ...((context.blockers ?? []) as DwmAlertCustomerProofHandoffRow["typedBlockers"]),
     !alert.organizationId ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert proof requires an organization id.", true) : undefined,
@@ -1800,6 +1807,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       sourceIds: uniqueStrings(asStringArray(alert.provenance?.sourceIds ?? (alert.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId))),
       generatedAt: alert.provenance?.generatedAt
     },
+    sourceProvenanceSummary,
     createdEvent,
     updatedEvent,
     workflow: {
@@ -1853,7 +1861,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         route: "organization_watchlist",
         alertDetailPath,
         casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
-        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "workflow.transitionEvents", "updatedEvent"]
+        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "workflow.transitionEvents", "sourceProvenanceSummary.provenanceGaps", "updatedEvent"]
       },
       helpdesk: {
         redacted: true,
@@ -1862,7 +1870,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       },
       publicTI: {
         canConsume: alertGeneratorKeys.length > 0,
-        fields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "alertGeneratorKeys"]
+        fields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "alertGeneratorKeys"]
       },
       roleGates: {
         create_watchlist: ["owner", "admin"],
@@ -1876,7 +1884,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       schemaVersion: "dwm.alert_consumer_contract.v1",
       queue: {
         route: "/v1/dwm/alerts",
-        stableFields: ["alertId", "alertDetailPath", "organizationId", "tenantId", "sourceFamily", "workflow.status", "workflow.transitionEvents", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
+        stableFields: ["alertId", "alertDetailPath", "organizationId", "tenantId", "sourceFamily", "workflow.status", "workflow.transitionEvents", "sourceProvenanceSummary", "sourceProvenanceSummary.provenanceGaps", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
         workflowStatus: String(alert.workflowStatus ?? "new"),
         sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
         evidenceCount
@@ -1884,7 +1892,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       detail: {
         route: "/v1/dwm/alerts/:alertId",
         alertDetailPath,
-        stableFields: ["alertDetailPath", "selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "updatedEvent", "dedupeKey", "watchlistItemIds"],
+        stableFields: ["alertDetailPath", "selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "sourceProvenanceSummary", "sourceProvenanceSummary.evidenceExcerpts", "createdEvent", "updatedEvent", "dedupeKey", "watchlistItemIds"],
         selectedCaptureIds,
         provenanceCaptureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
         generationEvidenceWindow
@@ -1909,7 +1917,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       publicTI: {
         redacted: true,
         canConsume: alertGeneratorKeys.length > 0,
-        stableFields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "generationEvidenceWindow.sourceFamilies", "alertGeneratorKeys"],
+        stableFields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "generationEvidenceWindow.sourceFamilies", "alertGeneratorKeys"],
         alertGeneratorKeys
       }
     },
