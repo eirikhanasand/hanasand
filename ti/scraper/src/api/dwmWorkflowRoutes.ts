@@ -1,5 +1,5 @@
 import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertGenerationReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
@@ -264,12 +264,24 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
     toDeliveryState: existing.deliveryState,
     note: "Evidence replay opened."
   };
-  const alert = (options.store as any).saveDwmAlert({
+  const replayedAlert = {
     ...existing,
     replayCount: Number(existing.replayCount ?? 0) + 1,
     lastReplayedAt: generatedAt,
     updatedAt: generatedAt,
     workflowEvents: [...(existing.workflowEvents ?? []), event]
+  };
+  const alert = (options.store as any).saveDwmAlert({
+    ...replayedAlert,
+    deliveryReadinessContext: buildDwmPersistedDeliveryReadinessContext({
+      alert: replayedAlert,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      workflowContext: replayedAlert.workflowContext,
+      existing: replayedAlert,
+      deliveries: ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === replayedAlert.id),
+      generatedAt
+    })
   });
   const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId: scope.tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "replay_dwm_alert", alertId: alert.id }, at: generatedAt });
   return json({ ...buildDwmAlertDetail(alert, options, access), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
@@ -341,7 +353,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl ?? "");
     if (!webhookUrl) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
-      deliveries.push((options.store as any).saveDwmWebhookDelivery({
+      const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
         organizationId: scope.organizationId,
         tenantId,
@@ -357,7 +369,9 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         status: "skipped",
         httpStatus: 0,
         error: "No webhook URL configured for the active watchlist."
-      }));
+      });
+      deliveries.push(delivery);
+      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
       continue;
     }
     const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination);
@@ -379,7 +393,9 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     };
 
     if (dryRun) {
-      deliveries.push((options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 }));
+      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 });
+      deliveries.push(delivery);
+      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
       continue;
     }
 
@@ -390,10 +406,14 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         body: JSON.stringify(requestBody)
       });
       const ok = response.status >= 200 && response.status < 300;
-      deliveries.push((options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status }));
-      if (ok) (options.store as any).saveDwmAlert({ ...alert, deliveryState: "delivered", deliveredAt: generatedAt });
+      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
+      deliveries.push(delivery);
+      const nextAlert = ok ? { ...alert, deliveryState: "delivered", deliveredAt: generatedAt } : alert;
+      refreshAlertDeliveryReadiness(options, nextAlert, scope, [delivery], generatedAt);
     } catch (error) {
-      deliveries.push((options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) }));
+      const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
+      deliveries.push(delivery);
+      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
     }
   }
 
@@ -487,8 +507,13 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     caseId: alert.caseId,
     casePath: alert.casePath ?? alert.workflowContext?.casePath,
     watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
+    alertGeneratorKeys: alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [],
     captureIds: alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? [],
+    selectedCaptureIds: alert.deliveryReadinessContext?.selectedCaptureIds ?? alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? [],
     evidenceCount: alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
+    deliveryReadinessContext: alert.deliveryReadinessContext,
+    deliveryDedupeKey: alert.deliveryReadinessContext?.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey,
+    replayMarker: alert.deliveryReadinessContext?.replayMarker,
     company: alert.company,
     matchedTerm: alert.matchedTerm?.value,
     actor: alert.actor,
@@ -527,6 +552,25 @@ function selectWebhookDestination(options: ApiServerOptions, orgDestinations: We
   const watchlistDestination = findWebhookDestination(options, watchlist?.webhookDestinationId);
   if (watchlistDestination && orgDestinations.some((row) => row.id === watchlistDestination.id)) return watchlistDestination;
   return orgDestinations[0];
+}
+
+function refreshAlertDeliveryReadiness(options: ApiServerOptions, alert: any, scope: { tenantId: string; organizationId?: string }, deliveries: any[], generatedAt: string) {
+  const allDeliveries = [
+    ...(((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id)),
+    ...deliveries
+  ];
+  return (options.store as any).saveDwmAlert({
+    ...alert,
+    deliveryReadinessContext: buildDwmPersistedDeliveryReadinessContext({
+      alert,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId ?? alert.organizationId,
+      workflowContext: alert.workflowContext,
+      existing: alert,
+      deliveries: allDeliveries,
+      generatedAt
+    })
+  });
 }
 
 type DwmWorkflowAccessMode = "read" | "mutate";
@@ -987,6 +1031,7 @@ function buildDwmAlertCaseHandoff(alert: any) {
 }
 
 function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
+  const persisted = alert.deliveryReadinessContext;
   const webhookDestinationIds = alert.webhookContext?.webhookDestinationIds ?? alert.workflowContext?.webhookDestinationIds ?? [];
   const captureIds = alert.webhookContext?.captureIds ?? alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? [];
   const lastDelivery = [...deliveries].sort((a: any, b: any) => String(a.attemptedAt ?? "").localeCompare(String(b.attemptedAt ?? ""))).at(-1);
@@ -998,13 +1043,25 @@ function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
     schemaVersion: "dwm.alert_delivery_readiness.v1",
     ready,
     state: ready ? "ready" : closed ? "closed" : suppressed ? "suppressed" : hasRoute ? "needs_evidence_review" : "missing_route",
+    persistedContext: persisted,
+    typedBlockers: persisted?.blockers ?? [],
+    blockerCodes: persisted?.blockerCodes ?? [],
     deliveryState: alert.deliveryState,
     recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
     webhookDestinationIds,
     captureIds,
+    selectedCaptureIds: persisted?.selectedCaptureIds ?? captureIds,
     evidenceCount: alert.workflowContext?.evidenceCount ?? alert.webhookContext?.evidenceCount ?? (alert.evidence ?? []).length,
     hasWebhookRoute: hasRoute,
     dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    deliveryDedupeKey: persisted?.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey,
+    replayMarker: persisted?.replayMarker,
+    alertGeneratorKeys: persisted?.alertGeneratorKeys ?? alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [],
+    sourceFamily: persisted?.sourceFamily ?? alert.sourceFamily,
+    caseIdCandidate: persisted?.caseIdCandidate ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
+    caseId: persisted?.caseId ?? alert.caseId,
+    casePath: persisted?.casePath ?? alert.casePath ?? alert.workflowContext?.casePath,
+    deliveryHistoryRefs: persisted?.deliveryHistoryRefs ?? deliveries.map((delivery: any) => delivery.id).filter(Boolean),
     lastDeliveryStatus: lastDelivery?.status,
     lastDeliveryAt: lastDelivery?.attemptedAt,
     blocker: ready ? null : closed ? "alert_closed" : suppressed ? "alert_suppressed" : hasRoute ? "review_required" : "missing_webhook_route"

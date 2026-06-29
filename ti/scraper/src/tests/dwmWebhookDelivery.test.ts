@@ -69,8 +69,16 @@ describe("dwm webhook delivery", () => {
       tenantId: "tenant_acme",
       sourceFamily: "telegram_public",
       captureIds: ["cap_webhook_acme"],
+      selectedCaptureIds: ["cap_webhook_acme"],
       evidenceCount: 1,
-      recommendedRoute: "identity_response"
+      recommendedRoute: "identity_response",
+      deliveryReadinessContext: {
+        schemaVersion: "dwm.alert_delivery_persistence.v1",
+        selectedCaptureIds: ["cap_webhook_acme"],
+        sourceFamily: "telegram_public",
+        deliveryDedupeKey: expect.any(String),
+        replayMarker: expect.any(String)
+      }
     });
     expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
     expect(seen[0].body.casePath).toContain(`/v1/cases/${seen[0].body.caseIdCandidate}`);
@@ -96,6 +104,12 @@ describe("dwm webhook delivery", () => {
     });
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
     expect((store as any).listDwmAlerts()[0].deliveryState).toBe("delivered");
+    expect((store as any).listDwmAlerts()[0].deliveryReadinessContext).toMatchObject({
+      state: "delivered",
+      blockerCodes: expect.arrayContaining(["replay_already_delivered"]),
+      deliveryHistoryRefs: [delivered.deliveries[0].id],
+      lastDeliveryStatus: "delivered"
+    });
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
   });
 
@@ -124,6 +138,12 @@ describe("dwm webhook delivery", () => {
     expect(delivered.attemptedCount).toBe(1);
     expect(delivered.deliveries[0].status).toBe("skipped");
     expect(delivered.deliveries[0].error).toContain("No webhook URL");
+    expect((store as any).listDwmAlerts()[0].deliveryReadinessContext).toMatchObject({
+      state: "blocked",
+      blockerCodes: expect.arrayContaining(["delivery_disabled"]),
+      deliveryHistoryRefs: [delivered.deliveries[0].id],
+      lastDeliveryStatus: "skipped"
+    });
   });
 
   test("tests webhook delivery before a real alert exists", async () => {
