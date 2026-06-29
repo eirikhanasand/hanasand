@@ -9,6 +9,8 @@ import {
 export const DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION = "dwm.org_alert_workflow_bridge.v1" as const;
 export const DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION = "dwm.org_alert_webhook_fixture.v1" as const;
 export const DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION = "dwm.org_alert_webhook_delivery_payload.v1" as const;
+export const DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION = "dwm.org_alert_source_evidence.v1" as const;
+export const DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION = "dwm.org_alert_webhook_reconciliation.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -159,6 +161,133 @@ export type OrgAlertWebhookFixtureBlocker = {
   message: string;
 };
 
+export type OrgAlertSourceRef = {
+  sourceId: string;
+  sourceFamily?: string;
+  status?: "active" | "paused" | "archived" | "candidate" | string;
+  lastCollectedAt?: string;
+  updatedAt?: string;
+};
+
+export type OrgAlertCaptureRef = {
+  captureId: string;
+  sourceId: string;
+  sourceFamily?: string;
+  contentHash?: string;
+  collectedAt?: string;
+};
+
+export type OrgAlertSourceEvidenceReport = {
+  schemaVersion: typeof DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  maxAgeHours: number;
+  rows: OrgAlertSourceEvidenceRow[];
+  blockers: OrgAlertSourceEvidenceBlocker[];
+};
+
+export type OrgAlertSourceEvidenceRow = {
+  rowId: string;
+  alertIds: string[];
+  watchlistId: string;
+  watchlistItemId?: string;
+  sourceFamilies: string[];
+  sourceIds: string[];
+  captureIds: string[];
+  contentHashes: string[];
+  newestEvidenceAt?: string;
+  ageHours?: number;
+  ready: boolean;
+  blockerCodes: OrgAlertSourceEvidenceBlocker["code"][];
+};
+
+export type OrgAlertSourceEvidenceBlocker = {
+  code:
+    | "bridge_row_not_ready"
+    | "missing_source_family"
+    | "missing_source_ref"
+    | "inactive_source"
+    | "missing_capture_ref"
+    | "content_hash_mismatch"
+    | "stale_evidence";
+  ownerLane: "alert" | "source";
+  rowId: string;
+  alertId?: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  sourceId?: string;
+  captureId?: string;
+  path: string;
+  message: string;
+};
+
+export type OrgAlertWebhookDeliveryAttemptRef = {
+  deliveryId: string;
+  tenantId: string;
+  organizationId: string;
+  alertId: string;
+  webhookDestinationId: string;
+  status?: "delivered" | "failed" | "queued" | "skipped" | string;
+  idempotencyKey?: string;
+  payloadHash?: string;
+  endpointHash?: string;
+  attemptedAt?: string;
+  httpStatus?: number;
+  dryRun?: boolean;
+};
+
+export type OrgAlertWebhookDeliveryReconciliation = {
+  schemaVersion: typeof DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  rows: OrgAlertWebhookDeliveryReconciliationRow[];
+  blockers: OrgAlertWebhookDeliveryReconciliationBlocker[];
+};
+
+export type OrgAlertWebhookDeliveryReconciliationRow = {
+  rowId: string;
+  plannedDeliveryId: string;
+  alertId: string;
+  watchlistId: string;
+  watchlistItemId?: string;
+  destinationIds: string[];
+  matchedDeliveryIds: string[];
+  status: "delivered" | "blocked";
+  ready: boolean;
+  blockerCodes: OrgAlertWebhookDeliveryReconciliationBlocker["code"][];
+  audit: {
+    redacted: true;
+    idempotencyKey: string;
+    payloadHash?: string;
+    endpointHashes: string[];
+    attemptedAt: string[];
+  };
+};
+
+export type OrgAlertWebhookDeliveryReconciliationBlocker = {
+  code:
+    | "fixture_delivery_not_ready"
+    | "missing_delivery_attempt"
+    | "duplicate_delivery_attempt"
+    | "delivery_identity_mismatch"
+    | "delivery_destination_mismatch"
+    | "delivery_idempotency_mismatch"
+    | "delivery_not_delivered"
+    | "dry_run_delivery";
+  ownerLane: "alert" | "webhook";
+  rowId: string;
+  plannedDeliveryId: string;
+  alertId: string;
+  destinationId?: string;
+  deliveryId?: string;
+  path: string;
+  message: string;
+};
+
 export function buildOrgAlertWorkflowBridgeReport(input: {
   tenantId: string;
   organizationId: string;
@@ -217,6 +346,55 @@ export function buildOrgAlertWebhookFixtureContract(input: {
     tenantId: input.bridge.tenantId,
     organizationId: input.bridge.organizationId,
     deliveries,
+    blockers
+  };
+}
+
+export function reconcileOrgAlertWebhookDeliveries(input: {
+  fixture: OrgAlertWebhookFixtureContract;
+  attempts: OrgAlertWebhookDeliveryAttemptRef[];
+  checkedAt?: string;
+}): OrgAlertWebhookDeliveryReconciliation {
+  const rows = input.fixture.deliveries.map((delivery) => reconcileDeliveryRow(delivery, input.fixture, input.attempts));
+  const blockers = rows.flatMap((row) => reconciliationBlockers(row, input.fixture));
+  return {
+    schemaVersion: DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
+    checkedAt: input.checkedAt ?? input.fixture.checkedAt,
+    ok: blockers.length === 0,
+    tenantId: input.fixture.tenantId,
+    organizationId: input.fixture.organizationId,
+    rows,
+    blockers
+  };
+}
+
+export function buildOrgAlertSourceEvidenceReport(input: {
+  bridge: OrgAlertWorkflowBridgeReport;
+  sources: OrgAlertSourceRef[];
+  captures: OrgAlertCaptureRef[];
+  checkedAt?: string;
+  maxAgeHours?: number;
+}): OrgAlertSourceEvidenceReport {
+  const checkedAt = input.checkedAt ?? input.bridge.checkedAt;
+  const maxAgeHours = input.maxAgeHours ?? 24;
+  const sourceById = new Map(input.sources.map((source) => [source.sourceId, source]));
+  const captureById = new Map(input.captures.map((capture) => [capture.captureId, capture]));
+  const rows = input.bridge.rows.map((row) => sourceEvidenceRow({
+    row,
+    sourceById,
+    captureById,
+    checkedAt,
+    maxAgeHours
+  }));
+  const blockers = rows.flatMap((row) => sourceEvidenceBlockers(row));
+  return {
+    schemaVersion: DWM_ORG_ALERT_SOURCE_EVIDENCE_SCHEMA_VERSION,
+    checkedAt,
+    ok: blockers.length === 0,
+    tenantId: input.bridge.tenantId,
+    organizationId: input.bridge.organizationId,
+    maxAgeHours,
+    rows,
     blockers
   };
 }
@@ -518,6 +696,119 @@ function webhookMessageFor(code: OrgAlertWebhookFixtureBlocker["code"]): string 
   if (code === "webhook_destination_scope_mismatch") return "Webhook destination does not belong to the alert organization.";
   if (code === "webhook_destination_not_verified") return "Webhook destination is not active and verified.";
   return "Webhook destination is not available.";
+}
+
+function reconcileDeliveryRow(
+  delivery: OrgAlertWebhookFixtureDelivery,
+  fixture: OrgAlertWebhookFixtureContract,
+  attempts: OrgAlertWebhookDeliveryAttemptRef[]
+): OrgAlertWebhookDeliveryReconciliationRow {
+  const matches = attempts.filter((attempt) => attemptMatchesDelivery(delivery, fixture, attempt));
+  const matchesByDestination = new Map(delivery.destinationIds.map((destinationId) => [
+    destinationId,
+    matches.filter((attempt) => attempt.webhookDestinationId === destinationId)
+  ]));
+  const blockerCodes = uniqueStrings([
+    !delivery.ready ? "fixture_delivery_not_ready" : undefined,
+    ...delivery.destinationIds.map((destinationId) => (matchesByDestination.get(destinationId)?.length ? undefined : "missing_delivery_attempt")),
+    ...delivery.destinationIds.map((destinationId) => ((matchesByDestination.get(destinationId)?.length ?? 0) > 1 ? "duplicate_delivery_attempt" : undefined)),
+    ...matches.map((attempt) => attempt.tenantId !== fixture.tenantId || attempt.organizationId !== fixture.organizationId || attempt.alertId !== delivery.alertId ? "delivery_identity_mismatch" : undefined),
+    ...matches.map((attempt) => !delivery.destinationIds.includes(attempt.webhookDestinationId) ? "delivery_destination_mismatch" : undefined),
+    ...matches.map((attempt) => attempt.idempotencyKey && attempt.idempotencyKey !== delivery.payload.idempotencyKey ? "delivery_idempotency_mismatch" : undefined),
+    ...matches.map((attempt) => attempt.status !== "delivered" ? "delivery_not_delivered" : undefined),
+    ...matches.map((attempt) => attempt.dryRun ? "dry_run_delivery" : undefined)
+  ].filter(Boolean).map(String)) as OrgAlertWebhookDeliveryReconciliationBlocker["code"][];
+  const endpointHashes = uniqueStrings(matches.map((attempt) => attempt.endpointHash).filter(Boolean).map(String));
+  const attemptedAt = uniqueStrings(matches.map((attempt) => attempt.attemptedAt).filter(Boolean).map(String));
+
+  return {
+    rowId: stableId("org_alert_webhook_reconciliation_row", `${fixture.tenantId}:${fixture.organizationId}:${delivery.deliveryId}:${matches.map((attempt) => attempt.deliveryId).join(",")}`),
+    plannedDeliveryId: delivery.deliveryId,
+    alertId: delivery.alertId,
+    watchlistId: delivery.watchlistId,
+    watchlistItemId: delivery.watchlistItemId,
+    destinationIds: delivery.destinationIds,
+    matchedDeliveryIds: uniqueStrings(matches.map((attempt) => attempt.deliveryId)),
+    status: blockerCodes.length === 0 ? "delivered" : "blocked",
+    ready: blockerCodes.length === 0,
+    blockerCodes,
+    audit: {
+      redacted: true,
+      idempotencyKey: delivery.payload.idempotencyKey,
+      payloadHash: matches.find((attempt) => attempt.payloadHash)?.payloadHash,
+      endpointHashes,
+      attemptedAt
+    }
+  };
+}
+
+function attemptMatchesDelivery(
+  delivery: OrgAlertWebhookFixtureDelivery,
+  fixture: OrgAlertWebhookFixtureContract,
+  attempt: OrgAlertWebhookDeliveryAttemptRef
+): boolean {
+  if (attempt.idempotencyKey && attempt.idempotencyKey === delivery.payload.idempotencyKey) return true;
+  if (attempt.tenantId !== fixture.tenantId) return false;
+  if (attempt.organizationId !== fixture.organizationId) return false;
+  if (attempt.alertId !== delivery.alertId) return false;
+  return delivery.destinationIds.includes(attempt.webhookDestinationId);
+}
+
+function reconciliationBlockers(
+  row: OrgAlertWebhookDeliveryReconciliationRow,
+  fixture: OrgAlertWebhookFixtureContract
+): OrgAlertWebhookDeliveryReconciliationBlocker[] {
+  const delivery = fixture.deliveries.find((item) => item.deliveryId === row.plannedDeliveryId);
+  return row.blockerCodes.flatMap((code) => {
+    if (code === "missing_delivery_attempt" || code === "duplicate_delivery_attempt") {
+      return row.destinationIds.map((destinationId) => reconciliationBlocker(code, row, destinationId));
+    }
+    if (code === "delivery_not_delivered" || code === "dry_run_delivery" || code === "delivery_idempotency_mismatch") {
+      return row.matchedDeliveryIds.map((deliveryId) => reconciliationBlocker(code, row, undefined, deliveryId));
+    }
+    return [reconciliationBlocker(code, row, delivery?.destinationIds[0])];
+  });
+}
+
+function reconciliationBlocker(
+  code: OrgAlertWebhookDeliveryReconciliationBlocker["code"],
+  row: OrgAlertWebhookDeliveryReconciliationRow,
+  destinationId?: string,
+  deliveryId?: string
+): OrgAlertWebhookDeliveryReconciliationBlocker {
+  return {
+    code,
+    ownerLane: code === "fixture_delivery_not_ready" || code === "delivery_identity_mismatch" ? "alert" : "webhook",
+    rowId: row.rowId,
+    plannedDeliveryId: row.plannedDeliveryId,
+    alertId: row.alertId,
+    destinationId,
+    deliveryId,
+    path: reconciliationPathFor(code),
+    message: reconciliationMessageFor(code)
+  };
+}
+
+function reconciliationPathFor(code: OrgAlertWebhookDeliveryReconciliationBlocker["code"]): string {
+  if (code === "fixture_delivery_not_ready") return "fixture.deliveries[].ready";
+  if (code === "missing_delivery_attempt") return "attempts";
+  if (code === "duplicate_delivery_attempt") return "attempts[].webhookDestinationId";
+  if (code === "delivery_identity_mismatch") return "attempts[].organizationId";
+  if (code === "delivery_destination_mismatch") return "attempts[].webhookDestinationId";
+  if (code === "delivery_idempotency_mismatch") return "attempts[].idempotencyKey";
+  if (code === "dry_run_delivery") return "attempts[].dryRun";
+  return "attempts[].status";
+}
+
+function reconciliationMessageFor(code: OrgAlertWebhookDeliveryReconciliationBlocker["code"]): string {
+  if (code === "fixture_delivery_not_ready") return "Planned webhook delivery is not ready.";
+  if (code === "missing_delivery_attempt") return "No webhook delivery attempt matched the planned destination.";
+  if (code === "duplicate_delivery_attempt") return "More than one webhook delivery attempt matched the planned destination.";
+  if (code === "delivery_identity_mismatch") return "Webhook delivery attempt identity does not match the planned organization alert.";
+  if (code === "delivery_destination_mismatch") return "Webhook delivery attempt used an unexpected destination.";
+  if (code === "delivery_idempotency_mismatch") return "Webhook delivery attempt idempotency key does not match the planned payload.";
+  if (code === "dry_run_delivery") return "Webhook delivery attempt was a dry run.";
+  return "Webhook delivery attempt was not delivered.";
 }
 
 function mergeProvenance(contracts: DwmAlertWorkflowContract[]): OrgAlertWorkflowBridgeRow["provenance"] {

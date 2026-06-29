@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
+  DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
   DWM_ORG_ALERT_WORKFLOW_BRIDGE_SCHEMA_VERSION,
   buildOrgAlertWebhookFixtureContract,
-  buildOrgAlertWorkflowBridgeReport
+  buildOrgAlertWorkflowBridgeReport,
+  reconcileOrgAlertWebhookDeliveries
 } from "../product/orgAlertWorkflowBridge.ts";
 import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
 
@@ -133,6 +135,41 @@ describe("org alert workflow bridge", () => {
     expect(JSON.stringify(contract)).not.toContain("https://discord.com");
   });
 
+  test("reconciles planned webhook fixture delivery with delivered attempts", () => {
+    const fixtureContract = happyWebhookFixtureContract();
+    const reconciliation = reconcileOrgAlertWebhookDeliveries({
+      fixture: fixtureContract,
+      attempts: [webhookAttemptFixture(fixtureContract.deliveries[0].payload.idempotencyKey)],
+      checkedAt: "2026-06-29T14:30:00.000Z"
+    });
+
+    expect(reconciliation).toMatchObject({
+      schemaVersion: DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      blockers: [],
+      rows: [{
+        alertId: "alert_acme_lumma",
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        destinationIds: ["webhook_discord"],
+        matchedDeliveryIds: ["delivery_acme_lumma"],
+        status: "delivered",
+        ready: true,
+        blockerCodes: [],
+        audit: {
+          redacted: true,
+          idempotencyKey: fixtureContract.deliveries[0].payload.idempotencyKey,
+          payloadHash: "payload_hash_acme",
+          endpointHashes: ["endpoint_hash_acme"],
+          attemptedAt: ["2026-06-29T14:25:00.000Z"]
+        }
+      }]
+    });
+    expect(JSON.stringify(reconciliation)).not.toContain("https://discord.com");
+  });
+
   test("returns owner-coded blockers for rows that cannot reach analyst workflow", () => {
     const report = buildOrgAlertWorkflowBridgeReport({
       tenantId: "tenant_acme",
@@ -249,6 +286,62 @@ describe("org alert workflow bridge", () => {
     expect(contract.deliveries[0].payload.organizationId).toBe("org_acme");
   });
 
+  test("blocks webhook reconciliation for failed dry-run or mismatched idempotency attempts", () => {
+    const fixtureContract = happyWebhookFixtureContract();
+    const reconciliation = reconcileOrgAlertWebhookDeliveries({
+      fixture: fixtureContract,
+      attempts: [{
+        ...webhookAttemptFixture("wrong_idempotency"),
+        status: "failed",
+        dryRun: true
+      }]
+    });
+
+    expect(reconciliation.ok).toBe(false);
+    expect(reconciliation.rows[0]).toMatchObject({
+      ready: false,
+      status: "blocked",
+      matchedDeliveryIds: ["delivery_acme_lumma"],
+      blockerCodes: expect.arrayContaining([
+        "delivery_idempotency_mismatch",
+        "delivery_not_delivered",
+        "dry_run_delivery"
+      ])
+    });
+    expect(reconciliation.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "delivery_idempotency_mismatch", ownerLane: "webhook", path: "attempts[].idempotencyKey" }),
+      expect.objectContaining({ code: "delivery_not_delivered", ownerLane: "webhook", path: "attempts[].status" }),
+      expect.objectContaining({ code: "dry_run_delivery", ownerLane: "webhook", path: "attempts[].dryRun" })
+    ]));
+  });
+
+  test("blocks webhook reconciliation when idempotency match points at another organization", () => {
+    const fixtureContract = happyWebhookFixtureContract();
+    const reconciliation = reconcileOrgAlertWebhookDeliveries({
+      fixture: fixtureContract,
+      attempts: [{
+        ...webhookAttemptFixture(fixtureContract.deliveries[0].payload.idempotencyKey),
+        tenantId: "tenant_other",
+        organizationId: "org_other"
+      }]
+    });
+
+    expect(reconciliation.ok).toBe(false);
+    expect(reconciliation.rows[0]).toMatchObject({
+      ready: false,
+      matchedDeliveryIds: ["delivery_acme_lumma"],
+      blockerCodes: ["delivery_identity_mismatch"]
+    });
+    expect(reconciliation.blockers).toEqual([
+      expect.objectContaining({
+        code: "delivery_identity_mismatch",
+        ownerLane: "alert",
+        alertId: "alert_acme_lumma",
+        path: "attempts[].organizationId"
+      })
+    ]);
+  });
+
   test("blocks webhook fixture delivery when the bridge has no alert event payload", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport({
       tenantId: "tenant_acme",
@@ -347,5 +440,33 @@ function webhookDestination() {
     status: "active",
     verified: true,
     endpointUrl: "https://discord.com/api/webhooks/acme/token"
+  };
+}
+
+function happyWebhookFixtureContract() {
+  const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+  return buildOrgAlertWebhookFixtureContract({
+    bridge,
+    destinations: [webhookDestination()],
+    destinationIdsByWatchlistId: {
+      watch_acme_domains: ["webhook_discord"]
+    }
+  });
+}
+
+function webhookAttemptFixture(idempotencyKey: string) {
+  return {
+    deliveryId: "delivery_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    alertId: "alert_acme_lumma",
+    webhookDestinationId: "webhook_discord",
+    status: "delivered",
+    idempotencyKey,
+    payloadHash: "payload_hash_acme",
+    endpointHash: "endpoint_hash_acme",
+    attemptedAt: "2026-06-29T14:25:00.000Z",
+    httpStatus: 204,
+    dryRun: false
   };
 }
