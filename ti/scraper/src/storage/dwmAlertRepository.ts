@@ -281,6 +281,37 @@ export type DwmAlertCustomerProofHandoffRow = {
     };
     roleGates: Record<DwmOrgAlertCaseCapability, DwmOrgAlertCaseRole[]>;
   };
+  consumerContract: {
+    schemaVersion: "dwm.alert_consumer_contract.v1";
+    queue: {
+      route: "/v1/dwm/alerts";
+      stableFields: string[];
+      workflowStatus: string;
+      sourceFamily: string;
+      evidenceCount: number;
+    };
+    detail: {
+      route: "/v1/dwm/alerts/:alertId";
+      stableFields: string[];
+      selectedCaptureIds: string[];
+      provenanceCaptureIds: string[];
+      generationEvidenceWindow?: DwmAlertCustomerProofHandoffRow["generationEvidenceWindow"];
+    };
+    webhookEvent: {
+      eventType: "dwm.alert.created";
+      eventId?: string;
+      dispatchReady: boolean;
+      deliveryDedupeKey: string;
+      replayMarker?: string;
+      requiredFields: string[];
+    };
+    publicTI: {
+      redacted: true;
+      canConsume: boolean;
+      stableFields: string[];
+      alertGeneratorKeys: string[];
+    };
+  };
   blockerCodes: DwmCustomerProofBlockerCode[];
   typedBlockers: Array<{ code: DwmCustomerProofBlockerCode; field: string; detail: string; recoverable: boolean }>;
   generatedAt: string;
@@ -1314,6 +1345,37 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         acknowledge_alert: ["owner", "admin", "analyst"],
         assign_case: ["owner", "admin", "analyst"],
         manage_invites: ["owner", "admin"]
+      }
+    },
+    consumerContract: {
+      schemaVersion: "dwm.alert_consumer_contract.v1",
+      queue: {
+        route: "/v1/dwm/alerts",
+        stableFields: ["alertId", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount"],
+        workflowStatus: String(alert.workflowStatus ?? "new"),
+        sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
+        evidenceCount
+      },
+      detail: {
+        route: "/v1/dwm/alerts/:alertId",
+        stableFields: ["selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "dedupeKey", "watchlistItemIds"],
+        selectedCaptureIds,
+        provenanceCaptureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
+        generationEvidenceWindow
+      },
+      webhookEvent: {
+        eventType: "dwm.alert.created",
+        eventId: createdEvent?.eventId,
+        dispatchReady: webhookDestinationIds.length > 0 && evidenceCount > 0,
+        deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
+        replayMarker: context.replayMarker,
+        requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
+      },
+      publicTI: {
+        redacted: true,
+        canConsume: alertGeneratorKeys.length > 0,
+        stableFields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "generationEvidenceWindow.sourceFamilies", "alertGeneratorKeys"],
+        alertGeneratorKeys
       }
     },
     blockerCodes,

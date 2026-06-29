@@ -1137,8 +1137,37 @@ describe("dwm alert repository", () => {
         dashboard: { route: "organization_watchlist" },
         helpdesk: { redacted: true },
         publicTI: { canConsume: true }
+      },
+      consumerContract: {
+        schemaVersion: "dwm.alert_consumer_contract.v1",
+        queue: {
+          route: "/v1/dwm/alerts",
+          workflowStatus: "investigating",
+          sourceFamily: "telegram_public",
+          evidenceCount: 2
+        },
+        detail: {
+          route: "/v1/dwm/alerts/:alertId",
+          selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+          provenanceCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
+        },
+        webhookEvent: {
+          eventType: "dwm.alert.created",
+          eventId: alert.alertCreatedEvent.id,
+          dispatchReady: true,
+          deliveryDedupeKey: alert.dedupeKey,
+          requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
+        },
+        publicTI: {
+          redacted: true,
+          canConsume: true,
+          alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"]
+        }
       }
     });
+    expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
+    expect(proof.consumerContract.detail.stableFields).toContain("generationEvidenceWindow");
+    expect(proof.consumerContract.publicTI.stableFields).toContain("provenance.captureIds");
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));
   });
