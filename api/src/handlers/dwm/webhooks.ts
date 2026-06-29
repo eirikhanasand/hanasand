@@ -10,6 +10,7 @@ import {
 import {
     archiveDwmWebhookDestination,
     buildDwmWebhookAuditEventContracts,
+    buildDwmWebhookDestinationHealth,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
@@ -69,6 +70,7 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
     return res.send({
         destinations,
         destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
+        destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
@@ -90,6 +92,7 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
         return res.status(201).send({
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
+            destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], auditEvents })[0],
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, destinations: [destination] }),
         })
     } catch (error) {
@@ -122,6 +125,7 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
         return res.send({
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+            destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
             auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
         })
     } catch (error) {
@@ -152,6 +156,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     return res.send({
         destination,
         destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+        destinationHealth: buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0],
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
     })
 }
@@ -165,7 +170,7 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
         return res.status(404).send({ error: 'Webhook destination not found.' })
     }
 
-    const permissionError = await memberPermissionError(existing.orgId, userId)
+    const permissionError = await configurationPermissionError(existing.orgId, userId)
     if (permissionError) {
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
@@ -183,6 +188,9 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
         preview: buildDwmWebhookDeliveryPreview(delivery),
         destinationContract: destination
             ? buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0]
+            : null,
+        destinationHealth: destination
+            ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0]
             : null,
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
@@ -259,6 +267,11 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             deliveries,
             auditEvents,
         }),
+        destinationHealth: buildDwmWebhookDestinationHealth({
+            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+            deliveries,
+            auditEvents,
+        }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({
             auditEvents,
             deliveries,
@@ -300,6 +313,7 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             deliveries: ledgerDeliveries,
             auditEvents,
         }),
+        destinationHealth: buildDwmWebhookDestinationHealth({ destinations, deliveries: ledgerDeliveries, auditEvents }),
         auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries: ledgerDeliveries, destinations }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',

@@ -3,6 +3,7 @@ import {
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
     buildDwmWebhookAuditEventContracts,
+    buildDwmWebhookDestinationHealth,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
@@ -10,6 +11,7 @@ import {
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
+    filterDwmWebhookDestinationHealthForVisibility,
     normalizeDwmWebhookDestinationInput,
     planDwmWebhookDeliveryRetry,
     redactWebhookEndpoint,
@@ -988,9 +990,52 @@ const auditDestinationRows = [
         createdAt: '2026-06-28T10:00:00.000Z',
         updatedAt: '2026-06-28T12:05:00.000Z',
     },
+    {
+        id: 'destination_skipped_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Live Disabled Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/444444444/${secret}`,
+        endpointHash: 'endpoint_skipped_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:03:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:30:00.000Z',
+        updatedAt: '2026-06-28T12:03:00.000Z',
+    },
 ]
 const auditDeliveryRows = [
     ...retryLedgerRows,
+    {
+        id: 'delivery_replay_duplicate_contract',
+        destinationId: 'destination_replay_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'alert_replay_contract',
+        eventType: 'dwm.alert.replayed' as const,
+        status: 'dry_run' as const,
+        dryRun: true,
+        endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+        endpointHash: 'endpoint_replay_hash',
+        payloadHash: 'payload_replay_duplicate_hash',
+        payload: duplicateReplayPayload,
+        responseStatus: null,
+        responseBody: null,
+        error: null,
+        idempotencyKey: 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract',
+        watchlistId: 'watchlist_item_replay_contract',
+        watchlistName: 'Replay contract watchlist',
+        route: 'identity_response',
+        casePath: replayWorkflowAlert.casePath,
+        attemptedAt: '2026-06-28T12:08:00.000Z',
+        createdAt: '2026-06-28T12:08:00.000Z',
+    },
     {
         id: 'delivery_test_contract',
         destinationId: 'destination_replay_contract',
@@ -1077,9 +1122,61 @@ const auditEventContracts = buildDwmWebhookAuditEventContracts({
         },
     ],
 })
+const destinationHealth = buildDwmWebhookDestinationHealth({
+    liveDeliveryEnabled: false,
+    destinations: auditDestinationRows,
+    deliveries: auditDeliveryRows,
+    auditEvents: [
+        {
+            id: 'audit_destination_archived_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_disabled_contract',
+            deliveryId: null,
+            action: 'destination.archived',
+            metadata: { endpointHint: `https://discord.com/api/webhooks/333333333/${secret}` },
+            createdAt: '2026-06-28T12:05:01.000Z',
+        },
+        {
+            id: 'audit_delivery_test_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_test_contract',
+            action: 'delivery.tested',
+            metadata: { status: 'dry_run', endpointHint: endpoint, dryRun: true },
+            createdAt: '2026-06-28T12:04:01.000Z',
+        },
+        {
+            id: 'audit_live_retry_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_live_contract',
+            deliveryId: 'delivery_live_failed_retry_contract',
+            action: 'delivery.failed',
+            metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`, error: `token=${secret}` },
+            createdAt: '2026-06-28T12:06:01.000Z',
+        },
+    ],
+})
+const memberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility({
+    destinationHealth,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility({
+    destinationHealth,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
+const replayHealth = destinationHealth.find(item => item.destinationId === 'destination_replay_contract')
+const retryHealth = destinationHealth.find(item => item.destinationId === 'destination_live_contract')
+const disabledHealth = destinationHealth.find(item => item.destinationId === 'destination_disabled_contract')
+const skippedHealth = destinationHealth.find(item => item.destinationId === 'destination_skipped_contract')
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -1107,6 +1204,15 @@ expect(retryReadiness?.retryState.retryable === true && retryReadiness.retryStat
 expect(disabledReadiness?.enabled === false && disabledReadiness.blockers.includes('destination_disabled') && disabledReadiness.readiness === 'disabled', 'Readiness should mark disabled destinations as blocked.', disabledReadiness)
 expect(readiness.idempotencyCoverage.covered === true && retryReadiness?.idempotencyCoverage.duplicateKeyCount === 1, 'Readiness should expose idempotency coverage and duplicate attempt groups.', readiness)
 expect(!JSON.stringify(readiness).includes(secret), 'Readiness should not leak endpoint, response, or error secrets.', readiness)
+expect(replayHealth?.enabled === true && replayHealth.owner.ownerId === 'owner_contract' && replayHealth.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Destination health should expose org-scoped ownership and redacted endpoint refs.', replayHealth)
+expect(replayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && replayHealth.lastTest.auditEventId === 'audit_delivery_test_contract', 'Destination health should expose latest dry-run/test evidence.', replayHealth)
+expect(replayHealth?.idempotencyCoverage.duplicateKeyCount === 1, 'Destination health should expose duplicate replay idempotency coverage.', replayHealth)
+expect(retryHealth?.retry.retryable === true && retryHealth.retry.errorClass === 'upstream_5xx' && retryHealth.lastFailure?.auditEventId === 'audit_live_retry_contract', 'Destination health should expose failure retry/backoff state.', retryHealth)
+expect(disabledHealth?.enabled === false && disabledHealth.health === 'disabled' && disabledHealth.auditEventIds.includes('audit_destination_archived_contract'), 'Destination health should expose disabled state and audit ids.', disabledHealth)
+expect(skippedHealth?.lastLiveDisabled?.errorClass === 'live_delivery_disabled' && skippedHealth.lastLiveDisabled.retryable === false, 'Destination health should expose live-disabled skipped attempts without retrying.', skippedHealth)
+expect(memberHealthVisibility.decision.allowed === true && memberHealthVisibility.destinationHealth.length === destinationHealth.length, 'Members policy should allow active members to inspect safe destination health.', memberHealthVisibility)
+expect(nonmemberHealthVisibility.decision.allowed === false && nonmemberHealthVisibility.destinationHealth.length === 0, 'Destination health visibility should deny nonmembers without leaking metadata.', nonmemberHealthVisibility)
+expect(!JSON.stringify(destinationHealth).includes(secret), 'Destination health should not leak endpoint, response, or audit secrets.', destinationHealth)
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
@@ -1144,6 +1250,13 @@ console.log(JSON.stringify({
         'destination readiness live blockers',
         'destination readiness retry/failure class',
         'destination readiness idempotency coverage',
+        'destination health status summary',
+        'destination health dry-run/test update',
+        'destination health failure retry/backoff',
+        'destination health live-disabled state',
+        'destination health duplicate replay dedupe',
+        'destination health org visibility allowed/denied',
+        'destination health secret redaction',
         'delivery evidence secret redaction',
         'delivery ledger secret redaction',
         'destination readiness secret redaction',

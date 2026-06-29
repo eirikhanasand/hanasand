@@ -919,6 +919,107 @@ export function buildDwmWebhookDeliveryReadiness({
     }
 }
 
+export function buildDwmWebhookDestinationHealth({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+}) {
+    const destinationContracts = buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents })
+    const readiness = buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const auditContracts = buildDwmWebhookAuditEventContracts({ destinations, deliveries, auditEvents })
+    const deliveryLedger = buildDwmWebhookDeliveryLedger({ deliveries, auditEvents })
+    const readinessByDestination = new Map(readiness.destinations.map(item => [item.destinationId, item]))
+    const auditByDestination = new Map<string, typeof auditContracts>()
+    for (const audit of auditContracts) {
+        if (!audit.destinationId) continue
+        const audits = auditByDestination.get(audit.destinationId) || []
+        audits.push(audit)
+        auditByDestination.set(audit.destinationId, audits)
+    }
+    const ledgerByDestination = new Map<string, typeof deliveryLedger>()
+    for (const attempt of deliveryLedger) {
+        if (!attempt.destinationId) continue
+        const attempts = ledgerByDestination.get(attempt.destinationId) || []
+        attempts.push(attempt)
+        ledgerByDestination.set(attempt.destinationId, attempts)
+    }
+
+    return destinationContracts.map((destination) => {
+        const attempts = (ledgerByDestination.get(destination.id) || [])
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const audits = (auditByDestination.get(destination.id) || [])
+            .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        const readinessRow = readinessByDestination.get(destination.id) || null
+        const lastDryRun = attempts.find(attempt => attempt.dryRun) || null
+        const lastDelivery = attempts.find(attempt => !attempt.dryRun && attempt.rawStatus !== 'skipped') || null
+        const lastFailure = attempts.find(attempt => attempt.rawStatus === 'failed' || attempt.errorClass) || null
+        const lastLiveDisabled = attempts.find(attempt => attempt.errorClass === 'live_delivery_disabled') || null
+        const latestAttempt = attempts[0] || null
+        const lastTestAuditId = auditEventIdForDelivery(audits, destination.lastTest.requestId)
+        const lastDeliveryAuditId = auditEventIdForDelivery(audits, destination.lastDelivery.requestId)
+
+        return {
+            schemaVersion: 'dwm.webhook.destination_health.v1',
+            destinationId: destination.id,
+            orgId: destination.orgId,
+            owner: {
+                ownerId: destination.createdBy,
+                createdBy: destination.createdBy,
+                actorId: destination.actorId,
+            },
+            type: destination.type,
+            label: destination.label,
+            status: destination.status,
+            enabled: destination.enabled,
+            health: readinessRow?.readiness || (destination.enabled ? 'blocked' : 'disabled'),
+            ready: readinessRow?.ready || false,
+            liveDeliveryEnabled,
+            redactedEndpoint: destination.redactedDestination,
+            blockers: readinessRow?.blockers || [],
+            retry: readinessRow?.retryState || { retryable: false, nextRetryAt: null, errorClass: null, reason: 'no_attempts', attemptCount: 0 },
+            lastDryRun: lastDryRun ? destinationHealthAttempt(lastDryRun, auditEventIdForDelivery(audits, lastDryRun.deliveryId)) : null,
+            lastTest: {
+                ...destination.lastTest,
+                auditEventId: destination.lastTest.auditEventId || lastTestAuditId,
+            },
+            lastDelivery: {
+                ...destination.lastDelivery,
+                auditEventId: destination.lastDelivery.auditEventId || lastDeliveryAuditId,
+            },
+            lastFailure: lastFailure ? destinationHealthAttempt(lastFailure, auditEventIdForDelivery(audits, lastFailure.deliveryId)) : null,
+            lastLiveDisabled: lastLiveDisabled ? destinationHealthAttempt(lastLiveDisabled, auditEventIdForDelivery(audits, lastLiveDisabled.deliveryId)) : null,
+            latestAttempt: latestAttempt ? destinationHealthAttempt(latestAttempt, auditEventIdForDelivery(audits, latestAttempt.deliveryId)) : null,
+            idempotencyCoverage: readinessRow?.idempotencyCoverage || idempotencyCoverage(attempts),
+            recentAttempts: attempts.slice(0, 5).map(attempt => destinationHealthAttempt(attempt, auditEventIdForDelivery(audits, attempt.deliveryId))),
+            auditEventIds: destination.auditEventIds,
+            latestAuditEventId: destination.latestAuditEventId,
+            auditEventContracts: audits.slice(0, 10),
+            updatedAt: destination.updatedAt,
+            createdAt: destination.createdAt,
+        }
+    })
+}
+
+export function filterDwmWebhookDestinationHealthForVisibility({
+    destinationHealth,
+    visibility,
+}: {
+    destinationHealth: ReturnType<typeof buildDwmWebhookDestinationHealth>
+    visibility: DwmWebhookEvidenceVisibilityInput
+}) {
+    const decision = organizationVisibilityDecision(visibility)
+    return {
+        decision,
+        destinationHealth: decision.allowed ? destinationHealth : [],
+    }
+}
+
 export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPublic) {
     const context = extractHanasandPayloadContext(delivery.payload)
     const payloadAlert = recordOrEmpty(context.alert)
@@ -1897,6 +1998,49 @@ function idempotencyCoverage(attempts: Array<{ idempotencyKey?: string | null }>
         covered: attempts.length === 0 || keys.length === attempts.length,
         duplicateKeyCount: [...groups.values()].filter(count => count > 1).length,
     }
+}
+
+function destinationHealthAttempt(
+    attempt: ReturnType<typeof buildDwmWebhookDeliveryLedger>[number],
+    auditEventId: string | null
+) {
+    return {
+        requestId: attempt.requestId,
+        deliveryId: attempt.deliveryId,
+        alertId: attempt.alertId,
+        eventType: attempt.eventType,
+        status: attempt.status,
+        rawStatus: attempt.rawStatus,
+        dryRun: attempt.dryRun,
+        live: attempt.live,
+        liveRequested: attempt.liveRequested,
+        replay: attempt.replay,
+        idempotencyKey: attempt.idempotencyKey,
+        dedupeKey: attempt.dedupeKey,
+        route: attempt.route,
+        casePath: attempt.casePath,
+        responseStatus: attempt.responseStatus,
+        responseSummary: attempt.responseSummary,
+        error: attempt.error,
+        errorClass: attempt.errorClass,
+        retryable: attempt.retryable,
+        nextRetryAt: attempt.nextRetryAt,
+        retryReason: attempt.retryReason,
+        attemptCount: attempt.attemptCount,
+        payloadHash: attempt.payloadHash,
+        auditEventId: attempt.auditEventId || auditEventId,
+        auditAction: attempt.auditAction,
+        attemptedAt: attempt.attemptedAt,
+        createdAt: attempt.createdAt,
+    }
+}
+
+function auditEventIdForDelivery(
+    audits: ReturnType<typeof buildDwmWebhookAuditEventContracts>,
+    deliveryId?: string | null
+) {
+    if (!deliveryId) return null
+    return audits.find(audit => audit.deliveryId === deliveryId)?.auditEventId || null
 }
 
 function firstClean(...values: unknown[]) {
