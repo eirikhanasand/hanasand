@@ -268,6 +268,7 @@ type SupportActionPreparationInput = {
     reason: string
     context: string
     scope: string[]
+    supportSessionId: string
     idempotencyKey: string
     durationMinutes: number | null
     expiresAt: string | null
@@ -4035,6 +4036,7 @@ function buildSupportActionPreparation(input: {
         reason: input.input.reason,
         context: input.input.context,
         scope: input.input.scope,
+        supportSessionId: input.input.supportSessionId,
         durationMinutes: input.input.durationMinutes,
         expiresAt: input.input.expiresAt,
         handoffExpiresAt,
@@ -4086,6 +4088,7 @@ function buildSupportActionPreparation(input: {
                 dryRun: true,
                 correlationId,
                 idempotencyKey: input.input.idempotencyKey,
+                supportSessionId: input.input.supportSessionId || null,
                 handoffExpiresAt,
                 execution: executionHandoff.execution,
                 targetUserId: input.user || null,
@@ -4128,6 +4131,7 @@ function supportActionExecutionHandoff(input: {
     reason: string
     context: string
     scope: string[]
+    supportSessionId: string
     durationMinutes: number | null
     expiresAt: string | null
     handoffExpiresAt: string
@@ -4162,6 +4166,7 @@ function supportActionExecutionHandoff(input: {
             requestId: input.requestId,
             correlationId: input.correlationId,
             idempotencyKey: input.idempotencyKey,
+            supportSessionId: input.supportSessionId || null,
             outcome: executorReadiness.ready ? 'success' : 'denied',
             blockerCode: executorReadiness.blockers[0] || null,
         },
@@ -4180,6 +4185,7 @@ function supportActionExecutorReadiness(input: {
     reason: string
     context: string
     scope: string[]
+    supportSessionId: string
     durationMinutes: number | null
     expiresAt: string | null
     handoffExpiresAt: string
@@ -4213,6 +4219,7 @@ function supportActionExecutorReadiness(input: {
         requestId: input.requestId,
         correlationId: input.correlationId,
         idempotencyKey: input.idempotencyKey,
+        supportSessionId: input.supportSessionId || null,
         target: {
             organizationId: input.organizationId,
             userId: input.user || null,
@@ -4234,7 +4241,9 @@ function supportActionExecutorReadiness(input: {
         executorContract: {
             method: input.execution.method,
             path: input.execution.path,
-            requiredHeaders: ['authorization', 'x-request-id', 'x-idempotency-key'],
+            requiredHeaders: input.supportSessionId
+                ? ['authorization', 'x-request-id', 'x-idempotency-key', 'x-support-session-id']
+                : ['authorization', 'x-request-id', 'x-idempotency-key'],
             requiredBody: supportActionExecutorRequiredBody(input.action),
             bodyPreview: input.execution.body,
             auditActionType: input.execution.auditActionType,
@@ -4267,6 +4276,7 @@ function supportActionExecutorReadiness(input: {
             requestId: input.requestId,
             correlationId: input.correlationId,
             idempotencyKey: input.idempotencyKey,
+            supportSessionId: input.supportSessionId || null,
             outcome: ready ? 'success' : 'denied',
             blockerCode: executorBlockers[0] || null,
             targetOrganizationId: input.organizationId,
@@ -4303,12 +4313,14 @@ function supportActionExecutionTarget(input: {
     reason: string
     context: string
     scope: string[]
+    supportSessionId?: string
     durationMinutes: number | null
     expiresAt: string | null
 }) {
     const headers = {
         'x-request-id': input.requestId,
         'x-idempotency-key': input.idempotencyKey,
+        ...(input.supportSessionId ? { 'x-support-session-id': input.supportSessionId } : {}),
     }
     if (input.action === 'impersonation') {
         return {
@@ -4397,6 +4409,7 @@ function supportActionPreparationInput(query: SupportInspectionQuery, action: st
             reason,
             context: cleanContext(query.context),
             scope: scopeResult.value,
+            supportSessionId: text(query.session || query.supportSession || query.supportSessionId),
             idempotencyKey,
             durationMinutes: durationResult.value,
             expiresAt: expiryResult.value,
