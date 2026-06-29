@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir } from "./apiTestHarness.ts";
 import { handleApiRequest } from "../api/server.ts";
-import { evaluateProposedDwmWatchlistEntitlement } from "../api/dwmEntitlementRoutes.ts";
+import { buildDwmEntitlementVisibilityBlocker, evaluateProposedDwmWatchlistEntitlement } from "../api/dwmEntitlementRoutes.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -610,11 +610,32 @@ describe("dwm entitlement policy", () => {
       expect(readiness.actions.watchlist_create).toMatchObject({
         ownerLane: "entitlement",
         status: "blocked",
+        entitlementStatus: "active",
+        plan: "custom",
+        persistedPolicy: true,
         blockedAction: "create_dwm_watchlist",
         blockerCodes: ["active_watchlists"],
         limit: { code: "active_watchlists", used: 2, limit: 1, remaining: 0 },
         requestId: "req-readiness-get"
       });
+      expect(readiness.actions.watchlist_create.blockers[0]).toMatchObject({
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "entitlement",
+        actionId: "watchlist_create",
+        action: "create_dwm_watchlist",
+        blockerCode: "active_watchlists",
+        blockedAction: "create_dwm_watchlist",
+        route: "/v1/dwm/watchlists",
+        requestId: "req-readiness-get",
+        entitlementStatus: "active",
+        plan: "custom",
+        persistedPolicy: true,
+        usage: { activeWatchlists: 1, watchTerms: 1 },
+        projectedUsage: { activeWatchlists: 2, watchTerms: 2 },
+        limit: { code: "active_watchlists", used: 2, limit: 1, remaining: 0 },
+        source: "entitlement"
+      });
+      expect(readiness.actions.watchlist_create.blockers[0].supportText).toContain("Limit active_watchlists");
       expect(readiness.actions.alert_rebuild).toMatchObject({
         ownerLane: "alert-workflow",
         status: "blocked",
@@ -622,21 +643,50 @@ describe("dwm entitlement policy", () => {
         blockerCodes: ["alert_rebuilds_today"],
         limit: { code: "alert_rebuilds_today", used: 2, limit: 1, remaining: 0 }
       });
+      expect(readiness.actions.alert_rebuild.blockers[0]).toMatchObject({
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "alert-workflow",
+        actionId: "alert_rebuild",
+        action: "rebuild_dwm_alerts",
+        blockerCode: "alert_rebuilds_today",
+        route: "/v1/dwm/alerts/rebuild",
+        requestId: "req-readiness-get",
+        limit: { code: "alert_rebuilds_today", used: 2, limit: 1, remaining: 0 },
+        source: "entitlement"
+      });
       expect(readiness.actions.source_growth).toMatchObject({
         ownerLane: "source-growth",
         status: "blocked",
         blockerCodes: ["source_packs"],
         limit: { code: "source_packs", used: 2, limit: 1, remaining: 0 }
       });
+      expect(readiness.actions.source_growth.blockers[0]).toMatchObject({
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "source-growth",
+        actionId: "source_growth",
+        action: "source_growth",
+        blockerCode: "source_packs",
+        route: "/v1/dwm/source-requests",
+        source: "entitlement"
+      });
       expect(readiness.actions.webhook_delivery).toMatchObject({
         ownerLane: "webhook",
         status: "allowed",
-        blockedAction: null
+        blockedAction: null,
+        blockers: []
       });
       expect(readiness.actions.analyst_handoff).toMatchObject({
         ownerLane: "analyst-handoff",
         status: "needs_input",
-        blockerCodes: ["missing_handoff_bundle"]
+        blockerCodes: ["missing_handoff_bundle"],
+        blockers: [{
+          schemaVersion: "dwm.entitlement_blocker.v1",
+          ownerLane: "analyst-handoff",
+          actionId: "analyst_handoff",
+          action: "consume_analyst_handoff",
+          blockerCode: "missing_handoff_bundle",
+          source: "missing_prerequisite"
+        }]
       });
       expect(readiness.actions.alert_rebuild.helpdeskText).toContain("Limit alert_rebuilds_today");
       expect(readiness.actions.alert_rebuild.redactedAudit).toMatchObject({ action: "created", requestId: "req-readiness-policy" });
@@ -657,6 +707,21 @@ describe("dwm entitlement policy", () => {
       expect(handoffReadiness.actions.analyst_handoff.blockerCodes).toContain("entitlement_blocked");
       expect(handoffReadiness.actions.analyst_handoff.blockerCodes).toContain("webhook_audit_contract_mismatch");
       expect(handoffReadiness.actions.analyst_handoff.analystHandoff.blockerCount).toBeGreaterThan(0);
+      expect(handoffReadiness.actions.analyst_handoff.blockers.find((item: any) => item.blockerCode === "webhook_audit_contract_mismatch")).toMatchObject({
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "analyst-handoff",
+        actionId: "analyst_handoff",
+        action: "consume_analyst_handoff",
+        blockedAction: "consume_analyst_handoff",
+        route: "analyst_handoff_consumer",
+        requestId: "req-readiness-handoff",
+        source: "analyst_handoff",
+        analystHandoff: {
+          code: "webhook_audit_contract_mismatch",
+          stage: "webhook_audit",
+          recoverable: false
+        }
+      });
 
       const outsiderResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements/readiness`, {
         headers: { "x-user-email": "outsider@readiness.example" }
@@ -665,6 +730,68 @@ describe("dwm entitlement policy", () => {
       expect(outsiderResponse.status).toBe(403);
       expect(outsiderPayload.error.code).toBe("organization_entitlement_denied");
       expect(outsiderPayload.actions).toBeUndefined();
+      expect(buildDwmEntitlementVisibilityBlocker({
+        actionId: "alert_rebuild",
+        ownerLane: "alert-workflow",
+        actionName: "rebuild_dwm_alerts",
+        blockerCode: "not_member",
+        route: "/v1/dwm/alerts/rebuild",
+        requestId: "req-readiness-outsider"
+      })).toMatchObject({
+        schemaVersion: "dwm.entitlement_blocker.v1",
+        ownerLane: "alert-workflow",
+        actionId: "alert_rebuild",
+        blockerCode: "not_member",
+        source: "visibility",
+        limit: undefined,
+        supportText: "Access was denied by organization visibility/RBAC before entitlement evaluation."
+      });
+
+      const webhookDeniedOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@webhook-denied.example" },
+        body: JSON.stringify({ name: "Webhook Denied Monitor", ownerEmail: "owner@webhook-denied.example", ownerUserId: "owner-webhook-denied" })
+      }), options);
+      const webhookDeniedOrg = await webhookDeniedOrgResponse.json() as any;
+      const webhookDeniedOrgId = webhookDeniedOrg.organization.id;
+      for (const suffix of ["one", "two"]) {
+        const response = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${webhookDeniedOrgId}/webhooks`, {
+          method: "POST",
+          headers: { "x-actor-id": "owner-webhook-denied" },
+          body: JSON.stringify({ name: `Webhook denied ${suffix}`, url: `https://discord.com/api/webhooks/${suffix}/token` })
+        }), options);
+        expect(response.status).toBe(201);
+      }
+      const webhookPolicyResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${webhookDeniedOrgId}/entitlements`, {
+        method: "PUT",
+        headers: { "x-user-email": "owner@webhook-denied.example", "x-request-id": "req-webhook-denied-policy" },
+        body: JSON.stringify({
+          plan: "custom",
+          limits: { activeWatchlists: 5, watchTerms: 50, webhookDestinations: 1, sourcePacks: 5, alertRebuildsPerDay: 5, openCases: 5 },
+          reason: "Webhook destination count is over contract until the customer upgrades."
+        })
+      }), options);
+      expect(webhookPolicyResponse.status).toBe(201);
+      const webhookDeniedReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${webhookDeniedOrgId}/entitlements/readiness`, {
+        headers: { "x-user-email": "owner@webhook-denied.example", "x-request-id": "req-webhook-denied-readiness" }
+      }), options);
+      const webhookDeniedReadiness = await webhookDeniedReadinessResponse.json() as any;
+      expect(webhookDeniedReadiness.actions.webhook_delivery).toMatchObject({
+        ownerLane: "webhook",
+        status: "blocked",
+        blockerCodes: ["webhook_destinations"],
+        blockedAction: "deliver_dwm_webhook",
+        limit: { code: "webhook_destinations", used: 2, limit: 1, remaining: 0 },
+        blockers: [{
+          schemaVersion: "dwm.entitlement_blocker.v1",
+          actionId: "webhook_delivery",
+          action: "deliver_dwm_webhook",
+          blockerCode: "webhook_destinations",
+          route: "/v1/dwm/webhooks/deliver",
+          requestId: "req-webhook-denied-readiness",
+          source: "entitlement"
+        }]
+      });
 
       const openOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
         method: "POST",
@@ -688,8 +815,8 @@ describe("dwm entitlement policy", () => {
       const openReadiness = await openReadinessResponse.json() as any;
       expect(openReadinessResponse.status).toBe(200);
       expect(openReadiness.policy.persistedPolicy).toBe(false);
-      expect(openReadiness.actions.alert_rebuild).toMatchObject({ status: "permissive_no_policy", blockedAction: null });
-      expect(openReadiness.actions.watchlist_create).toMatchObject({ status: "permissive_no_policy", blockedAction: null });
+      expect(openReadiness.actions.alert_rebuild).toMatchObject({ status: "permissive_no_policy", blockedAction: null, persistedPolicy: false, blockers: [] });
+      expect(openReadiness.actions.watchlist_create).toMatchObject({ status: "permissive_no_policy", blockedAction: null, persistedPolicy: false, blockers: [] });
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
