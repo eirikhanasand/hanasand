@@ -2505,13 +2505,16 @@ export async function getSupportAccessRecoveryApprovals(req: FastifyRequest<{ Qu
     `, values)
 
     const approvals = (result.rows as AccessRecoveryApprovalRow[]).map(toAccessRecoveryDecision)
+    const filters = { request, org, status, outcome, requester, approver, from, to, limit }
+    const approvalTimeline = supportAccessRecoveryApprovalTimeline(filters, approvals)
     return res.send({
         approvals,
-        filters: { request, org, status, outcome, requester, approver, from, to, limit },
+        filters,
         detail: {
             schemaVersion: 'support.access_recovery.approval_search.v1',
             generatedAt: new Date().toISOString(),
-            filters: { request, org, status, outcome, requester, approver, from, to, limit },
+            filters,
+            approvalTimeline,
             copyText: approvals.slice(0, 20).map(approval => approval.copyText).join('\n\n'),
         },
     })
@@ -6107,6 +6110,90 @@ function toAccessRecoveryDecision(row: AccessRecoveryApprovalRow) {
             row.denied_by ? `Denied by: ${row.denied_by} at ${row.denied_at}` : '',
             row.decision_reason ? `Decision reason: ${row.decision_reason}` : '',
         ].filter(Boolean).join('\n'),
+    }
+}
+
+function supportAccessRecoveryApprovalTimeline(filters: Record<string, unknown>, approvals: Array<Record<string, any>>) {
+    const timeline = approvals.map((approval) => {
+        const actionType = approval.status === 'denied'
+            ? 'support.organization.access_recovery.deny'
+            : approval.status === 'approved'
+                ? 'support.organization.access_recovery.approve'
+                : 'support.organization.access_recovery.request'
+        const auditEventIds = Array.isArray(approval.auditEventIds) ? approval.auditEventIds : []
+        return {
+            schemaVersion: 'admin.audit.timeline_event.v1',
+            id: Number(auditEventIds[0] || 0),
+            timestamp: approval.updatedAt || approval.createdAt,
+            actionType,
+            severity: approval.approvalRequired ? 'warning' : 'notice',
+            outcome: approval.outcome || (approval.status === 'denied' ? 'denied' : 'success'),
+            source: 'admin',
+            service: 'hanasand-api',
+            actor: {
+                id: approval.approvedBy || approval.deniedBy || approval.requestedBy,
+                name: null,
+            },
+            target: {
+                type: 'invite',
+                id: approval.inviteId,
+                name: approval.invite?.email || null,
+            },
+            organization: {
+                id: approval.organizationId,
+                name: approval.organizationName || null,
+            },
+            entity: {
+                id: approval.requestId,
+                type: 'access_recovery_request',
+            },
+            requestId: approval.requestId,
+            reason: approval.decisionReason || approval.requestedReason || '',
+            scope: {
+                approvalRequired: approval.approvalRequired,
+                status: approval.status,
+                expiresAt: approval.expiresAt,
+            },
+            before: null,
+            after: {
+                status: approval.status,
+                outcome: approval.outcome,
+                inviteStatus: approval.invite?.status || null,
+            },
+            context: {
+                schemaVersion: 'support.access_recovery.approval_timeline.v1',
+                requestId: approval.requestId,
+                inviteId: approval.inviteId,
+                targetUserId: approval.targetUserId || null,
+                auditEventIds,
+                redactionRequired: true,
+            },
+            links: {
+                detail: auditEventIds[0] ? `/api/admin/audit-events/${encodeURIComponent(String(auditEventIds[0]))}` : null,
+                request: `/api/admin/audit-events?request=${encodeURIComponent(String(approval.requestId))}&source=admin&service=hanasand-api`,
+                entity: `/api/admin/audit-events?entity=${encodeURIComponent(String(approval.requestId))}&source=admin&service=hanasand-api`,
+            },
+        }
+    })
+    return {
+        schemaVersion: 'support.access_recovery.approval_timeline.v1',
+        filters,
+        eventIds: timeline.map(event => event.id).filter(id => Number.isFinite(id) && id > 0),
+        summary: auditTimelineSummary(timeline),
+        filterContract: supportAuditFilterContract(filters, timeline),
+        exportProof: supportAuditExportProof(filters, timeline),
+        workflowRollup: supportAuditWorkflowRollup(filters, timeline),
+        events: timeline,
+        redacted: true,
+        links: {
+            timeline: auditFilterQuery(filters),
+            details: timeline.map(event => event.links.detail).filter(Boolean),
+        },
+        copyText: [
+            `Access recovery approval timeline: ${auditFilterQuery(filters)}`,
+            `Requests: ${approvals.map(approval => approval.requestId).filter(Boolean).join(', ') || 'none'}`,
+            `Audit events: ${timeline.flatMap(event => event.context.auditEventIds || []).join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
