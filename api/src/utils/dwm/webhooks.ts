@@ -633,6 +633,92 @@ export function buildDwmWebhookDeliveryLedger({
     })
 }
 
+export function buildDwmWebhookAuditEventContracts({
+    auditEvents,
+    deliveries = [],
+    destinations = [],
+}: {
+    auditEvents: DwmWebhookAuditPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    destinations?: DwmWebhookDestinationPublic[]
+}) {
+    const ledgerByDelivery = new Map(buildDwmWebhookDeliveryLedger({ deliveries, auditEvents }).map(item => [item.deliveryId, item]))
+    const deliveryById = new Map(deliveries.map(delivery => [delivery.id, delivery]))
+    const destinationById = new Map(destinations.map(destination => [destination.id, destination]))
+
+    return [...auditEvents]
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .map((audit) => {
+            const delivery = audit.deliveryId ? deliveryById.get(audit.deliveryId) || null : null
+            const ledger = audit.deliveryId ? ledgerByDelivery.get(audit.deliveryId) || null : null
+            const destination = audit.destinationId ? destinationById.get(audit.destinationId) || null : null
+            const metadata = redactAuditContractMetadata(recordOrEmpty(audit.metadata))
+            const endpointHint = clean(destination?.endpointHint)
+                || clean(delivery?.endpointHint)
+                || clean(metadata.endpointHint)
+            const endpointHash = clean(destination?.endpointHash)
+                || clean(delivery?.endpointHash)
+                || clean(metadata.endpointHash)
+
+            return {
+                schemaVersion: 'dwm.webhook.audit_event.v1',
+                auditEventId: audit.id,
+                eventId: audit.id,
+                action: audit.action,
+                category: webhookAuditCategory(audit.action),
+                outcome: webhookAuditOutcome(audit.action, delivery?.status || clean(metadata.status)),
+                severity: webhookAuditSeverity(audit.action, delivery?.status || clean(metadata.status)),
+                actorId: audit.actorId,
+                orgId: audit.orgId,
+                destinationId: audit.destinationId,
+                deliveryId: audit.deliveryId,
+                requestId: audit.deliveryId,
+                destination: audit.destinationId
+                    ? {
+                        id: audit.destinationId,
+                        label: destination?.name || null,
+                        type: destination?.kind || null,
+                        status: destination?.status || null,
+                        enabled: destination ? destination.status === 'active' : null,
+                        redactedEndpoint: {
+                            endpointHint: endpointHint ? redactDeliveryEvidenceText(endpointHint) : null,
+                            endpointHash: endpointHash || null,
+                        },
+                    }
+                    : null,
+                delivery: delivery
+                    ? {
+                        alertId: delivery.alertId,
+                        eventType: delivery.eventType,
+                        status: delivery.status,
+                        dryRun: delivery.dryRun,
+                        live: !delivery.dryRun && delivery.status !== 'skipped',
+                        idempotencyKey: delivery.idempotencyKey,
+                        payloadHash: delivery.payloadHash,
+                        responseStatus: delivery.responseStatus,
+                        error: redactNullableDeliveryText(delivery.error),
+                        watchlistId: delivery.watchlistId,
+                        watchlistName: delivery.watchlistName,
+                        route: delivery.route,
+                        casePath: delivery.casePath,
+                        attemptedAt: delivery.attemptedAt,
+                    }
+                    : null,
+                retry: ledger
+                    ? {
+                        retryable: ledger.retryable,
+                        nextRetryAt: ledger.nextRetryAt,
+                        errorClass: ledger.errorClass,
+                        reason: ledger.retryReason,
+                        attemptCount: ledger.attemptCount,
+                    }
+                    : null,
+                metadata,
+                createdAt: audit.createdAt,
+            }
+        })
+}
+
 export function planDwmWebhookDeliveryRetry({
     status,
     dryRun,
@@ -1750,6 +1836,32 @@ function classifyDeliveryError({
     return status === 'failed' ? 'unknown_failure' : null
 }
 
+function webhookAuditCategory(action: string) {
+    if (action.startsWith('destination.')) return 'destination'
+    if (action.startsWith('delivery.')) return 'delivery'
+    return 'webhook'
+}
+
+function webhookAuditOutcome(action: string, status?: string | null) {
+    if (action === 'destination.created') return 'created'
+    if (action === 'destination.updated') return 'updated'
+    if (action === 'destination.archived') return 'disabled'
+    if (action === 'delivery.tested') return 'tested'
+    if (action === 'delivery.replayed') return status || 'replayed'
+    if (action === 'delivery.failed') return 'failed'
+    if (action === 'delivery.delivered') return 'sent'
+    if (action === 'delivery.skipped') return 'skipped'
+    if (action === 'delivery.dry_run') return 'dry_run'
+    return status || action.split('.').pop() || 'unknown'
+}
+
+function webhookAuditSeverity(action: string, status?: string | null) {
+    const outcome = webhookAuditOutcome(action, status)
+    if (outcome === 'failed') return 'error'
+    if (outcome === 'skipped' || outcome === 'disabled') return 'warning'
+    return 'info'
+}
+
 function retryDelayMs(attemptCount: number) {
     const delays = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000, 6 * 60 * 60_000]
     return delays[Math.min(Math.max(1, attemptCount), delays.length) - 1]
@@ -1832,6 +1944,24 @@ function redactAuditMetadata(metadata: Record<string, unknown>) {
             redacted[key] = '[redacted]'
         } else if (typeof value === 'string') {
             redacted[key] = value.slice(0, 1000)
+        } else {
+            redacted[key] = value
+        }
+    }
+    return redacted
+}
+
+function redactAuditContractMetadata(metadata: Record<string, unknown>) {
+    const redacted: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(metadata)) {
+        if (/endpoint|secret|token|password|credential|url/i.test(key) && key !== 'endpointHint') {
+            redacted[key] = '[redacted]'
+        } else if (typeof value === 'string') {
+            redacted[key] = redactDeliveryEvidenceText(truncate(value, 1000))
+        } else if (Array.isArray(value)) {
+            redacted[key] = value.map(item => typeof item === 'string' ? redactDeliveryEvidenceText(truncate(item, 1000)) : item)
+        } else if (value && typeof value === 'object') {
+            redacted[key] = redactAuditContractMetadata(value as Record<string, unknown>)
         } else {
             redacted[key] = value
         }

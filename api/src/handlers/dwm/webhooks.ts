@@ -9,6 +9,7 @@ import {
 } from '#utils/organizations.ts'
 import {
     archiveDwmWebhookDestination,
+    buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
     buildDwmWebhookDeliveryEvidence,
@@ -69,6 +70,7 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
         destinations,
         destinationContracts: buildDwmWebhookDestinationContracts({ destinations, deliveries, auditEvents }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
+        auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations }),
     })
 }
 
@@ -88,6 +90,7 @@ export async function postDwmWebhookDestination(req: FastifyRequest<{ Body: DwmW
         return res.status(201).send({
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], auditEvents })[0],
+            auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, destinations: [destination] }),
         })
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid webhook destination.' })
@@ -119,6 +122,7 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
         return res.send({
             destination,
             destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+            auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
         })
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid webhook destination.' })
@@ -148,6 +152,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     return res.send({
         destination,
         destinationContract: buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0],
+        auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations: [destination] }),
     })
 }
 
@@ -179,6 +184,11 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
         destinationContract: destination
             ? buildDwmWebhookDestinationContracts({ destinations: [destination], deliveries, auditEvents })[0]
             : null,
+        auditEventContracts: buildDwmWebhookAuditEventContracts({
+            auditEvents,
+            deliveries,
+            destinations: destination ? [destination] : destinations,
+        }),
     })
 }
 
@@ -249,6 +259,11 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
             deliveries,
             auditEvents,
         }),
+        auditEventContracts: buildDwmWebhookAuditEventContracts({
+            auditEvents,
+            deliveries,
+            destinations: await listDwmWebhookDestinations(userId, orgId || undefined),
+        }),
         visibility: visibilityResult?.decision ?? {
             allowed: true,
             reason: null,
@@ -275,13 +290,17 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
     }
 
     const deliveries = await deliverDwmAlertNotification(userId, { ...input, orgId })
+    const destinations = await listDwmWebhookDestinations(userId, orgId)
+    const ledgerDeliveries = await listDwmWebhookDeliveries(userId, orgId)
+    const auditEvents = await listDwmWebhookAuditEvents(userId, orgId)
     return res.status(202).send({
         deliveries,
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({
-            destinations: await listDwmWebhookDestinations(userId, orgId),
-            deliveries: await listDwmWebhookDeliveries(userId, orgId),
-            auditEvents: await listDwmWebhookAuditEvents(userId, orgId),
+            destinations,
+            deliveries: ledgerDeliveries,
+            auditEvents,
         }),
+        auditEventContracts: buildDwmWebhookAuditEventContracts({ auditEvents, deliveries: ledgerDeliveries, destinations }),
         dryRunDefault: true,
         liveDeliveryEnabled: process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
     })

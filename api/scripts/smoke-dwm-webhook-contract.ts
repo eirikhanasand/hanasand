@@ -2,6 +2,7 @@ import {
     buildDwmAlertDeliveryPayload,
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
+    buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryLedger,
@@ -929,9 +930,161 @@ const readiness = buildDwmWebhookDeliveryReadiness({
         },
     ],
 })
+const auditDestinationRows = [
+    {
+        id: 'destination_replay_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Replay Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+        endpointHash: 'endpoint_replay_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: '2026-06-28T12:00:00.000Z',
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:04:00.000Z',
+    },
+    {
+        id: 'destination_live_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Retry Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+        endpointHash: 'endpoint_live_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:06:00.000Z',
+    },
+    {
+        id: 'destination_disabled_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Disabled Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/333333333/${secret}`,
+        endpointHash: 'endpoint_disabled_hash',
+        status: 'archived' as const,
+        events: ['dwm.alert.created'],
+        createdBy: 'owner_contract',
+        lastTestedAt: null,
+        lastTestStatus: null,
+        lastTestError: 'Disabled by owner',
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T10:00:00.000Z',
+        updatedAt: '2026-06-28T12:05:00.000Z',
+    },
+]
+const auditDeliveryRows = [
+    ...retryLedgerRows,
+    {
+        id: 'delivery_test_contract',
+        destinationId: 'destination_replay_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'webhook_test',
+        eventType: 'dwm.alert.test' as const,
+        status: 'dry_run' as const,
+        dryRun: true,
+        endpointHint: `https://discord.com/api/webhooks/987654321/${secret}`,
+        endpointHash: 'endpoint_replay_hash',
+        payloadHash: 'payload_test_hash',
+        payload: replayPayload,
+        responseStatus: null,
+        responseBody: null,
+        error: null,
+        idempotencyKey: 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test',
+        watchlistId: 'test-watchlist',
+        watchlistName: 'Webhook test watchlist',
+        route: 'test_delivery',
+        casePath: '/dashboard/dwm',
+        attemptedAt: '2026-06-28T12:04:00.000Z',
+        createdAt: '2026-06-28T12:04:00.000Z',
+    },
+]
+const auditEventContracts = buildDwmWebhookAuditEventContracts({
+    destinations: auditDestinationRows,
+    deliveries: auditDeliveryRows,
+    auditEvents: [
+        {
+            id: 'audit_destination_created_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: null,
+            action: 'destination.created',
+            metadata: { endpointHint: endpoint, endpointUrl: endpoint, status: 'active' },
+            createdAt: '2026-06-28T11:00:00.000Z',
+        },
+        {
+            id: 'audit_destination_updated_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: null,
+            action: 'destination.updated',
+            metadata: { endpointHash: 'endpoint_replay_hash', token: secret, events: ['dwm.alert.created', 'dwm.alert.replayed'] },
+            createdAt: '2026-06-28T11:30:00.000Z',
+        },
+        {
+            id: 'audit_destination_archived_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_disabled_contract',
+            deliveryId: null,
+            action: 'destination.archived',
+            metadata: { endpointHint: `https://discord.com/api/webhooks/333333333/${secret}` },
+            createdAt: '2026-06-28T12:05:01.000Z',
+        },
+        {
+            id: 'audit_delivery_test_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_replay_contract',
+            deliveryId: 'delivery_test_contract',
+            action: 'delivery.tested',
+            metadata: { status: 'dry_run', endpointHint: endpoint, dryRun: true },
+            createdAt: '2026-06-28T12:04:01.000Z',
+        },
+        {
+            id: 'audit_live_retry_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: 'destination_live_contract',
+            deliveryId: 'delivery_live_failed_retry_contract',
+            action: 'delivery.failed',
+            metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`, error: `token=${secret}` },
+            createdAt: '2026-06-28T12:06:01.000Z',
+        },
+    ],
+})
 const replayReadiness = readiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const retryReadiness = readiness.destinations.find(item => item.destinationId === 'destination_live_contract')
 const disabledReadiness = readiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
+const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
+const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
+const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
+const auditTested = auditEventContracts.find(item => item.auditEventId === 'audit_delivery_test_contract')
+const auditFailed = auditEventContracts.find(item => item.auditEventId === 'audit_live_retry_contract')
 
 expect(destinationContract.type === 'discord' && destinationContract.label === 'Replay Discord', 'Destination contract should expose type and label.', destinationContract)
 expect(destinationContract.enabled === true && destinationContract.status === 'active', 'Destination contract should expose enabled status.', destinationContract)
@@ -954,6 +1107,12 @@ expect(retryReadiness?.retryState.retryable === true && retryReadiness.retryStat
 expect(disabledReadiness?.enabled === false && disabledReadiness.blockers.includes('destination_disabled') && disabledReadiness.readiness === 'disabled', 'Readiness should mark disabled destinations as blocked.', disabledReadiness)
 expect(readiness.idempotencyCoverage.covered === true && retryReadiness?.idempotencyCoverage.duplicateKeyCount === 1, 'Readiness should expose idempotency coverage and duplicate attempt groups.', readiness)
 expect(!JSON.stringify(readiness).includes(secret), 'Readiness should not leak endpoint, response, or error secrets.', readiness)
+expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
+expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
+expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
+expect(auditTested?.category === 'delivery' && auditTested.outcome === 'tested' && auditTested.delivery?.dryRun === true && auditTested.requestId === 'delivery_test_contract', 'Audit contract should expose dry-run test delivery events.', auditTested)
+expect(auditFailed?.outcome === 'failed' && auditFailed.severity === 'error' && auditFailed.retry?.retryable === true && auditFailed.retry.errorClass === 'upstream_5xx', 'Audit contract should expose failed delivery retry state.', auditFailed)
+expect(!JSON.stringify(auditEventContracts).includes(secret), 'Audit event contracts should redact endpoint, token, and error secrets.', auditEventContracts)
 
 console.log(JSON.stringify({
     ok: true,
@@ -995,6 +1154,9 @@ console.log(JSON.stringify({
         'delivery evidence admin-only policy',
         'destination contract create/list/update/disable/test fields',
         'destination contract audit ids',
+        'structured audit contract create/update/disable/test/failure events',
+        'structured audit contract retry state',
+        'structured audit contract secret redaction',
         'dry-run Discord payload preview fields',
         'delivery evidence replay/live/dry-run distinction',
         'secret-free payload',
