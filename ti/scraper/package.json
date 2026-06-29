@@ -30,6 +30,7 @@
     "check:search-quality-mounted": "bun run scripts/check-search-quality-mounted.ts",
     "check:source-apply-plan": "bun run scripts/check-source-apply-plan.ts",
     "check:scraper-native-search": "bun run scripts/check-scraper-native-search-readiness.ts",
+    "check:public-ti-org-relevance": "bun run scripts/validatePublicTiOrgRelevance.ts",
     "check:ti-release-candidate": "bun run scripts/check-ti-release-candidate.ts",
     "check:apify-threat-actor-monitor": "cd apify/public-threat-actor-monitor && bun run check",
     "check:apify-publication": "cd apify/public-threat-actor-monitor && bun run check:publication",

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ANALYST_HANDOFF_SCHEMA_VERSION,
   AnalystHandoffIdentityMismatchError,
+  buildActorOrgRelevanceReadinessReport,
   buildActorWatchlistCandidateHandoff,
   buildAlertCaseHandoff,
   buildAlertWebhookTriggerHandoff,
@@ -417,6 +418,65 @@ describe("analyst handoff contract", () => {
     expect(codes.has("missing_case_route")).toBe(true);
     expect(codes.has("missing_webhook_destination")).toBe(true);
     expect(broken.partial?.state).toBe("blocked");
+  });
+
+  test("builds machine-readable actor org relevance readiness rows for integration", () => {
+    const report = buildActorOrgRelevanceReadinessReport({
+      checkedAt: "2026-06-29T09:00:00.000Z",
+      staleEvidenceBefore: "2026-06-01T00:00:00.000Z",
+      results: [{
+        file: "apt29-microsoft.json",
+        tenantId: "tenant_microsoft",
+        organizationId: "org_microsoft",
+        requestedByUserId: "user_ti",
+        orgRelevance: publicTiOrgRelevanceFixture()
+      }, {
+        file: "blocked.json",
+        tenantId: "tenant_microsoft",
+        orgRelevance: {
+          ...publicTiOrgRelevanceFixture(),
+          organizationRefs: [],
+          sourceEvidence: [],
+          alertCaseRefs: [],
+          handoffRows: [],
+          freshness: {
+            generatedAt: "2026-06-29T08:00:00.000Z",
+            lastSeen: "2026-01-01T00:00:00.000Z",
+            stale: true,
+            reason: "Old source."
+          }
+        }
+      }]
+    });
+
+    expect(report.schemaVersion).toBe("hanasand.actor_org_relevance.readiness_report.v1");
+    expect(report.checkedAt).toBe("2026-06-29T09:00:00.000Z");
+    expect(report.ok).toBe(false);
+    expect(report.readyCount).toBe(1);
+    expect(report.blockedCount).toBe(1);
+    const ready = report.rows.find(row => row.file === "apt29-microsoft.json");
+    expect(ready).toMatchObject({
+      ok: true,
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      handoffs: { watchlist: true, alertGeneration: true, caseHandoff: true, webhookTrigger: true },
+      coverage: {
+        organizationRefs: 1,
+        watchlistTerms: 1,
+        sourceEvidence: 1,
+        affectedVendors: 1,
+        affectedDomains: 1,
+        affectedRegions: 1,
+        relatedAlerts: 1,
+        relatedCases: 1,
+        webhookDestinations: 1
+      }
+    });
+    expect(ready?.provenance.some(row => row.sourceId === "microsoft" && row.captureId === "capture_microsoft_apt29")).toBe(true);
+    expect(report.productReadiness.org.blockerCodes).toContain("missing_org");
+    expect(report.productReadiness.source.blockerCodes).toContain("missing_provenance");
+    expect(report.productReadiness.case.blockerCodes).toContain("missing_case_route");
+    expect(report.productReadiness.webhook.blockerCodes).toContain("missing_webhook_destination");
   });
 });
 

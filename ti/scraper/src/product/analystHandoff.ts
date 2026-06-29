@@ -248,6 +248,15 @@ export type PublicTiOrgRelevanceProofLike = {
     casePath?: string;
     captureIds?: string[];
     webhookDestinationIds?: string[];
+    evidence?: {
+      sourceId?: string;
+      sourceName?: string;
+      provenance?: string;
+      captureId?: string;
+      reportDate?: string;
+      confidence?: number;
+      summary?: string;
+    };
     blockers?: Array<{ code?: string; field?: string; detail?: string; recoverable?: boolean }>;
   }>;
   blockers?: Array<{ code?: string; field?: string; detail?: string; recoverable?: boolean }>;
@@ -267,6 +276,64 @@ export type ActorOrgRelevanceHandoffValue = {
   sourceEvidence: NonNullable<PublicTiOrgRelevanceProofLike["sourceEvidence"]>;
   handoffRows: NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>;
   enrichmentGaps: NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>;
+};
+
+export type ActorOrgRelevanceReadinessOwner = "org" | "alert" | "case" | "webhook" | "source" | "publicTI";
+
+export type ActorOrgRelevanceReadinessReport = {
+  schemaVersion: "hanasand.actor_org_relevance.readiness_report.v1";
+  checkedAt: string;
+  ok: boolean;
+  proofCount: number;
+  readyCount: number;
+  blockedCount: number;
+  rows: ActorOrgRelevanceReadinessRow[];
+  productReadiness: Record<ActorOrgRelevanceReadinessOwner, {
+    ready: boolean;
+    blockerCodes: AnalystHandoffBlockerCode[];
+    recommendedOwnerLane: ActorOrgRelevanceReadinessOwner;
+  }>;
+};
+
+export type ActorOrgRelevanceReadinessRow = {
+  file?: string;
+  ok: boolean;
+  actorId?: string;
+  query?: string;
+  state: "ready" | "blocked";
+  freshness: {
+    stale: boolean;
+    lastSeen?: string;
+    reason?: string;
+  };
+  coverage: {
+    organizationRefs: number;
+    watchlistTerms: number;
+    sourceEvidence: number;
+    affectedVendors: number;
+    affectedDomains: number;
+    affectedRegions: number;
+    relatedAlerts: number;
+    relatedCases: number;
+    webhookDestinations: number;
+    enrichmentGaps: number;
+  };
+  handoffs: {
+    watchlist: boolean;
+    alertGeneration: boolean;
+    caseHandoff: boolean;
+    webhookTrigger: boolean;
+  };
+  provenance: Array<{
+    sourceId?: string;
+    sourceName: string;
+    captureId?: string;
+    provenance: string;
+    reportDate?: string;
+    confidence?: number;
+    shownBecause?: string;
+  }>;
+  blockers: Array<AnalystHandoffBlocker & { ownerLane: ActorOrgRelevanceReadinessOwner; route?: string; action?: string }>;
 };
 
 export type AnalystAlertLike = DwmAlert & {
@@ -671,6 +738,53 @@ export function publicTiOrgRelevanceToAnalystHandoff(input: {
   };
 }
 
+export function buildActorOrgRelevanceReadinessReport(input: {
+  checkedAt?: string;
+  staleEvidenceBefore?: string;
+  results: Array<{
+    file?: string;
+    orgRelevance?: PublicTiOrgRelevanceProofLike;
+    tenantId?: string;
+    organizationId?: string;
+    requestedByUserId?: string;
+    error?: unknown;
+  }>;
+}): ActorOrgRelevanceReadinessReport {
+  const rows = input.results.map((result) => {
+    if (!result.orgRelevance) {
+      return actorOrgReadinessErrorRow(result.file, result.error);
+    }
+    const handoff = publicTiOrgRelevanceToAnalystHandoff({
+      tenantId: result.tenantId,
+      organizationId: result.organizationId,
+      requestedByUserId: result.requestedByUserId,
+      orgRelevance: result.orgRelevance,
+      staleEvidenceBefore: input.staleEvidenceBefore
+    });
+    return actorOrgReadinessRow(result.file, result.orgRelevance, handoff);
+  });
+  const owners: ActorOrgRelevanceReadinessOwner[] = ["org", "alert", "case", "webhook", "source", "publicTI"];
+  const productReadiness = Object.fromEntries(owners.map((owner) => {
+    const blockerCodes = uniqueBlockerCodes(rows.flatMap(row => row.blockers.filter(blocker => blocker.ownerLane === owner).map(blocker => blocker.code)));
+    return [owner, {
+      ready: blockerCodes.length === 0,
+      blockerCodes,
+      recommendedOwnerLane: owner
+    }];
+  })) as ActorOrgRelevanceReadinessReport["productReadiness"];
+
+  return {
+    schemaVersion: "hanasand.actor_org_relevance.readiness_report.v1",
+    checkedAt: input.checkedAt || nowIso(),
+    ok: rows.every(row => row.ok),
+    proofCount: rows.length,
+    readyCount: rows.filter(row => row.ok).length,
+    blockedCount: rows.filter(row => !row.ok).length,
+    rows,
+    productReadiness
+  };
+}
+
 function selectOrgRef(orgRelevance: PublicTiOrgRelevanceProofLike, input: { tenantId?: string; organizationId?: string }) {
   const match = orgRelevance.organizationRefs?.find(ref => ref.organizationId || ref.watchlistId || ref.watchlistItemId);
   const row = orgRelevance.handoffRows?.find(row => row.kind === "watchlist_match" && (row.organizationId || row.watchlistId || row.watchlistItemId));
@@ -682,6 +796,150 @@ function selectOrgRef(orgRelevance: PublicTiOrgRelevanceProofLike, input: { tena
     kind: match?.kind,
     value: match?.value
   };
+}
+
+function actorOrgReadinessRow(
+  file: string | undefined,
+  orgRelevance: PublicTiOrgRelevanceProofLike,
+  handoff: AnalystHandoffAdapterResult<ActorOrgRelevanceHandoffValue>
+): ActorOrgRelevanceReadinessRow {
+  const blockers = handoff.ok ? [] : handoff.blockers.map((item) => ({
+    ...item,
+    ownerLane: ownerLaneForBlocker(item),
+    route: routeForBlocker(item),
+    action: actionForBlocker(item)
+  }));
+  const handoffRows = orgRelevance.handoffRows ?? [];
+  const alertRefs = orgRelevance.alertCaseRefs ?? [];
+  return {
+    file,
+    ok: handoff.ok,
+    actorId: orgRelevance.actorId,
+    query: orgRelevance.query,
+    state: handoff.ok ? "ready" : "blocked",
+    freshness: {
+      stale: orgRelevance.freshness?.stale ?? false,
+      lastSeen: orgRelevance.freshness?.lastSeen,
+      reason: orgRelevance.freshness?.reason
+    },
+    coverage: {
+      organizationRefs: orgRelevance.organizationRefs?.length ?? 0,
+      watchlistTerms: orgRelevance.candidateTerms?.length ?? 0,
+      sourceEvidence: orgRelevance.sourceEvidence?.length ?? 0,
+      affectedVendors: orgRelevance.affectedEntities?.vendors?.length ?? 0,
+      affectedDomains: orgRelevance.affectedEntities?.domains?.length ?? 0,
+      affectedRegions: orgRelevance.affectedEntities?.regions?.length ?? 0,
+      relatedAlerts: alertRefs.length,
+      relatedCases: alertRefs.filter(ref => ref.casePath || ref.caseIdCandidate).length,
+      webhookDestinations: uniqueOptionalStrings(alertRefs.flatMap(ref => ref.webhookDestinationIds)).length,
+      enrichmentGaps: handoffRows.filter(row => row.kind === "enrichment_gap").length
+    },
+    handoffs: {
+      watchlist: handoff.ok || !blockers.some(blocker => ["missing_org", "missing_watchlist_term"].includes(blocker.code)),
+      alertGeneration: handoff.ok || !blockers.some(blocker => ["missing_watchlist_id", "missing_watchlist_item"].includes(blocker.code)),
+      caseHandoff: handoff.ok || !blockers.some(blocker => ["absent_alert_id", "missing_case_route", "missing_provenance"].includes(blocker.code)),
+      webhookTrigger: handoff.ok || !blockers.some(blocker => ["missing_webhook_destination", "absent_alert_id", "missing_provenance"].includes(blocker.code))
+    },
+    provenance: provenanceRowsForOrgRelevance(orgRelevance),
+    blockers
+  };
+}
+
+function actorOrgReadinessErrorRow(file: string | undefined, error: unknown): ActorOrgRelevanceReadinessRow {
+  const detail = error instanceof Error ? error.message : error ? String(error) : "Actor org relevance proof is missing.";
+  return {
+    file,
+    ok: false,
+    state: "blocked",
+    freshness: { stale: false },
+    coverage: {
+      organizationRefs: 0,
+      watchlistTerms: 0,
+      sourceEvidence: 0,
+      affectedVendors: 0,
+      affectedDomains: 0,
+      affectedRegions: 0,
+      relatedAlerts: 0,
+      relatedCases: 0,
+      webhookDestinations: 0,
+      enrichmentGaps: 0
+    },
+    handoffs: {
+      watchlist: false,
+      alertGeneration: false,
+      caseHandoff: false,
+      webhookTrigger: false
+    },
+    provenance: [],
+    blockers: [{
+      ...blocker("missing_provenance", "orgRelevance", detail, true),
+      ownerLane: "publicTI",
+      route: "/ti",
+      action: "Return orgRelevance from the public TI actor response."
+    }]
+  };
+}
+
+function provenanceRowsForOrgRelevance(orgRelevance: PublicTiOrgRelevanceProofLike): ActorOrgRelevanceReadinessRow["provenance"] {
+  const sourceRows = (orgRelevance.sourceEvidence ?? []).map((source) => ({
+    sourceId: source.sourceId,
+    sourceName: source.sourceName,
+    captureId: source.captureId,
+    provenance: source.provenance,
+    confidence: source.confidence
+  }));
+  const handoffEvidence = (orgRelevance.handoffRows ?? []).flatMap((row) => row.evidence?.sourceName || row.evidence?.provenance ? [{
+    sourceId: row.evidence?.sourceId,
+    sourceName: row.evidence?.sourceName || row.label,
+    captureId: row.evidence?.captureId,
+    provenance: row.evidence?.provenance || row.provenanceRefs?.[0] || row.rowId,
+    reportDate: row.evidence?.reportDate,
+    confidence: row.evidence?.confidence,
+    shownBecause: row.evidence?.summary
+  }] : []);
+  return uniqueByRows([...sourceRows, ...handoffEvidence], row => `${row.sourceId || ""}:${row.captureId || ""}:${row.provenance}`);
+}
+
+function ownerLaneForBlocker(blocker: AnalystHandoffBlocker): ActorOrgRelevanceReadinessOwner {
+  if (blocker.code === "missing_org" || blocker.code === "missing_watchlist_id" || blocker.code === "missing_watchlist_item" || blocker.code === "missing_watchlist_term") return "org";
+  if (blocker.code === "absent_alert_id") return "alert";
+  if (blocker.code === "missing_case_route") return "case";
+  if (blocker.code === "missing_webhook_destination") return "webhook";
+  if (blocker.code === "missing_provenance" || blocker.code === "stale_evidence") return "source";
+  return "publicTI";
+}
+
+function routeForBlocker(blocker: AnalystHandoffBlocker) {
+  const owner = ownerLaneForBlocker(blocker);
+  if (owner === "org" || owner === "alert" || owner === "webhook") return "/dashboard/dwm";
+  if (owner === "case") return "/v1/cases";
+  if (owner === "source") return "/dashboard/ti/enrichment";
+  return "/ti";
+}
+
+function actionForBlocker(blocker: AnalystHandoffBlocker) {
+  if (blocker.code === "missing_org") return "Select or attach an organization before saving watchlist terms.";
+  if (blocker.code === "missing_watchlist_term") return "Attach a company, domain, vendor, or product term.";
+  if (blocker.code === "missing_watchlist_id" || blocker.code === "missing_watchlist_item") return "Persist the org watchlist item before rebuilding alerts.";
+  if (blocker.code === "absent_alert_id") return "Rebuild alerts from the persisted watchlist item.";
+  if (blocker.code === "missing_case_route") return "Create or return the case route for the related alert.";
+  if (blocker.code === "missing_webhook_destination") return "Attach an active webhook destination for dry-run delivery.";
+  if (blocker.code === "stale_evidence") return "Refresh actor evidence before handoff.";
+  return "Attach source provenance and capture identity.";
+}
+
+function uniqueBlockerCodes(codes: AnalystHandoffBlockerCode[]) {
+  return uniqueStrings(codes) as AnalystHandoffBlockerCode[];
+}
+
+function uniqueByRows<T>(values: T[], keyFor: (value: T) => string) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const key = keyFor(value);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function selectWatchTerm(orgRelevance: PublicTiOrgRelevanceProofLike) {
