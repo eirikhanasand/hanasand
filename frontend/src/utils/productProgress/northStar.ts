@@ -1,0 +1,245 @@
+import { buildProductProgressExternalState, type ProductProgressReadinessPayload, type ProductReadinessExternalState, type ProductReadinessSnapshotBase } from '@/app/dashboard/operatorConsoleModel'
+
+type ReadinessStatus = 'ready' | 'needs_action' | 'blocked' | 'unavailable'
+
+export type ProductNorthStarRowId =
+    | 'organizations'
+    | 'shared_watchlists'
+    | 'source_coverage'
+    | 'real_alert_generation'
+    | 'webhook_delivery'
+    | 'analyst_workflow'
+    | 'support_admin_audit'
+    | 'public_ti_enrichment'
+    | 'deploy_live_status'
+
+export type ProductNorthStarRow = {
+    id: ProductNorthStarRowId
+    label: string
+    state: ReadinessStatus
+    ownerLane: string
+    detail: string
+    href: string
+    proofSource: string
+    proofTimestamp: string
+    staleAfterSeconds: number
+    backendProofContractVersion: string
+    blocker: string
+    integrationProbeHint: string
+}
+
+export type ProductNorthStarScoreboard = {
+    schemaVersion: 'product.north_star.readiness.v1'
+    generatedAt: string
+    query: string
+    fullChainReady: boolean
+    readyRows: number
+    totalRows: number
+    firstBlocker?: string
+    rows: ProductNorthStarRow[]
+}
+
+type BuildOptions = {
+    generatedAt: string
+    query?: string
+    external?: ProductReadinessExternalState
+}
+
+export function buildProductNorthStarScoreboard(payload: ProductProgressReadinessPayload | null | undefined, options: BuildOptions): ProductNorthStarScoreboard {
+    const generatedAt = payload?.generatedAt || options.generatedAt
+    const query = options.query || 'company watchlist'
+    const external = options.external || buildProductProgressExternalState(payload, {
+        checkedAt: payload?.checkedAt || generatedAt,
+        staleAfterMinutes: 120,
+    })
+    const rows: ProductNorthStarRow[] = [
+        organizationsRow(external, generatedAt),
+        snapshotRow({
+            id: 'shared_watchlists',
+            label: 'Shared watchlists',
+            snapshot: external.orgAlertExport,
+            fallbackHref: '/dashboard/dwm',
+            fallbackOwner: 'org',
+            fallbackContract: 'organization.watchlist_alert_terms_export.v1',
+            fallbackProbe: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+            fallbackBlocker: 'Shared watchlist export proof is not loaded.',
+            readyDetail: 'Active organization terms can generate DWM alerts.',
+        }),
+        snapshotRow({
+            id: 'source_coverage',
+            label: 'Source coverage',
+            snapshot: external.sourceGrowth,
+            fallbackHref: '/dashboard/ti/sources',
+            fallbackOwner: 'source',
+            fallbackContract: 'dwm.source_inventory.v1',
+            fallbackProbe: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+            fallbackBlocker: 'Source inventory and worker readiness proof is not loaded.',
+            readyDetail: 'Source inventory and worker readiness are current.',
+        }),
+        snapshotRow({
+            id: 'real_alert_generation',
+            label: 'Real alert generation',
+            snapshot: external.dashboardEvidence,
+            fallbackHref: '/dashboard',
+            fallbackOwner: 'dashboard',
+            fallbackContract: 'dashboard.alert_evidence.readiness.v1',
+            fallbackProbe: 'Product progress must include a dashboard-visible alert with matching delivery/source/deploy proof.',
+            fallbackBlocker: 'Dashboard-visible alert proof is not loaded.',
+            readyDetail: 'A backend alert is visible in the dashboard with matched delivery evidence.',
+        }),
+        webhookDeliveryRow(external, generatedAt),
+        snapshotRow({
+            id: 'analyst_workflow',
+            label: 'Analyst workflow',
+            snapshot: external.dashboardEvidence,
+            fallbackHref: '/dashboard',
+            fallbackOwner: 'dashboard',
+            fallbackContract: 'dashboard.alert_evidence.readiness.v1',
+            fallbackProbe: 'Dashboard evidence must include a real alert id that can be opened by the analyst workbench.',
+            fallbackBlocker: 'No backed alert is available for analyst review.',
+            readyDetail: 'A backed alert is available for analyst review.',
+        }),
+        snapshotRow({
+            id: 'support_admin_audit',
+            label: 'Support and admin audit',
+            snapshot: external.helpdeskAudit,
+            fallbackHref: '/dashboard/system/impersonation',
+            fallbackOwner: 'helpdesk',
+            fallbackContract: 'support.audit.readiness.v1',
+            fallbackProbe: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+            fallbackBlocker: 'Support and admin audit proof is not loaded.',
+            readyDetail: 'Support actions and recovery state have structured audit proof.',
+        }),
+        snapshotRow({
+            id: 'public_ti_enrichment',
+            label: 'Public TI enrichment',
+            snapshot: external.publicTiProvenance,
+            fallbackHref: '/ti',
+            fallbackOwner: 'public-ti',
+            fallbackContract: 'ti.public_provenance.readiness.v1',
+            fallbackProbe: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+            fallbackBlocker: 'Public TI provenance proof is not loaded.',
+            readyDetail: 'Public TI enrichment has source, evidence, and freshness proof.',
+        }),
+        snapshotRow({
+            id: 'deploy_live_status',
+            label: 'Deploy and live status',
+            snapshot: external.deployProbe,
+            fallbackHref: '/status',
+            fallbackOwner: 'integration',
+            fallbackContract: 'product.deploy_probe.readiness.v1',
+            fallbackProbe: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
+            fallbackBlocker: 'Live deploy probe proof is not loaded.',
+            readyDetail: 'Deploy probe is fresh and tied to product-progress proof.',
+        }),
+    ]
+    const readyRows = rows.filter(row => row.state === 'ready').length
+    const firstBlocker = rows.find(row => row.state !== 'ready')?.blocker
+
+    return {
+        schemaVersion: 'product.north_star.readiness.v1',
+        generatedAt,
+        query,
+        fullChainReady: rows.every(row => row.state === 'ready'),
+        readyRows,
+        totalRows: rows.length,
+        firstBlocker,
+        rows,
+    }
+}
+
+function organizationsRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
+    const entitlement = external.entitlement
+    const orgExport = external.orgAlertExport
+    const state = combineState(entitlement?.status, orgExport?.status)
+    const blocker = [
+        rowBlocker(entitlement, 'DWM entitlement proof is not loaded.'),
+        rowBlocker(orgExport, 'Organization alert-term export proof is not loaded.'),
+    ].filter(Boolean).join(' ')
+    return {
+        id: 'organizations',
+        label: 'Organizations',
+        state,
+        ownerLane: entitlement?.ownerLane || orgExport?.ownerLane || 'org',
+        detail: state === 'ready' ? 'Organization entitlement and alert-term export are both ready.' : 'Organization access needs entitlement and alert-term export proof.',
+        href: entitlement?.href || orgExport?.href || '/dashboard/dwm',
+        proofSource: [entitlement?.source, orgExport?.source].filter(Boolean).join(' + ') || 'Missing organization readiness proof',
+        proofTimestamp: latestTimestamp([entitlement?.proofTimestamp, orgExport?.proofTimestamp, generatedAt]) || generatedAt,
+        staleAfterSeconds: Math.min(entitlement?.staleAfterSeconds || 900, orgExport?.staleAfterSeconds || 900),
+        backendProofContractVersion: [entitlement?.backendProofContractVersion || entitlement?.schemaVersion, orgExport?.backendProofContractVersion || orgExport?.schemaVersion].filter(Boolean).join(' + ') || 'organization.readiness.v1',
+        blocker: state === 'ready' ? '' : blocker || 'Organization readiness proof is incomplete.',
+        integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load entitlement and organization alert-term export readiness.',
+    }
+}
+
+function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
+    const health = external.webhookHealth
+    const dashboard = external.dashboardEvidence
+    const hasMatchedDelivery = dashboard?.deliveryEvidenceMatched === true && Boolean(dashboard.deliveryId)
+    const state = health?.status === 'ready' && hasMatchedDelivery ? 'ready' : health?.status === 'blocked' ? 'blocked' : 'needs_action'
+    return {
+        id: 'webhook_delivery',
+        label: 'Webhook delivery',
+        state,
+        ownerLane: health?.ownerLane || 'webhook',
+        detail: state === 'ready' ? 'Webhook lifecycle and matched delivery proof are loaded.' : 'Webhook delivery needs lifecycle proof and a delivery matched to a dashboard alert.',
+        href: health?.href || '/dashboard/automations?setup=dwm',
+        proofSource: health?.source || 'Missing DWM webhook health readiness contract',
+        proofTimestamp: latestTimestamp([health?.proofTimestamp, dashboard?.proofTimestamp, generatedAt]) || generatedAt,
+        staleAfterSeconds: Math.min(health?.staleAfterSeconds || 900, dashboard?.staleAfterSeconds || 600),
+        backendProofContractVersion: [health?.backendProofContractVersion || health?.schemaVersion, dashboard?.backendProofContractVersion || dashboard?.schemaVersion].filter(Boolean).join(' + ') || 'dwm.webhook.readiness.v1',
+        blocker: state === 'ready' ? '' : [rowBlocker(health, 'Webhook lifecycle proof is not loaded.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
+        integrationProbeHint: health?.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health.',
+    }
+}
+
+function snapshotRow(input: {
+    id: ProductNorthStarRowId
+    label: string
+    snapshot?: ProductReadinessSnapshotBase & { schemaVersion?: string }
+    fallbackHref: string
+    fallbackOwner: string
+    fallbackContract: string
+    fallbackProbe: string
+    fallbackBlocker: string
+    readyDetail: string
+}): ProductNorthStarRow {
+    const snapshot = input.snapshot
+    const state = snapshot?.status || 'unavailable'
+    return {
+        id: input.id,
+        label: input.label,
+        state,
+        ownerLane: snapshot?.ownerLane || input.fallbackOwner,
+        detail: state === 'ready' ? input.readyDetail : snapshot?.detail || input.fallbackBlocker,
+        href: snapshot?.href || input.fallbackHref,
+        proofSource: snapshot?.source || input.fallbackBlocker,
+        proofTimestamp: snapshot?.proofTimestamp || snapshot?.checkedAt || '',
+        staleAfterSeconds: snapshot?.staleAfterSeconds || 900,
+        backendProofContractVersion: snapshot?.backendProofContractVersion || snapshot?.schemaVersion || input.fallbackContract,
+        blocker: state === 'ready' ? '' : rowBlocker(snapshot, input.fallbackBlocker),
+        integrationProbeHint: snapshot?.integrationProbeHint || input.fallbackProbe,
+    }
+}
+
+function combineState(...states: Array<ReadinessStatus | undefined>): ReadinessStatus {
+    if (states.some(state => state === 'blocked')) return 'blocked'
+    if (states.length && states.every(state => state === 'ready')) return 'ready'
+    if (states.some(state => state === 'needs_action')) return 'needs_action'
+    return 'unavailable'
+}
+
+function rowBlocker(snapshot: ProductReadinessSnapshotBase | undefined, fallback: string) {
+    if (!snapshot) return fallback
+    if (snapshot.status === 'ready') return ''
+    if (snapshot.unavailableReason) return snapshot.unavailableReason
+    if (snapshot.blockers?.length) return snapshot.blockers.join(' ')
+    return snapshot.detail || fallback
+}
+
+function latestTimestamp(values: Array<string | undefined>) {
+    return values
+        .filter(Boolean)
+        .sort()
+        .at(-1)
+}
