@@ -72,6 +72,19 @@ const telegramDuplicateCapture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
 } as RawCapture;
 
+const telegramSubstringFalsePositiveCapture: RawCapture = {
+  id: "cap_telegram_notacme",
+  sourceId: "src_telegram_lumma",
+  url: "https://t.me/lumma_broker_room/44",
+  collectedAt: "2026-06-27T08:19:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-telegram-notacme",
+  sensitive: false,
+  body: "Broker message references notacme.com Okta sessions only; it must not match the customer watchlist.",
+  metadata: { adapter: "telegram_public", channel: "lumma_broker_room" }
+} as RawCapture;
+
 const darkwebCapture: RawCapture = {
   id: "cap_darkweb_1",
   sourceId: "src_akira_metadata",
@@ -106,7 +119,7 @@ describe("dwm product snapshot", () => {
       tenantId: "tenant_acme",
       watchlist: ["acme.com"],
       sources: [telegramSource, darkwebSource],
-      captures: [telegramCapture, telegramFollowupCapture, telegramDuplicateCapture, darkwebCapture],
+      captures: [telegramCapture, telegramFollowupCapture, telegramDuplicateCapture, telegramSubstringFalsePositiveCapture, darkwebCapture],
       generatedAt: "2026-06-27T08:20:00.000Z",
       includeDemoIfEmpty: false
     });
@@ -117,6 +130,8 @@ describe("dwm product snapshot", () => {
     expect(snapshot.alerts[0].sourceCount).toBe(2);
     expect(snapshot.alerts[0].evidence).toHaveLength(2);
     expect(snapshot.alerts[0].evidence.map((item) => item.id)).not.toContain("cap_telegram_2_duplicate");
+    expect(snapshot.alerts[0].evidence.map((item) => item.id)).not.toContain("cap_telegram_notacme");
+    expect(snapshot.alerts.flatMap((alert) => alert.provenance.captureIds)).not.toContain("cap_telegram_notacme");
     expect(snapshot.alerts[0].evidenceSummary).toMatchObject({
       evidenceCount: 2,
       sourceFamilyCounts: { telegram_public: 2 },
@@ -127,7 +142,7 @@ describe("dwm product snapshot", () => {
     expect(snapshot.alerts[0].matchContext).toMatchObject({
       normalizedTerm: "acme.com",
       termKind: "domain",
-      matchType: "case_insensitive_substring"
+      matchType: "bounded_text_or_metadata"
     });
     expect(snapshot.alerts[0].matchContext.matchedFieldHints).toContain("body");
     expect(snapshot.alerts[0].routingContext).toMatchObject({

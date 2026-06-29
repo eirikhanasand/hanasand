@@ -109,6 +109,45 @@ const actorSource: SourceRecord = {
   updatedAt: "2026-06-28T13:00:00.000Z"
 } as SourceRecord;
 
+const publicAdvisorySource: SourceRecord = {
+  id: "src_repo_public_ti",
+  name: "Repository public TI advisory",
+  type: "public_advisory",
+  url: "https://cert.example/advisories/acme",
+  accessMethod: "public_http",
+  status: "active",
+  trustScore: 0.69,
+  legalNotes: "Public TI advisory metadata.",
+  createdAt: "2026-06-28T13:00:00.000Z",
+  updatedAt: "2026-06-28T13:00:00.000Z"
+} as SourceRecord;
+
+const publicAdvisoryCapture: RawCapture = {
+  id: "cap_repo_public_ti_acme",
+  sourceId: publicAdvisorySource.id,
+  url: "https://cert.example/advisories/acme-session",
+  collectedAt: "2026-06-28T13:11:00.000Z",
+  mediaType: "text/html",
+  storageKind: "inline_text",
+  contentHash: "hash-repo-public-ti-acme",
+  sensitive: false,
+  body: "Public TI advisory says acme.com customers should rotate exposed partner API keys after credential resale claims.",
+  metadata: { adapter: "public_advisory", title: "acme.com partner API key exposure" }
+} as RawCapture;
+
+const substringFalsePositiveCapture: RawCapture = {
+  id: "cap_repo_tg_notacme_false_positive",
+  sourceId: telegramSource.id,
+  url: "https://t.me/repo_public/104",
+  collectedAt: "2026-06-28T13:19:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-repo-tg-notacme",
+  sensitive: false,
+  body: "Broker chatter mentions notacme.com Okta sessions only; this must not match the customer watchlist term.",
+  metadata: { adapter: "telegram_public", channel: "repo_public", messageId: 104 }
+} as RawCapture;
+
 const overlapTelegramCapture: RawCapture = {
   ...telegramCapture,
   id: "cap_repo_overlap_acme",
@@ -150,10 +189,13 @@ describe("dwm alert repository", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);
     store.saveSource(darkwebSource);
+    store.saveSource(publicAdvisorySource);
     store.saveCapture(telegramCapture);
     store.saveCapture(telegramDuplicateCapture);
     store.saveCapture(nonmatchCapture);
+    store.saveCapture(substringFalsePositiveCapture);
     store.saveCapture(darkwebCapture);
+    store.saveCapture(publicAdvisoryCapture);
     (store as any).saveDwmWatchlist({
       id: "watch_repo_acme",
       tenantId: "tenant_repo_acme",
@@ -212,9 +254,10 @@ describe("dwm alert repository", () => {
       webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"],
       hasWebhookRoute: true,
       visibilityPolicy: "admins",
-      sourceFamilies: ["telegram_public", "darkweb_metadata"]
+      sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
     });
-    expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId).sort()).toEqual(["cap_repo_darkweb_acme", "cap_repo_tg_acme"].sort());
+    expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId).sort()).toEqual(["cap_repo_darkweb_acme", "cap_repo_public_ti_acme", "cap_repo_tg_acme"].sort());
+    expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId)).not.toContain("cap_repo_tg_notacme_false_positive");
     expect(generationPlan.candidates[0].dedupeKeyCandidate).toMatch(/^dwm_dedupe_candidate_/);
 
     const readiness = buildDwmAlertGenerationReadiness({
@@ -239,7 +282,7 @@ describe("dwm alert repository", () => {
         candidateCount: 1,
         rawActiveTermCount: 2,
         duplicateCollapseCount: 1,
-        captureRefCount: 2,
+        captureRefCount: 3,
         matchedCandidateCount: 1,
         unmatchedCandidateCount: 0
       },
@@ -260,6 +303,7 @@ describe("dwm alert repository", () => {
     });
     expect(readiness.sourceFamilyCoverage).toEqual([
       { sourceFamily: "darkweb_metadata", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
+      { sourceFamily: "public_advisory", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
       { sourceFamily: "telegram_public", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] }
     ]);
     expect(readiness.blockerCodes).toEqual([]);
@@ -269,9 +313,9 @@ describe("dwm alert repository", () => {
       schemaVersion: "dwm.zero_alert_proof.v1",
       zeroAlert: false,
       state: "alerts_expected",
-      expectedAlertDelta: 2,
+      expectedAlertDelta: 3,
       blockerCodes: [],
-      counts: { activeWatchlists: 2, candidateCount: 1, captureRefCount: 2, matchedCandidateCount: 1, unmatchedCandidateCount: 0 }
+      counts: { activeWatchlists: 2, candidateCount: 1, captureRefCount: 3, matchedCandidateCount: 1, unmatchedCandidateCount: 0 }
     });
     expect(readiness.plan.candidates[0].webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
 
@@ -306,15 +350,25 @@ describe("dwm alert repository", () => {
 
     const first = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_acme", organizationId: "org_repo_acme", visibilityPolicy: "admins" });
 
-    expect(first.savedAlertCount).toBe(2);
+    expect(first.savedAlertCount).toBe(3);
     expect(first.generationPlan.candidateCount).toBe(1);
     expect(first.generationPlan.skippedWatchlists).toContainEqual({ watchlistId: "watch_repo_acme_paused", reason: "paused" });
-    expect(first.alerts.map((alert) => alert.sourceFamily).sort()).toEqual(["darkweb_metadata", "telegram_public"]);
+    expect(first.alerts.map((alert) => alert.sourceFamily).sort()).toEqual(["darkweb_metadata", "public_advisory", "telegram_public"]);
     expect(first.alerts.every((alert) => alert.organizationId === "org_repo_acme")).toBe(true);
     expect(first.alerts.every((alert) => alert.dedupeKey === alert.webhookDelivery.dedupeKey)).toBe(true);
     expect(first.alerts.every((alert) => alert.provenance.matchBasis === "watchlist_capture_text")).toBe(true);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.recommendedRoute).toBe("identity_response");
     expect(first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.provenance.metadataOnly).toBe(true);
+    expect(first.alerts.find((alert) => alert.sourceFamily === "public_advisory")).toMatchObject({
+      sourceFamily: "public_advisory",
+      recommendedRoute: "identity_response",
+      provenance: expect.objectContaining({ captureIds: ["cap_repo_public_ti_acme"] }),
+      matchContext: expect.objectContaining({
+        matchType: "bounded_text_or_metadata",
+        matchedFieldHints: expect.arrayContaining(["body", "metadata.title"])
+      })
+    });
+    expect(JSON.stringify(first.alerts)).not.toContain("cap_repo_tg_notacme_false_positive");
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.sourceCount).toBe(1);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.workflowContext).toMatchObject({
       organizationId: "org_repo_acme",

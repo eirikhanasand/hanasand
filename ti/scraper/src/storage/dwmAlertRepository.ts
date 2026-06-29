@@ -1860,7 +1860,7 @@ function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: s
 
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
   return input.captures
-    .filter((capture) => captureText(capture).includes(normalizeTerm(input.term.value)))
+    .filter((capture) => termMatchesText(captureText(capture), input.term.value))
     .map((capture) => {
       const source = input.sources.find((row) => row.id === capture.sourceId);
       return {
@@ -1919,6 +1919,15 @@ function captureText(capture: RawCapture): string {
     (capture as any).text,
     JSON.stringify((capture as any).metadata ?? {})
   ].map((value) => String(value ?? "").toLowerCase()).join("\n");
+}
+
+function termMatchesText(text: string, term: string): boolean {
+  const normalizedTerm = normalizeTerm(term);
+  if (!normalizedTerm) return false;
+  const escaped = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const domainLike = /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalizedTerm);
+  const boundary = domainLike ? "a-z0-9.-" : "a-z0-9";
+  return new RegExp(`(^|[^${boundary}])${escaped}(?=$|[^${boundary}])`, "i").test(text);
 }
 
 function sourceFamilyFor(source: SourceRecord | undefined, capture: RawCapture): string {

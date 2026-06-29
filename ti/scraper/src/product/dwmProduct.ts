@@ -55,7 +55,7 @@ export interface DwmAlert {
   matchContext: {
     normalizedTerm: string;
     termKind: DwmWatchTerm["kind"];
-    matchType: "case_insensitive_substring";
+    matchType: "bounded_text_or_metadata";
     matchedFieldHints: string[];
   };
   evidenceSummary: {
@@ -505,7 +505,7 @@ function buildDemoAlerts(watchlist: DwmWatchTerm[], generatedAt: string): DwmAle
     matchContext: {
       normalizedTerm: normalizeMatchValue(matchedTerm.value),
       termKind: matchedTerm.kind,
-      matchType: "case_insensitive_substring",
+      matchType: "bounded_text_or_metadata",
       matchedFieldHints: ["demo_public_message"]
     },
     evidenceSummary: evidenceSummaryFor([{
@@ -751,7 +751,7 @@ function matchContextFor(term: DwmWatchTerm, capture: RawCapture): DwmAlert["mat
   return {
     normalizedTerm: normalizeMatchValue(term.value),
     termKind: term.kind,
-    matchType: "case_insensitive_substring",
+    matchType: "bounded_text_or_metadata",
     matchedFieldHints: matchedFieldHints(capture, term.value)
   };
 }
@@ -772,7 +772,7 @@ function matchedFieldHints(capture: RawCapture, term: string): string[] {
     ["metadata.leakSite", metadata.leakSite ? JSON.stringify(metadata.leakSite) : undefined]
   ];
   return fields
-    .filter(([, value]) => String(value ?? "").toLowerCase().includes(normalized))
+    .filter(([, value]) => includesTerm(String(value ?? ""), normalized))
     .map(([field]) => field);
 }
 
@@ -849,7 +849,12 @@ function captureText(capture: RawCapture): string {
 }
 
 function includesTerm(text: string, term: string): boolean {
-  return text.toLowerCase().includes(term.toLowerCase());
+  const normalizedTerm = term.trim().toLowerCase();
+  if (!normalizedTerm) return false;
+  const escaped = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const domainLike = /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalizedTerm);
+  const boundary = domainLike ? "a-z0-9.-" : "a-z0-9";
+  return new RegExp(`(^|[^${boundary}])${escaped}(?=$|[^${boundary}])`, "i").test(text);
 }
 
 function safeExcerpt(text: string): string {
