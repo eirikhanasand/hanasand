@@ -156,6 +156,29 @@ export type DwmAlertWorkflowExecutionReadiness = {
     workflowEventCount: number;
     blockerCodes: DwmAlertWorkflowExecutionBlockerCode[];
   };
+  workflowActionEvent?: {
+    schemaVersion: "dwm.alert_workflow_action_event.v1";
+    ready: boolean;
+    action: DwmAlertWorkflowExecutionReadiness["action"];
+    alertId?: string;
+    organizationId?: string;
+    sourceFamily?: string;
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    captureIds: string[];
+    selectedCaptureIds: string[];
+    evidenceCount: number;
+    dedupeKey?: string;
+    deliveryDedupeKey?: string;
+    alertDetailPath?: string;
+    caseIdCandidate?: string;
+    caseId?: string;
+    casePath?: string;
+    workflowEventCount: number;
+    expectedWorkflowEventCount?: number;
+    idempotencyKey?: string;
+    blockerCodes: DwmAlertWorkflowExecutionBlockerCode[];
+  };
   ready: boolean;
   action: "assign" | "note" | "transition" | "case_link" | "replay" | "close" | "reopen" | "suppress" | "deliver";
   expectedWorkflowEventCount?: number;
@@ -631,6 +654,35 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
     ...lifecycleBlockers
   ].filter(Boolean) as DwmAlertWorkflowExecutionReadiness["blockers"];
   const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertWorkflowExecutionBlockerCode[];
+  const workflowActionEvent = alert ? {
+    schemaVersion: "dwm.alert_workflow_action_event.v1" as const,
+    ready: blockerCodes.length === 0,
+    action,
+    alertId: alert.id,
+    organizationId: input.organizationId ?? alert.organizationId,
+    sourceFamily: alert.sourceFamily ?? workflowContext.sourceFamily,
+    watchlistIds: uniqueStrings([
+      ...asStringArray(workflowContext.watchlistIds),
+      ...asStringArray(alert.watchlistIds)
+    ]),
+    watchlistItemIds: uniqueStrings([
+      ...asStringArray(workflowContext.watchlistItemIds),
+      ...asStringArray(alert.watchlistItemIds)
+    ]),
+    captureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
+    selectedCaptureIds,
+    evidenceCount: Number(workflowContext.evidenceCount ?? alert.evidence?.length ?? 0),
+    dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? workflowContext.dedupeKey,
+    deliveryDedupeKey: alert.webhookDelivery?.dedupeKey ?? workflowContext.deliveryDedupeKey ?? alert.dedupeKey,
+    alertDetailPath: workflowContext.alertDetailPath ?? alert.alertDetailPath,
+    caseIdCandidate: workflowContext.caseIdCandidate ?? alert.caseIdCandidate,
+    caseId: workflowContext.caseId ?? alert.caseId,
+    casePath: workflowContext.casePath ?? alert.casePath,
+    workflowEventCount: currentWorkflowEventCount ?? 0,
+    expectedWorkflowEventCount: input.expectedWorkflowEventCount,
+    idempotencyKey: stableId("dwm_alert_workflow_action_event", `${alert.id}:${currentWorkflowEventCount ?? 0}:${action}:${selectedCaptureIds.join("|")}`),
+    blockerCodes
+  } : undefined;
   return {
     schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
     alertId: alert?.id,
@@ -651,6 +703,7 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
       workflowEventCount: currentWorkflowEventCount ?? 0,
       blockerCodes
     } : undefined,
+    workflowActionEvent,
     ready: blockers.length === 0,
     action,
     expectedWorkflowEventCount: input.expectedWorkflowEventCount,

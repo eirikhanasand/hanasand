@@ -751,6 +751,26 @@ describe("dwm alert repository", () => {
         dedupeKey: telegramAlert?.dedupeKey,
         recommendedRoute: "identity_response",
         alertDetailPath: telegramAlert?.alertDetailPath
+      },
+      workflowActionEvent: {
+        schemaVersion: "dwm.alert_workflow_action_event.v1",
+        ready: true,
+        action: "assign",
+        alertId: telegramAlert?.id,
+        organizationId: "org_repo_acme",
+        sourceFamily: "telegram_public",
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+        captureIds: ["cap_repo_tg_acme"],
+        selectedCaptureIds: ["cap_repo_tg_acme"],
+        evidenceCount: 1,
+        dedupeKey: telegramAlert?.dedupeKey,
+        deliveryDedupeKey: telegramAlert?.dedupeKey,
+        alertDetailPath: telegramAlert?.alertDetailPath,
+        caseIdCandidate: telegramAlert?.caseIdCandidate,
+        casePath: telegramAlert?.casePath,
+        workflowEventCount: 0,
+        blockerCodes: []
       }
     });
 
@@ -882,6 +902,19 @@ describe("dwm alert repository", () => {
         sourceFamily: "telegram_public",
         captureIds: ["cap_repo_tg_acme"],
         recommendedRoute: "identity_response"
+      },
+      workflowActionEvent: {
+        schemaVersion: "dwm.alert_workflow_action_event.v1",
+        ready: false,
+        action: "replay",
+        alertId: preserved?.id,
+        organizationId: "org_repo_acme",
+        sourceFamily: "telegram_public",
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        evidenceCount: 2,
+        workflowEventCount: 1,
+        expectedWorkflowEventCount: 0,
+        blockerCodes: ["stale_workflow_version"]
       }
     });
     expect(preserved?.caseId).toBe("case_existing_repo");
