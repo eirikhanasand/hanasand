@@ -156,7 +156,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     const collectionSources = result.collectionStrategy?.sourcePosture ?? defaultCollectionSources()
     const datasets = (result.datasets.length ? result.datasets : defaultDatasets()).filter(item => !/planned|rejected|blocked/i.test(item.status))
     const sources = result.sources.length ? result.sources : defaultSourceLinks()
-    const alertItems = alertItemsFor(result)
     const victimObservations = useMemo(() => victimObservationsFor(result), [result])
     const actorIntel = useMemo(() => buildActorIntelligence(result, victimObservations), [result, victimObservations])
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
@@ -481,15 +480,7 @@ function Results({ result }: { result: TiSearchResponse }) {
 
             <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                 <Panel title='Watchlist Relevance' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
-                    {alertItems.length ? alertItems.map(item => (
-                        <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-                            <div className='flex items-center justify-between gap-3'>
-                                <h2 className='text-sm font-semibold text-[#171a21]'>{item.title}</h2>
-                                <span className={`rounded-lg px-2 py-1 text-xs ${rowToneClass(item.tone)}`}>{item.state}</span>
-                            </div>
-                            <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
-                        </div>
-                    )) : <EmptyLine text='No company, domain, vendor, or product matches returned yet.' />}
+                    <WatchlistWorkflowPanel watchlist={watchlist} actionability={actionability} query={result.query} />
                 </Panel>
 
                 <Panel title='Sources' description='Data families checked for this result, including actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
@@ -1346,6 +1337,47 @@ function sourceEvidenceRequestPayloadFor(row: SelectedSourceDrilldownRow, drilld
     }
 }
 
+function watchlistTermRequestPayloadFor(term: string, watchlist: WatchlistRelevance, actionability: TiActionabilityModel, query: string) {
+    const parsed = watchlistTermParts(term)
+    const matchingTerms = actionability.watchlistRelevance.terms.filter(item =>
+        item.value.toLowerCase() === parsed.value.toLowerCase()
+        || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase()
+    )
+    const matchingIntersections = actionability.orgRelevance.watchlistIntersections.filter(item =>
+        item.value.toLowerCase() === parsed.value.toLowerCase()
+        || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase()
+    )
+    return {
+        schemaVersion: 'ti.public_actor.watchlist_term_request.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query,
+        kind: parsed.kind,
+        value: parsed.value,
+        route: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+        blocked: actionability.exportPayloads.watchlist.blocked,
+        missing: actionability.exportPayloads.watchlist.missing,
+        matched: matchingTerms.some(item => item.matched) || matchingIntersections.length > 0,
+        matchedOrganizations: unique([
+            ...watchlist.organizations,
+            ...matchingIntersections.map(item => item.organizationId).filter((value): value is string => Boolean(value)),
+        ]).slice(0, 12),
+        watchlistItemIds: unique(matchingIntersections.map(item => item.watchlistItemId).filter((value): value is string => Boolean(value))),
+        alertIds: unique(matchingIntersections.flatMap(item => item.alertIds)),
+        casePaths: unique(matchingIntersections.flatMap(item => item.casePaths)),
+        sourceEvidenceRefs: unique(matchingIntersections.flatMap(item => item.sourceEvidenceRefs)),
+        provenance: actionability.exportPayloads.watchlist.provenance,
+    }
+}
+
+function watchlistTermParts(term: string): { kind: 'company' | 'domain' | 'vendor'; value: string } {
+    const [kind, ...rest] = term.split(':')
+    const value = rest.join(':').trim()
+    if (value && (kind === 'company' || kind === 'domain' || kind === 'vendor')) return { kind, value }
+    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(term.trim())) return { kind: 'domain', value: term.trim() }
+    return { kind: 'company', value: term.trim() }
+}
+
 function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: string; ready: boolean; endpoint: string; missing: string[] }) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -1502,6 +1534,58 @@ function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: Anal
                         {watchlist.domains.map(domain => <span key={domain} className='rounded-full border border-[#d8dee9] bg-white px-2.5 py-1 font-mono text-xs text-[#344054]'>{domain}</span>)}
                     </div>
                 </div>
+            ) : null}
+        </div>
+    )
+}
+
+function WatchlistWorkflowPanel({ watchlist, actionability, query }: { watchlist: WatchlistRelevance; actionability: TiActionabilityModel; query: string }) {
+    const terms = watchlist.terms.slice(0, 8)
+    const matched = new Set(watchlist.matchedTerms.map(value => value.toLowerCase()))
+    const blocked = actionability.exportPayloads.watchlist.blocked
+
+    if (!terms.length) {
+        return (
+            <div data-ti-watchlist-term-requests='true' className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                No customer-relevant watchlist term is attached yet. Use actor aliases, targets, source domains, campaigns, or tooling only after they are returned with provenance.
+            </div>
+        )
+    }
+
+    return (
+        <div data-ti-watchlist-term-requests='true' className='grid min-w-0 gap-2'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{terms.length} candidate term{terms.length === 1 ? '' : 's'} for monitoring</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{watchlist.rationale}</p>
+                </div>
+                <span className={blocked ? decisionStepStatusClass('blocked') : actionability.watchlistRelevance.matches.length ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
+                    {blocked ? 'blocked' : actionability.watchlistRelevance.matches.length ? 'ready' : 'review'}
+                </span>
+            </div>
+            {terms.map(term => {
+                const parsed = watchlistTermParts(term)
+                const isMatched = matched.has(term.toLowerCase())
+                    || actionability.watchlistRelevance.terms.some(item => item.matched && item.value.toLowerCase() === parsed.value.toLowerCase())
+                return (
+                    <div key={term} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{parsed.kind}: {parsed.value}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                    {isMatched ? 'Persisted organization watchlist match returned.' : 'Candidate term requires authenticated organization review before monitoring.'}
+                                </p>
+                            </div>
+                            <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                <span className={sourceHealthChipClass(isMatched ? 'ready' : blocked ? 'blocked' : 'review')}>{isMatched ? 'matched' : blocked ? 'blocked' : 'candidate'}</span>
+                                <CopyPayloadButton label='Watchlist term request' payload={watchlistTermRequestPayloadFor(term, watchlist, actionability, query)} />
+                            </div>
+                        </div>
+                    </div>
+                )
+            })}
+            {actionability.watchlistRelevance.blockers.length ? (
+                <p className='wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(actionability.watchlistRelevance.blockers.slice(0, 2))}</p>
             ) : null}
         </div>
     )
@@ -4438,31 +4522,4 @@ function readableSourceText(value?: string) {
         }
     }
     return value.replace(/^Scraper run [^;]+;\s*/i, '').replace(/^Live query text;\s*/i, '')
-}
-
-function alertItemsFor(result: TiSearchResponse) {
-    const fromReview = result.analystLoop?.metadataReviewInbox.map(item => ({
-        title: item.company || item.victim || 'Exposure mention',
-        detail: [item.affectedAccounts, item.datasetSize, item.actorStatement].filter(Boolean).join(' · ') || 'Review the captured mention before customer alerting.',
-        state: 'review',
-        tone: 'watch' as const
-    })) ?? []
-    const fromActivity = result.recentActivity
-        .filter(item => item.victimName || item.claimType === 'victim_claim' || /victim|leak|claim|stolen|exfiltrat/i.test(`${item.title} ${item.detail}`))
-        .map(item => ({
-            title: item.victimName || item.title,
-            detail: item.impact || item.detail,
-            state: 'matched',
-            tone: 'ok' as const
-        }))
-    if (fromReview.length || fromActivity.length) return [...fromReview, ...fromActivity].slice(0, 5)
-    if (result.status === 'searching' || result.status === 'queued') {
-        return [{
-            title: 'Watching for company matches',
-            detail: 'The search is checking actor claims, public indexes, and captured page text for company, vendor, domain, and brand mentions.',
-            state: 'watching',
-            tone: 'watch' as const
-        }]
-    }
-    return []
 }
