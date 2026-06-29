@@ -616,6 +616,9 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         rows.push(invite.rows[0] as OrganizationInviteRow)
     }
 
+    const requestId = input.requestId || supportRequestId(req)
+    const inviteIds = rows.map(row => row.id)
+    const entityId = inviteIds.join(',')
     await run('UPDATE organizations SET updated_at = NOW() WHERE id = $1', [organization.id])
     await recordAdminAuditEvent(req, {
         actionType: 'support.organization.invite_assist',
@@ -623,20 +626,68 @@ export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params
         targetType: 'organization',
         targetId: organization.id,
         organizationId: organization.id,
-        entityId: rows.map(row => row.id).join(','),
+        entityId,
+        requestId,
         severity: 'notice',
         outcome: 'success',
         reason,
         context: {
+            schemaVersion: 'support.invite_assist.v1',
+            requestId,
+            organizationId: organization.id,
             emails: rows.map(row => row.email),
             role: input.role,
             expiresAt: input.expiresAt,
-            inviteIds: rows.map(row => row.id),
+            inviteIds,
+            noSilentMembershipMutation: true,
+            mutation: 'invite_row_only',
             supportContext: cleanContext(req.body?.context),
         },
     })
+    const auditEventIds = await loadAdminAuditEventIds({
+        requestId,
+        actionType: 'support.organization.invite_assist',
+        entityId,
+    })
 
-    return res.status(201).send({ invites: rows.map(toInvite) })
+    return res.status(201).send({
+        invites: rows.map(toInvite),
+        inviteAssistance: {
+            schemaVersion: 'support.invite_assist.v1',
+            requestId,
+            actorId: actor.id,
+            organization: toOrganization(organization),
+            invites: rows.map(toInvite),
+            reason,
+            scope: {
+                organizationId: organization.id,
+                inviteIds,
+                role: input.role,
+                expiresAt: input.expiresAt,
+            },
+            outcome: 'success',
+            auditEventIds,
+            noSilentMembershipMutation: true,
+            audit: {
+                actionType: 'support.organization.invite_assist',
+                source: 'admin',
+                service: 'hanasand-api',
+                outcome: 'success',
+                severity: 'notice',
+                eventIds: auditEventIds,
+                query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&action=invite_assist&outcome=success&source=admin&service=hanasand-api`,
+            },
+            copyText: [
+                `Support invite assistance for ${rows.map(row => row.email).join(', ')}`,
+                `Org: ${organization.name} (${organization.id})`,
+                `Role: ${input.role}`,
+                `Expires: ${input.expiresAt}`,
+                `Request: ${requestId}`,
+                `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
+                `Reason: ${reason}`,
+            ].join('\n'),
+        },
+    })
 }
 
 export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ Params: SupportInviteActionParams, Body: SupportInviteActionBody }>, res: FastifyReply) {
@@ -1195,6 +1246,11 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             approval,
         },
     })
+    const auditEventIds = await loadAdminAuditEventIds({
+        requestId,
+        actionType: 'support.organization.access_recovery',
+        entityId: inviteRow.id,
+    })
 
     return res.status(201).send({
         recovery: {
@@ -1211,12 +1267,14 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
             approvedBy: approval.approvedBy,
             approvedAt: approval.approvedAt,
             approval,
+            auditEventIds,
             audit: {
                 actionType: 'support.organization.access_recovery',
                 source: 'admin',
                 service: 'hanasand-api',
                 outcome: 'success',
                 severity: 'warning',
+                eventIds: auditEventIds,
                 query: `/api/admin/audit-events?request=${encodeURIComponent(requestId)}&outcome=success&source=admin&service=hanasand-api`,
             },
             copyText: [
@@ -1226,6 +1284,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 `Expires: ${inviteRow.expires_at}`,
                 `Request: ${requestId}`,
                 `Approval: ${approval.status}`,
+                `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
                 approval.approvalRequired ? 'Share status: blocked until approved' : 'Share status: ready',
                 `Reason: ${reason}`,
             ].join('\n'),
