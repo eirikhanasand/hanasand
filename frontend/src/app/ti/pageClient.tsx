@@ -1095,13 +1095,18 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
 function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityModel }) {
     const proof = actionability.orgRelevance
     const firstBlocker = proof.blockers[0]
+    const affectedEntities = [
+        ...proof.affectedEntities.vendors.slice(0, 3),
+        ...proof.affectedEntities.domains.slice(0, 3),
+        ...proof.affectedEntities.regions.slice(0, 3),
+    ]
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+        <div data-ti-org-relevance='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist relevance</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {proof.organizationRefs.length} organization match{proof.organizationRefs.length === 1 ? '' : 'es'} · {proof.candidateTerms.length} candidate term{proof.candidateTerms.length === 1 ? '' : 's'} · {proof.sourceEvidence.length} source row{proof.sourceEvidence.length === 1 ? '' : 's'}
+                        {proof.organizationRefs.length} organization match{proof.organizationRefs.length === 1 ? '' : 'es'} · {proof.candidateTerms.length} candidate term{proof.candidateTerms.length === 1 ? '' : 's'} · {proof.sourceEvidence.length} source row{proof.sourceEvidence.length === 1 ? '' : 's'} · {proof.freshness.stale ? 'refresh needed' : 'freshness accepted'}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -1109,6 +1114,22 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                     <CopyPayloadButton label='Watchlist relevance' payload={proof} />
                 </div>
             </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Last seen' value={formatDate(proof.freshness.lastSeen)} />
+                <EvidenceMetric label='Freshness' value={proof.freshness.stale ? proof.freshness.reason : 'Current enough for review'} />
+            </div>
+            {affectedEntities.length ? (
+                <div className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Affected context</p>
+                    <div className='mt-2 flex flex-wrap gap-1.5'>
+                        {affectedEntities.map(entity => (
+                            <span key={`${entity.kind}-${entity.value}`} className={entity.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
+                                {entity.kind}: {entity.value}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            ) : null}
             <div className='mt-3 grid gap-2'>
                 {proof.candidateTerms.length ? proof.candidateTerms.slice(0, 4).map(term => (
                     <div key={`${term.kind}-${term.value}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -1124,6 +1145,31 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                     <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source-backed watchlist term is attached yet.</p>
                 )}
             </div>
+            {proof.handoffRows.length ? (
+                <div className='mt-3 grid gap-2'>
+                    {proof.handoffRows.slice(0, 6).map(row => {
+                        const rowBlocker = row.blockers[0]
+                        return (
+                            <div key={row.rowId} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                                <div className='flex flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.action} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}</p>
+                                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                                        {row.alertId || row.watchlistItemId || row.captureIds.length ? (
+                                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                                {[row.alertId ? `alert ${row.alertId}` : '', row.watchlistItemId ? `watchlist item ${row.watchlistItemId}` : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
+                                            </p>
+                                        ) : null}
+                                        {rowBlocker ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{rowBlocker.handoff}</p> : null}
+                                    </div>
+                                    <span className={decisionStepStatusClass(row.state)}>{decisionStepStatusLabel(row.state)}</span>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            ) : null}
             {firstBlocker ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(firstBlocker.ownerLane)}: {firstBlocker.handoff}</p>
             ) : null}
