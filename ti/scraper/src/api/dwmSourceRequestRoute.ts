@@ -3047,6 +3047,11 @@ function sourceActorEnrichmentReadinessResponse(body: DwmSourceRequestBody, opti
 
 function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Record<string, any>) {
   const publicTiQueryAdapter = sourceActorPublicTiQueryAdapter(query, actorReadiness);
+  const dashboardSourceOperationsAdapter = sourceActorDashboardSourceOperationsAdapter({
+    query,
+    actorReadiness,
+    publicTiQueryAdapter
+  });
   return {
     schemaVersion: "dwm.actor_source_readiness_proof_artifacts.v1",
     proofId: actorReadiness.proofId,
@@ -3092,6 +3097,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
       sourceSectionReadiness: actorReadiness.sourceSectionReadiness,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
+      sourceOperationsAdapter: dashboardSourceOperationsAdapter,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
       blockerCount: [
@@ -3140,6 +3146,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
+      ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
     ],
     safeOutput: {
@@ -3345,6 +3352,116 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
       restrictedMetadataLeaked: false,
       liveNetworkScrapeStarted: false,
       restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActorDashboardSourceOperationsAdapter(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  publicTiQueryAdapter: Record<string, any>;
+}) {
+  const operationsByFamily = new Map<string, Array<Record<string, any>>>();
+  const freshnessRows = input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.rows ?? [];
+  for (const operation of input.publicTiQueryAdapter.sourceOperationsHandoff?.operations ?? []) {
+    const families = String(operation.family) === "all_active"
+      ? freshnessRows.map((row: any) => String(row.sourceFamily))
+      : [String(operation.family)];
+    for (const family of families) operationsByFamily.set(family, [...(operationsByFamily.get(family) ?? []), operation]);
+  }
+  const alertRowsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const row of input.publicTiQueryAdapter.alertEnrichmentHandoff?.rows ?? []) {
+    const family = String(row.sourceFamily);
+    alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
+  }
+  const rows = freshnessRows.map((row: any) => {
+    const family = String(row.sourceFamily);
+    const operations = operationsByFamily.get(family) ?? [];
+    const alertRows = alertRowsByFamily.get(family) ?? [];
+    return {
+      schemaVersion: "dwm.dashboard.source_operations_adapter_row.v1",
+      proofId: stableId("dwm_dashboard_source_operations_adapter_row", `${input.query}:${family}:${row.state}:${row.parserStatus?.state}:${row.freshnessState}`),
+      query: input.query,
+      sourceFamily: family,
+      state: row.state,
+      freshnessState: row.freshnessState,
+      parserStatus: row.parserStatus,
+      confidence: row.confidence,
+      confidenceTier: row.confidenceTier,
+      timestamps: row.timestamps,
+      provenance: row.provenance,
+      gap: row.gap,
+      alertability: row.alertability,
+      operations: operations.map((operation) => ({
+        operationId: operation.operationId,
+        type: operation.type,
+        priority: operation.priority,
+        reasonCode: operation.reasonCode,
+        route: operation.route,
+        blockers: operation.blockers ?? [],
+        liveNetworkFetch: false
+      })),
+      nextActions: [
+        ...(row.nextActions ?? []),
+        ...operations.map((operation) => ({
+          action: operation.type,
+          route: operation.route,
+          reasonCode: operation.reasonCode,
+          priority: operation.priority,
+          liveNetworkFetch: false
+        }))
+      ],
+      alertEnrichment: {
+        readyRows: alertRows.filter((alert: any) => alert.state === "ready").length,
+        blockedRows: alertRows.filter((alert: any) => alert.state !== "ready").length,
+        watchlistTerms: uniqueSourceReadinessStrings(alertRows.map((alert: any) => alert.watchlistTerm)),
+        enrichmentProofIds: uniqueSourceReadinessStrings(alertRows.flatMap((alert: any) => alert.provenance?.enrichmentProofIds ?? [])),
+        webhookConsumable: alertRows.some((alert: any) => alert.webhookPayload?.canConsume === true)
+      },
+      blockers: dedupeBlockers([
+        ...(row.blockers ?? []),
+        ...operations.flatMap((operation) => operation.blockers ?? []),
+        ...alertRows.flatMap((alert) => alert.blockers ?? [])
+      ]),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
+    proofId: stableId("dwm_dashboard_source_operations_adapter", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.parserStatus?.state}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      totalFamilies: rows.length,
+      activeSourceFamilies: input.actorReadiness.alertability?.activeSourceFamilies ?? [],
+      publicTiReady: input.actorReadiness.sourceConsumerBridge?.summary?.publicTiReady === true,
+      alertReady: input.actorReadiness.alertCaseHandoffReadiness?.alertReady === true,
+      caseReady: input.actorReadiness.alertCaseHandoffReadiness?.caseReady === true,
+      freshFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.freshFamilies ?? [],
+      gapFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.gapFamilies ?? [],
+      retryFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.retryFamilies ?? [],
+      alertableFamilies: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.alertableFamilies ?? [],
+      nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
+      parserStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.parserStatus?.state).filter(Boolean)),
+      latestCaptureAt: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.latestCaptureAt,
+      latestEnrichmentAt: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.latestEnrichmentAt
+    },
+    policyBoundary: {
+      liveNetworkFetch: false,
+      publicTelegramOnly: true,
+      metadataOnlyRestrictedSources: true,
+      rawRestrictedPayloadStorage: false
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
     }
   };
 }

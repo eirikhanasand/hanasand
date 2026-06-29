@@ -2215,6 +2215,35 @@ describe("dwm source requests", () => {
               coveredSections: expect.arrayContaining(["overview", "evidence"])
             })
           }),
+          sourceOperationsAdapter: expect.objectContaining({
+            schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                sourceFamily: "telegram",
+                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed" }),
+                provenance: expect.objectContaining({
+                  evidenceProofId: expect.any(String),
+                  sourceHealthProofId: expect.any(String)
+                }),
+                alertEnrichment: expect.objectContaining({
+                  webhookConsumable: true,
+                  enrichmentProofIds: expect.arrayContaining([expect.any(String)])
+                }),
+                operations: expect.arrayContaining([
+                  expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
+                ]),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              })
+            ]),
+            summary: expect.objectContaining({
+              publicTiReady: true,
+              alertReady: true,
+              parserStates: expect.arrayContaining(["ready"]),
+              nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
+              latestCaptureAt: expect.any(String)
+            }),
+            policyBoundary: expect.objectContaining({ liveNetworkFetch: false })
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
@@ -2241,6 +2270,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.alertEnrichmentHandoff.schemaVersion == \"ti.public_actor.alert_enrichment_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
+          ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
       }
@@ -3181,6 +3211,25 @@ describe("dwm source requests", () => {
             expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
           ])
         }),
+        sourceOperationsAdapter: expect.objectContaining({
+          schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              sourceFamily: "darkweb_onion",
+              parserStatus: expect.objectContaining({ state: "missing_source" }),
+              gap: expect.objectContaining({ state: "missing" }),
+              nextActions: expect.arrayContaining([
+                expect.objectContaining({ action: "request_candidate", liveNetworkFetch: false })
+              ]),
+              safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            alertReady: false,
+            gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+            nextActionTypes: expect.arrayContaining(["request_candidate"])
+          })
+        }),
         sourceSectionReadiness: expect.objectContaining({
           sections: expect.arrayContaining([
             expect.objectContaining({ section: "infrastructure", state: "missing_source" })
@@ -3452,6 +3501,30 @@ describe("dwm source requests", () => {
           consumers: expect.arrayContaining([
             expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
           ])
+        }),
+        sourceOperationsAdapter: expect.objectContaining({
+          schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              sourceFamily: "telegram",
+              parserStatus: expect.objectContaining({
+                state: "retry_required",
+                retryBackoff: expect.objectContaining({ retryable: true })
+              }),
+              nextActions: expect.arrayContaining([
+                expect.objectContaining({ action: "retry", liveNetworkFetch: false }),
+                expect.objectContaining({ action: "retry_parser", liveNetworkFetch: false })
+              ]),
+              blockers: expect.arrayContaining([
+                expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
+              ])
+            })
+          ]),
+          summary: expect.objectContaining({
+            alertReady: false,
+            retryFamilies: expect.arrayContaining(["telegram"]),
+            nextActionTypes: expect.arrayContaining(["retry", "retry_parser", "request_candidate"])
+          })
         }),
         sourceSectionReadiness: expect.objectContaining({
           sections: expect.arrayContaining([
