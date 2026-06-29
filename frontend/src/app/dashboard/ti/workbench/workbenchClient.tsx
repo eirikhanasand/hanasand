@@ -941,7 +941,7 @@ function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onC
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {row.href ? (
-                                <Link href={row.href} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                <Link href={row.href} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'>
                                     Open
                                     <ExternalLink className='h-3.5 w-3.5' />
                                 </Link>
@@ -952,7 +952,7 @@ function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onC
                                     disabled={Boolean(busyAction) || Boolean(row.disabledReason || row.action.disabledReason)}
                                     title={row.disabledReason || row.action.disabledReason}
                                     onClick={() => onRunAction(row.action as WorkbenchAction)}
-                                    className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
                                 >
                                     {busyAction === `action:${selected?.id}:${row.action.id}` ? 'Running...' : row.action.label}
                                 </button>
@@ -962,13 +962,13 @@ function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onC
                                     type='button'
                                     disabled={Boolean(busyAction)}
                                     onClick={() => onCopyPayload(row.copyPayload)}
-                                    className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
                                 >
                                     Copy handoff
                                 </button>
                             ) : null}
                             {!row.href && !row.action && row.copyPayload === undefined && (
-                                <button type='button' disabled title={row.disabledReason} className='inline-flex h-8 cursor-not-allowed items-center rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-2.5 text-xs font-semibold text-[#98a2b3]'>
+                                <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-2.5 text-xs font-semibold text-[#98a2b3] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#8795ad]'>
                                     Blocked
                                 </button>
                             )}
@@ -1006,6 +1006,33 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({ id: 'open_case', label: 'Open selected case', detail: selected.caseDetailHref, tone: 'ready', href: selected.caseDetailHref })
     } else if (selected.kind === 'dwm_alert') {
         rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
+    }
+    if (selected.kind === 'dwm_alert') {
+        rows.push({
+            id: 'replay_alert',
+            label: 'Replay evidence',
+            detail: selected.persistent ? `POST /api/dwm/alerts/${selected.id}/replay.` : 'Replay is blocked for fallback alerts until the DWM alerts API returns this item.',
+            tone: selected.persistent ? 'ready' : 'blocked',
+            action: {
+                id: 'replay_alert',
+                label: 'Replay',
+                method: 'POST',
+                href: `/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay`,
+                body: { actor: 'dashboard' },
+                disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot call /api/dwm/alerts/:id/replay.',
+            },
+            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.',
+        })
+    }
+    const sendAction = selected.actions?.find(action => action.id === 'send_alert')
+    if (sendAction) {
+        rows.push({
+            id: 'send_alert',
+            label: 'Send delivery',
+            detail: 'POST /api/dwm/webhooks/deliver for the selected alert and scoped destination.',
+            tone: selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
+            action: sendAction,
+        })
     }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     if (activeWebhook && orgContext?.organization) {
