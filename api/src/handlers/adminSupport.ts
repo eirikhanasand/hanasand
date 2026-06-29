@@ -2237,6 +2237,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                     outcome: 'success',
                     blockers: ['duplicate_idempotency_key'],
                 }),
+                executionReceipt: supportInviteActionExecutionReceipt({
+                    actorId: actor.id,
+                    organizationId: organization.id,
+                    requestId: duplicate.request_id,
+                    action: action as 'revoke' | 'resend',
+                    actionType,
+                    reason,
+                    controls: executorControls,
+                    invite,
+                    before: inviteSnapshot(invite),
+                    after: inviteSnapshot(invite),
+                    outcome: 'success',
+                    auditEventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                    blockers: ['duplicate_idempotency_key'],
+                }),
                 audit: {
                     actionType,
                     source: 'admin',
@@ -2467,6 +2482,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 before,
                 after,
                 outcome: 'success',
+                blockers: [],
+            }),
+            executionReceipt: supportInviteActionExecutionReceipt({
+                actorId: actor.id,
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite: updatedInvite,
+                before,
+                after,
+                outcome: 'success',
+                auditEventIds,
                 blockers: [],
             }),
             audit: {
@@ -7839,6 +7869,75 @@ function supportInviteActionExecutorDetail(input: {
             blockerCode: input.blockers[0] || null,
             redactionRequired: true,
         }),
+    }
+}
+
+function supportInviteActionExecutionReceipt(input: {
+    actorId: string
+    organizationId: string
+    requestId: string
+    action: 'revoke' | 'resend'
+    actionType: string
+    reason: string
+    controls: ReturnType<typeof supportInviteActionExecutorControls>['value']
+    invite: OrganizationInviteRow
+    before: Record<string, unknown>
+    after: Record<string, unknown>
+    outcome: 'success' | 'denied' | 'failed'
+    auditEventIds: number[]
+    blockers: string[]
+}) {
+    return {
+        schemaVersion: 'support.invite_action.execution_receipt.v1',
+        generatedAt: new Date().toISOString(),
+        supportRoleRequired: true,
+        reasonRequired: true,
+        contextRequired: true,
+        scopeRequired: true,
+        noSilentMembershipMutation: true,
+        mutationMode: 'controlled_invite_row_only',
+        action: input.action,
+        actionType: input.actionType,
+        outcome: input.outcome,
+        severity: input.action === 'revoke' ? 'warning' : 'notice',
+        actorId: input.actorId,
+        organizationId: input.organizationId,
+        targetType: 'invite',
+        targetId: input.invite.email,
+        entityId: input.invite.id,
+        inviteId: input.invite.id,
+        requestId: input.requestId,
+        reason: input.reason,
+        scope: input.controls.scope,
+        handoffExpiresAt: input.controls.handoffExpiresAt,
+        correlationId: input.controls.correlationId,
+        idempotencyKey: input.controls.idempotencyKey,
+        supportSessionId: input.controls.supportSessionId || null,
+        before: input.before,
+        after: input.after,
+        auditEventIds: input.auditEventIds,
+        audit: {
+            detailRoutes: input.auditEventIds.map(id => `/api/admin/audit-events/${encodeURIComponent(String(id))}`),
+            replay: supportInviteActionAuditQuery({
+                requestId: input.requestId,
+                organizationId: input.organizationId,
+                inviteId: input.invite.id,
+                correlationId: input.controls.correlationId,
+                idempotencyKey: input.controls.idempotencyKey,
+                reason: input.reason,
+                actionType: input.actionType,
+                outcome: input.outcome,
+            }),
+            byTargetType: auditFilterQuery({ targetType: 'invite', entity: input.invite.id, request: input.requestId }),
+            deniedReplay: auditFilterQuery({ targetType: 'invite', entity: input.invite.id, action: input.actionType, outcome: 'denied' }),
+        },
+        blockers: input.blockers,
+        copyText: [
+            `Support invite ${input.action} receipt ${input.invite.id}`,
+            `Request: ${input.requestId}`,
+            `Audit events: ${input.auditEventIds.join(', ') || 'pending index refresh'}`,
+            `Replay: ${auditFilterQuery({ targetType: 'invite', entity: input.invite.id, request: input.requestId })}`,
+        ].join('\n'),
     }
 }
 
