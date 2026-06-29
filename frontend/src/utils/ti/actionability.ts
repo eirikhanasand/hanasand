@@ -570,6 +570,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         orgRelevance,
         sourceProvenance,
         enrichmentGapQueue,
+        sourceHealthQueue,
     })
 
     return {
@@ -762,6 +763,7 @@ function buildPublicTiActionPayloads(input: {
     orgRelevance: PublicTiOrgRelevanceProof
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
     enrichmentGapQueue: EnrichmentGapQueueItem[]
+    sourceHealthQueue: PublicTiSourceHealthQueue
 }): PublicTiActionPayloadSet {
     const actorId = actorIdForQuery(input.result.query)
     const sourceIds = uniqueStrings(input.sourceProvenance.map(source => source.sourceId))
@@ -879,6 +881,7 @@ function buildPublicTiActionPayloads(input: {
                     ...input.exportPayloads.enrichment.body,
                     ...commonContext,
                     tasks: input.enrichmentGapQueue,
+                    sourceHealthQueue: input.sourceHealthQueue,
                     noMutation: true,
                 },
                 provenance: input.exportPayloads.enrichment.provenance,

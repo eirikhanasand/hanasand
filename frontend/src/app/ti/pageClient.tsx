@@ -2458,16 +2458,31 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
 
 function CopyPayloadButton({ label, payload }: { label: string; payload: unknown }) {
     const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+    const resetTimerRef = useRef<number | null>(null)
+
+    useEffect(() => {
+        return () => {
+            if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current)
+        }
+    }, [])
+
+    function resetLater(delay: number) {
+        if (resetTimerRef.current) window.clearTimeout(resetTimerRef.current)
+        resetTimerRef.current = window.setTimeout(() => {
+            resetTimerRef.current = null
+            setState('idle')
+        }, delay)
+    }
 
     async function copyPayload() {
         const text = JSON.stringify(payload, null, 2)
         try {
             await navigator.clipboard.writeText(text)
             setState('copied')
-            window.setTimeout(() => setState('idle'), 1800)
+            resetLater(1800)
         } catch {
             setState('failed')
-            window.setTimeout(() => setState('idle'), 2200)
+            resetLater(2200)
         }
     }
 

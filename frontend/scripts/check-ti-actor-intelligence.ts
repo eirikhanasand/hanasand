@@ -236,6 +236,7 @@ assert(actionability.actionPayloads.payloads.webhookDelivery.blockedBy.some(bloc
 assert(actionability.actionPayloads.payloads.analystHandoffBundle.body.schemaVersion === 'hanasand.analyst_handoff.consumer.v1', 'Analyst bundle export should align to the authenticated consumer schema.')
 assert(actionability.actionPayloads.payloads.sourceEnrichment.route === '/dashboard/ti/enrichment', 'Source enrichment action export should point to source enrichment work.')
 assert(actionability.actionPayloads.payloads.sourceEnrichment.blockedBy.some(blocker => blocker.code === 'missing_capture' && blocker.ownerLane === 'source'), 'Source enrichment export should carry missing capture blockers.')
+assert(JSON.stringify(actionability.actionPayloads.payloads.sourceEnrichment.body).includes('ti.public_actor.source_health_queue.v1'), 'Source enrichment export should carry the modeled source-health queue.')
 assert(actionability.enrichmentGapQueue.some(item => item.route === '/dashboard/dwm' && item.sourceFamily === 'alert' && item.requestedFields.includes('relatedAlerts[].id')), 'Enrichment gaps should carry route, source family, and requested fields.')
 assert(actionability.exportPayloads.enrichment.backedRoute === '/dashboard/ti/enrichment', 'Enrichment package should point to the backed enrichment route.')
 assert(actionability.alertDisposition === 'watchlist_required', 'APT29 fixture should not alert without a backed watchlist match or alert ID.')
