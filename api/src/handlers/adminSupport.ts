@@ -6937,6 +6937,16 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract'],
             redactionRequired: true,
         },
+        exampleQueries: {
+            organization: auditFilterQuery({ org: filters.org || 'organization-id' }),
+            actor: auditFilterQuery({ actor: filters.actor || 'support-actor-id' }),
+            target: auditFilterQuery({ target: filters.target || 'target-user-id' }),
+            actionOutcome: auditFilterQuery({ action: filters.action || 'support.organization.access_recovery', outcome: filters.outcome || 'success' }),
+            entity: auditFilterQuery({ entity: filters.entity || 'entity-id', entityType: filters.entityType || 'invite' }),
+            request: auditFilterQuery({ request: filters.request || 'request-id' }),
+            timeRange: auditFilterQuery({ from: filters.from || '2026-01-01T00:00:00.000Z', to: filters.to || '2026-01-02T00:00:00.000Z' }),
+            textQuery: auditFilterQuery({ q: filters.q || 'customer@example.com' }),
+        },
         blockers: [
             timeline.length ? '' : 'audit_unavailable',
             replayQuery.includes('?') ? '' : 'missing_replay_filter',
