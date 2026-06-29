@@ -2814,6 +2814,9 @@ expect(replayDestinationTest.blockers.some(item => item.code === 'live_delivery_
 expect(replayDestinationTest.dryRunPayloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && replayDestinationTest.dryRunPayloadPreview.noNetwork === true && replayDestinationTest.dryRunPayloadPreview.discord.fieldNames.includes('Watchlist'), 'Destination test contract should expose the no-network Discord payload preview for setup screens.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunPayloadPreview?.context.orgId === 'org_contract' && replayDestinationTest.dryRunPayloadPreview.context.sourceFamily === 'dark_web' && replayDestinationTest.dryRunPayloadPreview.context.analystLink === '/dashboard/dwm', 'Destination test payload preview should carry org/source/action-link context.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunPayloadPreview?.redaction.safeForCustomerDisplay === true && replayDestinationTest.dryRunPayloadPreview.redaction.endpointExposed === false, 'Destination test payload preview should prove redaction and avoid endpoint leakage.', replayDestinationTest.dryRunPayloadPreview)
+expect(replayDestinationTest.dryRunTestRequest.canSend === true && replayDestinationTest.dryRunTestRequest.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && replayDestinationTest.dryRunTestRequest.body?.idempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test', 'Destination test contract should expose the exact no-network dry-run test request.', replayDestinationTest.dryRunTestRequest)
+expect(replayDestinationTest.dryRunTestRequest.expected.auditAction === 'delivery.tested' && replayDestinationTest.dryRunTestRequest.expected.persistedAttempt === true && replayDestinationTest.dryRunTestRequest.payloadPreview?.redaction.endpointExposed === false, 'Destination dry-run test request should prove persisted delivery/audit outcome without exposing endpoint secrets.', replayDestinationTest.dryRunTestRequest)
+expect(disabledDestinationTest.dryRunTestRequest.canSend === false && disabledDestinationTest.dryRunTestRequest.blockers.some(item => item.code === 'destination_disabled'), 'Destination dry-run test request should block disabled destinations.', disabledDestinationTest.dryRunTestRequest)
 expect(disabledDestinationTest.status === 'disabled' && disabledDestinationTest.blockers.some(item => item.code === 'destination_disabled'), 'Destination test contract should block disabled destinations.', disabledDestinationTest)
 expect(failedDestinationTest.status === 'test_failed' && failedDestinationTest.blockers.some(item => item.code === 'test_failed'), 'Destination test contract should expose failed test state.', failedDestinationTest)
 expect(memberReplayDestinationTest.access.memberSafe === true && memberReplayDestinationTest.access.canTest === false && memberReplayDestinationTest.audit.auditEventContracts.length === 0, 'Destination test contract should keep member views read-only and audit-safe.', memberReplayDestinationTest)
@@ -3308,6 +3311,9 @@ console.log(JSON.stringify({
             'destinationTests[].schemaVersion',
             'destinationTests[].latestTest.status',
             'destinationTests[].preview.discord.fieldNames',
+            'destinationTests[].dryRunTestRequest.body',
+            'destinationTests[].dryRunTestRequest.expected.auditAction',
+            'destinationTests[].dryRunTestRequest.payloadPreview.discord.fieldNames',
             'destinationTests[].audit.latestAuditEventId',
             'destinationTests[].blockers[].code',
             'destinationDeliveryMatrix.schemaVersion',

@@ -4980,6 +4980,14 @@ export function buildDwmWebhookDestinationTestContract({
         || persistedLastTest?.status === 'dry_run'
         || persistedLastTest?.status === 'delivered'
     const latestTestStatus = latestTest?.status || persistedLastTest?.status || null
+    const expectedIdempotencyKey = destination ? buildIdempotencyKey('dwm.alert.test', destination.orgId, destination.id, 'webhook_test') : null
+    const testRoute = destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : 'POST /api/dwm/webhook-destinations/:id/test'
+    const canSendDryRunTest = Boolean(
+        canManage
+        && destination
+        && destination.status === 'active'
+        && !uniqueBlockers.some(blocker => blocker.blocking),
+    )
 
     return {
         schemaVersion: 'dwm.webhook.destination_test.v1',
@@ -5031,6 +5039,32 @@ export function buildDwmWebhookDestinationTestContract({
             }
             : null,
         dryRunPayloadPreview,
+        dryRunTestRequest: {
+            method: 'POST',
+            route: testRoute,
+            canSend: canSendDryRunTest,
+            noNetwork: true,
+            externalSendEnabled: false,
+            body: destination
+                ? {
+                    orgId: destination.orgId,
+                    destinationId: destination.id,
+                    eventType: 'dwm.alert.test' as DwmAlertEventType,
+                    dryRun: true,
+                    live: false,
+                    idempotencyKey: expectedIdempotencyKey,
+                }
+                : null,
+            expected: {
+                deliveryStatus: 'dry_run',
+                persistedAttempt: true,
+                auditAction: 'delivery.tested',
+                idempotencyKey: expectedIdempotencyKey,
+                endpointExposed: false,
+            },
+            payloadPreview: dryRunPayloadPreview,
+            blockers: uniqueBlockers,
+        },
         health: health
             ? {
                 status: health.health,
@@ -5048,7 +5082,7 @@ export function buildDwmWebhookDestinationTestContract({
         blockers: uniqueBlockers,
         blockingCodes,
         routes: {
-            test: destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : 'POST /api/dwm/webhook-destinations/:id/test',
+            test: testRoute,
             destination: destinationId ? `GET /api/dwm/webhooks?destinationId=${destinationId}` : 'GET /api/dwm/webhooks',
         },
     }
