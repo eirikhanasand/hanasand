@@ -2037,6 +2037,41 @@ describe("dwm source requests", () => {
               latestCaptureAt: expect.any(String)
             })
           }),
+          alertEnrichmentHandoff: expect.objectContaining({
+            schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
+            ready: true,
+            route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }),
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                watchlistTerm: "APT29",
+                sourceFamily: "telegram",
+                state: "ready",
+                parserStatus: expect.objectContaining({ state: "ready", captureState: "capture_observed" }),
+                freshness: expect.objectContaining({ lastCaptureAt: expect.any(String) }),
+                matchContext: expect.objectContaining({
+                  matchBasis: "watchlist_enrichment_evidence",
+                  matchableFields: expect.arrayContaining(["text"])
+                }),
+                provenance: expect.objectContaining({
+                  evidenceProofId: expect.any(String),
+                  freshnessProofId: expect.any(String),
+                  enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
+                  sourceIds: expect.arrayContaining([expect.any(String)])
+                }),
+                webhookPayload: expect.objectContaining({
+                  canConsume: true,
+                  requiredFields: expect.arrayContaining(["provenance.enrichmentProofIds", "freshness.lastCaptureAt"])
+                }),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              })
+            ]),
+            summary: expect.objectContaining({
+              readyRows: expect.any(Number),
+              sourceFamilies: expect.arrayContaining(["telegram"]),
+              enrichmentProofIds: expect.arrayContaining([expect.any(String)]),
+              latestCaptureAt: expect.any(String)
+            })
+          }),
           watchlistAlertabilityBridge: expect.objectContaining({
             schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
             ready: true,
@@ -2203,6 +2238,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.alertEnrichmentHandoff.schemaVersion == \"ti.public_actor.alert_enrichment_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3044,6 +3080,39 @@ describe("dwm source requests", () => {
           }),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         }),
+        alertEnrichmentHandoff: expect.objectContaining({
+          schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
+          ready: false,
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              watchlistTerm: "APT28",
+              sourceFamily: "telegram",
+              state: "blocked",
+              alertState: "blocked",
+              parserStatus: expect.objectContaining({
+                state: "ready",
+                captureState: "capture_required"
+              }),
+              blockers: expect.arrayContaining([
+                expect.objectContaining({ code: "capture_required" })
+              ]),
+              webhookPayload: expect.objectContaining({ canConsume: false }),
+              provenance: expect.objectContaining({
+                freshnessProofId: expect.any(String),
+                sourceIds: expect.arrayContaining([expect.any(String)])
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ]),
+          summary: expect.objectContaining({
+            blockedRows: expect.any(Number),
+            sourceFamilies: expect.arrayContaining(["telegram"]),
+            watchlistTerms: expect.arrayContaining(["APT28"])
+          }),
+          blockers: expect.arrayContaining([
+            expect.objectContaining({ code: "capture_required" })
+          ])
+        }),
         watchlistAlertabilityBridge: expect.objectContaining({
           schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
           ready: false,
@@ -3649,6 +3718,21 @@ describe("dwm source requests", () => {
               gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
               nextActionTypes: expect.arrayContaining(["retry", "request_candidate"])
             })
+          }),
+          alertEnrichmentHandoff: expect.objectContaining({
+            schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
+            ready: false,
+            rows: [],
+            summary: expect.objectContaining({
+              readyRows: 0,
+              blockedRows: 0,
+              sourceFamilies: [],
+              watchlistTerms: []
+            }),
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "retry_required", family: "telegram" })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           }),
           watchlistAlertabilityBridge: expect.objectContaining({
             schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
