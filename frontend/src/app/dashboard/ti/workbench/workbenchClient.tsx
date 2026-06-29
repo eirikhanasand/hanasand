@@ -334,6 +334,46 @@ type AlertDetailPayload = {
         deliverySelection?: { ready?: boolean, selectedWebhookDestinationId?: string, blockerCodes?: string[] }
         customerProof?: { ready?: boolean, blockerCodes?: string[] }
     }
+    customerProofHandoff?: {
+        ready?: boolean
+        blockerCodes?: string[]
+        evidenceCount?: number
+        deliveryReady?: boolean
+        deliveryState?: string
+        selectedCaptureIds?: string[]
+    }
+    nextBestAction?: {
+        action?: string
+        label?: string
+        reason?: string
+        requiresRationale?: boolean
+        route?: string
+        casePath?: string
+        webhookReady?: boolean
+    }
+    deliveryReadiness?: {
+        ready?: boolean
+        state?: string
+        blocker?: string | null
+        blockerCodes?: string[]
+        evidenceCount?: number
+        lastDeliveryStatus?: string
+        lastDeliveryAt?: string
+        deliveryHistoryRefs?: string[]
+        selectedCaptureIds?: string[]
+    }
+    evidenceFreshness?: {
+        newestEvidenceAt?: string
+        evidenceCount?: number
+        sourceCount?: number
+        sourceFamily?: string
+        captureIds?: string[]
+    }
+    provenanceFreshness?: {
+        matchBasis?: string
+        captureIds?: string[]
+        sourceIds?: string[]
+    }
     timeline?: CaseTimelineItem[]
     error?: { message?: string }
 }
@@ -1821,6 +1861,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, com
                     {alertDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Alert detail unavailable' body={alertDetail.error} />}
                     {alertRecord ? <AlertDetailSummary alert={alertRecord} fallback={item} /> : null}
                     {alertDetail?.status === 'ready' ? <AlertWorkflowReadiness detail={alertDetail.detail} /> : null}
+                    {alertDetail?.status === 'ready' ? <AlertOperationalReadiness detail={alertDetail.detail} /> : null}
                     {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Fetching /api/cases/:id through the dashboard proxy.' />}
                     {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail unavailable' body={caseDetail.error} />}
                     {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Blocked dependency' body={blockedDependency} />}
@@ -2008,6 +2049,37 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
                     ))}
                 </div>
             ) : null}
+        </div>
+    )
+}
+
+function AlertOperationalReadiness({ detail }: { detail: AlertDetailPayload }) {
+    const next = detail.nextBestAction
+    const delivery = detail.deliveryReadiness
+    const customerProof = detail.customerProofHandoff
+    const evidence = detail.evidenceFreshness
+    const provenance = detail.provenanceFreshness
+    const blockerCodes = [...(delivery?.blockerCodes || []), ...(customerProof?.blockerCodes || [])]
+        .filter((code, index, source) => source.indexOf(code) === index)
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center gap-2'>
+                <h4 className='text-sm font-semibold text-[#171a21]'>Operational readiness</h4>
+                <span className={workflowStatusClass(delivery?.ready || customerProof?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs_action')}>{delivery?.ready || customerProof?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs action'}</span>
+            </div>
+            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#475467]'>Next:</span> {next?.label || 'Review alert detail.'}</p>
+                <p><span className='font-semibold text-[#475467]'>Action:</span> {label(next?.action || 'not returned')}{next?.requiresRationale ? ' · rationale required' : ''}</p>
+                <p><span className='font-semibold text-[#475467]'>Delivery:</span> {label(delivery?.state || delivery?.lastDeliveryStatus || customerProof?.deliveryState || 'not returned')}</p>
+                <p><span className='font-semibold text-[#475467]'>Customer proof:</span> {customerProof?.ready || customerProof?.deliveryReady ? 'ready' : blockerCodes.length ? 'blocked' : 'not returned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Evidence:</span> {evidence?.evidenceCount ?? customerProof?.evidenceCount ?? delivery?.evidenceCount ?? 'not returned'} item(s){evidence?.newestEvidenceAt ? ` · ${relativeTime(evidence.newestEvidenceAt)}` : ''}</p>
+                <p><span className='font-semibold text-[#475467]'>Provenance:</span> {(provenance?.sourceIds || []).length} source(s), {(provenance?.captureIds || evidence?.captureIds || delivery?.selectedCaptureIds || customerProof?.selectedCaptureIds || []).length} capture(s)</p>
+            </div>
+            {next?.reason ? <p className='mt-3 rounded-md border border-[#e0e5ed] bg-white px-2 py-1 text-xs leading-5 text-[#596170]'>{next.reason}</p> : null}
+            <div className='mt-3 flex flex-wrap gap-2'>
+                {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
+                {!blockerCodes.length && <span className='text-xs text-[#667085]'>No delivery or customer-proof blockers returned.</span>}
+            </div>
         </div>
     )
 }
