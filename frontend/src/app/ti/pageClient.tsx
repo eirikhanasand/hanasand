@@ -2853,28 +2853,64 @@ function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; inta
                 <CopyPayloadButton label='Source enrichment intake' payload={intake} />
             </div>
             <div data-ti-collection-gap-intake='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
-                {tasks.map(task => (
-                    <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <div className='flex flex-wrap items-start justify-between gap-2'>
-                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{task.title}</p>
-                            <span className={`${taskStatusClass(task.status)} shrink-0 whitespace-nowrap`}>{taskStatusLabel(task.status)}</span>
-                        </div>
-                        {(task.route || task.sourceFamily || task.requestedFields?.length || task.ownerLane) ? (
-                            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                                {task.sourceFamily ? <span className={sourceHealthChipClass('review')}>{formatLabel(task.sourceFamily)}</span> : null}
-                                {task.ownerLane ? <span className={sourceHealthChipClass(task.status === 'needs_api' ? 'blocked' : 'review')}>{readinessOwnerLabel(task.ownerLane)}</span> : null}
-                                {task.route ? <span className={sourceHealthChipClass('review')}>{sourceRequestRouteLabel(task.route)}</span> : null}
-                                {task.requestedFields?.slice(0, 3).map(field => (
-                                    <span key={`${task.title}-${field}`} className={sourceHealthChipClass('blocked')}>{sourceHealthFieldLabel(field)}</span>
-                                ))}
+                {tasks.map(task => {
+                    const payload = collectionGapTaskPayloadFor(task, intake)
+                    return (
+                        <div key={task.title} data-ti-collection-gap-task-export='true' className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{task.title}</p>
+                                <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                    <span className={`${taskStatusClass(task.status)} shrink-0 whitespace-nowrap`}>{taskStatusLabel(task.status)}</span>
+                                    <CopyPayloadButton label='Collection gap task' payload={payload} />
+                                </div>
                             </div>
-                        ) : null}
-                        <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{task.detail}</p>
-                    </div>
-                ))}
+                            {(task.route || task.sourceFamily || task.requestedFields?.length || task.ownerLane) ? (
+                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {task.sourceFamily ? <span className={sourceHealthChipClass('review')}>{formatLabel(task.sourceFamily)}</span> : null}
+                                    {task.ownerLane ? <span className={sourceHealthChipClass(task.status === 'needs_api' ? 'blocked' : 'review')}>{readinessOwnerLabel(task.ownerLane)}</span> : null}
+                                    {task.route ? <span className={sourceHealthChipClass('review')}>{sourceRequestRouteLabel(task.route)}</span> : null}
+                                    {task.requestedFields?.slice(0, 3).map(field => (
+                                        <span key={`${task.title}-${field}`} className={sourceHealthChipClass('blocked')}>{sourceHealthFieldLabel(field)}</span>
+                                    ))}
+                                </div>
+                            ) : null}
+                            <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{task.detail}</p>
+                        </div>
+                    )
+                })}
             </div>
         </Panel>
     )
+}
+
+function collectionGapTaskPayloadFor(task: EnrichmentTask, intake: TiActionabilityModel['sourceEnrichmentIntake']) {
+    const requestedFields = task.requestedFields ?? []
+    const matchingItems = intake.items.filter(item =>
+        item.route === task.route
+        || item.ownerLane === task.ownerLane
+        || item.sourceFamily === task.sourceFamily
+        || item.requestedFields.some(field => requestedFields.includes(field))
+    )
+    return {
+        schemaVersion: 'ti.public_actor.collection_gap_task.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        title: task.title,
+        status: task.status,
+        detail: task.detail,
+        sourceFamily: task.sourceFamily,
+        route: task.route,
+        ownerLane: task.ownerLane,
+        requestedFields,
+        intakeRoute: intake.route,
+        intakeItems: matchingItems,
+        summary: {
+            matchingItems: matchingItems.length,
+            sourceRequests: matchingItems.filter(item => Boolean(item.sourceRequestId)).length,
+            captures: matchingItems.filter(item => Boolean(item.captureId)).length,
+            blockers: matchingItems.reduce((count, item) => count + item.blockedBy.length, 0),
+        },
+    }
 }
 
 function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
