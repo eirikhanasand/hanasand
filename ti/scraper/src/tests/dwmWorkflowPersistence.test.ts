@@ -748,6 +748,149 @@ describe("dwm workflow persistence", () => {
     expect(crossOrgDetail.error.code).toBe("organization_visibility_denied");
     expect(JSON.stringify(crossOrgDetail)).not.toContain("case_alpha_darkweb");
     expect(JSON.stringify(crossOrgDetail)).not.toContain("cap_workflow_onion_acme");
+
+    (store as any).saveDwmWatchlist({
+      ...(store as any).getDwmWatchlist("watch_workflow_alpha_acme"),
+      status: "paused",
+      lifecycleStatus: "archived",
+      updatedAt: "2026-06-27T21:12:00.000Z"
+    });
+    const archivedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const archivedDetail = await archivedDetailResponse.json() as any;
+    expect(archivedDetailResponse.status).toBe(200);
+    expect(archivedDetail.workflowSummary).toMatchObject({
+      status: "investigating",
+      assignedOwner: "owner-alpha-workflow",
+      severityOverride: "high",
+      caseId: "case_alpha_darkweb",
+      eventCount: 1
+    });
+    expect(archivedDetail.downstreamHandoff).toMatchObject({
+      ready: false,
+      blockerCodes: expect.arrayContaining(["retired_watchlist"]),
+      lifecycle: {
+        retiredWatchlistIds: ["watch_workflow_alpha_acme"],
+        activeSourceMatch: true
+      },
+      deliverySelection: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["retired_watchlist"])
+      }
+    });
+    expect(archivedDetail.downstreamHandoff.deliverySelection).not.toHaveProperty("selectedWebhookDestinationId");
+    expect(archivedDetail.retentionAudit).toMatchObject({
+      retentionState: "lifecycle_blocked_retained",
+      cleanup: {
+        deleteEligible: false,
+        reviewRequired: true,
+        retiredWatchlistIds: ["watch_workflow_alpha_acme"]
+      }
+    });
+    const archivedReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}/replay`, {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id })
+    }), options);
+    const archivedReplay = await archivedReplayResponse.json() as any;
+    expect(archivedReplayResponse.status).toBe(200);
+    expect(archivedReplay.workflowExecutionReadiness.blockerCodes).toEqual(expect.arrayContaining(["retired_watchlist"]));
+    expect((store as any).getDwmAlert(alphaDarkweb.id).workflowEvents).toHaveLength(1);
+    const archivedDeliveryResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      headers: { "x-user-email": "owner-alpha@workflow.example" },
+      body: JSON.stringify({ organizationId: alphaOrg.id, alertId: alphaDarkweb.id })
+    }), options);
+    const archivedDelivery = await archivedDeliveryResponse.json() as any;
+    expect(archivedDeliveryResponse.status).toBe(200);
+    expect(archivedDelivery.deliveries[0]).toMatchObject({
+      status: "skipped",
+      endpointHash: "retired_watchlist",
+      error: "Delivery selection blocked by retired watchlist.",
+      alertId: alphaDarkweb.id,
+      organizationId: alphaOrg.id,
+      tenantId: alphaOrg.id,
+      dedupeKey: alphaDarkweb.dedupeKey,
+      payloadHash: "not_sent",
+      httpStatus: 0,
+      watchlistId: "watch_workflow_alpha_acme"
+    });
+
+    const quietOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-quiet@workflow.example" },
+      body: JSON.stringify({ name: "Workflow Quiet Org", ownerEmail: "owner-quiet@workflow.example", ownerUserId: "owner-quiet-workflow" })
+    }), options);
+    const quietOrg = (await quietOrgResponse.json() as any).organization;
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: quietOrg.id,
+      tenantId: quietOrg.id,
+      ownerOrganizationId: quietOrg.id,
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_workflow_quiet_nomatch",
+        watchlistItemId: "watch_item_workflow_quiet_nomatch",
+        organizationId: quietOrg.id,
+        tenantId: quietOrg.id,
+        kind: "domain",
+        termFamily: "domain",
+        term: "quiet.example",
+        category: "domain",
+        status: "active",
+        alertGenerationRef: workflowAlertGenerationRef({
+          organizationId: quietOrg.id,
+          watchlistItemId: "watch_item_workflow_quiet_nomatch",
+          term: "quiet.example",
+          termFamily: "domain"
+        })
+      }]
+    })) {
+      (store as any).saveDwmWatchlist(watchlist);
+    }
+    const quietReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${quietOrg.id}`, {
+      headers: { "x-user-email": "owner-quiet@workflow.example" }
+    }), options);
+    const quietReadiness = await quietReadinessResponse.json() as any;
+    expect(quietReadinessResponse.status).toBe(200);
+    expect(quietReadiness.readiness.zeroAlertProof).toMatchObject({
+      schemaVersion: "dwm.zero_alert_proof.v1",
+      zeroAlert: true,
+      state: "blocked_no_matching_capture",
+      expectedAlertDelta: 0,
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+      watchlistIds: ["watch_workflow_quiet_nomatch"],
+      routes: {
+        readiness: "/v1/dwm/alerts/readiness",
+        rebuild: "/v1/dwm/alerts/rebuild",
+        alerts: "/v1/dwm/alerts"
+      },
+      nextAction: "Add or collect a recent capture containing the active watchlist term."
+    });
+    const quietRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-quiet@workflow.example" },
+      body: JSON.stringify({ organizationId: quietOrg.id })
+    }), options);
+    const quietRebuild = await quietRebuildResponse.json() as any;
+    expect(quietRebuildResponse.status).toBe(200);
+    expect(quietRebuild.savedAlertCount).toBe(0);
+    expect(quietRebuild.zeroAlertProof).toMatchObject({
+      schemaVersion: "dwm.zero_alert_proof.v1",
+      zeroAlert: true,
+      state: "blocked_no_matching_capture",
+      expectedAlertDelta: 0,
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"])
+    });
+    const quietListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${quietOrg.id}`, {
+      headers: { "x-user-email": "owner-quiet@workflow.example" }
+    }), options);
+    const quietList = await quietListResponse.json() as any;
+    expect(quietListResponse.status).toBe(200);
+    expect(quietList.alerts).toHaveLength(0);
   });
 });
 
