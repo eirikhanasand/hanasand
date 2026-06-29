@@ -3106,6 +3106,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
       ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
+      ".actorReadiness.alertGenerationReadiness.watchlistMatchReadiness.schemaVersion == \"dwm.actor_watchlist_match_readiness.v1\"",
       ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
       ".actorReadiness.sourceOperationsQueue.queueItems | all(.route.path | length > 0 and .liveNetworkFetch == false and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
@@ -3178,6 +3179,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
   const alertability = {
     activeSourceFamilies: readinessArtifact.sharedWatchlistAlertability?.activeSourceFamilies ?? [],
     matchableFields: readinessArtifact.sharedWatchlistAlertability?.matchableFields ?? [],
+    watchlistTerms: readinessArtifact.sharedWatchlistAlertability?.watchlistTerms ?? [],
     sourceTrust: readinessArtifact.sharedWatchlistAlertability?.sourceTrust,
     blockerReasons: readinessArtifact.sharedWatchlistAlertability?.blockerReasons ?? [],
     sourcePolicyLimits: readinessArtifact.sharedWatchlistAlertability?.sourcePolicyLimits ?? []
@@ -3670,6 +3672,15 @@ function sourceActorAlertGenerationReadiness(input: {
       privacyBoundary: row.privacyBoundary,
       safeOutput: row.safeOutput
     })),
+    watchlistMatchReadiness: sourceActorWatchlistMatchReadiness({
+      query: input.query,
+      watchlistTerms: input.alertability.watchlistTerms ?? [],
+      alertCapableRows,
+      matchableFields: input.alertability.matchableFields,
+      sourceTrust: input.alertability.sourceTrust,
+      latestCaptureAt: input.latestCaptureAt,
+      blockers
+    }),
     rebuildPlan: {
       method: "POST",
       path: "/v1/dwm/alerts/rebuild",
@@ -3683,6 +3694,85 @@ function sourceActorAlertGenerationReadiness(input: {
       liveNetworkFetch: false
     },
     blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorWatchlistMatchReadiness(input: {
+  query: string;
+  watchlistTerms: string[];
+  alertCapableRows: Array<Record<string, any>>;
+  matchableFields: string[];
+  sourceTrust: Record<string, any>;
+  latestCaptureAt?: string;
+  blockers: Array<Record<string, any>>;
+}) {
+  const watchlistTerms = input.watchlistTerms.length > 0 ? input.watchlistTerms : [input.query];
+  const blocking = input.blockers.some((blocker) => blocker.severity === "blocking");
+  const rows = watchlistTerms.flatMap((term) => input.alertCapableRows.map((row) => {
+    const fields = uniqueSourceReadinessStrings([
+      ...(row.alertability?.matchableFields ?? []),
+      ...(row.alertability?.alertableFields ?? [])
+    ]);
+    const missingFields = fields.length === 0;
+    const state = blocking
+      ? !input.latestCaptureAt
+        ? "capture_required"
+        : missingFields
+          ? "no_matchable_fields"
+          : "blocked"
+      : "ready";
+    return {
+      schemaVersion: "dwm.actor_watchlist_match_readiness_row.v1",
+      proofId: stableId("dwm_actor_watchlist_match_readiness_row", `${input.query}:${term}:${row.family}:${state}:${fields.join(",")}`),
+      query: input.query,
+      watchlistTerm: term,
+      family: row.family,
+      state,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      matchableFields: fields,
+      alertableFields: row.alertability?.alertableFields ?? [],
+      freshnessState: row.freshnessState,
+      latestCaptureAt: input.latestCaptureAt,
+      confidence: Number(input.sourceTrust?.byFamily?.[row.family]?.score ?? 0),
+      sourceTrust: input.sourceTrust?.byFamily?.[row.family],
+      blockers: dedupeBlockers([
+        ...(!input.latestCaptureAt ? [{ code: "capture_required", severity: "blocking", retryable: true }] : []),
+        ...(missingFields ? [{ code: "no_matchable_fields", severity: "blocking", family: row.family, retryable: true }] : []),
+        ...input.blockers.filter((blocker) => blocker.family === row.family || !blocker.family)
+      ]),
+      privacyBoundary: row.privacyBoundary,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  }));
+  return {
+    schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
+    proofId: stableId("dwm_actor_watchlist_match_readiness", `${input.query}:${watchlistTerms.join(",")}:${rows.map((row) => `${row.family}:${row.state}`).join(",")}`),
+    query: input.query,
+    watchlistTerms,
+    rows,
+    summary: {
+      ready: rows.length > 0 && rows.every((row) => row.state === "ready"),
+      readyTerms: uniqueSourceReadinessStrings(rows.filter((row) => row.state === "ready").map((row) => row.watchlistTerm)),
+      blockedTerms: uniqueSourceReadinessStrings(rows.filter((row) => row.state !== "ready").map((row) => row.watchlistTerm)),
+      sourceFamilies: uniqueSourceReadinessStrings(rows.map((row) => row.family)),
+      matchableFields: uniqueSourceReadinessStrings([
+        ...input.matchableFields,
+        ...rows.flatMap((row) => row.matchableFields)
+      ]),
+      latestCaptureAt: input.latestCaptureAt
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
@@ -4025,6 +4115,8 @@ function sourceActorConsumerBridge(input: {
       publicTiReady: input.evidenceReadiness.evidenceReady === true,
       alertReady: input.alertGenerationReadiness.alertReady === true,
       caseReady: input.alertCaseHandoffReadiness.caseReady === true,
+      watchlistMatchReady: input.alertGenerationReadiness.watchlistMatchReadiness?.summary?.ready === true,
+      watchlistTerms: input.alertGenerationReadiness.watchlistMatchReadiness?.watchlistTerms ?? [],
       sourceFamilies: uniqueSourceReadinessStrings(consumerRows.map((row) => row.family)),
       alertableFamilies: uniqueSourceReadinessStrings(consumerRows.filter((row) => row.consumers.sharedWatchlistAlerts === true).map((row) => row.family)),
       gapFamilies: uniqueSourceReadinessStrings(input.candidateGaps.map((gap) => gap.family)),

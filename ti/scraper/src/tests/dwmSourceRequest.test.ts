@@ -1521,6 +1521,35 @@ describe("dwm source requests", () => {
             dryRunSupported: true,
             liveNetworkFetch: false
           }),
+          watchlistMatchReadiness: {
+            schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
+            watchlistTerms: ["APT29", "example.com"],
+            summary: expect.objectContaining({
+              ready: true,
+              readyTerms: expect.arrayContaining(["APT29", "example.com"]),
+              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+              matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve"])
+            }),
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                watchlistTerm: "APT29",
+                family: "telegram",
+                state: "ready",
+                matchableFields: expect.arrayContaining(["text"]),
+                confidence: expect.any(Number),
+                sourceTrust: expect.objectContaining({ tier: expect.any(String) }),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              }),
+              expect.objectContaining({
+                watchlistTerm: "example.com",
+                family: "darkweb_onion",
+                state: "ready",
+                privacyBoundary: expect.objectContaining({ metadataOnly: true, restrictedSource: true }),
+                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+              })
+            ]),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          },
           blockers: []
         },
         sourceOperationsQueue: {
@@ -1605,6 +1634,8 @@ describe("dwm source requests", () => {
             publicTiReady: true,
             alertReady: true,
             caseReady: true,
+            watchlistMatchReady: true,
+            watchlistTerms: ["APT29", "example.com"],
             alertableFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
             lastProofAt: expect.any(String)
           }),
@@ -1711,7 +1742,11 @@ describe("dwm source requests", () => {
           }),
           alertGenerationReadiness: expect.objectContaining({
             schemaVersion: "dwm.actor_alert_generation_readiness.v1",
-            alertReady: true
+            alertReady: true,
+            watchlistMatchReadiness: expect.objectContaining({
+              schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
+              summary: expect.objectContaining({ ready: true })
+            })
           }),
           sourceOperationsQueue: expect.objectContaining({
             schemaVersion: "dwm.actor_source_operations_queue.v1",
@@ -1769,7 +1804,8 @@ describe("dwm source requests", () => {
           sourceConsumerBridge: expect.objectContaining({
             summary: expect.objectContaining({
               publicTiReady: true,
-              alertReady: true
+              alertReady: true,
+              watchlistMatchReady: true
             })
           }),
           freshnessState: "fresh"
@@ -1779,6 +1815,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
           ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
+          ".actorReadiness.alertGenerationReadiness.watchlistMatchReadiness.schemaVersion == \"dwm.actor_watchlist_match_readiness.v1\"",
           ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
           ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
           ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
@@ -2032,6 +2069,26 @@ describe("dwm source requests", () => {
           missing: expect.arrayContaining(["darkweb_onion", "actor_page"])
         }),
         rebuildPlan: expect.objectContaining({ liveNetworkFetch: false }),
+        watchlistMatchReadiness: expect.objectContaining({
+          schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
+          watchlistTerms: expect.arrayContaining(["APT28"]),
+          summary: expect.objectContaining({
+            ready: false,
+            blockedTerms: expect.arrayContaining(["APT28"]),
+            sourceFamilies: expect.arrayContaining(["telegram"])
+          }),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              watchlistTerm: "APT28",
+              family: "telegram",
+              state: "capture_required",
+              blockers: expect.arrayContaining([
+                expect.objectContaining({ code: "capture_required" })
+              ]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ])
+        }),
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "capture_required", severity: "blocking" }),
           expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
@@ -2123,6 +2180,7 @@ describe("dwm source requests", () => {
           publicTiReady: true,
           alertReady: false,
           caseReady: false,
+          watchlistMatchReady: false,
           gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
         }),
         consumers: expect.arrayContaining([
@@ -2452,7 +2510,15 @@ describe("dwm source requests", () => {
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "retry_required", family: "telegram" })
         ]),
-        rebuildPlan: expect.objectContaining({ dryRunSupported: true, liveNetworkFetch: false })
+        rebuildPlan: expect.objectContaining({ dryRunSupported: true, liveNetworkFetch: false }),
+        watchlistMatchReadiness: expect.objectContaining({
+          schemaVersion: "dwm.actor_watchlist_match_readiness.v1",
+          summary: expect.objectContaining({
+            ready: false,
+            sourceFamilies: []
+          }),
+          rows: []
+        })
       },
       sourceOperationsQueue: {
         schemaVersion: "dwm.actor_source_operations_queue.v1",
@@ -2517,6 +2583,7 @@ describe("dwm source requests", () => {
         summary: expect.objectContaining({
           publicTiReady: false,
           alertReady: false,
+          watchlistMatchReady: false,
           retryFamilies: expect.arrayContaining(["telegram"])
         }),
         consumers: expect.arrayContaining([
