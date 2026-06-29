@@ -12,6 +12,7 @@ export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_disp
 export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION = "dwm.webhook_destination_lifecycle_proof.v1" as const;
 export const DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_destination_action_request.v1" as const;
 export const DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION = "dwm.webhook_delivery_persistence_proof.v1" as const;
+export const DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION = "dwm.webhook_org_watchlist_dispatch_packet.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -226,6 +227,73 @@ export type DwmWebhookDispatchReadinessBlocker = {
     | "suppressed_alert"
     | "duplicate_delivered_dedupe";
   ownerLane: "alert" | "case" | "source" | "webhook";
+  path: string;
+  message: string;
+};
+
+export type DwmWebhookOrgWatchlistDispatchPacket = {
+  schemaVersion: typeof DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  readiness: {
+    schemaVersion: typeof DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION;
+    readinessId: string;
+    checkedAt: string;
+    ok: boolean;
+    blockerCodes: DwmWebhookDispatchReadinessBlocker["code"][];
+  };
+  orgWatchlist: {
+    schemaVersion: "dwm.alert_org_watchlist_scope.v1";
+    organizationId?: string;
+    ownerOrganizationIds: string[];
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
+  };
+  dispatch: {
+    route: DwmWebhookDispatchReadiness["dispatch"]["route"];
+    dryRun: boolean;
+    destinationIds: string[];
+    dedupeKey?: string;
+    idempotencyKey: string;
+  };
+  evidenceSummary: {
+    redacted: true;
+    evidenceCount: number;
+    captureCount: number;
+    sourceCount: number;
+    contentHashCount: number;
+  };
+  consumerContracts: {
+    alertGeneration: {
+      requiredFields: string[];
+      sourceSchema: "organization.watchlist_alert_generation_ref.v1";
+    };
+    webhookDelivery: {
+      requiredFields: string[];
+      route: DwmWebhookDispatchReadiness["dispatch"]["route"];
+    };
+    dashboard: {
+      requiredFields: string[];
+      detailRoute?: string;
+    };
+  };
+  blockers: Array<DwmWebhookDispatchReadinessBlocker | DwmWebhookOrgWatchlistDispatchBlocker>;
+};
+
+export type DwmWebhookOrgWatchlistDispatchBlocker = {
+  code:
+    | "missing_org_watchlist_scope"
+    | "org_watchlist_scope_mismatch"
+    | "missing_watchlist_items"
+    | "missing_alert_generation_refs";
+  ownerLane: "org" | "alert" | "webhook";
   path: string;
   message: string;
 };
@@ -966,6 +1034,76 @@ export function buildWebhookDispatchReadiness(input: {
   };
 }
 
+export function buildWebhookOrgWatchlistDispatchPacket(input: {
+  readiness: DwmWebhookDispatchReadiness;
+  alert: Record<string, any>;
+  generatedAt?: string;
+}): DwmWebhookOrgWatchlistDispatchPacket {
+  const readiness = input.readiness;
+  const scope = orgWatchlistScopeFromAlert(input.alert);
+  const blockers = [
+    ...readiness.blockers,
+    ...orgWatchlistDispatchBlockers(readiness, scope)
+  ];
+  const alertDetailPath = stringValue(input.alert.alertDetailPath ?? input.alert.workflowContext?.alertDetailPath ?? input.alert.webhookContext?.alertDetailPath);
+
+  return {
+    schemaVersion: DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_org_watchlist_dispatch_packet", `${readiness.id}:${scope.watchlistItemIds.join(",")}:${input.generatedAt ?? readiness.checkedAt}`),
+    generatedAt: input.generatedAt ?? readiness.checkedAt,
+    ok: blockers.length === 0,
+    tenantId: readiness.tenantId,
+    organizationId: readiness.organizationId,
+    alertId: readiness.alertId,
+    caseId: readiness.caseId,
+    redacted: true,
+    readiness: {
+      schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+      readinessId: readiness.id,
+      checkedAt: readiness.checkedAt,
+      ok: readiness.ok,
+      blockerCodes: readiness.blockers.map((blocker) => blocker.code)
+    },
+    orgWatchlist: {
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      organizationId: scope.organizationId,
+      ownerOrganizationIds: scope.ownerOrganizationIds,
+      watchlistIds: scope.watchlistIds,
+      watchlistItemIds: scope.watchlistItemIds,
+      alertGeneratorKeys: scope.alertGeneratorKeys
+    },
+    dispatch: {
+      route: readiness.dispatch.route,
+      dryRun: readiness.dispatch.dryRun,
+      destinationIds: readiness.dispatch.destinationIds,
+      dedupeKey: readiness.dedupeKey,
+      idempotencyKey: readiness.dispatch.idempotencyKey
+    },
+    evidenceSummary: {
+      redacted: true,
+      evidenceCount: readiness.evidence.evidenceCount,
+      captureCount: readiness.evidence.captureIds.length,
+      sourceCount: readiness.evidence.sourceIds.length,
+      contentHashCount: readiness.evidence.contentHashes.length
+    },
+    consumerContracts: {
+      alertGeneration: {
+        requiredFields: ["organizationId", "watchlistIds", "watchlistItemIds", "alertGeneratorKeys"],
+        sourceSchema: "organization.watchlist_alert_generation_ref.v1"
+      },
+      webhookDelivery: {
+        requiredFields: ["alertId", "organizationId", "caseId", "webhookDestinationIds", "idempotencyKey"],
+        route: readiness.dispatch.route
+      },
+      dashboard: {
+        requiredFields: ["alertId", "caseId", "watchlistItemIds", "destinationIds", "evidenceSummary"],
+        detailRoute: alertDetailPath
+      }
+    },
+    blockers
+  };
+}
+
 export function buildWebhookDispatchSupportPacket(input: {
   readiness: DwmWebhookDispatchReadiness;
   requestId?: string;
@@ -1644,6 +1782,90 @@ function deliveryPersistenceOutcome(attempt: DwmWebhookDispatchReplayHistory["hi
   if (attempt.retryable || attempt.nextRetryAt) return "retry_scheduled";
   if (attempt.status === "failed") return "failed";
   return "persisted";
+}
+
+function orgWatchlistScopeFromAlert(alert: Record<string, any>): DwmWebhookOrgWatchlistDispatchPacket["orgWatchlist"] {
+  const workflow = alert.workflowContext ?? {};
+  const webhook = alert.webhookContext ?? {};
+  const scope = alert.orgWatchlistScope ?? workflow.orgWatchlistScope ?? webhook.orgWatchlistScope ?? {};
+  const organizationId = stringValue(scope.organizationId ?? alert.organizationId ?? workflow.organizationId ?? webhook.organizationId);
+  const watchlistIds = uniqueStrings([
+    ...asStringArray(scope.watchlistIds),
+    ...asStringArray(alert.watchlistIds),
+    ...asStringArray(workflow.watchlistIds),
+    ...asStringArray(webhook.watchlistIds)
+  ]);
+  const watchlistItemIds = uniqueStrings([
+    ...asStringArray(scope.watchlistItemIds),
+    ...asStringArray(alert.watchlistItemIds),
+    ...asStringArray(workflow.watchlistItemIds),
+    ...asStringArray(webhook.watchlistItemIds)
+  ]);
+  const ownerOrganizationIds = uniqueStrings([
+    ...asStringArray(scope.ownerOrganizationIds),
+    ...asStringArray(alert.ownerOrganizationIds),
+    ...asStringArray(workflow.ownerOrganizationIds),
+    ...asStringArray(webhook.ownerOrganizationIds),
+    ...(organizationId ? [organizationId] : [])
+  ]);
+  const alertGeneratorKeys = uniqueStrings([
+    ...asStringArray(scope.alertGeneratorKeys),
+    ...asStringArray(alert.alertGeneratorKeys),
+    ...asStringArray(workflow.alertGeneratorKeys),
+    ...asStringArray(webhook.alertGeneratorKeys)
+  ]);
+
+  return {
+    schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+    organizationId,
+    ownerOrganizationIds,
+    watchlistIds,
+    watchlistItemIds,
+    alertGeneratorKeys
+  };
+}
+
+function orgWatchlistDispatchBlockers(
+  readiness: DwmWebhookDispatchReadiness,
+  scope: DwmWebhookOrgWatchlistDispatchPacket["orgWatchlist"]
+): DwmWebhookOrgWatchlistDispatchBlocker[] {
+  const blockers: DwmWebhookOrgWatchlistDispatchBlocker[] = [];
+  const hasScope = Boolean(scope.organizationId || scope.ownerOrganizationIds.length || scope.watchlistIds.length || scope.watchlistItemIds.length || scope.alertGeneratorKeys.length);
+  if (!hasScope) {
+    blockers.push(orgWatchlistDispatchBlocker("missing_org_watchlist_scope", "org", "alert.orgWatchlistScope", "Webhook dispatch ownership requires org watchlist scope."));
+  }
+  if (readiness.organizationId && scope.organizationId && scope.organizationId !== readiness.organizationId) {
+    blockers.push(orgWatchlistDispatchBlocker("org_watchlist_scope_mismatch", "org", "alert.orgWatchlistScope.organizationId", "Webhook dispatch org scope does not match alert readiness org."));
+  }
+  if (readiness.organizationId && scope.ownerOrganizationIds.length && !scope.ownerOrganizationIds.includes(readiness.organizationId)) {
+    blockers.push(orgWatchlistDispatchBlocker("org_watchlist_scope_mismatch", "org", "alert.orgWatchlistScope.ownerOrganizationIds", "Webhook dispatch owner organization does not include alert readiness org."));
+  }
+  if (!scope.watchlistIds.length || !scope.watchlistItemIds.length) {
+    blockers.push(orgWatchlistDispatchBlocker("missing_watchlist_items", "org", "alert.orgWatchlistScope.watchlistItemIds", "Webhook dispatch ownership requires watchlist and item ids."));
+  }
+  if (!scope.alertGeneratorKeys.length) {
+    blockers.push(orgWatchlistDispatchBlocker("missing_alert_generation_refs", "alert", "alert.orgWatchlistScope.alertGeneratorKeys", "Webhook dispatch ownership requires alert generation refs."));
+  }
+  return uniqueOrgWatchlistDispatchBlockers(blockers);
+}
+
+function orgWatchlistDispatchBlocker(
+  code: DwmWebhookOrgWatchlistDispatchBlocker["code"],
+  ownerLane: DwmWebhookOrgWatchlistDispatchBlocker["ownerLane"],
+  path: string,
+  message: string
+): DwmWebhookOrgWatchlistDispatchBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function uniqueOrgWatchlistDispatchBlockers(blockers: DwmWebhookOrgWatchlistDispatchBlocker[]): DwmWebhookOrgWatchlistDispatchBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {

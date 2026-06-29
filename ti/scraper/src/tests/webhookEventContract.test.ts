@@ -10,6 +10,7 @@ import {
   DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION,
   DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
   DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
+  DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
@@ -17,6 +18,7 @@ import {
   buildWebhookDestinationLifecycleProof,
   buildWebhookDeliveryPersistenceProof,
   buildWebhookDispatchReadiness,
+  buildWebhookOrgWatchlistDispatchPacket,
   buildWebhookDispatchReplayHistory,
   buildWebhookDispatchReplayRequest,
   buildWebhookDispatchRetryAudit,
@@ -239,6 +241,112 @@ describe("webhook event contract", () => {
     expect(readiness.dispatch.idempotencyKey).toMatch(/^dwm_webhook_dispatch_/);
     expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
     expect(JSON.stringify(readiness)).not.toContain("payloadBody");
+  });
+
+  test("packages org watchlist ownership for webhook dispatch consumers", () => {
+    const alert = {
+      ...alertFixture(),
+      alertDetailPath: "/dashboard/dwm/alerts/alert_acme_lumma",
+      orgWatchlistScope: {
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_acme",
+        ownerOrganizationIds: ["org_acme"],
+        watchlistIds: ["watch_acme_domains"],
+        watchlistItemIds: ["watch_item_acme_domain"],
+        alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com"]
+      }
+    };
+    const readiness = buildWebhookDispatchReadiness({
+      alert,
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:08:00.000Z"
+    });
+    const packet = buildWebhookOrgWatchlistDispatchPacket({
+      readiness,
+      alert,
+      generatedAt: "2026-06-29T12:09:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      readiness: {
+        schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+        readinessId: readiness.id,
+        ok: true,
+        blockerCodes: []
+      },
+      orgWatchlist: {
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_acme",
+        ownerOrganizationIds: ["org_acme"],
+        watchlistIds: ["watch_acme_domains"],
+        watchlistItemIds: ["watch_item_acme_domain"],
+        alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com"]
+      },
+      dispatch: {
+        route: "/v1/dwm/webhooks/deliver",
+        dryRun: false,
+        destinationIds: ["webhook_discord"],
+        dedupeKey: "dedupe_acme_lumma",
+        idempotencyKey: readiness.dispatch.idempotencyKey
+      },
+      evidenceSummary: {
+        redacted: true,
+        evidenceCount: 1,
+        captureCount: 1,
+        sourceCount: 1,
+        contentHashCount: 1
+      },
+      consumerContracts: {
+        alertGeneration: {
+          requiredFields: expect.arrayContaining(["organizationId", "watchlistItemIds", "alertGeneratorKeys"]),
+          sourceSchema: "organization.watchlist_alert_generation_ref.v1"
+        },
+        webhookDelivery: {
+          requiredFields: expect.arrayContaining(["alertId", "organizationId", "webhookDestinationIds", "idempotencyKey"]),
+          route: "/v1/dwm/webhooks/deliver"
+        },
+        dashboard: {
+          detailRoute: "/dashboard/dwm/alerts/alert_acme_lumma"
+        }
+      },
+      blockers: []
+    });
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+    expect(JSON.stringify(packet)).not.toContain("endpoint_hash_acme");
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_lumma");
+  });
+
+  test("blocks org watchlist dispatch packets without ownership refs", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:08:00.000Z"
+    });
+    const packet = buildWebhookOrgWatchlistDispatchPacket({
+      readiness,
+      alert: alertFixture()
+    });
+
+    expect(readiness.ok).toBe(true);
+    expect(packet.ok).toBe(false);
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_watchlist_items", ownerLane: "org", path: "alert.orgWatchlistScope.watchlistItemIds" }),
+      expect.objectContaining({ code: "missing_alert_generation_refs", ownerLane: "alert", path: "alert.orgWatchlistScope.alertGeneratorKeys" })
+    ]));
+    expect(packet.orgWatchlist).toMatchObject({
+      organizationId: "org_acme",
+      ownerOrganizationIds: ["org_acme"],
+      watchlistIds: [],
+      watchlistItemIds: [],
+      alertGeneratorKeys: []
+    });
   });
 
   test("builds org-scoped destination lifecycle proof with test and retry state", () => {
