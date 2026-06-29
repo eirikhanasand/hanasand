@@ -664,7 +664,7 @@ type SelectedCaseDraft = {
     route?: string
     missing: string[]
     watchTerms: string[]
-    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'state' | 'missing'>>
+    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'confidence' | 'state' | 'missing'>>
     body: Record<string, unknown>
 }
 
@@ -2872,6 +2872,26 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 <EvidenceMetric label='Sources' value={`${draft.sourceRows.length} row${draft.sourceRows.length === 1 ? '' : 's'}`} />
             </div>
             <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{draft.route || draft.endpoint}</p>
+            {draft.sourceRows.length ? (
+                <div data-ti-selected-case-provenance='true' className='mt-2 grid min-w-0 gap-2'>
+                    {draft.sourceRows.slice(0, 3).map(row => (
+                        <div key={`${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? 'missing'}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                                </div>
+                                <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'blocked' : 'review')}>
+                                    {row.captureId ? `capture ${row.captureId}` : 'capture needed'}
+                                </span>
+                            </div>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                {typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}% confidence` : 'confidence pending'}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 {draft.watchTerms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
@@ -3220,6 +3240,7 @@ function selectedCaseDraftFor(
         sourceId: row.sourceId,
         provenance: row.provenance,
         captureId: row.captureId,
+        confidence: row.confidence,
         state: row.state,
         missing: row.missing,
     }))
