@@ -164,6 +164,17 @@ export type DwmAlertCustomerProofHandoffRow = {
     sourceIds: string[];
     generatedAt?: string;
   };
+  createdEvent?: {
+    schemaVersion: "dwm.alert_created_event.v1";
+    eventId?: string;
+    eventType?: string;
+    at?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    dedupeKey?: string;
+    deliveryDedupeKey?: string;
+    recommendedRoute?: string;
+  };
   workflow: {
     status: string;
     reviewState?: string;
@@ -256,6 +267,17 @@ export type DwmAlertDownstreamHandoff = {
     alertDedupeKey?: string;
     deliveryDedupeKey?: string;
     replayMarker?: string;
+  };
+  createdEvent?: {
+    schemaVersion: "dwm.alert_created_event.v1";
+    eventId?: string;
+    eventType?: string;
+    at?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    dedupeKey?: string;
+    deliveryDedupeKey?: string;
+    recommendedRoute?: string;
   };
   workflowVersion: {
     eventCount: number;
@@ -1086,6 +1108,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const delivered = Boolean(alert.deliveredAt) || alert.deliveryState === "delivered" || deliveries.some((delivery) => delivery.status === "delivered") || context.state === "delivered";
   const redactionRequired = input.supportOnlyRedactionNeeded === true || (alert.evidence ?? []).some((item: any) => item.redactionState === "raw_sensitive");
   const hasCaseRoute = Boolean(context.casePath ?? alert.casePath ?? workflow.casePath);
+  const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
   const blockers = [
     ...((context.blockers ?? []) as DwmAlertCustomerProofHandoffRow["typedBlockers"]),
     !alert.organizationId ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert proof requires an organization id.", true) : undefined,
@@ -1117,6 +1140,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       sourceIds: uniqueStrings(asStringArray(alert.provenance?.sourceIds ?? (alert.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId))),
       generatedAt: alert.provenance?.generatedAt
     },
+    createdEvent,
     workflow: {
       status: String(alert.workflowStatus ?? "new"),
       reviewState: alert.reviewState,
@@ -1191,6 +1215,24 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   };
 }
 
+function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fallbackCaptureIds: string[]) {
+  const event = alert?.alertCreatedEvent;
+  const eventId = event?.id ?? context?.alertCreatedEventId;
+  const at = event?.at ?? context?.alertCreatedAt;
+  if (!eventId && !at) return undefined;
+  return {
+    schemaVersion: "dwm.alert_created_event.v1" as const,
+    eventId,
+    eventType: event?.eventType ?? "dwm.alert.created",
+    at,
+    sourceFamily: event?.sourceFamily ?? context?.sourceFamily ?? alert?.sourceFamily,
+    captureIds: uniqueStrings(asStringArray(event?.captureIds ?? fallbackCaptureIds)),
+    dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
+    deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
+    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute
+  };
+}
+
 export function buildDwmAlertDownstreamHandoff(input: {
   alert?: any;
   deliveries?: Array<Record<string, any>>;
@@ -1235,6 +1277,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const casePath = context.casePath ?? alert?.casePath ?? workflow.casePath;
   const caseIdCandidate = context.caseIdCandidate ?? alert?.caseIdCandidate ?? workflow.caseIdCandidate;
   const deliveryDedupeKey = String(context.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey ?? "");
+  const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
   const delivered = Boolean(alert?.deliveredAt) || alert?.deliveryState === "delivered" || context.state === "delivered" || deliveries.some((delivery) => delivery.status === "delivered");
   const duplicateReplay = delivered && Number(alert?.replayCount ?? 0) > 0 && input.currentReplayAttempt !== true;
   const organizationStatus = input.organizationStatus ?? alert?.organizationStatus ?? workflow.organizationStatus;
@@ -1329,6 +1372,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       deliveryDedupeKey,
       replayMarker: context.replayMarker
     },
+    createdEvent,
     workflowVersion: {
       eventCount,
       updatedAt: alert?.updatedAt,

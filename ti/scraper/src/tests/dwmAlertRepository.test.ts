@@ -455,6 +455,23 @@ describe("dwm alert repository", () => {
     });
     expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
+    const telegramHandoff = buildDwmAlertDownstreamHandoff({ alert: telegramAlert });
+    expect(telegramHandoff.createdEvent).toMatchObject({
+      schemaVersion: "dwm.alert_created_event.v1",
+      eventId: telegramAlert?.alertCreatedEvent.id,
+      eventType: "dwm.alert.created",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_acme"],
+      dedupeKey: telegramAlert?.dedupeKey,
+      deliveryDedupeKey: telegramAlert?.dedupeKey,
+      recommendedRoute: "identity_response"
+    });
+    const telegramProof = buildDwmAlertCustomerProofHandoffRow({ alert: telegramAlert });
+    expect(telegramProof.createdEvent).toMatchObject({
+      eventId: telegramAlert?.alertCreatedEvent.id,
+      captureIds: ["cap_repo_tg_acme"],
+      recommendedRoute: "identity_response"
+    });
 
     const existing = first.alerts[0];
     store.saveDwmAlert({
@@ -481,6 +498,10 @@ describe("dwm alert repository", () => {
     expect(preserved?.workflowEvents).toHaveLength(1);
     expect(preserved?.alertCreatedEvent).toEqual(existing.alertCreatedEvent);
     expect(preserved?.alertEvents).toEqual(existing.alertEvents);
+    expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).createdEvent).toMatchObject({
+      eventId: existing.alertCreatedEvent.id,
+      captureIds: ["cap_repo_tg_acme"]
+    });
     expect(preserved?.caseId).toBe("case_existing_repo");
     expect(preserved?.replayCount).toBe(2);
     expect(preserved?.lastReplayedAt).toBe("2026-06-28T13:13:00.000Z");
