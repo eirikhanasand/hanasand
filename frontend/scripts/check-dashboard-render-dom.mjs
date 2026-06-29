@@ -51,6 +51,13 @@ const bannedCopy = [
 ]
 
 const highContrastDarkTokens = ['border-white/', 'bg-white/10', 'bg-white/15']
+const localAuthFixture = {
+    header: 'local-dashboard-render-proof',
+    id: 'dashboard-render-proof-user',
+    name: 'Dashboard Render Proof',
+    token: 'local-dashboard-render-proof-token',
+    roles: [{ id: 'admin' }, { id: 'system_admin' }],
+}
 
 function parseArgs(argv) {
     const options = {
@@ -79,6 +86,10 @@ function pageUrl(baseUrl, pagePath) {
     return `${baseUrl}${pagePath}`
 }
 
+function cookieUrl(baseUrl) {
+    return new URL(baseUrl).origin
+}
+
 function resultSkeleton(spec, viewport, imagePath) {
     return {
         pageId: spec.id,
@@ -102,6 +113,9 @@ async function inspectRenderedPage(page, spec) {
         const reasons = []
         const selectorCounts = {}
         const bodyText = document.body.innerText.toLowerCase()
+        if (location.pathname === '/login' || bodyText.includes('login') && bodyText.includes('password')) {
+            reasons.push('rendered login screen; dashboard auth fixture was not accepted')
+        }
         const bannedCopyList = bannedCopyValues.filter(value => bodyText.includes(value))
         for (const phrase of bannedCopyList) {
             reasons.push(`visible banned copy: ${phrase}`)
@@ -204,7 +218,11 @@ async function inspectRenderedPage(page, spec) {
         }
 
         const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], [data-readiness-detail], .source-ops-workbench button, .source-ops-workbench a'))
+        const actionElements = Array.from(document.querySelectorAll('[data-readiness-row-id] a, [data-readiness-row-id] button, [data-readiness-detail] a, [data-readiness-detail] button, .source-ops-workbench button, .source-ops-workbench a'))
         const visibleRows = rowElements
+            .map((element, index) => ({ element, rect: visibleRect(element), index }))
+            .filter(item => item.rect)
+        const visibleActions = actionElements
             .map((element, index) => ({ element, rect: visibleRect(element), index }))
             .filter(item => item.rect)
         let overlapCount = 0
@@ -218,7 +236,7 @@ async function inspectRenderedPage(page, spec) {
         }
 
         let narrowActionCount = 0
-        for (const { rect } of visibleRows) {
+        for (const { rect } of visibleActions) {
             if (rect.text.length > 6 && rect.width < 56 && rect.height > 40) narrowActionCount += 1
             if (rect.text.length > 10 && rect.height > rect.width * 1.8) narrowActionCount += 1
         }
@@ -282,7 +300,18 @@ async function run() {
                 const result = resultSkeleton(spec, viewport, imagePath)
                 artifact.summary.screenshotPaths.push(imagePath)
 
-                const context = await browser.newContext({ viewport, colorScheme: 'dark' })
+                const context = await browser.newContext({
+                    viewport,
+                    colorScheme: 'dark',
+                    extraHTTPHeaders: { 'x-hanasand-render-proof-auth': localAuthFixture.header },
+                })
+                await context.addCookies([
+                    { name: 'id', value: encodeURIComponent(localAuthFixture.id), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
+                    { name: 'name', value: encodeURIComponent(localAuthFixture.name), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
+                    { name: 'access_token', value: encodeURIComponent(localAuthFixture.token), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
+                    { name: 'roles', value: encodeURIComponent(JSON.stringify(localAuthFixture.roles)), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
+                    { name: 'email', value: encodeURIComponent('dashboard-render-proof@hanasand.local'), url: cookieUrl(options.baseUrl), httpOnly: false, secure: false, sameSite: 'Lax' },
+                ])
                 const page = await context.newPage()
                 try {
                     await page.goto(pageUrl(options.baseUrl, spec.path), { waitUntil: 'networkidle', timeout: 45000 })

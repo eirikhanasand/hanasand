@@ -1182,6 +1182,7 @@ function buildProductReadiness(input: {
     const deliveryStatus: WorkbenchProductReadinessItem['status'] = input.dashboardAlertDelivery
         ? 'ready'
         : input.activeWebhookCount ? 'needs_action' : 'blocked'
+    const readinessCheckedAt = new Date().toISOString()
 
     const publicTiProvenance = input.externalReadiness?.publicTiProvenance
     const helpdeskAudit = input.externalReadiness?.helpdeskAudit
@@ -1286,7 +1287,7 @@ function buildProductReadiness(input: {
                 : input.latestDelivery ? `Latest delivery ${input.latestDelivery.id} is for ${input.latestDelivery.alertId}, but not for a dashboard-surfaced alert.` : 'No delivery row is tied to a dashboard-surfaced alert.',
             source: 'GET /api/dwm/webhooks/deliveries',
             href: '/dashboard/automations?setup=dwm',
-            checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt,
+            checkedAt: input.dashboardAlertDelivery?.attemptedAt || input.latestDelivery?.attemptedAt || readinessCheckedAt,
             backendProofContractVersion: 'dwm.webhook.delivery_ledger.v1',
         },
         {
