@@ -296,6 +296,33 @@ describe("actor org relevance API", () => {
     });
     const needsCollection = await needsCollectionResponse.json() as any;
 
+    const pendingQueueResponse = await listSourceCollectionQueue(store, "tenant_microsoft", "org_microsoft", "state=needs_request&q=Microsoft");
+    const pendingQueue = await pendingQueueResponse.json() as any;
+    expect(pendingQueueResponse.status).toBe(200);
+    expect(pendingQueue).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.source_collection_queue.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      counts: { total: 1, needsRequest: 1, requested: 0 }
+    });
+    expect(pendingQueue.records).toHaveLength(1);
+    expect(pendingQueue.records[0]).toMatchObject({
+      reviewId: created.record.id,
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      state: "needs_request",
+      evidenceReviewId: needsCollection.review.id,
+      sourceId: "microsoft",
+      sourceName: "Microsoft",
+      captureId: "capture_microsoft_apt29",
+      provenance: "https://www.microsoft.com/en-us/security/blog/",
+      supportsTerms: ["Microsoft"],
+      routes: {
+        review: `/v1/ti/actor-org-relevance/${created.record.id}`,
+        sourceCollectionRequest: `/v1/ti/actor-org-relevance/${created.record.id}/source-collection-request`
+      }
+    });
+
     const requestResponse = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
       evidenceReviewId: needsCollection.review.id,
       priority: "high",
@@ -347,6 +374,17 @@ describe("actor org relevance API", () => {
     ]));
     expect((store as any).getActorOrgRelevanceReview(created.record.id).sourceCollectionRequests).toHaveLength(1);
 
+    const requestedQueueResponse = await listSourceCollectionQueue(store, "tenant_microsoft", "org_microsoft", "state=requested");
+    const requestedQueue = await requestedQueueResponse.json() as any;
+    expect(requestedQueue.counts).toEqual({ total: 1, needsRequest: 0, requested: 1 });
+    expect(requestedQueue.records[0].latestRequest).toMatchObject({
+      id: payload.receipt.id,
+      request: {
+        method: "POST",
+        path: "/v1/dwm/source-requests"
+      }
+    });
+
     const duplicateResponse = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
       captureId: "capture_microsoft_apt29",
       priority: "high",
@@ -364,6 +402,10 @@ describe("actor org relevance API", () => {
       rationale: "Cross-org request must not work."
     });
     expect(crossOrgResponse.status).toBe(404);
+
+    const forbiddenQueueResponse = await listSourceCollectionQueue(store, "tenant_other", "org_other");
+    const forbiddenQueue = await forbiddenQueueResponse.json() as any;
+    expect(forbiddenQueue.counts).toEqual({ total: 0, needsRequest: 0, requested: 0 });
   });
 
   test("materializes a ready actor relevance review into an org DWM watchlist with provenance", async () => {
@@ -1006,6 +1048,14 @@ async function requestSourceCollection(store: InMemoryScraperStore | FileBackedS
     headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
     body: JSON.stringify(body)
   }), { store, frontier: new FocusedFrontier() });
+}
+
+async function listSourceCollectionQueue(store: InMemoryScraperStore | FileBackedScraperStore, tenantId: string, organizationId: string, query = "") {
+  const suffix = query ? `&${query}` : "";
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/source-collection-queue?tenantId=${tenantId}&organizationId=${organizationId}${suffix}`), {
+    store,
+    frontier: new FocusedFrontier()
+  });
 }
 
 function readyRelevance(): PublicTiOrgRelevanceProofLike {

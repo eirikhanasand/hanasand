@@ -11,6 +11,7 @@ import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 
 export const ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION = "hanasand.actor_org_relevance.review.v1" as const;
 export const ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.queue.v1" as const;
+export const ACTOR_ORG_RELEVANCE_SOURCE_COLLECTION_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.source_collection_queue.v1" as const;
 
 export type ActorOrgRelevanceReviewRecord = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION;
@@ -84,6 +85,44 @@ export type ActorOrgRelevanceNextAction = {
   label: string;
   route?: string;
   recoverable: boolean;
+};
+
+export type ActorOrgRelevanceSourceCollectionQueueRow = {
+  reviewId: string;
+  tenantId: string;
+  organizationId: string;
+  actorId: string;
+  query: string;
+  state: "needs_request" | "requested";
+  evidenceReviewId: string;
+  evidenceKey: string;
+  reviewedAt: string;
+  reviewedBy?: string;
+  rationale?: string;
+  sourceId?: string;
+  sourceName: string;
+  captureId?: string;
+  provenance: string;
+  confidence?: number;
+  supportsTerms: string[];
+  latestRequest?: ActorOrgRelevanceSourceCollectionRequestReceipt;
+  routes: {
+    review: string;
+    sourceCollectionRequest: string;
+  };
+};
+
+export type ActorOrgRelevanceSourceCollectionQueue = {
+  schemaVersion: typeof ACTOR_ORG_RELEVANCE_SOURCE_COLLECTION_QUEUE_SCHEMA_VERSION;
+  generatedAt: string;
+  tenantId: string;
+  organizationId: string;
+  counts: {
+    total: number;
+    needsRequest: number;
+    requested: number;
+  };
+  records: ActorOrgRelevanceSourceCollectionQueueRow[];
 };
 
 export type ActorOrgRelevanceTimelineEvent = {
@@ -573,6 +612,70 @@ export function buildActorOrgRelevanceQueue(input: {
       closed: scoped.filter((record) => record.workflow.status === "closed").length
     },
     records: scoped.map(summarizeActorOrgRelevanceReview)
+  };
+}
+
+export function buildActorOrgRelevanceSourceCollectionQueue(input: {
+  tenantId: string;
+  organizationId: string;
+  records: ActorOrgRelevanceReviewRecord[];
+  generatedAt?: string;
+  state?: "needs_request" | "requested";
+  query?: string;
+}): ActorOrgRelevanceSourceCollectionQueue {
+  const normalizedQuery = input.query?.trim().toLowerCase();
+  const rows = input.records
+    .filter((record) => record.tenantId === input.tenantId && record.organizationId === input.organizationId)
+    .flatMap((record) => record.evidenceReviews
+      .filter((review) => review.status === "needs_collection")
+      .map((review): ActorOrgRelevanceSourceCollectionQueueRow => {
+        const latestRequest = [...record.sourceCollectionRequests]
+          .reverse()
+          .find((request) => request.evidenceReviewId === review.id);
+        return {
+          reviewId: record.id,
+          tenantId: record.tenantId,
+          organizationId: record.organizationId,
+          actorId: record.actorId,
+          query: record.query,
+          state: latestRequest ? "requested" : "needs_request",
+          evidenceReviewId: review.id,
+          evidenceKey: review.evidenceKey,
+          reviewedAt: review.reviewedAt,
+          reviewedBy: review.reviewedBy,
+          rationale: review.rationale,
+          sourceId: review.sourceId,
+          sourceName: review.sourceName,
+          captureId: review.captureId,
+          provenance: review.provenance,
+          confidence: review.confidence,
+          supportsTerms: review.supportsTerms,
+          latestRequest,
+          routes: {
+            review: `/v1/ti/actor-org-relevance/${record.id}`,
+            sourceCollectionRequest: `/v1/ti/actor-org-relevance/${record.id}/source-collection-request`
+          }
+        };
+      }))
+    .filter((row) => !input.state || row.state === input.state)
+    .filter((row) => !normalizedQuery
+      || row.query.toLowerCase().includes(normalizedQuery)
+      || row.actorId.toLowerCase().includes(normalizedQuery)
+      || row.sourceName.toLowerCase().includes(normalizedQuery)
+      || row.supportsTerms.some((term) => term.toLowerCase().includes(normalizedQuery)))
+    .sort((a, b) => b.reviewedAt.localeCompare(a.reviewedAt));
+
+  return {
+    schemaVersion: ACTOR_ORG_RELEVANCE_SOURCE_COLLECTION_QUEUE_SCHEMA_VERSION,
+    generatedAt: input.generatedAt || nowIso(),
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    counts: {
+      total: rows.length,
+      needsRequest: rows.filter((row) => row.state === "needs_request").length,
+      requested: rows.filter((row) => row.state === "requested").length
+    },
+    records: rows
   };
 }
 
