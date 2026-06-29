@@ -393,10 +393,19 @@ export type DwmAlertSourceProvenanceSummary = {
     generatedAt?: string;
     metadataOnly?: boolean;
   };
+  provenanceGaps: Array<{
+    code: "missing_source_url" | "missing_source_key" | "missing_observed_at" | "missing_content_hash";
+    field: string;
+    evidenceId?: string;
+    recoverable: boolean;
+    detail: string;
+  }>;
   evidenceExcerpts: Array<{
     evidenceId: string;
     captureId?: string;
     sourceId?: string;
+    sourceKey?: string;
+    sourceUrl?: string;
     sourceFamily?: string;
     observedAt?: string;
     contentHash?: string;
@@ -2642,6 +2651,7 @@ export function buildDwmAlertSourceProvenanceSummary(input: {
     ...evidence.map((item: any) => item.sourceFamily).filter(Boolean).map(String)
   ]);
   const contentHashes = uniqueStrings(evidence.map((item: any) => item.contentHash).filter(Boolean).map(String));
+  const evidenceExcerpts = buildDwmAlertEventEvidenceExcerpts(alert);
   return {
     schemaVersion: "dwm.alert_source_provenance.v1",
     alertId: alert.id ? String(alert.id) : undefined,
@@ -2665,16 +2675,8 @@ export function buildDwmAlertSourceProvenanceSummary(input: {
       generatedAt: alert.provenance?.generatedAt,
       metadataOnly: alert.provenance?.metadataOnly
     },
-    evidenceExcerpts: evidence.map((item: any) => ({
-      evidenceId: String(item.id),
-      captureId: item.provenance?.captureId ? String(item.provenance.captureId) : item.id ? String(item.id) : undefined,
-      sourceId: item.provenance?.sourceId ? String(item.provenance.sourceId) : item.sourceId ? String(item.sourceId) : undefined,
-      sourceFamily: item.sourceFamily ? String(item.sourceFamily) : undefined,
-      observedAt: item.observedAt ?? item.firstSeenAt ? String(item.observedAt ?? item.firstSeenAt) : undefined,
-      contentHash: item.contentHash ? String(item.contentHash) : undefined,
-      excerpt: item.excerpt ? String(item.excerpt) : undefined,
-      redactionState: item.redactionState ? String(item.redactionState) : undefined
-    })),
+    provenanceGaps: buildDwmAlertProvenanceGaps(evidenceExcerpts),
+    evidenceExcerpts,
     generationEvidenceWindow
   };
 }
@@ -2958,18 +2960,60 @@ function buildDwmAlertEventConsumerPayload(input: {
   };
 }
 
-function buildDwmAlertEventEvidenceExcerpts(alert: DwmAlert & Record<string, any>) {
+function buildDwmAlertEventEvidenceExcerpts(alert: Record<string, any>) {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return evidence.map((item: any) => ({
     evidenceId: String(item.id),
     captureId: item.provenance?.captureId ? String(item.provenance.captureId) : item.id ? String(item.id) : undefined,
     sourceId: item.provenance?.sourceId ? String(item.provenance.sourceId) : item.sourceId ? String(item.sourceId) : undefined,
+    sourceKey: sourceKeyForEvidence(item),
+    sourceUrl: item.url ? String(item.url) : undefined,
     sourceFamily: item.sourceFamily ? String(item.sourceFamily) : alert.sourceFamily ? String(alert.sourceFamily) : undefined,
     observedAt: item.observedAt ?? item.firstSeenAt ? String(item.observedAt ?? item.firstSeenAt) : undefined,
     contentHash: item.contentHash ? String(item.contentHash) : undefined,
     excerpt: item.excerpt ? String(item.excerpt) : undefined,
     redactionState: item.redactionState ? String(item.redactionState) : undefined
   }));
+}
+
+function sourceKeyForEvidence(item: any): string | undefined {
+  const sourceId = item.provenance?.sourceId ?? item.sourceId;
+  if (sourceId && String(sourceId) !== "unknown") return String(sourceId);
+  const sourceFamily = item.sourceFamily ? String(item.sourceFamily) : undefined;
+  return sourceFamily ? `source_family:${sourceFamily}` : undefined;
+}
+
+function buildDwmAlertProvenanceGaps(evidenceExcerpts: ReturnType<typeof buildDwmAlertEventEvidenceExcerpts>): DwmAlertSourceProvenanceSummary["provenanceGaps"] {
+  return evidenceExcerpts.flatMap((item) => [
+    !item.sourceUrl ? {
+      code: "missing_source_url" as const,
+      field: "evidenceExcerpts[].sourceUrl",
+      evidenceId: item.evidenceId,
+      recoverable: true,
+      detail: "Capture evidence has no source URL; consumers should show source key/family instead of inventing a link."
+    } : undefined,
+    !item.sourceKey ? {
+      code: "missing_source_key" as const,
+      field: "evidenceExcerpts[].sourceKey",
+      evidenceId: item.evidenceId,
+      recoverable: true,
+      detail: "Capture evidence has no stable source key."
+    } : undefined,
+    !item.observedAt ? {
+      code: "missing_observed_at" as const,
+      field: "evidenceExcerpts[].observedAt",
+      evidenceId: item.evidenceId,
+      recoverable: true,
+      detail: "Capture evidence has no observed timestamp."
+    } : undefined,
+    !item.contentHash ? {
+      code: "missing_content_hash" as const,
+      field: "evidenceExcerpts[].contentHash",
+      evidenceId: item.evidenceId,
+      recoverable: true,
+      detail: "Capture evidence has no content hash; dedupe must use capture id fallback."
+    } : undefined
+  ].filter(Boolean) as DwmAlertSourceProvenanceSummary["provenanceGaps"]);
 }
 
 function mergeAlertEvents(existingEvents: any[], nextEvent: any | undefined): any[] {

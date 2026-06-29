@@ -63,6 +63,31 @@ const telegramDuplicateCapture: RawCapture = {
   id: "cap_repo_tg_acme_duplicate"
 } as RawCapture;
 
+const telegramNoUrlSource = {
+  id: "src_repo_tg_no_url",
+  name: "Repository public Telegram no URL",
+  type: "telegram_public",
+  accessMethod: "public_http",
+  status: "active",
+  trustScore: 0.61,
+  legalNotes: "Public channel source key only.",
+  createdAt: "2026-06-28T13:00:00.000Z",
+  updatedAt: "2026-06-28T13:00:00.000Z"
+} as SourceRecord;
+
+const telegramNoUrlCapture: RawCapture = {
+  id: "cap_repo_tg_no_url_acme",
+  sourceId: telegramNoUrlSource.id,
+  url: "",
+  collectedAt: "2026-06-28T13:33:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-repo-tg-no-url-acme",
+  sensitive: false,
+  body: "acme.com appears in source-key-only public Telegram evidence with Okta replay chatter.",
+  metadata: { adapter: "telegram_public", channel: "repo_public_no_url", messageId: 301 }
+} as RawCapture;
+
 const nonmatchCapture: RawCapture = {
   id: "cap_repo_tg_quiet",
   sourceId: telegramSource.id,
@@ -1536,6 +1561,105 @@ describe("dwm alert repository", () => {
       evidenceCount: 2,
       workflowEventCount: 1
     });
+  });
+
+  test("persists source-key-only matches with typed provenance gaps instead of fake source links", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramNoUrlSource);
+    store.saveCapture(telegramNoUrlCapture);
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_source_key_only",
+      tenantId: "tenant_repo_gap",
+      organizationId: "org_repo_gap",
+      name: "Source key only watch",
+      terms: [{ id: "watch_item_source_key_acme", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_gap",
+      status: "active",
+      createdAt: "2026-06-28T13:30:00.000Z",
+      updatedAt: "2026-06-28T13:30:00.000Z"
+    });
+
+    const rebuild = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_gap", organizationId: "org_repo_gap", visibilityPolicy: "admins" });
+    expect(rebuild.savedAlertCount).toBe(1);
+    const alert = rebuild.alerts[0];
+    expect(alert).toMatchObject({
+      tenantId: "tenant_repo_gap",
+      organizationId: "org_repo_gap",
+      sourceFamily: "telegram_public",
+      recommendedRoute: "analyst_review",
+      watchlistIds: ["watch_repo_source_key_only"],
+      watchlistItemIds: ["watch_item_source_key_acme"]
+    });
+    expect(alert.evidence[0]).toMatchObject({
+      id: "cap_repo_tg_no_url_acme",
+      sourceId: "src_repo_tg_no_url",
+      sourceFamily: "telegram_public",
+      observedAt: "2026-06-28T13:33:00.000Z",
+      contentHash: "hash-repo-tg-no-url-acme",
+      provenance: { captureId: "cap_repo_tg_no_url_acme", sourceId: "src_repo_tg_no_url" }
+    });
+    expect(alert.evidence[0].url).toBeUndefined();
+    expect(alert.provenance.captureIds).toEqual(["cap_repo_tg_no_url_acme"]);
+    expect(alert.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      captureIds: ["cap_repo_tg_no_url_acme"],
+      sourceIds: ["src_repo_tg_no_url"],
+      contentHashes: ["hash-repo-tg-no-url-acme"],
+      provenanceGaps: [{
+        code: "missing_source_url",
+        field: "evidenceExcerpts[].sourceUrl",
+        evidenceId: "cap_repo_tg_no_url_acme",
+        recoverable: true,
+        detail: "Capture evidence has no source URL; consumers should show source key/family instead of inventing a link."
+      }],
+      evidenceExcerpts: [{
+        evidenceId: "cap_repo_tg_no_url_acme",
+        captureId: "cap_repo_tg_no_url_acme",
+        sourceId: "src_repo_tg_no_url",
+        sourceKey: "src_repo_tg_no_url",
+        sourceFamily: "telegram_public",
+        observedAt: "2026-06-28T13:33:00.000Z",
+        contentHash: "hash-repo-tg-no-url-acme"
+      }]
+    });
+    expect(alert.sourceProvenanceSummary.evidenceExcerpts[0].sourceUrl).toBeUndefined();
+    expect(alert.alertCreatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_no_url_acme"],
+      sourceProvenanceSummary: {
+        provenanceGaps: [expect.objectContaining({ code: "missing_source_url", evidenceId: "cap_repo_tg_no_url_acme" })]
+      },
+      evidenceExcerpts: [{
+        captureId: "cap_repo_tg_no_url_acme",
+        sourceKey: "src_repo_tg_no_url",
+        sourceFamily: "telegram_public"
+      }]
+    });
+
+    (store as any).saveDwmAlert({
+      ...alert,
+      workflowStatus: "investigating",
+      assignedOwner: "analyst-gap",
+      workflowNote: "Keep provenance gap visible.",
+      workflowEvents: [{ id: "evt_gap_triage", at: "2026-06-28T13:40:00.000Z", toWorkflowStatus: "investigating", note: "Keep provenance gap visible." }]
+    });
+    store.saveCapture({
+      ...telegramNoUrlCapture,
+      id: "cap_repo_tg_no_url_acme_followup",
+      collectedAt: "2026-06-28T13:43:00.000Z",
+      contentHash: "hash-repo-tg-no-url-acme-followup",
+      body: "Follow-up acme.com source-key-only Telegram evidence confirms the same Okta replay chatter."
+    } as RawCapture);
+    const replay = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_gap", organizationId: "org_repo_gap", visibilityPolicy: "admins" });
+    expect(replay.savedAlertCount).toBe(1);
+    const preserved = (store as any).listDwmAlerts()[0];
+    expect(preserved.workflowStatus).toBe("investigating");
+    expect(preserved.assignedOwner).toBe("analyst-gap");
+    expect(preserved.workflowNote).toBe("Keep provenance gap visible.");
+    expect(preserved.workflowEvents).toHaveLength(1);
+    expect(preserved.provenance.captureIds).toEqual(["cap_repo_tg_no_url_acme", "cap_repo_tg_no_url_acme_followup"]);
+    expect(preserved.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.evidenceId).sort()).toEqual(["cap_repo_tg_no_url_acme", "cap_repo_tg_no_url_acme_followup"]);
   });
 
   test("builds customer proof rows from org export alerts while preserving workflow and delivery replay state", () => {
