@@ -1986,22 +1986,33 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     )
 }
 
+type RelatedRecordRow = {
+    id: string
+    label: string
+    meta: string
+    route?: string
+    kind: 'Alert' | 'Case'
+    recordId: string
+}
+
 function RelatedRecordsPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
     const caseIntake = actionability.caseReviewIntake
-    const records = [
+    const records: RelatedRecordRow[] = [
         ...actionability.relatedAlerts.map(alert => ({
             id: `alert:${alert.id}`,
             label: alert.title || alert.id,
             meta: [alert.id, alert.status, alert.severity].filter(Boolean).join(' · '),
             route: alert.casePath || alert.recommendedRoute,
-            kind: 'Alert',
+            kind: 'Alert' as const,
+            recordId: alert.id,
         })),
         ...actionability.relatedCases.map(item => ({
             id: `case:${item.id}`,
             label: item.title || item.id,
             meta: [item.id, item.status, item.priority].filter(Boolean).join(' · '),
             route: item.path,
-            kind: 'Case',
+            kind: 'Case' as const,
+            recordId: item.id,
         })),
     ]
 
@@ -2025,12 +2036,15 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{record.kind}: {record.label}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{record.meta}</p>
                                 </div>
-                                {record.route ? (
-                                    <a href={record.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
-                                        <ExternalLink className='h-3.5 w-3.5' />
-                                        Open
-                                    </a>
-                                ) : null}
+                                <div data-ti-related-record-export='true' className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                    {record.route ? (
+                                        <a href={record.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                            Open
+                                        </a>
+                                    ) : null}
+                                    <CopyPayloadButton label='Related record' payload={relatedRecordHandoffPayloadFor(record, actionability, query)} />
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -2070,6 +2084,60 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
             )}
         </div>
     )
+}
+
+function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability: TiActionabilityModel, query: string) {
+    const alert = record.kind === 'Alert' ? actionability.relatedAlerts.find(item => item.id === record.recordId) : undefined
+    const relatedCase = record.kind === 'Case' ? actionability.relatedCases.find(item => item.id === record.recordId) : undefined
+    const matchingCaseItems = actionability.caseReviewIntake.items.filter(item =>
+        item.alertIds.includes(record.recordId)
+        || item.casePaths.includes(record.route ?? '')
+        || (alert?.casePath ? item.casePaths.includes(alert.casePath) : false)
+        || (relatedCase?.path ? item.casePaths.includes(relatedCase.path) : false)
+    )
+    const deliveryBlockers = alert?.deliveryReadinessContext?.blockerCodes ?? []
+    return {
+        schemaVersion: 'ti.public_actor.related_record_handoff.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query,
+        record: {
+            id: record.recordId,
+            kind: record.kind.toLowerCase(),
+            label: record.label,
+            meta: record.meta,
+            route: record.route,
+        },
+        alert,
+        case: relatedCase,
+        caseReviewIntake: matchingCaseItems,
+        sourceProvenance: actionability.sourceProvenance,
+        readiness: {
+            publicTi: actionability.readiness,
+            consumer: actionability.consumerReadiness,
+            delivery: alert?.deliveryReadinessContext,
+            blockers: [
+                ...actionability.readiness.blockers,
+                ...deliveryBlockers.map(code => ({
+                    schemaVersion: 'ti.public_actor.readiness_blocker.v1' as const,
+                    code,
+                    category: 'webhook' as const,
+                    ownerLane: 'webhook' as const,
+                    field: `relatedAlerts.${record.recordId}.deliveryReadinessContext`,
+                    detail: `Delivery readiness blocker: ${code}.`,
+                    route: '/dashboard/dwm',
+                    handoff: 'Resolve delivery readiness before sending or replaying this alert.',
+                    source: 'delivery_readiness' as const,
+                })),
+            ],
+        },
+        handoffRoutes: {
+            alertRebuild: actionability.createAlertHandoff.backedRoute,
+            case: record.route || actionability.caseHandoff.backedRoute,
+            sourceEnrichment: actionability.exportPayloads.enrichment.backedRoute,
+            webhookDelivery: actionability.webhookDeliveryHandoff.backedRoute,
+        },
+    }
 }
 
 function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityModel }) {
