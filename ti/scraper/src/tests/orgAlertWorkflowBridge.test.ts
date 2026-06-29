@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION,
+  DWM_ORG_ALERT_CASE_ACTION_LEDGER_SCHEMA_VERSION,
   DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_DELIVERY_PAYLOAD_SCHEMA_VERSION,
   DWM_ORG_ALERT_WEBHOOK_FIXTURE_SCHEMA_VERSION,
@@ -14,7 +15,8 @@ import {
   buildOrgAlertWebhookFixtureContract,
   buildOrgAlertSourceEvidenceReport,
   buildOrgAlertWorkflowBridgeReport,
-  reconcileOrgAlertWebhookDeliveries
+  reconcileOrgAlertWebhookDeliveries,
+  recordOrgAlertCaseActionReceipt
 } from "../product/orgAlertWorkflowBridge.ts";
 import fixture from "./fixtures/org-alert-workflow-bridge-happy.json";
 
@@ -405,6 +407,94 @@ describe("org alert workflow bridge", () => {
     expect(receipt.payloadShape).toEqual(expect.arrayContaining(["action", "execution", "route", "blockedByCodes", "blockers[]"]));
   });
 
+  test("persists case action receipt into a scoped audit ledger", () => {
+    const receipt = readyCaseActionReceipt();
+    const first = recordOrgAlertCaseActionReceipt({
+      records: [],
+      receipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      recordedAt: "2026-06-29T15:05:00.000Z"
+    });
+    const duplicate = recordOrgAlertCaseActionReceipt({
+      records: first.records,
+      receipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      recordedAt: "2026-06-29T15:06:00.000Z"
+    });
+
+    expect(first).toMatchObject({
+      ok: true,
+      created: true,
+      blockers: [],
+      record: {
+        schemaVersion: DWM_ORG_ALERT_CASE_ACTION_LEDGER_SCHEMA_VERSION,
+        receiptId: receipt.id,
+        recordedAt: "2026-06-29T15:05:00.000Z",
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        watchlistId: "watch_acme_domains",
+        watchlistItemId: "watch_item_acme_com",
+        alertIds: ["alert_acme_lumma"],
+        casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+        action: "open_case",
+        execution: "ready",
+        ownerLane: "case",
+        route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+        method: "GET",
+        analystId: "analyst_acme",
+        rationaleRecorded: false,
+        receiptOk: true,
+        blockedByCodes: [],
+        auditEvent: expect.objectContaining({
+          schemaVersion: "dwm.org_alert_case_action_audit_event.v1",
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          receiptId: receipt.id,
+          action: "open_case",
+          safeOutput: {
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false
+          }
+        })
+      }
+    });
+    expect(first.records).toHaveLength(1);
+    expect(first.record?.dedupeKey).toMatch(/^org_alert_case_action_dedupe_/);
+    expect(duplicate).toMatchObject({
+      ok: true,
+      created: false,
+      record: { id: first.record?.id },
+      blockers: []
+    });
+    expect(duplicate.records).toHaveLength(1);
+    expect(JSON.stringify(first)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(first)).not.toContain("https://discord.com");
+  });
+
+  test("blocks case action ledger writes across organization scope", () => {
+    const receipt = readyCaseActionReceipt();
+    const result = recordOrgAlertCaseActionReceipt({
+      records: [],
+      receipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_other"
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      created: false,
+      records: [],
+      blockers: [{
+        code: "organization_scope_mismatch",
+        ownerLane: "case",
+        receiptId: receipt.id,
+        path: "receipt.organizationId"
+      }]
+    });
+  });
+
   test("requires source rebuild receipts when operator readiness depends on alert creation proof", () => {
     const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
     const packet = buildOrgAlertOperatorReadinessPacket({
@@ -546,6 +636,63 @@ describe("org alert workflow bridge", () => {
         rationale: "Source evidence report is required before closing the alert case."
       },
       blockedByCodes: ["missing_source_evidence_report"],
+      blockers: []
+    });
+  });
+
+  test("keeps blocked repair receipts out of the ledger unless audit storage is requested", () => {
+    const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+    const readiness = buildOrgAlertOperatorReadinessPacket({
+      bridge,
+      requireWebhookReconciliation: true,
+      checkedAt: "2026-06-29T15:02:00.000Z"
+    });
+    const packet = buildOrgAlertCaseActionPacket({ readiness });
+    const blockedReceipt = buildOrgAlertCaseActionReceipt({
+      packet,
+      action: "restore_source_evidence",
+      analystId: "analyst_acme",
+      checkedAt: "2026-06-29T15:04:00.000Z"
+    });
+    const blocked = recordOrgAlertCaseActionReceipt({
+      records: [],
+      receipt: blockedReceipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme"
+    });
+    const audited = recordOrgAlertCaseActionReceipt({
+      records: [],
+      receipt: blockedReceipt,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      allowBlockedReceipt: true,
+      recordedAt: "2026-06-29T15:05:00.000Z"
+    });
+
+    expect(blocked).toMatchObject({
+      ok: false,
+      created: false,
+      records: [],
+      blockers: [expect.objectContaining({ code: "receipt_not_ready", ownerLane: "source", path: "receipt.ok" })]
+    });
+    expect(audited).toMatchObject({
+      ok: true,
+      created: true,
+      record: {
+        receiptId: blockedReceipt.id,
+        action: "restore_source_evidence",
+        execution: "repair_required",
+        ownerLane: "source",
+        method: "POST",
+        rationaleRecorded: false,
+        receiptOk: false,
+        blockedByCodes: ["missing_source_evidence_report"],
+        auditEvent: expect.objectContaining({
+          action: "restore_source_evidence",
+          execution: "repair_required",
+          blockedByCodes: ["missing_source_evidence_report"]
+        })
+      },
       blockers: []
     });
   });
@@ -978,6 +1125,34 @@ function captureRefs() {
     contentHash: "hash_acme_followup",
     collectedAt: "2026-06-29T14:30:00.000Z"
   }];
+}
+
+function readyCaseActionReceipt() {
+  const bridge = buildOrgAlertWorkflowBridgeReport(fixture as any);
+  const sourceEvidence = buildOrgAlertSourceEvidenceReport({
+    bridge,
+    sources: sourceRefs(),
+    captures: [],
+    sourceProvenanceSummaries: [sourceProvenanceSummary()],
+    checkedAt: "2026-06-29T15:00:00.000Z"
+  });
+  const webhookFixture = buildOrgAlertWebhookFixtureContract({
+    bridge,
+    destinations: [webhookDestination()],
+    destinationIdsByWatchlistId: { watch_acme_domains: ["webhook_discord"] }
+  });
+  const readiness = buildOrgAlertOperatorReadinessPacket({
+    bridge,
+    sourceEvidence,
+    webhookFixture
+  });
+  const packet = buildOrgAlertCaseActionPacket({ readiness, checkedAt: "2026-06-29T15:03:00.000Z" });
+  return buildOrgAlertCaseActionReceipt({
+    packet,
+    action: "open_case",
+    analystId: "analyst_acme",
+    checkedAt: "2026-06-29T15:04:00.000Z"
+  });
 }
 
 function sourceRebuildReceipt() {

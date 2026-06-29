@@ -18,6 +18,8 @@ export const DWM_ORG_ALERT_WEBHOOK_RECONCILIATION_SCHEMA_VERSION = "dwm.org_aler
 export const DWM_ORG_ALERT_OPERATOR_READINESS_SCHEMA_VERSION = "dwm.org_alert_operator_readiness.v1" as const;
 export const DWM_ORG_ALERT_CASE_ACTION_PACKET_SCHEMA_VERSION = "dwm.org_alert_case_action_packet.v1" as const;
 export const DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION = "dwm.org_alert_case_action_receipt.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_LEDGER_SCHEMA_VERSION = "dwm.org_alert_case_action_ledger.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION = "dwm.org_alert_case_action_audit_event.v1" as const;
 
 export type OrgAlertWorkflowWatchlistRef = {
   watchlistId: string;
@@ -467,6 +469,70 @@ export type OrgAlertCaseActionReceiptBlocker = {
   message: string;
 };
 
+export type OrgAlertCaseActionLedgerRecord = {
+  schemaVersion: typeof DWM_ORG_ALERT_CASE_ACTION_LEDGER_SCHEMA_VERSION;
+  id: string;
+  receiptId: string;
+  dedupeKey: string;
+  recordedAt: string;
+  tenantId: string;
+  organizationId: string;
+  rowId?: string;
+  watchlistId?: string;
+  watchlistItemId?: string;
+  alertIds: string[];
+  casePaths: string[];
+  action: OrgAlertCaseAction["action"];
+  execution: OrgAlertCaseActionReceipt["execution"];
+  ownerLane?: OrgAlertCaseAction["ownerLane"];
+  route?: string;
+  method?: OrgAlertCaseAction["method"];
+  analystId?: string;
+  rationaleRecorded: boolean;
+  receiptOk: boolean;
+  blockedByCodes: string[];
+  auditEvent: OrgAlertCaseActionAuditEvent;
+};
+
+export type OrgAlertCaseActionAuditEvent = {
+  schemaVersion: typeof DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION;
+  id: string;
+  at: string;
+  tenantId: string;
+  organizationId: string;
+  receiptId: string;
+  action: OrgAlertCaseAction["action"];
+  execution: OrgAlertCaseActionReceipt["execution"];
+  ownerLane?: OrgAlertCaseAction["ownerLane"];
+  alertIds: string[];
+  casePaths: string[];
+  watchlistId?: string;
+  watchlistItemId?: string;
+  analystId?: string;
+  blockedByCodes: string[];
+  route?: string;
+  safeOutput: {
+    rawEvidenceExposed: false;
+    webhookSecretExposed: false;
+  };
+};
+
+export type OrgAlertCaseActionLedgerBlocker = {
+  code: "duplicate_receipt" | "receipt_not_ready" | "tenant_scope_mismatch" | "organization_scope_mismatch";
+  ownerLane: "case" | "alert" | "source" | "webhook";
+  receiptId: string;
+  path: string;
+  message: string;
+};
+
+export type OrgAlertCaseActionLedgerResult = {
+  ok: boolean;
+  created: boolean;
+  record?: OrgAlertCaseActionLedgerRecord;
+  records: OrgAlertCaseActionLedgerRecord[];
+  blockers: OrgAlertCaseActionLedgerBlocker[];
+};
+
 export function buildOrgAlertWorkflowBridgeReport(input: {
   tenantId: string;
   organizationId: string;
@@ -708,6 +774,50 @@ export function buildOrgAlertCaseActionReceipt(input: {
     blockedByCodes: selectedAction?.blockerCodes ?? [],
     blockers,
     payloadShape: ["action", "execution", "route", "blockedByCodes", "blockers[]"]
+  };
+}
+
+export function recordOrgAlertCaseActionReceipt(input: {
+  records: OrgAlertCaseActionLedgerRecord[];
+  receipt: OrgAlertCaseActionReceipt;
+  tenantId: string;
+  organizationId: string;
+  recordedAt?: string;
+  allowBlockedReceipt?: boolean;
+}): OrgAlertCaseActionLedgerResult {
+  const existing = input.records.find((record) => record.receiptId === input.receipt.id);
+  if (existing) {
+    return {
+      ok: true,
+      created: false,
+      record: existing,
+      records: input.records,
+      blockers: []
+    };
+  }
+
+  const blockers = caseActionLedgerBlockers(input.receipt, {
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    allowBlockedReceipt: input.allowBlockedReceipt === true
+  });
+  if (blockers.length) {
+    return {
+      ok: false,
+      created: false,
+      records: input.records,
+      blockers
+    };
+  }
+
+  const recordedAt = input.recordedAt ?? input.receipt.checkedAt;
+  const record = caseActionLedgerRecord(input.receipt, recordedAt);
+  return {
+    ok: true,
+    created: true,
+    record,
+    records: [...input.records, record],
+    blockers: []
   };
 }
 
@@ -978,6 +1088,80 @@ function caseActionReceiptBlocker(
   message: string
 ): OrgAlertCaseActionReceiptBlocker {
   return { code, ownerLane, path, message };
+}
+
+function caseActionLedgerRecord(receipt: OrgAlertCaseActionReceipt, recordedAt: string): OrgAlertCaseActionLedgerRecord {
+  const dedupeKey = stableId("org_alert_case_action_dedupe", `${receipt.tenantId}:${receipt.organizationId}:${receipt.id}`);
+  return {
+    schemaVersion: DWM_ORG_ALERT_CASE_ACTION_LEDGER_SCHEMA_VERSION,
+    id: stableId("org_alert_case_action_ledger", `${dedupeKey}:${recordedAt}`),
+    receiptId: receipt.id,
+    dedupeKey,
+    recordedAt,
+    tenantId: receipt.tenantId,
+    organizationId: receipt.organizationId,
+    rowId: receipt.rowId,
+    watchlistId: receipt.watchlistId,
+    watchlistItemId: receipt.watchlistItemId,
+    alertIds: receipt.alertIds,
+    casePaths: receipt.casePaths,
+    action: receipt.action,
+    execution: receipt.execution,
+    ownerLane: receipt.ownerLane,
+    route: receipt.route,
+    method: receipt.method,
+    analystId: receipt.analyst?.analystId,
+    rationaleRecorded: Boolean(receipt.analyst?.rationale?.trim()),
+    receiptOk: receipt.ok,
+    blockedByCodes: receipt.blockedByCodes,
+    auditEvent: caseActionAuditEvent(receipt, recordedAt, dedupeKey)
+  };
+}
+
+function caseActionAuditEvent(receipt: OrgAlertCaseActionReceipt, recordedAt: string, dedupeKey: string): OrgAlertCaseActionAuditEvent {
+  return {
+    schemaVersion: DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION,
+    id: stableId("org_alert_case_action_audit", `${dedupeKey}:${recordedAt}`),
+    at: recordedAt,
+    tenantId: receipt.tenantId,
+    organizationId: receipt.organizationId,
+    receiptId: receipt.id,
+    action: receipt.action,
+    execution: receipt.execution,
+    ownerLane: receipt.ownerLane,
+    alertIds: receipt.alertIds,
+    casePaths: receipt.casePaths,
+    watchlistId: receipt.watchlistId,
+    watchlistItemId: receipt.watchlistItemId,
+    analystId: receipt.analyst?.analystId,
+    blockedByCodes: receipt.blockedByCodes,
+    route: receipt.route,
+    safeOutput: {
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseActionLedgerBlockers(
+  receipt: OrgAlertCaseActionReceipt,
+  input: { tenantId: string; organizationId: string; allowBlockedReceipt: boolean }
+): OrgAlertCaseActionLedgerBlocker[] {
+  return [
+    receipt.tenantId !== input.tenantId ? caseActionLedgerBlocker("tenant_scope_mismatch", receipt.ownerLane ?? "case", receipt.id, "receipt.tenantId", "Case action receipt tenant does not match ledger scope.") : undefined,
+    receipt.organizationId !== input.organizationId ? caseActionLedgerBlocker("organization_scope_mismatch", receipt.ownerLane ?? "case", receipt.id, "receipt.organizationId", "Case action receipt organization does not match ledger scope.") : undefined,
+    !receipt.ok && !input.allowBlockedReceipt ? caseActionLedgerBlocker("receipt_not_ready", receipt.ownerLane ?? "case", receipt.id, "receipt.ok", "Case action receipt has unresolved blockers.") : undefined
+  ].filter(Boolean) as OrgAlertCaseActionLedgerBlocker[];
+}
+
+function caseActionLedgerBlocker(
+  code: OrgAlertCaseActionLedgerBlocker["code"],
+  ownerLane: OrgAlertCaseActionLedgerBlocker["ownerLane"],
+  receiptId: string,
+  path: string,
+  message: string
+): OrgAlertCaseActionLedgerBlocker {
+  return { code, ownerLane, receiptId, path, message };
 }
 
 function operatorBlocker(
