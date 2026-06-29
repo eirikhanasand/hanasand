@@ -2420,6 +2420,13 @@ expect(orgAlertDeliveryContract.watchlist.id === 'watchlist_item_replay_contract
 expect(orgAlertDeliveryContract.destinationSelection.selectedDestinations.some(item => item.id === 'destination_replay_contract' && item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract'), 'Org alert delivery contract should expose destination idempotency keys.', orgAlertDeliveryContract)
 expect(orgAlertDeliveryContract.destinationSelection.skippedDestinations.some(item => item.id === 'destination_disabled_contract' && item.reason === 'disabled'), 'Org alert delivery contract should expose disabled destination skips.', orgAlertDeliveryContract)
 expect(orgAlertDeliveryContract.alertDestinationReadiness.schemaVersion === 'dwm.webhook.alert_readiness_handoff.v1' && orgAlertDeliveryContract.alertDestinationReadiness.orgId === 'org_contract', 'Org alert delivery contract should include destination readiness handoff.', orgAlertDeliveryContract.alertDestinationReadiness)
+expect(orgAlertDeliveryContract.deliveryOutcome.schemaVersion === 'dwm.webhook.org_alert_delivery_outcome.v1' && orgAlertDeliveryContract.deliveryOutcome.counts.recorded >= 1, 'Org alert delivery contract should include persisted delivery outcome proof.', orgAlertDeliveryContract.deliveryOutcome)
+const orgAlertReplayOutcome = orgAlertDeliveryContract.deliveryOutcome.selectedDestinations.find(item => item.destinationId === 'destination_replay_contract')
+const orgAlertDisabledOutcome = orgAlertDeliveryContract.deliveryOutcome.skippedDestinations.find(item => item.destinationId === 'destination_disabled_contract')
+expect(orgAlertReplayOutcome?.recorded === true && orgAlertReplayOutcome.latestAttempt?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayOutcome.latestAttempt.auditEventId === 'audit_replay_duplicate_contract', 'Org alert delivery outcome should link selected destination to ledger and audit ids.', orgAlertReplayOutcome)
+expect(orgAlertReplayOutcome?.preview?.discord.fieldNames.includes('Workflow') && orgAlertReplayOutcome.preview.discord.fieldNames.includes('Confidence') && orgAlertReplayOutcome.preview.context.alert.casePath === replayWorkflowAlert.casePath, 'Org alert delivery outcome should carry Discord preview and case context.', orgAlertReplayOutcome)
+expect(orgAlertDisabledOutcome?.reason === 'disabled' && orgAlertDisabledOutcome.blockers.some(item => item.code === 'disabled' && item.blocking === true), 'Org alert delivery outcome should expose disabled destination skips as blockers.', orgAlertDisabledOutcome)
+expect(orgAlertDeliveryContract.deliveryOutcome.noNetwork === true && orgAlertDeliveryContract.deliveryOutcome.externalSendEnabled === false, 'Org alert delivery outcome should preserve no-network dry-run semantics.', orgAlertDeliveryContract.deliveryOutcome)
 expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
 expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
 expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
@@ -2630,6 +2637,8 @@ console.log(JSON.stringify({
         'org alert delivery destination selection',
         'org alert delivery health/lifecycle linkage',
         'org alert delivery destination readiness handoff',
+        'org alert delivery persisted outcome proof',
+        'org alert delivery selected/skipped outcome blockers',
         'org alert delivery audit/ledger linkage',
         'org alert delivery secret redaction',
         'two-org overlapping watchlist destination isolation',
@@ -2791,6 +2800,10 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDestinationReadiness.schemaVersion',
             'orgAlertDelivery.alertDestinationReadiness.destinationSelection.selectedDestinationIds',
             'orgAlertDelivery.alertDestinationReadiness.deliveryRetryPersistence.deliveryKeys[]',
+            'orgAlertDelivery.deliveryOutcome.schemaVersion',
+            'orgAlertDelivery.deliveryOutcome.selectedDestinations[].latestAttempt.deliveryId',
+            'orgAlertDelivery.deliveryOutcome.selectedDestinations[].preview.discord.fieldNames',
+            'orgAlertDelivery.deliveryOutcome.skippedDestinations[].blockers[].code',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,
