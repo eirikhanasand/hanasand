@@ -7,7 +7,7 @@ import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProdu
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
-import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
+import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { createCase, exportCaseEvidence, getCaseDetail, listCases, updateCase } from "./caseRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
@@ -55,6 +55,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/intel/search" || url.pathname === "/api/ti/search") return searchResponse(request, options, url);
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "GET") return listActorOrgRelevanceReviews(url, options, request);
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "POST") return submitActorOrgRelevanceReview(request, options);
+    if (url.pathname === "/v1/ti/actor-org-relevance/handoff-queue" && request.method === "GET") return listActorOrgRelevanceHandoffQueue(url, options, request);
     if (url.pathname === "/v1/ti/actor-org-relevance/source-collection-queue" && request.method === "GET") return listActorOrgRelevanceSourceCollectionQueue(url, options, request);
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+\/watchlist$/.test(url.pathname) && request.method === "POST") return materializeActorOrgRelevanceReviewWatchlist(request, options, url.pathname.split("/")[4]);
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+\/alert-generation-request$/.test(url.pathname) && request.method === "POST") return createActorOrgRelevanceReviewAlertGenerationRequest(request, options, url.pathname.split("/")[4]);

@@ -1,5 +1,6 @@
 import {
   actorOrgRelevanceRecordBelongsTo,
+  buildActorOrgRelevanceHandoffQueue,
   buildActorOrgRelevanceQueue,
   buildActorOrgRelevanceReviewRecord,
   buildActorOrgRelevanceSourceCollectionQueue,
@@ -76,6 +77,21 @@ export function listActorOrgRelevanceSourceCollectionQueue(url: URL, options: Ap
     records,
     generatedAt: url.searchParams.get("generatedAt") || undefined,
     state: sourceCollectionStateParam(url.searchParams.get("state")),
+    query: url.searchParams.get("q") || undefined
+  });
+  return json({ ...queue, records: page(queue.records, url) });
+}
+
+export function listActorOrgRelevanceHandoffQueue(url: URL, options: ApiServerOptions, request: Request): Response {
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to list actor relevance handoffs.", 400);
+  const records = ((options.store as any).listActorOrgRelevanceReviews?.() ?? []) as ActorOrgRelevanceReviewRecord[];
+  const queue = buildActorOrgRelevanceHandoffQueue({
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    records,
+    generatedAt: url.searchParams.get("generatedAt") || undefined,
+    state: handoffQueueStateParam(url.searchParams.get("state")),
     query: url.searchParams.get("q") || undefined
   });
   return json({ ...queue, records: page(queue.records, url) });
@@ -358,4 +374,14 @@ function workflowStatusParam(value: string | null) {
 
 function sourceCollectionStateParam(value: string | null) {
   return value === "needs_request" || value === "requested" ? value : undefined;
+}
+
+function handoffQueueStateParam(value: string | null) {
+  return value === "needs_alert_generation"
+    || value === "needs_case_handoff"
+    || value === "needs_webhook_trigger"
+    || value === "ready_for_customer"
+    || value === "blocked"
+    ? value
+    : undefined;
 }

@@ -12,6 +12,7 @@ import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 export const ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION = "hanasand.actor_org_relevance.review.v1" as const;
 export const ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.queue.v1" as const;
 export const ACTOR_ORG_RELEVANCE_SOURCE_COLLECTION_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.source_collection_queue.v1" as const;
+export const ACTOR_ORG_RELEVANCE_HANDOFF_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.handoff_queue.v1" as const;
 
 export type ActorOrgRelevanceReviewRecord = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION;
@@ -123,6 +124,48 @@ export type ActorOrgRelevanceSourceCollectionQueue = {
     requested: number;
   };
   records: ActorOrgRelevanceSourceCollectionQueueRow[];
+};
+
+export type ActorOrgRelevanceHandoffQueueState =
+  | "needs_alert_generation"
+  | "needs_case_handoff"
+  | "needs_webhook_trigger"
+  | "ready_for_customer"
+  | "blocked";
+
+export type ActorOrgRelevanceHandoffQueueRow = {
+  reviewId: string;
+  tenantId: string;
+  organizationId: string;
+  actorId: string;
+  query: string;
+  state: ActorOrgRelevanceHandoffQueueState;
+  submittedAt: string;
+  updatedAt: string;
+  workflow: ActorOrgRelevanceWorkflowState;
+  blockerCodes: string[];
+  affected: ActorOrgRelevanceReviewSummary["affected"];
+  latestSourceCollectionRequest?: ActorOrgRelevanceSourceCollectionRequestReceipt;
+  latestAlertGeneration?: ActorOrgRelevanceAlertGenerationReceipt;
+  latestCaseHandoff?: ActorOrgRelevanceCaseHandoffReceipt;
+  latestWebhookTrigger?: ActorOrgRelevanceWebhookTriggerReceipt;
+  routes: {
+    review: string;
+    watchlist?: string;
+    alertGeneration?: string;
+    caseHandoff?: string;
+    webhookTrigger?: string;
+    case?: string;
+  };
+};
+
+export type ActorOrgRelevanceHandoffQueue = {
+  schemaVersion: typeof ACTOR_ORG_RELEVANCE_HANDOFF_QUEUE_SCHEMA_VERSION;
+  generatedAt: string;
+  tenantId: string;
+  organizationId: string;
+  counts: Record<ActorOrgRelevanceHandoffQueueState | "total", number>;
+  records: ActorOrgRelevanceHandoffQueueRow[];
 };
 
 export type ActorOrgRelevanceTimelineEvent = {
@@ -677,6 +720,81 @@ export function buildActorOrgRelevanceSourceCollectionQueue(input: {
     },
     records: rows
   };
+}
+
+export function buildActorOrgRelevanceHandoffQueue(input: {
+  tenantId: string;
+  organizationId: string;
+  records: ActorOrgRelevanceReviewRecord[];
+  generatedAt?: string;
+  state?: ActorOrgRelevanceHandoffQueueState;
+  query?: string;
+}): ActorOrgRelevanceHandoffQueue {
+  const normalizedQuery = input.query?.trim().toLowerCase();
+  const rows = input.records
+    .filter((record) => record.tenantId === input.tenantId && record.organizationId === input.organizationId)
+    .map(actorOrgHandoffQueueRow)
+    .filter((row) => !input.state || row.state === input.state)
+    .filter((row) => !normalizedQuery
+      || row.query.toLowerCase().includes(normalizedQuery)
+      || row.actorId.toLowerCase().includes(normalizedQuery)
+      || row.affected.vendors.some((vendor) => vendor.toLowerCase().includes(normalizedQuery))
+      || row.affected.domains.some((domain) => domain.toLowerCase().includes(normalizedQuery)))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  return {
+    schemaVersion: ACTOR_ORG_RELEVANCE_HANDOFF_QUEUE_SCHEMA_VERSION,
+    generatedAt: input.generatedAt || nowIso(),
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    counts: {
+      total: rows.length,
+      needs_alert_generation: rows.filter((row) => row.state === "needs_alert_generation").length,
+      needs_case_handoff: rows.filter((row) => row.state === "needs_case_handoff").length,
+      needs_webhook_trigger: rows.filter((row) => row.state === "needs_webhook_trigger").length,
+      ready_for_customer: rows.filter((row) => row.state === "ready_for_customer").length,
+      blocked: rows.filter((row) => row.state === "blocked").length
+    },
+    records: rows
+  };
+}
+
+function actorOrgHandoffQueueRow(record: ActorOrgRelevanceReviewRecord): ActorOrgRelevanceHandoffQueueRow {
+  const summary = summarizeActorOrgRelevanceReview(record);
+  const state = actorOrgHandoffQueueState(record);
+  return {
+    reviewId: record.id,
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    actorId: record.actorId,
+    query: record.query,
+    state,
+    submittedAt: record.submittedAt,
+    updatedAt: record.updatedAt,
+    workflow: record.workflow,
+    blockerCodes: summary.blockerCodes,
+    affected: summary.affected,
+    latestSourceCollectionRequest: summary.latestSourceCollectionRequest,
+    latestAlertGeneration: summary.latestAlertGeneration,
+    latestCaseHandoff: summary.latestCaseHandoff,
+    latestWebhookTrigger: summary.latestWebhookTrigger,
+    routes: {
+      review: `/v1/ti/actor-org-relevance/${record.id}`,
+      watchlist: record.handoff ? `/v1/ti/actor-org-relevance/${record.id}/watchlist` : undefined,
+      alertGeneration: record.handoff ? `/v1/ti/actor-org-relevance/${record.id}/alert-generation-request` : undefined,
+      caseHandoff: summary.latestAlertGeneration ? `/v1/ti/actor-org-relevance/${record.id}/case-handoff-request` : undefined,
+      webhookTrigger: summary.latestCaseHandoff ? `/v1/ti/actor-org-relevance/${record.id}/webhook-trigger-request` : undefined,
+      case: summary.routes.case
+    }
+  };
+}
+
+function actorOrgHandoffQueueState(record: ActorOrgRelevanceReviewRecord): ActorOrgRelevanceHandoffQueueState {
+  if (record.state !== "ready" || !record.handoff) return "blocked";
+  if (!latestActiveReceipt(record.alertGenerationReceipts)) return "needs_alert_generation";
+  if (!latestActiveReceipt(record.caseHandoffReceipts)) return "needs_case_handoff";
+  if (!latestActiveReceipt(record.webhookTriggerReceipts)) return "needs_webhook_trigger";
+  return "ready_for_customer";
 }
 
 export function actorOrgRelevanceRecordBelongsTo(record: ActorOrgRelevanceReviewRecord | undefined, input: { tenantId?: string; organizationId?: string }) {

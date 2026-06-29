@@ -104,6 +104,113 @@ describe("actor org relevance API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  test("lists actor relevance handoff queue states for alert case and webhook work", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+    await submit(store, {
+      ...readyRelevance(),
+      actorId: "actor:blocked-source",
+      query: "blocked source",
+      sourceEvidence: [],
+      alertCaseRefs: [],
+      handoffRows: []
+    }, "tenant_microsoft", "org_microsoft");
+
+    const initialResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=needs_alert_generation&q=Microsoft");
+    const initial = await initialResponse.json() as any;
+    expect(initialResponse.status).toBe(200);
+    expect(initial).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.handoff_queue.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      counts: {
+        total: 1,
+        needs_alert_generation: 1,
+        needs_case_handoff: 0,
+        needs_webhook_trigger: 0,
+        ready_for_customer: 0,
+        blocked: 0
+      }
+    });
+    expect(initial.records[0]).toMatchObject({
+      reviewId: created.record.id,
+      state: "needs_alert_generation",
+      actorId: "actor:apt29-microsoft",
+      affected: { vendors: ["Microsoft"] },
+      routes: {
+        review: `/v1/ti/actor-org-relevance/${created.record.id}`,
+        watchlist: `/v1/ti/actor-org-relevance/${created.record.id}/watchlist`,
+        alertGeneration: `/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request`
+      }
+    });
+
+    const blockedResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=blocked");
+    const blocked = await blockedResponse.json() as any;
+    expect(blocked.counts).toMatchObject({ total: 1, blocked: 1 });
+    expect(blocked.records[0].state).toBe("blocked");
+
+    await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/watchlist?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ webhookDestinationId: "webhook_soc", generatedAt: "2026-06-29T10:17:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const alertResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:18:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const alert = await alertResponse.json() as any;
+
+    const caseQueueResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=needs_case_handoff");
+    const caseQueue = await caseQueueResponse.json() as any;
+    expect(caseQueue.counts).toMatchObject({ total: 1, needs_case_handoff: 1 });
+    expect(caseQueue.records[0]).toMatchObject({
+      state: "needs_case_handoff",
+      latestAlertGeneration: { id: alert.receipt.id },
+      routes: {
+        caseHandoff: `/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request`
+      }
+    });
+
+    const caseResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:19:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const caseHandoff = await caseResponse.json() as any;
+
+    const webhookQueueResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=needs_webhook_trigger");
+    const webhookQueue = await webhookQueueResponse.json() as any;
+    expect(webhookQueue.counts).toMatchObject({ total: 1, needs_webhook_trigger: 1 });
+    expect(webhookQueue.records[0]).toMatchObject({
+      state: "needs_webhook_trigger",
+      latestCaseHandoff: { id: caseHandoff.receipt.id },
+      routes: {
+        webhookTrigger: `/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request`,
+        case: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft"
+      }
+    });
+
+    const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ dryRun: true, generatedAt: "2026-06-29T10:20:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const webhook = await webhookResponse.json() as any;
+
+    const readyResponse = await listHandoffQueue(store, "tenant_microsoft", "org_microsoft", "state=ready_for_customer");
+    const ready = await readyResponse.json() as any;
+    expect(ready.counts).toMatchObject({ total: 1, ready_for_customer: 1 });
+    expect(ready.records[0]).toMatchObject({
+      state: "ready_for_customer",
+      latestWebhookTrigger: { id: webhook.receipt.id }
+    });
+
+    const otherOrgResponse = await listHandoffQueue(store, "tenant_other", "org_other");
+    const otherOrg = await otherOrgResponse.json() as any;
+    expect(otherOrg.counts.total).toBe(0);
+  });
+
   test("updates workflow state with assignment, notes, decisions, and org isolation", async () => {
     const store = new InMemoryScraperStore();
     const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
@@ -1053,6 +1160,14 @@ async function requestSourceCollection(store: InMemoryScraperStore | FileBackedS
 async function listSourceCollectionQueue(store: InMemoryScraperStore | FileBackedScraperStore, tenantId: string, organizationId: string, query = "") {
   const suffix = query ? `&${query}` : "";
   return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/source-collection-queue?tenantId=${tenantId}&organizationId=${organizationId}${suffix}`), {
+    store,
+    frontier: new FocusedFrontier()
+  });
+}
+
+async function listHandoffQueue(store: InMemoryScraperStore | FileBackedScraperStore, tenantId: string, organizationId: string, query = "") {
+  const suffix = query ? `&${query}` : "";
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/handoff-queue?tenantId=${tenantId}&organizationId=${organizationId}${suffix}`), {
     store,
     frontier: new FocusedFrontier()
   });
