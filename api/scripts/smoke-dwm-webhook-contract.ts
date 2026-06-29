@@ -7,6 +7,7 @@ import {
     buildDwmWebhookAuditEventContracts,
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookDestinationAdminProof,
+    buildDwmWebhookDestinationDeliveryMatrix,
     buildDwmWebhookDestinationCrudContract,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
@@ -1833,6 +1834,33 @@ const nonmemberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
     canManage: false,
     visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
 })
+const destinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const memberDestinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: 'member',
+    canManage: false,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDestinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const dashboardReadiness = buildDwmWebhookDashboardReadinessAdapter({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2272,6 +2300,9 @@ const persistedSentKey = deliveryRetryPersistence.deliveryKeys.find(item => item
 const queuedRetryEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract')
 const queuedDeliveredEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
 const queuedTerminalEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
+const matrixReplayDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_replay_contract')
+const matrixRetryDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_live_contract')
+const matrixDisabledDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 expect(deliveryRetryPersistence.schemaVersion === 'dwm.webhook.delivery_retry_persistence.v1' && deliveryRetryPersistence.counts.retryable >= 1, 'Delivery retry persistence should expose grouped retry proof.', deliveryRetryPersistence)
 expect(persistedRetryKey?.retry.retryable === true && persistedRetryKey.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && persistedRetryKey.retry.persistedAttemptCount === 2, 'Delivery retry persistence should keep retry/backoff attempts by idempotency key.', persistedRetryKey)
 expect(persistedReplayKey?.replay === true && persistedReplayKey.dedupe.duplicate === true && persistedReplayKey.dedupe.duplicateAttemptCount === 2, 'Delivery retry persistence should expose duplicate replay/dedupe proof.', persistedReplayKey)
@@ -2287,6 +2318,14 @@ expect(queuedTerminalEntry?.blockers.some(item => item.code === 'terminal_failur
 expect(memberDeliveryRetryQueue.entries.some(item => item.blockers.some(blocker => blocker.code === 'permission_denied')) && memberDeliveryRetryQueue.access.memberSafe === true, 'Delivery retry queue should keep members read-only without retry permission.', memberDeliveryRetryQueue)
 expect(nonmemberDeliveryRetryQueue.entries.length === 0 && nonmemberDeliveryRetryQueue.blockers.some(item => item.code === 'permission_denied'), 'Delivery retry queue should deny nonmembers without destination leakage.', nonmemberDeliveryRetryQueue)
 expect(!JSON.stringify(deliveryRetryQueue).includes(secret), 'Delivery retry queue should redact endpoint, response, and error secrets.', deliveryRetryQueue)
+expect(destinationDeliveryMatrix.schemaVersion === 'dwm.webhook.destination_delivery_matrix.v1' && destinationDeliveryMatrix.summary.destinationCount === operationDestinations.length, 'Destination delivery matrix should summarize org destinations.', destinationDeliveryMatrix)
+expect(matrixReplayDestination?.eventCoverage.replayed === true && matrixReplayDestination.deliveryProof.lastReplayed?.requestId === 'delivery_replay_duplicate_contract', 'Destination delivery matrix should expose replay delivery proof by destination.', matrixReplayDestination)
+expect(matrixReplayDestination?.routes.test === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && matrixReplayDestination.audit.auditEventContracts.length > 0, 'Destination delivery matrix should expose route hints and admin audit contracts.', matrixReplayDestination)
+expect(matrixRetryDestination?.retry.ready === true && matrixRetryDestination.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && matrixRetryDestination.blockers.some(item => item.code === 'retry_scheduled' && item.blocking === false), 'Destination delivery matrix should expose retry-ready destination state.', matrixRetryDestination)
+expect(matrixDisabledDestination?.enabled === false && matrixDisabledDestination.blockers.some(item => item.code === 'destination_disabled'), 'Destination delivery matrix should expose disabled destination blockers.', matrixDisabledDestination)
+expect(memberDestinationDeliveryMatrix.access.memberSafe === true && memberDestinationDeliveryMatrix.destinations.some(item => item.audit.auditEventContracts.length === 0), 'Destination delivery matrix should keep member views audit-safe.', memberDestinationDeliveryMatrix)
+expect(nonmemberDestinationDeliveryMatrix.destinations.length === 0 && nonmemberDestinationDeliveryMatrix.blockers.some(item => item.code === 'permission_denied'), 'Destination delivery matrix should deny nonmembers without leaking destination metadata.', nonmemberDestinationDeliveryMatrix)
+expect(!JSON.stringify(destinationDeliveryMatrix).includes(secret), 'Destination delivery matrix should redact endpoint, response, and audit secrets.', destinationDeliveryMatrix)
 const dashboardVerified = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const dashboardDisabled = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 const dashboardSecretMissing = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
@@ -2440,6 +2479,11 @@ console.log(JSON.stringify({
         'delivery retry queue delivered/terminal blockers',
         'delivery retry queue member/nonmember gates',
         'delivery retry queue secret redaction',
+        'destination delivery matrix route hints',
+        'destination delivery matrix replay/test proof',
+        'destination delivery matrix retry/disabled blockers',
+        'destination delivery matrix member/nonmember gates',
+        'destination delivery matrix secret redaction',
         'dashboard readiness verified delivery proof',
         'dashboard readiness failed test-send state',
         'dashboard readiness disabled/secret-missing blockers',
@@ -2526,6 +2570,11 @@ console.log(JSON.stringify({
             'deliveryRetryQueue.entries[].retry.liveReady',
             'deliveryRetryQueue.entries[].blockers[].code',
             'deliveryRetryQueue.entries[].audit.latestAuditEventId',
+            'destinationDeliveryMatrix.schemaVersion',
+            'destinationDeliveryMatrix.routes.deliveryList',
+            'destinationDeliveryMatrix.destinations[].deliveryProof.lastReplayed.requestId',
+            'destinationDeliveryMatrix.destinations[].retry.nextRetryAt',
+            'destinationDeliveryMatrix.destinations[].blockers[].code',
             'dashboardReadiness.schemaVersion',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',

@@ -14,6 +14,7 @@ import {
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookDestinationCrudContract,
     buildDwmWebhookDestinationAdminProof,
+    buildDwmWebhookDestinationDeliveryMatrix,
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
@@ -117,6 +118,20 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
         }),
         deliveryReadiness: buildDwmWebhookDeliveryReadiness({ destinations, deliveries, auditEvents }),
         deliveryRetryQueue: buildDwmWebhookDeliveryRetryQueue({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: membership?.role,
+                    status: 'active',
+                    userActive: true,
+                    alertVisibilityPolicy: membership?.alert_visibility_policy,
+                }
+                : null,
+        }),
+        destinationDeliveryMatrix: buildDwmWebhookDestinationDeliveryMatrix({
             destinations,
             deliveries,
             auditEvents,
@@ -526,6 +541,20 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                     }
                     : null,
             }),
+        destinationDeliveryMatrix: buildDwmWebhookDestinationDeliveryMatrix({
+            deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
+            auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
+            destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,
+            ...destinationLifecycleAccess(orgId, userId, visibility),
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: visibility?.role,
+                    status: visibility?.status,
+                    userActive: visibility?.user_active,
+                    alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                }
+                : null,
+        }),
         dashboardReadiness: buildDwmWebhookDashboardReadinessAdapter({
             destinations,
             deliveries,
@@ -674,6 +703,13 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
                 casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
                 dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
             },
+            viewerRole: 'admin',
+            canManage: true,
+        }),
+        destinationDeliveryMatrix: buildDwmWebhookDestinationDeliveryMatrix({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
             viewerRole: 'admin',
             canManage: true,
         }),
