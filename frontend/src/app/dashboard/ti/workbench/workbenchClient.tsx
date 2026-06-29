@@ -886,6 +886,8 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                             <OperatorActionRail
                                 selected={selected}
                                 orgContext={orgContext}
+                                caseDetail={selectedCaseDetail}
+                                actionDeliveries={selectedActionDeliveries}
                                 busyAction={busyAction}
                                 onRunAction={(action) => selected && runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
                                 onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
@@ -1128,14 +1130,16 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     )
 }
 
-function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onCopyPayload }: {
+function OperatorActionRail({ selected, orgContext, caseDetail, actionDeliveries = [], busyAction, onRunAction, onCopyPayload }: {
     selected?: WorkbenchCase
     orgContext?: WorkbenchOrgContext
+    caseDetail?: CaseDetailState
+    actionDeliveries?: WorkbenchDeliveryEvidence[]
     busyAction: string | null
     onRunAction: (action: WorkbenchAction) => void | Promise<void>
     onCopyPayload: (payload?: unknown) => void | Promise<void>
 }) {
-    const rows = actionRailRows(selected, orgContext)
+    const rows = actionRailRows(selected, orgContext, caseDetail, actionDeliveries)
 
     return (
         <section className='rounded-lg border border-[#d8e1ef] bg-white dark:border-[#2d3a52] dark:bg-[#0f172a]'>
@@ -1205,7 +1209,7 @@ export type OperatorActionRailRow = {
     disabledReason?: string
 }
 
-function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
+function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = []): OperatorActionRailRow[] {
     if (!selected) return [{
         id: 'select_case',
         label: 'Select work',
@@ -1264,6 +1268,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: 'POST /api/dwm/webhooks/deliver for the selected alert and scoped destination.',
             tone: selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
             action: sendAction,
+        })
+    }
+    const selectedDelivery = latestDeliveryForActionRail(selected, caseDetail, actionDeliveries, orgContext)
+    if (selectedDelivery) {
+        rows.push({
+            id: 'open_delivery_ledger',
+            label: 'Open delivery ledger',
+            detail: `GET ${deliveryLedgerHref(orgContext)}; selected delivery ${selectedDelivery.id}:${selectedDelivery.status}.`,
+            tone: selectedDelivery.status === 'failed' || selectedDelivery.status === 'skipped' ? 'blocked' : 'ready',
+            href: deliveryLedgerHref(orgContext),
         })
     }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
@@ -2839,6 +2853,21 @@ function caseExportHref(caseDetailHref: string) {
     params.set('evidence', 'true')
     params.set('nextActionPayloads', 'true')
     return `${path.replace(/\/$/, '')}/export?${params.toString()}`
+}
+
+function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined) {
+    const params = new URLSearchParams()
+    if (orgContext?.organization?.id || orgContext?.scope.organizationId) params.set('organizationId', orgContext.organization?.id || orgContext.scope.organizationId || '')
+    if (orgContext?.scope.tenantId) params.set('tenantId', orgContext.scope.tenantId)
+    const query = params.toString()
+    return `/api/dwm/webhooks/deliveries${query ? `?${query}` : ''}`
+}
+
+function latestDeliveryForActionRail(selected: WorkbenchCase, caseDetail: CaseDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined) {
+    const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
+    return [...detailDeliveries, ...actionDeliveries, ...(selected.deliveryEvidence || []), orgContext?.readiness.latestDelivery]
+        .filter((delivery): delivery is WorkbenchDeliveryEvidence | CaseDelivery => Boolean(delivery?.id))
+        .sort((a, b) => String(b.attemptedAt ?? '').localeCompare(String(a.attemptedAt ?? '')))[0]
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {
