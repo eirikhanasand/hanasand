@@ -4597,6 +4597,14 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
     const embeds = Array.isArray((delivery.payload as Record<string, unknown> | undefined)?.embeds)
         ? (delivery.payload as Record<string, unknown>).embeds
         : []
+    const retryPlan = planDwmWebhookDeliveryRetry({
+        status: delivery.status,
+        dryRun: delivery.dryRun,
+        responseStatus: delivery.responseStatus,
+        error: delivery.error,
+        attemptedAt: delivery.attemptedAt,
+        attemptCount: delivery.attemptCount || 1,
+    })
 
     return {
         requestId: delivery.id,
@@ -4642,6 +4650,18 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
             summary: delivery.responseBody ? redactDeliveryEvidenceText(truncate(delivery.responseBody, 500)) : null,
         },
         error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
+        retry: {
+            retryable: Boolean(delivery.nextRetryAt) || retryPlan.retryable,
+            nextRetryAt: delivery.nextRetryAt || retryPlan.nextRetryAt,
+            errorClass: delivery.errorClass || retryPlan.errorClass,
+            attemptCount: delivery.attemptCount || 1,
+            reason: retryPlan.reason,
+            persisted: Boolean(delivery.errorClass || delivery.attemptCount || delivery.nextRetryAt),
+        },
+        audit: {
+            auditEventId: null,
+            expectedAction: deliveryAuditActionForEvent(delivery.eventType),
+        },
         payloadHash: delivery.payloadHash,
         idempotencyKey: delivery.idempotencyKey,
         timestamps: {

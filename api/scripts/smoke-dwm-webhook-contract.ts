@@ -1195,6 +1195,34 @@ const deliveryPreview = buildDwmWebhookDeliveryPreview({
     createdAt: '2026-06-28T12:00:00.000Z',
     updatedAt: '2026-06-28T12:00:05.000Z',
 })
+const retryDeliveryPreview = buildDwmWebhookDeliveryPreview({
+    id: 'delivery_retry_preview_contract',
+    destinationId: 'destination_live_contract',
+    ownerId: 'owner_contract',
+    orgId: 'org_contract',
+    alertId: 'alert_retry_preview_contract',
+    eventType: 'dwm.alert.created',
+    status: 'failed',
+    dryRun: false,
+    endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`,
+    endpointHash: 'endpoint_live_hash',
+    payloadHash: 'payload_retry_preview_hash',
+    payload: replayPayload,
+    responseStatus: 503,
+    responseBody: `retry failed with token=${secret}`,
+    error: `upstream unavailable token=${secret}`,
+    errorClass: 'upstream_5xx',
+    attemptCount: 2,
+    nextRetryAt: '2026-06-28T12:11:00.000Z',
+    idempotencyKey: 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_retry_preview_contract',
+    watchlistId: 'watchlist_item_replay_contract',
+    watchlistName: 'Replay contract watchlist',
+    route: 'identity_response',
+    casePath: replayWorkflowAlert.casePath,
+    attemptedAt: '2026-06-28T12:06:00.000Z',
+    createdAt: '2026-06-28T12:06:00.000Z',
+    updatedAt: '2026-06-28T12:06:05.000Z',
+})
 const readiness = buildDwmWebhookDeliveryReadiness({
     liveDeliveryEnabled: false,
     destinations: [
@@ -2654,6 +2682,8 @@ expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.cont
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl && deliveryPreview.context.links.alertUrl === replayWorkflowAlert.alertUrl, 'Test preview should expose alert URL/deep-link context.', deliveryPreview)
 expect(deliveryPreview.timestamps.updatedAt === '2026-06-28T12:00:05.000Z' && deliveryPreview.timestamps.createdAt === '2026-06-28T12:00:00.000Z', 'Test preview should expose persisted delivery created/updated timestamps.', deliveryPreview.timestamps)
+expect(deliveryPreview.retry.retryable === false && deliveryPreview.retry.attemptCount === 1 && deliveryPreview.audit.expectedAction === 'delivery.replayed', 'Test preview should expose retry/audit proof for dry-run delivery attempts.', deliveryPreview)
+expect(retryDeliveryPreview.retry.retryable === true && retryDeliveryPreview.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryDeliveryPreview.retry.errorClass === 'upstream_5xx' && retryDeliveryPreview.response.summary && !retryDeliveryPreview.response.summary.includes(secret), 'Failed delivery preview should expose persisted retry metadata with redacted response.', retryDeliveryPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryPreview.sanitizedPayloadPreview.payloadHash === 'payload_replay_hash', 'Test preview should expose a stable sanitized payload proof with payload hash.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Alert URL') && deliveryPreview.sanitizedPayloadPreview.context.watchlistId === 'watchlist_item_replay_contract', 'Sanitized payload preview should expose Discord field names and watchlist context without parsing raw payload.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Observed at') && deliveryPreview.sanitizedPayloadPreview.context.eventTimestamp === '2026-06-28T10:45:00.000Z', 'Sanitized payload preview should expose alert event timestamp context.', deliveryPreview.sanitizedPayloadPreview)
@@ -3029,6 +3059,7 @@ console.log(JSON.stringify({
         'delivery history customer-safe read model',
         'delivery history Discord preview proof',
         'delivery history sanitized payload preview proof',
+        'delivery preview retry/audit proof',
         'delivery history retry/terminal failure proof',
         'delivery history duplicate replay live-send guard',
         'delivery history duplicate replay skipped audit proof',
