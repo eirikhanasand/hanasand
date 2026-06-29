@@ -1131,15 +1131,6 @@ async function configurationPermissionError(orgId: string, userId: string) {
     return null
 }
 
-async function memberPermissionError(orgId: string, userId: string) {
-    if (!orgId || orgId === userId) return null
-    const membership = await loadOrganizationMembership(orgId, userId)
-    if (!membership) {
-        return { status: 404, message: 'Organization not found.' }
-    }
-    return null
-}
-
 function destinationLifecycleAccess(orgId: string, userId: string, membership: Membership | null) {
     const role = orgId && orgId !== userId ? membership?.role || null : 'owner'
     return {

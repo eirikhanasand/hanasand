@@ -1275,17 +1275,17 @@ export function buildDwmWebhookDeliveryActionPlan({
             ? 'review_status'
             : retryable
                 ? 'retry_dry_run'
-            : liveRetryable
-                ? 'retry_live'
-                : destinationDisabled
-                    ? 'enable_destination'
-                    : destinationUnavailable
-                        ? 'configure_destination'
-                        : terminalFailure
-                            ? 'rotate_or_disable_destination'
-                            : delivered
-                                ? 'monitor'
-                                : 'test_destination'
+                : liveRetryable
+                    ? 'retry_live'
+                    : destinationDisabled
+                        ? 'enable_destination'
+                        : destinationUnavailable
+                            ? 'configure_destination'
+                            : terminalFailure
+                                ? 'rotate_or_disable_destination'
+                                : delivered
+                                    ? 'monitor'
+                                    : 'test_destination'
         const blockers = uniqueRetryQueueBlockers([
             ...item.blockers,
             ...(!timeline.access.canManage ? [retryQueueBlocker('permission_denied', 'Only organization owners and admins can act on webhook deliveries.', latest.destinationId, true)] : []),
@@ -2650,7 +2650,6 @@ export function buildDwmWebhookDeliveryAuditTrail({
         .map((audit) => {
             const retryWorkOrder = audit.deliveryId ? retryByDeliveryId.get(audit.deliveryId) || null : null
             const replay = audit.delivery?.eventType === 'dwm.alert.replayed' || audit.action === 'delivery.replayed'
-            const retryable = Boolean(audit.retry?.retryable || retryWorkOrder?.eligibility.dryRunReady || retryWorkOrder?.eligibility.liveReady)
             const summary = audit.category === 'destination'
                 ? `${audit.outcome} destination ${audit.destination?.label || audit.destinationId || 'webhook destination'}`
                 : `${audit.outcome} ${audit.delivery?.eventType || 'webhook delivery'} for alert ${audit.delivery?.alertId || 'unknown'}`
@@ -3164,7 +3163,6 @@ export function buildDwmWebhookDestinationHealth({
             .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
         const readinessRow = readinessByDestination.get(destination.id) || null
         const lastDryRun = attempts.find(attempt => attempt.dryRun) || null
-        const lastDelivery = attempts.find(attempt => !attempt.dryRun && attempt.rawStatus !== 'skipped') || null
         const lastFailure = attempts.find(attempt => attempt.rawStatus === 'failed' || attempt.errorClass) || null
         const lastLiveDisabled = attempts.find(attempt => attempt.errorClass === 'live_delivery_disabled') || null
         const latestAttempt = attempts[0] || null
