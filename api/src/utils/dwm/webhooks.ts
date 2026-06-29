@@ -4024,6 +4024,77 @@ function buildDwmWebhookAlertDeliveryProof({
     const recordedDeliveryBlockingCodes = recordedDestinationBlockers
         .filter(blocker => blocker.blocking)
         .map(blocker => blocker.code)
+    const safeAlertBody = {
+        id: normalizedAlert.id,
+        title: normalizedAlert.title,
+        severity: normalizedAlert.severity,
+        confidence: normalizedAlert.confidence,
+        sourceFamily: normalizedAlert.sourceFamily,
+        evidenceCount: normalizedAlert.evidenceCount,
+        route: normalizedAlert.route,
+        dedupeKey: normalizedAlert.dedupeKey,
+        casePath: normalizedAlert.casePath,
+        caseId: normalizedAlert.caseId,
+        alertUrl: normalizedAlert.alertUrl,
+        provenanceSummary: normalizedAlert.provenanceSummary,
+        watchlist,
+    }
+    const deliveryRequestBodyForDestination = (destinationId: string, live: boolean) => ({
+        orgId,
+        organizationId: orgId,
+        tenantId: orgId,
+        destinationId,
+        eventType,
+        alertId: normalizedAlert.id,
+        watchlistItemId: watchlist.id,
+        watchlistName: watchlist.name,
+        dedupeKey: normalizedAlert.dedupeKey || normalizedAlert.id,
+        route: normalizedAlert.route,
+        casePath: normalizedAlert.casePath,
+        evidenceCount: normalizedAlert.evidenceCount,
+        sourceFamily: normalizedAlert.sourceFamily,
+        dryRun: !live,
+        live,
+        alert: safeAlertBody,
+    })
+    const dryRunDeliveryRequests = selectedDestinations.map(destination => ({
+        destinationId: destination.id,
+        method: 'POST',
+        route: 'POST /api/dwm/webhook-deliveries',
+        noNetwork: true,
+        externalSendEnabled: false,
+        body: deliveryRequestBodyForDestination(destination.id, false),
+        blockers: alertScopedBlockers.filter(blocker => blocker.destinationId === destination.id),
+    }))
+    const liveDeliveryRequests = selectedDestinations.map(destination => {
+        const destinationBlockers = alertScopedBlockers.filter(blocker => !blocker.destinationId || blocker.destinationId === destination.id)
+        const blockingDestinationCodes = destinationBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+        const canSend = liveDeliveryEnabled && !dryRun && liveRequested && blockingDestinationCodes.length === 0
+        return {
+            destinationId: destination.id,
+            method: 'POST',
+            route: 'POST /api/dwm/webhook-deliveries',
+            noNetwork: !canSend,
+            externalSendEnabled: canSend,
+            body: canSend ? deliveryRequestBodyForDestination(destination.id, true) : null,
+            blockers: destinationBlockers,
+        }
+    })
+    const destinationTestRequests = selectedDestinations.map(destination => ({
+        destinationId: destination.id,
+        method: 'POST',
+        route: `POST /api/dwm/webhook-destinations/${destination.id}/test`,
+        noNetwork: true,
+        externalSendEnabled: false,
+        body: {
+            orgId,
+            destinationId: destination.id,
+            eventType: 'dwm.alert.test' as DwmAlertEventType,
+            dryRun: true,
+            live: false,
+            alert: safeAlertBody,
+        },
+    }))
     const status = customerSetup.status === 'permission_denied'
         ? 'permission_denied'
         : blockingCodes.length > 0
@@ -4122,6 +4193,21 @@ function buildDwmWebhookAlertDeliveryProof({
             customerSetupRoute: customerSetup.routes.list,
             deliveryRoute: customerSetup.routes.deliver,
             deliveryHistoryRoute: customerSetup.routes.deliveryHistory,
+        },
+        actionRequests: {
+            dryRunDeliveries: dryRunDeliveryRequests,
+            liveDeliveries: liveDeliveryRequests,
+            destinationTests: destinationTestRequests,
+            deliveryHistory: {
+                method: 'GET',
+                route: customerSetup.routes.deliveryHistory,
+                query: {
+                    orgId,
+                    alertId: normalizedAlert.id,
+                    dedupeKey: normalizedAlert.dedupeKey,
+                    casePath: normalizedAlert.casePath,
+                },
+            },
         },
         blockers,
         blockerCodes: blockingCodes,
