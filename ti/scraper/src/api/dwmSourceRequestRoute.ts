@@ -3139,6 +3139,9 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
@@ -3147,6 +3150,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
+      ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
     ],
     safeOutput: {
@@ -4308,6 +4312,32 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
     alertGenerationContract: {
       path: "/v1/dwm/alerts/rebuild",
       requiredFields: ["sourceFamily", "consumers.alertGeneration", "provenance.evidenceProofId", "parserStatus", "blockers"]
+    },
+    sourceOperationsContract: {
+      schemaVersion: "ti.public_actor.source_operations_contract.v1",
+      mode: "no_network_fixture",
+      requiredFields: [
+        "sourceOperationsReadiness.rows[].proofId",
+        "sourceOperationsReadiness.rows[].sourceFamily",
+        "sourceOperationsReadiness.rows[].state",
+        "sourceOperationsReadiness.rows[].parserStatus",
+        "sourceOperationsReadiness.rows[].provenance",
+        "sourceOperationsReadiness.rows[].operatorActions",
+        "sourceOperationsReadiness.rows[].candidateIntake",
+        "sourceOperationsReadiness.rows[].safeOutput"
+      ],
+      consumerRoutes: {
+        publicTi: `/ti/${encodeURIComponent(input.query.toLowerCase())}`,
+        dashboardSourceOps: "/dashboard/ti/control",
+        sourceRequests: "/v1/dwm/source-requests",
+        alertRebuild: "/v1/dwm/alerts/rebuild"
+      },
+      policyBoundary: {
+        liveNetworkFetch: false,
+        publicTelegramOnly: true,
+        metadataOnlyRestrictedSources: true,
+        rawRestrictedPayloadStorage: false
+      }
     },
     rows,
     operations: (input.sourceOperationsHandoff.operations ?? []).map((operation: any) => ({

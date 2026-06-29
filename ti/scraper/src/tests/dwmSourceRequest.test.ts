@@ -2147,6 +2147,27 @@ describe("dwm source requests", () => {
               path: "/v1/dwm/alerts/rebuild",
               requiredFields: expect.arrayContaining(["sourceFamily", "consumers.alertGeneration", "provenance.evidenceProofId"])
             }),
+            sourceOperationsContract: expect.objectContaining({
+              schemaVersion: "ti.public_actor.source_operations_contract.v1",
+              mode: "no_network_fixture",
+              requiredFields: expect.arrayContaining([
+                "sourceOperationsReadiness.rows[].proofId",
+                "sourceOperationsReadiness.rows[].sourceFamily",
+                "sourceOperationsReadiness.rows[].state",
+                "sourceOperationsReadiness.rows[].parserStatus",
+                "sourceOperationsReadiness.rows[].provenance",
+                "sourceOperationsReadiness.rows[].operatorActions",
+                "sourceOperationsReadiness.rows[].candidateIntake",
+                "sourceOperationsReadiness.rows[].safeOutput"
+              ]),
+              consumerRoutes: expect.objectContaining({
+                publicTi: "/ti/apt29",
+                dashboardSourceOps: "/dashboard/ti/control",
+                sourceRequests: "/v1/dwm/source-requests",
+                alertRebuild: "/v1/dwm/alerts/rebuild"
+              }),
+              policyBoundary: expect.objectContaining({ liveNetworkFetch: false })
+            }),
             rows: expect.arrayContaining([
               expect.objectContaining({
                 sourceFamily: "telegram",
@@ -2441,6 +2462,9 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsContract.requiredFields | index(\"sourceOperationsReadiness.rows[].proofId\")",
+          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.schemaVersion == \"ti.public_actor.downstream_source_operations_readiness.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.sourceOperationsReadiness.rows | all(has(\"sourceFamily\") and has(\"state\") and has(\"parserStatus\") and has(\"provenance\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
@@ -2448,6 +2472,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.schemaVersion == \"dwm.dashboard.source_operations_adapter.v1\"",
+          ".proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter.rows | all(has(\"sourceOperationsReadiness\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
       }
