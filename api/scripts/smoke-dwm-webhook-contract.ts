@@ -2539,6 +2539,21 @@ const crudUpdateContract = buildDwmWebhookDestinationCrudContract({
         channel: '#security',
     },
 })
+const crudOrgScopeMismatchContract = buildDwmWebhookDestinationCrudContract({
+    action: 'update',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: {
+        orgId: 'org_other_contract',
+        label: 'Moved Discord',
+        url: 'https://discord.com/api/webhooks/987654321/move-token',
+    },
+})
 const crudDisableContract = buildDwmWebhookDestinationCrudContract({
     action: 'disable',
     ownerId: 'owner_contract',
@@ -2916,6 +2931,7 @@ expect(crudInvalidUrlContract.canApply === false && crudInvalidUrlContract.block
 expect(crudUnsupportedTypeContract.canApply === false && crudUnsupportedTypeContract.blockers.some(item => item.code === 'unsupported_destination_type'), 'Destination CRUD contract should block unsupported destination types.', crudUnsupportedTypeContract)
 expect(crudEntitlementDeniedContract.canApply === false && crudEntitlementDeniedContract.blockers.some(item => item.code === 'entitlement_plan_denied'), 'Destination CRUD contract should expose entitlement/plan denial blockers.', crudEntitlementDeniedContract)
 expect(crudUpdateContract.canApply === true && crudUpdateContract.action === 'update' && crudUpdateContract.desired.label === 'Renamed Discord' && crudUpdateContract.desired.channel === '#security', 'Destination CRUD contract should allow admin update and endpoint rotation preflight.', crudUpdateContract)
+expect(crudOrgScopeMismatchContract.canApply === false && crudOrgScopeMismatchContract.blockers.some(item => item.code === 'org_scope_mismatch') && crudOrgScopeMismatchContract.destination?.orgId === 'org_contract', 'Destination CRUD contract should block cross-org destination reassignment.', crudOrgScopeMismatchContract)
 expect(crudDisableContract.canApply === true && crudDisableContract.access.canDisable === true && crudDisableContract.audit.auditEventIds.includes('audit_delivery_test_contract'), 'Destination CRUD contract should expose disable capability and audit linkage.', crudDisableContract)
 expect(crudEnableContract.canApply === true && crudEnableContract.action === 'enable' && crudEnableContract.access.canEnable === true, 'Destination CRUD contract should allow enable preflight for paused destinations.', crudEnableContract)
 expect(crudTestContract.canApply === true && crudTestContract.access.canTest === true && crudTestContract.noNetwork === true, 'Destination CRUD contract should allow dry-run test preflight without network.', crudTestContract)
@@ -3095,6 +3111,7 @@ console.log(JSON.stringify({
         'destination CRUD unsupported type blocker',
         'destination CRUD duplicate endpoint blocker',
         'destination CRUD entitlement blocker',
+        'destination CRUD org-scope immutability',
         'destination CRUD disable/enable/test preflight',
         'destination CRUD role denial',
         'destination CRUD idempotency/audit linkage',

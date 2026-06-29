@@ -284,13 +284,14 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
     }
 
     const nextOrgId = clean(req.body?.orgId) || existing.orgId || userId
-    const permissionError = await configurationPermissionError(nextOrgId, userId)
+    const destinationOrgId = existing.orgId || userId
+    const permissionError = await configurationPermissionError(destinationOrgId, userId)
     if (permissionError) {
         return res.status(permissionError.status).send({ error: permissionError.message })
     }
 
     try {
-        const currentDestinations = await listDwmWebhookDestinations(userId, nextOrgId)
+        const currentDestinations = await listDwmWebhookDestinations(userId, destinationOrgId)
         const destinationBefore = currentDestinations.find(item => item.id === req.params.id) || null
         const action = destinationCrudActionForUpdate(req.body, destinationBefore)
         const preflightCrud = buildDwmWebhookDestinationCrudContract({
@@ -299,8 +300,8 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
             input: { ...req.body, orgId: nextOrgId },
             destination: destinationBefore,
             destinations: currentDestinations,
-            deliveries: await listDwmWebhookDeliveries(userId, nextOrgId),
-            auditEvents: await listDwmWebhookAuditEvents(userId, nextOrgId),
+            deliveries: await listDwmWebhookDeliveries(userId, destinationOrgId),
+            auditEvents: await listDwmWebhookAuditEvents(userId, destinationOrgId),
             viewerRole: 'admin',
             canManage: true,
         })
@@ -311,7 +312,7 @@ export async function putDwmWebhookDestination(req: FastifyRequest<{ Params: IdP
             })
         }
 
-        const destination = await updateDwmWebhookDestination(userId, req.params.id, { ...req.body, orgId: nextOrgId })
+        const destination = await updateDwmWebhookDestination(userId, req.params.id, { ...req.body, orgId: destinationOrgId })
         if (!destination) {
             return res.status(404).send({ error: 'Webhook destination not found.' })
         }

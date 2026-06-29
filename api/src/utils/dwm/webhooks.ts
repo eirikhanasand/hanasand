@@ -203,6 +203,7 @@ export type DwmWebhookDestinationCrudBlockerCode =
     | 'unhealthy_destination'
     | 'entitlement_plan_denied'
     | 'permission_denied'
+    | 'org_scope_mismatch'
     | 'audit_missing'
     | 'idempotency_duplicate'
     | 'retry_not_eligible'
@@ -3520,6 +3521,9 @@ export function buildDwmWebhookDestinationCrudContract({
 
     if (!canManage) {
         blockers.push(crudBlocker('permission_denied', 'Only organization owners and admins can manage webhook destinations.', destination?.id || null))
+    }
+    if (destination && normalizedOrgId !== destination.orgId) {
+        blockers.push(crudBlocker('org_scope_mismatch', 'Webhook destinations cannot be moved between organizations. Create a new destination for the target organization.', destination.id))
     }
     if (!entitlementAllowed || parseBoolean(input.entitlementAllowed ?? input.entitlement_allowed, true) === false) {
         blockers.push(crudBlocker('entitlement_plan_denied', 'Current plan does not allow another webhook destination.', destination?.id || null))
