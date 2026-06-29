@@ -3266,9 +3266,40 @@ describe("dwm source requests", () => {
             expect.objectContaining({ type: "record_capture" }),
             expect.objectContaining({ type: "request_candidate" })
           ]),
+          sourceOperationsReadiness: expect.objectContaining({
+            schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                sourceFamily: "darkweb_onion",
+                state: "actionable",
+                candidateIntake: expect.objectContaining({
+                  available: true,
+                  policyResult: expect.objectContaining({
+                    allowed: true,
+                    metadataOnly: true,
+                    liveNetworkFetch: false
+                  }),
+                  liveNetworkFetch: false
+                }),
+                operatorActions: expect.arrayContaining([
+                  expect.objectContaining({
+                    type: "request_candidate",
+                    route: expect.objectContaining({ liveNetworkFetch: false })
+                  })
+                ]),
+                safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+              })
+            ]),
+            summary: expect.objectContaining({
+              actionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              candidateIntakeFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+              policyReadyFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
+            })
+          }),
           summary: expect.objectContaining({
             gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
-            operationTypes: expect.arrayContaining(["record_capture", "request_candidate"])
+            operationTypes: expect.arrayContaining(["record_capture", "request_candidate"]),
+            sourceOperationsActionableFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
           })
         }),
         sourceFamilyCoverageMatrix: expect.objectContaining({
@@ -3936,9 +3967,34 @@ describe("dwm source requests", () => {
               expect.objectContaining({ type: "retry_parser" }),
               expect.objectContaining({ type: "retry_capture" })
             ]),
+            sourceOperationsReadiness: expect.objectContaining({
+              schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
+              rows: expect.arrayContaining([
+                expect.objectContaining({
+                  sourceFamily: "telegram",
+                  state: "actionable",
+                  parserStatus: expect.objectContaining({
+                    state: "retry_required",
+                    retryBackoff: expect.objectContaining({ retryable: true })
+                  }),
+                  operatorActions: expect.arrayContaining([
+                    expect.objectContaining({ type: "retry_parser" }),
+                    expect.objectContaining({ type: "retry_capture" })
+                  ]),
+                  blockers: expect.arrayContaining([
+                    expect.objectContaining({ code: "parser_retry_required" })
+                  ])
+                })
+              ]),
+              summary: expect.objectContaining({
+                actionableFamilies: expect.arrayContaining(["telegram"]),
+                operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+              })
+            }),
             summary: expect.objectContaining({
               retryFamilies: expect.arrayContaining(["telegram"]),
-              operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+              operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"]),
+              sourceOperationsActionableFamilies: expect.arrayContaining(["telegram"])
             }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           }),

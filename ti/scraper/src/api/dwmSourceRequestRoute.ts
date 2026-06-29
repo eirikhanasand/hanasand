@@ -3584,7 +3584,8 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     actorReadiness,
     consumerProofLedger,
     alertGenerationConsumerHandoff,
-    sourceOperationsHandoff
+    sourceOperationsHandoff,
+    sourcePackIntakeHandoff
   });
   const sourceFamilyCoverageMatrix = sourceActorPublicTiSourceFamilyCoverageMatrix({
     query,
@@ -4219,6 +4220,7 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
   consumerProofLedger: Record<string, any>;
   alertGenerationConsumerHandoff: Record<string, any>;
   sourceOperationsHandoff: Record<string, any>;
+  sourcePackIntakeHandoff: Record<string, any>;
 }) {
   const rows = (input.consumerProofLedger.rows ?? []).map((row: any) => ({
     schemaVersion: "ti.public_actor.downstream_fixture_row.v1",
@@ -4252,6 +4254,12 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
       liveNetworkScrapeStarted: false
     }
   }));
+  const sourceOperationsReadiness = sourceActorPublicTiDownstreamSourceOperationsReadiness({
+    query: input.query,
+    rows,
+    sourceOperationsHandoff: input.sourceOperationsHandoff,
+    sourcePackIntakeHandoff: input.sourcePackIntakeHandoff
+  });
   return {
     schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
     proofId: stableId("ti_public_actor_downstream_fixture_export", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.parserStatus?.state}`).join(",")}`),
@@ -4281,6 +4289,7 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
       blockers: operation.blockers ?? [],
       safeOutput: operation.safeOutput
     })),
+    sourceOperationsReadiness,
     summary: {
       rowCount: rows.length,
       publicTiReadyFamilies: input.consumerProofLedger.summary?.publicTiReadyFamilies ?? [],
@@ -4288,8 +4297,127 @@ function sourceActorPublicTiDownstreamFixtureExport(input: {
       gapFamilies: input.consumerProofLedger.summary?.gapFamilies ?? [],
       retryFamilies: input.consumerProofLedger.summary?.retryFamilies ?? [],
       operationTypes: input.sourceOperationsHandoff.summary?.actionTypes ?? [],
+      sourceOperationsReadyFamilies: sourceOperationsReadiness.summary.readyFamilies,
+      sourceOperationsActionableFamilies: sourceOperationsReadiness.summary.actionableFamilies,
       latestCaptureAt: input.consumerProofLedger.summary?.latestCaptureAt,
       latestEnrichmentAt: input.consumerProofLedger.summary?.latestEnrichmentAt
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiDownstreamSourceOperationsReadiness(input: {
+  query: string;
+  rows: Array<Record<string, any>>;
+  sourceOperationsHandoff: Record<string, any>;
+  sourcePackIntakeHandoff: Record<string, any>;
+}) {
+  const operationsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const operation of input.sourceOperationsHandoff.operations ?? []) {
+    const families = operation.relatedFamilies?.length ? operation.relatedFamilies : [operation.family];
+    for (const family of families.filter(Boolean)) {
+      operationsByFamily.set(String(family), [...(operationsByFamily.get(String(family)) ?? []), operation]);
+    }
+  }
+  const intakeByFamily = new Map<string, Record<string, any>>((input.sourcePackIntakeHandoff.candidates ?? []).map((candidate: any) => [String(candidate.family), candidate]));
+  const familyNames = uniqueSourceReadinessStrings([
+    ...input.rows.map((row) => row.sourceFamily),
+    ...Array.from(operationsByFamily.keys()),
+    ...Array.from(intakeByFamily.keys())
+  ]);
+  const rows = familyNames.map((family) => {
+    const proof = input.rows.find((row) => row.sourceFamily === family);
+    const operations = operationsByFamily.get(family) ?? [];
+    const intake = intakeByFamily.get(family);
+    const blockers = dedupeBlockers([
+      ...(proof?.blockers ?? []),
+      ...operations.flatMap((operation) => operation.blockers ?? []),
+      ...(intake?.blockers ?? [])
+    ]);
+    const publicTiReady = proof?.consumers?.publicTi?.ready === true;
+    const alertGenerationReady = proof?.consumers?.alertGeneration?.ready === true;
+    const hasAction = operations.length > 0 || Boolean(intake);
+    return {
+      schemaVersion: "ti.public_actor.downstream_source_operations_readiness_row.v1",
+      proofId: stableId("ti_public_actor_downstream_source_operations_readiness_row", `${input.query}:${family}:${proof?.state ?? "candidate"}:${operations.map((operation) => operation.type).join(",")}:${intake?.policyResult?.allowed === true}`),
+      query: input.query,
+      sourceFamily: family,
+      state: publicTiReady || alertGenerationReady ? "ready" : hasAction ? "actionable" : "blocked",
+      parserStatus: proof?.parserStatus ?? intake?.parserExpectation,
+      freshness: {
+        lastCaptureAt: proof?.timestamps?.lastCaptureAt,
+        lastEnrichmentAt: proof?.timestamps?.lastEnrichmentAt,
+        freshnessState: proof?.timestamps?.lastCaptureAt ? "observed" : "capture_required"
+      },
+      provenance: {
+        downstreamProofId: proof?.proofId,
+        intakeProofId: intake?.proofId,
+        sourceIds: proof?.provenance?.sourceIds ?? [],
+        candidateIds: uniqueSourceReadinessStrings([
+          ...(proof?.provenance?.candidateIds ?? []),
+          intake?.candidateId
+        ]),
+        privacyBoundary: proof?.provenance?.privacyBoundary ?? intake?.policyResult?.policyBoundary
+      },
+      candidateIntake: intake ? {
+        available: true,
+        policyResult: intake.policyResult,
+        parserExpectation: intake.parserExpectation,
+        activationReadiness: intake.activationReadiness,
+        validationRoute: input.sourcePackIntakeHandoff.sourcePackWorkflow?.steps?.find((step: any) => step.step === "validate_candidates")?.route,
+        liveNetworkFetch: false
+      } : {
+        available: false,
+        liveNetworkFetch: false
+      },
+      operatorActions: operations.map((operation) => ({
+        operationId: operation.operationId,
+        type: operation.type,
+        priority: operation.priority,
+        route: operation.route,
+        liveNetworkFetch: false
+      })),
+      alertability: {
+        publicTiReady,
+        alertGenerationReady,
+        matchableFields: proof?.consumers?.alertGeneration?.matchableFields ?? proof?.consumers?.publicTi?.matchableFields ?? [],
+        blocked: blockers.length > 0
+      },
+      blockers,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
+    proofId: stableId("ti_public_actor_downstream_source_operations_readiness", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.state}:${row.operatorActions.length}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      totalFamilies: rows.length,
+      readyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "ready").map((row: any) => row.sourceFamily)),
+      actionableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.state === "actionable").map((row: any) => row.sourceFamily)),
+      candidateIntakeFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.available).map((row: any) => row.sourceFamily)),
+      policyReadyFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.candidateIntake.policyResult?.allowed === true).map((row: any) => row.sourceFamily)),
+      blockedFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.blockers.length > 0 || row.state === "blocked").map((row: any) => row.sourceFamily)),
+      operationTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.operatorActions.map((action: any) => action.type))),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.freshness.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.freshness.lastEnrichmentAt))
+    },
+    policyBoundary: {
+      liveNetworkFetch: false,
+      publicTelegramOnly: true,
+      metadataOnlyRestrictedSources: true,
+      rawRestrictedPayloadStorage: false
     },
     safeOutput: {
       rawTargetsExposed: false,
