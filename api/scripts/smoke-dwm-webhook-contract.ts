@@ -20,6 +20,7 @@ import {
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryHistory,
+    buildDwmWebhookDeliveryHistoryConsumerProof,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryPersistenceProof,
@@ -2050,6 +2051,13 @@ const deliveryHistory = buildDwmWebhookDeliveryHistory({
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
 })
+const deliveryHistoryConsumer = buildDwmWebhookDeliveryHistoryConsumerProof({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract', destinationId: 'destination_replay_contract' },
+})
 const deliveryPersistenceProof = buildDwmWebhookDeliveryPersistenceProof({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -3056,6 +3064,7 @@ const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.delivery
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
 const deliveryHistoryMissingDestination = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_missing_destination_contract')
+const deliveryHistoryConsumerReplay = deliveryHistoryConsumer.rows.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryPersistenceReplay = deliveryPersistenceProof.rows.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryPersistenceRetry = deliveryPersistenceProof.rows.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryAttemptPersistenceReadReplay = deliveryAttemptPersistenceRead.rows.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
@@ -3087,6 +3096,12 @@ expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistor
 expect(deliveryHistoryMissingDestination?.destination.availability.state === 'missing_destination' && deliveryHistoryMissingDestination.destination.availability.setupRoute === 'POST /api/dwm/webhooks', 'Delivery history should expose setup guidance for missing webhook destination attempts.', deliveryHistoryMissingDestination)
 expect(deliveryHistoryMissingDestination?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract' && deliveryHistoryMissingDestination.deliveryProof.auditEventId === 'audit_missing_destination_contract', 'Missing destination history should preserve sanitized Discord preview and audit proof.', deliveryHistoryMissingDestination)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
+expect(deliveryHistoryConsumer.schemaVersion === 'dwm.webhook.delivery_history_consumer.v1' && deliveryHistoryConsumer.counts.total >= 1 && deliveryHistoryConsumer.routes.detail.includes('delivery_id'), 'Delivery history consumer proof should expose stable list/detail routes.', deliveryHistoryConsumer)
+expect(deliveryHistoryConsumerReplay?.redactedDestination.endpointExposed === false && deliveryHistoryConsumerReplay.redactedDestination.endpointHash === 'endpoint_replay_hash', 'Delivery history consumer proof should expose redacted destination metadata.', deliveryHistoryConsumerReplay?.redactedDestination)
+expect(deliveryHistoryConsumerReplay?.discord.fieldNames.includes('Alert URL') && deliveryHistoryConsumerReplay.discord.safeForCustomerDisplay === true, 'Delivery history consumer proof should expose Discord-safe preview fields.', deliveryHistoryConsumerReplay?.discord)
+expect(deliveryHistoryConsumerReplay?.audit.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryConsumerReplay.idempotency.duplicateAttemptCount === 2 && deliveryHistoryConsumerReplay.replayHistory.duplicateReplay === true, 'Delivery history consumer proof should expose audit and replay idempotency proof.', deliveryHistoryConsumerReplay)
+expect(deliveryHistoryConsumerReplay?.routes.deliveryDetail?.includes('delivery_replay_duplicate_contract') && deliveryHistoryConsumerReplay.routes.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery history consumer proof should expose customer operation routes.', deliveryHistoryConsumerReplay?.routes)
+expect(!JSON.stringify(deliveryHistoryConsumer).includes(secret), 'Delivery history consumer proof should redact endpoint, response, and payload secrets.', deliveryHistoryConsumer)
 expect(deliveryPersistenceProof.schemaVersion === 'dwm.webhook.delivery_persistence_proof.v1' && deliveryPersistenceProof.ok === true && deliveryPersistenceProof.totals.rows === deliveryHistory.total, 'Delivery persistence proof should summarize persisted delivery history rows.', deliveryPersistenceProof)
 expect(deliveryPersistenceReplay?.sanitizedPayloadPreview?.context.casePath === replayWorkflowAlert.casePath && deliveryPersistenceReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery persistence proof should preserve replay case context and audit linkage.', deliveryPersistenceReplay)
 expect(deliveryPersistenceRetry?.retry.retryable === true && deliveryPersistenceRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryPersistenceRetry.retry.lastErrorCategory === 'upstream_5xx', 'Delivery persistence proof should preserve retry/backoff metadata.', deliveryPersistenceRetry)
@@ -3333,6 +3348,7 @@ console.log(JSON.stringify({
         'delivery history Discord preview proof',
         'delivery history sanitized payload preview proof',
         'delivery preview retry/audit proof',
+        'delivery history consumer proof',
         'delivery history retry/terminal failure proof',
         'delivery history duplicate replay live-send guard',
         'delivery history duplicate replay skipped audit proof',
@@ -3499,6 +3515,12 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].retry.terminalFailure',
             'deliveryHistory.entries[].dedupe.alreadyDelivered',
             'deliveryHistory.entries[].status',
+            'deliveryHistoryConsumer.schemaVersion',
+            'deliveryHistoryConsumer.rows[].redactedDestination.endpointHash',
+            'deliveryHistoryConsumer.rows[].discord.fieldNames',
+            'deliveryHistoryConsumer.rows[].idempotency.duplicateAttemptCount',
+            'deliveryHistoryConsumer.rows[].replayHistory.duplicateReplay',
+            'deliveryHistoryConsumer.rows[].routes.deliveryDetail',
             'deliveryPersistenceProof.schemaVersion',
             'deliveryPersistenceProof.rows[].sanitizedPayloadPreview.context.casePath',
             'deliveryPersistenceProof.rows[].retry.nextRetryAt',
