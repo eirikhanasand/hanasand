@@ -31,6 +31,67 @@
     "methods": ["POST"],
     "checkedAt": "2026-06-29T00:13:00.000Z"
   },
+  "deployGateEvidence": {
+    "publicTiReadiness": [{
+      "schemaVersion": "ti.public_actor.readiness.v1",
+      "state": "ready",
+      "backedIds": {
+        "organizationIds": ["org_acme"],
+        "watchlistIds": ["watch_acme"],
+        "alertIds": ["dwm_alert_acme"],
+        "casePaths": ["/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"],
+        "captureIds": ["cap_consumer_acme"],
+        "webhookDestinationIds": ["webhook_discord"]
+      },
+      "blockers": []
+    }],
+    "orgLifecycle": [{
+      "schemaVersion": "organization.lifecycle_readiness.v1",
+      "organizationId": "org_acme",
+      "tenantId": "tenant_acme",
+      "readyForOnboarding": true,
+      "typedBlockers": [],
+      "watchlistReadiness": { "ready": true },
+      "alertExportReadiness": {
+        "ready": true,
+        "route": "GET /api/organizations/:id/watchlists/alert-terms"
+      }
+    }],
+    "webhookDestinations": [{
+      "schemaVersion": "dwm.webhook.destination_admin_proof_row.v1",
+      "destinationId": "webhook_discord",
+      "orgId": "org_acme",
+      "access": {
+        "canRead": true,
+        "canManage": true,
+        "memberSafe": false
+      },
+      "health": {
+        "ready": true,
+        "status": "ready",
+        "adminProofBlockers": []
+      },
+      "retry": {
+        "retryable": false,
+        "lastErrorCategory": null
+      }
+    }],
+    "supportExecutor": [{
+      "schemaVersion": "support.action_executor_readiness.v1",
+      "ready": true,
+      "action": "invite_assist",
+      "mutationMode": "no_mutation_readiness",
+      "noMutation": true,
+      "executableByExistingEndpoint": true,
+      "blockers": [],
+      "executorContract": {
+        "method": "POST",
+        "path": "/api/admin/support/organizations/org_acme/invite-assist",
+        "requiredHeaders": ["authorization", "x-request-id", "x-idempotency-key"],
+        "requiredBody": ["organizationId", "email", "reason"]
+      }
+    }]
+  },
   "stages": {
     "publicTi": {
       "handoff": {
