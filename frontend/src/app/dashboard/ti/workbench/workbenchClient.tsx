@@ -1193,13 +1193,17 @@ function handoffEnvelope(handoff: WorkbenchPublicTiHandoff) {
 
 function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContext }) {
     const items = orgContext?.readiness.productReadiness || []
+    const [selectedReadinessId, setSelectedReadinessId] = useState('')
+    const selectedReadiness = items.find(item => item.id === selectedReadinessId)
+        || items.find(item => item.status !== 'ready')
+        || items[0]
     if (!items.length) {
         return (
-            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div>
-                        <p className='text-xs font-semibold uppercase text-[#667085]'>Product readiness</p>
-                        <p className='mt-1 text-xs leading-5 text-[#596170]'>The dashboard has no readiness contract loaded yet.</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product readiness</p>
+                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>Readiness proof is not loaded yet.</p>
                     </div>
                     <span className={workflowStatusClass('blocked')}>blocked</span>
                 </div>
@@ -1225,9 +1229,13 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
             <div className='mt-3 grid gap-2'>
                 {items.map(item => {
                     const tone = productReadinessTone(item.status)
-                    const content = (
-                        <div
-                            className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-white px-3 py-2 text-left transition hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'
+                    const active = selectedReadiness?.id === item.id
+                    return (
+                        <button
+                            key={item.id}
+                            type='button'
+                            onClick={() => setSelectedReadinessId(item.id)}
+                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#3056d3] bg-[#f4f7ff] dark:border-[#5f7ee8] dark:bg-[#17233a]' : 'border-[#d8e1ef] bg-white hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'}`}
                             data-readiness-row-id={item.id}
                             data-readiness-state={item.status}
                             data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
@@ -1247,13 +1255,71 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                                 <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{[item.ownerLane, item.operatorAction, item.source].filter(Boolean).join(' · ')}</p>
                             </div>
                             <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(item.status)}</span>
-                        </div>
+                        </button>
                     )
-                    return item.href ? <Link key={item.id} href={item.href}>{content}</Link> : <div key={item.id}>{content}</div>
                 })}
             </div>
+            {selectedReadiness ? <ReadinessDetail item={selectedReadiness} /> : null}
         </div>
     )
+}
+
+function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
+    const blocker = readinessBlocker(item)
+    const proofTime = item.proofTimestamp || item.checkedAt || ''
+    const tone = productReadinessTone(item.status)
+    return (
+        <div
+            className='mt-3 rounded-lg border border-[#d8e1ef] bg-white p-3 dark:border-[#2d3a52] dark:bg-[#111827]'
+            data-readiness-detail={item.id}
+            data-readiness-detail-state={item.status}
+            data-readiness-detail-owner={item.ownerLane || ''}
+            data-readiness-detail-action={item.operatorAction || ''}
+            data-readiness-detail-proof={item.backendProofContractVersion || ''}
+            data-readiness-detail-blocker={blocker}
+            data-readiness-detail-href={item.deepLinkTarget || item.href || ''}
+        >
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>Readiness detail</p>
+                    <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</h3>
+                </div>
+                <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
+            </div>
+            <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                <ReadinessDetailField label='Owner' value={item.ownerLane || 'owner unavailable'} />
+                <ReadinessDetailField label='Next action' value={item.operatorAction || 'review blocker'} />
+                <ReadinessDetailField label='Last check' value={proofTime ? relativeTime(proofTime) : 'not returned'} />
+                <ReadinessDetailField label='Proof' value={item.backendProofContractVersion || item.source || 'proof contract unavailable'} />
+            </div>
+            <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+                <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{item.status === 'ready' ? 'Evidence' : 'Blocker'}</p>
+                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#344054] dark:text-[#d8deea]'>{item.status === 'ready' ? item.detail : blocker}</p>
+                {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.integrationProbeHint}</p> : null}
+            </div>
+            {item.href ? (
+                <Link href={item.href} className='mt-3 inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'>
+                    Open workflow
+                </Link>
+            ) : (
+                <p className='mt-3 text-xs leading-5 text-[#667085] dark:text-[#aab6ca]'>No backed workflow link was returned.</p>
+            )}
+        </div>
+    )
+}
+
+function ReadinessDetailField({ label: fieldLabel, value }: { label: string, value: string }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+            <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{fieldLabel}</p>
+            <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{value}</p>
+        </div>
+    )
+}
+
+function readinessBlocker(item: WorkbenchProductReadinessItem) {
+    if (item.status === 'ready') return ''
+    return item.unavailableReason || item.detail || item.source || 'Readiness proof is incomplete.'
 }
 
 function productReadinessTone(status: WorkbenchProductReadinessItem['status']): WorkbenchWorkflowStep['status'] {

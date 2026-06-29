@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS, PRODUCT_READINESS_PROOF_ROW_IDS, buildOrgOperatingContext, buildProductProgressExternalState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from '../src/app/dashboard/operatorConsoleModel'
+import { buildProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
 
 const here = new URL('.', import.meta.url)
 const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/workbenchClient.tsx', here), 'utf8')
 const dashboardModelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', here), 'utf8')
 const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', here), 'utf8')
+const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -66,6 +68,13 @@ const partialPayload = buildProductProgressPayload({
 })
 
 assert.equal(partialPayload.schemaVersion, 'product.progress.readiness.v1')
+const northStar = buildProductNorthStarScoreboard(partialPayload, { generatedAt, query: 'watchlist terms' })
+assert.equal(northStar.schemaVersion, 'product.north_star.readiness.v1')
+assert.equal(northStar.fullChainReady, false)
+assert.equal(northStar.totalRows, 9)
+assert.ok(northStar.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint), 'North-star rows require owner, deep link, proof contract, and probe hint.')
+assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.state !== 'unavailable', 'Webhook delivery row should distinguish lifecycle/action work from missing proof.')
+assert.equal(buildProductNorthStarScoreboard(null, { generatedAt }).firstBlocker?.length ? true : false, true)
 assert.equal(partialPayload.sourceProxy?.sourceInventory?.schemaVersion, 'dwm.source_inventory.v1')
 assert.equal(partialPayload.dashboardEvidence?.visibleInDashboard, true)
 assert.equal(partialPayload.dashboardEvidence?.deliveryEvidenceMatched, true)
@@ -395,13 +404,23 @@ for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria'
     assert.equal(workbenchSource.toLowerCase().includes(bannedCopy), false, `Dashboard workbench includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardModelSource.toLowerCase().includes(bannedCopy), false, `Dashboard model includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardPageSource.toLowerCase().includes(bannedCopy), false, `Dashboard page includes banned copy: ${bannedCopy}`)
+    assert.equal(readinessPageSource.toLowerCase().includes(bannedCopy), false, `Readiness page includes banned copy: ${bannedCopy}`)
+}
+
+for (const visibleExample of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {
+    assert.equal(readinessPageSource.includes(visibleExample), false, `Readiness page includes prompt/example copy: ${visibleExample}`)
+}
+
+for (const readinessRouteToken of ['data-north-star-row-id', 'data-north-star-owner-lane', 'data-north-star-backend-proof-contract-version', 'watchlist terms', 'Open']) {
+    assert.ok(readinessPageSource.includes(readinessRouteToken), `Readiness route missing product proof token: ${readinessRouteToken}`)
 }
 
 for (const bannedClass of ['border-white/', 'bg-white/10', 'bg-white/15']) {
     assert.equal(workbenchSource.includes(bannedClass), false, `Dashboard workbench includes high-contrast dark-mode class: ${bannedClass}`)
 }
 
-assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href={item.href}>'), 'Readiness rows should deep-link through the backed href.')
+assert.ok(workbenchSource.includes('data-readiness-detail-href'), 'Readiness detail should expose the backed workflow href.')
+assert.ok(workbenchSource.includes('Open workflow'), 'Readiness detail should deep-link to the backed workflow.')
 
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',

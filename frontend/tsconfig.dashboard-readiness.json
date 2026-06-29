@@ -12,6 +12,7 @@
         "src/app/dashboard/operatorConsoleModel.contract.ts",
         "src/app/dashboard/page.tsx",
         "src/app/dashboard/ti/workbench/workbenchClient.tsx",
+        "src/app/readiness/**/*.tsx",
         "src/utils/productProgress/**/*.ts"
     ]
 }

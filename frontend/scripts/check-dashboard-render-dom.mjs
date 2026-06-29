@@ -24,7 +24,7 @@ const pageSpecs = [
     {
         id: 'dashboard',
         path: '/dashboard',
-        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-backend-proof-contract-version]'],
+        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-backend-proof-contract-version]', '[data-readiness-detail]'],
     },
     {
         id: 'dashboard_ti_control',
@@ -119,6 +119,17 @@ async function inspectRenderedPage(page, spec) {
 
         const readinessRows = {}
         if (location.pathname === '/dashboard') {
+            const detail = document.querySelector('[data-readiness-detail]')
+            if (!detail) {
+                reasons.push('missing readiness detail panel')
+            } else {
+                for (const attr of ['data-readiness-detail-owner', 'data-readiness-detail-action', 'data-readiness-detail-proof', 'data-readiness-detail-href']) {
+                    if (!detail.getAttribute(attr)) reasons.push(`readiness detail missing ${attr}`)
+                }
+                if (detail.getAttribute('data-readiness-detail-state') !== 'ready' && !detail.getAttribute('data-readiness-detail-blocker')) {
+                    reasons.push('readiness detail missing blocker')
+                }
+            }
             for (const [id, href] of Object.entries(expectedReadinessRows)) {
                 const row = document.querySelector(`[data-readiness-row-id="${id}"]`)
                 if (!row) {
@@ -190,7 +201,7 @@ async function inspectRenderedPage(page, spec) {
             return width * height
         }
 
-        const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], .source-ops-workbench button, .source-ops-workbench a'))
+        const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], [data-readiness-detail], .source-ops-workbench button, .source-ops-workbench a'))
         const visibleRows = rowElements
             .map((element, index) => ({ element, rect: visibleRect(element), index }))
             .filter(item => item.rect)
