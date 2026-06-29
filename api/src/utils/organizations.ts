@@ -4728,6 +4728,41 @@ export function organizationLastOwnerGuard(input: {
     }
 }
 
+export function organizationWatchlistMutationDenial(input: {
+    organizationId: string
+    actorId: string
+    actorRole?: OrganizationRole | null
+    action: 'create_watchlist' | 'update_watchlist' | 'archive_watchlist' | 'watchlist_lifecycle_action' | 'cleanup_watchlists'
+    itemId?: string | null
+    requestId?: string | null
+    reason?: string | null
+    message: string
+}) {
+    return {
+        schemaVersion: 'organization.watchlist_mutation_denial.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        actorRole: input.actorRole ?? null,
+        action: input.action,
+        itemId: input.itemId ?? null,
+        denialReason: 'role_not_allowed' as const,
+        message: input.message,
+        statusCode: 403,
+        allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
+        readRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        memberCanReadSharedWatchlists: true,
+        memberCanMutateSharedWatchlists: false,
+        viewerCanReadSharedWatchlists: true,
+        viewerCanMutateSharedWatchlists: false,
+        nonmemberEnumeration: false as const,
+        serviceLogAction: 'organization_watchlist_mutation_denied' as const,
+        requestId: input.requestId ?? null,
+        reason: input.reason ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
     const lifecycleState = organizationWatchlistEnabledState(status)

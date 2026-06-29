@@ -854,9 +854,29 @@ const viewerAddsWatchlistResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists`,
     headers: authHeaders('org_smoke_viewer', 'viewer-token'),
-    payload: { kind: 'company', value: 'Viewer Blocked Holdings' },
+    payload: { kind: 'company', value: 'Viewer Blocked Holdings', reason: 'Viewer cannot mutate shared terms.', requestId: 'smoke-viewer-watchlist-create-denied' },
 })
 assert.equal(viewerAddsWatchlistResponse.statusCode, 403, viewerAddsWatchlistResponse.body)
+const viewerAddsWatchlistDenied = parseBody(viewerAddsWatchlistResponse.body).watchlistMutationDenial
+assert.equal(viewerAddsWatchlistDenied.schemaVersion, 'organization.watchlist_mutation_denial.v1')
+assert.equal(viewerAddsWatchlistDenied.organizationId, organization.id)
+assert.equal(viewerAddsWatchlistDenied.tenantId, organization.id)
+assert.equal(viewerAddsWatchlistDenied.actorId, 'org_smoke_viewer')
+assert.equal(viewerAddsWatchlistDenied.actorRole, 'viewer')
+assert.equal(viewerAddsWatchlistDenied.action, 'create_watchlist')
+assert.equal(viewerAddsWatchlistDenied.itemId, null)
+assert.equal(viewerAddsWatchlistDenied.denialReason, 'role_not_allowed')
+assert.deepEqual(viewerAddsWatchlistDenied.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(viewerAddsWatchlistDenied.readRoles, ['owner', 'admin', 'member', 'viewer'])
+assert.equal(viewerAddsWatchlistDenied.memberCanReadSharedWatchlists, true)
+assert.equal(viewerAddsWatchlistDenied.memberCanMutateSharedWatchlists, false)
+assert.equal(viewerAddsWatchlistDenied.viewerCanReadSharedWatchlists, true)
+assert.equal(viewerAddsWatchlistDenied.viewerCanMutateSharedWatchlists, false)
+assert.equal(viewerAddsWatchlistDenied.nonmemberEnumeration, false)
+assert.equal(viewerAddsWatchlistDenied.serviceLogAction, 'organization_watchlist_mutation_denied')
+assert.equal(viewerAddsWatchlistDenied.requestId, 'smoke-viewer-watchlist-create-denied')
+assert.equal(viewerAddsWatchlistDenied.reason, 'Viewer cannot mutate shared terms.')
+assert.equal(viewerAddsWatchlistDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const memberAddsWatchlistDeniedResponse = await app.inject({
     method: 'POST',
@@ -3053,6 +3073,26 @@ const memberCleanupDeniedResponse = await app.inject({
     payload: { itemIds: [cleanupCompanyItem.id], reason: 'Member cleanup denied.', requestId: 'smoke-member-cleanup-denied' },
 })
 assert.equal(memberCleanupDeniedResponse.statusCode, 403, memberCleanupDeniedResponse.body)
+const memberCleanupDenied = parseBody(memberCleanupDeniedResponse.body).watchlistMutationDenial
+assert.equal(memberCleanupDenied.schemaVersion, 'organization.watchlist_mutation_denial.v1')
+assert.equal(memberCleanupDenied.organizationId, organization.id)
+assert.equal(memberCleanupDenied.tenantId, organization.id)
+assert.equal(memberCleanupDenied.actorId, 'org_smoke_member')
+assert.equal(memberCleanupDenied.actorRole, 'member')
+assert.equal(memberCleanupDenied.action, 'cleanup_watchlists')
+assert.equal(memberCleanupDenied.itemId, null)
+assert.equal(memberCleanupDenied.denialReason, 'role_not_allowed')
+assert.deepEqual(memberCleanupDenied.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberCleanupDenied.readRoles, ['owner', 'admin', 'member', 'viewer'])
+assert.equal(memberCleanupDenied.memberCanReadSharedWatchlists, true)
+assert.equal(memberCleanupDenied.memberCanMutateSharedWatchlists, false)
+assert.equal(memberCleanupDenied.viewerCanReadSharedWatchlists, true)
+assert.equal(memberCleanupDenied.viewerCanMutateSharedWatchlists, false)
+assert.equal(memberCleanupDenied.nonmemberEnumeration, false)
+assert.equal(memberCleanupDenied.serviceLogAction, 'organization_watchlist_mutation_denied')
+assert.equal(memberCleanupDenied.requestId, 'smoke-member-cleanup-denied')
+assert.equal(memberCleanupDenied.reason, 'Member cleanup denied.')
+assert.equal(memberCleanupDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const cleanupBeforeArchiveExportResponse = await app.inject({
     method: 'GET',
@@ -3349,6 +3389,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_paused
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resumed' && log.metadata.requestId === 'smoke-resume-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_restored' && log.metadata.requestId === 'smoke-restore-cleanup-keyword'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-viewer-watchlist-create-denied' && log.metadata.action === 'create_watchlist' && log.metadata.actorRole === 'viewer'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-cleanup-denied' && log.metadata.action === 'cleanup_watchlists' && log.metadata.actorRole === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-alert-terms-paused' && log.metadata.role === 'member'))

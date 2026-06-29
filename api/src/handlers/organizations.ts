@@ -31,6 +31,7 @@ import {
     organizationWatchlistAlertGenerationContract,
     organizationWatchlistAlertTermsExport,
     organizationWatchlistAlertTermsExportDenial,
+    organizationWatchlistMutationDenial,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -1491,7 +1492,12 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+        return sendWatchlistMutationDenial(req, res, organization, userId, {
+            action: 'create_watchlist',
+            requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can update watchlists.',
+        })
     }
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'create shared watchlists')
@@ -1572,7 +1578,13 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+        return sendWatchlistMutationDenial(req, res, organization, userId, {
+            action: 'update_watchlist',
+            itemId: req.params.itemId,
+            requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can update watchlists.',
+        })
     }
 
     const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'update shared watchlists')
@@ -1639,7 +1651,13 @@ export async function deleteOrganizationWatchlist(req: FastifyRequest<{ Params: 
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+        return sendWatchlistMutationDenial(req, res, organization, userId, {
+            action: 'archive_watchlist',
+            itemId: req.params.itemId,
+            requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id ?? req.query?.requestId ?? req.query?.request_id),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can update watchlists.',
+        })
     }
 
     const requestId = normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id ?? req.query?.requestId ?? req.query?.request_id)
@@ -1694,7 +1712,13 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+        return sendWatchlistMutationDenial(req, res, organization, userId, {
+            action: 'watchlist_lifecycle_action',
+            itemId: req.params.itemId,
+            requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can update watchlists.',
+        })
     }
 
     let input
@@ -1770,7 +1794,12 @@ export async function postOrganizationWatchlistCleanup(req: FastifyRequest<{ Par
     }
 
     if (!roleCanWriteWatchlist(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can clean up watchlists.' })
+        return sendWatchlistMutationDenial(req, res, organization, userId, {
+            action: 'cleanup_watchlists',
+            requestId: normalizeWatchlistRequestId(req.body?.requestId ?? req.body?.request_id),
+            reason: typeof req.body?.reason === 'string' ? req.body.reason.trim().slice(0, 1000) : null,
+            message: 'Only organization owners and admins can clean up watchlists.',
+        })
     }
 
     let input
@@ -2087,6 +2116,36 @@ function organizationSettingsPermissions(role: OrganizationRole | undefined) {
         canEdit,
         editableFields: canEdit ? ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] : [],
     }
+}
+
+function sendWatchlistMutationDenial(
+    req: FastifyRequest,
+    res: FastifyReply,
+    organization: OrganizationRow,
+    actorId: string,
+    input: {
+        action: 'create_watchlist' | 'update_watchlist' | 'archive_watchlist' | 'watchlist_lifecycle_action' | 'cleanup_watchlists'
+        itemId?: string | null
+        requestId?: string | null
+        reason?: string | null
+        message: string
+    }
+) {
+    const denial = organizationWatchlistMutationDenial({
+        organizationId: organization.id,
+        actorId,
+        actorRole: organization.role,
+        ...input,
+    })
+    logOrganizationEvent(req, denial.serviceLogAction, organization.id, actorId, {
+        requestId: denial.requestId,
+        reason: denial.reason,
+        action: denial.action,
+        itemId: denial.itemId,
+        actorRole: organization.role,
+        denialReason: denial.denialReason,
+    })
+    return res.status(403).send({ error: input.message, watchlistMutationDenial: denial })
 }
 
 function removalPermissionError(actorRole: OrganizationRole | undefined, targetRole: OrganizationRole) {
