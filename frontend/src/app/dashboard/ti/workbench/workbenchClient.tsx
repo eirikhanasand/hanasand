@@ -622,7 +622,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const response = await fetch(action?.href || '/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopedActionBody(action?.body || { alertId: item.id, limit: 1 }, orgContext)),
+                body: JSON.stringify(scopedDeliveryActionBody(action?.body || { alertId: item.id, limit: 1 }, orgContext)),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -1377,14 +1377,15 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sendAction = sendDeliveryActionFor(selected)
     if (sendAction) {
-        const sendDestinationReady = hasSendDeliveryDestination(sendAction, orgContext)
+        const sendActionBody = scopedDeliveryActionBody(sendAction.body || {}, orgContext)
+        const sendDestinationReady = hasSendDeliveryDestination({ ...sendAction, body: sendActionBody }, orgContext)
         const sendDisabledReason = sendDeliveryDisabledReason(selected, orgContext)
         rows.push({
             id: 'send_alert',
             label: 'Send delivery',
-            detail: sendDestinationReady ? 'POST /api/dwm/webhooks/deliver for the selected alert and scoped destination.' : 'Configure or test an organization webhook destination before sending alert delivery.',
+            detail: sendDestinationReady ? `POST /api/dwm/webhooks/deliver for ${stringValue(sendActionBody.webhookDestinationId) || 'the action-scoped destination'}.` : 'Configure or test an organization webhook destination before sending alert delivery.',
             tone: sendDisabledReason ? 'blocked' : selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
-            action: sendDisabledReason ? { ...sendAction, disabledReason: sendDisabledReason } : sendAction,
+            action: sendDisabledReason ? { ...sendAction, body: sendActionBody, disabledReason: sendDisabledReason } : { ...sendAction, body: sendActionBody },
             disabledReason: sendDisabledReason,
         })
     }
@@ -3176,11 +3177,20 @@ function alertWorkflowMutationBody(item: WorkbenchCase, detail: AlertDetailPaylo
     }
 }
 
-function scopedActionBody(body: Record<string, unknown>, orgContext: WorkbenchOrgContext | undefined) {
+function scopedActionBody(body: Record<string, unknown>, orgContext: WorkbenchOrgContext | undefined): Record<string, unknown> {
     return {
         ...scopeBody(orgContext),
         ...body,
     }
+}
+
+function scopedDeliveryActionBody(body: Record<string, unknown>, orgContext: WorkbenchOrgContext | undefined): Record<string, unknown> {
+    const scoped = scopedActionBody(body, orgContext)
+    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
+    if (!stringValue(scoped.webhookDestinationId) && !stringValue(scoped.webhookUrl) && activeWebhook?.id) {
+        return { ...scoped, webhookDestinationId: activeWebhook.id }
+    }
+    return scoped
 }
 
 function stringValue(value: unknown) {
