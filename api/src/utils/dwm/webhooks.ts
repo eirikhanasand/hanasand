@@ -50,6 +50,7 @@ export type DwmWebhookDeliveryRow = {
     case_path: string | null
     attempted_at: string
     created_at: string
+    updated_at?: string
 }
 
 export type DwmWebhookAuditRow = {
@@ -238,7 +239,7 @@ export function toDwmWebhookDestination(row: DwmWebhookDestinationRow) {
 }
 
 export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
-    return {
+    const delivery = {
         id: row.id,
         destinationId: row.destination_id,
         ownerId: row.owner_id,
@@ -261,6 +262,10 @@ export function toDwmWebhookDelivery(row: DwmWebhookDeliveryRow) {
         casePath: row.case_path,
         attemptedAt: row.attempted_at,
         createdAt: row.created_at,
+    }
+    return {
+        ...delivery,
+        ...(row.updated_at ? { updatedAt: row.updated_at } : {}),
     }
 }
 
@@ -577,6 +582,7 @@ export function buildDwmWebhookDeliveryEvidence({
                 watchlistName: delivery.watchlistName || clean(payloadWatchlist.name),
                 attemptedAt: delivery.attemptedAt,
                 createdAt: delivery.createdAt,
+                updatedAt: delivery.updatedAt || delivery.createdAt,
                 redactedDestination: {
                     id: delivery.destinationId,
                     endpointHint: redactDeliveryEvidenceText(delivery.endpointHint),
@@ -673,6 +679,7 @@ export function buildDwmWebhookDeliveryLedger({
             attemptCount,
             attemptedAt: item.attemptedAt,
             createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
             nextRetryAt: retryPlan.nextRetryAt,
             retryable: retryPlan.retryable,
             retryReason: retryPlan.reason,
@@ -750,6 +757,7 @@ export function buildDwmWebhookDeliveryOperations({
             auditAction: audit?.action || attempt.auditAction,
             attemptedAt: attempt.attemptedAt,
             createdAt: attempt.createdAt,
+            updatedAt: attempt.updatedAt,
         }
     })
 
@@ -847,6 +855,7 @@ export function buildDwmWebhookDeliveryHistory({
                 auditAction: audit?.action || operation.auditAction,
                 attemptedAt: operation.attemptedAt,
                 createdAt: operation.createdAt,
+                updatedAt: operation.updatedAt,
                 response: operation.response,
                 error: operation.error,
             },
@@ -1000,6 +1009,7 @@ export function buildDwmWebhookDeliveryReceipts({
                 auditAction: entry.deliveryProof.auditAction,
                 attemptedAt: entry.deliveryProof.attemptedAt,
                 createdAt: entry.deliveryProof.createdAt,
+                updatedAt: entry.deliveryProof.updatedAt,
                 response: entry.deliveryProof.response,
                 error: entry.deliveryProof.error,
                 noNetwork: entry.dryRun || !entry.live,
@@ -2488,6 +2498,7 @@ export function buildDwmWebhookAuditEventContracts({
                         route: delivery.route,
                         casePath: delivery.casePath,
                         attemptedAt: delivery.attemptedAt,
+                        updatedAt: delivery.updatedAt || delivery.createdAt,
                     }
                     : null,
                 retry: ledger
@@ -2636,6 +2647,7 @@ export function buildDwmWebhookDeliveryAuditTrail({
                         route: audit.delivery.route,
                         casePath: audit.delivery.casePath,
                         attemptedAt: audit.delivery.attemptedAt,
+                        updatedAt: audit.delivery.updatedAt,
                     }
                     : null,
                 retry: retryWorkOrder
@@ -4585,6 +4597,11 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
         error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
         payloadHash: delivery.payloadHash,
         idempotencyKey: delivery.idempotencyKey,
+        timestamps: {
+            attemptedAt: delivery.attemptedAt,
+            createdAt: delivery.createdAt,
+            updatedAt: delivery.updatedAt || delivery.createdAt,
+        },
     }
 }
 

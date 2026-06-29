@@ -1104,6 +1104,7 @@ const deliveryPreview = buildDwmWebhookDeliveryPreview({
     casePath: replayWorkflowAlert.casePath,
     attemptedAt: '2026-06-28T12:00:00.000Z',
     createdAt: '2026-06-28T12:00:00.000Z',
+    updatedAt: '2026-06-28T12:00:05.000Z',
 })
 const readiness = buildDwmWebhookDeliveryReadiness({
     liveDeliveryEnabled: false,
@@ -1321,6 +1322,7 @@ const auditDeliveryRows = [
         casePath: replayWorkflowAlert.casePath,
         attemptedAt: '2026-06-28T12:08:00.000Z',
         createdAt: '2026-06-28T12:08:00.000Z',
+        updatedAt: '2026-06-28T12:08:05.000Z',
     },
     {
         id: 'delivery_test_contract',
@@ -2492,6 +2494,7 @@ expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract'
 expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 3, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl && deliveryPreview.context.links.alertUrl === replayWorkflowAlert.alertUrl, 'Test preview should expose alert URL/deep-link context.', deliveryPreview)
+expect(deliveryPreview.timestamps.updatedAt === '2026-06-28T12:00:05.000Z' && deliveryPreview.timestamps.createdAt === '2026-06-28T12:00:00.000Z', 'Test preview should expose persisted delivery created/updated timestamps.', deliveryPreview.timestamps)
 expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
 expect(deliveryPreview.operationLinks.dedupeHistory?.includes('dwm_dedupe_replay_contract') && deliveryPreview.operationLinks.casePath === replayWorkflowAlert.casePath, 'Test preview should expose dedupe history and case action links.', deliveryPreview.operationLinks)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
@@ -2642,6 +2645,7 @@ expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && de
 expect(deliveryHistoryReplay?.discordPreview?.embedCount === 1 && deliveryHistoryReplay.discordPreview.fieldNames.includes('Alert URL'), 'Delivery history should expose safe Discord preview fields.', deliveryHistoryReplay)
 expect(deliveryHistoryReplay?.alert.casePath === replayWorkflowAlert.casePath && deliveryHistoryReplay.watchlist.id === 'watchlist_item_replay_contract', 'Delivery history should preserve alert/case/watchlist context.', deliveryHistoryReplay)
 expect(deliveryHistoryReplay?.deliveryProof.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryReplay.dedupe.duplicateAttemptCount === 2, 'Delivery history should link replay audit and duplicate replay proof.', deliveryHistoryReplay)
+expect(deliveryHistoryReplay?.deliveryProof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery history should expose persisted delivery updated timestamp.', deliveryHistoryReplay?.deliveryProof)
 expect(deliveryHistoryRetry?.retry.retryable === true && deliveryHistoryRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Delivery history should expose retry/backoff state.', deliveryHistoryRetry)
 expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistoryTerminal.retry.lastErrorCategory === 'upstream_4xx', 'Delivery history should expose terminal failure state.', deliveryHistoryTerminal)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
@@ -2652,6 +2656,7 @@ expect(!JSON.stringify(duplicateReplayGuardHistory).includes(secret), 'Duplicate
 expect(deliveryReceipts.schemaVersion === 'dwm.webhook.delivery_receipts.v1' && deliveryReceipts.counts.total === deliveryHistory.total, 'Delivery receipts should provide a stable proof contract for delivery attempts.', deliveryReceipts)
 expect(deliveryReceiptReplay?.proof.auditEventId === 'audit_replay_duplicate_contract' && deliveryReceiptReplay.proof.noNetwork === true, 'Delivery receipts should link replay delivery proof and preserve no-network dry-run status.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') && deliveryReceiptReplay.discordPreview.fieldNames.includes('Alert URL') && deliveryReceiptReplay.casePath === replayWorkflowAlert.casePath, 'Delivery receipts should carry Discord preview and case/deep-link context.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery receipts should expose persisted delivery updated timestamp.', deliveryReceiptReplay?.proof)
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
@@ -2660,6 +2665,7 @@ expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts sh
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
 expect(deliveryTimelineReplay?.latestReceipt.discordPreview?.fieldNames.includes('Alert URL') && deliveryTimelineReplay.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery timeline should preserve Discord preview and audit proof for replayed alerts.', deliveryTimelineReplay)
 expect(deliveryTimelineReplay?.watchlist.id === 'watchlist_item_replay_contract' && deliveryTimelineReplay.casePath === replayWorkflowAlert.casePath, 'Delivery timeline should keep watchlist and case context.', deliveryTimelineReplay)
+expect(deliveryTimelineReplay?.latestReceipt.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery timeline should carry latest receipt updated timestamp.', deliveryTimelineReplay?.latestReceipt)
 expect(deliveryTimelineReplay?.operationLinks?.deliveryHistory.includes('destination_replay_contract') && deliveryTimelineReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery timeline should expose stable operation links without requiring consumers to inspect receipt internals.', deliveryTimelineReplay)
 expect(deliveryTimelineRetry?.status === 'retry_scheduled' && deliveryTimelineRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryTimelineRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery timeline should expose retry/backoff state by alert.', deliveryTimelineRetry)
 expect(deliveryTimelineTerminal?.status === 'terminal_failure' && deliveryTimelineTerminal.retry.terminalFailure === true, 'Delivery timeline should expose terminal failure state by alert.', deliveryTimelineTerminal)
@@ -2681,6 +2687,7 @@ expect(replayGuardReplay?.guard.dryRunAllowed === true && replayGuardReplay.guar
 expect(replayGuardDelivered?.guard.duplicateLiveBlocked === true && replayGuardDelivered.blockers.some(item => item.code === 'dedupe_already_delivered'), 'Delivery replay guard should block duplicate live sends for already delivered keys.', replayGuardDelivered)
 expect(replayGuardTerminal?.retry.terminalFailure === true && replayGuardTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery replay guard should surface terminal failure blockers before replay.', replayGuardTerminal)
 expect(replayGuardReplay?.latestReceipt?.discordPreview?.fieldNames.includes('Alert URL') && replayGuardReplay.audit.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery replay guard should keep latest Discord proof and audit linkage.', replayGuardReplay)
+expect(replayGuardReplay?.latestReceipt?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery replay guard should preserve latest receipt updated timestamp.', replayGuardReplay?.latestReceipt)
 expect(nonmemberDeliveryReplayGuard.entries.length === 0 && nonmemberDeliveryReplayGuard.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay guard should deny nonmembers without leaking replay keys.', nonmemberDeliveryReplayGuard)
 expect(orgAlertDeliveryContract.deliveryReplayGuard.schemaVersion === 'dwm.webhook.delivery_replay_guard.v1' && orgAlertDeliveryContract.deliveryReplayGuard.entries.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped replay guard.', orgAlertDeliveryContract.deliveryReplayGuard)
 expect(!JSON.stringify(deliveryReplayGuard).includes(secret), 'Delivery replay guard should redact endpoint, response, and payload secrets.', deliveryReplayGuard)

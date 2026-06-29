@@ -668,7 +668,8 @@ export default async function ensureSchema() {
             route TEXT,
             case_path TEXT,
             attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS endpoint_hash TEXT NOT NULL DEFAULT \'\'')
@@ -678,8 +679,10 @@ export default async function ensureSchema() {
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS route TEXT')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS case_path TEXT')
     await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
+    await run('ALTER TABLE dwm_webhook_deliveries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_owner_created ON dwm_webhook_deliveries(owner_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_org_created ON dwm_webhook_deliveries(org_id, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_org_updated ON dwm_webhook_deliveries(org_id, updated_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_destination_created ON dwm_webhook_deliveries(destination_id, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_alert_attempted ON dwm_webhook_deliveries(alert_id, attempted_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_dwm_webhook_deliveries_payload_hash ON dwm_webhook_deliveries(payload_hash)')
