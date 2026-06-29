@@ -167,6 +167,8 @@ export type WorkbenchProductReadinessItem = {
     deepLinkTarget?: string
     proofTimestamp?: string
     unavailableReason?: string
+    ownerLane?: string
+    operatorAction?: string
 }
 
 export type WorkbenchOrgContext = {
@@ -1037,7 +1039,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
 }
 
 function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
-    const priority = ['dashboard_evidence', 'source_inventory_probe', 'org_alert_export', 'webhook_health', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
+    const priority = ['dashboard_evidence', 'source_inventory_probe', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
     return (orgContext?.readiness.productReadiness || [])
         .filter(item => item.status !== 'ready' && priority.includes(item.id))
         .sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id))
@@ -1228,11 +1230,13 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
                             data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
                             data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
+                            data-readiness-owner-lane={item.ownerLane || ''}
+                            data-readiness-operator-action={item.operatorAction || ''}
                         >
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
                                 <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.detail}</p>
-                                <p className='mt-1 break-all text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{item.source}</p>
+                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{[item.ownerLane, item.operatorAction, item.source].filter(Boolean).join(' · ')}</p>
                             </div>
                             <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(item.status)}</span>
                         </div>

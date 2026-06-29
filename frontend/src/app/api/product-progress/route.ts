@@ -50,6 +50,7 @@ function productProgressRoutes(query: string) {
         helpdeskAudit: '/api/admin/support/readiness',
         deployProbe: '/api/product-progress',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
+        entitlement: '/api/dwm/entitlements/readiness',
         orgAlertExport: '/api/organizations/:id/watchlist-alert-terms',
         webhookHealth: '/api/dwm/webhooks',
         dashboardAlerts: '/api/dwm/alerts',

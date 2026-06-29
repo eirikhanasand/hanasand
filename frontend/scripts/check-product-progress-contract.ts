@@ -15,6 +15,7 @@ const routes = {
     helpdeskAudit: '/api/admin/support/readiness',
     deployProbe: '/api/product-progress',
     sourceProxy: '/api/ti/scraper/control?q=LockBit',
+    entitlement: '/api/dwm/entitlements/readiness',
     orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
@@ -75,6 +76,29 @@ assert.equal(partialPayload.publicTiProvenance?.status, 'unavailable')
 assert.equal(partialPayload.helpdeskAudit?.status, 'unavailable')
 assert.equal(partialPayload.orgAlertExport?.status, 'unavailable')
 assert.equal(partialPayload.webhookHealth?.status, 'needs_action')
+
+for (const dependency of [
+    partialPayload.publicTiProvenance,
+    partialPayload.helpdeskAudit,
+    partialPayload.deployProbe,
+    partialPayload.orgAlertExport,
+    partialPayload.webhookHealth,
+    partialPayload.dashboardEvidence,
+]) {
+    assertDependencyProofFields(dependency)
+}
+assert.equal(partialPayload.publicTiProvenance?.ownerLane, 'public-ti')
+assert.equal(partialPayload.publicTiProvenance?.unavailableReason, 'missing_public_ti_provenance_readiness_api')
+assert.equal(partialPayload.helpdeskAudit?.ownerLane, 'helpdesk')
+assert.equal(partialPayload.helpdeskAudit?.unavailableReason, 'missing_helpdesk_audit_readiness_api')
+assert.equal(partialPayload.deployProbe?.ownerLane, 'integration')
+assert.equal(partialPayload.deployProbe?.unavailableReason, 'missing_live_deploy_probe')
+assert.equal(partialPayload.orgAlertExport?.ownerLane, 'org')
+assert.equal(partialPayload.orgAlertExport?.unavailableReason, 'missing_org_alert_export_readiness_api')
+assert.equal(partialPayload.webhookHealth?.ownerLane, 'webhook')
+assert.equal(partialPayload.webhookHealth?.unavailableReason, 'missing_webhook_lifecycle_health_api')
+assert.equal(partialPayload.dashboardEvidence?.ownerLane, 'dashboard')
+assert.equal(partialPayload.dashboardEvidence?.unavailableReason, 'missing_live_deploy_probe')
 
 const organizationState = {
     organizations: [{
@@ -159,6 +183,10 @@ const deliveries = [{
 }] satisfies DwmDeliveryItem[]
 
 const partialExternal = buildProductProgressExternalState(partialPayload, { checkedAt: generatedAt })
+assertDependencyProofFields(partialExternal.sourceGrowth)
+assert.equal(partialExternal.sourceGrowth?.ownerLane, 'source')
+assert.equal(partialExternal.sourceGrowth?.expectedDashboardRowId, 'source_inventory_probe')
+assert.equal(partialExternal.sourceGrowth?.staleAfterSeconds, 7200)
 const partialContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -179,12 +207,15 @@ for (const rowId of PRODUCT_READINESS_PROOF_ROW_IDS) {
     assert.equal(row.deepLinkTarget, row.href)
     assert.equal(typeof row.blockerCount, 'number')
     assert.equal(row.unavailableReason, row.status === 'unavailable' ? row.source : undefined)
+    assert.ok(row.ownerLane, `Missing owner lane for product-readiness row ${rowId}`)
+    assert.ok(row.operatorAction, `Missing operator action for product-readiness row ${rowId}`)
 }
 for (const rowId of PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS) {
     assert.ok(partialContext.readiness.productReadiness.find(item => item.id === rowId), `Missing workflow row ${rowId}`)
 }
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.href, '/dashboard')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automations?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'org_alert_export')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.href, '/dashboard/automations?setup=dwm')
@@ -195,6 +226,7 @@ assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 
 const readyPayload = {
     ...partialPayload,
     publicTiProvenance: { ...partialPayload.publicTiProvenance!, status: 'ready' as const, blockers: [], sourceCount: 3, evidenceCount: 5 },
+    entitlement: { schemaVersion: 'dwm.entitlement.readiness.v1', status: 'ready' as const, blockers: [], allowed: true, policy: 'shared_watchlist', checkedRole: 'analyst', source: routes.entitlement, href: '/dashboard/dwm' },
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 2, openRecoveryRequests: 0 },
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 1, canGenerateAlerts: true },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
@@ -214,6 +246,17 @@ const readyContext = buildOrgOperatingContext({
 })
 assert.equal(readyContext.readiness.fullChainReady, true)
 
+for (const dependency of [
+    readyPayload.publicTiProvenance,
+    readyPayload.helpdeskAudit,
+    readyPayload.deployProbe,
+    readyPayload.orgAlertExport,
+    readyPayload.webhookHealth,
+    readyPayload.dashboardEvidence,
+]) {
+    assertDependencyProofFields(dependency)
+}
+
 const longLabelContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -229,6 +272,7 @@ assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id ==
 assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'org_members')?.detail.includes('Very Long Customer Label'))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => typeof item.blockerCount === 'number'))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.deepLinkTarget === item.href))
+assert.ok(longLabelContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
 
 for (const attribute of [
     'data-readiness-row-id',
@@ -237,6 +281,8 @@ for (const attribute of [
     'data-readiness-deep-link-target',
     'data-readiness-proof-timestamp',
     'data-readiness-unavailable-reason',
+    'data-readiness-owner-lane',
+    'data-readiness-operator-action',
 ]) {
     assert.ok(workbenchSource.includes(attribute), `Missing readiness DOM attribute ${attribute}`)
 }
@@ -259,3 +305,26 @@ for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria'
 }
 
 assert.ok(workbenchSource.includes('return item.href ? <Link key={item.id} href={item.href}>'), 'Readiness rows should deep-link through the backed href.')
+
+function assertDependencyProofFields(input: {
+    status?: string
+    ownerLane?: string
+    unavailableReason?: string
+    staleAfterSeconds?: number
+    proofTimestamp?: string
+    expectedDashboardRowId?: string
+    integrationProbeHint?: string
+} | undefined) {
+    assert.ok(input, 'Missing readiness dependency proof object.')
+    assert.ok(input.ownerLane, 'Missing ownerLane.')
+    const staleAfterSeconds = input.staleAfterSeconds
+    assert.equal(typeof staleAfterSeconds, 'number')
+    if (typeof staleAfterSeconds !== 'number') throw new Error('Missing staleAfterSeconds.')
+    assert.ok(staleAfterSeconds > 0)
+    assert.ok(input.proofTimestamp, 'Missing proofTimestamp.')
+    assert.ok(input.expectedDashboardRowId, 'Missing expectedDashboardRowId.')
+    assert.ok(input.integrationProbeHint, 'Missing integrationProbeHint.')
+    if (input.status !== 'ready') {
+        assert.ok(input.unavailableReason, `Missing unavailableReason for ${input.expectedDashboardRowId}.`)
+    }
+}

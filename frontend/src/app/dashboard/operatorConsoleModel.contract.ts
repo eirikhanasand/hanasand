@@ -241,6 +241,7 @@ const productProgressPayload = {
         helpdeskAudit: '/api/admin/support/readiness',
         deployProbe: '/api/product-progress',
         sourceProxy: '/api/ti/scraper/control?q=LockBit',
+        entitlement: '/api/dwm/entitlements/readiness',
         orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
         webhookHealth: '/api/dwm/webhooks',
         dashboardAlerts: '/dashboard',
@@ -248,6 +249,15 @@ const productProgressPayload = {
     publicTiProvenance: externalReadiness.publicTiProvenance,
     helpdeskAudit: externalReadiness.helpdeskAudit,
     sourceProxy: sourceProofProxyPayload,
+    entitlement: {
+        schemaVersion: 'dwm.entitlement.readiness.v1',
+        status: 'ready',
+        organizationId: 'org_acme',
+        policy: 'shared_watchlist',
+        allowed: true,
+        checkedRole: 'analyst',
+        source: '/api/dwm/entitlements/readiness',
+    },
     orgAlertExport: {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         status: 'ready',
@@ -353,6 +363,25 @@ const missingOrgExportProductProgress = buildProductProgressExternalState({
 const missingHelpdeskProductProgress = buildProductProgressExternalState({
     ...productProgressPayload,
     helpdeskAudit: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const missingEntitlementProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    entitlement: undefined,
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const blockedEntitlementProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    entitlement: {
+        ...productProgressPayload.entitlement,
+        status: 'blocked',
+        allowed: false,
+        blockers: ['DWM entitlement policy blocks alert delivery for viewer role.'],
+    },
 }, {
     checkedAt: '2026-06-28T10:20:00.000Z',
     staleAfterMinutes: 120,
@@ -551,6 +580,28 @@ const missingHelpdeskOrgContext = buildOrgOperatingContext({
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: missingHelpdeskProductProgress,
+})
+const missingEntitlementOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: missingEntitlementProductProgress,
+})
+const blockedEntitlementOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: blockedEntitlementProductProgress,
 })
 const missingSourceWorkerProductProgressOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -998,6 +1049,7 @@ void (expectProductReadinessStatus(missingDashboardEvidenceOrgContext, 'dashboar
 void (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').blockerCount satisfies number | undefined)
 void expectProductReadinessLink(productProgressOrgContext, 'dashboard_evidence', '/dashboard?case=alert_acme_1')
 void expectProductReadinessLink(productProgressOrgContext, 'source_inventory_probe', '/dashboard/ti/sources')
+void expectProductReadinessLink(productProgressOrgContext, 'entitlement_readiness', '/dashboard/dwm')
 void expectProductReadinessLink(productProgressOrgContext, 'webhook_delivery', '/dashboard/automations?setup=dwm')
 void expectProductReadinessLink(productProgressOrgContext, 'org_alert_export', '/dashboard/dwm')
 void expectProductReadinessLink(productProgressOrgContext, 'webhook_health', '/dashboard/automations?setup=dwm')
@@ -1007,6 +1059,7 @@ void expectProductReadinessLink(productProgressOrgContext, 'public_ti_provenance
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
+void expectProductReadinessStatus(productProgressOrgContext, 'entitlement_readiness', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready')
@@ -1023,6 +1076,10 @@ void expectProductReadinessStatus(missingOrgExportOrgContext, 'org_alert_export'
 void (missingOrgExportOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(missingHelpdeskOrgContext, 'helpdesk_audit', 'unavailable')
 void (missingHelpdeskOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(missingEntitlementOrgContext, 'entitlement_readiness', 'unavailable')
+void (missingEntitlementOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(blockedEntitlementOrgContext, 'entitlement_readiness', 'blocked')
+void (blockedEntitlementOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'source_inventory_probe', 'needs_action')
 void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'dashboard_evidence', 'needs_action')
 void (missingSourceWorkerProductProgressOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
