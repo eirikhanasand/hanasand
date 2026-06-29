@@ -297,6 +297,7 @@ describe("actor org relevance API", () => {
     const payload = await receiptResponse.json() as any;
 
     expect(receiptResponse.status).toBe(201);
+    expect(payload.created).toBe(true);
     expect(payload.receipt).toMatchObject({
       schemaVersion: "hanasand.actor_org_relevance.alert_generation_receipt.v1",
       tenantId: "tenant_microsoft",
@@ -336,6 +337,20 @@ describe("actor org relevance API", () => {
     expect(payload.record.timeline).toEqual(expect.arrayContaining([
       expect.objectContaining({ eventType: "alert_generation_requested", actorId: "user_ti" })
     ]));
+    expect((store as any).getActorOrgRelevanceReview(created.record.id).alertGenerationReceipts).toHaveLength(1);
+
+    const duplicateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:27:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.created).toBe(false);
+    expect(duplicate.receipt.id).toBe(payload.receipt.id);
+    expect(duplicate.receipt.idempotencyKey).toBe(payload.receipt.idempotencyKey);
+    expect(duplicate.record.alertGenerationReceipts).toHaveLength(1);
+    expect(duplicate.record.timeline.filter((event: any) => event.eventType === "alert_generation_requested")).toHaveLength(1);
     expect((store as any).getActorOrgRelevanceReview(created.record.id).alertGenerationReceipts).toHaveLength(1);
 
     const crossOrgResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_other&organizationId=org_other`, {
@@ -381,6 +396,7 @@ describe("actor org relevance API", () => {
     const payload = await caseResponse.json() as any;
 
     expect(caseResponse.status).toBe(201);
+    expect(payload.created).toBe(true);
     expect(payload.receipt).toMatchObject({
       schemaVersion: "hanasand.actor_org_relevance.case_handoff_receipt.v1",
       tenantId: "tenant_microsoft",
@@ -421,6 +437,20 @@ describe("actor org relevance API", () => {
     expect(payload.record.timeline).toEqual(expect.arrayContaining([
       expect.objectContaining({ eventType: "case_handoff_requested", actorId: "user_ti" })
     ]));
+    expect((store as any).getActorOrgRelevanceReview(created.record.id).caseHandoffReceipts).toHaveLength(1);
+
+    const duplicateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:31:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.created).toBe(false);
+    expect(duplicate.receipt.id).toBe(payload.receipt.id);
+    expect(duplicate.receipt.idempotencyKey).toBe(payload.receipt.idempotencyKey);
+    expect(duplicate.record.caseHandoffReceipts).toHaveLength(1);
+    expect(duplicate.record.timeline.filter((event: any) => event.eventType === "case_handoff_requested")).toHaveLength(1);
     expect((store as any).getActorOrgRelevanceReview(created.record.id).caseHandoffReceipts).toHaveLength(1);
 
     const crossOrgResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request?tenantId=tenant_other&organizationId=org_other`, {
@@ -468,6 +498,7 @@ describe("actor org relevance API", () => {
     const payload = await webhookResponse.json() as any;
 
     expect(webhookResponse.status).toBe(201);
+    expect(payload.created).toBe(true);
     expect(payload.receipt).toMatchObject({
       schemaVersion: "hanasand.actor_org_relevance.webhook_trigger_receipt.v1",
       tenantId: "tenant_microsoft",
@@ -510,6 +541,20 @@ describe("actor org relevance API", () => {
     expect(payload.record.timeline).toEqual(expect.arrayContaining([
       expect.objectContaining({ eventType: "webhook_trigger_prepared", actorId: "user_ti" })
     ]));
+    expect((store as any).getActorOrgRelevanceReview(created.record.id).webhookTriggerReceipts).toHaveLength(1);
+
+    const duplicateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ dryRun: true, generatedAt: "2026-06-29T10:36:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.created).toBe(false);
+    expect(duplicate.receipt.id).toBe(payload.receipt.id);
+    expect(duplicate.receipt.idempotencyKey).toBe(payload.receipt.idempotencyKey);
+    expect(duplicate.record.webhookTriggerReceipts).toHaveLength(1);
+    expect(duplicate.record.timeline.filter((event: any) => event.eventType === "webhook_trigger_prepared")).toHaveLength(1);
     expect((store as any).getActorOrgRelevanceReview(created.record.id).webhookTriggerReceipts).toHaveLength(1);
 
     const crossOrgResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_other&organizationId=org_other`, {

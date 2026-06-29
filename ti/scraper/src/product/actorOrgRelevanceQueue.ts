@@ -203,7 +203,7 @@ export type ActorOrgRelevanceAlertGenerationRequestInput = {
 };
 
 export type ActorOrgRelevanceAlertGenerationRequestResult =
-  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceAlertGenerationReceipt }
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceAlertGenerationReceipt; created: boolean }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceCaseHandoffReceipt = {
@@ -246,7 +246,7 @@ export type ActorOrgRelevanceCaseHandoffRequestInput = {
 };
 
 export type ActorOrgRelevanceCaseHandoffRequestResult =
-  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceCaseHandoffReceipt }
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceCaseHandoffReceipt; created: boolean }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceWebhookTriggerReceipt = {
@@ -291,7 +291,7 @@ export type ActorOrgRelevanceWebhookTriggerRequestInput = {
 };
 
 export type ActorOrgRelevanceWebhookTriggerRequestResult =
-  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceWebhookTriggerReceipt }
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceWebhookTriggerReceipt; created: boolean }
   | { ok: false; code: string; message: string };
 
 export type ActorOrgRelevanceQueue = {
@@ -623,6 +623,11 @@ export function createActorOrgRelevanceAlertGenerationRequest(input: {
     ...record.handoff.alertGeneration.request.body,
     actorOrgRelevanceReviewId: record.id
   };
+  const idempotencyKey = stableId("actor_org_relevance_alert_generation_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${expectedWatchlistId}`);
+  const existingReceipt = record.alertGenerationReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  if (existingReceipt) {
+    return { ok: true, created: false, receipt: existingReceipt, record };
+  }
   const receipt: ActorOrgRelevanceAlertGenerationReceipt = {
     schemaVersion: "hanasand.actor_org_relevance.alert_generation_receipt.v1",
     id: stableId("actor_org_relevance_alert_generation", `${record.id}:${expectedWatchlistId}:${generatedAt}`),
@@ -633,7 +638,7 @@ export function createActorOrgRelevanceAlertGenerationRequest(input: {
     query: record.query,
     createdAt: generatedAt,
     createdBy: input.request?.actorId,
-    idempotencyKey: stableId("actor_org_relevance_alert_generation_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${expectedWatchlistId}`),
+    idempotencyKey,
     request: {
       method: "POST",
       path: "/v1/dwm/alerts/rebuild",
@@ -654,6 +659,7 @@ export function createActorOrgRelevanceAlertGenerationRequest(input: {
   };
   return {
     ok: true,
+    created: true,
     receipt,
     record: {
       ...record,
@@ -696,6 +702,11 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
     alertGenerationReceiptId: alertGenerationReceipt.id
   };
   const sourceIds = uniqueStrings(alertGenerationReceipt.downstream.sourceIds);
+  const idempotencyKey = stableId("actor_org_relevance_case_handoff_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${alertGenerationReceipt.id}`);
+  const existingReceipt = record.caseHandoffReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  if (existingReceipt) {
+    return { ok: true, created: false, receipt: existingReceipt, record };
+  }
   const receipt: ActorOrgRelevanceCaseHandoffReceipt = {
     schemaVersion: "hanasand.actor_org_relevance.case_handoff_receipt.v1",
     id: stableId("actor_org_relevance_case_handoff", `${record.id}:${alertGenerationReceipt.id}:${generatedAt}`),
@@ -707,7 +718,7 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
     createdAt: generatedAt,
     createdBy: input.request?.actorId,
     alertGenerationReceiptId: alertGenerationReceipt.id,
-    idempotencyKey: stableId("actor_org_relevance_case_handoff_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${alertGenerationReceipt.id}`),
+    idempotencyKey,
     request: {
       method: "POST",
       path: "/v1/cases",
@@ -728,6 +739,7 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
   };
   return {
     ok: true,
+    created: true,
     receipt,
     record: {
       ...record,
@@ -771,6 +783,11 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
     actorOrgRelevanceReviewId: record.id,
     caseHandoffReceiptId: caseHandoffReceipt.id
   };
+  const idempotencyKey = stableId("actor_org_relevance_webhook_trigger_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${caseHandoffReceipt.id}:${dryRun ? "dry_run" : "live"}`);
+  const existingReceipt = record.webhookTriggerReceipts.find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  if (existingReceipt) {
+    return { ok: true, created: false, receipt: existingReceipt, record };
+  }
   const receipt: ActorOrgRelevanceWebhookTriggerReceipt = {
     schemaVersion: "hanasand.actor_org_relevance.webhook_trigger_receipt.v1",
     id: stableId("actor_org_relevance_webhook_trigger", `${record.id}:${caseHandoffReceipt.id}:${generatedAt}:${dryRun ? "dry_run" : "live"}`),
@@ -782,7 +799,7 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
     createdAt: generatedAt,
     createdBy: input.request?.actorId,
     caseHandoffReceiptId: caseHandoffReceipt.id,
-    idempotencyKey: stableId("actor_org_relevance_webhook_trigger_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${caseHandoffReceipt.id}:${dryRun ? "dry_run" : "live"}`),
+    idempotencyKey,
     request: {
       method: "POST",
       path: "/v1/dwm/webhooks/deliver",
@@ -804,6 +821,7 @@ export function createActorOrgRelevanceWebhookTriggerRequest(input: {
   };
   return {
     ok: true,
+    created: true,
     receipt,
     record: {
       ...record,

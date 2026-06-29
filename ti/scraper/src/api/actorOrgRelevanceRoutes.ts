@@ -154,10 +154,11 @@ export async function createActorOrgRelevanceReviewAlertGenerationRequest(reques
   if (!result.ok) return error(result.code, result.message, result.code === "watchlist_scope_mismatch" ? 409 : 400);
   (options.store as any).saveActorOrgRelevanceReview(result.record);
   return json({
+    created: result.created,
     receipt: result.receipt,
     record: result.record,
     summary: summarizeActorOrgRelevanceReview(result.record)
-  }, 201);
+  }, result.created ? 201 : 200);
 }
 
 export async function createActorOrgRelevanceReviewCaseHandoffRequest(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
@@ -178,10 +179,11 @@ export async function createActorOrgRelevanceReviewCaseHandoffRequest(request: R
   if (!result.ok) return error(result.code, result.message, 400);
   (options.store as any).saveActorOrgRelevanceReview(result.record);
   return json({
+    created: result.created,
     receipt: result.receipt,
     record: result.record,
     summary: summarizeActorOrgRelevanceReview(result.record)
-  }, 201);
+  }, result.created ? 201 : 200);
 }
 
 export async function createActorOrgRelevanceReviewWebhookTriggerRequest(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
@@ -203,10 +205,11 @@ export async function createActorOrgRelevanceReviewWebhookTriggerRequest(request
   if (!result.ok) return error(result.code, result.message, 400);
   (options.store as any).saveActorOrgRelevanceReview(result.record);
   return json({
+    created: result.created,
     receipt: result.receipt,
     record: result.record,
     summary: summarizeActorOrgRelevanceReview(result.record)
-  }, 201);
+  }, result.created ? 201 : 200);
 }
 
 function findExistingReview(
