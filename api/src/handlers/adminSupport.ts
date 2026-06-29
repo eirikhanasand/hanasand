@@ -6866,6 +6866,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         compliancePacket: supportAuditCompliancePacket(filters, [timelineEvent]),
         bridgeAdapter: supportAuditBridgeAdapterContract(filters),
         workflowProof: supportAuditEventWorkflowProof({ detail, timelineEvent, filters }),
+        integrationFixture: supportAuditEventIntegrationFixture({ detail, timelineEvent, relatedTimeline, filters }),
         workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         relatedTimeline: {
             schemaVersion: 'admin.audit.event_related_timeline.v1',
@@ -6899,6 +6900,86 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             `Timeline: ${auditFilterQuery(filters)}`,
             `Workflow proof: support.audit.event_workflow_proof.v1`,
         ].filter(Boolean).join('\n'),
+    }
+}
+
+function supportAuditEventIntegrationFixture(input: {
+    detail: Record<string, any>
+    timelineEvent: Record<string, any>
+    relatedTimeline: Array<Record<string, any>>
+    filters: Record<string, unknown>
+}) {
+    const links = input.timelineEvent.links?.entities || {}
+    const organizationId = text(input.detail.organizationId || input.filters.org)
+    const targetId = text(input.detail.targetId || input.filters.target)
+    const entityId = text(input.detail.entityId || input.filters.entity)
+    const requestId = text(input.detail.requestId || input.filters.request)
+    const actionType = text(input.detail.actionType)
+    const outcome = text(input.detail.outcome)
+    const relatedEventIds = input.relatedTimeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    return {
+        schemaVersion: 'support.audit.integration_fixture.v1',
+        fixtureName: 'support-audit-detail-timeline',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noMutation: true,
+        seedEntities: {
+            organizationId: organizationId || null,
+            targetId: targetId || null,
+            entityId: entityId || null,
+            requestId: requestId || null,
+            actionType: actionType || null,
+            outcome: outcome || null,
+        },
+        auditFilters: {
+            detail: `/api/admin/audit-events/${encodeURIComponent(String(input.timelineEvent.id || 'event-id'))}`,
+            replay: auditFilterQuery(input.filters),
+            request: requestId ? auditFilterQuery({ request: requestId }) : null,
+            entity: entityId ? auditFilterQuery({ entity: entityId }) : null,
+            outcome: outcome ? auditFilterQuery({ outcome, action: actionType }) : null,
+        },
+        supportRoutes: {
+            inspection: links.inspection || null,
+            inviteAction: links.inviteAction || null,
+            accessRecovery: links.accessRecovery || null,
+            memberRoleRecovery: links.memberRoleRecovery || null,
+            impersonation: links.impersonation || null,
+            supportSession: links.supportSession || null,
+        },
+        expectedAuditFields: [
+            'actor.id',
+            'target.id',
+            'organization.id',
+            'entity.id',
+            'actionType',
+            'severity',
+            'outcome',
+            'requestId',
+            'reason',
+            'timestamp',
+        ],
+        assertions: {
+            reasonRequiredForSupportActions: true,
+            scopeRequiredForMutationActions: true,
+            durationRequiredForImpersonation: true,
+            redactionRequired: true,
+            relatedEventIds,
+            expectedOutcome: outcome || null,
+            expectedActionType: actionType || null,
+        },
+        blockers: [
+            organizationId || targetId || entityId ? '' : 'missing_structured_target',
+            requestId ? '' : 'missing_request_id',
+            actionType ? '' : 'missing_action_type',
+        ].filter(Boolean),
+        copyText: [
+            'Support audit integration fixture',
+            `Action: ${actionType || 'unknown'}`,
+            `Outcome: ${outcome || 'unknown'}`,
+            `Request: ${requestId || 'none'}`,
+            `Replay: ${auditFilterQuery(input.filters)}`,
+            `Related events: ${relatedEventIds.join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
