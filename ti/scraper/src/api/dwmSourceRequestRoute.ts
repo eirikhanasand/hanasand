@@ -240,7 +240,7 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
     : ageMinutes !== undefined && ageMinutes > staleAfterMinutes
       ? "stale"
       : "fresh";
-  return {
+  const snapshot = {
     schemaVersion: "dwm.source_pack_worker_readiness.v1",
     generatedAt,
     freshness,
@@ -303,6 +303,88 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
       liveNetworkScrapeStarted: false
     }
   };
+  return {
+    ...snapshot,
+    proxyVerification: buildDwmSourcePackWorkerProxyVerification(snapshot)
+  };
+}
+
+function buildDwmSourcePackWorkerProxyVerification(snapshot: {
+  schemaVersion: string;
+  freshness: string;
+  lastRun?: { id: string; status: string; startedAt: string; completedAt: string; ageMinutes?: number };
+  counters: Record<string, number>;
+  workerReadiness: Record<string, any>;
+  parserSourceFamilyCounts: Record<string, Record<string, number>>;
+  sourceFamilyCounts: Record<string, unknown>;
+  redactedSourcePackIds: Array<{ id: string; safeRef: string; rawTargetsExposed: boolean }>;
+  rejectedCandidates: Array<{ targetRef?: { rawStored?: boolean }; reason?: string }>;
+  readiness: { state: string; blockers: string[] };
+  safeOutput: Record<string, boolean>;
+}) {
+  const checks = [
+    verificationCheck("schema_present", snapshot.schemaVersion === "dwm.source_pack_worker_readiness.v1", snapshot.schemaVersion),
+    verificationCheck("freshness_known", ["fresh", "stale", "missing"].includes(snapshot.freshness), snapshot.freshness),
+    verificationCheck("worker_run_present_when_ready", snapshot.readiness.state !== "ready" || Boolean(snapshot.lastRun?.id), snapshot.lastRun?.id ?? "missing"),
+    verificationCheck(
+      "active_or_collection_rows_when_ready",
+      snapshot.readiness.state !== "ready" || Number(snapshot.workerReadiness.activeSourceRows ?? 0) + Number(snapshot.workerReadiness.collectionReadyRows ?? 0) > 0,
+      { activeSourceRows: snapshot.workerReadiness.activeSourceRows ?? 0, collectionReadyRows: snapshot.workerReadiness.collectionReadyRows ?? 0 }
+    ),
+    verificationCheck("candidate_counters_present", Number.isFinite(snapshot.counters.totalCandidates), snapshot.counters.totalCandidates ?? "missing"),
+    verificationCheck("queue_counters_present", Number.isFinite(snapshot.counters.queuedCollectionTasks), snapshot.counters.queuedCollectionTasks ?? "missing"),
+    verificationCheck("parser_family_counts_present", Object.keys(snapshot.parserSourceFamilyCounts).length > 0, Object.keys(snapshot.parserSourceFamilyCounts)),
+    verificationCheck("source_family_counts_present", Object.keys(snapshot.sourceFamilyCounts).length > 0, Object.keys(snapshot.sourceFamilyCounts)),
+    verificationCheck("pack_ids_redacted", snapshot.redactedSourcePackIds.every((pack) => pack.safeRef && pack.rawTargetsExposed === false), snapshot.redactedSourcePackIds.length),
+    verificationCheck("rejected_candidates_redacted", snapshot.rejectedCandidates.every((candidate) => candidate.targetRef?.rawStored === false), snapshot.rejectedCandidates.length),
+    verificationCheck("safe_output_no_raw_rows", snapshot.safeOutput.rawUnsafeRowsStored === false && snapshot.safeOutput.rawTargetsExposed === false, snapshot.safeOutput),
+    verificationCheck("safe_output_no_private_telegram", snapshot.safeOutput.privateTelegramContentExposed === false, snapshot.safeOutput.privateTelegramContentExposed),
+    verificationCheck("safe_output_no_restricted_metadata_leak", snapshot.safeOutput.restrictedMetadataLeaked === false, snapshot.safeOutput.restrictedMetadataLeaked),
+    verificationCheck("safe_output_no_live_network", snapshot.safeOutput.liveNetworkScrapeStarted === false, snapshot.safeOutput.liveNetworkScrapeStarted)
+  ];
+  const failed = checks.filter((check) => check.status === "fail");
+  return {
+    schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
+    state: failed.length > 0
+      ? "blocked"
+      : snapshot.readiness.state === "ready"
+        ? "ready"
+        : snapshot.freshness,
+    checks,
+    requiredJsonPaths: [
+      "sourceInventory.sourcePackWorker.schemaVersion",
+      "sourceInventory.sourcePackWorker.freshness",
+      "sourceInventory.sourcePackWorker.lastRun.id",
+      "sourceInventory.sourcePackWorker.counters.totalCandidates",
+      "sourceInventory.sourcePackWorker.counters.queuedCollectionTasks",
+      "sourceInventory.sourcePackWorker.workerReadiness.activeSourceRows",
+      "sourceInventory.sourcePackWorker.workerReadiness.collectionReadyRows",
+      "sourceInventory.sourcePackWorker.parserSourceFamilyCounts",
+      "sourceInventory.sourcePackWorker.sourceFamilyCounts",
+      "sourceInventory.sourcePackWorker.rejectedCandidates[].targetRef.rawStored",
+      "sourceInventory.sourcePackWorker.redactedSourcePackIds[].safeRef",
+      "sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted",
+      "sourcePacks.workerReadiness.activeSourceRows",
+      "sourcePacks.readiness.state",
+      "sourcePacks.proxyVerification.state"
+    ],
+    worker3JsonAssertions: [
+      ".sourceInventory.sourcePackWorker.schemaVersion == \"dwm.source_pack_worker_readiness.v1\"",
+      ".sourceInventory.sourcePackWorker.proxyVerification.schemaVersion == \"dwm.source_pack_worker_proxy_verification.v1\"",
+      ".sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted == false",
+      ".sourceInventory.sourcePackWorker.safeOutput.privateTelegramContentExposed == false",
+      ".sourceInventory.sourcePackWorker.safeOutput.restrictedMetadataLeaked == false",
+      ".sourceInventory.sourcePackWorker.redactedSourcePackIds | all(.rawTargetsExposed == false)",
+      ".sourceInventory.sourcePackWorker.rejectedCandidates | all(.targetRef.rawStored == false)",
+      ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
+    ],
+    blockers: snapshot.readiness.blockers,
+    safeOutput: snapshot.safeOutput
+  };
+}
+
+function verificationCheck(id: string, passed: boolean, observed: unknown) {
+  return { id, status: passed ? "pass" : "fail", observed };
 }
 
 function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServerOptions) {

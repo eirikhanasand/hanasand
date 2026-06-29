@@ -128,6 +128,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         sourceGrowthCounters: sourcePackWorker.counters,
         parserSourceFamilyCounts: sourcePackWorker.parserSourceFamilyCounts,
         sourceFamilyCounts: sourcePackWorker.sourceFamilyCounts,
+        proxyVerification: sourcePackWorker.proxyVerification,
         readiness: sourcePackWorker.readiness,
         redactedSourcePackIds: sourcePackWorker.redactedSourcePackIds,
         rejectedCandidates: sourcePackWorker.rejectedCandidates,

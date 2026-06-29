@@ -122,6 +122,51 @@ describe("dwm source inventory", () => {
     expect(packsBody.counts.telegramPublic).toBeGreaterThanOrEqual(3000);
   });
 
+  test("exposes missing worker readiness as a proxy-verifiable blocked state", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const inventory = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-inventory?full=true&watchlist=APT29"), options);
+    const inventoryBody = await inventory.json() as any;
+    const packs = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-packs?terms=APT29"), options);
+    const packsBody = await packs.json() as any;
+
+    expect(inventory.status).toBe(200);
+    expect(inventoryBody.sourcePackWorker).toMatchObject({
+      freshness: "missing",
+      readiness: {
+        state: "missing",
+        blockers: expect.arrayContaining(["source-pack worker has not run"])
+      },
+      safeOutput: {
+        rawUnsafeRowsStored: false,
+        rawTargetsExposed: false,
+        privateTelegramContentExposed: false,
+        restrictedMetadataLeaked: false,
+        liveNetworkScrapeStarted: false
+      },
+      proxyVerification: {
+        schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
+        state: "missing"
+      }
+    });
+    expect(inventoryBody.sourcePackWorker.proxyVerification.requiredJsonPaths).toEqual(expect.arrayContaining([
+      "sourceInventory.sourcePackWorker.freshness",
+      "sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted",
+      "sourcePacks.proxyVerification.state"
+    ]));
+    expect(inventoryBody.sourcePackWorker.proxyVerification.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "safe_output_no_live_network", status: "pass" }),
+      expect.objectContaining({ id: "rejected_candidates_redacted", status: "pass" }),
+      expect.objectContaining({ id: "pack_ids_redacted", status: "pass" })
+    ]));
+    expect(packsBody).toMatchObject({
+      readiness: { state: "missing" },
+      proxyVerification: { state: "missing" },
+      safeOutput: { liveNetworkScrapeStarted: false }
+    });
+  });
+
   test("exposes restart-safe source-pack worker readiness for dashboard proxy consumption", async () => {
     const tmp = mkdtempSync(join(tmpdir(), "source-pack-worker-proof-"));
     try {
@@ -221,6 +266,27 @@ describe("dwm source inventory", () => {
       expect(Object.values(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.telegram).reduce((sum: number, count: any) => sum + Number(count), 0)).toBe(2);
       expect(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.darkweb_metadata).toMatchObject({ restricted_metadata_parser_ready: 1 });
       expect(inventoryBody.sourcePackWorker.parserSourceFamilyCounts.darkweb_onion).toMatchObject({ intake_blocked: 1 });
+      expect(inventoryBody.sourcePackWorker.proxyVerification).toMatchObject({
+        schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
+        state: "ready",
+        safeOutput: {
+          privateTelegramContentExposed: false,
+          restrictedMetadataLeaked: false,
+          liveNetworkScrapeStarted: false
+        }
+      });
+      expect(inventoryBody.sourcePackWorker.proxyVerification.checks).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "schema_present", status: "pass" }),
+        expect.objectContaining({ id: "active_or_collection_rows_when_ready", status: "pass" }),
+        expect.objectContaining({ id: "pack_ids_redacted", status: "pass" }),
+        expect.objectContaining({ id: "rejected_candidates_redacted", status: "pass" }),
+        expect.objectContaining({ id: "safe_output_no_restricted_metadata_leak", status: "pass" }),
+        expect.objectContaining({ id: "safe_output_no_live_network", status: "pass" })
+      ]));
+      expect(inventoryBody.sourcePackWorker.proxyVerification.worker3JsonAssertions).toEqual(expect.arrayContaining([
+        ".sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted == false",
+        ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
+      ]));
       expect(JSON.stringify(inventoryBody.sourcePackWorker)).not.toContain("password-dump");
 
       expect(packs.status).toBe(200);
@@ -228,6 +294,10 @@ describe("dwm source inventory", () => {
         workerReadiness: { activeSourceRows: 2, collectionReadyRows: 2 },
         sourceGrowthCounters: { queuedCollectionTasks: 2, restrictedBlocked: 1 },
         readiness: { state: "ready" },
+        proxyVerification: {
+          schemaVersion: "dwm.source_pack_worker_proxy_verification.v1",
+          state: "ready"
+        },
         safeOutput: { rawTargetsExposed: false }
       });
 
@@ -237,6 +307,10 @@ describe("dwm source inventory", () => {
       expect(staleBody.readiness).toMatchObject({
         state: "stale",
         blockers: expect.arrayContaining(["source-pack worker last run is older than 120 minutes"])
+      });
+      expect(staleBody.proxyVerification).toMatchObject({
+        state: "stale",
+        safeOutput: { liveNetworkScrapeStarted: false }
       });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
