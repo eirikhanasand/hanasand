@@ -1187,6 +1187,132 @@ export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: Or
     })
 }
 
+export async function getOrganizationWatchlist(req: FastifyRequest<{ Params: WatchlistParams }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.organizationId, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM organization_watchlist_items
+        WHERE id = $1
+          AND organization_id = $2
+        LIMIT 1
+    `, [req.params.itemId, req.params.organizationId])
+
+    if (!result.rows.length) {
+        return sendWatchlistLookupDenial(req, res, organization, userId, {
+            action: 'read_watchlist',
+            itemId: req.params.itemId,
+        })
+    }
+
+    const watchlistItem = toWatchlistItem(result.rows[0] as OrganizationWatchlistRow)
+    const visibility = organizationVisibilityDecision({
+        role: organization.role,
+        status: 'active',
+        userActive: true,
+        alertVisibilityPolicy: organization.alert_visibility_policy,
+    })
+
+    return res.send({
+        organization: toOrganization(organization),
+        watchlistItem,
+        watchlistReadContract: {
+            schemaVersion: 'organization.watchlist_item_read.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            ownerOrganizationId: organization.id,
+            watchlistItemId: watchlistItem.id,
+            watchlistId: watchlistItem.id,
+            member: {
+                userId,
+                role: organization.role ?? 'viewer',
+                status: 'active',
+            },
+            visibility: {
+                canReadSharedWatchlist: true,
+                alertVisibilityAllowed: visibility.allowed,
+                alertVisibilityPolicy: visibility.alertVisibilityPolicy,
+                allowedAlertViewerRoles: visibility.allowedRoles,
+                alertVisibilityDenialReason: visibility.reason,
+            },
+            ownerContext: {
+                schemaVersion: 'organization.watchlist_owner_context.v1',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                ownerOrganizationId: organization.id,
+                watchlistItemId: watchlistItem.id,
+                watchlistId: watchlistItem.id,
+                actorId: userId,
+                actorRole: organization.role ?? 'viewer',
+                visibilityPolicy: visibility.alertVisibilityPolicy,
+                allowedViewerRoles: visibility.allowedRoles,
+                sourceFamily: 'organization_watchlist',
+                route: 'organization_watchlist',
+                alertBridgeFields: [
+                    'organizationId',
+                    'tenantId',
+                    'ownerOrganizationId',
+                    'watchlistItemId',
+                    'watchlistId',
+                    'workflowContext.alertGenerationRefs',
+                    'workflowContext.alertGeneratorKeys',
+                ],
+                webhookBridgeFields: [
+                    'organizationId',
+                    'tenantId',
+                    'ownerOrganizationId',
+                    'watchlistItemId',
+                    'destination.org_id',
+                    'webhookDestinationIds[]',
+                ],
+                crossTenantCollisionAllowed: false,
+                nonmemberEnumeration: false,
+            },
+            alertBridge: {
+                activeTermsExportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
+                alertGenerationReference: watchlistItem.alertGenerationReference,
+                requiredPersistedFields: [
+                    'organizationId',
+                    'tenantId',
+                    'watchlistItemIds',
+                    'workflowContext.alertGenerationRefs',
+                    'workflowContext.alertGeneratorKeys',
+                    'workflowContext.visibilityDecision',
+                ],
+            },
+            webhookBridge: {
+                route: 'POST /v1/dwm/webhooks/deliver',
+                requiredDestinationOrgId: organization.id,
+                selectedDestinationOrgField: 'destination.org_id',
+                selectedDestinationIdField: 'webhookDestinationIds[]',
+                nonmemberDestinationEnumeration: false,
+                noLeakFields: ['destination.secret', 'otherOrg.destinationIds'],
+            },
+            lifecycle: {
+                status: watchlistItem.status,
+                enabled: watchlistItem.enabled,
+                disabledReason: watchlistItem.disabledReason,
+                alertGenerationEligible: watchlistItem.enabled,
+            },
+            noLeakFields: [
+                'otherOrg.watchlistItemIds',
+                'otherOrg.alertGeneratorKeys',
+                'otherOrg.destinationIds',
+                'destination.secret',
+            ],
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
+    })
+}
+
 export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params: OrganizationParams }>, res: FastifyReply) {
     const { valid, id: userId } = await tokenWrapper(req, res)
     if (!valid || !userId) {
@@ -2295,7 +2421,7 @@ function sendWatchlistLookupDenial(
     organization: OrganizationRow,
     actorId: string,
     input: {
-        action: 'update_watchlist' | 'archive_watchlist' | OrganizationWatchlistAction
+        action: 'read_watchlist' | 'update_watchlist' | 'archive_watchlist' | OrganizationWatchlistAction
         itemId: string
         requestId?: string | null
         reason?: string | null

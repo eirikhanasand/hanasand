@@ -59,6 +59,7 @@ app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
 app.get('/api/organizations/:id/alert-case-visibility', handlers.getOrganizationAlertCaseVisibility)
 app.get('/api/organizations/:id/watchlists/alert-terms', handlers.getOrganizationWatchlistAlertTerms)
+app.get('/api/organizations/:organizationId/watchlists/:itemId', handlers.getOrganizationWatchlist)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
 app.post('/api/organizations/:id/watchlists/cleanup', handlers.postOrganizationWatchlistCleanup)
@@ -958,6 +959,34 @@ assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
 assert.equal(memberWatchlist[0].enabled, true)
 assert.equal(memberWatchlist[0].disabledReason, null)
+const memberWatchlistItemResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(memberWatchlistItemResponse.statusCode, 200, memberWatchlistItemResponse.body)
+const memberWatchlistItemBody = parseBody(memberWatchlistItemResponse.body)
+assert.equal(memberWatchlistItemBody.watchlistItem.id, ownerWatchlistItem.id)
+assert.equal(memberWatchlistItemBody.watchlistItem.organizationId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.schemaVersion, 'organization.watchlist_item_read.v1')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.organizationId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.tenantId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.ownerOrganizationId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.watchlistItemId, ownerWatchlistItem.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.member.userId, 'org_smoke_member')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.member.role, 'member')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.visibility.canReadSharedWatchlist, true)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.visibility.alertVisibilityAllowed, false)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.visibility.alertVisibilityDenialReason, 'role_not_allowed')
+assert.deepEqual(memberWatchlistItemBody.watchlistReadContract.ownerContext.alertBridgeFields, ownerWatchlistOperation.ownerContext.alertBridgeFields)
+assert.deepEqual(memberWatchlistItemBody.watchlistReadContract.ownerContext.webhookBridgeFields, ownerWatchlistOperation.ownerContext.webhookBridgeFields)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.alertBridge.alertGenerationReference.watchlistItemId, ownerWatchlistItem.id)
+assert.ok(memberWatchlistItemBody.watchlistReadContract.alertBridge.requiredPersistedFields.includes('workflowContext.alertGeneratorKeys'))
+assert.equal(memberWatchlistItemBody.watchlistReadContract.webhookBridge.requiredDestinationOrgId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.webhookBridge.nonmemberDestinationEnumeration, false)
+assert.ok(memberWatchlistItemBody.watchlistReadContract.noLeakFields.includes('otherOrg.watchlistItemIds'))
+assert.equal(memberWatchlistItemBody.watchlistReadContract.lifecycle.status, 'active')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.lifecycle.alertGenerationEligible, true)
 const memberSharedWatchlistContract = parseBody(memberWatchlistResponse.body).sharedWatchlistContract
 assert.equal(memberSharedWatchlistContract.schemaVersion, 'organization.shared_watchlist_contract.v1')
 assert.equal(memberSharedWatchlistContract.organizationId, organization.id)
@@ -3144,6 +3173,25 @@ assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item:
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.enabled), [true])
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.disabledReason), [null])
 
+const wrongOrgWatchlistReadResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${secondOrganization.id}/watchlists/${ownerWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(wrongOrgWatchlistReadResponse.statusCode, 404, wrongOrgWatchlistReadResponse.body)
+const wrongOrgWatchlistReadDenied = parseBody(wrongOrgWatchlistReadResponse.body).watchlistLookupDenial
+assert.equal(wrongOrgWatchlistReadDenied.schemaVersion, 'organization.watchlist_lookup_denial.v1')
+assert.equal(wrongOrgWatchlistReadDenied.organizationId, secondOrganization.id)
+assert.equal(wrongOrgWatchlistReadDenied.tenantId, secondOrganization.id)
+assert.equal(wrongOrgWatchlistReadDenied.actorId, 'org_smoke_owner')
+assert.equal(wrongOrgWatchlistReadDenied.actorRole, 'owner')
+assert.equal(wrongOrgWatchlistReadDenied.action, 'read_watchlist')
+assert.equal(wrongOrgWatchlistReadDenied.itemId, ownerWatchlistItem.id)
+assert.equal(wrongOrgWatchlistReadDenied.blockerCode, 'watchlist_not_found_or_cross_org')
+assert.equal(wrongOrgWatchlistReadDenied.nonmemberEnumeration, false)
+assert.equal(wrongOrgWatchlistReadDenied.crossOrgEnumerationAllowed, false)
+assert.ok(wrongOrgWatchlistReadDenied.noLeakFields.includes('otherOrg.watchlistItemIds'))
+
 const wrongOrgWatchlistUpdateResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${secondOrganization.id}/watchlists/${ownerWatchlistItem.id}`,
@@ -3662,6 +3710,12 @@ const outsiderAlertTermsResponse = await app.inject({
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderAlertTermsResponse.statusCode, 404, outsiderAlertTermsResponse.body)
+const outsiderWatchlistItemResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(outsiderWatchlistItemResponse.statusCode, 404, outsiderWatchlistItemResponse.body)
 const outsiderCleanupResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists/cleanup`,
@@ -3682,6 +3736,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutati
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-viewer-watchlist-archive-denied' && log.metadata.action === 'archive_watchlist' && log.metadata.actorRole === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.actorRole === 'member'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_mutation_denied' && log.metadata.requestId === 'smoke-member-cleanup-denied' && log.metadata.action === 'cleanup_watchlists' && log.metadata.actorRole === 'member'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.action === 'read_watchlist' && log.metadata.itemId === ownerWatchlistItem.id && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_lookup_denied' && log.metadata.requestId === 'smoke-wrong-org-watchlist-update-denied' && log.metadata.action === 'update_watchlist' && log.metadata.blockerCode === 'watchlist_not_found_or_cross_org'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
@@ -3967,6 +4022,12 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('SELECT * FROM organization_watchlist_items')) {
+        if (compact.includes('WHERE id = $1')) {
+            const [itemId, organizationId] = params
+            const existing = watchlists.get(itemId)
+            return rows(existing && existing.organization_id === organizationId ? [existing] : [])
+        }
+
         if (params.length === 1 && compact.includes('ORDER BY status ASC')) {
             const [organizationId] = params
             return rows([...watchlists.values()]
