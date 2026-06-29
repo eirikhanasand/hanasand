@@ -3379,11 +3379,13 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
     alertRowsByFamily.set(family, [...(alertRowsByFamily.get(family) ?? []), row]);
   }
   const sourceOperationsReadinessByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const recoveryByFamily = new Map<string, Record<string, any>>((input.publicTiQueryAdapter.sourceHealth ?? []).map((row: any) => [String(row.family), row.operationalRecovery]));
   const rows = freshnessRows.map((row: any) => {
     const family = String(row.sourceFamily);
     const operations = operationsByFamily.get(family) ?? [];
     const alertRows = alertRowsByFamily.get(family) ?? [];
     const sourceOperationsReadiness = sourceOperationsReadinessByFamily.get(family);
+    const operationalRecovery = recoveryByFamily.get(family);
     return {
       schemaVersion: "dwm.dashboard.source_operations_adapter_row.v1",
       proofId: stableId("dwm_dashboard_source_operations_adapter_row", `${input.query}:${family}:${row.state}:${row.parserStatus?.state}:${row.freshnessState}`),
@@ -3407,6 +3409,16 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
         blockers: operation.blockers ?? [],
         liveNetworkFetch: false
       })),
+      operationalRecovery: operationalRecovery ? {
+        state: operationalRecovery.state,
+        retryable: operationalRecovery.retryable === true,
+        noNetworkSafe: operationalRecovery.noNetworkSafe !== false,
+        nextActionTypes: operationalRecovery.nextActionTypes ?? [],
+        primaryAction: operationalRecovery.primaryAction,
+        primaryRoute: operationalRecovery.primaryRoute,
+        blockerCodes: operationalRecovery.blockerCodes ?? [],
+        liveNetworkFetch: false
+      } : undefined,
       sourceOperationsReadiness: sourceOperationsReadiness ? {
         proofId: sourceOperationsReadiness.proofId,
         state: sourceOperationsReadiness.state,
@@ -3471,6 +3483,8 @@ function sourceActorDashboardSourceOperationsAdapter(input: {
       fixtureTestableFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.fixtureTestableFamilies ?? [],
       fixtureMetadataApprovalFamilies: input.publicTiQueryAdapter.downstreamFixtureExport?.sourceOperationsReadiness?.summary?.fixtureMetadataApprovalFamilies ?? [],
       nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
+      recoveryStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.operationalRecovery?.state).filter(Boolean)),
+      recoveryActionFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.operationalRecovery?.nextActionTypes?.length > 0).map((row) => row.sourceFamily)),
       parserStates: uniqueSourceReadinessStrings(rows.map((row: any) => row.parserStatus?.state).filter(Boolean)),
       latestCaptureAt: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.latestCaptureAt,
       latestEnrichmentAt: input.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger?.summary?.latestEnrichmentAt
@@ -3521,6 +3535,16 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     retryBackoff: row.retryBackoff,
     blockers: row.blockers ?? [],
     nextActions: row.nextActions ?? [],
+    operationalRecovery: row.operationalRecovery ? {
+      state: row.operationalRecovery.state,
+      retryable: row.operationalRecovery.retryable === true,
+      noNetworkSafe: row.operationalRecovery.noNetworkSafe !== false,
+      nextActionTypes: row.operationalRecovery.nextActionTypes ?? [],
+      primaryAction: row.operationalRecovery.primaryAction,
+      primaryRoute: row.operationalRecovery.primaryRoute,
+      blockerCodes: row.operationalRecovery.blockerCodes ?? [],
+      liveNetworkFetch: false
+    } : undefined,
     safeOutput: row.safeOutput
   }));
   const sectionRows = (actorReadiness.sourceSectionReadiness?.sections ?? []).map((section: any) => {

@@ -1968,6 +1968,14 @@ describe("dwm source requests", () => {
               family: "telegram",
               parserState: "ready",
               sourceIds: expect.arrayContaining([expect.any(String)]),
+              operationalRecovery: expect.objectContaining({
+                state: "monitor",
+                retryable: false,
+                noNetworkSafe: true,
+                nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
+                primaryAction: "rebuild_alerts",
+                liveNetworkFetch: false
+              }),
               safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
             })
           ]),
@@ -2480,6 +2488,11 @@ describe("dwm source requests", () => {
                 operations: expect.arrayContaining([
                   expect.objectContaining({ type: "rebuild_alerts", liveNetworkFetch: false })
                 ]),
+                operationalRecovery: expect.objectContaining({
+                  state: "monitor",
+                  nextActionTypes: expect.arrayContaining(["rebuild_alerts"]),
+                  liveNetworkFetch: false
+                }),
                 safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
               })
             ]),
@@ -4010,7 +4023,17 @@ describe("dwm source requests", () => {
       }),
       sourceFamilyHealth: expect.objectContaining({
         rows: expect.arrayContaining([
-          expect.objectContaining({ family: "telegram", parserState: "retry_required" })
+          expect.objectContaining({
+            family: "telegram",
+            parserState: "retry_required",
+            operationalRecovery: expect.objectContaining({
+              state: "retryable",
+              retryable: true,
+              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+              primaryAction: "retry_parser",
+              liveNetworkFetch: false
+            })
+          })
         ])
       })
     });
@@ -4126,6 +4149,24 @@ describe("dwm source requests", () => {
             })
           })
         ])
+      })
+    });
+    expect(retryBody.proofArtifacts.dashboardSourceReadiness.sourceOperationsAdapter).toMatchObject({
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram",
+          operationalRecovery: expect.objectContaining({
+            state: "retryable",
+            retryable: true,
+            nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+            primaryAction: "retry_parser",
+            liveNetworkFetch: false
+          })
+        })
+      ]),
+      summary: expect.objectContaining({
+        recoveryStates: expect.arrayContaining(["retryable", "candidate_required"]),
+        recoveryActionFamilies: expect.arrayContaining(["telegram", "actor_page"])
       })
     });
     expect(retryQueryAdapter.downstreamFixtureExport).toMatchObject({
