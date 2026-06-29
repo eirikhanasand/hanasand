@@ -587,12 +587,16 @@ const ownerWatchlistResponse = await app.inject({
 assert.equal(ownerWatchlistResponse.statusCode, 201, ownerWatchlistResponse.body)
 const ownerWatchlistItem = parseBody(ownerWatchlistResponse.body).watchlistItem
 assert.equal(ownerWatchlistItem.status, 'active')
+assert.equal(ownerWatchlistItem.enabled, true)
+assert.equal(ownerWatchlistItem.disabledReason, null)
 assert.equal(ownerWatchlistItem.createdBy, 'org_smoke_owner')
 assert.equal(ownerWatchlistItem.updatedBy, 'org_smoke_owner')
 assert.equal(ownerWatchlistItem.lifecycleReason, 'Live proof domain seed.')
 assert.equal(ownerWatchlistItem.lifecycleRequestId, 'smoke-domain-create')
 assert.equal(ownerWatchlistItem.alertGenerationReference.watchlistItemId, ownerWatchlistItem.id)
 assert.equal(ownerWatchlistItem.alertGenerationReference.category, 'domain')
+assert.equal(ownerWatchlistItem.alertGenerationReference.enabled, true)
+assert.equal(ownerWatchlistItem.alertGenerationReference.disabledReason, null)
 const ownerWatchlistOperation = parseBody(ownerWatchlistResponse.body).operation
 assert.equal(ownerWatchlistOperation.actorId, 'org_smoke_owner')
 assert.equal(ownerWatchlistOperation.requestId, 'smoke-domain-create')
@@ -609,6 +613,8 @@ assert.equal(memberWatchlist.length, 1)
 assert.ok(memberWatchlist[0].id)
 assert.equal(memberWatchlist[0].organizationId, organization.id)
 assert.equal(memberWatchlist[0].value, 'acme-shared.example')
+assert.equal(memberWatchlist[0].enabled, true)
+assert.equal(memberWatchlist[0].disabledReason, null)
 
 const viewerWatchlistResponse = await app.inject({
     method: 'GET',
@@ -673,6 +679,8 @@ const ownerPausesCompanyResponse = await app.inject({
 })
 assert.equal(ownerPausesCompanyResponse.statusCode, 200, ownerPausesCompanyResponse.body)
 assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.status, 'paused')
+assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.enabled, false)
+assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.disabledReason, 'watchlist_paused')
 assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.action, 'pause')
 
 const pausedWatchlistsResponse = await app.inject({
@@ -682,6 +690,8 @@ const pausedWatchlistsResponse = await app.inject({
 })
 assert.equal(pausedWatchlistsResponse.statusCode, 200, pausedWatchlistsResponse.body)
 assert.deepEqual(parseBody(pausedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [companyWatchlistItem.id])
+assert.deepEqual(parseBody(pausedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.enabled), [false])
+assert.deepEqual(parseBody(pausedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.disabledReason), ['watchlist_paused'])
 
 const readinessWhilePausedResponse = await app.inject({
     method: 'GET',
@@ -2406,6 +2416,8 @@ const secondOrgListResponse = await app.inject({
 assert.equal(secondOrgListResponse.statusCode, 200, secondOrgListResponse.body)
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.organizationId), [secondOrganization.id])
 assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.id), [secondOrgWatchlistItem.id])
+assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.enabled), [true])
+assert.deepEqual(parseBody(secondOrgListResponse.body).watchlistItems.map((item: Row) => item.disabledReason), [null])
 
 const alertTermsRetryResponse = await app.inject({
     method: 'GET',
@@ -2414,6 +2426,8 @@ const alertTermsRetryResponse = await app.inject({
 })
 assert.equal(alertTermsRetryResponse.statusCode, 200, alertTermsRetryResponse.body)
 const alertTermsRetryExport = parseBody(alertTermsRetryResponse.body).alertTermsExport
+assert.ok(alertTermsRetryExport.activeTerms.every((term: Row) => term.enabled === true))
+assert.ok(alertTermsRetryExport.activeTerms.every((term: Row) => term.disabledReason === null))
 assert.deepEqual(
     alertTermsRetryExport.activeTerms.map((term: Row) => ({
         watchlistItemId: term.watchlistItemId,
@@ -2515,6 +2529,8 @@ assert.equal(ownerDisablesActorResponse.statusCode, 200, ownerDisablesActorRespo
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.action, 'disabled')
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.requestId, 'smoke-disable-actor')
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.status, 'archived')
+assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.enabled, false)
+assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.disabledReason, 'watchlist_archived')
 
 const archivedWatchlistsResponse = await app.inject({
     method: 'GET',
@@ -2523,6 +2539,8 @@ const archivedWatchlistsResponse = await app.inject({
 })
 assert.equal(archivedWatchlistsResponse.statusCode, 200, archivedWatchlistsResponse.body)
 assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [actorWatchlistItem.id])
+assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.enabled), [false])
+assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.disabledReason), ['watchlist_archived'])
 
 const alertTermsAfterArchiveResponse = await app.inject({
     method: 'GET',
@@ -2651,6 +2669,12 @@ assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.cleanu
 assert.equal(cleanupAfterArchiveExport.downstreamAuthorization.watchlists.archivedCount, 3)
 assert.ok(cleanupAfterArchiveExport.downstreamAuthorization.downstream.alertGeneration.blockerCodes.includes('watchlist_archived'))
 assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.status === 'active'))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.enabled === true))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.disabledReason === null))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.enabled === true))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.disabledReason === null))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.lifecycle.enabled === true))
+assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationReference.enabled === true))
 assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
     'create_watchlist',
     'edit_watchlist_terms',
@@ -2673,6 +2697,8 @@ const restoreArchivedWatchlistResponse = await app.inject({
 assert.equal(restoreArchivedWatchlistResponse.statusCode, 200, restoreArchivedWatchlistResponse.body)
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.status, 'active')
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.archivedAt, null)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.enabled, true)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.disabledReason, null)
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.action, 'restore')
 
 const restoredExportResponse = await app.inject({
@@ -2684,6 +2710,8 @@ assert.equal(restoredExportResponse.statusCode, 200, restoredExportResponse.body
 const restoredExport = parseBody(restoredExportResponse.body).alertTermsExport
 assert.ok(restoredExport.activeTerms.some((term: Row) => term.watchlistItemId === cleanupKeywordItem.id))
 assert.equal(restoredExport.activeTerms.find((term: Row) => term.watchlistItemId === cleanupKeywordItem.id).alertGenerationRef.lifecycle.requestId, 'smoke-restore-cleanup-keyword')
+assert.equal(restoredExport.activeTerms.find((term: Row) => term.watchlistItemId === cleanupKeywordItem.id).enabled, true)
+assert.equal(restoredExport.activeTerms.find((term: Row) => term.watchlistItemId === cleanupKeywordItem.id).disabledReason, null)
 assert.deepEqual(restoredExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
     'create_watchlist',
     'edit_watchlist_terms',

@@ -250,8 +250,12 @@ export type OrganizationWatchlistAlertGenerationRef = {
     term: string
     normalizedTerm: string
     status: 'active'
+    enabled: true
+    disabledReason: null
     lifecycle: {
         status: 'active'
+        enabled: true
+        disabledReason: null
         reason: string | null
         requestId: string | null
         createdBy: string
@@ -4126,6 +4130,8 @@ export function toWatchlistItem(row: OrganizationWatchlistRow) {
             category: row.kind,
             term: row.value,
             status,
+            enabled: lifecycleState.enabled,
+            disabledReason: lifecycleState.disabledReason,
         },
     }
 }
@@ -4360,6 +4366,8 @@ export function organizationWatchlistAlertTermsExport(
                 category: term.category,
                 term: term.term,
                 status: 'active' as const,
+                enabled: true as const,
+                disabledReason: null,
             },
         }
     })
@@ -4834,8 +4842,12 @@ function organizationWatchlistAlertGenerationRef(term: OrganizationWatchlistTerm
         term: term.term,
         normalizedTerm,
         status: 'active',
+        enabled: true,
+        disabledReason: null,
         lifecycle: {
             status: 'active',
+            enabled: true,
+            disabledReason: null,
             reason: term.lifecycleReason,
             requestId: term.lifecycleRequestId,
             createdBy: term.createdBy,
