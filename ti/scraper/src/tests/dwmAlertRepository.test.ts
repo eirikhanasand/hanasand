@@ -955,6 +955,15 @@ describe("dwm alert repository", () => {
       deliveryReadiness: {
         webhookDestinationIds: ["webhook_alpha_ops"],
         destinationReady: true
+      },
+      deliverySelection: {
+        schemaVersion: "dwm.alert_delivery_selection.v1",
+        ready: true,
+        selectedWebhookDestinationId: "webhook_alpha_ops",
+        enabledWebhookDestinationIds: ["webhook_alpha_ops"],
+        disabledWebhookDestinationIds: [],
+        selectedCaptureIds: ["cap_repo_overlap_acme"],
+        sourceFamily: "telegram_public"
       }
     });
     expect(betaHandoff).toMatchObject({
@@ -969,6 +978,15 @@ describe("dwm alert repository", () => {
       deliveryReadiness: {
         webhookDestinationIds: ["webhook_beta_ops"],
         destinationReady: true
+      },
+      deliverySelection: {
+        schemaVersion: "dwm.alert_delivery_selection.v1",
+        ready: true,
+        selectedWebhookDestinationId: "webhook_beta_ops",
+        enabledWebhookDestinationIds: ["webhook_beta_ops"],
+        disabledWebhookDestinationIds: [],
+        selectedCaptureIds: ["cap_repo_overlap_acme"],
+        sourceFamily: "telegram_public"
       }
     });
     expect(JSON.stringify(alphaHandoff)).not.toContain("webhook_beta_ops");
@@ -1009,7 +1027,13 @@ describe("dwm alert repository", () => {
       blockerCodes: ["duplicate_replay"],
       replay: { duplicate: true, canReplay: false },
       caseReadiness: { caseId: "case_alpha_overlap" },
-      deliveryReadiness: { deliveryHistoryRefs: ["delivery_alpha_overlap"] }
+      deliveryReadiness: { deliveryHistoryRefs: ["delivery_alpha_overlap"] },
+      deliverySelection: {
+        ready: false,
+        selectedWebhookDestinationId: undefined,
+        blockerCodes: expect.arrayContaining(["duplicate_replay"]),
+        selectedCaptureIds: ["cap_repo_overlap_acme"]
+      }
     });
     expect(betaTelegramAfterAlphaWorkflow?.workflowEvents ?? []).toHaveLength(0);
     expect(betaTelegramAfterAlphaWorkflow?.assignedOwner).toBeUndefined();
