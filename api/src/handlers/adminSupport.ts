@@ -986,6 +986,19 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         availabilityByOrg,
         timeline: recentAuditTimeline.events,
     })
+    const authorization = buildSupportInspectionAuthorization({
+        actorId: actor.id,
+        requestedOrg: req.params.id,
+        requestedUser: '',
+        effectiveOrg: organization.id,
+        effectiveUser: '',
+        email: '',
+        request: inspectionAudit.requestId,
+        entity: organization.id,
+        supportSession: '',
+        sessionState: null,
+        organizationIds: [organization.id],
+    })
     const alertReadinessBridge = supportTimelineAuditBridgeEvent({
         workflow: 'watchlist',
         action: 'support.organization.alert_readiness.inspect',
@@ -1011,6 +1024,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
     })
     return res.send({
         organization: toOrganization(organization),
+        authorization,
         accessStatus: organizationAccessStatus,
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
@@ -1042,6 +1056,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         recentAuditTimeline,
         copyText: [
             `Support organization inspection ${organization.id}`,
+            `Authorization: ${authorization.supportSessionScoped ? 'scoped support session' : 'support role'}`,
             `Access status: ${organizationAccessStatus.overall}`,
             `Members: ${members.rows.length}`,
             `Pending invites: ${(invites.rows as OrganizationInviteRow[]).filter(row => row.status === 'pending').length}`,
@@ -1169,8 +1184,22 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         availabilityByOrg,
         timeline: recentAuditTimeline.events,
     })
+    const authorization = buildSupportInspectionAuthorization({
+        actorId: actor.id,
+        requestedOrg: '',
+        requestedUser: req.params.id,
+        effectiveOrg: '',
+        effectiveUser: req.params.id,
+        email: '',
+        request: inspectionAudit.requestId,
+        entity: req.params.id,
+        supportSession: '',
+        sessionState: null,
+        organizationIds,
+    })
     return res.send({
         user: toSupportUser(userRow),
+        authorization,
         accessStatus: userAccessStatus,
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
@@ -1179,6 +1208,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         recentAuditTimeline,
         copyText: [
             `Support user inspection ${req.params.id}`,
+            `Authorization: ${authorization.supportSessionScoped ? 'scoped support session' : 'support role'}`,
             `Access status: ${userAccessStatus.overall}`,
             `Memberships: ${memberships.rows.length}`,
             `Pending invites: ${invites.rows.length}`,
