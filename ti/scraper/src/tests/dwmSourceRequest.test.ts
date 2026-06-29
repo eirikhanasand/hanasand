@@ -644,15 +644,151 @@ describe("dwm source requests", () => {
     expect(inventoryBody.sourcePackWorker.proxyVerification).toMatchObject({
       checks: expect.arrayContaining([
         expect.objectContaining({ id: "source_operations_readiness_present", status: "pass" }),
-        expect.objectContaining({ id: "source_operations_next_actions_present", status: "pass" })
+        expect.objectContaining({ id: "source_operations_next_actions_present", status: "pass" }),
+        expect.objectContaining({ id: "source_customer_config_present", status: "pass" }),
+        expect.objectContaining({ id: "source_customer_config_redacted", status: "pass" })
       ]),
       worker3JsonAssertions: expect.arrayContaining([
         ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.schemaVersion == \"dwm.source_operations_readiness.v1\"",
-        ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions | all(has(\"action\") and has(\"reason\"))"
+        ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions | all(has(\"action\") and has(\"reason\"))",
+        ".sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion == \"dwm.source_pack_customer_config.v1\"",
+        ".sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs | all(.redactedIdentity.rawStored == false)"
       ])
     });
+    expect(inventoryBody.sourcePackWorker.sourceCustomerConfig).toMatchObject({
+      schemaVersion: "dwm.source_pack_customer_config.v1",
+      summary: {
+        candidateCount: 4,
+        activeSourceCount: 1,
+        retryableCount: 1,
+        duplicateCount: 1,
+        suppressedDuplicateCount: 1,
+        policyRejectedCount: 1,
+        restrictedSourceCount: 1,
+        mutationReady: false
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        rawTargetsExposed: false,
+        privateTelegramContentExposed: false,
+        restrictedPayloadDownloadAllowed: false
+      }
+    });
+    expect(inventoryBody.sourcePackWorker.sourceCustomerConfig.sourceConfigs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        candidateId: activeCandidate.id,
+        family: "telegram",
+        redactedIdentity: expect.objectContaining({ rawStored: false }),
+        allowedOperatorActions: expect.arrayContaining([
+          expect.objectContaining({ action: "activate", allowed: true })
+        ])
+      }),
+      expect.objectContaining({
+        candidateId: retryCandidate.id,
+        retryState: expect.objectContaining({ retryable: true }),
+        allowedOperatorActions: expect.arrayContaining([
+          expect.objectContaining({ action: "retry", allowed: true })
+        ])
+      }),
+      expect.objectContaining({
+        candidateId: duplicateCandidate.id,
+        suppressionState: expect.objectContaining({ duplicate: true, suppressed: true }),
+        typedBlockers: expect.arrayContaining([
+          expect.objectContaining({ code: "duplicate_source", severity: "blocking" })
+        ])
+      }),
+      expect.objectContaining({
+        candidateId: rejectedCandidate.id,
+        family: "darkweb_onion",
+        candidatePolicy: expect.objectContaining({ restrictedSource: true }),
+        typedBlockers: expect.arrayContaining([
+          expect.objectContaining({ code: "rejected_policy", severity: "blocking" }),
+          expect.objectContaining({ code: "restricted_source" })
+        ]),
+        allowedOperatorActions: expect.arrayContaining([
+          expect.objectContaining({ action: "review_policy", allowed: true })
+        ])
+      })
+    ]));
+    expect(inventoryBody.sourcePackWorker.sourceCustomerConfig.allowedOperatorActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "prepare_customer_config", dryRunSupported: true })
+    ]));
+    expect(inventoryBody.sourcePackWorker.sourceCustomerConfig.futureMutationRoutes).toMatchObject({
+      prepare: { method: "POST", path: "/v1/dwm/source-requests" },
+      applyCandidateAction: { status: "use_existing_pack_review_until_customer_config_mutation_exists" },
+      futureCrud: { status: "not_implemented" }
+    });
+
+    const customerConfig = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        customerId: "customer_acme",
+        scope: "APT29",
+        configMode: "prepare"
+      })
+    }), options);
+    const customerConfigBody = await customerConfig.json() as any;
+    expect(customerConfig.status).toBe(200);
+    expect(customerConfigBody).toMatchObject({
+      action: "pack_customer_config",
+      schemaVersion: "dwm.source_pack_customer_config.v1",
+      mode: "prepare",
+      tenantId: "tenant_action",
+      orgId: "org_acme",
+      customerId: "customer_acme",
+      summary: {
+        candidateCount: 4,
+        configurableCount: expect.any(Number),
+        mutationReady: false
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        rawTargetsExposed: false
+      }
+    });
+    expect(customerConfigBody.readiness.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate_source" }),
+      expect.objectContaining({ code: "rejected_policy" }),
+      expect.objectContaining({ code: "restricted_source" }),
+      expect.objectContaining({ code: "cleanup_required" })
+    ]));
+    expect(JSON.stringify(customerConfigBody)).not.toContain("password-dump");
+
+    const missingOrg = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_customer_config", sourcePackId: "pack_action_contract" })
+    }), options);
+    const missingOrgBody = await missingOrg.json() as any;
+    expect(missingOrg.status).toBe(200);
+    expect(missingOrgBody.readiness).toMatchObject({
+      state: "blocked",
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "missing_org_scope", severity: "blocking", retryable: true })
+      ])
+    });
+
+    const staleCustomerConfig = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        scope: "APT29",
+        generatedAt: "2030-01-01T00:00:00.000Z"
+      })
+    }), options);
+    const staleCustomerConfigBody = await staleCustomerConfig.json() as any;
+    expect(staleCustomerConfig.status).toBe(200);
+    expect(staleCustomerConfigBody.readiness.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "stale_worker", severity: "blocking", retryable: true })
+    ]));
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceOperationsReadiness)).not.toContain("password-dump");
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceHealth)).not.toContain("password-dump");
+    expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceCustomerConfig)).not.toContain("password-dump");
     expect(frontier.snapshot()).toHaveLength(1);
   });
 

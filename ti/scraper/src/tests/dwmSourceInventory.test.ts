@@ -445,7 +445,34 @@ describe("dwm source inventory", () => {
       ]));
       expect(inventoryBody.sourcePackWorker.proxyVerification.worker3JsonAssertions).toEqual(expect.arrayContaining([
         ".sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted == false",
+        ".sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion == \"dwm.source_pack_customer_config.v1\"",
+        ".sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs | all(.redactedIdentity.rawStored == false)",
         ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
+      ]));
+      expect(inventoryBody.sourcePackWorker.sourceCustomerConfig).toMatchObject({
+        schemaVersion: "dwm.source_pack_customer_config.v1",
+        summary: {
+          candidateCount: 4,
+          activeSourceCount: 2,
+          duplicateCount: 1,
+          suppressedDuplicateCount: 0,
+          policyRejectedCount: 1,
+          restrictedSourceCount: 2,
+          cleanupRequiredCount: 2,
+          mutationReady: false
+        },
+        safeOutput: { liveNetworkScrapeStarted: false, rawTargetsExposed: false }
+      });
+      expect(inventoryBody.sourcePackWorker.sourceCustomerConfig.sourceConfigs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ family: "telegram", redactedIdentity: expect.objectContaining({ rawStored: false }) }),
+        expect.objectContaining({ family: "darkweb_metadata", candidatePolicy: expect.objectContaining({ metadataOnly: true, restrictedSource: true }) }),
+        expect.objectContaining({
+          family: "darkweb_onion",
+          typedBlockers: expect.arrayContaining([
+            expect.objectContaining({ code: "rejected_policy" }),
+            expect.objectContaining({ code: "restricted_source" })
+          ])
+        })
       ]));
       expect(JSON.stringify(inventoryBody.sourcePackWorker)).not.toContain("password-dump");
 
@@ -469,6 +496,11 @@ describe("dwm source inventory", () => {
           actionability: { canGrowSources: true },
           safeOutput: { liveNetworkScrapeStarted: false }
         },
+        sourceCustomerConfig: {
+          schemaVersion: "dwm.source_pack_customer_config.v1",
+          summary: { candidateCount: 4, activeSourceCount: 2, mutationReady: false },
+          safeOutput: { liveNetworkScrapeStarted: false }
+        },
         safeOutput: { rawTargetsExposed: false }
       });
 
@@ -489,6 +521,15 @@ describe("dwm source inventory", () => {
         typedBlockers: expect.arrayContaining([
           expect.objectContaining({ code: "stale_worker", severity: "blocking", retryable: true })
         ])
+      });
+      expect(staleBody.sourceCustomerConfig).toMatchObject({
+        summary: { staleWorker: true },
+        readiness: {
+          blockers: expect.arrayContaining([
+            expect.objectContaining({ code: "stale_worker", severity: "blocking", retryable: true })
+          ])
+        },
+        safeOutput: { liveNetworkScrapeStarted: false }
       });
     } finally {
       rmSync(tmp, { recursive: true, force: true });

@@ -64,8 +64,11 @@ type DwmSourceRequestBody = {
   requestId?: string;
   seedPackIds?: string[];
   priority?: "critical" | "high" | "medium";
-  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run";
+  action?: "inspect" | "validate" | "test" | "activate" | "promote" | "reject" | "retry" | "suppress" | "record_capture" | "collection_failed" | "pack_status" | "pack_review" | "pack_list" | "pack_worker_run" | "pack_customer_config";
   packAction?: "approve" | "promote" | "reject" | "retry" | "suppress";
+  orgId?: string;
+  customerId?: string;
+  configMode?: "read" | "prepare";
   chunkSize?: number;
   maxAttempts?: number;
   backoffSeconds?: number;
@@ -227,7 +230,7 @@ export async function createDwmSourceRequest(request: Request, options: ApiServe
 
 export function buildDwmSourcePackWorkerReadinessSnapshot(
   options: ApiServerOptions,
-  input: { generatedAt?: string; staleAfterMinutes?: number } = {}
+  input: { generatedAt?: string; staleAfterMinutes?: number; tenantId?: string; orgId?: string; customerId?: string; scope?: string } = {}
 ) {
   const generatedAt = input.generatedAt ?? nowIso();
   const staleAfterMinutes = Math.max(1, input.staleAfterMinutes ?? 120);
@@ -243,6 +246,15 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
       ? "stale"
       : "fresh";
   const sourceHealth = buildDwmSourceHealthOperationsSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt });
+  const sourceCustomerConfig = buildDwmSourcePackCustomerConfigReadiness(packs, options, {
+    generatedAt,
+    freshness,
+    staleAfterMinutes,
+    tenantId: input.tenantId,
+    orgId: input.orgId,
+    customerId: input.customerId,
+    scope: input.scope
+  });
   const snapshot = {
     schemaVersion: "dwm.source_pack_worker_readiness.v1",
     generatedAt,
@@ -270,6 +282,7 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
     workerReadiness: workerState.readiness,
     sourceHealth,
     sourceOperationsReadiness: buildDwmSourceOperationsReadinessSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt, sourceHealth }),
+    sourceCustomerConfig,
     parserSourceFamilyCounts: growth.parserSourceFamilyCounts,
     sourceFamilyCounts: growth.sourceFamilyCounts,
     redactedSourcePackIds: packs.map((pack) => ({
@@ -322,6 +335,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
   workerReadiness: Record<string, any>;
   sourceHealth: Record<string, any>;
   sourceOperationsReadiness: Record<string, any>;
+  sourceCustomerConfig: Record<string, any>;
   parserSourceFamilyCounts: Record<string, Record<string, number>>;
   sourceFamilyCounts: Record<string, unknown>;
   redactedSourcePackIds: Array<{ id: string; safeRef: string; rawTargetsExposed: boolean }>;
@@ -344,6 +358,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
     verificationCheck("source_health_blockers_typed", Array.isArray(snapshot.sourceHealth.typedBlockers), snapshot.sourceHealth.typedBlockers?.length ?? "missing"),
     verificationCheck("source_operations_readiness_present", snapshot.sourceOperationsReadiness.schemaVersion === "dwm.source_operations_readiness.v1", snapshot.sourceOperationsReadiness.schemaVersion),
     verificationCheck("source_operations_next_actions_present", Array.isArray(snapshot.sourceOperationsReadiness.nextOperatorActions), snapshot.sourceOperationsReadiness.nextOperatorActions?.length ?? "missing"),
+    verificationCheck("source_customer_config_present", snapshot.sourceCustomerConfig.schemaVersion === "dwm.source_pack_customer_config.v1", snapshot.sourceCustomerConfig.schemaVersion),
+    verificationCheck("source_customer_config_redacted", snapshot.sourceCustomerConfig.safeOutput?.rawTargetsExposed === false && snapshot.sourceCustomerConfig.safeOutput?.privateTelegramContentExposed === false, snapshot.sourceCustomerConfig.safeOutput),
     verificationCheck("parser_family_counts_present", Object.keys(snapshot.parserSourceFamilyCounts).length > 0, Object.keys(snapshot.parserSourceFamilyCounts)),
     verificationCheck("source_family_counts_present", Object.keys(snapshot.sourceFamilyCounts).length > 0, Object.keys(snapshot.sourceFamilyCounts)),
     verificationCheck("pack_ids_redacted", snapshot.redactedSourcePackIds.every((pack) => pack.safeRef && pack.rawTargetsExposed === false), snapshot.redactedSourcePackIds.length),
@@ -376,6 +392,9 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourceInventory.sourcePackWorker.sourceOperationsReadiness.actionability.canRetry",
       "sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions[].action",
       "sourceInventory.sourcePackWorker.sourceOperationsReadiness.lastActionIds[]",
+      "sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion",
+      "sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs[].redactedIdentity.rawStored",
+      "sourceInventory.sourcePackWorker.sourceCustomerConfig.allowedOperatorActions[].action",
       "sourceInventory.sourcePackWorker.parserSourceFamilyCounts",
       "sourceInventory.sourcePackWorker.sourceFamilyCounts",
       "sourceInventory.sourcePackWorker.rejectedCandidates[].targetRef.rawStored",
@@ -384,6 +403,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourcePacks.workerReadiness.activeSourceRows",
       "sourcePacks.sourceHealth.typedBlockers",
       "sourcePacks.sourceOperationsReadiness.summary.candidateCount",
+      "sourcePacks.sourceCustomerConfig.summary.configurableCount",
       "sourcePacks.readiness.state",
       "sourcePacks.proxyVerification.state"
     ],
@@ -399,6 +419,9 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       ".sourceInventory.sourcePackWorker.sourceHealth.typedBlockers | all(has(\"code\") and has(\"severity\"))",
       ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.schemaVersion == \"dwm.source_operations_readiness.v1\"",
       ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions | all(has(\"action\") and has(\"reason\"))",
+      ".sourceInventory.sourcePackWorker.sourceCustomerConfig.schemaVersion == \"dwm.source_pack_customer_config.v1\"",
+      ".sourceInventory.sourcePackWorker.sourceCustomerConfig.sourceConfigs | all(.redactedIdentity.rawStored == false)",
+      ".sourceInventory.sourcePackWorker.sourceCustomerConfig.safeOutput.liveNetworkScrapeStarted == false",
       ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
     ],
     blockers: snapshot.readiness.blockers,
@@ -615,6 +638,278 @@ function buildDwmSourceOperationsReadinessSnapshot(
       restrictedPayloadDownloadAllowed: false
     }
   };
+}
+
+function buildDwmSourcePackCustomerConfigReadiness(
+  packs: SourcePackRegistry[],
+  options: ApiServerOptions,
+  input: {
+    generatedAt: string;
+    freshness?: string;
+    staleAfterMinutes?: number;
+    tenantId?: string;
+    orgId?: string;
+    customerId?: string;
+    scope?: string;
+    family?: string;
+    mode?: "read" | "prepare";
+  }
+) {
+  const requestedFamily = input.family?.trim();
+  const supportedFamily = !requestedFamily || SOURCE_GROWTH_FAMILIES.includes(requestedFamily as SourceGrowthFamily);
+  const filteredPacks = packs;
+  const selectedPacks = supportedFamily && requestedFamily
+    ? filteredPacks.map((pack) => ({
+      ...pack,
+      candidates: pack.candidates.filter((candidate) => candidate.declaredFamily === requestedFamily)
+    })).filter((pack) => pack.candidates.length > 0)
+    : filteredPacks;
+  const packIds = new Set(selectedPacks.map((pack) => pack.id));
+  const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
+  const receipts = sourcePackCollectionReceiptStore(options).list().filter((receipt) => packIds.has(receipt.packId));
+  const sources = options.store.listSources().filter((source) => packIds.has(String(sourceCandidate(source).sourcePackId ?? source.metadata?.sourcePack?.packId ?? "")));
+  const sourceByCandidateId = new Map(sources.map((source) => [sourceCandidate(source).id, source]));
+  const receiptByCandidateId = new Map(receipts.map((receipt) => [receipt.candidateId, receipt]));
+  const activeByCandidateId = new Map(activeRows.map((row) => [row.candidateId, row]));
+  const latestActionByCandidateId = new Map<string, string>();
+  for (const pack of selectedPacks) {
+    for (const event of pack.audit) {
+      if (!event.candidateId) continue;
+      latestActionByCandidateId.set(String(event.candidateId), stableId("dwm_source_pack_action_event", `${pack.id}:${String(event.at ?? "")}:${String(event.action ?? "")}:${String(event.candidateId ?? "")}`));
+    }
+  }
+  const rows = selectedPacks.flatMap((pack) => pack.candidates.map((candidate) => {
+    const source = candidate.sourceId ? sources.find((item) => item.id === candidate.sourceId) : sourceByCandidateId.get(candidate.id);
+    const configBlockers = sourcePackCustomerConfigBlockers({
+      pack,
+      candidate,
+      source,
+      options,
+      freshness: input.freshness ?? "missing",
+      staleAfterMinutes: input.staleAfterMinutes ?? 120,
+      tenantId: input.tenantId,
+      orgId: input.orgId,
+      customerId: input.customerId,
+      scope: input.scope,
+      requestedFamily,
+      supportedFamily
+    });
+    const activeRow = activeByCandidateId.get(candidate.id);
+    const receipt = receiptByCandidateId.get(candidate.id);
+    const retryable = isRetryableSourcePackCandidate(candidate) || Boolean(source?.metadata?.lastCollectionOutcome?.retryAfter);
+    const duplicate = isDuplicateSourcePackCandidate(candidate);
+    const policyRejected = isRejectedPolicySourcePackCandidate(candidate);
+    const restricted = candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata";
+    return {
+      sourcePackId: pack.id,
+      sourcePackLabel: pack.label,
+      safeSourcePackRef: stableId("dwm_source_pack_ref", pack.id),
+      candidateId: candidate.id,
+      sourceId: source?.id ?? candidate.sourceId,
+      tenantId: input.tenantId ?? pack.tenantId,
+      orgId: input.orgId,
+      customerId: input.customerId,
+      scope: input.scope ?? pack.scope,
+      family: candidate.declaredFamily,
+      sourceType: source?.type ?? candidate.type,
+      redactedIdentity: candidate.targetRef ?? (source ? safeTargetRef(source.url, sourceGrowthFamilyForSource(source)) : safeTargetRef(candidate.id, candidate.declaredFamily)),
+      candidatePolicy: {
+        boundary: candidate.policyBoundary,
+        validationResult: candidate.validationResult,
+        metadataOnly: candidate.policyBoundary?.metadataOnly === true,
+        restrictedSource: restricted,
+        safeOutput: {
+          rawPayloadStored: false,
+          rawTargetStored: false,
+          privateTelegramContentExposed: false,
+          restrictedMetadataLeaked: false
+        }
+      },
+      activationState: source ? activationStateForSource(source) : candidate.activationState ?? candidate.decision ?? candidate.status,
+      parserHealth: {
+        status: candidate.parserStatus ?? source?.metadata?.sourceCandidate?.parserStatus ?? (source ? parserStatusForSource(source) : "not_scheduled"),
+        healthStatus: candidate.healthStatus ?? source?.metadata?.healthStatus ?? "not_tested",
+        lastFailure: candidate.failure ? { code: candidate.failure.code, message: candidate.failure.message } : undefined,
+        alertGradeEvidenceEligible: activeRow?.alertGradeEvidenceEligible === true
+      },
+      retryState: {
+        retryable,
+        retryHint: candidate.retryHint ?? source?.metadata?.lastCollectionOutcome?.retryAfter,
+        lastCollectionReceipt: receipt ? redactedWorkerReceipt(receipt) : undefined
+      },
+      suppressionState: {
+        duplicate,
+        suppressed: candidate.status === "suppressed" || candidate.decision === "suppressed_duplicate",
+        duplicateOf: candidate.duplicateOf
+      },
+      auditActionIds: latestActionByCandidateId.get(candidate.id) ? [latestActionByCandidateId.get(candidate.id)] : [],
+      allowedOperatorActions: sourcePackCustomerConfigAllowedActions({ pack, candidate, source, configBlockers, retryable, duplicate, policyRejected }),
+      typedBlockers: configBlockers
+    };
+  }));
+  const globalBlockers = [
+    ...(!input.tenantId && !input.orgId && !input.customerId && !input.scope ? [{ code: "missing_org_scope", severity: "blocking", message: "tenantId, orgId, customerId, or scope is required before durable customer source configuration can mutate", retryable: true }] : []),
+    ...(!supportedFamily ? [{ code: "unsupported_source_family", severity: "blocking", family: requestedFamily, message: "requested source family is not supported by source-pack configuration", retryable: false }] : []),
+    ...(input.freshness === "stale" ? [{ code: "stale_worker", severity: "blocking", message: `source-pack worker older than ${input.staleAfterMinutes ?? 120} minutes`, retryable: true }] : [])
+  ];
+  const rowBlockers = rows.flatMap((row) => row.typedBlockers);
+  const summary = {
+    packCount: selectedPacks.length,
+    candidateCount: rows.length,
+    configurableCount: rows.filter((row) => !row.typedBlockers.some((blocker: any) => blocker.severity === "blocking")).length,
+    activeSourceCount: rows.filter((row) => row.sourceId && (String(row.activationState).includes("active") || row.activationState === "metadata_only_approved")).length,
+    retryableCount: rows.filter((row) => row.retryState.retryable).length,
+    duplicateCount: rows.filter((row) => row.suppressionState.duplicate).length,
+    suppressedDuplicateCount: rows.filter((row) => row.suppressionState.suppressed).length,
+    policyRejectedCount: rows.filter((row) => row.typedBlockers.some((blocker: any) => blocker.code === "rejected_policy")).length,
+    restrictedSourceCount: rows.filter((row) => row.candidatePolicy.restrictedSource).length,
+    cleanupRequiredCount: rows.filter((row) => row.typedBlockers.some((blocker: any) => blocker.code === "cleanup_required")).length,
+    staleWorker: input.freshness === "stale",
+    mutationReady: false
+  };
+  const allowedOperatorActions = Array.from(new Set(rows.flatMap((row) => row.allowedOperatorActions.map((action: any) => action.action))));
+  return {
+    schemaVersion: "dwm.source_pack_customer_config.v1",
+    generatedAt: input.generatedAt,
+    mode: input.mode ?? "read",
+    tenantId: input.tenantId,
+    orgId: input.orgId,
+    customerId: input.customerId,
+    scope: input.scope,
+    requestedFamily,
+    summary,
+    readiness: {
+      state: globalBlockers.some((blocker) => blocker.severity === "blocking")
+        ? "blocked"
+        : rows.length === 0
+          ? "missing"
+          : rowBlockers.some((blocker: any) => blocker.severity === "blocking")
+            ? "needs_action"
+            : "ready",
+      blockers: dedupeBlockers([...globalBlockers, ...rowBlockers])
+    },
+    allowedOperatorActions: allowedOperatorActions.map((action) => ({ action, route: "/v1/dwm/source-requests", dryRunSupported: true })),
+    sourceConfigs: rows,
+    futureMutationRoutes: {
+      prepare: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { action: "pack_customer_config", dryRun: true, tenantId: input.tenantId ?? "<tenant-id>", orgId: input.orgId ?? "<org-id>", sourcePackId: "<source-pack-id>", family: requestedFamily ?? "<source-family>" }
+      },
+      applyCandidateAction: {
+        status: "use_existing_pack_review_until_customer_config_mutation_exists",
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { action: "pack_review", packAction: "approve|retry|suppress|reject", tenantId: input.tenantId ?? "<tenant-id>", candidateIds: ["<candidate-id>"], decidedBy: "<operator-id>", reason: "<change-ticket>" }
+      },
+      futureCrud: {
+        status: "not_implemented",
+        method: "PATCH",
+        path: "/v1/dwm/customer-source-packs/<org-id>/<source-pack-id>",
+        body: { activationState: "active|disabled|suppressed", parserPolicy: "<parser-mode>", retryPolicy: "<backoff-window>", auditReason: "<change-ticket>" }
+      }
+    },
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      rawTargetsExposed: false,
+      rawRejectedTargetsStored: false,
+      rawDuplicateTargetsStored: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourcePackCustomerConfigBlockers(input: {
+  pack: SourcePackRegistry;
+  candidate: SourcePackRegistryCandidate;
+  source?: SourceRecord;
+  options: ApiServerOptions;
+  freshness: string;
+  staleAfterMinutes: number;
+  tenantId?: string;
+  orgId?: string;
+  customerId?: string;
+  scope?: string;
+  requestedFamily?: string;
+  supportedFamily: boolean;
+}) {
+  const blockers: Array<Record<string, unknown>> = [];
+  if (!input.tenantId && !input.orgId && !input.customerId && !input.scope) blockers.push({ code: "missing_org_scope", severity: "blocking", retryable: true });
+  if (!input.supportedFamily) blockers.push({ code: "unsupported_source_family", severity: "blocking", family: input.requestedFamily, retryable: false });
+  if (!SOURCE_GROWTH_FAMILIES.includes(input.candidate.declaredFamily)) blockers.push({ code: "unsupported_source_family", severity: "blocking", family: input.candidate.declaredFamily, retryable: false });
+  if (input.freshness === "stale") blockers.push({ code: "stale_worker", severity: "blocking", retryable: true });
+  if (isDuplicateSourcePackCandidate(input.candidate)) blockers.push({ code: "duplicate_source", severity: "blocking", duplicateOf: input.candidate.duplicateOf, retryable: false });
+  if (isRejectedPolicySourcePackCandidate(input.candidate)) blockers.push({ code: "rejected_policy", severity: "blocking", reason: input.candidate.reason ?? input.candidate.failure?.message, retryable: false });
+  if (input.candidate.failure || String(input.candidate.parserStatus ?? "").includes("failed") || String(input.candidate.parserStatus ?? "").includes("blocked")) {
+    blockers.push({ code: "parser_failure", severity: isRetryableSourcePackCandidate(input.candidate) ? "warning" : "blocking", parserStatus: input.candidate.parserStatus, retryable: isRetryableSourcePackCandidate(input.candidate) });
+  }
+  if ((input.candidate.declaredFamily === "darkweb_onion" || input.candidate.declaredFamily === "darkweb_metadata") && input.candidate.policyBoundary?.metadataOnly !== true) {
+    blockers.push({ code: "restricted_source", severity: "blocking", message: "restricted/onion source can only be configured as governed metadata-only", retryable: false });
+  }
+  if (input.candidate.declaredFamily === "darkweb_onion" || input.candidate.declaredFamily === "darkweb_metadata") {
+    blockers.push({ code: "restricted_source", severity: input.candidate.policyBoundary?.metadataOnly === true ? "warning" : "blocking", message: "restricted source remains metadata-only and cannot trigger live scraping", retryable: false });
+  }
+  if (!input.source && !isDuplicateSourcePackCandidate(input.candidate) && !isRejectedPolicySourcePackCandidate(input.candidate) && input.candidate.status !== "retry_scheduled") {
+    blockers.push({ code: "activation_disabled", severity: "warning", retryable: true });
+  }
+  if ((isRetryableSourcePackCandidate(input.candidate) || input.source?.metadata?.lastCollectionOutcome?.retryAfter) && !input.source && input.candidate.status !== "retry_scheduled") {
+    blockers.push({ code: "no_retry_eligibility", severity: "blocking", retryable: false });
+  }
+  const coverage = sourceFamilyCoverage({ sources: sourcesForPack(input.pack.id, input.options), registry: input.pack });
+  const familyCoverage = coverage[input.candidate.declaredFamily];
+  if (familyCoverage?.total > 0 && familyCoverage.active === 0) blockers.push({ code: "source_family_inactive", severity: "warning", family: input.candidate.declaredFamily, retryable: true });
+  if ((isDuplicateSourcePackCandidate(input.candidate) && input.candidate.status !== "suppressed") || isRejectedPolicySourcePackCandidate(input.candidate)) {
+    blockers.push({ code: "cleanup_required", severity: "warning", message: "candidate requires suppression, rejection review, or cleanup before customer config can apply", retryable: true });
+  }
+  return dedupeBlockers(blockers);
+}
+
+function sourcePackCustomerConfigAllowedActions(input: {
+  pack: SourcePackRegistry;
+  candidate: SourcePackRegistryCandidate;
+  source?: SourceRecord;
+  configBlockers: Array<Record<string, unknown>>;
+  retryable: boolean;
+  duplicate: boolean;
+  policyRejected: boolean;
+}) {
+  const blockingCodes = new Set(input.configBlockers.filter((blocker) => blocker.severity === "blocking").map((blocker) => String(blocker.code)));
+  const actions: Array<Record<string, unknown>> = [
+    { action: "inspect", allowed: true, route: "/v1/dwm/source-requests", dryRunSupported: true },
+    { action: "prepare_customer_config", allowed: true, route: "/v1/dwm/source-requests", dryRunSupported: true }
+  ];
+  actions.push({
+    action: "activate",
+    allowed: Boolean(input.source) && !blockingCodes.has("duplicate_source") && !blockingCodes.has("rejected_policy") && !blockingCodes.has("restricted_source") && !blockingCodes.has("stale_worker"),
+    route: "/v1/dwm/source-requests",
+    dryRunSupported: true
+  });
+  actions.push({
+    action: "retry",
+    allowed: input.retryable && !blockingCodes.has("duplicate_source") && !blockingCodes.has("rejected_policy") && !blockingCodes.has("stale_worker"),
+    route: "/v1/dwm/source-requests",
+    dryRunSupported: true
+  });
+  actions.push({
+    action: "suppress",
+    allowed: input.duplicate || input.policyRejected,
+    route: "/v1/dwm/source-requests",
+    dryRunSupported: true
+  });
+  actions.push({
+    action: "review_policy",
+    allowed: input.policyRejected || blockingCodes.has("restricted_source"),
+    route: "/v1/dwm/source-requests",
+    dryRunSupported: true
+  });
+  return actions;
+}
+
+function dedupeBlockers(blockers: Array<Record<string, unknown>>) {
+  return blockers.filter((blocker, index, all) => index === all.findIndex((item) => JSON.stringify(item) === JSON.stringify(blocker)));
 }
 
 function buildDwmSourceOperationsNextActions(input: {
@@ -1915,6 +2210,37 @@ function sourcePackStatusResponse(body: DwmSourceRequestBody, options: ApiServer
   };
 }
 
+function sourcePackCustomerConfigResponse(body: DwmSourceRequestBody, options: ApiServerOptions) {
+  const registry = findSourcePackRegistry(body, options);
+  const packs = registry ? [registry] : sourcePackStore(options).list({ limit: body.limit ?? 500 }).items;
+  const generatedAt = body.generatedAt ?? nowIso();
+  const workerState = sourcePackWorkerStateForPacks(packs, options);
+  const lastRunTime = workerState.lastRun?.completedAt ?? workerState.lastRun?.startedAt;
+  const staleAfterMinutes = 120;
+  const ageMinutes = lastRunTime ? Math.max(0, Math.floor((Date.parse(generatedAt) - Date.parse(lastRunTime)) / 60000)) : undefined;
+  const freshness = !workerState.lastRun
+    ? "missing"
+    : ageMinutes !== undefined && ageMinutes > staleAfterMinutes
+      ? "stale"
+      : "fresh";
+  return {
+    action: "pack_customer_config",
+    sourcePackId: registry?.id ?? body.sourcePackId,
+    sourcePackLabel: registry?.label,
+    ...buildDwmSourcePackCustomerConfigReadiness(packs, options, {
+      generatedAt,
+      freshness,
+      staleAfterMinutes,
+      tenantId: body.tenantId,
+      orgId: body.orgId,
+      customerId: body.customerId,
+      scope: body.scope,
+      family: body.family,
+      mode: body.configMode ?? (body.dryRun === true ? "prepare" : "read")
+    })
+  };
+}
+
 function sourcePackActionContract(input: {
   pack?: SourcePackRegistry;
   candidate: any;
@@ -2502,6 +2828,7 @@ function telegramSourceFromRequest(input: { target: string; channel: string; bod
 function handleSourceLifecycleAction(body: DwmSourceRequestBody, options: ApiServerOptions): Response {
   if (body.action === "pack_list") return json(sourcePackListResponse(body, options), 200);
   if (body.action === "pack_status") return json(sourcePackStatusResponse(body, options), 200);
+  if (body.action === "pack_customer_config") return json(sourcePackCustomerConfigResponse(body, options), 200);
   if (body.action === "pack_review") return handleSourcePackReview(body, options);
   if (body.action === "pack_worker_run") return handleSourcePackWorkerRun(body, options);
 

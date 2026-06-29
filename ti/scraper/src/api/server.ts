@@ -107,7 +107,11 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
           includeCandidates: url.searchParams.get("full") === "true",
           generatedAt
         }),
-        sourcePackWorker: buildDwmSourcePackWorkerReadinessSnapshot(options, { generatedAt })
+        sourcePackWorker: buildDwmSourcePackWorkerReadinessSnapshot(options, {
+          generatedAt,
+          tenantId: scope.tenantId,
+          scope: parseWatchlistParam(url.searchParams.get("watchlist") ?? url.searchParams.get("terms") ?? "").join(",")
+        })
       });
     }
     if ((url.pathname === "/v1/dwm/source-packs" || url.pathname === "/api/dwm/source-packs") && request.method === "GET") {
@@ -127,6 +131,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
         workerReadiness: sourcePackWorker.workerReadiness,
         sourceHealth: sourcePackWorker.sourceHealth,
         sourceOperationsReadiness: sourcePackWorker.sourceOperationsReadiness,
+        sourceCustomerConfig: sourcePackWorker.sourceCustomerConfig,
         lastRun: sourcePackWorker.lastRun,
         sourceGrowthCounters: sourcePackWorker.counters,
         parserSourceFamilyCounts: sourcePackWorker.parserSourceFamilyCounts,
