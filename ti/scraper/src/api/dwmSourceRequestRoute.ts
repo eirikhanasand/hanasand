@@ -40,7 +40,7 @@ import type { SourceRecord } from "../types.ts";
 
 type DwmSourceRequestBody = {
   target?: string;
-  type?: "telegram_channel" | "restricted_metadata";
+  type?: "telegram_channel" | "restricted_metadata" | "public_url";
   tenantId?: string;
   scope?: string;
   activate?: boolean;
@@ -94,7 +94,7 @@ type DwmSourceRequestBody = {
 
 type DwmSourcePackCandidate = {
   target?: string;
-  type?: "telegram_channel" | "restricted_metadata";
+  type?: "telegram_channel" | "restricted_metadata" | "public_url";
   family?: SourceGrowthFamily;
   refLabel?: string;
   parserExpectation?: string;
@@ -462,6 +462,11 @@ function buildDwmSourceHealthOperationsSnapshot(
       counts[status] = (counts[status] ?? 0) + 1;
       return counts;
     }, {});
+    const operationalStateCounts = rows.reduce<Record<string, number>>((counts, row) => {
+      const state = sourceHealthOperationalState(row.candidate, row.activeRow, row.receipt);
+      counts[state] = (counts[state] ?? 0) + 1;
+      return counts;
+    }, { canary: 0, active: 0, paused: 0, failed: 0, blocked: 0 });
     const rejectionReasons = rows
       .filter((row) => isBlockedSourcePackCandidate(row.candidate))
       .map((row) => ({
@@ -483,6 +488,7 @@ function buildDwmSourceHealthOperationsSnapshot(
       retryableCount: rows.filter((row) => isRetryableSourcePackCandidate(row.candidate)).length,
       unretryableCount: rows.filter((row) => isUnretryableSourcePackCandidate(row.candidate)).length,
       parserStatusCounts,
+      operationalStateCounts,
       rejectionReasons,
       lastWorkerReceipt: latestReceipt ? redactedWorkerReceipt(latestReceipt) : undefined,
       alertGradeEvidenceEligible: rows.some((row) => row.activeRow?.alertGradeEvidenceEligible === true)
@@ -509,7 +515,12 @@ function buildDwmSourceHealthOperationsSnapshot(
       rejected: candidateRows.filter((row) => isRejectedPolicySourcePackCandidate(row.candidate)).length,
       duplicate: candidateRows.filter((row) => isDuplicateSourcePackCandidate(row.candidate)).length,
       retryable: candidateRows.filter((row) => isRetryableSourcePackCandidate(row.candidate)).length,
-      unretryable: candidateRows.filter((row) => isUnretryableSourcePackCandidate(row.candidate)).length
+      unretryable: candidateRows.filter((row) => isUnretryableSourcePackCandidate(row.candidate)).length,
+      operationalStates: candidateRows.reduce<Record<string, number>>((counts, row) => {
+        const state = sourceHealthOperationalState(row.candidate, row.activeRow, row.receipt);
+        counts[state] = (counts[state] ?? 0) + 1;
+        return counts;
+      }, { canary: 0, active: 0, paused: 0, failed: 0, blocked: 0 })
     },
     sourcePackGrowthDeltas: {
       packCount: packs.length,
@@ -750,8 +761,20 @@ function buildDwmSourcePackCustomerConfigReadiness(
       retryState: {
         retryable,
         retryHint: candidate.retryHint ?? source?.metadata?.lastCollectionOutcome?.retryAfter,
-        lastCollectionReceipt: receipt ? redactedWorkerReceipt(receipt) : undefined
+        lastCollectionReceipt: receipt ? redactedWorkerReceipt(receipt) : undefined,
+        activationRetryReadiness: sourceActivationRetryReadiness({ candidate, source, receipt, generatedAt: input.generatedAt })
       },
+      activationProof: sourceActivationProof({
+        pack,
+        candidate,
+        source,
+        receipt,
+        activeRow,
+        scope: input.scope ?? pack.scope,
+        freshness: input.freshness ?? "missing",
+        generatedAt: input.generatedAt,
+        blockers: configBlockers
+      }),
       suppressionState: {
         duplicate,
         suppressed: candidate.status === "suppressed" || candidate.decision === "suppressed_duplicate",
@@ -919,6 +942,173 @@ function sourcePackCustomerTargetInvalid(target: string, family: string): boolea
   if (family === "darkweb_onion" || family === "darkweb_metadata") return !trimmed.startsWith("metadata://");
   if (family === "clear_web" || family === "public_advisory" || family === "actor_page") return !/^https?:\/\//i.test(trimmed);
   return true;
+}
+
+function sourceActivationProof(input: {
+  pack: SourcePackRegistry;
+  candidate: SourcePackRegistryCandidate;
+  source?: SourceRecord;
+  receipt?: DwmSourcePackCollectionQueueReceiptRecord;
+  activeRow?: { alertGradeEvidenceEligible?: boolean; parserStatus?: string };
+  scope?: string;
+  freshness: string;
+  generatedAt: string;
+  blockers: Array<Record<string, unknown>>;
+}) {
+  const family = input.candidate.declaredFamily;
+  const state = sourceOperationalState(input.source, input.candidate, input.receipt);
+  const policy = sourceActivationPolicyResult(input.candidate, input.source);
+  const parserStatus = input.candidate.parserStatus ?? input.activeRow?.parserStatus ?? (input.source ? parserStatusForSource(input.source) : "not_scheduled");
+  const parserAvailable = !String(parserStatus).includes("blocked") && !String(parserStatus).includes("failed") && !isRejectedPolicySourcePackCandidate(input.candidate);
+  const captureType = expectedCaptureTypeForFamily(family);
+  const alertableFields = alertableFieldsForFamily(family);
+  const watchlistTerms = String(input.scope ?? "").split(/[,\n]/).map((term) => term.trim()).filter(Boolean);
+  const blocking = input.blockers.filter((blocker) => blocker.severity === "blocking");
+  const canProduceCapture = Boolean(input.source) && parserAvailable && policy.allowed && state !== "blocked" && state !== "failed";
+  const canProduceAlert = canProduceCapture && alertableFields.length > 0 && (input.activeRow?.alertGradeEvidenceEligible === true || input.source?.status === "active");
+  return {
+    schemaVersion: "dwm.source_activation_proof.v1",
+    generatedAt: input.generatedAt,
+    sourcePackId: input.pack.id,
+    candidateId: input.candidate.id,
+    sourceId: input.source?.id ?? input.candidate.sourceId,
+    family,
+    state,
+    policyResult: policy,
+    credentialBoundary: input.candidate.policyBoundary ?? (family === "telegram" ? publicTelegramBoundary() : family === "darkweb_onion" || family === "darkweb_metadata" ? restrictedMetadataBoundary() : publicWebMetadataBoundary()),
+    parserAvailability: {
+      available: parserAvailable,
+      status: parserStatus,
+      profile: parserProfileForFamily(family),
+      freshness: input.freshness
+    },
+    expectedCapture: {
+      type: captureType,
+      storage: family === "telegram" ? "inline_text_metadata" : "metadata_only",
+      liveNetworkRequiredForProof: false,
+      restrictedPayloadStored: false
+    },
+    alertability: {
+      canProduceCapture,
+      canProduceAlert,
+      alertableFields,
+      watchlistTerms,
+      requiresCaptureBeforeAlert: true,
+      bridge: {
+        schemaVersion: "dwm.source_alertability_bridge.v1",
+        activeSourceId: input.source?.status === "active" ? input.source.id : undefined,
+        sourcePackId: input.pack.id,
+        candidateId: input.candidate.id,
+        satisfiedByFields: alertableFields,
+        watchlistTerms,
+        alertGenerationPath: "/v1/dwm/source-requests?action=record_capture -> /v1/dwm/alerts/rebuild"
+      }
+    },
+    activationBlockers: blocking,
+    retryReadiness: sourceActivationRetryReadiness({ candidate: input.candidate, source: input.source, receipt: input.receipt, generatedAt: input.generatedAt }),
+    safeOutput: {
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourceActivationPolicyResult(candidate: SourcePackRegistryCandidate, source?: SourceRecord) {
+  if (isRejectedPolicySourcePackCandidate(candidate)) {
+    return { allowed: false, category: "policy_rejected", reason: candidate.reason ?? candidate.failure?.message ?? "candidate rejected by policy", publicOnly: false, metadataOnly: candidate.policyBoundary?.metadataOnly === true };
+  }
+  if (candidate.declaredFamily === "darkweb_onion" || candidate.declaredFamily === "darkweb_metadata" || (source ? isRestrictedMetadataSource(source) : false)) {
+    return { allowed: candidate.policyBoundary?.metadataOnly === true, category: "restricted_metadata_only", reason: "restricted source is metadata-only and cannot trigger unsafe scraping", publicOnly: false, metadataOnly: true };
+  }
+  if (candidate.declaredFamily === "telegram") {
+    return { allowed: true, category: "public_telegram_only", reason: "public Telegram preview boundary; no private access, auto-join, credentials, replies, reactions, or media downloads", publicOnly: true, metadataOnly: false };
+  }
+  return { allowed: true, category: "public_ti_metadata", reason: "public TI/blog/advisory metadata-only boundary", publicOnly: true, metadataOnly: true };
+}
+
+function sourceOperationalState(source: SourceRecord | undefined, candidate: SourcePackRegistryCandidate, receipt?: DwmSourcePackCollectionQueueReceiptRecord): "canary" | "active" | "paused" | "failed" | "blocked" {
+  if (isRejectedPolicySourcePackCandidate(candidate) || candidate.status === "disabled") return "blocked";
+  if (candidate.failure || String(candidate.parserStatus ?? "").includes("failed") || receipt?.status === "blocked") return "failed";
+  if (source?.status === "active" && source.metadata?.canaryPortfolio === true) return "canary";
+  if (source?.status === "active") return "active";
+  if (source?.status === "suppressed" || candidate.status === "suppressed") return "paused";
+  if (candidate.status === "retry_scheduled") return "failed";
+  return "paused";
+}
+
+function sourceHealthOperationalState(
+  candidate: SourcePackRegistryCandidate,
+  activeRow?: { alertGradeEvidenceEligible?: boolean; parserStatus?: string },
+  receipt?: DwmSourcePackCollectionQueueReceiptRecord
+): "canary" | "active" | "paused" | "failed" | "blocked" {
+  if (isRejectedPolicySourcePackCandidate(candidate) || candidate.status === "disabled") return "blocked";
+  if (candidate.failure || receipt?.status === "blocked" || String(candidate.parserStatus ?? "").includes("failed")) return "failed";
+  if (activeRow && candidate.status === "active") return "canary";
+  if (activeRow) return "active";
+  if (candidate.status === "retry_scheduled" || String(candidate.parserStatus ?? "").includes("retry")) return "failed";
+  return "paused";
+}
+
+function expectedCaptureTypeForFamily(family: SourceGrowthFamily): string {
+  if (family === "telegram") return "telegram_public_message_preview";
+  if (family === "darkweb_onion") return "darkweb_onion_metadata_observation";
+  if (family === "darkweb_metadata") return "darkweb_metadata_observation";
+  if (family === "actor_page") return "actor_page_metadata";
+  if (family === "public_advisory") return "public_advisory_metadata";
+  return "clear_web_metadata";
+}
+
+function alertableFieldsForFamily(family: SourceGrowthFamily): string[] {
+  if (family === "telegram") return ["text", "channel", "publishedAt", "urls", "actorHints", "victimHints"];
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return ["title", "actorHandle", "marketplace", "publishedAt", "victimHints", "claimType"];
+  if (family === "actor_page") return ["title", "actorName", "aliases", "ttps", "targetSectors"];
+  if (family === "public_advisory") return ["title", "vendor", "cve", "publishedAt", "ttps", "affectedProducts"];
+  return ["title", "url", "publishedAt", "extractedTerms"];
+}
+
+function sourceActivationRetryReadiness(input: {
+  candidate: SourcePackRegistryCandidate;
+  source?: SourceRecord;
+  receipt?: DwmSourcePackCollectionQueueReceiptRecord;
+  generatedAt: string;
+}) {
+  const outcome = input.source ? (input.source.metadata?.lastCollectionOutcome ?? sourceCandidate(input.source).lastCollectionOutcome) : undefined;
+  const failureCategory = input.candidate.failure?.code
+    ?? outcome?.errorCode
+    ?? (String(input.candidate.parserStatus ?? "").includes("retry") ? "parser_retry_scheduled" : undefined);
+  const retryable = isRetryableSourcePackCandidate(input.candidate) || Boolean(outcome?.retryAfter);
+  const nextRetryAt = outcome?.retryAfter ?? (retryable ? input.candidate.retryHint : undefined);
+  return {
+    retryable,
+    lastRun: {
+      at: outcome?.at ?? input.receipt?.queuedAt,
+      status: outcome?.status ?? input.receipt?.status ?? input.candidate.status,
+      receiptId: input.receipt?.taskId,
+      parserStatus: input.candidate.parserStatus
+    },
+    nextRetryAt,
+    backoffSeconds: outcome?.backoffSeconds,
+    failureCategory,
+    remediation: sourceActivationRemediation(failureCategory, input.candidate),
+    checkedAt: input.generatedAt,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActivationRemediation(failureCategory: unknown, candidate: SourcePackRegistryCandidate): string {
+  const category = String(failureCategory ?? "");
+  if (category.includes("restricted_policy")) return "Keep the source metadata-only, remove payload/download/credential intent, and resubmit for policy review.";
+  if (category.includes("duplicate")) return "Suppress or link the duplicate before attempting activation.";
+  if (category.includes("parser")) return "Retry the parser fixture after backoff; no live network probe is required for readiness.";
+  if (isRejectedPolicySourcePackCandidate(candidate)) return "Resolve policy rejection before activation.";
+  return "Review parser health and retry only through the source-pack worker contract.";
 }
 
 function sourcePackCustomerCrudWorkflow(input: {
@@ -1273,7 +1463,9 @@ function createSourceCandidatePack(body: DwmSourceRequestBody, options: ApiServe
     };
     const result = type === "restricted_metadata"
       ? createRestrictedMetadataSourceFromTarget(target, requestBody, options)
-      : createTelegramSourceFromTarget(target, requestBody, options);
+      : type === "public_url"
+        ? createPublicUrlSourceFromTarget(target, requestBody, options, declaredFamily)
+        : createTelegramSourceFromTarget(target, requestBody, options);
 
     if (result.kind === "error") {
       const failure = {
@@ -2951,6 +3143,62 @@ function createTelegramSourceFromTarget(target: string, body: DwmSourceRequestBo
   return { kind: "created", source: saved };
 }
 
+function createPublicUrlSourceFromTarget(target: string, body: DwmSourceRequestBody, options: ApiServerOptions, family: SourceGrowthFamily):
+  | { kind: "created"; source: SourceRecord }
+  | { kind: "duplicate"; duplicateOf: string }
+  | { kind: "error"; code: string; message: string } {
+  if (!/^https?:\/\//i.test(target)) return { kind: "error", code: "invalid_target", message: "A public http(s) TI/blog/advisory URL is required." };
+  if (/(?:credential|password|dump|leak|payload|download)=/i.test(target)) return { kind: "error", code: "public_url_policy_blocked", message: "Public URL source cannot request payload, credential, dump, or download paths." };
+  const source = publicUrlSourceFromRequest({ target, body, family });
+  const duplicate = options.store.listSources().find((existing) => sourceDedupeKey(existing) === sourceDedupeKey(source));
+  if (duplicate) return { kind: "duplicate", duplicateOf: String(duplicate.id) };
+  const saved = options.store.saveSource(source);
+  return { kind: "created", source: saved };
+}
+
+function publicUrlSourceFromRequest(input: { target: string; body: DwmSourceRequestBody; family: SourceGrowthFamily }): SourceRecord {
+  const generatedAt = nowIso();
+  const normalizedUrl = input.target.trim();
+  const family = input.family === "telegram" || input.family === "darkweb_onion" || input.family === "darkweb_metadata" ? "public_advisory" : input.family;
+  return {
+    id: stableId("src_dwm_public_url", normalizedUrl),
+    name: `DWM Public TI ${new URL(normalizedUrl).hostname}`,
+    type: family,
+    url: normalizedUrl,
+    accessMethod: "public_http_metadata",
+    status: input.body.activate === false ? "candidate" : "active",
+    risk: input.body.priority === "critical" ? "medium" : "low",
+    trustScore: input.body.priority === "critical" ? 0.68 : 0.58,
+    crawlFrequencySeconds: input.body.priority === "critical" ? 1800 : 3600,
+    legalNotes: "Public web metadata collection only. No credentialed crawling, form submission, downloads, or bypass.",
+    language: "en",
+    createdAt: generatedAt,
+    updatedAt: generatedAt,
+    metadata: {
+      tenantId: input.body.tenantId,
+      dwmSourceRequest: true,
+      canaryPortfolio: true,
+      sourceGrowthFamily: family,
+      sourceFamily: family,
+      scope: input.body.scope,
+      collectionBoundary: publicWebMetadataBoundary(),
+      sourceCandidate: initialSourceCandidate({
+        source: { id: stableId("src_dwm_public_url", normalizedUrl), type: family, url: normalizedUrl, tenantId: input.body.tenantId },
+        generatedAt,
+        target: input.target,
+        requestedBy: input.body.requestedBy ?? input.body.approvedBy ?? "api",
+        scope: input.body.scope,
+        policyBoundary: publicWebMetadataBoundary(),
+        validationResult: { allowed: true, reason: "public TI/blog source URL passed metadata-only validation", checkedAt: generatedAt },
+        parserStatus: `${family}_parser_ready`,
+        healthStatus: "not_tested",
+        status: input.body.activate === false ? "queued" : "active",
+        activationDecision: input.body.activate === false ? "pending_operator_review" : "auto_activated_public_metadata"
+      })
+    }
+  } as SourceRecord;
+}
+
 function telegramSourceFromRequest(input: { target: string; channel: string; body: DwmSourceRequestBody }): SourceRecord {
   const generatedAt = nowIso();
   const normalizedUrl = `https://t.me/${input.channel}`;
@@ -4041,6 +4289,17 @@ function publicTelegramBoundary() {
     noAutoJoin: true,
     noCredentialCollection: true,
     noMediaDownload: true
+  };
+}
+
+function publicWebMetadataBoundary() {
+  return {
+    publicOnly: true,
+    metadataOnly: true,
+    noCredentialCollection: true,
+    noFormSubmission: true,
+    noDownloads: true,
+    noBypass: true
   };
 }
 

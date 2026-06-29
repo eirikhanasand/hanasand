@@ -595,7 +595,11 @@ describe("dwm source requests", () => {
     expect(inventory.status).toBe(200);
     expect(inventoryBody.sourcePackWorker.sourceHealth).toMatchObject({
       schemaVersion: "dwm.source_health_operations.v1",
-      candidateStates: { retryable: 1, duplicate: 1 },
+      candidateStates: {
+        retryable: 1,
+        duplicate: 1,
+        operationalStates: expect.objectContaining({ canary: 1, failed: expect.any(Number), blocked: expect.any(Number), paused: expect.any(Number) })
+      },
       safeOutput: {
         liveNetworkScrapeStarted: false,
         privateTelegramContentExposed: false,
@@ -681,11 +685,33 @@ describe("dwm source requests", () => {
         redactedIdentity: expect.objectContaining({ rawStored: false }),
         allowedOperatorActions: expect.arrayContaining([
           expect.objectContaining({ action: "activate", allowed: true })
-        ])
+        ]),
+        activationProof: expect.objectContaining({
+          schemaVersion: "dwm.source_activation_proof.v1",
+          state: "canary",
+          policyResult: expect.objectContaining({ allowed: true, category: "public_telegram_only" }),
+          credentialBoundary: expect.objectContaining({ noPrivateAccess: true, noAutoJoin: true, noCredentialCollection: true }),
+          parserAvailability: expect.objectContaining({ available: true, profile: "public_channel_handoff" }),
+          expectedCapture: expect.objectContaining({ type: "telegram_public_message_preview", liveNetworkRequiredForProof: false }),
+          alertability: expect.objectContaining({
+            canProduceCapture: true,
+            canProduceAlert: true,
+            alertableFields: expect.arrayContaining(["text", "actorHints"]),
+            bridge: expect.objectContaining({ schemaVersion: "dwm.source_alertability_bridge.v1" })
+          })
+        })
       }),
       expect.objectContaining({
         candidateId: retryCandidate.id,
         retryState: expect.objectContaining({ retryable: true }),
+        activationProof: expect.objectContaining({
+          state: "failed",
+          retryReadiness: expect.objectContaining({
+            retryable: true,
+            failureCategory: "parser_retry_scheduled",
+            remediation: expect.stringContaining("Retry the parser fixture")
+          })
+        }),
         allowedOperatorActions: expect.arrayContaining([
           expect.objectContaining({ action: "retry", allowed: true })
         ])
@@ -701,6 +727,12 @@ describe("dwm source requests", () => {
         candidateId: rejectedCandidate.id,
         family: "darkweb_onion",
         candidatePolicy: expect.objectContaining({ restrictedSource: true }),
+        activationProof: expect.objectContaining({
+          state: "blocked",
+          policyResult: expect.objectContaining({ allowed: false, category: "policy_rejected" }),
+          expectedCapture: expect.objectContaining({ type: "darkweb_onion_metadata_observation", restrictedPayloadStored: false }),
+          safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+        }),
         typedBlockers: expect.arrayContaining([
           expect.objectContaining({ code: "rejected_policy", severity: "blocking" }),
           expect.objectContaining({ code: "restricted_source" })
@@ -1075,6 +1107,91 @@ describe("dwm source requests", () => {
       rawUnsafeRowsStored: false,
       restrictedPayloadDownloadAllowed: false
     });
+  });
+
+  test("prepares activation proof for Telegram darkweb metadata and public TI source candidates without network fetches", async () => {
+    const store = new InMemoryScraperStore();
+    const frontier = new FocusedFrontier();
+    const options = { store, frontier };
+
+    const created = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        sourcePackId: "pack_activation_proof_mixed",
+        sourcePackLabel: "Activation proof mixed source pack",
+        tenantId: "tenant_acme",
+        scope: "APT29,example.com",
+        requestedBy: "source-proof-worker",
+        candidates: [
+          { target: "@activation_proof_public", type: "telegram_channel", family: "telegram" },
+          { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata", family: "darkweb_metadata" },
+          { target: "https://example.com/security/advisory/apt29", type: "public_url", family: "public_advisory" }
+        ]
+      })
+    }), options);
+    const createdBody = await created.json() as any;
+    expect(created.status).toBe(201);
+    expect(createdBody.summary).toMatchObject({ acceptedCount: 3, rejectedCount: 0 });
+
+    const worker = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_worker_run", sourcePackId: "pack_activation_proof_mixed", chunkSize: 10 })
+    }), options);
+    const workerBody = await worker.json() as any;
+    expect(worker.status).toBe(200);
+    expect(workerBody.activation.summary.activeSourceCount).toBe(3);
+    expect(workerBody.collectionQueue.summary.taskCount).toBe(3);
+
+    const config = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        sourcePackId: "pack_activation_proof_mixed",
+        tenantId: "tenant_acme",
+        orgId: "org_acme",
+        scope: "APT29,example.com",
+        configOperation: "enable",
+        operatorRole: "source_operator",
+        ownerLane: "source_ops",
+        auditReason: "activation proof dry-run"
+      })
+    }), options);
+    const configBody = await config.json() as any;
+    expect(config.status).toBe(200);
+    expect(configBody.sourceConfigs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "telegram",
+        activationProof: expect.objectContaining({
+          state: "canary",
+          credentialBoundary: expect.objectContaining({ noAutoJoin: true, noCredentialCollection: true }),
+          expectedCapture: expect.objectContaining({ type: "telegram_public_message_preview" }),
+          alertability: expect.objectContaining({ canProduceAlert: true, alertableFields: expect.arrayContaining(["text"]) })
+        })
+      }),
+      expect.objectContaining({
+        family: "darkweb_metadata",
+        activationProof: expect.objectContaining({
+          state: "active",
+          policyResult: expect.objectContaining({ allowed: true, category: "restricted_metadata_only", metadataOnly: true }),
+          expectedCapture: expect.objectContaining({ type: "darkweb_metadata_observation", restrictedPayloadStored: false }),
+          alertability: expect.objectContaining({ alertableFields: expect.arrayContaining(["victimHints", "claimType"]) })
+        })
+      }),
+      expect.objectContaining({
+        family: "public_advisory",
+        activationProof: expect.objectContaining({
+          state: "canary",
+          policyResult: expect.objectContaining({ allowed: true, category: "public_ti_metadata", publicOnly: true, metadataOnly: true }),
+          credentialBoundary: expect.objectContaining({ noDownloads: true, noCredentialCollection: true }),
+          parserAvailability: expect.objectContaining({ profile: "public_advisory", available: true }),
+          expectedCapture: expect.objectContaining({ type: "public_advisory_metadata", liveNetworkRequiredForProof: false }),
+          alertability: expect.objectContaining({ watchlistTerms: ["APT29", "example.com"], alertableFields: expect.arrayContaining(["cve", "ttps"]) })
+        })
+      })
+    ]));
+    expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
+    expect(frontier.snapshot()).toHaveLength(3);
+    expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
   });
 
   test("retrieves source packs across scraper store restarts through durable adapter", async () => {
