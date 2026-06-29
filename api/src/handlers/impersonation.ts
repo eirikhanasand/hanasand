@@ -31,6 +31,8 @@ type EventQuery = {
     method?: string
     path?: string
     session?: string
+    supportSession?: string
+    supportSessionId?: string
     reason?: string
     from?: string
     to?: string
@@ -451,7 +453,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
     const outcomeFilter = String(query.outcome || '').trim().toLowerCase()
     const methodFilter = String(query.method || '').trim().toUpperCase()
     const pathFilter = String(query.path || '').trim()
-    const sessionFilter = String(query.session || '').trim()
+    const sessionFilter = String(query.session || query.supportSession || query.supportSessionId || '').trim()
     const reasonFilter = String(query.reason || '').trim()
     const fromFilter = String(query.from || '').trim()
     const toFilter = String(query.to || '').trim()
@@ -539,7 +541,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
     `, values)
-    const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, reason: reasonFilter, from: fromFilter, to: toFilter, limit }
+    const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, supportSession: sessionFilter, reason: reasonFilter, from: fromFilter, to: toFilter, limit }
     const timeline = result.rows.map(toImpersonationTimelineEvent)
     return res.send({
         events: result.rows,
@@ -628,7 +630,8 @@ function impersonationTimelineFilterContract(filters: Record<string, unknown>, t
     return {
         schemaVersion: 'support.impersonation.timeline_filter_contract.v1',
         filters,
-        supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'reason', 'from', 'to', 'limit'],
+        supportedFilters: ['q', 'actor', 'target', 'action', 'outcome', 'method', 'path', 'session', 'supportSession', 'supportSessionId', 'reason', 'from', 'to', 'limit'],
+        filterReadiness: impersonationTimelineFilterReadiness(filters, timeline),
         lifecycleStorage: 'impersonation_events',
         auditStorage: 'admin_audit_events',
         eventCount: timeline.length,
@@ -654,6 +657,48 @@ function impersonationTimelineFilterContract(filters: Record<string, unknown>, t
             `Lifecycle replay: ${impersonationEventsQuery(filters)}`,
             'Denied attempts: /api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
         ].join('\n'),
+    }
+}
+
+function impersonationTimelineFilterReadiness(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const filterText = (key: string) => cleanText(filters[key])
+    const appliedFilters = Object.fromEntries(Object.entries(filters).filter(([, value]) => cleanText(value)))
+    const targetFilters = ['actor', 'target', 'session', 'supportSession', 'reason']
+        .filter(key => filterText(key))
+    const actionFilters = ['action', 'outcome', 'method', 'path']
+        .filter(key => filterText(key))
+    const from = filterText('from')
+    const to = filterText('to')
+    const timeRangeValid = (!from || !Number.isNaN(Date.parse(from))) && (!to || !Number.isNaN(Date.parse(to)))
+    const targetBounded = Boolean(targetFilters.length)
+    return {
+        schemaVersion: 'support.impersonation.timeline_filter_readiness.v1',
+        appliedFilters,
+        targetBounded,
+        targetFilters,
+        actionFilters,
+        timeRange: {
+            from: from || null,
+            to: to || null,
+            valid: timeRangeValid,
+        },
+        supportedAliases: {
+            actor: ['actor'],
+            target: ['target'],
+            session: ['session', 'supportSession', 'supportSessionId'],
+            reason: ['reason'],
+        },
+        replay: {
+            lifecycle: impersonationEventsQuery(filters),
+            audit: `/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api${filterText('session') ? `&entity=${encodeURIComponent(filterText('session'))}` : ''}`,
+            denied: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+        },
+        blockers: [
+            timeRangeValid ? '' : 'invalid_time_range',
+            !targetBounded && (actionFilters.length || from || to) ? 'overbroad_impersonation_timeline_filter' : '',
+            timeline.length ? '' : 'lifecycle_events_unavailable',
+        ].filter(Boolean),
+        redacted: true,
     }
 }
 
