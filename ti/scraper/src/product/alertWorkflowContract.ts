@@ -4,6 +4,7 @@ export const DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION = "dwm.alert_workflow_co
 export const DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION = "dwm.alert_workflow_preservation.v1" as const;
 export const DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION = "dwm.alert_workflow_admin_audit.v1" as const;
 export const DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.alert_workflow_support_action_request.v1" as const;
+export const DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION = "dwm.alert_workflow_support_evidence_packet.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -183,6 +184,59 @@ export type DwmAlertWorkflowSupportActionRequest = {
     path: string;
     message: string;
   }[];
+};
+
+export type DwmAlertWorkflowSupportEvidencePacket = {
+  schemaVersion: typeof DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  support: {
+    route: "/api/admin/support/inspect";
+    probeId: "support.alert.workflow_evidence_packet";
+    entityType: "dwm_alert";
+    action: DwmAlertWorkflowSupportActionRequest["adminSupportContract"]["query"]["action"];
+    prepareAction: DwmAlertWorkflowSupportActionRequest["adminSupportContract"]["query"]["prepareAction"];
+    idempotencyKey: string;
+    customerVisible: false;
+  };
+  auditEvents: Array<{
+    schemaVersion: typeof DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION;
+    eventType: DwmAlertWorkflowAdminAuditAdapter["audit"]["eventType"];
+    outcome: DwmAlertWorkflowAdminAuditAdapter["audit"]["outcome"];
+    actorId?: string;
+    requestId?: string;
+    blockerCodes: DwmAlertWorkflowPreservationBlocker["code"][];
+    ownerLanes: DwmAlertWorkflowPreservationBlocker["ownerLane"][];
+  }>;
+  proof: {
+    adapterId: string;
+    supportRequestId: string;
+    reportSchemaVersion: typeof DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION;
+    beforeContractId: string;
+    afterContractId: string;
+    checkedAt: string;
+    preserved: DwmAlertWorkflowPreservationReport["preserved"];
+    evidenceSummary: {
+      evidenceCount: number;
+      captureCount: number;
+      sourceCount: number;
+      contentHashCount: number;
+      sourceFamilies: string[];
+    };
+  };
+  blockers: Array<DwmAlertWorkflowSupportActionRequest["blockers"][number] | {
+    code: "support_request_blocked";
+    ownerLane: DwmAlertWorkflowPreservationBlocker["ownerLane"];
+    path: string;
+    message: string;
+  }>;
+  nextActions: DwmAlertWorkflowAdminAuditAdapter["nextActions"];
 };
 
 export function buildAlertWorkflowContract(input: {
@@ -442,6 +496,77 @@ export function buildAlertWorkflowSupportActionRequest(input: {
       ownerLanes: adapter.audit.ownerLanes
     },
     blockers
+  };
+}
+
+export function buildAlertWorkflowSupportEvidencePacket(input: {
+  adapter: DwmAlertWorkflowAdminAuditAdapter;
+  supportRequest?: DwmAlertWorkflowSupportActionRequest;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmAlertWorkflowSupportEvidencePacket {
+  const supportRequest = input.supportRequest ?? buildAlertWorkflowSupportActionRequest({
+    adapter: input.adapter,
+    requestId: input.requestId,
+    generatedAt: input.generatedAt
+  });
+  const provenance = input.adapter.proof.provenance;
+  const blockers: DwmAlertWorkflowSupportEvidencePacket["blockers"] = [
+    ...supportRequest.blockers,
+    ...supportRequest.blockers.map((blocker) => ({
+      code: "support_request_blocked" as const,
+      ownerLane: blocker.ownerLane,
+      path: blocker.path,
+      message: "Support evidence packet is waiting on the prepared support request."
+    }))
+  ];
+
+  return {
+    schemaVersion: DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
+    id: stableId("dwm_alert_workflow_support_evidence_packet", `${input.adapter.id}:${supportRequest.id}`),
+    generatedAt: input.generatedAt ?? supportRequest.generatedAt,
+    ok: input.adapter.ok && supportRequest.ok && blockers.length === 0,
+    tenantId: input.adapter.tenantId,
+    organizationId: input.adapter.organizationId,
+    alertId: input.adapter.alertId,
+    caseId: input.adapter.caseId,
+    redacted: true,
+    support: {
+      route: "/api/admin/support/inspect",
+      probeId: "support.alert.workflow_evidence_packet",
+      entityType: "dwm_alert",
+      action: supportRequest.adminSupportContract.query.action,
+      prepareAction: supportRequest.adminSupportContract.query.prepareAction,
+      idempotencyKey: supportRequest.adminSupportContract.query.idempotencyKey,
+      customerVisible: false
+    },
+    auditEvents: [{
+      schemaVersion: DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
+      eventType: input.adapter.audit.eventType,
+      outcome: input.adapter.audit.outcome,
+      actorId: input.adapter.audit.actorId,
+      requestId: input.adapter.audit.requestId,
+      blockerCodes: input.adapter.audit.blockerCodes,
+      ownerLanes: input.adapter.audit.ownerLanes
+    }],
+    proof: {
+      adapterId: input.adapter.id,
+      supportRequestId: supportRequest.id,
+      reportSchemaVersion: input.adapter.proof.reportSchemaVersion,
+      beforeContractId: input.adapter.proof.beforeContractId,
+      afterContractId: input.adapter.proof.afterContractId,
+      checkedAt: input.adapter.proof.checkedAt,
+      preserved: input.adapter.workflow.preserved,
+      evidenceSummary: {
+        evidenceCount: provenance.evidenceCount,
+        captureCount: provenance.captureIds.length,
+        sourceCount: provenance.sourceIds.length,
+        contentHashCount: provenance.contentHashes.length,
+        sourceFamilies: provenance.sourceFamilies ?? []
+      }
+    },
+    blockers,
+    nextActions: input.adapter.nextActions
   };
 }
 

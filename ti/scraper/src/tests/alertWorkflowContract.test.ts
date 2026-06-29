@@ -4,8 +4,10 @@ import {
   DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+  DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
   buildAlertWorkflowAdminAuditAdapter,
   buildAlertWorkflowContract,
+  buildAlertWorkflowSupportEvidencePacket,
   buildAlertWorkflowSupportActionRequest,
   validateAlertWorkflowPreservation
 } from "../product/alertWorkflowContract.ts";
@@ -206,6 +208,77 @@ describe("alert workflow preservation contract", () => {
     expect(JSON.stringify(request)).not.toContain("evidence_acme_initial");
   });
 
+  test("packages alert workflow audit and support request as redacted evidence", () => {
+    const report = validateAlertWorkflowPreservation({
+      before: fixture.before as any,
+      after: fixture.after as any,
+      checkedAt: fixture.checkedAt
+    });
+    const adapter = buildAlertWorkflowAdminAuditAdapter({
+      report,
+      actorId: "support_admin",
+      requestId: "req_workflow_preservation"
+    });
+    const supportRequest = buildAlertWorkflowSupportActionRequest({
+      adapter,
+      requestId: "req_alert_workflow_support"
+    });
+    const packet = buildAlertWorkflowSupportEvidencePacket({
+      adapter,
+      supportRequest,
+      generatedAt: "2026-06-29T13:08:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T13:08:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      support: {
+        route: "/api/admin/support/inspect",
+        probeId: "support.alert.workflow_evidence_packet",
+        entityType: "dwm_alert",
+        action: "support.alert.inspect_workflow",
+        prepareAction: "inspect_alert_workflow",
+        customerVisible: false
+      },
+      auditEvents: [{
+        schemaVersion: DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
+        eventType: "dwm.alert.workflow_preservation_checked",
+        outcome: "allowed",
+        actorId: "support_admin",
+        requestId: "req_workflow_preservation",
+        blockerCodes: [],
+        ownerLanes: []
+      }],
+      proof: {
+        adapterId: adapter.id,
+        supportRequestId: supportRequest.id,
+        reportSchemaVersion: DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
+        beforeContractId: "dwm_alert_workflow_contract_fixture_before",
+        afterContractId: "dwm_alert_workflow_contract_fixture_after",
+        checkedAt: "2026-06-29T13:06:00.000Z",
+        evidenceSummary: {
+          evidenceCount: 2,
+          captureCount: 2,
+          sourceCount: 1,
+          contentHashCount: 2,
+          sourceFamilies: []
+        }
+      },
+      blockers: [],
+      nextActions: []
+    });
+    expect(packet.support.idempotencyKey).toMatch(/^dwm_alert_workflow_support_action_/);
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(packet)).not.toContain("evidence_acme_initial");
+    expect(JSON.stringify(packet)).not.toContain(["control", "room"].join(" "));
+  });
+
   test("returns owner-coded blockers when workflow state is dropped", () => {
     const before = buildAlertWorkflowContract({ alert: alertFixture() });
     const after = buildAlertWorkflowContract({
@@ -374,6 +447,85 @@ describe("alert workflow preservation contract", () => {
       expect.objectContaining({ code: "audit_blocked", ownerLane: "case", path: "casePath" }),
       expect.objectContaining({ code: "audit_blocked", ownerLane: "source", path: "provenance" })
     ]));
+  });
+
+  test("keeps blocked alert workflow support evidence actionable without raw payloads", () => {
+    const before = buildAlertWorkflowContract({ alert: alertFixture() });
+    const after = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        organizationId: "org_other",
+        reviewState: "new",
+        deliveryState: "pending_review",
+        assignedOwner: undefined,
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        casePath: undefined,
+        workflowEvents: [],
+        provenance: { captureIds: [] },
+        workflowContext: {},
+        webhookContext: {},
+        sourceProvenanceSummary: undefined,
+        orgWatchlistScope: undefined,
+        evidence: []
+      }
+    });
+    const report = validateAlertWorkflowPreservation({
+      before,
+      after,
+      checkedAt: "2026-06-29T13:07:00.000Z"
+    });
+    const adapter = buildAlertWorkflowAdminAuditAdapter({ report, requestId: "req_blocked_workflow" });
+    const packet = buildAlertWorkflowSupportEvidencePacket({
+      adapter,
+      requestId: "req_blocked_alert_workflow",
+      generatedAt: "2026-06-29T13:09:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
+      ok: false,
+      support: {
+        route: "/api/admin/support/inspect",
+        probeId: "support.alert.workflow_evidence_packet",
+        action: "support.alert.restore_workflow",
+        prepareAction: "restore_alert_workflow",
+        customerVisible: false
+      },
+      auditEvents: [{
+        outcome: "blocked",
+        requestId: "req_blocked_workflow",
+        blockerCodes: expect.arrayContaining([
+          "organization_scope_changed",
+          "case_route_dropped",
+          "owner_dropped",
+          "review_state_regressed",
+          "delivery_state_regressed",
+          "workflow_events_regressed",
+          "provenance_dropped"
+        ]),
+        ownerLanes: expect.arrayContaining(["alert", "case", "webhook", "source"])
+      }],
+      proof: {
+        evidenceSummary: {
+          evidenceCount: 0,
+          captureCount: 0,
+          sourceCount: 0,
+          contentHashCount: 0
+        }
+      }
+    });
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "audit_blocked", ownerLane: "alert", path: "organizationId" }),
+      expect.objectContaining({ code: "support_request_blocked", ownerLane: "case", path: "casePath" }),
+      expect.objectContaining({ code: "support_request_blocked", ownerLane: "source", path: "provenance" })
+    ]));
+    expect(packet.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ownerLane: "case", blockerCode: "case_route_dropped", action: "restore_case_route" }),
+      expect.objectContaining({ ownerLane: "source", blockerCode: "provenance_dropped", action: "restore_provenance" })
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_initial");
+    expect(JSON.stringify(packet)).not.toContain("evidence_acme_initial");
   });
 });
 
