@@ -1313,14 +1313,18 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.',
         })
     }
+    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sendAction = selected.actions?.find(action => action.id === 'send_alert')
     if (sendAction) {
+        const sendDestinationReady = Boolean(activeWebhook || stringValue(sendAction.body?.webhookDestinationId) || stringValue(sendAction.body?.webhookUrl))
+        const sendDisabledReason = sendAction.disabledReason || (!sendDestinationReady ? 'Send delivery requires an active organization webhook destination or action-scoped webhook target.' : undefined)
         rows.push({
             id: 'send_alert',
             label: 'Send delivery',
-            detail: 'POST /api/dwm/webhooks/deliver for the selected alert and scoped destination.',
-            tone: selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
-            action: sendAction,
+            detail: sendDestinationReady ? 'POST /api/dwm/webhooks/deliver for the selected alert and scoped destination.' : 'Configure or test an organization webhook destination before sending alert delivery.',
+            tone: sendDisabledReason ? 'blocked' : selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
+            action: sendDisabledReason ? { ...sendAction, disabledReason: sendDisabledReason } : sendAction,
+            disabledReason: sendDisabledReason,
         })
     }
     const selectedDelivery = latestDeliveryForActionRail(selected, caseDetail, actionDeliveries, orgContext)
@@ -1333,7 +1337,6 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: deliveryLedgerHref(orgContext),
         })
     }
-    const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     if (activeWebhook && orgContext?.organization) {
         rows.push({
             id: 'test_webhook',
