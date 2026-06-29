@@ -575,11 +575,11 @@ describe("source provenance TI page contract", () => {
         ready: false
       })
     ]);
-    expect(receipt.blockers).toEqual(expect.arrayContaining([
-      expect.objectContaining({ code: "missing_watchlist_item_match", ownerLane: "org", path: "response.alerts[].watchlistItemIds" }),
-      expect.objectContaining({ code: "missing_alert_generation_ref_match", ownerLane: "alert", path: "response.alerts[].alertGeneratorKeys" }),
-      expect.objectContaining({ code: "missing_source_bridge_match", ownerLane: "alert", path: "response.alerts[].sourceBridgeId" }),
-      expect.objectContaining({ code: "missing_case_handoff", ownerLane: "case", path: "response.alerts[].caseId" })
+    expect(receipt.blockers.map((blocker) => `${blocker.code}:${blocker.ownerLane}:${blocker.path}`)).toEqual(expect.arrayContaining([
+      "missing_watchlist_item_match:org:response.alerts[].watchlistItemIds",
+      "missing_alert_generation_ref_match:alert:response.alerts[].alertGeneratorKeys",
+      "missing_source_bridge_match:source:response.alerts[].sourceBridgeId",
+      "missing_case_handoff:case:response.alerts[].caseId"
     ]));
   });
 

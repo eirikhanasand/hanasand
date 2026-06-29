@@ -975,7 +975,7 @@ function alertRebuildReceiptBlockers(input: {
     input.request.request.body.alertGeneratorKeys.length > 0 && input.matchedAlertGeneratorKeys.length === 0
       ? alertRebuildReceiptBlocker("missing_alert_generation_ref_match", "alert", "response.alerts[].alertGeneratorKeys", "Alert rebuild response did not match requested alert generation refs.")
       : undefined,
-    input.matchedSourceBridgeIds.length === 0 ? alertRebuildReceiptBlocker("missing_source_bridge_match", "alert", "response.alerts[].sourceBridgeId", "Alert rebuild response did not preserve source bridge provenance.") : undefined,
+    input.matchedSourceBridgeIds.length === 0 ? alertRebuildReceiptBlocker("missing_source_bridge_match", "source", "response.alerts[].sourceBridgeId", "Alert rebuild response did not preserve source bridge provenance.") : undefined,
     input.savedAlertIds.length > 0 && !input.caseHandoffRows.some((row) => row.ready)
       ? alertRebuildReceiptBlocker("missing_case_handoff", "case", "response.alerts[].caseId", "Saved alerts need case handoff ids and paths before analyst workflow can continue.")
       : undefined
