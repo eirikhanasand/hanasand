@@ -4654,6 +4654,46 @@ export function toMember(row: OrganizationMemberRow) {
     }
 }
 
+export function organizationMemberMutationDenial(input: {
+    organizationId: string
+    actorId: string
+    actorRole?: OrganizationRole | null
+    targetUserId: string
+    targetRole: OrganizationRole
+    action: 'remove_member' | 'change_member_role'
+    requestedRole?: OrganizationRole | null
+    reason?: string | null
+    requestId?: string | null
+    message: string
+}) {
+    return {
+        schemaVersion: 'organization.member_mutation_denial.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        actorRole: input.actorRole ?? null,
+        targetUserId: input.targetUserId,
+        targetRole: input.targetRole,
+        action: input.action,
+        requestedRole: input.requestedRole ?? null,
+        denialReason: 'role_not_allowed' as const,
+        message: input.message,
+        statusCode: 403,
+        allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
+        allowedTargetRoles: input.action === 'remove_member'
+            ? ['admin', 'member', 'viewer'] as OrganizationRole[]
+            : ['admin', 'member', 'viewer'] as OrganizationRole[],
+        adminAllowedTargetRoles: ['member', 'viewer'] as Array<'member' | 'viewer'>,
+        ownerCanMutateOwners: true,
+        adminCanMutateOwners: false,
+        nonmemberEnumeration: false as const,
+        serviceLogAction: 'organization_member_mutation_denied' as const,
+        requestId: input.requestId ?? null,
+        reason: input.reason ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
     const lifecycleState = organizationWatchlistEnabledState(status)

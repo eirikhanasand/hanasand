@@ -20,6 +20,7 @@ import {
     organizationAlertCaseWorkflowState,
     organizationInviteAcceptanceDenial,
     organizationLifecycleReadiness,
+    organizationMemberMutationDenial,
     organizationDownstreamAuthorizationExport,
     organizationMemberAccessContract,
     organizationReadinessProof,
@@ -400,7 +401,25 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
 
     const permissionError = removalPermissionError(organization.role, target.role)
     if (permissionError) {
-        return res.status(403).send({ error: permissionError })
+        const denial = organizationMemberMutationDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            targetUserId: req.params.userId,
+            targetRole: target.role,
+            action: 'remove_member',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+            message: permissionError,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            targetUserId: req.params.userId,
+            targetRole: target.role,
+            actorRole: organization.role,
+            action: denial.action,
+            denialReason: denial.denialReason,
+        })
+        return res.status(403).send({ error: permissionError, memberMutationDenial: denial })
     }
 
     const ownerCount = await activeOwnerCount(req.params.id)
@@ -466,7 +485,29 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
 
     const permissionError = roleUpdatePermissionError(organization.role, target.role, input.role)
     if (permissionError) {
-        return res.status(403).send({ error: permissionError })
+        const denial = organizationMemberMutationDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            targetUserId: req.params.userId,
+            targetRole: target.role,
+            action: 'change_member_role',
+            requestedRole: input.role,
+            reason: input.reason,
+            requestId: input.requestId,
+            message: permissionError,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            targetUserId: req.params.userId,
+            targetRole: target.role,
+            actorRole: organization.role,
+            action: denial.action,
+            requestedRole: input.role,
+            denialReason: denial.denialReason,
+            reason: input.reason,
+        })
+        return res.status(403).send({ error: permissionError, memberMutationDenial: denial })
     }
 
     const ownerCount = await activeOwnerCount(req.params.id)

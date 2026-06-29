@@ -649,6 +649,22 @@ const memberRoleUpdateDeniedResponse = await app.inject({
     payload: { role: 'member', reason: 'Member should not manage roles.', requestId: 'smoke-member-role-denied' },
 })
 assert.equal(memberRoleUpdateDeniedResponse.statusCode, 403, memberRoleUpdateDeniedResponse.body)
+const memberRoleUpdateDenial = parseBody(memberRoleUpdateDeniedResponse.body).memberMutationDenial
+assert.equal(memberRoleUpdateDenial.schemaVersion, 'organization.member_mutation_denial.v1')
+assert.equal(memberRoleUpdateDenial.organizationId, organization.id)
+assert.equal(memberRoleUpdateDenial.actorId, 'org_smoke_member')
+assert.equal(memberRoleUpdateDenial.actorRole, 'member')
+assert.equal(memberRoleUpdateDenial.targetUserId, 'org_smoke_viewer')
+assert.equal(memberRoleUpdateDenial.targetRole, 'viewer')
+assert.equal(memberRoleUpdateDenial.action, 'change_member_role')
+assert.equal(memberRoleUpdateDenial.requestedRole, 'member')
+assert.equal(memberRoleUpdateDenial.denialReason, 'role_not_allowed')
+assert.equal(memberRoleUpdateDenial.statusCode, 403)
+assert.deepEqual(memberRoleUpdateDenial.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberRoleUpdateDenial.adminAllowedTargetRoles, ['member', 'viewer'])
+assert.equal(memberRoleUpdateDenial.nonmemberEnumeration, false)
+assert.equal(memberRoleUpdateDenial.serviceLogAction, 'organization_member_mutation_denied')
+assert.equal(memberRoleUpdateDenial.requestId, 'smoke-member-role-denied')
 
 const adminPromotesViewerDeniedResponse = await app.inject({
     method: 'PATCH',
@@ -657,6 +673,13 @@ const adminPromotesViewerDeniedResponse = await app.inject({
     payload: { role: 'admin', reason: 'Admin cannot promote another admin.', requestId: 'smoke-admin-promote-denied' },
 })
 assert.equal(adminPromotesViewerDeniedResponse.statusCode, 403, adminPromotesViewerDeniedResponse.body)
+const adminPromotesViewerDenial = parseBody(adminPromotesViewerDeniedResponse.body).memberMutationDenial
+assert.equal(adminPromotesViewerDenial.actorRole, 'admin')
+assert.equal(adminPromotesViewerDenial.targetRole, 'viewer')
+assert.equal(adminPromotesViewerDenial.action, 'change_member_role')
+assert.equal(adminPromotesViewerDenial.requestedRole, 'admin')
+assert.equal(adminPromotesViewerDenial.adminCanMutateOwners, false)
+assert.equal(adminPromotesViewerDenial.requestId, 'smoke-admin-promote-denied')
 
 const ownerUpdatesViewerRoleResponse = await app.inject({
     method: 'PATCH',
@@ -3120,6 +3143,20 @@ const memberRemoveViewerResponse = await app.inject({
     headers: authHeaders('org_smoke_member', 'member-token'),
 })
 assert.equal(memberRemoveViewerResponse.statusCode, 403, memberRemoveViewerResponse.body)
+const memberRemoveViewerDenial = parseBody(memberRemoveViewerResponse.body).memberMutationDenial
+assert.equal(memberRemoveViewerDenial.schemaVersion, 'organization.member_mutation_denial.v1')
+assert.equal(memberRemoveViewerDenial.organizationId, organization.id)
+assert.equal(memberRemoveViewerDenial.actorId, 'org_smoke_member')
+assert.equal(memberRemoveViewerDenial.actorRole, 'member')
+assert.equal(memberRemoveViewerDenial.targetUserId, 'org_smoke_viewer')
+assert.equal(memberRemoveViewerDenial.targetRole, 'viewer')
+assert.equal(memberRemoveViewerDenial.action, 'remove_member')
+assert.equal(memberRemoveViewerDenial.requestedRole, null)
+assert.equal(memberRemoveViewerDenial.denialReason, 'role_not_allowed')
+assert.deepEqual(memberRemoveViewerDenial.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberRemoveViewerDenial.allowedTargetRoles, ['admin', 'member', 'viewer'])
+assert.equal(memberRemoveViewerDenial.nonmemberEnumeration, false)
+assert.equal(memberRemoveViewerDenial.serviceLogAction, 'organization_member_mutation_denied')
 
 const adminRemoveOwnerResponse = await app.inject({
     method: 'DELETE',
@@ -3127,6 +3164,12 @@ const adminRemoveOwnerResponse = await app.inject({
     headers: authHeaders('org_smoke_admin', 'admin-token'),
 })
 assert.equal(adminRemoveOwnerResponse.statusCode, 403, adminRemoveOwnerResponse.body)
+const adminRemoveOwnerDenial = parseBody(adminRemoveOwnerResponse.body).memberMutationDenial
+assert.equal(adminRemoveOwnerDenial.actorRole, 'admin')
+assert.equal(adminRemoveOwnerDenial.targetUserId, 'org_smoke_owner')
+assert.equal(adminRemoveOwnerDenial.targetRole, 'owner')
+assert.equal(adminRemoveOwnerDenial.action, 'remove_member')
+assert.equal(adminRemoveOwnerDenial.adminCanMutateOwners, false)
 
 const viewerTransferResponse = await app.inject({
     method: 'POST',
@@ -3257,6 +3300,9 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated
 assert.ok(serviceLogs.some(log => log.message === 'organization_ownership_transferred' && log.metadata.targetUserId === 'org_smoke_admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_role_updated' && log.metadata.requestId === 'smoke-viewer-role-member'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-member-role-denied' && log.metadata.action === 'change_member_role'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-admin-promote-denied' && log.metadata.requestedRole === 'admin'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.action === 'remove_member' && log.metadata.targetUserId === 'org_smoke_owner'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.requestId === 'smoke-archived-invite-denied' && log.metadata.blockerCode === 'org_archived'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.requestId === 'smoke-deleted-watchlist-resume-denied' && log.metadata.blockerCode === 'org_deleted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.blockedAction === 'change member roles' && log.metadata.actorRole === 'owner'))
