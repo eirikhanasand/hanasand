@@ -1366,7 +1366,7 @@ function buildProductReadiness(input: {
                 ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
                 : 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
             source: publicTiProvenance?.source || 'Public TI handoff contract',
-            href: publicTiProvenance?.href || '/ti',
+            href: '/ti',
             checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
             staleAfterSeconds: publicTiProvenance?.staleAfterSeconds,
             proofTimestamp: publicTiProvenance?.proofTimestamp,

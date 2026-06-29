@@ -46,6 +46,7 @@ const bannedCopy = [
     'how this feeds',
     '/ti/<query>',
     'dashboard slop',
+    'signal',
     'apt29',
     'lockbit',
 ]

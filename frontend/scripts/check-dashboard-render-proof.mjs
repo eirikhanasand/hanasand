@@ -161,7 +161,7 @@ for (const [id, spec] of Object.entries(readinessRows)) {
     assert.ok(renderDomSource.includes(spec.href), `Rendered proof command missing href ${spec.href}`)
 }
 
-for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop']) {
+for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria', 'coordinator', 'delegation', 'you are tasked', 'worker 3', 'ti control room', 'how this feeds', '/ti/<query>', 'dashboard slop', 'signal']) {
     assert.ok(renderDomSource.includes(bannedCopy), `Rendered proof command missing banned copy check: ${bannedCopy}`)
 }
 
