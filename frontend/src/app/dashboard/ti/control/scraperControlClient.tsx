@@ -223,7 +223,7 @@ export default function TiScraperControlClient() {
                             <input
                                 value={query}
                                 onChange={event => setQuery(event.target.value)}
-                                className='h-10 w-full rounded-lg border border-white/15 bg-white/10 pl-9 pr-3 text-sm font-medium text-white outline-none transition placeholder:text-[#aeb8ca] focus:border-[#9db4ff] focus:ring-2 focus:ring-[#9db4ff]/30'
+                                className='h-10 w-full rounded-lg border border-[#2a3d5c] bg-[#1f2f49] pl-9 pr-3 text-sm font-medium text-white outline-none transition placeholder:text-[#aeb8ca] focus:border-[#9db4ff] focus:ring-2 focus:ring-[#9db4ff]/30'
                                 placeholder='Actor, company, domain, CVE...'
                             />
                         </label>
