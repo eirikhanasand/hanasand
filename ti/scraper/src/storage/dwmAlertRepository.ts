@@ -66,6 +66,17 @@ export type DwmZeroAlertProof = {
   };
   sourceFamilyCoverage: Array<{ sourceFamily: string; candidateCount: number; captureRefCount: number; watchlistIds: string[] }>;
   watchlistIds: string[];
+  watchlistTerms: Array<{
+    candidateId: string;
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    term: string;
+    kind?: string;
+    organizationId?: string;
+    hasMatchingCaptures: boolean;
+    sourceFamilies: string[];
+    captureRefCount: number;
+  }>;
   candidateIdsMissingRoute: string[];
   routes: {
     readiness: "/v1/dwm/alerts/readiness";
@@ -1119,6 +1130,7 @@ export function buildDwmAlertGenerationReadiness(input: {
       typedBlockers,
       sourceFamilyCoverage,
       watchlistIds: plan.activeWatchlistIds,
+      candidates: plan.candidates,
       candidateIdsMissingRoute
     }),
     plan
@@ -1827,6 +1839,7 @@ function buildDwmZeroAlertProof(input: {
   typedBlockers: DwmAlertGenerationBlocker[];
   sourceFamilyCoverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
   watchlistIds: string[];
+  candidates: DwmAlertGenerationCandidate[];
   candidateIdsMissingRoute: string[];
 }): DwmZeroAlertProof {
   const state = zeroAlertState(input);
@@ -1849,6 +1862,17 @@ function buildDwmZeroAlertProof(input: {
     },
     sourceFamilyCoverage: input.sourceFamilyCoverage,
     watchlistIds: input.watchlistIds,
+    watchlistTerms: input.candidates.map((candidate) => ({
+      candidateId: candidate.id,
+      watchlistIds: candidate.watchlistIds,
+      watchlistItemIds: candidate.watchlistItemIds,
+      term: candidate.normalizedTerm,
+      kind: candidate.term.kind,
+      organizationId: candidate.organizationId,
+      hasMatchingCaptures: candidate.captureRefs.length > 0,
+      sourceFamilies: candidate.sourceFamilies,
+      captureRefCount: candidate.captureRefs.length
+    })),
     candidateIdsMissingRoute: input.candidateIdsMissingRoute,
     routes: {
       readiness: "/v1/dwm/alerts/readiness",

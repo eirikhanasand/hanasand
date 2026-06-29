@@ -809,6 +809,17 @@ describe("dwm alert repository", () => {
         blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
         counts: { activeWatchlists: 1, candidateCount: 1, captureRefCount: 0, matchedCandidateCount: 0, unmatchedCandidateCount: 1 },
         watchlistIds: ["watch_repo_nomatch"],
+        watchlistTerms: [{
+          candidateId: expect.any(String),
+          watchlistIds: ["watch_repo_nomatch"],
+          watchlistItemIds: ["watch_item_nomatch"],
+          term: "acme.com",
+          kind: "domain",
+          organizationId: "org_repo_nomatch",
+          hasMatchingCaptures: false,
+          sourceFamilies: [],
+          captureRefCount: 0
+        }],
         routes: {
           readiness: "/v1/dwm/alerts/readiness",
           rebuild: "/v1/dwm/alerts/rebuild",
@@ -824,6 +835,12 @@ describe("dwm alert repository", () => {
       zeroAlert: true,
       state: "blocked_no_matching_capture",
       expectedAlertDelta: 0
+    });
+    expect(noMatchRebuild.zeroAlertProof.watchlistTerms[0]).toMatchObject({
+      term: "acme.com",
+      watchlistItemIds: ["watch_item_nomatch"],
+      hasMatchingCaptures: false,
+      captureRefCount: 0
     });
     expect(noMatchRebuild.generationReadiness.zeroAlertProof.state).toBe("blocked_no_matching_capture");
     expect((noMatchStore as any).listDwmAlerts()).toEqual([expect.objectContaining({ id: "alert_existing_nomatch" })]);
