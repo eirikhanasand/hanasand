@@ -351,6 +351,148 @@ describe("analyst handoff consumer validation", () => {
       })
     ]));
   });
+
+  test("emits deploy-gate rows for Worker 3 without custom parsing", () => {
+    const happy = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    happy.deployGateEvidence = {
+      publicTiReadiness: [{
+        schemaVersion: "ti.public_actor.readiness.v1",
+        state: "ready",
+        backedIds: {
+          organizationIds: ["org_acme"],
+          watchlistIds: ["watch_acme"],
+          alertIds: ["dwm_alert_acme"],
+          casePaths: ["/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"],
+          captureIds: ["cap_consumer_acme"],
+          webhookDestinationIds: ["webhook_discord"]
+        },
+        blockers: []
+      }],
+      webhookDestinations: [{
+        schemaVersion: "dwm.webhook.destination_admin_proof_row.v1",
+        destinationId: "webhook_discord",
+        orgId: "org_acme",
+        access: { canRead: true, canManage: true, memberSafe: false },
+        health: { ready: true, status: "ready", adminProofBlockers: [] },
+        retry: { retryable: false, lastErrorCategory: null }
+      }],
+      orgLifecycle: [{
+        schemaVersion: "organization.lifecycle_readiness.v1",
+        organizationId: "org_acme",
+        tenantId: "tenant_acme",
+        readyForOnboarding: true,
+        typedBlockers: [],
+        watchlistReadiness: { ready: true },
+        alertExportReadiness: { ready: true, route: "GET /api/organizations/:id/watchlists/alert-terms" }
+      }],
+      supportExecutor: [{
+        schemaVersion: "support.action_executor_readiness.v1",
+        ready: true,
+        action: "invite_assist",
+        mutationMode: "no_mutation_readiness",
+        noMutation: true,
+        executableByExistingEndpoint: true,
+        blockers: [],
+        executorContract: {
+          method: "POST",
+          path: "/api/admin/support/organizations/org_acme/invite-assist",
+          requiredHeaders: ["authorization", "x-request-id", "x-idempotency-key"],
+          requiredBody: ["organizationId", "email", "reason"]
+        }
+      }]
+    };
+
+    const blocked = clone(happy);
+    blocked.deployGateEvidence = {
+      publicTiReadiness: [{
+        schemaVersion: "ti.public_actor.readiness.v1",
+        state: "blocked",
+        backedIds: { organizationIds: [], alertIds: [], casePaths: [], webhookDestinationIds: [] },
+        blockers: [{ code: "missing_org", ownerLane: "org", route: "/dashboard/dwm" }]
+      }],
+      webhookDestinations: [{
+        schemaVersion: "dwm.webhook.destination_admin_proof_row.v1",
+        destinationId: "webhook_missing",
+        orgId: "org_acme",
+        access: { canRead: true, canManage: false, memberSafe: true },
+        health: { ready: false, status: "blocked", adminProofBlockers: [{ code: "no_live_endpoint" }] },
+        retry: { retryable: false, lastErrorCategory: "configuration" }
+      }],
+      orgLifecycle: [{
+        schemaVersion: "organization.lifecycle_readiness.v1",
+        organizationId: "org_acme",
+        tenantId: "tenant_acme",
+        readyForOnboarding: false,
+        typedBlockers: ["watchlist_setup_required", "alert_export_unavailable"],
+        watchlistReadiness: { ready: false },
+        alertExportReadiness: { ready: false, route: "GET /api/organizations/:id/watchlists/alert-terms" }
+      }],
+      supportExecutor: [{
+        schemaVersion: "support.action_executor_readiness.v1",
+        ready: false,
+        action: "access_recovery",
+        mutationMode: "no_mutation_readiness",
+        noMutation: true,
+        executableByExistingEndpoint: false,
+        blockers: ["mutation_unavailable"],
+        executorContract: {
+          method: "POST",
+          path: "/api/admin/support/organizations/org_acme/access-recovery",
+          requiredHeaders: ["authorization", "x-request-id", "x-idempotency-key"],
+          requiredBody: ["organizationId", "userId", "reason"]
+        }
+      }]
+    };
+
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:20:00.000Z",
+      results: [
+        { file: "happy-worker3.json", bundle: happy },
+        { file: "owner-blockers-worker3.json", bundle: blocked }
+      ]
+    });
+
+    expect(report.deployGate.schemaVersion).toBe("hanasand.analyst_handoff.deploy_gate_assertions.v1");
+    expect(report.deployGate.requiredContractVersions).toEqual(ANALYST_HANDOFF_CONTRACT_VERSIONS);
+    expect(report.deployGate.ownerLaneMap).toMatchObject({
+      org: "org",
+      alert: "alert",
+      webhook: "webhook",
+      publicTI: "publicTI",
+      helpdesk: "helpdesk"
+    });
+    expect(report.deployGate.rows.map((row) => row.kind)).toEqual(expect.arrayContaining([
+      "public_ti_readiness",
+      "alert_case_handoff",
+      "webhook_destination",
+      "org_lifecycle",
+      "support_executor"
+    ]));
+    expect(report.deployGate.rows.every((row) =>
+      row.schemaVersion
+      && row.ownerLane
+      && Array.isArray(row.blockerCodes)
+      && Array.isArray(row.requiredFields)
+    )).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "public_ti_readiness" && row.ownerLane === "publicTI" && row.blockerCodes.includes("missing_org") && row.route === "/dashboard/dwm")).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "alert_case_handoff" && row.route === "/v1/cases" && row.identity?.alertId === "dwm_alert_acme")).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "webhook_destination" && row.ownerLane === "webhook" && row.blockerCodes.includes("no_live_endpoint"))).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "org_lifecycle" && row.ownerLane === "org" && row.blockerCodes.includes("watchlist_setup_required"))).toBe(true);
+    expect(report.deployGate.rows.some((row) => row.kind === "support_executor" && row.ownerLane === "helpdesk" && row.action === "access_recovery" && row.route === "/api/admin/support/organizations/org_acme/access-recovery")).toBe(true);
+  });
+
+  test("keeps validator modules free of UI, network, and database imports", () => {
+    const consumerSource = readFileSync(new URL("../product/analystHandoffConsumer.ts", import.meta.url), "utf8");
+    const validatorSource = readFileSync(new URL("../../scripts/validateAnalystHandoffBundles.ts", import.meta.url), "utf8");
+    const combined = `${consumerSource}\n${validatorSource}`;
+
+    expect(combined).not.toContain("frontend/");
+    expect(combined).not.toContain("next/");
+    expect(combined).not.toContain("#db");
+    expect(combined).not.toContain("fetch(");
+    expect(combined).not.toContain("axios");
+    expect(combined).not.toContain("postgres");
+  });
 });
 
 function loadFixture(name: string): unknown {

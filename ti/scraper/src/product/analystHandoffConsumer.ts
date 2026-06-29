@@ -28,6 +28,11 @@ export const HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION = "helpdesk.action_avai
 export const DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION = "dwm.entitlement_blocker.v1" as const;
 export const DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION = "dwm.source_pack_action_contract.v1" as const;
 export const SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION = "support.action_execution_handoff.v1" as const;
+export const ANALYST_HANDOFF_DEPLOY_GATE_ASSERTIONS_SCHEMA_VERSION = "hanasand.analyst_handoff.deploy_gate_assertions.v1" as const;
+export const PUBLIC_TI_READINESS_SCHEMA_VERSION = "ti.public_actor.readiness.v1" as const;
+export const DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION = "dwm.webhook.destination_admin_proof_row.v1" as const;
+export const ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION = "organization.lifecycle_readiness.v1" as const;
+export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_executor_readiness.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -43,7 +48,12 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   helpdeskActionAvailability: HELPDESK_ACTION_AVAILABILITY_SCHEMA_VERSION,
   entitlementBlocker: DWM_ENTITLEMENT_BLOCKER_SCHEMA_VERSION,
   sourcePackActionContract: DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION,
-  supportActionExecutionHandoff: SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION
+  supportActionExecutionHandoff: SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+  deployGateAssertions: ANALYST_HANDOFF_DEPLOY_GATE_ASSERTIONS_SCHEMA_VERSION,
+  publicTiReadiness: PUBLIC_TI_READINESS_SCHEMA_VERSION,
+  webhookDestinationAdminProofRow: DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION,
+  organizationLifecycleReadiness: ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION,
+  supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
 } as const;
 
 export type AnalystHandoffConsumerBlockerCode =
@@ -194,6 +204,71 @@ export type AnalystHandoffSupportActionExecution = {
   };
   audit?: {
     blockerCode?: string | null;
+  };
+  executorReadiness?: AnalystHandoffSupportExecutorReadiness;
+};
+
+export type AnalystHandoffPublicTiReadinessRow = {
+  schemaVersion: typeof PUBLIC_TI_READINESS_SCHEMA_VERSION;
+  state: "ready" | "review" | "degraded" | "blocked";
+  backedIds?: {
+    organizationIds?: string[];
+    watchlistIds?: string[];
+    alertIds?: string[];
+    casePaths?: string[];
+    captureIds?: string[];
+    webhookDestinationIds?: string[];
+  };
+  blockers?: Array<{
+    code: string;
+    ownerLane: "org" | "alert" | "case" | "webhook" | "source" | "entitlement" | "public-ti";
+    route?: string;
+  }>;
+};
+
+export type AnalystHandoffWebhookDestinationAdminProofRow = {
+  schemaVersion: typeof DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION;
+  destinationId: string;
+  orgId: string;
+  access?: {
+    canRead?: boolean;
+    canManage?: boolean;
+    memberSafe?: boolean;
+  };
+  health?: {
+    ready?: boolean;
+    status?: string;
+    adminProofBlockers?: Array<{ code?: string }>;
+  };
+  retry?: {
+    retryable?: boolean;
+    lastErrorCategory?: string | null;
+  };
+};
+
+export type AnalystHandoffOrgLifecycleReadinessRow = {
+  schemaVersion: typeof ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION;
+  organizationId: string;
+  tenantId: string;
+  readyForOnboarding: boolean;
+  typedBlockers: string[];
+  watchlistReadiness?: { ready?: boolean };
+  alertExportReadiness?: { ready?: boolean; route?: string };
+};
+
+export type AnalystHandoffSupportExecutorReadiness = {
+  schemaVersion: typeof SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION;
+  ready: boolean;
+  action: string;
+  mutationMode?: "no_mutation_readiness";
+  noMutation?: boolean;
+  executableByExistingEndpoint?: boolean;
+  blockers: string[];
+  executorContract?: {
+    method?: string;
+    path?: string;
+    requiredHeaders?: string[];
+    requiredBody?: string[];
   };
 };
 
@@ -352,6 +427,12 @@ export type AnalystHandoffConsumerBundle = {
     sourceActions?: AnalystHandoffSourcePackActionContract[];
     supportActions?: AnalystHandoffSupportActionExecution[];
   };
+  deployGateEvidence?: {
+    publicTiReadiness?: AnalystHandoffPublicTiReadinessRow[];
+    webhookDestinations?: AnalystHandoffWebhookDestinationAdminProofRow[];
+    orgLifecycle?: AnalystHandoffOrgLifecycleReadinessRow[];
+    supportExecutor?: AnalystHandoffSupportExecutorReadiness[];
+  };
   stages: Partial<{
     publicTi: ActorWatchlistAdapterValue;
     orgWatchlist: AlertGenerationAdapterValue & {
@@ -402,6 +483,7 @@ export type AnalystHandoffValidationReport = {
   failedCount: number;
   blockerCodes: AnalystHandoffConsumerBlockerCode[];
   productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
+  deployGate: AnalystHandoffDeployGateAssertions;
   results: Array<{
     file?: string;
     ok: boolean;
@@ -413,6 +495,36 @@ export type AnalystHandoffValidationReport = {
     contracts: AnalystHandoffConsumerValidation["contracts"] | null;
     identity?: AnalystHandoffIdentity;
   }>;
+};
+
+export type AnalystHandoffDeployGateRowKind =
+  | "public_ti_readiness"
+  | "alert_case_handoff"
+  | "webhook_destination"
+  | "org_lifecycle"
+  | "support_executor";
+
+export type AnalystHandoffDeployGateRow = {
+  kind: AnalystHandoffDeployGateRowKind;
+  ownerLane: AnalystHandoffOwnerLane;
+  ok: boolean;
+  schemaVersion: string;
+  sourceFile?: string;
+  action?: string;
+  route?: string;
+  blockerCodes: string[];
+  requiredFields: string[];
+  identity?: Pick<AnalystHandoffIdentity, "organizationId" | "alertId" | "casePath" | "webhookDestinationIds">;
+};
+
+export type AnalystHandoffDeployGateAssertions = {
+  schemaVersion: typeof ANALYST_HANDOFF_DEPLOY_GATE_ASSERTIONS_SCHEMA_VERSION;
+  ok: boolean;
+  rowCount: number;
+  requiredContractVersions: typeof ANALYST_HANDOFF_CONTRACT_VERSIONS;
+  ownerLaneMap: Record<AnalystHandoffOwnerLane, AnalystHandoffOwnerLane>;
+  rowsByOwner: Record<AnalystHandoffOwnerLane, { ok: boolean; rowCount: number; blockerCodes: string[] }>;
+  rows: AnalystHandoffDeployGateRow[];
 };
 
 export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHandoffConsumerValidation {
@@ -558,6 +670,11 @@ export function buildAnalystHandoffValidationReport(input: {
     };
   });
   const allBlockers = results.flatMap((item) => item.blockers.map(({ ownerLane: _ownerLane, ...blocker }) => blocker as AnalystHandoffConsumerBlocker));
+  const deployGate = buildDeployGateAssertions(input.results.map((item, index) => ({
+    file: item.file,
+    bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
+    result: results[index]
+  })));
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
     contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
@@ -568,8 +685,205 @@ export function buildAnalystHandoffValidationReport(input: {
     failedCount: results.filter((item) => !item.ok).length,
     blockerCodes: [...new Set(results.flatMap((item) => item.blockerCodes))].sort() as AnalystHandoffConsumerBlockerCode[],
     productReadiness: productReadinessFor(allBlockers),
+    deployGate,
     results
   };
+}
+
+export function buildDeployGateAssertions(input: Array<{
+  file?: string;
+  bundle?: Partial<AnalystHandoffConsumerBundle>;
+  result?: AnalystHandoffValidationReport["results"][number];
+}>): AnalystHandoffDeployGateAssertions {
+  const rows = input.flatMap(({ file, bundle, result }) => deployGateRowsForBundle(file, bundle, result));
+  const lanes: AnalystHandoffOwnerLane[] = ["org", "alert", "source", "entitlement", "webhook", "case", "publicTI", "helpdesk"];
+  const rowsByOwner = Object.fromEntries(lanes.map((owner) => {
+    const owned = rows.filter((row) => row.ownerLane === owner);
+    return [owner, {
+      ok: owned.every((row) => row.ok),
+      rowCount: owned.length,
+      blockerCodes: [...new Set(owned.flatMap((row) => row.blockerCodes))].sort()
+    }];
+  })) as AnalystHandoffDeployGateAssertions["rowsByOwner"];
+  const ownerLaneMap = Object.fromEntries(lanes.map((owner) => [owner, owner])) as AnalystHandoffDeployGateAssertions["ownerLaneMap"];
+  return {
+    schemaVersion: ANALYST_HANDOFF_DEPLOY_GATE_ASSERTIONS_SCHEMA_VERSION,
+    ok: rows.every((row) => row.ok),
+    rowCount: rows.length,
+    requiredContractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
+    ownerLaneMap,
+    rowsByOwner,
+    rows
+  };
+}
+
+function deployGateRowsForBundle(
+  file: string | undefined,
+  bundle: Partial<AnalystHandoffConsumerBundle> | undefined,
+  result: AnalystHandoffValidationReport["results"][number] | undefined
+): AnalystHandoffDeployGateRow[] {
+  if (!bundle) return [];
+  const rows: AnalystHandoffDeployGateRow[] = [];
+  const identity = result?.identity;
+  const publicTiRows = bundle.deployGateEvidence?.publicTiReadiness || [];
+  for (const row of publicTiRows) {
+    const blockerCodes = (row.blockers || []).map((item) => item.code).filter(Boolean);
+    rows.push({
+      kind: "public_ti_readiness",
+      ownerLane: "publicTI",
+      ok: row.schemaVersion === PUBLIC_TI_READINESS_SCHEMA_VERSION && row.state !== "blocked" && !blockerCodes.length,
+      schemaVersion: row.schemaVersion,
+      sourceFile: file,
+      route: firstString((row.blockers || []).map((item) => item.route)),
+      blockerCodes,
+      requiredFields: [
+        "schemaVersion",
+        "state",
+        "backedIds.organizationIds",
+        "backedIds.alertIds",
+        "backedIds.casePaths",
+        "backedIds.webhookDestinationIds",
+        "blockers[].ownerLane"
+      ],
+      identity: deployGateIdentity(identity)
+    });
+  }
+
+  if (bundle.stages?.caseHandoff || bundle.stages?.orgWatchlist) {
+    const caseRequest = bundle.stages.caseHandoff?.request as AlertCaseAdapterValue["request"] | undefined;
+    const orgRequest = bundle.stages.orgWatchlist?.request as AlertGenerationAdapterValue["request"] | undefined;
+    const caseBody = caseRequest?.body;
+    const orgBody = orgRequest?.body;
+    const blockerCodes = [
+      ...(!orgBody?.watchlistId ? ["missing_watchlist_id"] : []),
+      ...(!orgBody?.watchlistItemIds?.length ? ["missing_watchlist_item"] : []),
+      ...(!caseBody?.alertId ? ["absent_alert_id"] : []),
+      ...(!caseBody?.casePath ? ["case_route_unavailable"] : []),
+      ...(!caseBody?.captureIds?.length ? ["missing_provenance"] : []),
+    ];
+    rows.push({
+      kind: "alert_case_handoff",
+      ownerLane: blockerCodes.some((code) => code === "absent_alert_id" || code === "case_route_unavailable") ? "case" : "alert",
+      ok: caseRequest?.method === "POST" && caseRequest.path === "/v1/cases" && orgRequest?.method === "POST" && orgRequest.path === "/v1/dwm/alerts/rebuild" && blockerCodes.length === 0,
+      schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
+      sourceFile: file,
+      route: caseRequest?.path,
+      action: "case_handoff",
+      blockerCodes,
+      requiredFields: [
+        "stages.orgWatchlist.request.body.watchlistId",
+        "stages.orgWatchlist.request.body.watchlistItemIds",
+        "stages.caseHandoff.request.path",
+        "stages.caseHandoff.request.body.alertId",
+        "stages.caseHandoff.request.body.casePath",
+        "stages.caseHandoff.request.body.captureIds"
+      ],
+      identity: deployGateIdentity(identity)
+    });
+  }
+
+  const webhookRows = [
+    ...(bundle.deployGateEvidence?.webhookDestinations || []),
+    ...((bundle.stages?.webhookTrigger?.destinationLifecycle || []).map((row) => ({
+      schemaVersion: DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION,
+      destinationId: row.destinationId,
+      orgId: row.orgId,
+      access: { canRead: row.access.canReadStatus, canManage: row.access.canManage, memberSafe: row.access.memberSafe },
+      health: { ready: row.health.ready, status: row.health.status, adminProofBlockers: row.health.blockers.map((code) => ({ code })) },
+      retry: { retryable: row.retry.retryable, lastErrorCategory: row.retry.lastErrorCategory }
+    } satisfies AnalystHandoffWebhookDestinationAdminProofRow)))
+  ];
+  for (const row of webhookRows) {
+    const blockerCodes = (row.health?.adminProofBlockers || []).map((item) => item.code).filter((code): code is string => Boolean(code));
+    rows.push({
+      kind: "webhook_destination",
+      ownerLane: "webhook",
+      ok: row.schemaVersion === DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION && row.access?.canRead !== false && row.health?.ready === true && !blockerCodes.length,
+      schemaVersion: row.schemaVersion,
+      sourceFile: file,
+      action: row.retry?.retryable ? "retry_or_replay" : "delivery_readiness",
+      route: "GET /api/dwm/webhooks?orgId=<org_id>",
+      blockerCodes,
+      requiredFields: [
+        "schemaVersion",
+        "destinationId",
+        "orgId",
+        "health.ready",
+        "health.adminProofBlockers[].code",
+        "retry.lastErrorCategory"
+      ],
+      identity: deployGateIdentity(identity)
+    });
+  }
+
+  for (const row of bundle.deployGateEvidence?.orgLifecycle || []) {
+    const blockerCodes = row.typedBlockers || [];
+    rows.push({
+      kind: "org_lifecycle",
+      ownerLane: "org",
+      ok: row.schemaVersion === ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION && row.readyForOnboarding && !blockerCodes.length,
+      schemaVersion: row.schemaVersion,
+      sourceFile: file,
+      route: row.alertExportReadiness?.route,
+      action: "org_lifecycle_readiness",
+      blockerCodes,
+      requiredFields: [
+        "schemaVersion",
+        "organizationId",
+        "tenantId",
+        "readyForOnboarding",
+        "watchlistReadiness.ready",
+        "alertExportReadiness.route",
+        "typedBlockers"
+      ],
+      identity: deployGateIdentity(identity)
+    });
+  }
+
+  const supportRows = [
+    ...(bundle.deployGateEvidence?.supportExecutor || []),
+    ...((bundle.compatibility?.supportActions || []).map((item) => item.executorReadiness).filter(Boolean) as AnalystHandoffSupportExecutorReadiness[])
+  ];
+  for (const row of supportRows) {
+    rows.push({
+      kind: "support_executor",
+      ownerLane: "helpdesk",
+      ok: row.schemaVersion === SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION && row.ready && row.noMutation !== false && Boolean(row.executorContract?.path) && !row.blockers.length,
+      schemaVersion: row.schemaVersion,
+      sourceFile: file,
+      action: row.action,
+      route: row.executorContract?.path,
+      blockerCodes: row.blockers || [],
+      requiredFields: [
+        "schemaVersion",
+        "ready",
+        "mutationMode",
+        "noMutation",
+        "action",
+        "executorContract.path",
+        "executorContract.requiredHeaders",
+        "executorContract.requiredBody",
+        "blockers"
+      ],
+      identity: deployGateIdentity(identity)
+    });
+  }
+
+  return rows;
+}
+
+function deployGateIdentity(identity: AnalystHandoffIdentity | undefined): AnalystHandoffDeployGateRow["identity"] {
+  if (!identity) return undefined;
+  return {
+    organizationId: identity.organizationId,
+    alertId: identity.alertId,
+    casePath: identity.casePath,
+    webhookDestinationIds: identity.webhookDestinationIds
+  };
+}
+
+function firstString(values: Array<string | undefined>): string | undefined {
+  return values.find((value): value is string => Boolean(value));
 }
 
 function validateStageEnvelope(
