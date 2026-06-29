@@ -1407,6 +1407,27 @@ describe("dwm source requests", () => {
           expect.objectContaining({ family: "darkweb_onion", state: "active", privacyBoundary: expect.objectContaining({ metadataOnly: true }) }),
           expect.objectContaining({ family: "actor_page", state: "canary", matchableFields: expect.arrayContaining(["actorName"]) })
         ]),
+        sourceReadinessLedgerRows: expect.arrayContaining([
+          expect.objectContaining({
+            schemaVersion: "dwm.actor_source_readiness_ledger_row.v1",
+            proofId: expect.any(String),
+            family: "telegram",
+            state: "canary",
+            parserStatuses: expect.arrayContaining(["telegram_public_parser_ready"]),
+            freshnessState: "fresh",
+            actionability: expect.objectContaining({
+              liveNetworkFetchRequired: false,
+              nextActions: []
+            }),
+            downstreamConsumers: expect.objectContaining({
+              publicTiActorPage: true,
+              dashboardSourceReadiness: true,
+              sharedWatchlistAlerts: true,
+              caseHandoff: true
+            }),
+            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          })
+        ]),
         freshness: {
           lastSuccessfulCaptureAt: expect.any(String),
           lastSuccessfulEnrichmentAt: expect.any(String),
@@ -1456,6 +1477,9 @@ describe("dwm source requests", () => {
           sourceCoverage: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", state: "canary" })
           ]),
+          sourceReadinessLedgerRows: expect.arrayContaining([
+            expect.objectContaining({ family: "telegram", freshnessState: "fresh" })
+          ]),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1468,10 +1492,14 @@ describe("dwm source requests", () => {
           sourceCoverage: expect.arrayContaining([
             expect.objectContaining({ family: "public_advisory", state: "canary" })
           ]),
+          sourceReadinessLedgerRows: expect.arrayContaining([
+            expect.objectContaining({ family: "public_advisory", downstreamConsumers: expect.objectContaining({ sharedWatchlistAlerts: true }) })
+          ]),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
           ".actorReadiness.proofId | length > 0",
+          ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -1625,6 +1653,22 @@ describe("dwm source requests", () => {
         expect.objectContaining({ family: "darkweb_onion", state: "missing" }),
         expect.objectContaining({ family: "actor_page", state: "missing" })
       ]),
+      sourceReadinessLedgerRows: expect.arrayContaining([
+        expect.objectContaining({
+          family: "darkweb_onion",
+          state: "missing",
+          freshnessState: "needs_capture",
+          actionability: expect.objectContaining({
+            intakeAvailable: true,
+            nextActions: expect.arrayContaining(["request_candidate"]),
+            liveNetworkFetchRequired: false
+          }),
+          candidateGap: expect.objectContaining({
+            state: "missing",
+            intakeRecommendation: expect.objectContaining({ family: "darkweb_onion", policyBoundary: "metadata_only_restricted_source" })
+          })
+        })
+      ]),
       sourceFamilies: {
         active: expect.arrayContaining(["telegram"]),
         enrichable: expect.arrayContaining(["telegram"])
@@ -1748,6 +1792,21 @@ describe("dwm source requests", () => {
       state: "partial",
       sourceCoverage: expect.arrayContaining([
         expect.objectContaining({ family: "telegram", state: "failed", parserStatuses: expect.arrayContaining(["parser_retry_scheduled"]) })
+      ]),
+      sourceReadinessLedgerRows: expect.arrayContaining([
+        expect.objectContaining({
+          family: "telegram",
+          state: "failed",
+          actionability: expect.objectContaining({
+            retryAvailable: true,
+            nextActions: expect.arrayContaining(["retry"]),
+            liveNetworkFetchRequired: false
+          }),
+          retryBackoff: expect.objectContaining({
+            retryable: true,
+            failureCategories: expect.arrayContaining(["parser_timeout"])
+          })
+        })
       ]),
       sourceFamilies: {
         failed: expect.arrayContaining(["telegram"])
