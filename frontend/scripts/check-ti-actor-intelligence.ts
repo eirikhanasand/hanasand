@@ -537,6 +537,8 @@ assert(pageClientSource.includes('Readiness'), 'Public TI page should expose bac
 assert(pageClientSource.includes('Backed IDs, blockers, and next handoff owner'), 'Public TI page should describe backed readiness without prompt-shaped language.')
 assert(pageClientSource.includes('data-ti-org-actor-identity'), 'Public TI org relevance should render actor identity fields.')
 assert(pageClientSource.includes('data-ti-org-source-coverage'), 'Public TI org relevance should render source coverage fields.')
+assert(pageClientSource.includes('data-ti-watchlist-intersections'), 'Public TI org relevance should render customer watchlist intersections.')
+assert(pageClientSource.includes('Watchlist intersections'), 'Public TI org relevance should label watchlist intersections directly.')
 assert(pageClientSource.includes('data-ti-org-enrichment-gaps'), 'Public TI org relevance should render enrichment gaps.')
 assert(pageClientSource.includes('Actor identity'), 'Public TI org relevance should label actor identity without implementation wording.')
 assert(pageClientSource.includes('Enrichment needed'), 'Public TI org relevance should expose collection/enrichment gaps.')

@@ -361,7 +361,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </div>
                                 </section>
 
-                                <section className='grid gap-4 xl:grid-cols-[1fr_1fr]'>
+                                <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                                     <Panel title='Targeting' description='Country, victim, sector, timeframe, incident, and source basis for the selected actor/query.' icon={<Target className='h-4 w-4' />}>
                                         {victimObservations.length ? victimObservations.map(item => (
                                             <VictimObservationRow key={`${item.victim}-${item.timeframe}`} item={item} />
@@ -445,7 +445,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                 </div>
             </section>
 
-            <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
+            <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                 <Panel title='Watchlist Relevance' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
                     {alertItems.length ? alertItems.map(item => (
                         <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
@@ -796,7 +796,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                 <p className='text-xs font-semibold uppercase text-[#667085]'>Artifact queue</p>
                 <p className='text-[11px] text-[#667085]'>Arrow keys, Home, and End move selection.</p>
             </div>
-            <div className='flex gap-2 overflow-x-auto pb-1'>
+            <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3'>
                 {artifacts.map(artifact => {
                     const active = artifact.id === selectedArtifactId
                     return (
@@ -804,10 +804,10 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             key={artifact.id}
                             type='button'
                             onClick={() => onSelectArtifact(artifact.id)}
-                            className={`shrink-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white'}`}
+                            className={`min-w-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white'}`}
                         >
-                            <span className='block text-xs font-semibold text-[#171a21]'>{artifact.label}</span>
-                            <span className='mt-1 block text-[11px] text-[#667085]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
+                            <span className='block wrap-break-word text-xs font-semibold text-[#171a21]'>{artifact.label}</span>
+                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
                         </button>
                     )
                 })}
@@ -844,7 +844,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <EvidenceMetric label='Readiness' value={artifact.readiness.label} />
                 </div>
             </div>
-            <div className='mt-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
+            <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
                         {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{line}</li>) : <li>No evidence text is attached to this artifact.</li>}
@@ -859,7 +859,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                         {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{task}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
                     </EvidencePanel>
                 </div>
-                <div className='grid content-start gap-2'>
+                <div className='grid min-w-0 max-w-full content-start gap-2'>
                     <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Console handoff</p>
                         <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
@@ -1163,7 +1163,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
 
     return (
         <Panel title='Actions' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
-            <div className='grid gap-3'>
+            <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <ConsumerReadinessPanel actionability={actionability} />
                 <ReadinessBlockersPanel actionability={actionability} />
@@ -1204,18 +1204,18 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                     </div>
                 </div>
 
-                <div className='grid gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                <div className='grid min-w-0 gap-2'>
+                    <Link href='/dashboard/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                         <ExternalLink className='h-3.5 w-3.5' />
                         Open console
                     </Link>
                     {casePath ? (
-                        <a href={casePath} className='inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                        <a href={casePath} className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                             <ExternalLink className='h-3.5 w-3.5' />
                             Open related case
                         </a>
                     ) : (
-                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex min-h-9 cursor-not-allowed items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 py-2 text-xs font-semibold text-[#98a2b3] dark:border-[#314057] dark:bg-[#172131] dark:text-[#77869a]'>
+                        <button type='button' disabled title={actionability.handoffs.caseBlockers.join('; ')} className='inline-flex min-h-9 w-fit max-w-full cursor-not-allowed items-center justify-center gap-2 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-3 py-2 text-xs font-semibold text-[#98a2b3] dark:border-[#314057] dark:bg-[#172131] dark:text-[#77869a]'>
                             <ClipboardList className='h-3.5 w-3.5' />
                             Create case
                         </button>
@@ -1372,6 +1372,41 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                     )}
                 </div>
             </div>
+            <div data-ti-watchlist-intersections='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist intersections</p>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {proof.watchlistIntersections.length} intersection{proof.watchlistIntersections.length === 1 ? '' : 's'} · {proof.watchlistIntersections.filter(item => item.alertIds.length).length} with alerts · {proof.watchlistIntersections.filter(item => item.casePaths.length).length} with cases
+                        </p>
+                    </div>
+                    <span className={proof.watchlistIntersections.some(item => item.state === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(proof.watchlistIntersections.length ? 'review' : 'blocked')}>
+                        {proof.watchlistIntersections.some(item => item.state === 'ready') ? 'ready' : proof.watchlistIntersections.length ? 'review' : 'blocked'}
+                    </span>
+                </div>
+                <div className='mt-2 grid gap-2'>
+                    {proof.watchlistIntersections.length ? proof.watchlistIntersections.slice(0, 4).map(item => (
+                        <div key={item.intersectionId} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.kind}: {item.value}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                        {watchlistIntersectionActionLabel(item.recommendedAction)} · {item.organizationId ? `org ${item.organizationId}` : 'organization needed'} · {item.watchlistItemId ? `watchlist item ${item.watchlistItemId}` : 'watchlist item needed'}
+                                    </p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                        {item.sourceFamilies.map(formatLabel).join(', ') || 'source family needed'} · {item.captureIds.length ? `${item.captureIds.length} capture${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.alertIds.length ? `${item.alertIds.length} alert${item.alertIds.length === 1 ? '' : 's'}` : 'alert needed'}
+                                    </p>
+                                    {item.blockers.length ? <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{item.blockers[0].handoff}</p> : null}
+                                </div>
+                                <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
+                            </div>
+                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.casePath || item.route}</p>
+                        </div>
+                    )) : (
+                        <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No organization watchlist intersection is attached yet.</p>
+                    )}
+                </div>
+            </div>
             {proof.enrichmentGaps.length ? (
                 <div data-ti-org-enrichment-gaps='true' className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 dark:border-[#5a4316] dark:bg-[#231b0c]'>
                     <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Enrichment needed</p>
@@ -1469,8 +1504,8 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
     ]
 
     return (
-        <div data-public-ti-action-exports='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div data-public-ti-action-exports='true' className='min-w-0 w-full max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Action exports</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Validated request bodies for authenticated review. Copying does not change customer state.</p>
@@ -1481,10 +1516,10 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                 {payloads.map(payload => {
                     const primaryBlocker = payload.blockedBy[0]
                     return (
-                        <div key={payload.kind} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
-                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                        <div key={payload.kind} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
-                                    <div className='flex flex-wrap items-center gap-2'>
+                                    <div className='flex min-w-0 flex-wrap items-center gap-2'>
                                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{payload.label}</p>
                                         <span className={payload.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
                                             {payload.ready ? 'Ready' : 'Unavailable'}
@@ -1497,9 +1532,9 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                         <p className='mt-1 text-[11px] leading-5 text-[#147a3b]'>Required IDs and provenance are present.</p>
                                     )}
                                 </div>
-                                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                <div className='flex min-w-0 w-full flex-wrap items-center justify-start gap-1.5 sm:w-auto sm:justify-end sm:shrink-0'>
                                     {payload.backedRoute ? (
-                                        <a href={payload.backedRoute} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                        <a href={payload.backedRoute} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                             <ExternalLink className='h-3.5 w-3.5' />
                                             Open
                                         </a>
@@ -1730,10 +1765,10 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
 
 function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: string; detail: string; payload: unknown; route?: string; blocked: boolean }) {
     return (
-        <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
-            <div className='flex flex-wrap items-start justify-between gap-2'>
+        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <div className='flex items-center gap-2'>
+                    <div className='flex min-w-0 flex-wrap items-center gap-2'>
                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
                         <span className={blocked ? 'rounded-md bg-[#fff4d6] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a5a00]' : 'rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b]'}>
                             {blocked ? 'blocked' : 'ready'}
@@ -1741,7 +1776,7 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
                     </div>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{detail}</p>
                 </div>
-                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                <div className='flex min-w-0 w-full flex-wrap items-center justify-start gap-1.5 sm:w-auto sm:justify-end sm:shrink-0'>
                     {route ? (
                         <a href={route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                             <ExternalLink className='h-3.5 w-3.5' />
@@ -1771,7 +1806,7 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     }
 
     return (
-        <button type='button' onClick={copyPayload} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
+        <button type='button' onClick={copyPayload} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
             {state === 'copied' ? <CheckCircle2 className='h-3.5 w-3.5 text-[#147a3b]' /> : <Copy className='h-3.5 w-3.5' />}
             {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : 'Copy'}
         </button>
@@ -2321,10 +2356,10 @@ function formatDate(value: string) {
 
 function Panel({ title, description, icon, children }: { title: string; description?: string; icon: React.ReactNode; children: React.ReactNode }) {
     return (
-        <section className='border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
-            <div className='mb-2 flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>
+        <section className='min-w-0 border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
+            <div className='mb-2 flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>
                 <span className='text-[#3056d3] dark:text-[#9ab3ff]'>{icon}</span>
-                <span>{title}</span>
+                <span className='min-w-0 wrap-break-word'>{title}</span>
                 {description ? <InfoTip label={description} /> : null}
             </div>
             {children}
@@ -2726,6 +2761,14 @@ function coverageMissingLabel(value: string) {
     if (value.includes('datedActivityRow')) return 'dated activity rows'
     if (value.includes('provenanceRefs')) return 'provenance references'
     return formatLabel(value)
+}
+
+function watchlistIntersectionActionLabel(value: TiActionabilityModel['orgRelevance']['watchlistIntersections'][number]['recommendedAction']) {
+    if (value === 'open_watchlist_item') return 'Open saved watchlist item'
+    if (value === 'persist_watchlist_item') return 'Save watchlist item'
+    if (value === 'rebuild_alerts') return 'Rebuild related alerts'
+    if (value === 'open_case') return 'Open related case'
+    return 'Attach source evidence'
 }
 
 function humanResultStatus(value?: string) {
