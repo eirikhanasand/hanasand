@@ -2565,6 +2565,17 @@ const crudDisableContract = buildDwmWebhookDestinationCrudContract({
     auditEvents: operationAuditEvents,
     input: { orgId: 'org_contract' },
 })
+const crudDeleteContract = buildDwmWebhookDestinationCrudContract({
+    action: 'delete',
+    ownerId: 'owner_contract',
+    viewerRole: 'admin',
+    canManage: true,
+    destination: operationDestinations.find(item => item.id === 'destination_replay_contract') || null,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    input: { orgId: 'org_contract' },
+})
 const crudEnableContract = buildDwmWebhookDestinationCrudContract({
     action: 'enable',
     ownerId: 'owner_contract',
@@ -2933,6 +2944,7 @@ expect(crudEntitlementDeniedContract.canApply === false && crudEntitlementDenied
 expect(crudUpdateContract.canApply === true && crudUpdateContract.action === 'update' && crudUpdateContract.desired.label === 'Renamed Discord' && crudUpdateContract.desired.channel === '#security', 'Destination CRUD contract should allow admin update and endpoint rotation preflight.', crudUpdateContract)
 expect(crudOrgScopeMismatchContract.canApply === false && crudOrgScopeMismatchContract.blockers.some(item => item.code === 'org_scope_mismatch') && crudOrgScopeMismatchContract.destination?.orgId === 'org_contract', 'Destination CRUD contract should block cross-org destination reassignment.', crudOrgScopeMismatchContract)
 expect(crudDisableContract.canApply === true && crudDisableContract.access.canDisable === true && crudDisableContract.audit.auditEventIds.includes('audit_delivery_test_contract'), 'Destination CRUD contract should expose disable capability and audit linkage.', crudDisableContract)
+expect(crudDeleteContract.canApply === true && crudDeleteContract.action === 'delete' && crudDeleteContract.desired.status === 'archived' && crudDeleteContract.access.canDelete === true, 'Destination CRUD contract should expose delete/archive capability without hard-deleting delivery proof.', crudDeleteContract)
 expect(crudEnableContract.canApply === true && crudEnableContract.action === 'enable' && crudEnableContract.access.canEnable === true, 'Destination CRUD contract should allow enable preflight for paused destinations.', crudEnableContract)
 expect(crudTestContract.canApply === true && crudTestContract.access.canTest === true && crudTestContract.noNetwork === true, 'Destination CRUD contract should allow dry-run test preflight without network.', crudTestContract)
 expect(crudRoleDeniedContract.canApply === false && crudRoleDeniedContract.blockers.some(item => item.code === 'permission_denied'), 'Destination CRUD contract should enforce owner/admin mutation gates.', crudRoleDeniedContract)
@@ -3112,6 +3124,7 @@ console.log(JSON.stringify({
         'destination CRUD duplicate endpoint blocker',
         'destination CRUD entitlement blocker',
         'destination CRUD org-scope immutability',
+        'destination CRUD delete/archive preflight',
         'destination CRUD disable/enable/test preflight',
         'destination CRUD role denial',
         'destination CRUD idempotency/audit linkage',

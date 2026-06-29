@@ -366,7 +366,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     const currentDestinations = await listDwmWebhookDestinations(userId, existing.orgId)
     const destinationBefore = currentDestinations.find(item => item.id === req.params.id) || null
     const preflightCrud = buildDwmWebhookDestinationCrudContract({
-        action: 'disable',
+        action: 'delete',
         ownerId: userId,
         input: { orgId: existing.orgId },
         destination: destinationBefore,
@@ -378,7 +378,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     })
     if (!preflightCrud.canApply) {
         return res.status(400).send({
-            error: preflightCrud.blockers[0]?.message || 'Webhook destination cannot be disabled.',
+            error: preflightCrud.blockers[0]?.message || 'Webhook destination cannot be deleted.',
             destinationCrud: preflightCrud,
         })
     }
@@ -392,7 +392,7 @@ export async function deleteDwmWebhookDestination(req: FastifyRequest<{ Params: 
     return res.send({
         destination,
         destinationCrud: buildDwmWebhookDestinationCrudContract({
-            action: 'disable',
+            action: 'delete',
             ownerId: userId,
             input: { orgId: destination.orgId },
             destination,

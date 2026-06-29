@@ -193,7 +193,7 @@ export type DwmWebhookDestinationAdminProofBlockerCode =
     | 'dedupe_already_delivered'
     | 'audit_missing'
     | 'retry_not_eligible'
-export type DwmWebhookDestinationCrudAction = 'create' | 'update' | 'disable' | 'enable' | 'test'
+export type DwmWebhookDestinationCrudAction = 'create' | 'update' | 'disable' | 'delete' | 'enable' | 'test'
 export type DwmWebhookDestinationCrudBlockerCode =
     | 'invalid_url'
     | 'unsupported_destination_type'
@@ -3503,7 +3503,8 @@ export function buildDwmWebhookDestinationCrudContract({
     const normalizedOrgId = firstClean(input.orgId, destination?.orgId, ownerId)
     const normalizedLabel = firstClean(input.name, input.label, input.channelName, input.channel_name, input.channel, destination?.name)
         || (normalizedKind === 'discord' ? 'Discord alerts' : 'Webhook alerts')
-    const status = parseStatus(input.status ?? destination?.status ?? (action === 'disable' ? 'paused' : 'active'))
+    const operationStatus = action === 'delete' ? 'archived' : action === 'disable' ? 'paused' : null
+    const status = parseStatus(input.status ?? operationStatus ?? destination?.status ?? 'active')
     const scopedDestinations = destinations.filter(item => item.orgId === normalizedOrgId)
     const duplicate = normalizedEndpointHash
         ? scopedDestinations.find(item => item.endpointHash === normalizedEndpointHash && item.id !== destination?.id && item.status !== 'archived') || null
@@ -3537,10 +3538,10 @@ export function buildDwmWebhookDestinationCrudContract({
     if (duplicate && action === 'create') {
         blockers.push(crudBlocker('duplicate_destination', 'An active destination already uses this endpoint for the organization.', duplicate.id))
     }
-    if ((action === 'update' || action === 'disable' || action === 'enable' || action === 'test') && !destination) {
+    if ((action === 'update' || action === 'disable' || action === 'delete' || action === 'enable' || action === 'test') && !destination) {
         blockers.push(crudBlocker('permission_denied', 'Webhook destination is not available for this organization.', null))
     }
-    if ((action === 'disable' || action === 'test') && destination?.status !== 'active') {
+    if ((action === 'disable' || action === 'delete' || action === 'test') && destination?.status !== 'active') {
         blockers.push(crudBlocker('destination_disabled', 'Destination is disabled.', destination?.id || null, false, action === 'test'))
     }
     if ((action === 'test' || action === 'enable') && proofRow?.health.adminProofBlockers.some(blocker => blocker.code === 'no_live_endpoint')) {
@@ -3577,6 +3578,7 @@ export function buildDwmWebhookDestinationCrudContract({
             canCreate: canManage,
             canUpdate: canManage && Boolean(destination),
             canDisable: canManage && destination?.status === 'active',
+            canDelete: canManage && destination?.status === 'active',
             canEnable: canManage && Boolean(destination) && destination?.status !== 'active',
             canTest: canManage && Boolean(destination),
             memberSafe: !canManage,
