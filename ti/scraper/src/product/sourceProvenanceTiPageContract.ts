@@ -20,6 +20,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION = "ti.source_provenance_alert_handoff_state.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION = "ti.source_provenance_source_ops_action_queue.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION = "ti.source_provenance_source_ops_fixture_bundle.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1274,6 +1275,72 @@ export type TiSourceProvenanceSourceOpsActionQueueRow = {
   };
 };
 
+export type TiSourceProvenanceSourceOpsFixtureBundle = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  expectedActor?: string;
+  publicTiRoute?: string;
+  packetRefs: {
+    sourceFreshnessGapPacketId: string;
+    parserHealthAlertPacketId: string;
+    sourceOpsActionQueueId: string;
+  };
+  readiness: {
+    publicTI: boolean;
+    dashboard: boolean;
+    sourceOps: boolean;
+    alertGeneration: boolean;
+    operatorActionCount: number;
+    validationIssueCount: number;
+  };
+  sourceHealth: {
+    sourceFamilies: string[];
+    parserAlertCount: number;
+    freshnessState: TiSourceProvenanceSourceFreshnessGapPacket["freshness"]["state"];
+    nextRetryAt?: string;
+  };
+  operatorActions: TiSourceProvenanceSourceOpsActionQueueRow[];
+  validationIssues: TiSourceProvenanceSourceOpsFixtureValidationIssue[];
+  fixtureContracts: Array<{
+    consumer: "publicTI" | "dashboard" | "sourceOps" | "alertGeneration";
+    route: string;
+    requiredFields: string[];
+    sourceSchemas: string[];
+    liveNetworkFetch: false;
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourceOpsFixtureValidationIssue = {
+  code: "wrong_actor_query" | "duplicate_candidate" | "unsupported_source_family";
+  severity: "blocking" | "warning";
+  ownerLane: "publicTI" | "source";
+  sourceFamily?: string;
+  expectedActor?: string;
+  actualActor?: string;
+  duplicateOf?: string;
+  path: string;
+  nextAction: "retry_query" | "suppress_duplicate" | "review_source_family";
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+};
+
 export type TiSourceProvenanceAlertHandoffState = {
   schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION;
   id: string;
@@ -1285,6 +1352,12 @@ export type TiSourceProvenanceAlertHandoffState = {
   publicTiRoute?: string;
   parserHealthAlertPacketId: string;
   state: "ready" | "blocked";
+  lifecycle: {
+    currentState: "ready" | "blocked";
+    requestedTransition?: TiSourceProvenanceAlertHandoffTransition;
+    allowedTransitions: TiSourceProvenanceAlertHandoffTransition[];
+    invalidTransition?: TiSourceProvenanceAlertHandoffTransition;
+  };
   alertGeneration: {
     ready: boolean;
     sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
@@ -1335,13 +1408,20 @@ export type TiSourceProvenanceAlertHandoffState = {
 };
 
 export type TiSourceProvenanceAlertHandoffStateBlocker = {
-  code: "missing_org_scope" | "source_org_mismatch" | "parser_health_blocked" | "duplicate_alert_id";
-  ownerLane: "org" | "source" | "alert";
+  code: "missing_org_scope" | "source_org_mismatch" | "parser_health_blocked" | "duplicate_alert_id" | "invalid_transition";
+  ownerLane: "org" | "source" | "alert" | "webhook" | "publicTI";
   path: string;
   message: string;
   alertId?: string;
   sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  requestedTransition?: TiSourceProvenanceAlertHandoffTransition;
 };
+
+export type TiSourceProvenanceAlertHandoffTransition =
+  | "request_alert_generation"
+  | "refresh_public_ti"
+  | "prepare_webhook_dry_run"
+  | "repair_source";
 
 export type TiSourceProvenancePageAction = {
   action:
@@ -2509,9 +2589,90 @@ export function buildSourceProvenanceSourceOpsActionQueue(input: {
   };
 }
 
+export function buildSourceProvenanceSourceOpsFixtureBundle(input: {
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket;
+  parserHealthPacket: TiSourceProvenanceParserHealthAlertPacket;
+  actionQueue: TiSourceProvenanceSourceOpsActionQueue;
+  expectedActor?: string;
+  validationIssues?: Array<{
+    code: TiSourceProvenanceSourceOpsFixtureValidationIssue["code"];
+    sourceFamily?: string;
+    duplicateOf?: string;
+    path?: string;
+  }>;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceOpsFixtureBundle {
+  const generatedAt = input.generatedAt ?? input.actionQueue.generatedAt;
+  const validationIssues = uniqueSourceOpsFixtureValidationIssues([
+    ...sourceOpsActorValidationIssues(input.actionQueue, input.expectedActor),
+    ...(input.validationIssues ?? []).map((issue) => sourceOpsFixtureValidationIssue(input.actionQueue, issue))
+  ]);
+  const issueBlocking = validationIssues.some((issue) => issue.severity === "blocking");
+  const dashboardConsumer = input.actionQueue.consumers.find((consumer) => consumer.consumer === "dashboard");
+  const sourceOpsConsumer = input.actionQueue.consumers.find((consumer) => consumer.consumer === "sourceOps");
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_ops_fixture_bundle", `${input.actionQueue.id}:${input.expectedActor ?? ""}:${validationIssues.map((issue) => `${issue.code}:${issue.sourceFamily ?? ""}:${issue.duplicateOf ?? ""}`).join("|")}:${generatedAt}`),
+    generatedAt,
+    ok: input.actionQueue.ok && !issueBlocking,
+    tenantId: input.actionQueue.tenantId,
+    organizationId: input.actionQueue.organizationId,
+    actor: input.actionQueue.actor,
+    expectedActor: input.expectedActor,
+    publicTiRoute: input.actionQueue.publicTiRoute,
+    packetRefs: {
+      sourceFreshnessGapPacketId: input.freshnessPacket.id,
+      parserHealthAlertPacketId: input.parserHealthPacket.id,
+      sourceOpsActionQueueId: input.actionQueue.id
+    },
+    readiness: {
+      publicTI: input.actionQueue.summary.publicTiReady && !issueBlocking,
+      dashboard: dashboardConsumer?.ready === true,
+      sourceOps: sourceOpsConsumer?.ready === true,
+      alertGeneration: input.actionQueue.summary.alertGenerationReady && !issueBlocking,
+      operatorActionCount: input.actionQueue.summary.actionCount,
+      validationIssueCount: validationIssues.length
+    },
+    sourceHealth: {
+      sourceFamilies: uniqueStrings([
+        ...input.actionQueue.summary.sourceFamilies,
+        ...input.parserHealthPacket.summary.sourceFamilies,
+        ...validationIssues.map((issue) => issue.sourceFamily).filter(Boolean).map(String)
+      ]),
+      parserAlertCount: input.parserHealthPacket.summary.alertCount,
+      freshnessState: input.freshnessPacket.freshness.state,
+      nextRetryAt: earliestTimestamp([
+        input.actionQueue.summary.nextRetryAt,
+        input.parserHealthPacket.summary.nextRetryAt
+      ])
+    },
+    operatorActions: input.actionQueue.rows,
+    validationIssues,
+    fixtureContracts: sourceOpsFixtureContracts(input.actionQueue, input.freshnessPacket, input.parserHealthPacket),
+    payloadShape: [
+      "packetRefs.sourceFreshnessGapPacketId",
+      "packetRefs.parserHealthAlertPacketId",
+      "packetRefs.sourceOpsActionQueueId",
+      "readiness.publicTI",
+      "readiness.sourceOps",
+      "sourceHealth.sourceFamilies",
+      "operatorActions[].route",
+      "validationIssues[].code"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 export function buildSourceProvenanceAlertHandoffState(input: {
   packet: TiSourceProvenanceParserHealthAlertPacket;
   expectedOrganizationId?: string;
+  requestedTransition?: TiSourceProvenanceAlertHandoffTransition;
   generatedAt?: string;
 }): TiSourceProvenanceAlertHandoffState {
   const packet = input.packet;
@@ -2521,11 +2682,20 @@ export function buildSourceProvenanceAlertHandoffState(input: {
   const publicTi = consumers.get("publicTI") ?? fallbackParserHealthConsumer("publicTI", packet);
   const webhook = consumers.get("webhook") ?? fallbackParserHealthConsumer("webhook", packet);
   const sourceOps = consumers.get("sourceOps") ?? fallbackParserHealthConsumer("sourceOps", packet);
-  const blockers = uniqueAlertHandoffStateBlockers([
+  const baseAllowedTransitions = alertHandoffAllowedTransitions(packet, alertGeneration, publicTi, webhook);
+  const structuralBlockers = uniqueAlertHandoffStateBlockers([
     ...alertHandoffOrgBlockers(packet, input.expectedOrganizationId),
     ...packet.rows.map((row) => alertHandoffStateBlocker("parser_health_blocked", "source", "rows[]", "Parser or freshness state blocks alert handoff.", row.alertId, row.sourceFamily)),
     ...duplicateAlertHandoffBlockers(packet.rows)
   ]);
+  const allowedTransitions = structuralBlockers.some((blocker) => blocker.code === "missing_org_scope" || blocker.code === "source_org_mismatch" || blocker.code === "duplicate_alert_id")
+    ? baseAllowedTransitions.filter((transition) => transition === "repair_source")
+    : baseAllowedTransitions;
+  const blockers = uniqueAlertHandoffStateBlockers([
+    ...structuralBlockers,
+    ...alertHandoffTransitionBlockers(input.requestedTransition, allowedTransitions)
+  ]);
+  const state = blockers.length === 0 && packet.summary.alertGenerationReady ? "ready" : "blocked";
 
   return {
     schemaVersion: TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
@@ -2537,7 +2707,13 @@ export function buildSourceProvenanceAlertHandoffState(input: {
     actor: packet.actor,
     publicTiRoute: packet.publicTiRoute,
     parserHealthAlertPacketId: packet.id,
-    state: blockers.length === 0 && packet.summary.alertGenerationReady ? "ready" : "blocked",
+    state,
+    lifecycle: {
+      currentState: state,
+      requestedTransition: input.requestedTransition,
+      allowedTransitions,
+      invalidTransition: input.requestedTransition && !allowedTransitions.includes(input.requestedTransition) ? input.requestedTransition : undefined
+    },
     alertGeneration: {
       ready: alertGeneration.ready && blockers.length === 0,
       sourceFamilies: packet.summary.sourceFamilies,
@@ -2563,15 +2739,15 @@ export function buildSourceProvenanceAlertHandoffState(input: {
     blockers,
     consumerContracts: {
       alertGeneration: {
-        requiredFields: ["tenantId", "organizationId", "actor", "parserHealthAlertPacketId", "alertGeneration.ready"],
+        requiredFields: ["tenantId", "organizationId", "actor", "parserHealthAlertPacketId", "alertGeneration.ready", "lifecycle.allowedTransitions"],
         sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
       },
       publicTi: {
-        requiredFields: ["actor", "publicTiRoute", "publicTi.ready", "blockers[]"],
+        requiredFields: ["actor", "publicTiRoute", "publicTi.ready", "lifecycle.currentState", "blockers[]"],
         sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
       },
       webhook: {
-        requiredFields: ["organizationId", "webhook.sourceAlertRows", "sourceOps.nextActions", "safeOutput"],
+        requiredFields: ["organizationId", "webhook.sourceAlertRows", "sourceOps.nextActions", "lifecycle.invalidTransition", "safeOutput"],
         sourceSchema: TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION
       },
       sourceOps: {
@@ -3450,6 +3626,43 @@ function alertHandoffOrgBlockers(
   return [];
 }
 
+function alertHandoffAllowedTransitions(
+  packet: TiSourceProvenanceParserHealthAlertPacket,
+  alertGeneration: TiSourceProvenanceParserHealthAlertConsumer,
+  publicTi: TiSourceProvenanceParserHealthAlertConsumer,
+  webhook: TiSourceProvenanceParserHealthAlertConsumer
+): TiSourceProvenanceAlertHandoffTransition[] {
+  return [
+    alertGeneration.ready && packet.summary.alertGenerationReady ? "request_alert_generation" : undefined,
+    publicTi.ready ? "refresh_public_ti" : undefined,
+    webhook.ready ? "prepare_webhook_dry_run" : undefined,
+    packet.rows.length > 0 ? "repair_source" : undefined
+  ].filter(Boolean) as TiSourceProvenanceAlertHandoffTransition[];
+}
+
+function alertHandoffTransitionBlockers(
+  requestedTransition: TiSourceProvenanceAlertHandoffTransition | undefined,
+  allowedTransitions: TiSourceProvenanceAlertHandoffTransition[]
+): TiSourceProvenanceAlertHandoffStateBlocker[] {
+  if (!requestedTransition || allowedTransitions.includes(requestedTransition)) return [];
+  return [{
+    code: "invalid_transition",
+    ownerLane: alertHandoffTransitionOwner(requestedTransition),
+    path: "lifecycle.requestedTransition",
+    message: "Requested alert handoff transition is not available for the current source state.",
+    requestedTransition
+  }];
+}
+
+function alertHandoffTransitionOwner(
+  transition: TiSourceProvenanceAlertHandoffTransition
+): TiSourceProvenanceAlertHandoffStateBlocker["ownerLane"] {
+  if (transition === "request_alert_generation") return "alert";
+  if (transition === "refresh_public_ti") return "publicTI";
+  if (transition === "prepare_webhook_dry_run") return "webhook";
+  return "source";
+}
+
 function duplicateAlertHandoffBlockers(
   rows: TiSourceProvenanceParserHealthAlertRow[]
 ): TiSourceProvenanceAlertHandoffStateBlocker[] {
@@ -3471,9 +3684,10 @@ function alertHandoffStateBlocker(
   path: string,
   message: string,
   alertId?: string,
-  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"]
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"],
+  requestedTransition?: TiSourceProvenanceAlertHandoffTransition
 ): TiSourceProvenanceAlertHandoffStateBlocker {
-  return { code, ownerLane, path, message, alertId, sourceFamily };
+  return { code, ownerLane, path, message, alertId, sourceFamily, requestedTransition };
 }
 
 function uniqueAlertHandoffStateBlockers(
@@ -3481,7 +3695,7 @@ function uniqueAlertHandoffStateBlockers(
 ): TiSourceProvenanceAlertHandoffStateBlocker[] {
   const seen = new Set<string>();
   return blockers.filter((blocker) => {
-    const key = `${blocker.code}:${blocker.path}:${blocker.alertId ?? ""}:${blocker.sourceFamily ?? ""}`;
+    const key = `${blocker.code}:${blocker.path}:${blocker.alertId ?? ""}:${blocker.sourceFamily ?? ""}:${blocker.requestedTransition ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -3718,6 +3932,140 @@ function uniqueSourceOpsActionRows(
   const seen = new Set<string>();
   return rows.filter((row) => {
     const key = `${row.action}:${row.reasonCode}:${row.sourceFamily ?? ""}:${row.candidateIds.join(",")}:${row.retryState.nextRetryAt ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourceOpsActorValidationIssues(
+  queue: TiSourceProvenanceSourceOpsActionQueue,
+  expectedActor?: string
+): TiSourceProvenanceSourceOpsFixtureValidationIssue[] {
+  if (!expectedActor || expectedActor.toLowerCase() === queue.actor.toLowerCase()) return [];
+  return [sourceOpsFixtureValidationIssue(queue, {
+    code: "wrong_actor_query",
+    path: "actor"
+  }, expectedActor)];
+}
+
+function sourceOpsFixtureValidationIssue(
+  queue: TiSourceProvenanceSourceOpsActionQueue,
+  issue: {
+    code: TiSourceProvenanceSourceOpsFixtureValidationIssue["code"];
+    sourceFamily?: string;
+    duplicateOf?: string;
+    path?: string;
+  },
+  expectedActor?: string
+): TiSourceProvenanceSourceOpsFixtureValidationIssue {
+  const nextAction = sourceOpsFixtureIssueNextAction(issue.code);
+  return {
+    code: issue.code,
+    severity: issue.code === "duplicate_candidate" ? "warning" : "blocking",
+    ownerLane: issue.code === "wrong_actor_query" ? "publicTI" : "source",
+    sourceFamily: issue.sourceFamily,
+    expectedActor,
+    actualActor: issue.code === "wrong_actor_query" ? queue.actor : undefined,
+    duplicateOf: issue.duplicateOf,
+    path: issue.path ?? sourceOpsFixtureIssuePath(issue.code),
+    nextAction,
+    route: sourceOpsFixtureIssueRoute(queue, nextAction, issue)
+  };
+}
+
+function sourceOpsFixtureIssueNextAction(
+  code: TiSourceProvenanceSourceOpsFixtureValidationIssue["code"]
+): TiSourceProvenanceSourceOpsFixtureValidationIssue["nextAction"] {
+  if (code === "wrong_actor_query") return "retry_query";
+  if (code === "duplicate_candidate") return "suppress_duplicate";
+  return "review_source_family";
+}
+
+function sourceOpsFixtureIssuePath(
+  code: TiSourceProvenanceSourceOpsFixtureValidationIssue["code"]
+): string {
+  if (code === "wrong_actor_query") return "actor";
+  if (code === "duplicate_candidate") return "sourcePack.candidates[].duplicateOf";
+  return "sourcePack.candidates[].sourceFamily";
+}
+
+function sourceOpsFixtureIssueRoute(
+  queue: TiSourceProvenanceSourceOpsActionQueue,
+  nextAction: TiSourceProvenanceSourceOpsFixtureValidationIssue["nextAction"],
+  issue: { sourceFamily?: string; duplicateOf?: string }
+): TiSourceProvenanceSourceOpsFixtureValidationIssue["route"] {
+  if (nextAction === "retry_query") {
+    return {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(queue.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    };
+  }
+  return {
+    method: "POST",
+    path: "/v1/dwm/source-requests",
+    body: {
+      action: nextAction,
+      sourceFamily: issue.sourceFamily,
+      duplicateOf: issue.duplicateOf,
+      dryRun: true
+    },
+    dryRunSupported: true,
+    liveNetworkFetch: false
+  };
+}
+
+function sourceOpsFixtureContracts(
+  queue: TiSourceProvenanceSourceOpsActionQueue,
+  freshnessPacket: TiSourceProvenanceSourceFreshnessGapPacket,
+  parserHealthPacket: TiSourceProvenanceParserHealthAlertPacket
+): TiSourceProvenanceSourceOpsFixtureBundle["fixtureContracts"] {
+  return [{
+    consumer: "publicTI",
+    route: freshnessPacket.publicTiRoute ?? `/ti/${encodeURIComponent(freshnessPacket.actor)}`,
+    requiredFields: ["readiness.publicTI", "sourceHealth.freshnessState", "packetRefs.sourceFreshnessGapPacketId"],
+    sourceSchemas: [
+      TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
+      TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION
+    ],
+    liveNetworkFetch: false
+  }, {
+    consumer: "dashboard",
+    route: `/dashboard/ti/sources?actor=${encodeURIComponent(queue.actor)}`,
+    requiredFields: ["operatorActions[].action", "operatorActions[].route", "validationIssues[].code"],
+    sourceSchemas: [
+      TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+      TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION
+    ],
+    liveNetworkFetch: false
+  }, {
+    consumer: "sourceOps",
+    route: "/v1/dwm/source-requests",
+    requiredFields: ["operatorActions[].ownerLane", "operatorActions[].retryState", "operatorActions[].provenance"],
+    sourceSchemas: [
+      TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION
+    ],
+    liveNetworkFetch: false
+  }, {
+    consumer: "alertGeneration",
+    route: "/v1/dwm/alerts/rebuild",
+    requiredFields: ["readiness.alertGeneration", "packetRefs.parserHealthAlertPacketId", "sourceHealth.parserAlertCount"],
+    sourceSchemas: [
+      TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+      parserHealthPacket.schemaVersion
+    ],
+    liveNetworkFetch: false
+  }];
+}
+
+function uniqueSourceOpsFixtureValidationIssues(
+  issues: TiSourceProvenanceSourceOpsFixtureValidationIssue[]
+): TiSourceProvenanceSourceOpsFixtureValidationIssue[] {
+  const seen = new Set<string>();
+  return issues.filter((issue) => {
+    const key = `${issue.code}:${issue.sourceFamily ?? ""}:${issue.expectedActor ?? ""}:${issue.actualActor ?? ""}:${issue.duplicateOf ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
