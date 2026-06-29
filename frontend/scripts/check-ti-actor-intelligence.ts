@@ -282,8 +282,11 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequired, 'Decoded
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.stale, 'Decoded APT29 payload should keep stale-evidence blocker state.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.blockers.some(blocker => blocker.code === 'stale_evidence'), 'Decoded APT29 payload should carry stable blocker codes.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.missing.includes('captureId or source request ID')), 'Decoded APT29 payload should expose missing capture/source request IDs.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/dashboard/ti/enrichment' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.requestedFields?.includes('sourceProvenance[].captureId') && source.requestedFields?.includes('sourceProvenance[].sourceRequestId')), 'Decoded APT29 source requests should carry requested source/capture fields.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('selectedPayload'), 'Dashboard consumer contract should document selectedPayload.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests'), 'Dashboard consumer contract should document sourceRequests.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests[].requestedFields'), 'Dashboard consumer contract should document source request field metadata.')
 const legacyDecoded = usHandoffs ? decodePublicTiHandoffPayload(encodeHandoffPayload({
     artifact: usHandoffs.authBridge.payload.artifact,
     watchlist: usHandoffs.watchlist,
@@ -578,6 +581,8 @@ assert(pageClientSource.includes('data-ti-artifact-workflow-readiness'), 'Select
 assert(pageClientSource.includes('data-ti-artifact-source-requests'), 'Selected artifacts should expose source request rows for case and alert evidence checks.')
 assert(pageClientSource.includes('bridge.payload.sourceRequests'), 'Selected artifact source request rows should come from the versioned bridge payload.')
 assert(pageClientSource.includes('capture needed'), 'Selected artifact source request rows should show missing capture state honestly.')
+assert(pageClientSource.includes('sourceRequestFamilyLabel'), 'Selected artifact source requests should show source family in analyst language.')
+assert(pageClientSource.includes('sourceRequestRouteLabel'), 'Selected artifact source requests should show source queue routing in analyst language.')
 assert(pageClientSource.includes('data-ti-evidence-priority'), 'Selected evidence should expose backed priority proof.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')

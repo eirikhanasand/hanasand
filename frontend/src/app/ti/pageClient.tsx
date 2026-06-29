@@ -964,6 +964,14 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing].filter(Boolean).join(' · ')}
                                         </p>
                                     ) : null}
+                                    <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                        <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                            {sourceRequestFamilyLabel(request.sourceFamily ?? 'source_capture')}
+                                        </span>
+                                        <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                            {sourceRequestRouteLabel(request.route ?? '/dashboard/ti/enrichment')}
+                                        </span>
+                                    </div>
                                 </div>
                             )) : (
                                 <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source request rows returned for this artifact.</p>
@@ -1937,6 +1945,16 @@ function sourceRequestCaptureClass(ready: boolean) {
     return ready
         ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-1.5 py-0.5 text-[10px] font-semibold text-[#147a3b] dark:bg-[#102218] dark:text-[#83d9a1]'
         : 'max-w-full wrap-break-word rounded-md bg-[#fff1f0] px-1.5 py-0.5 text-[10px] font-semibold text-[#b42318] dark:bg-[#2b1716] dark:text-[#ffaaa3]'
+}
+
+function sourceRequestFamilyLabel(value: string) {
+    if (value === 'source_capture') return 'source capture'
+    return formatLabel(value)
+}
+
+function sourceRequestRouteLabel(value: string) {
+    if (value === '/dashboard/ti/enrichment') return 'source queue'
+    return 'review route'
 }
 
 type DecisionStep = {

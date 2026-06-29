@@ -37,6 +37,10 @@ export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
     'missing',
     'blockers',
     'sourceRequests',
+    'sourceRequests[].ownerLane',
+    'sourceRequests[].route',
+    'sourceRequests[].sourceFamily',
+    'sourceRequests[].requestedFields',
 ] as const
 
 export type ActorArtifactKind = 'country' | 'tool' | 'campaign' | 'infrastructure' | 'technique'
@@ -97,7 +101,17 @@ export type PublicTiHandoffPayload = {
     stale: boolean
     missing: string[]
     blockers: Array<{ code: 'org_required' | 'source_required' | 'stale_evidence' | 'missing_watchlist_term'; detail: string }>
-    sourceRequests: Array<{ sourceName: string; provenance: string; captureId?: string; confidence?: number; missing: string[] }>
+    sourceRequests: Array<{
+        sourceName: string
+        provenance: string
+        captureId?: string
+        confidence?: number
+        missing: string[]
+        ownerLane?: 'source'
+        route?: '/dashboard/ti/enrichment'
+        sourceFamily?: 'source_capture'
+        requestedFields?: string[]
+    }>
 }
 
 export type AuthenticatedArtifactBridge = {
@@ -564,6 +578,12 @@ function sourceRequestsFor(payloads: PublicTiHandoffPayload['actionPayloads']): 
         captureId: source.captureId,
         confidence: source.confidence,
         missing: source.captureId ? [] : ['captureId or source request ID'],
+        ownerLane: 'source' as const,
+        route: PUBLIC_TI_HANDOFF_ROUTES.enrichment,
+        sourceFamily: 'source_capture' as const,
+        requestedFields: source.captureId
+            ? ['sourceProvenance[].sourceName', 'sourceProvenance[].provenance', 'sourceProvenance[].captureId']
+            : ['sourceProvenance[].sourceName', 'sourceProvenance[].provenance', 'sourceProvenance[].captureId', 'sourceProvenance[].sourceRequestId'],
     })), source => `${source.sourceName}:${source.provenance}:${source.captureId ?? ''}`)
 }
 
