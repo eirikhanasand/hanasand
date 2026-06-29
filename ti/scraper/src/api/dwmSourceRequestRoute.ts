@@ -3135,6 +3135,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourcePackActivationPreview.schemaVersion == \"ti.public_actor.source_pack_activation_preview.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger.schemaVersion == \"ti.public_actor.source_enrichment_freshness_ledger.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
@@ -3476,6 +3477,18 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     actorReadiness,
     sourceFamilyCoverageMatrix
   });
+  const watchlistAlertabilityBridge = sourceActorPublicTiWatchlistAlertabilityBridge({
+    query,
+    alertGenerationConsumerHandoff,
+    sourceFamilyCoverageMatrix
+  });
+  const sourceEnrichmentFreshnessLedger = sourceActorPublicTiSourceEnrichmentFreshnessLedger({
+    query,
+    consumerProofLedger,
+    sourceFamilyCoverageMatrix,
+    sourcePackActivationPreview,
+    watchlistAlertabilityBridge
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3518,11 +3531,8 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     downstreamFixtureExport,
     sourceFamilyCoverageMatrix,
     sourcePackActivationPreview,
-    watchlistAlertabilityBridge: sourceActorPublicTiWatchlistAlertabilityBridge({
-      query,
-      alertGenerationConsumerHandoff,
-      sourceFamilyCoverageMatrix
-    }),
+    sourceEnrichmentFreshnessLedger,
+    watchlistAlertabilityBridge,
     gaps: actorReadiness.candidateGaps ?? [],
     safeOutput: {
       rawTargetsExposed: false,
@@ -3662,6 +3672,130 @@ function sourceActorPublicTiActivationPreviewAction(input: {
       publicTelegramOnly: true,
       metadataOnlyRestrictedSources: true,
       liveNetworkFetch: false
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiSourceEnrichmentFreshnessLedger(input: {
+  query: string;
+  consumerProofLedger: Record<string, any>;
+  sourceFamilyCoverageMatrix: Record<string, any>;
+  sourcePackActivationPreview: Record<string, any>;
+  watchlistAlertabilityBridge: Record<string, any>;
+}) {
+  const coverageByFamily = new Map<string, Record<string, any>>((input.sourceFamilyCoverageMatrix.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const actionsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const action of input.sourcePackActivationPreview.actions ?? []) {
+    const family = String(action.family);
+    actionsByFamily.set(family, [...(actionsByFamily.get(family) ?? []), action]);
+  }
+  const watchlistRowsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const row of input.watchlistAlertabilityBridge.rows ?? []) {
+    const family = String(row.sourceFamily);
+    watchlistRowsByFamily.set(family, [...(watchlistRowsByFamily.get(family) ?? []), row]);
+  }
+  const families = uniqueSourceReadinessStrings([
+    ...(input.consumerProofLedger.rows ?? []).map((row: any) => String(row.family)),
+    ...(input.sourceFamilyCoverageMatrix.rows ?? []).map((row: any) => String(row.sourceFamily)),
+    ...(input.sourcePackActivationPreview.actions ?? []).map((row: any) => String(row.family)),
+    ...(input.watchlistAlertabilityBridge.rows ?? []).map((row: any) => String(row.sourceFamily))
+  ]);
+  const rows = families.map((family) => {
+    const consumer = (input.consumerProofLedger.rows ?? []).find((row: any) => String(row.family) === family);
+    const coverage = coverageByFamily.get(family);
+    const actions = actionsByFamily.get(family) ?? [];
+    const watchlistRows = watchlistRowsByFamily.get(family) ?? [];
+    const timestamps = {
+      lastCaptureAt: consumer?.timestamps?.lastCaptureAt ?? coverage?.lastCaptureAt,
+      lastEnrichmentAt: consumer?.timestamps?.lastEnrichmentAt ?? coverage?.lastEnrichmentAt,
+      checkedAt: consumer?.timestamps?.checkedAt
+    };
+    const gap = consumer?.gap ?? (coverage?.gapState ? { state: coverage.gapState } : undefined);
+    const freshnessState = coverage?.captureState === "capture_observed" || timestamps.lastCaptureAt
+      ? "fresh"
+      : coverage?.captureState === "capture_required"
+        ? "needs_capture"
+        : gap?.state ?? "unknown";
+    return {
+      schemaVersion: "ti.public_actor.source_enrichment_freshness_row.v1",
+      proofId: stableId("ti_public_actor_source_enrichment_freshness_row", `${input.query}:${family}:${freshnessState}:${consumer?.parserStatus?.state ?? coverage?.parserState}`),
+      query: input.query,
+      sourceFamily: family,
+      state: consumer?.state ?? coverage?.state ?? gap?.state ?? "missing",
+      freshnessState,
+      parserStatus: {
+        state: consumer?.parserStatus?.state ?? coverage?.parserState,
+        captureState: consumer?.parserStatus?.captureState ?? coverage?.captureState,
+        retryBackoff: consumer?.parserStatus?.retryBackoff,
+        blockers: consumer?.parserStatus?.blockers ?? []
+      },
+      confidence: consumer?.confidence ?? coverage?.confidence ?? 0,
+      confidenceTier: consumer?.confidenceTier ?? coverage?.confidenceTier ?? "missing",
+      timestamps,
+      provenance: {
+        evidenceProofId: consumer?.provenance?.evidenceProofId ?? coverage?.provenance?.evidenceProofId,
+        sourceHealthProofId: consumer?.provenance?.sourceHealthProofId ?? coverage?.provenance?.sourceHealthProofId,
+        parserProofId: consumer?.provenance?.parserProofId ?? coverage?.provenance?.parserProofId,
+        coverageProofId: coverage?.proofId,
+        sourceIds: uniqueSourceReadinessStrings([
+          ...(consumer?.provenance?.sourceIds ?? []),
+          ...(coverage?.provenance?.sourceIds ?? [])
+        ]),
+        candidateIds: uniqueSourceReadinessStrings([
+          ...(consumer?.provenance?.candidateIds ?? []),
+          ...(coverage?.provenance?.candidateIds ?? [])
+        ]),
+        privacyBoundary: consumer?.provenance?.privacyBoundary
+      },
+      gap,
+      alertability: {
+        publicTiReady: consumer?.consumers?.publicTi?.ready === true,
+        alertGenerationReady: consumer?.consumers?.alertGeneration?.ready === true,
+        watchlistAlertable: watchlistRows.some((row: any) => row.state === "alertable"),
+        watchlistTerms: uniqueSourceReadinessStrings(watchlistRows.map((row: any) => row.watchlistTerm)),
+        matchableFields: uniqueSourceReadinessStrings(watchlistRows.flatMap((row: any) => row.matchableFields ?? [])),
+        alertableFields: uniqueSourceReadinessStrings(watchlistRows.flatMap((row: any) => row.alertableFields ?? []))
+      },
+      nextActions: actions.map((action) => ({
+        action: action.action,
+        route: action.route,
+        idempotencyKey: action.idempotencyKey,
+        blockers: action.blockers ?? [],
+        liveNetworkFetch: false
+      })),
+      blockers: dedupeBlockers([
+        ...(consumer?.blockers ?? []),
+        ...(actions.flatMap((action) => action.blockers ?? [])),
+        ...(watchlistRows.flatMap((row) => row.blockers ?? []))
+      ]),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.source_enrichment_freshness_ledger.v1",
+    proofId: stableId("ti_public_actor_source_enrichment_freshness_ledger", `${input.query}:${rows.map((row: any) => `${row.sourceFamily}:${row.freshnessState}:${row.parserStatus?.state}`).join(",")}`),
+    query: input.query,
+    rows,
+    summary: {
+      freshFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.freshnessState === "fresh").map((row: any) => row.sourceFamily)),
+      captureRequiredFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserStatus?.captureState === "capture_required").map((row: any) => row.sourceFamily)),
+      retryFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserStatus?.retryBackoff?.retryable === true || row.nextActions.some((action: any) => action.action === "retry")).map((row: any) => row.sourceFamily)),
+      gapFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.gap).map((row: any) => row.sourceFamily)),
+      alertableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.alertability.watchlistAlertable).map((row: any) => row.sourceFamily)),
+      nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
+      latestCaptureAt: latestIso(rows.map((row: any) => row.timestamps?.lastCaptureAt)),
+      latestEnrichmentAt: latestIso(rows.map((row: any) => row.timestamps?.lastEnrichmentAt))
     },
     safeOutput: {
       rawTargetsExposed: false,
