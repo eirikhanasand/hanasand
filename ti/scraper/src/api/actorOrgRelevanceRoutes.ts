@@ -7,7 +7,6 @@ import {
   cancelActorOrgRelevancePreparedHandoff,
   createActorOrgRelevanceAlertGenerationRequest,
   createActorOrgRelevanceCaseHandoffRequest,
-  createActorOrgRelevanceCustomerNotification,
   createActorOrgRelevanceSourceCollectionRequest,
   createActorOrgRelevanceWebhookTriggerRequest,
   materializeActorOrgRelevanceWatchlist,
@@ -314,34 +313,6 @@ export async function createActorOrgRelevanceReviewWebhookTriggerRequest(request
   }, result.created ? 201 : 200);
 }
 
-export async function createActorOrgRelevanceReviewCustomerNotification(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
-  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
-  const url = new URL(request.url);
-  const scope = actorOrgScope(url, request);
-  if (!scope.organizationId) return error("missing_org", "organizationId is required to record actor relevance customer notification.", 400);
-  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
-  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
-  const body = await readJson<any>(request);
-  const result = createActorOrgRelevanceCustomerNotification({
-    record: record!,
-    request: {
-      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
-      deliveryMode: body.deliveryMode,
-      externalReference: body.externalReference,
-      rationale: body.rationale,
-      generatedAt: body.generatedAt || nowIso()
-    }
-  });
-  if (!result.ok) return error(result.code, result.message, 400);
-  (options.store as any).saveActorOrgRelevanceReview(result.record);
-  return json({
-    created: result.created,
-    receipt: result.receipt,
-    record: result.record,
-    summary: summarizeActorOrgRelevanceReview(result.record)
-  }, result.created ? 201 : 200);
-}
-
 export async function cancelActorOrgRelevanceReviewPreparedHandoff(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
   if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
   const url = new URL(request.url);
@@ -410,7 +381,6 @@ function handoffQueueStateParam(value: string | null) {
     || value === "needs_case_handoff"
     || value === "needs_webhook_trigger"
     || value === "ready_for_customer"
-    || value === "customer_notified"
     || value === "blocked"
     ? value
     : undefined;
