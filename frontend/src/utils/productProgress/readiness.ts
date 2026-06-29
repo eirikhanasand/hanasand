@@ -14,12 +14,28 @@ type DeliveryProofRow = {
     createdAt?: string
 }
 
+export type DwmAlertGenerationReadinessInput = {
+    schemaVersion?: string
+    status?: 'ready' | 'needs_action' | 'blocked' | 'unavailable' | string
+    readyForCustomerDelivery?: boolean
+    candidateCount?: number
+    captureRefCount?: number
+    matchedCandidateCount?: number
+    missingRouteCandidateCount?: number
+    blockerCodes?: string[]
+    blockers?: string[]
+    source?: string
+    checkedAt?: string
+    proofTimestamp?: string
+}
+
 export type ProductProgressEndpointInput = {
     generatedAt: string
     checkedAt?: string
     query: string
     routes: NonNullable<ProductProgressReadinessPayload['routes']>
     sourceProxy?: DashboardSourceProofProxyPayload
+    alertGeneration?: DwmAlertGenerationReadinessInput
     alerts?: AlertProofRow[]
     deliveries?: DeliveryProofRow[]
     deploy?: Partial<DeployProbeReadiness>
@@ -86,6 +102,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             route: input.routes.dashboardAlerts || '/dashboard',
             alert,
             delivery,
+            alertGeneration: input.alertGeneration,
             sourceProxyReady,
             deployProbeFresh,
         }),
@@ -263,16 +280,22 @@ function dashboardEvidenceFromRows(input: {
     route: string
     alert?: AlertProofRow
     delivery?: DeliveryProofRow
+    alertGeneration?: DwmAlertGenerationReadinessInput
     sourceProxyReady: boolean
     deployProbeFresh: boolean
 }): DashboardAlertEvidenceReadiness {
     const visibleInDashboard = Boolean(input.alert?.id)
     const deliveryEvidenceMatched = Boolean(input.alert?.id && input.delivery?.alertId === input.alert.id && input.delivery.id)
+    const alertGenerationReady = input.alertGeneration?.status === 'ready' && input.alertGeneration.readyForCustomerDelivery === true
+    const alertGenerationDetail = alertGenerationReady
+        ? `${input.alertGeneration?.candidateCount ?? 0} alert generation candidate${input.alertGeneration?.candidateCount === 1 ? '' : 's'} with ${input.alertGeneration?.captureRefCount ?? 0} capture reference${input.alertGeneration?.captureRefCount === 1 ? '' : 's'}.`
+        : input.alertGeneration?.blockers?.filter(Boolean).join('; ') || 'DWM alert generation readiness proof is not loaded.'
     const blockers = [
         visibleInDashboard ? '' : 'No dashboard-visible backend alert was loaded.',
         deliveryEvidenceMatched ? '' : 'No delivery row matched the dashboard-visible alert.',
         input.sourceProxyReady ? '' : 'Source proxy and worker readiness are not both loaded.',
         input.deployProbeFresh ? '' : 'Deploy probe recency is not loaded.',
+        alertGenerationReady ? '' : alertGenerationDetail,
     ].filter(Boolean)
     return {
         schemaVersion: 'dashboard.alert_evidence.readiness.v1',
@@ -294,13 +317,14 @@ function dashboardEvidenceFromRows(input: {
             deliveryEvidenceMatched,
             sourceProxyReady: input.sourceProxyReady,
             deployProbeFresh: input.deployProbeFresh,
+            alertGenerationReady,
         }) : undefined,
         staleAfterSeconds: 600,
-        proofTimestamp: input.alert?.updatedAt || input.alert?.createdAt || input.checkedAt,
+        proofTimestamp: input.alertGeneration?.proofTimestamp || input.alert?.updatedAt || input.alert?.createdAt || input.checkedAt,
         expectedDashboardRowId: 'dashboard_evidence',
-        integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
-        backendProofContractVersion: 'dashboard.alert_evidence.readiness.v1',
-        detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}.`,
+        integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, deploy probe is fresh, and /api/dwm/alerts/generation-readiness returns customer-delivery readiness.',
+        backendProofContractVersion: input.alertGeneration?.schemaVersion || 'dashboard.alert_evidence.readiness.v1',
+        detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}. ${alertGenerationDetail}`,
     }
 }
 
@@ -309,10 +333,12 @@ function dashboardEvidenceUnavailableReason(input: {
     deliveryEvidenceMatched: boolean
     sourceProxyReady: boolean
     deployProbeFresh: boolean
+    alertGenerationReady?: boolean
 }) {
     if (!input.visibleInDashboard) return 'missing_dashboard_alert'
     if (!input.deliveryEvidenceMatched) return 'missing_matching_delivery'
     if (!input.sourceProxyReady) return 'missing_source_proxy_worker_readiness'
     if (!input.deployProbeFresh) return 'missing_live_deploy_probe'
+    if (!input.alertGenerationReady) return 'missing_alert_generation_readiness'
     return 'dashboard_evidence_needs_action'
 }

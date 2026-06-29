@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
+import type { DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
@@ -15,10 +16,11 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, dwmProduct, alerts, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
+    const [sourceProxy, dwmProduct, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
+        fetchInternalJson(request, routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness'),
         fetchInternalJson(request, routes.deliveries || '/api/dwm/webhooks/deliveries'),
         fetchInternalJson(request, routes.organizations || '/api/organizations'),
         fetchInternalJson(request, routes.watchlists || '/api/dwm/watchlists'),
@@ -49,6 +51,11 @@ export async function GET(request: NextRequest) {
             fetch: dwmProduct,
         }),
         alerts: rows((alerts.json as { alerts?: unknown[] } | undefined)?.alerts),
+        alertGeneration: alertGenerationReadiness({
+            generatedAt,
+            route: routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness',
+            fetch: alertGeneration,
+        }),
         deliveries: deliveryRows,
         orgAlertExport: orgAlertExportReadiness({
             generatedAt,
@@ -110,6 +117,7 @@ function productProgressRoutes(query: string) {
         orgAlertExport: '/api/dwm/watchlists',
         webhookHealth: '/api/organizations/:id/webhooks',
         dashboardAlerts: '/api/dwm/alerts',
+        alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
         organizations: '/api/organizations',
         watchlists: '/api/dwm/watchlists',
         operations: '/api/dwm/operations',
@@ -189,6 +197,78 @@ function selectOrganization(payload: unknown, request: NextRequest): DwmOrganiza
     return organizations.find(item => item.id === requestedId)
         || organizations.find(item => item.status === 'active')
         || organizations[0]
+}
+
+function alertGenerationReadiness(input: {
+    generatedAt: string
+    route: string
+    fetch: FetchResult
+}): DwmAlertGenerationReadinessInput {
+    const proof = dwmAlertGenerationProof(input.fetch)
+    const counts = proof?.counts || {}
+    const blockerCodes = Array.isArray(proof?.blockerCodes) ? proof.blockerCodes.filter(Boolean).map(String) : []
+    const blockers = [
+        input.fetch.ok ? '' : input.fetch.error || `DWM alert-generation route returned HTTP ${input.fetch.status}.`,
+        proof ? '' : 'DWM alert-generation route did not return dwm.alert_generation_readiness.v1.',
+        proof?.readyForCustomerDelivery ? '' : 'DWM alert-generation proof is not ready for customer delivery.',
+        ...(Array.isArray(proof?.blockers) ? proof.blockers.filter(Boolean).map(String) : []),
+    ].filter(Boolean)
+
+    return {
+        schemaVersion: proof?.schemaVersion || 'dwm.alert_generation_readiness.v1',
+        status: blockers.length ? 'needs_action' : 'ready',
+        readyForCustomerDelivery: proof?.readyForCustomerDelivery === true,
+        candidateCount: numberOrUndefined(counts.candidateCount),
+        captureRefCount: numberOrUndefined(counts.captureRefCount),
+        matchedCandidateCount: numberOrUndefined(counts.matchedCandidateCount),
+        missingRouteCandidateCount: numberOrUndefined(proof?.webhookReadiness?.missingRouteCandidateCount ?? counts.missingRouteCandidateCount),
+        blockerCodes,
+        blockers,
+        source: input.route,
+        checkedAt: input.generatedAt,
+        proofTimestamp: proof?.generatedAt || input.generatedAt,
+    }
+}
+
+type DwmAlertGenerationProof = {
+    schemaVersion: 'dwm.alert_generation_readiness.v1'
+    generatedAt?: string
+    readyForCustomerDelivery?: boolean
+    counts?: {
+        candidateCount?: number
+        captureRefCount?: number
+        matchedCandidateCount?: number
+        missingRouteCandidateCount?: number
+    }
+    webhookReadiness?: {
+        missingRouteCandidateCount?: number
+    }
+    blockerCodes?: string[]
+    blockers?: string[]
+}
+
+function dwmAlertGenerationProof(result: FetchResult): DwmAlertGenerationProof | undefined {
+    const payload = result.json as {
+        readiness?: unknown
+        alertGenerationReadiness?: unknown
+    } | DwmAlertGenerationProof | undefined
+    const proof = isDwmAlertGenerationProof(payload)
+        ? payload
+        : isDwmAlertGenerationProof(payload?.readiness)
+            ? payload.readiness
+            : isDwmAlertGenerationProof(payload?.alertGenerationReadiness)
+                ? payload.alertGenerationReadiness
+                : undefined
+    return proof
+}
+
+function isDwmAlertGenerationProof(input: unknown): input is DwmAlertGenerationProof {
+    if (!input || typeof input !== 'object') return false
+    return (input as { schemaVersion?: unknown }).schemaVersion === 'dwm.alert_generation_readiness.v1'
+}
+
+function numberOrUndefined(value: unknown) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 function orgAlertExportReadiness(input: {
