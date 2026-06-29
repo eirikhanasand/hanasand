@@ -99,18 +99,6 @@ const partialScoreboard = buildProductNorthStarScoreboard(partialPayload, { gene
 assert.equal(partialScoreboard.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(partialScoreboard.fullChainReady, false)
 assert.ok(partialScoreboard.firstBlocker)
-assert.equal(partialScoreboard.deployGate.fullChainReady, false)
-assert.equal(partialScoreboard.deployGate.readyRows, partialScoreboard.readyRows)
-assert.equal(partialScoreboard.deployGate.totalRows, partialScoreboard.totalRows)
-assert.equal(partialScoreboard.deployGate.firstBlocker, partialScoreboard.firstBlocker)
-assert.deepEqual(partialScoreboard.deployGate.blockerRows, ['organizations'])
-assert.deepEqual(partialScoreboard.deployGate.needsActionRows, ['shared_watchlists', 'real_alert_generation', 'webhook_delivery', 'analyst_workflow', 'deploy_live_status'])
-assert.deepEqual(partialScoreboard.deployGate.unavailableRows, ['support_admin_audit', 'public_ti_enrichment'])
-assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/ti/workbench'))
-assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/automations?setup=dwm'))
-assert.ok(partialScoreboard.deployGate.proofContracts.includes('dashboard.alert_evidence.readiness.v1'))
-assert.ok(partialScoreboard.deployGate.ownerLanes.includes('dashboard'))
-assert.ok(partialScoreboard.deployGate.expectedDashboardRowIds.includes('dashboard_evidence'))
 assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
@@ -146,15 +134,6 @@ assert.deepEqual(rowExpectedDashboardIds(partialScoreboard), {
 assert.equal(parseProductNorthStarScoreboard(partialScoreboard)?.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersion: 'wrong' }), null)
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, readyRows: partialScoreboard.readyRows + 1 }), null)
-assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, deployGate: undefined }), null)
-assert.equal(parseProductNorthStarScoreboard({
-    ...partialScoreboard,
-    deployGate: { ...partialScoreboard.deployGate, fullChainReady: true },
-}), null)
-assert.equal(parseProductNorthStarScoreboard({
-    ...partialScoreboard,
-    deployGate: { ...partialScoreboard.deployGate, firstBlocker: 'different blocker' },
-}), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, expectedDashboardRowId: '' } : row),
@@ -183,10 +162,6 @@ const readyScoreboard = buildProductNorthStarScoreboard(readyPayload, { generate
 assert.equal(readyScoreboard.fullChainReady, true)
 assert.equal(readyScoreboard.readyRows, readyScoreboard.totalRows)
 assert.equal(readyScoreboard.firstBlocker, undefined)
-assert.equal(readyScoreboard.deployGate.fullChainReady, true)
-assert.equal(readyScoreboard.deployGate.state, 'ready')
-assert.equal(readyScoreboard.deployGate.firstBlocker, '')
-assert.deepEqual(readyScoreboard.deployGate.actionNeededWorkflowLinks, [])
 assert.ok(readyScoreboard.direction.every(item => item.state === 'ready' && !item.blocker))
 
 for (const token of [

@@ -70,22 +70,6 @@ export type ProductNorthStarDirection = {
     proofSummary: string
 }
 
-export type ProductNorthStarDeployGate = {
-    state: ReadinessStatus
-    fullChainReady: boolean
-    readyRows: number
-    totalRows: number
-    blockerRows: ProductNorthStarRowId[]
-    needsActionRows: ProductNorthStarRowId[]
-    unavailableRows: ProductNorthStarRowId[]
-    readyWorkflowLinks: string[]
-    actionNeededWorkflowLinks: string[]
-    proofContracts: string[]
-    ownerLanes: string[]
-    expectedDashboardRowIds: string[]
-    firstBlocker: string
-}
-
 export type ProductNorthStarScoreboard = {
     schemaVersion: 'product.north_star.readiness.v1'
     generatedAt: string
@@ -94,7 +78,6 @@ export type ProductNorthStarScoreboard = {
     readyRows: number
     totalRows: number
     firstBlocker?: string
-    deployGate: ProductNorthStarDeployGate
     direction: ProductNorthStarDirection[]
     rows: ProductNorthStarRow[]
 }
@@ -109,14 +92,9 @@ export function parseProductNorthStarScoreboard(input: unknown): ProductNorthSta
     if (typeof candidate.readyRows !== 'number' || typeof candidate.totalRows !== 'number') return null
     if (!candidate.rows.every(isProductNorthStarRow)) return null
     if (!candidate.direction.every(isProductNorthStarDirection)) return null
-    if (!isProductNorthStarDeployGate(candidate.deployGate)) return null
     if (candidate.totalRows !== candidate.rows.length) return null
     if (candidate.readyRows !== candidate.rows.filter(row => row.state === 'ready').length) return null
     if (candidate.fullChainReady !== candidate.rows.every(row => row.state === 'ready')) return null
-    if (candidate.deployGate.totalRows !== candidate.totalRows) return null
-    if (candidate.deployGate.readyRows !== candidate.readyRows) return null
-    if (candidate.deployGate.fullChainReady !== candidate.fullChainReady) return null
-    if (candidate.deployGate.firstBlocker !== (candidate.firstBlocker || '')) return null
     return candidate as ProductNorthStarScoreboard
 }
 
@@ -155,32 +133,6 @@ function isProductNorthStarDirection(input: unknown): input is ProductNorthStarD
         && typeof direction.blocker === 'string'
         && isFilledString(direction.proofSummary)
         && (direction.state === 'ready' || Boolean(direction.blocker))
-}
-
-function isProductNorthStarDeployGate(input: unknown): input is ProductNorthStarDeployGate {
-    if (!input || typeof input !== 'object') return false
-    const deployGate = input as Partial<ProductNorthStarDeployGate>
-    return isReadinessStatus(deployGate.state)
-        && typeof deployGate.fullChainReady === 'boolean'
-        && typeof deployGate.readyRows === 'number'
-        && typeof deployGate.totalRows === 'number'
-        && Array.isArray(deployGate.blockerRows)
-        && deployGate.blockerRows.every(isRowId)
-        && Array.isArray(deployGate.needsActionRows)
-        && deployGate.needsActionRows.every(isRowId)
-        && Array.isArray(deployGate.unavailableRows)
-        && deployGate.unavailableRows.every(isRowId)
-        && Array.isArray(deployGate.readyWorkflowLinks)
-        && deployGate.readyWorkflowLinks.every(isFilledString)
-        && Array.isArray(deployGate.actionNeededWorkflowLinks)
-        && deployGate.actionNeededWorkflowLinks.every(isFilledString)
-        && Array.isArray(deployGate.proofContracts)
-        && deployGate.proofContracts.every(isFilledString)
-        && Array.isArray(deployGate.ownerLanes)
-        && deployGate.ownerLanes.every(isFilledString)
-        && Array.isArray(deployGate.expectedDashboardRowIds)
-        && deployGate.expectedDashboardRowIds.every(isFilledString)
-        && typeof deployGate.firstBlocker === 'string'
 }
 
 function isRowId(input: unknown): input is ProductNorthStarRowId {
@@ -293,42 +245,17 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
     ]
     const readyRows = rows.filter(row => row.state === 'ready').length
     const firstBlocker = rows.find(row => row.state !== 'ready')?.blocker
-    const fullChainReady = rows.every(row => row.state === 'ready')
 
     return {
         schemaVersion: 'product.north_star.readiness.v1',
         generatedAt,
         query,
-        fullChainReady,
+        fullChainReady: rows.every(row => row.state === 'ready'),
         readyRows,
         totalRows: rows.length,
         firstBlocker,
-        deployGate: buildDeployGate(rows, { fullChainReady, readyRows, firstBlocker }),
         direction: buildProductDirection(rows),
         rows,
-    }
-}
-
-function buildDeployGate(rows: ProductNorthStarRow[], summary: {
-    fullChainReady: boolean
-    readyRows: number
-    firstBlocker?: string
-}): ProductNorthStarDeployGate {
-    const rowsNeedingAction = rows.filter(row => row.state !== 'ready')
-    return {
-        state: summary.fullChainReady ? 'ready' : combineDirectionState(rows.map(row => row.state)),
-        fullChainReady: summary.fullChainReady,
-        readyRows: summary.readyRows,
-        totalRows: rows.length,
-        blockerRows: rows.filter(row => row.state === 'blocked').map(row => row.id),
-        needsActionRows: rows.filter(row => row.state === 'needs_action').map(row => row.id),
-        unavailableRows: rows.filter(row => row.state === 'unavailable').map(row => row.id),
-        readyWorkflowLinks: uniqueStrings(rows.filter(row => row.state === 'ready').map(row => row.href)),
-        actionNeededWorkflowLinks: uniqueStrings(rowsNeedingAction.map(row => row.href)),
-        proofContracts: uniqueStrings(rows.map(row => row.backendProofContractVersion)),
-        ownerLanes: uniqueStrings(rows.map(row => row.ownerLane)),
-        expectedDashboardRowIds: uniqueStrings(rows.flatMap(row => row.expectedDashboardRowId.split(',').map(id => id.trim()))),
-        firstBlocker: summary.firstBlocker || '',
     }
 }
 
@@ -538,8 +465,4 @@ function latestTimestamp(values: Array<string | undefined>) {
         .filter(Boolean)
         .sort()
         .at(-1)
-}
-
-function uniqueStrings(values: Array<string | undefined>) {
-    return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim()))))
 }
