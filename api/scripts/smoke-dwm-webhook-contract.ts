@@ -2492,6 +2492,8 @@ expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract'
 expect(deliveryPreview.context.alert.severity === 'high' && deliveryPreview.context.alert.evidenceCount === 3, 'Test preview should expose alert severity and evidence count.', deliveryPreview)
 expect(deliveryPreview.context.alert.casePath === replayWorkflowAlert.casePath && deliveryPreview.context.links.casePath === replayWorkflowAlert.casePath, 'Test preview should expose case/deep-link context.', deliveryPreview)
 expect(deliveryPreview.context.alert.alertUrl === replayWorkflowAlert.alertUrl && deliveryPreview.context.links.alertUrl === replayWorkflowAlert.alertUrl, 'Test preview should expose alert URL/deep-link context.', deliveryPreview)
+expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
+expect(deliveryPreview.operationLinks.dedupeHistory?.includes('dwm_dedupe_replay_contract') && deliveryPreview.operationLinks.casePath === replayWorkflowAlert.casePath, 'Test preview should expose dedupe history and case action links.', deliveryPreview.operationLinks)
 expect(!JSON.stringify(deliveryPreview).includes(secret), 'Test preview should not leak endpoint secrets.', deliveryPreview)
 expect(readiness.destinationCount === 3 && readiness.activeDestinationCount === 2 && readiness.disabledDestinationCount === 1, 'Readiness should roll up multiple destinations.', readiness)
 expect(readiness.blockers.includes('live_delivery_disabled') && readiness.retryScheduledCount === 1, 'Readiness should expose live-send blockers and retry schedule count.', readiness)
@@ -2529,6 +2531,7 @@ const orgAlertReplayOutcome = orgAlertDeliveryContract.deliveryOutcome.selectedD
 const orgAlertDisabledOutcome = orgAlertDeliveryContract.deliveryOutcome.skippedDestinations.find(item => item.destinationId === 'destination_disabled_contract')
 expect(orgAlertReplayOutcome?.recorded === true && orgAlertReplayOutcome.latestAttempt?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayOutcome.latestAttempt.auditEventId === 'audit_replay_duplicate_contract', 'Org alert delivery outcome should link selected destination to ledger and audit ids.', orgAlertReplayOutcome)
 expect(orgAlertReplayOutcome?.preview?.discord.fieldNames.includes('Workflow') && orgAlertReplayOutcome.preview.discord.fieldNames.includes('Confidence') && orgAlertReplayOutcome.preview.context.alert.casePath === replayWorkflowAlert.casePath, 'Org alert delivery outcome should carry Discord preview and case context.', orgAlertReplayOutcome)
+expect(orgAlertReplayOutcome?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && orgAlertReplayOutcome.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Org alert delivery outcome should carry stable customer operation links for delivery proof.', orgAlertReplayOutcome)
 expect(orgAlertDisabledOutcome?.reason === 'disabled' && orgAlertDisabledOutcome.blockers.some(item => item.code === 'disabled' && item.blocking === true), 'Org alert delivery outcome should expose disabled destination skips as blockers.', orgAlertDisabledOutcome)
 expect(orgAlertDeliveryContract.deliveryOutcome.noNetwork === true && orgAlertDeliveryContract.deliveryOutcome.externalSendEnabled === false, 'Org alert delivery outcome should preserve no-network dry-run semantics.', orgAlertDeliveryContract.deliveryOutcome)
 expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
@@ -2649,6 +2652,7 @@ expect(!JSON.stringify(duplicateReplayGuardHistory).includes(secret), 'Duplicate
 expect(deliveryReceipts.schemaVersion === 'dwm.webhook.delivery_receipts.v1' && deliveryReceipts.counts.total === deliveryHistory.total, 'Delivery receipts should provide a stable proof contract for delivery attempts.', deliveryReceipts)
 expect(deliveryReceiptReplay?.proof.auditEventId === 'audit_replay_duplicate_contract' && deliveryReceiptReplay.proof.noNetwork === true, 'Delivery receipts should link replay delivery proof and preserve no-network dry-run status.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') && deliveryReceiptReplay.discordPreview.fieldNames.includes('Alert URL') && deliveryReceiptReplay.casePath === replayWorkflowAlert.casePath, 'Delivery receipts should carry Discord preview and case/deep-link context.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
@@ -2979,6 +2983,8 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].proof.auditEventId',
             'deliveryReceipts.receipts[].proof.noNetwork',
             'deliveryReceipts.receipts[].discordPreview.fieldNames',
+            'deliveryReceipts.receipts[].operationLinks.deliveryDetail',
+            'deliveryReceipts.receipts[].operationLinks.destinationTest',
             'deliveryReceipts.receipts[].retry.nextRetryAt',
             'deliveryReceipts.receipts[].blockers[].code',
             'deliveryTimeline.schemaVersion',
@@ -3048,6 +3054,8 @@ console.log(JSON.stringify({
             'orgAlertDelivery.deliveryOutcome.schemaVersion',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].latestAttempt.deliveryId',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].preview.discord.fieldNames',
+            'orgAlertDelivery.deliveryOutcome.selectedDestinations[].operationLinks.deliveryDetail',
+            'orgAlertDelivery.deliveryOutcome.selectedDestinations[].operationLinks.destinationTest',
             'orgAlertDelivery.deliveryOutcome.skippedDestinations[].blockers[].code',
             'orgAlertDelivery.deliveryTimeline.schemaVersion',
             'orgAlertDelivery.deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',

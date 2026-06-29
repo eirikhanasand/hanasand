@@ -872,6 +872,7 @@ export function buildDwmWebhookDeliveryHistory({
                     allowedMentions: preview.discord.allowedMentions,
                 }
                 : null,
+            operationLinks: preview?.operationLinks || null,
         }
     })
 
@@ -1017,6 +1018,7 @@ export function buildDwmWebhookDeliveryReceipts({
                 latestDedupeKey: retryKey?.dedupe.latestDedupeKey || entry.alert.dedupeKey,
             },
             discordPreview: entry.discordPreview,
+            operationLinks: entry.operationLinks,
             blockers: uniqueBlockers,
             blockingCodes,
         }
@@ -4332,6 +4334,7 @@ export function buildDwmOrgAlertWebhookDeliveryOutcome({
                 latestAuditEventId: audit?.auditEventId || latestAttempt?.auditEventId || null,
                 action: audit?.action || latestAttempt?.auditAction || null,
             },
+            operationLinks: preview?.operationLinks || null,
             health: health
                 ? {
                     status: health.health,
@@ -4572,6 +4575,7 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
                 alertUrl: clean(payloadDelivery.alertUrl) || clean(payloadAlert.alertUrl),
             },
         },
+        operationLinks: buildDwmWebhookDeliveryOperationLinks(delivery),
         response: {
             httpStatus: delivery.responseStatus,
             summary: delivery.responseBody ? redactDeliveryEvidenceText(truncate(delivery.responseBody, 500)) : null,
@@ -4579,6 +4583,25 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
         error: delivery.error ? redactDeliveryEvidenceText(truncate(delivery.error, 500)) : null,
         payloadHash: delivery.payloadHash,
         idempotencyKey: delivery.idempotencyKey,
+    }
+}
+
+function buildDwmWebhookDeliveryOperationLinks(delivery: DwmWebhookDeliveryPublic) {
+    const orgId = encodeURIComponent(delivery.orgId)
+    const deliveryId = encodeURIComponent(delivery.id)
+    const alertId = encodeURIComponent(delivery.alertId)
+    const destinationId = delivery.destinationId ? encodeURIComponent(delivery.destinationId) : null
+    const dedupeKey = delivery.idempotencyKey ? encodeURIComponent(dedupeFromIdempotencyKey(delivery.idempotencyKey) || delivery.idempotencyKey) : null
+    return {
+        deliveryDetail: `GET /api/dwm/webhook-deliveries?orgId=${orgId}&deliveryId=${deliveryId}`,
+        deliveryHistory: destinationId
+            ? `GET /api/dwm/webhook-deliveries?orgId=${orgId}&destinationId=${destinationId}&alertId=${alertId}`
+            : `GET /api/dwm/webhook-deliveries?orgId=${orgId}&alertId=${alertId}`,
+        retryDryRun: 'POST /api/dwm/webhook-deliveries',
+        destinationTest: destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : null,
+        destinationDetail: destinationId ? `GET /api/dwm/webhooks?orgId=${orgId}&destinationId=${destinationId}` : null,
+        dedupeHistory: dedupeKey ? `GET /api/dwm/webhook-deliveries?orgId=${orgId}&dedupeKey=${dedupeKey}` : null,
+        casePath: delivery.casePath || null,
     }
 }
 
