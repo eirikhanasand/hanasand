@@ -1839,6 +1839,12 @@ describe("dwm source requests", () => {
               liveNetworkFetch: false,
               rawRestrictedPayloadStorage: false
             }),
+            fixtureManifest: expect.objectContaining({
+              schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
+              mode: "no_network_fixture",
+              fixtures: [],
+              summary: expect.objectContaining({ totalFixtures: 0 })
+            }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           },
           alertability: expect.objectContaining({
@@ -2780,6 +2786,53 @@ describe("dwm source requests", () => {
         metadataOnly: expect.any(Number),
         publicOnly: expect.any(Number)
       },
+      fixtureManifest: expect.objectContaining({
+        schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
+        mode: "no_network_fixture",
+        fixtures: expect.arrayContaining([
+          expect.objectContaining({
+            family: "darkweb_onion",
+            fixtureKey: expect.stringContaining("/darkweb_onion/"),
+            parserProfile: "restricted_metadata",
+            expectedCaptureType: "darkweb_onion_metadata_observation",
+            metadataOnly: true,
+            loadPlan: expect.objectContaining({
+              path: "/v1/dwm/source-requests",
+              liveNetworkFetch: false,
+              body: expect.objectContaining({ action: "pack_worker_run", dryRun: true })
+            }),
+            validationChecks: expect.arrayContaining(["raw_restricted_payload_not_stored", "live_network_fetch_disabled"]),
+            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          }),
+          expect.objectContaining({
+            family: "actor_page",
+            fixtureKey: expect.stringContaining("/actor_page/"),
+            parserProfile: "actor_page_metadata",
+            expectedCaptureType: "actor_page_metadata",
+            publicOnly: true
+          }),
+          expect.objectContaining({
+            family: "public_advisory",
+            parserProfile: "public_advisory",
+            expectedCaptureType: "public_advisory_metadata"
+          }),
+          expect.objectContaining({
+            family: "clear_web",
+            parserProfile: "clear_web",
+            expectedCaptureType: "clear_web_metadata"
+          })
+        ]),
+        summary: expect.objectContaining({
+          totalFixtures: 5,
+          families: expect.arrayContaining(["darkweb_onion", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"]),
+          metadataOnlyFamilies: expect.arrayContaining(["darkweb_onion", "darkweb_metadata"]),
+          parserProfiles: expect.arrayContaining(["restricted_metadata", "actor_page_metadata", "public_advisory", "clear_web"])
+        }),
+        policyBoundary: expect.objectContaining({
+          liveNetworkFetch: false,
+          metadataOnlyRestrictedSources: true
+        })
+      }),
       candidatePreviews: expect.arrayContaining([
         expect.objectContaining({
           schemaVersion: "dwm.actor_source_candidate_intake_preview.v1",
@@ -2885,6 +2938,24 @@ describe("dwm source requests", () => {
             totalCandidates: expect.any(Number),
             accepted: expect.any(Number),
             metadataOnly: expect.any(Number)
+          }),
+          fixtureManifest: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_candidate_fixture_manifest.v1",
+            mode: "no_network_fixture",
+            fixtures: expect.arrayContaining([
+              expect.objectContaining({
+                family: "darkweb_onion",
+                parserProfile: "restricted_metadata",
+                loadPlan: expect.objectContaining({ liveNetworkFetch: false })
+              }),
+              expect.objectContaining({
+                family: "actor_page",
+                parserProfile: "actor_page_metadata"
+              })
+            ]),
+            summary: expect.objectContaining({
+              families: expect.arrayContaining(["darkweb_onion", "actor_page"])
+            })
           }),
           sourcePackWorkflow: expect.objectContaining({
             schemaVersion: "dwm.actor_source_candidate_intake_workflow.v1",
