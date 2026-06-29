@@ -202,6 +202,14 @@ describe("dwm workflow persistence", () => {
         evidenceCount: 1,
         recommendedRoute: "identity_response"
       });
+      expect(detail.workflowSummary.createdEvent).toMatchObject({
+        schemaVersion: "dwm.alert_created_event.v1",
+        eventId: detail.alert.alertCreatedEvent.id,
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        dedupeKey: rebuild.alerts[0].dedupeKey,
+        recommendedRoute: "identity_response"
+      });
       expect(detail.evidenceReplay[0]).toMatchObject({ sourceName: "Workflow public Telegram", contentHash: "hash-workflow-acme" });
       expect(detail.timeline[0]).toMatchObject({
         type: "alert_created",
@@ -321,6 +329,13 @@ describe("dwm workflow persistence", () => {
     const triage = await triageResponse.json() as any;
     expect(triageResponse.status).toBe(200);
     expect(triage.alert.workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", severityOverride: "critical", caseId: "case_workflow_live", eventCount: 1 });
+    expect(triage.alert.workflowSummary.createdEvent).toMatchObject({
+      schemaVersion: "dwm.alert_created_event.v1",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      recommendedRoute: "identity_response"
+    });
     expect(triage.workflowExecutionReadiness).toMatchObject({
       schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
       ready: true,
@@ -383,7 +398,12 @@ describe("dwm workflow persistence", () => {
       ready: false,
       blockerCodes: ["stale_workflow_version"],
       expectedWorkflowEventCount: 0,
-      currentWorkflowEventCount: 1
+      currentWorkflowEventCount: 1,
+      createdEvent: {
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        dedupeKey: alert.dedupeKey
+      }
     });
     expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(1);
 
@@ -404,6 +424,11 @@ describe("dwm workflow persistence", () => {
     expect(filteredTriageResponse.status).toBe(200);
     expect(filteredTriage.alerts).toHaveLength(1);
     expect(filteredTriage.alerts[0].workflowSummary).toMatchObject({ status: "triaged", assignedOwner: "owner-workflow", caseId: "case_workflow_live" });
+    expect(filteredTriage.alerts[0].workflowSummary.createdEvent).toMatchObject({
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      recommendedRoute: "identity_response"
+    });
 
     const missingRationaleResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",

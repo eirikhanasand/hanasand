@@ -1550,9 +1550,26 @@ function buildDwmAlertWorkflowSummary(alert: any) {
   const lastEvent = events.at(-1);
   const status = String(alert.workflowStatus ?? "new");
   const effectiveSeverity = String(alert.severityOverride ?? alert.severity ?? "medium");
+  const alertCreatedEvent = alert.alertCreatedEvent;
+  const deliveryContext = alert.deliveryReadinessContext ?? {};
+  const createdEventId = alertCreatedEvent?.id ?? deliveryContext.alertCreatedEventId;
+  const createdEventAt = alertCreatedEvent?.at ?? deliveryContext.alertCreatedAt;
+  const createdEvent = createdEventId || createdEventAt ? {
+    schemaVersion: "dwm.alert_created_event.v1",
+    eventId: createdEventId,
+    eventType: alertCreatedEvent?.eventType ?? "dwm.alert.created",
+    at: createdEventAt,
+    sourceFamily: alertCreatedEvent?.sourceFamily ?? alert.sourceFamily ?? deliveryContext.sourceFamily,
+    captureIds: uniqueAlertStrings((Array.isArray(alertCreatedEvent?.captureIds)
+      ? alertCreatedEvent.captureIds
+      : deliveryContext.selectedCaptureIds ?? alert.provenance?.captureIds ?? []).map(String).filter(Boolean)),
+    dedupeKey: alertCreatedEvent?.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    recommendedRoute: alertCreatedEvent?.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute
+  } : undefined;
   return {
     schemaVersion: "dwm.alert_workflow_summary.v1",
     status,
+    createdEvent,
     reviewState: alert.reviewState,
     deliveryState: alert.deliveryState,
     assignedOwner: alert.assignedOwner,
