@@ -1038,6 +1038,27 @@ assert.ok(readiness.readinessProof.uiProof.safeFields.includes('inviteLifecycleP
 assert.ok(readiness.readinessProof.uiProof.redactedFields.includes('activeTerms[].term'))
 assert.equal(readiness.readinessProof.cleanupProof.cleanupIdempotent, true)
 assert.equal(readiness.readinessProof.cleanupProof.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
+assert.equal(readiness.readinessProof.customerWorkflowProof.schemaVersion, 'organization.customer_workflow_proof.v1')
+assert.deepEqual(readiness.readinessProof.customerWorkflowProof.routeSequence, [
+    'POST /api/organizations',
+    'POST /api/organizations/:id/invites',
+    'POST /api/organizations/invites/:inviteId/accept',
+    'GET /api/organizations/:id/members',
+    'POST /api/organizations/:id/watchlists',
+    'GET /api/organizations/:id/watchlists/alert-terms',
+    'GET /api/organizations/:id/alert-case-visibility',
+    'POST /api/organizations/:id/watchlists/cleanup',
+])
+assert.ok(readiness.readinessProof.customerWorkflowProof.requiredOrgFields.includes('counts.activeAdminCount'))
+assert.ok(readiness.readinessProof.customerWorkflowProof.requiredWatchlistFields.includes('alertGenerationRef'))
+assert.ok(readiness.readinessProof.customerWorkflowProof.requiredAlertFields.includes('workflowContext.visibilityDecision'))
+assert.equal(readiness.readinessProof.customerWorkflowProof.roleGates.ownerAdminMutate, true)
+assert.equal(readiness.readinessProof.customerWorkflowProof.roleGates.memberReadExport, true)
+assert.equal(readiness.readinessProof.customerWorkflowProof.roleGates.viewerReadOnly, true)
+assert.equal(readiness.readinessProof.customerWorkflowProof.roleGates.nonmemberEnumeration, false)
+assert.deepEqual(readiness.readinessProof.customerWorkflowProof.lifecycleBlockers, ['role_not_allowed'])
+assert.deepEqual(readiness.readinessProof.customerWorkflowProof.downstreamConsumers, ['alert_queue', 'case_workflow', 'webhook_delivery', 'dashboard_readiness', 'support_timeline'])
+assert.equal(readiness.readinessProof.customerWorkflowProof.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(readiness.sharedWatchlistDownstreamProof.schemaVersion, 'organization.shared_watchlist_downstream_proof.v1')
 assert.equal(readiness.sharedWatchlistDownstreamProof.actor.userId, 'org_smoke_member')
 assert.equal(readiness.sharedWatchlistDownstreamProof.actor.role, 'member')
@@ -1182,6 +1203,8 @@ assert.deepEqual(adminReadiness.readinessProof.alertQueueProof.allowedActions, [
     'manage_invites',
 ])
 assert.deepEqual(adminReadiness.readinessProof.alertQueueProof.blockerCodes, [])
+assert.deepEqual(adminReadiness.readinessProof.customerWorkflowProof.lifecycleBlockers, [])
+assert.equal(adminReadiness.readinessProof.customerWorkflowProof.roleGates.memberReadExport, true)
 assert.equal(adminReadiness.readinessProof.webhookDeliveryProof.canUseDefaultDestinations, false)
 assert.deepEqual(adminReadiness.readinessProof.webhookDeliveryProof.blockerCodes, ['manual_webhook_selection_required'])
 assert.equal(adminReadiness.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, true)

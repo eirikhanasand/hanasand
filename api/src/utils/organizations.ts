@@ -1560,6 +1560,31 @@ export type OrganizationReadinessProof = {
         cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
         cleanupRequiredBlocker: 'cleanup_required'
     }
+    customerWorkflowProof: {
+        schemaVersion: 'organization.customer_workflow_proof.v1'
+        routeSequence: Array<
+            | 'POST /api/organizations'
+            | 'POST /api/organizations/:id/invites'
+            | 'POST /api/organizations/invites/:inviteId/accept'
+            | 'GET /api/organizations/:id/members'
+            | 'POST /api/organizations/:id/watchlists'
+            | 'GET /api/organizations/:id/watchlists/alert-terms'
+            | 'GET /api/organizations/:id/alert-case-visibility'
+            | 'POST /api/organizations/:id/watchlists/cleanup'
+        >
+        requiredOrgFields: Array<'organizationId' | 'tenantId' | 'member.role' | 'counts.activeMemberCount' | 'counts.activeAdminCount'>
+        requiredWatchlistFields: Array<'watchlistItemId' | 'organizationId' | 'kind' | 'term' | 'status' | 'createdBy' | 'updatedBy' | 'alertGenerationRef'>
+        requiredAlertFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.visibilityDecision'>
+        roleGates: {
+            ownerAdminMutate: true
+            memberReadExport: boolean
+            viewerReadOnly: true
+            nonmemberEnumeration: false
+        }
+        lifecycleBlockers: string[]
+        downstreamConsumers: Array<'alert_queue' | 'case_workflow' | 'webhook_delivery' | 'dashboard_readiness' | 'support_timeline'>
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     blockers: string[]
 }
 
@@ -4339,6 +4364,60 @@ export function organizationReadinessProof(input: {
             cleanupIdempotent: true,
             cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
             cleanupRequiredBlocker: 'cleanup_required',
+        },
+        customerWorkflowProof: {
+            schemaVersion: 'organization.customer_workflow_proof.v1',
+            routeSequence: [
+                'POST /api/organizations',
+                'POST /api/organizations/:id/invites',
+                'POST /api/organizations/invites/:inviteId/accept',
+                'GET /api/organizations/:id/members',
+                'POST /api/organizations/:id/watchlists',
+                'GET /api/organizations/:id/watchlists/alert-terms',
+                'GET /api/organizations/:id/alert-case-visibility',
+                'POST /api/organizations/:id/watchlists/cleanup',
+            ],
+            requiredOrgFields: [
+                'organizationId',
+                'tenantId',
+                'member.role',
+                'counts.activeMemberCount',
+                'counts.activeAdminCount',
+            ],
+            requiredWatchlistFields: [
+                'watchlistItemId',
+                'organizationId',
+                'kind',
+                'term',
+                'status',
+                'createdBy',
+                'updatedBy',
+                'alertGenerationRef',
+            ],
+            requiredAlertFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.alertGeneratorKeys',
+                'workflowContext.visibilityDecision',
+            ],
+            roleGates: {
+                ownerAdminMutate: true,
+                memberReadExport: input.downstreamAuthorization.member.role === 'owner'
+                    || input.downstreamAuthorization.member.role === 'admin'
+                    || input.downstreamAuthorization.member.role === 'member',
+                viewerReadOnly: true,
+                nonmemberEnumeration: false,
+            },
+            lifecycleBlockers: blockers,
+            downstreamConsumers: [
+                'alert_queue',
+                'case_workflow',
+                'webhook_delivery',
+                'dashboard_readiness',
+                'support_timeline',
+            ],
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         blockers,
     }
