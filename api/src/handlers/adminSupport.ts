@@ -491,6 +491,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             summary: auditTimelineSummary(timeline),
             filterContract: supportAuditFilterContract(filters, timeline),
             exportProof: supportAuditExportProof(filters, timeline),
+            bridgeAdapter: supportAuditBridgeAdapterContract(filters),
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
@@ -5691,6 +5692,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         redacted: true,
         filterContract: supportAuditFilterContract(filters, [timelineEvent]),
         exportProof: supportAuditExportProof(filters, [timelineEvent]),
+        bridgeAdapter: supportAuditBridgeAdapterContract(filters),
         relatedTimeline: {
             schemaVersion: 'admin.audit.event_related_timeline.v1',
             filters,
@@ -5789,6 +5791,56 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
             correlation: filters.correlation || null,
             idempotency: filters.idempotency || null,
             query: auditFilterQuery(filters),
+        },
+    }
+}
+
+function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
+    return {
+        schemaVersion: 'support.audit.bridge_adapter_contract.v1',
+        route: '/api/admin/audit-events',
+        adapter: 'supportTimelineAuditBridgeEvent',
+        supportedWorkflows: ['organization', 'watchlist', 'webhook', 'alert', 'impersonation', 'support'],
+        requiredFields: [
+            'workflow',
+            'action',
+            'actorId',
+            'targetType',
+            'targetId',
+            'organizationId',
+            'entityId',
+            'requestId',
+            'severity',
+            'outcome',
+            'reason',
+        ],
+        filterFields: ['org', 'actor', 'target', 'action', 'severity', 'outcome', 'request', 'entity', 'source', 'service', 'workflow', 'from', 'to'],
+        currentFilters: filters,
+        redaction: {
+            required: true,
+            redactedFields: ['password', 'token', 'secret', 'authorization', 'cookie', 'apiKey', 'session', 'credential', 'webhookUrl', 'privateSourceUrl'],
+            beforeAfterRedacted: true,
+        },
+        blockerCatalog: [
+            'missing_support_reason',
+            'unsupported_audit_filter',
+            'audit_unavailable',
+            'redaction_required',
+        ],
+        replay: {
+            query: auditFilterQuery(filters),
+            detailRouteTemplate: '/api/admin/audit-events/:id',
+        },
+        worker3: {
+            readinessName: 'support-audit-bridge-adapter',
+            testCommand: 'cd api && bun run smoke:admin-support-unit',
+            expectedResponsePath: 'detail.bridgeAdapter',
+            validation: [
+                'detail.bridgeAdapter.schemaVersion = support.audit.bridge_adapter_contract.v1',
+                'detail.bridgeAdapter.supportedWorkflows includes webhook and alert',
+                'detail.bridgeAdapter.redaction.required = true',
+                'detail.bridgeAdapter.replay.query is copy-ready',
+            ],
         },
     }
 }
