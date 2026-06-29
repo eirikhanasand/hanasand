@@ -250,6 +250,11 @@ describe("dwm workflow persistence", () => {
       expect(secondRebuild.alerts[0].sourceCount).toBe(2);
       expect(secondRebuild.alerts[0].evidenceSummary.evidenceCount).toBe(2);
       expect(secondRebuild.alerts[0].workflowContext.evidenceCount).toBe(2);
+      expect(secondRebuild.alerts[0].workflowContext.generationEvidenceWindow).toMatchObject({
+        captureIds: expect.arrayContaining(["cap_workflow_acme", "cap_workflow_acme_followup"]),
+        firstObservedAt: "2026-06-27T21:02:00.000Z",
+        lastObservedAt: "2026-06-27T21:07:00.000Z"
+      });
       expect(secondRebuild.alerts[0].evidence.map((item: any) => item.id)).toContain("cap_workflow_acme_followup");
       expect(secondRebuild.alerts[0].provenance.captureIds).toContain("cap_workflow_acme_followup");
       expect(secondRebuild.alerts[0].dedupeKey).toBe(rebuild.alerts[0].dedupeKey);
@@ -398,8 +403,26 @@ describe("dwm workflow persistence", () => {
       caseId: "case_workflow_live",
       casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`
     });
-    expect(triage.alert.evidenceFreshness).toMatchObject({ newestEvidenceAt: "2026-06-27T21:02:00.000Z", evidenceCount: 1, captureIds: ["cap_workflow_acme"] });
-    expect(triage.alert.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"], dedupeKey: alert.dedupeKey });
+    expect(triage.alert.evidenceFreshness).toMatchObject({
+      newestEvidenceAt: "2026-06-27T21:02:00.000Z",
+      evidenceCount: 1,
+      captureIds: ["cap_workflow_acme"],
+      generationEvidenceWindow: {
+        captureIds: ["cap_workflow_acme"],
+        sourceFamilies: ["telegram_public"],
+        firstObservedAt: "2026-06-27T21:02:00.000Z",
+        lastObservedAt: "2026-06-27T21:02:00.000Z"
+      }
+    });
+    expect(triage.alert.provenanceFreshness).toMatchObject({
+      matchBasis: "watchlist_capture_text",
+      captureIds: ["cap_workflow_acme"],
+      dedupeKey: alert.dedupeKey,
+      generationEvidenceWindow: {
+        contentHashes: ["hash-workflow-acme"],
+        firstObservedAt: "2026-06-27T21:02:00.000Z"
+      }
+    });
 
     const staleMutationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
       method: "PATCH",
@@ -583,8 +606,22 @@ describe("dwm workflow persistence", () => {
       dedupeKey: alert.dedupeKey,
       recommendedRoute: "identity_response"
     });
-    expect(detail.evidenceFreshness).toMatchObject({ evidenceCount: 1, newestEvidenceAt: "2026-06-27T21:02:00.000Z" });
-    expect(detail.provenanceFreshness).toMatchObject({ matchBasis: "watchlist_capture_text", captureIds: ["cap_workflow_acme"] });
+    expect(detail.evidenceFreshness).toMatchObject({
+      evidenceCount: 1,
+      newestEvidenceAt: "2026-06-27T21:02:00.000Z",
+      generationEvidenceWindow: {
+        captureIds: ["cap_workflow_acme"],
+        sourceFamilies: ["telegram_public"]
+      }
+    });
+    expect(detail.provenanceFreshness).toMatchObject({
+      matchBasis: "watchlist_capture_text",
+      captureIds: ["cap_workflow_acme"],
+      generationEvidenceWindow: {
+        firstObservedAt: "2026-06-27T21:02:00.000Z",
+        lastObservedAt: "2026-06-27T21:02:00.000Z"
+      }
+    });
   });
 
   test("keeps multi-source org alert lifecycle isolated across darkweb Telegram and actor captures", async () => {

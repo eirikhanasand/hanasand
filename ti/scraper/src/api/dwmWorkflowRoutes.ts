@@ -1456,6 +1456,7 @@ function buildDwmAlertDeliveryReadiness(alert: any, deliveries: any[]) {
 }
 
 function buildDwmAlertEvidenceFreshness(alert: any) {
+  const generationEvidenceWindow = alert.workflowContext?.generationEvidenceWindow ?? alert.webhookContext?.generationEvidenceWindow;
   const observed = (alert.evidence ?? [])
     .map((item: any) => item.observedAt ?? item.firstSeenAt ?? item.provenance?.observedAt)
     .filter(Boolean)
@@ -1472,11 +1473,13 @@ function buildDwmAlertEvidenceFreshness(alert: any) {
     sourceCount: alert.sourceCount ?? uniqueSourceCount(alert),
     sourceFamily: alert.sourceFamily,
     captureIds,
+    generationEvidenceWindow,
     contentHashes: uniqueAlertStrings((alert.evidence ?? []).map((item: any) => item.contentHash).filter(Boolean))
   };
 }
 
 function buildDwmAlertProvenanceFreshness(alert: any) {
+  const generationEvidenceWindow = alert.workflowContext?.generationEvidenceWindow ?? alert.webhookContext?.generationEvidenceWindow;
   return {
     schemaVersion: "dwm.alert_provenance_freshness.v1",
     matchBasis: alert.provenance?.matchBasis,
@@ -1484,6 +1487,7 @@ function buildDwmAlertProvenanceFreshness(alert: any) {
     sourceIds: alert.provenance?.sourceIds ?? uniqueAlertStrings((alert.evidence ?? []).map((item: any) => item.provenance?.sourceId ?? item.sourceId).filter(Boolean)),
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,
+    generationEvidenceWindow,
     generatedFromWatchlists: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
     dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey
   };
