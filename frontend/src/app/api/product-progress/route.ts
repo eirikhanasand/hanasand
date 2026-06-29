@@ -215,6 +215,10 @@ function rows(value: unknown[] | undefined) {
     return Array.isArray(value) ? value as Array<Record<string, unknown>> : []
 }
 
+function uniqueStrings(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean)))
+}
+
 function selectOrganization(payload: unknown, request: NextRequest): DwmOrganizationSummary | undefined {
     const organizations = rows((payload as { organizations?: unknown[] } | undefined)?.organizations) as DwmOrganizationSummary[]
     const requestedId = request.nextUrl.searchParams.get('organizationId') || request.headers.get('x-organization-id') || ''
@@ -403,6 +407,14 @@ type GenerationEvidenceWindow = {
     lastObservedAt?: string
 }
 
+type NormalizedGenerationEvidenceWindow = {
+    captureIds: string[]
+    sourceFamilies: string[]
+    contentHashes: string[]
+    firstObservedAt?: string
+    lastObservedAt?: string
+}
+
 function dwmAlertGenerationProof(result: FetchResult): DwmAlertGenerationProof | undefined {
     const payload = result.json as {
         readiness?: unknown
@@ -423,7 +435,7 @@ function isDwmAlertGenerationProof(input: unknown): input is DwmAlertGenerationP
     return (input as { schemaVersion?: unknown }).schemaVersion === 'dwm.alert_generation_readiness.v1'
 }
 
-function generationEvidenceWindowFromProof(proof?: DwmAlertGenerationProof) {
+function generationEvidenceWindowFromProof(proof?: DwmAlertGenerationProof): NormalizedGenerationEvidenceWindow {
     const windows = [
         proof?.generationEvidenceWindow,
         ...(Array.isArray(proof?.plan?.candidates)
@@ -431,7 +443,7 @@ function generationEvidenceWindowFromProof(proof?: DwmAlertGenerationProof) {
             : []),
     ].filter(isGenerationEvidenceWindow)
 
-    return windows.reduce((acc, window) => ({
+    return windows.reduce<NormalizedGenerationEvidenceWindow>((acc, window) => ({
         captureIds: uniqueStrings([...acc.captureIds, ...stringsFrom(window.captureIds)]),
         sourceFamilies: uniqueStrings([...acc.sourceFamilies, ...stringsFrom(window.sourceFamilies)]),
         contentHashes: uniqueStrings([...acc.contentHashes, ...stringsFrom(window.contentHashes)]),
