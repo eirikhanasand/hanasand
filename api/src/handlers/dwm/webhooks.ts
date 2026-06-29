@@ -14,6 +14,7 @@ import {
     buildDwmWebhookDeliveryActionPlan,
     buildDwmWebhookDeliveryAuditTrail,
     buildDwmWebhookDeliveryAttemptContract,
+    buildDwmWebhookDeliveryAttemptPersistenceProof,
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookCustomerSetupProof,
     buildDwmWebhookDestinationCrudContract,
@@ -966,6 +967,13 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             input: { ...input, orgId },
             destinations,
             deliveries: ledgerDeliveries,
+        }),
+        deliveryAttemptPersistence: buildDwmWebhookDeliveryAttemptPersistenceProof({
+            ownerId: userId,
+            input: { ...input, orgId },
+            destinations,
+            deliveries: ledgerDeliveries,
+            auditEvents,
         }),
         deliveryReceipts: buildDwmWebhookDeliveryReceipts({
             deliveries: ledgerDeliveries,
