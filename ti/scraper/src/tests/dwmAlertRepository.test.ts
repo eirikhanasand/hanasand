@@ -1759,7 +1759,18 @@ describe("dwm alert repository", () => {
       severityOverride: "critical",
       workflowNote: "Customer proof analyst note.",
       workflowRationale: "Evidence is tied to active org watchlist term.",
-      workflowEvents: [{ id: "evt_customer_proof", at: "2026-06-28T13:20:00.000Z", note: "Customer proof analyst note." }],
+      workflowEvents: [{
+        id: "evt_customer_proof",
+        at: "2026-06-28T13:20:00.000Z",
+        actor: "analyst-customer-proof",
+        eventType: "workflow.transition",
+        fromWorkflowStatus: "new",
+        toWorkflowStatus: "investigating",
+        toCaseId: "case_customer_proof",
+        toCasePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+        note: "Customer proof analyst note.",
+        rationale: "Evidence is tied to active org watchlist term."
+      }],
       caseId: "case_customer_proof",
       casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
       deliveredAt: "2026-06-28T13:21:00.000Z",
@@ -1867,6 +1878,23 @@ describe("dwm alert repository", () => {
         assignedOwner: "analyst-customer-proof",
         severityOverride: "critical",
         eventCount: 1,
+        transitionEvents: [{
+          schemaVersion: "dwm.alert_workflow_transition_event.v1",
+          id: "evt_customer_proof",
+          actor: "analyst-customer-proof",
+          eventType: "workflow.transition",
+          action: "escalated",
+          fromStatus: "new",
+          toStatus: "investigating",
+          caseId: "case_customer_proof",
+          casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+          hasNote: true,
+          hasRationale: true,
+          dedupeKey: alert.dedupeKey,
+          sourceFamily: "telegram_public",
+          watchlistIds: ["watch_repo_customer"],
+          captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
+        }],
         replayCount: 3
       },
       caseHandoff: {
@@ -1933,6 +1961,7 @@ describe("dwm alert repository", () => {
       }
     });
     expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
+    expect(proof.consumerContract.queue.stableFields).toContain("workflow.transitionEvents");
     expect(proof.consumerContract.queue.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.queue.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.detail.stableFields).toContain("alertDetailPath");
@@ -1942,6 +1971,7 @@ describe("dwm alert repository", () => {
     expect(proof.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.createdEvent?.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.consumerAdapter.dashboard.fields).toContain("updatedEvent");
+    expect(proof.consumerAdapter.dashboard.fields).toContain("workflow.transitionEvents");
     expect(proof.consumerAdapter.dashboard.fields).toContain("alertDetailPath");
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));

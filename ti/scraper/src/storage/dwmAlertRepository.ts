@@ -273,6 +273,24 @@ export type DwmAlertCustomerProofHandoffRow = {
     note?: string;
     rationale?: string;
     eventCount: number;
+    transitionEvents: Array<{
+      schemaVersion: "dwm.alert_workflow_transition_event.v1";
+      id: string;
+      at?: string;
+      actor?: string;
+      eventType: string;
+      action: "reviewed" | "escalated" | "suppressed" | "closed" | "reopened" | "assigned" | "note" | "transition";
+      fromStatus?: string;
+      toStatus: string;
+      caseId?: string;
+      casePath?: string;
+      hasNote: boolean;
+      hasRationale: boolean;
+      dedupeKey: string;
+      sourceFamily: string;
+      watchlistIds: string[];
+      captureIds: string[];
+    }>;
     replayCount: number;
   };
   caseHandoff: {
@@ -1760,6 +1778,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const deliveryState = String(context.state ?? alert.deliveryState ?? "pending_review");
   const deliveryReady = Boolean(context.ready) && !blockerCodes.includes("webhook_destination_not_verified") && !blockerCodes.includes("support_only_redaction_needed");
   const alertDetailPath = context.alertDetailPath ?? alert.alertDetailPath ?? workflow.alertDetailPath ?? webhook.alertDetailPath;
+  const workflowTransitionEvents = buildDwmAlertCustomerProofWorkflowTransitionEvents(alert);
   return {
     schemaVersion: "dwm.customer_alert_proof.v1",
     alertId: String(alert.id),
@@ -1790,6 +1809,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       note: alert.workflowNote,
       rationale: alert.workflowRationale,
       eventCount: (alert.workflowEvents ?? []).length,
+      transitionEvents: workflowTransitionEvents,
       replayCount: Number(alert.replayCount ?? 0)
     },
     caseHandoff: {
@@ -1831,7 +1851,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         route: "organization_watchlist",
         alertDetailPath,
         casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
-        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "updatedEvent"]
+        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "workflow.transitionEvents", "updatedEvent"]
       },
       helpdesk: {
         redacted: true,
@@ -1854,7 +1874,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       schemaVersion: "dwm.alert_consumer_contract.v1",
       queue: {
         route: "/v1/dwm/alerts",
-        stableFields: ["alertId", "alertDetailPath", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
+        stableFields: ["alertId", "alertDetailPath", "organizationId", "tenantId", "sourceFamily", "workflow.status", "workflow.transitionEvents", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
         workflowStatus: String(alert.workflowStatus ?? "new"),
         sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
         evidenceCount
@@ -1895,6 +1915,42 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
     typedBlockers: blockers,
     generatedAt
   };
+}
+
+function buildDwmAlertCustomerProofWorkflowTransitionEvents(alert: any): DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"] {
+  const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
+  return events.map((event: any, index: number) => {
+    const toStatus = String(event.toWorkflowStatus ?? alert.workflowStatus ?? "new");
+    return {
+      schemaVersion: "dwm.alert_workflow_transition_event.v1",
+      id: event.id ? String(event.id) : stableId("dwm_alert_workflow_event", `${alert.id ?? "alert"}:${event.at ?? index}:${toStatus}`),
+      at: event.at ? String(event.at) : undefined,
+      actor: event.actor ? String(event.actor) : undefined,
+      eventType: event.eventType ? String(event.eventType) : "workflow.transition",
+      action: customerProofWorkflowTransitionAction(event, toStatus),
+      fromStatus: event.fromWorkflowStatus ? String(event.fromWorkflowStatus) : undefined,
+      toStatus,
+      caseId: event.toCaseId ?? alert.caseId,
+      casePath: event.toCasePath ?? alert.casePath,
+      hasNote: Boolean(event.note),
+      hasRationale: Boolean(event.rationale),
+      dedupeKey: String(alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? ""),
+      sourceFamily: String(alert.sourceFamily ?? alert.workflowContext?.sourceFamily ?? "unknown"),
+      watchlistIds: uniqueStrings(asStringArray(alert.watchlistIds ?? alert.workflowContext?.watchlistIds)),
+      captureIds: uniqueStrings(asStringArray(alert.workflowContext?.captureIds ?? alert.provenance?.captureIds))
+    };
+  });
+}
+
+function customerProofWorkflowTransitionAction(event: any, toStatus: string): DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"][number]["action"] {
+  if (toStatus === "closed") return "closed";
+  if (toStatus === "suppressed") return "suppressed";
+  if (toStatus === "reopened") return "reopened";
+  if (event.toCaseId || event.toCasePath || toStatus === "investigating") return "escalated";
+  if (toStatus === "triaged") return "reviewed";
+  if (event.toOwner !== event.fromOwner) return "assigned";
+  if (event.eventType === "workflow.note") return "note";
+  return "transition";
 }
 
 function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fallbackCaptureIds: string[]) {
