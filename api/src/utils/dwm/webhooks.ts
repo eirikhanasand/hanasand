@@ -175,6 +175,7 @@ export type DwmWebhookDeliveryAttemptState = 'queued' | 'sent' | 'failed' | 'ski
 export type DwmWebhookDeliveryOperationBlockerCode =
     | 'missing_org'
     | 'missing_alert_context'
+    | 'destination_unavailable'
     | 'destination_disabled'
     | 'destination_unhealthy'
     | 'missing_webhook_url'
@@ -739,6 +740,7 @@ export function buildDwmWebhookDeliveryOperations({
     const recentDeliveries = sortedLedger.map((attempt) => {
         const destination = attempt.destinationId ? destinationsById.get(attempt.destinationId) || null : null
         const audit = auditByDelivery.get(attempt.deliveryId) || null
+        const availability = deliveryDestinationAvailability(attempt)
         return {
             schemaVersion: 'dwm.webhook.delivery_operation.v1',
             requestId: attempt.requestId,
@@ -761,11 +763,12 @@ export function buildDwmWebhookDeliveryOperations({
             casePath: attempt.casePath,
             destination: {
                 id: attempt.destinationId,
-                label: destination?.name || null,
-                type: destination?.kind || null,
-                status: destination?.status || null,
-                enabled: destination ? destination.status === 'active' : null,
+                label: destination?.name || availability.label,
+                type: destination?.kind || availability.type,
+                status: destination?.status || availability.status,
+                enabled: destination ? destination.status === 'active' : false,
                 redactedEndpoint: attempt.redactedDestination,
+                availability,
             },
             attempts: {
                 count: attempt.attemptCount,
@@ -999,13 +1002,15 @@ export function buildDwmWebhookDeliveryReceipts({
         const retryKey = entry.deliveryProof.idempotencyKey
             ? retryByIdempotencyKey.get(entry.deliveryProof.idempotencyKey) || null
             : null
+        const destinationUnavailable = !entry.destinationId
         const blockers = []
-        if (entry.destination.status && entry.destination.status !== 'active') blockers.push(retryQueueBlocker('destination_disabled', 'Destination is disabled.', entry.destinationId, true))
+        if (entry.destinationId && entry.destination.status && entry.destination.status !== 'active') blockers.push(retryQueueBlocker('destination_disabled', 'Destination is disabled.', entry.destinationId, true))
+        if (destinationUnavailable) blockers.push(retryQueueBlocker('destination_unavailable', entry.destination.availability.message, null, true))
         if (entry.liveRequested && !liveDeliveryEnabled) blockers.push(retryQueueBlocker('live_delivery_disabled', 'Live webhook delivery is disabled for this environment.', entry.destinationId, false))
         if (entry.status === 'skipped') blockers.push(retryQueueBlocker('delivery_skipped', 'Delivery attempt was skipped before external send.', entry.destinationId, true))
         if (entry.dedupe.alreadyDelivered && entry.status === 'skipped') blockers.push(retryQueueBlocker('dedupe_already_delivered', 'This destination already has a delivered attempt for the idempotency key.', entry.destinationId, true))
         if (entry.retry.retryable) blockers.push(retryQueueBlocker('retry_scheduled', 'Delivery is retryable and has retry/backoff metadata.', entry.destinationId, false))
-        if (entry.retry.terminalFailure) blockers.push(retryQueueBlocker('terminal_failure', 'Latest delivery failure is terminal and not eligible for retry.', entry.destinationId, true))
+        if (!destinationUnavailable && entry.retry.terminalFailure) blockers.push(retryQueueBlocker('terminal_failure', 'Latest delivery failure is terminal and not eligible for retry.', entry.destinationId, true))
         if (!entry.deliveryProof.auditEventId) blockers.push(retryQueueBlocker('audit_missing', 'Delivery receipt has no linked audit event yet.', entry.destinationId, false))
         const uniqueBlockers = uniqueRetryQueueBlockers(blockers)
         const blockingCodes = uniqueBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
@@ -1048,7 +1053,7 @@ export function buildDwmWebhookDeliveryReceipts({
                 nextRetryAt: entry.retry.nextRetryAt,
                 attemptCount: retryKey?.retry.persistedAttemptCount || entry.retry.attemptCount,
                 lastErrorCategory: entry.retry.lastErrorCategory,
-                terminalFailure: entry.retry.terminalFailure,
+                terminalFailure: destinationUnavailable ? false : entry.retry.terminalFailure,
             },
             dedupe: {
                 alreadyDelivered: entry.dedupe.alreadyDelivered,
@@ -1259,7 +1264,8 @@ export function buildDwmWebhookDeliveryActionPlan({
     const actions = timeline.timelines.map((item) => {
         const latest = item.latestReceipt
         const retryEntry = latest.idempotencyKey ? retryByIdempotencyKey.get(latest.idempotencyKey) || null : null
-        const destinationDisabled = latest.destination.status && latest.destination.status !== 'active'
+        const destinationDisabled = latest.destinationId && latest.destination.status && latest.destination.status !== 'active'
+        const destinationUnavailable = latest.destination.availability.code === 'destination_unavailable'
         const terminalFailure = item.retry.terminalFailure
         const retryable = item.retry.retryable && retryEntry?.dryRunRequest.canSend === true
         const liveRetryable = item.retry.retryable && retryEntry?.liveRequest.canSend === true
@@ -1268,10 +1274,12 @@ export function buildDwmWebhookDeliveryActionPlan({
             ? 'review_status'
             : retryable
                 ? 'retry_dry_run'
-                : liveRetryable
-                    ? 'retry_live'
-                    : destinationDisabled
-                        ? 'enable_destination'
+            : liveRetryable
+                ? 'retry_live'
+                : destinationDisabled
+                    ? 'enable_destination'
+                    : destinationUnavailable
+                        ? 'configure_destination'
                         : terminalFailure
                             ? 'rotate_or_disable_destination'
                             : delivered
@@ -4720,6 +4728,35 @@ function buildDwmWebhookDeliveryOperationLinks(delivery: DwmWebhookDeliveryPubli
     }
 }
 
+function deliveryDestinationAvailability(attempt: ReturnType<typeof buildDwmWebhookDeliveryLedger>[number]) {
+    if (attempt.destinationId) {
+        return {
+            state: 'configured',
+            code: null,
+            label: null,
+            type: null,
+            status: null,
+            message: 'Webhook destination is configured.',
+            setupRoute: null,
+            requestedDestinationId: null,
+        }
+    }
+
+    const requestedDestination = attempt.redactedDestination.endpointHint === 'requested_destination_not_found'
+    return {
+        state: requestedDestination ? 'requested_destination_not_found' : 'missing_destination',
+        code: 'destination_unavailable',
+        label: requestedDestination ? 'Requested destination unavailable' : 'No webhook destination configured',
+        type: 'webhook',
+        status: 'unavailable',
+        message: requestedDestination
+            ? 'The requested webhook destination is not available for this organization. Choose an active destination or create one before retrying.'
+            : 'No enabled webhook or Discord destination is configured for this organization. Create and test a destination before retrying.',
+        setupRoute: 'POST /api/dwm/webhooks',
+        requestedDestinationId: requestedDestination ? attempt.redactedDestination.endpointHash : null,
+    }
+}
+
 export function buildDwmWebhookDestinationTestContract({
     destination,
     deliveries = [],
@@ -6182,6 +6219,7 @@ function buildIdempotencyKey(eventType: DwmAlertEventType, orgId: string, destin
 }
 
 function deliveryAttemptState(status: DwmWebhookDeliveryPublic['status'], dryRun: boolean): DwmWebhookDeliveryAttemptState {
+    if (status === 'skipped') return 'skipped'
     if (dryRun) return 'queued'
     if (status === 'delivered') return 'sent'
     if (status === 'failed') return 'failed'

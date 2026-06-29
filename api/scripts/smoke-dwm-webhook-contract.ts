@@ -1427,6 +1427,34 @@ const auditDeliveryRows = [
         createdAt: '2026-06-28T12:04:00.000Z',
     },
     {
+        id: 'delivery_missing_destination_contract',
+        destinationId: null,
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        alertId: 'alert_missing_destination_contract',
+        eventType: 'dwm.alert.created' as const,
+        status: 'skipped' as const,
+        dryRun: true,
+        endpointHint: 'no_webhook_destination',
+        endpointHash: 'no_webhook_destination',
+        payloadHash: 'payload_missing_destination_hash',
+        payload: replayPayload,
+        responseStatus: null,
+        responseBody: null,
+        error: 'Delivery selection skipped because no enabled webhook destination is configured for this organization.',
+        errorClass: 'skipped',
+        attemptCount: 1,
+        nextRetryAt: null,
+        idempotencyKey: 'dwm.alert.created:org_contract:missing_destination:dwm_dedupe_missing_destination_contract',
+        watchlistId: 'watchlist_missing_destination_contract',
+        watchlistName: 'Missing destination watchlist',
+        route: 'customer_discord',
+        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        attemptedAt: '2026-06-28T12:13:00.000Z',
+        createdAt: '2026-06-28T12:13:00.000Z',
+        updatedAt: '2026-06-28T12:13:00.000Z',
+    },
+    {
         id: 'delivery_live_test_contract',
         destinationId: 'destination_live_contract',
         ownerId: 'owner_contract',
@@ -1520,6 +1548,22 @@ const auditEventContracts = buildDwmWebhookAuditEventContracts({
             action: 'delivery.failed',
             metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/444444444/${secret}`, error: `token=${secret}` },
             createdAt: '2026-06-28T12:09:01.000Z',
+        },
+        {
+            id: 'audit_missing_destination_contract',
+            ownerId: 'owner_contract',
+            actorId: 'owner_contract',
+            orgId: 'org_contract',
+            destinationId: null,
+            deliveryId: 'delivery_missing_destination_contract',
+            action: 'delivery.skipped',
+            metadata: {
+                status: 'skipped',
+                reason: 'missing_destination',
+                endpointHint: 'no_webhook_destination',
+                payloadHash: 'payload_missing_destination_hash',
+            },
+            createdAt: '2026-06-28T12:13:01.000Z',
         },
     ],
 })
@@ -2709,13 +2753,17 @@ const customerSetupDeliveryStep = customerSetup.setupSteps.find(item => item.id 
 const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
+const deliveryHistoryMissingDestination = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_missing_destination_contract')
 const deliveryReceiptReplay = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryReceiptRetry = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryReceiptTerminal = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_terminal_contract')
+const deliveryReceiptMissingDestination = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_missing_destination_contract')
 const deliveryTimelineReplay = deliveryTimeline.timelines.find(item => item.alertId === 'alert_replay_contract')
 const deliveryTimelineRetry = deliveryTimeline.timelines.find(item => item.dedupeKey === 'dwm_dedupe_live_contract')
+const deliveryTimelineMissingDestination = deliveryTimeline.timelines.find(item => item.alertId === 'alert_missing_destination_contract')
 const deliveryTimelineTerminal = deliveryTimeline.timelines.find(item => item.dedupeKey === 'dwm_dedupe_terminal_contract')
 const deliveryActionRetry = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_live_contract')
+const deliveryActionMissingDestination = deliveryActionPlan.actions.find(item => item.deliveryId === 'delivery_missing_destination_contract')
 const deliveryActionTerminal = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_terminal_contract')
 const deliveryActionDelivered = deliveryActionPlan.actions.find(item => item.dedupeKey === 'dwm_dedupe_sent_contract')
 const replayGuardReplay = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract')
@@ -2730,6 +2778,8 @@ expect(deliveryHistoryReplay?.deliveryProof.auditEventId === 'audit_replay_dupli
 expect(deliveryHistoryReplay?.deliveryProof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery history should expose persisted delivery updated timestamp.', deliveryHistoryReplay?.deliveryProof)
 expect(deliveryHistoryRetry?.retry.retryable === true && deliveryHistoryRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Delivery history should expose retry/backoff state.', deliveryHistoryRetry)
 expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistoryTerminal.retry.lastErrorCategory === 'upstream_4xx', 'Delivery history should expose terminal failure state.', deliveryHistoryTerminal)
+expect(deliveryHistoryMissingDestination?.destination.availability.state === 'missing_destination' && deliveryHistoryMissingDestination.destination.availability.setupRoute === 'POST /api/dwm/webhooks', 'Delivery history should expose setup guidance for missing webhook destination attempts.', deliveryHistoryMissingDestination)
+expect(deliveryHistoryMissingDestination?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract' && deliveryHistoryMissingDestination.deliveryProof.auditEventId === 'audit_missing_destination_contract', 'Missing destination history should preserve sanitized Discord preview and audit proof.', deliveryHistoryMissingDestination)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
 expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.status === 'skipped', 'Delivery history should expose duplicate replay live-send guard skipped attempts.', duplicateReplayGuardHistory)
 expect(duplicateReplayGuardSkipped?.deliveryProof.auditEventId === 'audit_duplicate_replay_skipped_contract' && duplicateReplayGuardSkipped.dedupe.alreadyDelivered === true, 'Duplicate replay guard should link skipped audit and prior delivered idempotency proof.', duplicateReplayGuardSkipped)
@@ -2743,6 +2793,8 @@ expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'D
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
+expect(deliveryReceiptMissingDestination?.destination.availability.code === 'destination_unavailable' && deliveryReceiptMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery receipts should expose typed blockers for missing destination outcomes.', deliveryReceiptMissingDestination)
+expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === null && deliveryReceiptMissingDestination.operationLinks.deliveryHistory.includes('alert_missing_destination_contract'), 'Missing destination receipts should avoid fake destination test links and keep alert-scoped history links.', deliveryReceiptMissingDestination)
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
 expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts should redact endpoint, response, and payload secrets.', deliveryReceipts)
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
@@ -2752,6 +2804,7 @@ expect(deliveryTimelineReplay?.latestReceipt.proof.updatedAt === '2026-06-28T12:
 expect(deliveryTimelineReplay?.operationLinks?.deliveryHistory.includes('destination_replay_contract') && deliveryTimelineReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery timeline should expose stable operation links without requiring consumers to inspect receipt internals.', deliveryTimelineReplay)
 expect(deliveryTimelineRetry?.status === 'retry_scheduled' && deliveryTimelineRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryTimelineRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery timeline should expose retry/backoff state by alert.', deliveryTimelineRetry)
 expect(deliveryTimelineTerminal?.status === 'terminal_failure' && deliveryTimelineTerminal.retry.terminalFailure === true, 'Delivery timeline should expose terminal failure state by alert.', deliveryTimelineTerminal)
+expect(deliveryTimelineMissingDestination?.status === 'skipped' && deliveryTimelineMissingDestination.blockingCodes.includes('destination_unavailable'), 'Delivery timeline should roll up missing destination outcomes as blocked skipped attempts.', deliveryTimelineMissingDestination)
 expect(foreignDeliveryTimeline.timelines.length === 1 && foreignDeliveryTimeline.timelines.every(item => item.orgId === 'org_foreign'), 'Delivery timeline org filter should not leak another org delivery history.', foreignDeliveryTimeline)
 expect(nonmemberDeliveryTimeline.timelines.length === 0 && nonmemberDeliveryTimeline.blockers.some(item => item.code === 'permission_denied'), 'Delivery timeline should deny nonmembers without delivery history leakage.', nonmemberDeliveryTimeline)
 expect(orgAlertDeliveryContract.deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && orgAlertDeliveryContract.deliveryTimeline.timelines.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped delivery timeline.', orgAlertDeliveryContract.deliveryTimeline)
@@ -2762,6 +2815,7 @@ expect(deliveryActionRetry?.requests.liveRetry?.canSend === false && deliveryAct
 expect(deliveryActionRetry?.operationLinks?.retryDryRun === 'POST /api/dwm/webhook-deliveries' && deliveryActionRetry.operationLinks.deliveryDetail.includes('delivery_live_failed_retry_contract'), 'Delivery action plan should expose operation links for dry-run retry and delivery detail.', deliveryActionRetry)
 expect(deliveryActionTerminal?.action === 'rotate_or_disable_destination' && deliveryActionTerminal.audit.nextAction === 'destination.update_requested', 'Delivery action plan should guide terminal failures to destination remediation.', deliveryActionTerminal)
 expect(deliveryActionDelivered?.action === 'monitor' && deliveryActionDelivered.status === 'delivered', 'Delivery action plan should mark delivered attempts as monitor-only.', deliveryActionDelivered)
+expect(deliveryActionMissingDestination?.action === 'configure_destination' && deliveryActionMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery action plan should route missing destination outcomes to destination setup.', deliveryActionMissingDestination)
 expect(nonmemberDeliveryActionPlan.actions.length === 0 && nonmemberDeliveryActionPlan.blockers.some(item => item.code === 'permission_denied'), 'Delivery action plan should deny nonmembers without leaking actions.', nonmemberDeliveryActionPlan)
 expect(orgAlertDeliveryContract.deliveryActionPlan.schemaVersion === 'dwm.webhook.delivery_action_plan.v1' && orgAlertDeliveryContract.deliveryActionPlan.actions.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped delivery action plan.', orgAlertDeliveryContract.deliveryActionPlan)
 expect(!JSON.stringify(deliveryActionPlan).includes(secret), 'Delivery action plan should redact endpoint, response, and payload secrets.', deliveryActionPlan)
@@ -2879,6 +2933,7 @@ console.log(JSON.stringify({
         'disabled destination skip',
         'persistable skipped destination intents',
         'persistable missing destination intent',
+        'missing destination delivery operations proof',
         'org/watchlist context propagation',
         'route/dedupe/case context',
         'alert replay trigger adapter',
