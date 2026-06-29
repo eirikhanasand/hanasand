@@ -5,6 +5,7 @@ import {
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
 } from "../product/sourceProvenanceTiPageContract.ts";
+import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 
 describe("source provenance TI page contract", () => {
   test("builds public TI page provenance payload from fresh source evidence", () => {
@@ -290,6 +291,28 @@ describe("source provenance TI page contract", () => {
       })
     ]);
     expect(candidate.activeTerms[0].alertGeneratorKey).toBe(candidate.activeTerms[0].alertGenerationRef.dedupe.key);
+    const runtimeWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
+      organizationId: candidate.organizationId ?? "",
+      tenantId: candidate.tenantId,
+      activeTerms: candidate.activeTerms,
+      canGenerateAlerts: candidate.canGenerateAlerts,
+      blockedReasons: candidate.blockedReasons
+    });
+    expect(runtimeWatchlists[0]).toMatchObject({
+      id: "watch_public_ti_apt29",
+      organizationId: "org_acme",
+      tenantId: "tenant_acme",
+      status: "active",
+      orgWatchlistTerms: [expect.objectContaining({
+        term: "APT29",
+        termFamily: "actor",
+        alertGeneratorKey: candidate.activeTerms[0].alertGeneratorKey,
+        alertGenerationRef: expect.objectContaining({
+          schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+          organizationId: "org_acme"
+        })
+      })]
+    });
     expect(JSON.stringify(candidate)).not.toContain("rawText");
     expect(JSON.stringify(candidate)).not.toContain("password");
   });
