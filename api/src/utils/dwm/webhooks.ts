@@ -1448,6 +1448,173 @@ export function filterDwmWebhookDestinationHealthForVisibility({
     }
 }
 
+export function buildDwmWebhookDashboardReadinessAdapter({
+    destinations,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    visibility = null,
+    orgStatus = 'active',
+    watchlistStatus = 'active',
+}: {
+    destinations: DwmWebhookDestinationPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    visibility?: DwmWebhookEvidenceVisibilityInput | null
+    orgStatus?: unknown
+    watchlistStatus?: unknown
+}) {
+    const visibilityDecision = visibility ? organizationVisibilityDecision(visibility) : {
+        allowed: true,
+        reason: null,
+        alertVisibilityPolicy: 'members',
+        allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+    }
+    const orgLifecycleStatus = clean(orgStatus).toLowerCase() || 'active'
+    const watchlistLifecycleStatus = clean(watchlistStatus).toLowerCase() || 'active'
+    const orgBlocked = ['archived', 'disabled', 'deleted', 'suspended'].includes(orgLifecycleStatus)
+    const watchlistBlocked = ['archived', 'retired', 'deleted'].includes(watchlistLifecycleStatus)
+    const policyBlockers = [
+        visibilityDecision.allowed ? null : dashboardReadinessBlocker('policy_blocked', 'Destination readiness is not visible for this actor.', null, visibilityDecision.reason || 'permission_denied'),
+        orgBlocked ? dashboardReadinessBlocker('policy_blocked', 'Organization lifecycle blocks webhook delivery.', null, 'org_archived') : null,
+        watchlistBlocked ? dashboardReadinessBlocker('policy_blocked', 'Retired or archived watchlist blocks alert delivery.', null, 'watchlist_retired') : null,
+    ].filter(Boolean) as ReturnType<typeof dashboardReadinessBlocker>[]
+
+    if (!visibilityDecision.allowed) {
+        return {
+            schemaVersion: 'dwm.webhook.dashboard_readiness.v1',
+            liveDeliveryEnabled,
+            visibility: visibilityDecision,
+            orgStatus: orgLifecycleStatus,
+            watchlistStatus: watchlistLifecycleStatus,
+            summary: {
+                destinationCount: 0,
+                verifiedCount: 0,
+                blockedCount: 0,
+                retryScheduledCount: 0,
+                terminalFailureCount: 0,
+                disabledCount: 0,
+                policyBlockedCount: 1,
+            },
+            blockers: policyBlockers,
+            destinations: [],
+        }
+    }
+
+    const destinationHealth = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const retryPersistence = buildDwmWebhookDeliveryRetryPersistence({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const retryKeysByDestination = new Map<string, ReturnType<typeof buildDwmWebhookDeliveryRetryPersistence>['deliveryKeys']>()
+    for (const key of retryPersistence.deliveryKeys) {
+        if (!key.destinationId) continue
+        const keys = retryKeysByDestination.get(key.destinationId) || []
+        keys.push(key)
+        retryKeysByDestination.set(key.destinationId, keys)
+    }
+    const rows = destinationHealth.map((health) => {
+        const retryKeys = retryKeysByDestination.get(health.destinationId) || []
+        const endpointPresent = Boolean(health.redactedEndpoint.endpointHash || health.redactedEndpoint.endpointHint)
+        const latestRetryKey = retryKeys[0] || null
+        const terminalFailure = Boolean(
+            health.lastFailure
+            && !health.lastFailure.retryable
+            && health.lastFailure.errorClass !== 'live_delivery_disabled'
+        ) || retryKeys.some(key => key.retry.terminalFailure)
+        const states = [
+            policyBlockers.length ? 'policy_blocked' : null,
+            !health.enabled ? 'disabled' : null,
+            endpointPresent ? null : 'secret_missing',
+            health.lastTest.status === 'failed' ? 'test_failed' : null,
+            health.retry.retryable ? 'retry_scheduled' : null,
+            terminalFailure ? 'terminal_failure' : null,
+            health.enabled && endpointPresent && health.lastTest.requestId && health.lastTest.status !== 'failed' ? 'verified' : null,
+        ].filter(Boolean) as string[]
+        const blockers = [
+            ...policyBlockers.map(blocker => ({ ...blocker, destinationId: health.destinationId })),
+            !health.enabled ? dashboardReadinessBlocker('disabled', 'Destination is disabled.', health.destinationId, 'destination_disabled') : null,
+            endpointPresent ? null : dashboardReadinessBlocker('secret_missing', 'Destination has no stored webhook URL reference.', health.destinationId, 'secret_missing'),
+            health.lastTest.status === 'failed' ? dashboardReadinessBlocker('test_failed', 'Latest destination test failed.', health.destinationId, 'test_failed') : null,
+            health.retry.retryable ? dashboardReadinessBlocker('retry_scheduled', 'Latest failed delivery has retry/backoff scheduled.', health.destinationId, health.retry.errorClass || 'retry_scheduled', false) : null,
+            terminalFailure ? dashboardReadinessBlocker('terminal_failure', 'Latest delivery failure is not retryable.', health.destinationId, health.lastFailure?.errorClass || latestRetryKey?.retry.lastErrorCategory || 'terminal_failure') : null,
+        ].filter(Boolean) as ReturnType<typeof dashboardReadinessBlocker>[]
+        const healthStatus = dashboardPrimaryHealthStatus(states)
+
+        return {
+            schemaVersion: 'dwm.webhook.dashboard_destination_readiness.v1',
+            orgId: health.orgId,
+            destinationId: health.destinationId,
+            label: health.label,
+            type: health.type,
+            lifecycle: {
+                status: health.status,
+                enabled: health.enabled,
+            },
+            healthStatus,
+            healthStates: [...new Set(states.length ? states : ['unverified'])],
+            readyForDryRun: health.enabled && endpointPresent && !policyBlockers.length,
+            readyForLive: health.ready && liveDeliveryEnabled && !policyBlockers.length,
+            secretState: endpointPresent ? 'redacted' : 'missing',
+            redactedEndpoint: health.redactedEndpoint,
+            latestDeliveryProof: {
+                requestId: health.latestAttempt?.requestId || null,
+                deliveryId: health.latestAttempt?.deliveryId || null,
+                status: health.latestAttempt?.status || null,
+                rawStatus: health.latestAttempt?.rawStatus || null,
+                dryRun: health.latestAttempt?.dryRun ?? null,
+                live: health.latestAttempt?.live ?? null,
+                replay: health.latestAttempt?.replay ?? null,
+                dedupeKey: health.latestAttempt?.dedupeKey || latestRetryKey?.dedupeKey || null,
+                idempotencyKey: health.latestAttempt?.idempotencyKey || latestRetryKey?.idempotencyKey || null,
+                casePath: health.latestAttempt?.casePath || latestRetryKey?.casePath || null,
+                auditEventId: health.latestAttempt?.auditEventId || latestRetryKey?.audit.latestAuditEventId || null,
+                attemptedAt: health.latestAttempt?.attemptedAt || null,
+            },
+            test: {
+                status: health.lastTest.status,
+                requestId: health.lastTest.requestId,
+                auditEventId: health.lastTest.auditEventId,
+                failureReason: health.lastTest.failureReason,
+            },
+            retry: {
+                retryable: health.retry.retryable,
+                nextRetryAt: health.retry.nextRetryAt,
+                attemptCount: health.retry.attemptCount,
+                lastErrorCategory: health.retry.errorClass,
+                terminalFailure,
+            },
+            replay: {
+                duplicateKeyCount: health.idempotencyCoverage.duplicateKeyCount,
+                latestReplayRequestId: health.recentAttempts.find(attempt => attempt.replay)?.requestId || null,
+            },
+            auditEventIds: health.auditEventIds,
+            latestAuditEventId: health.latestAuditEventId,
+            blockers: uniqueDashboardReadinessBlockers(blockers),
+        }
+    })
+
+    return {
+        schemaVersion: 'dwm.webhook.dashboard_readiness.v1',
+        liveDeliveryEnabled,
+        visibility: visibilityDecision,
+        orgStatus: orgLifecycleStatus,
+        watchlistStatus: watchlistLifecycleStatus,
+        summary: {
+            destinationCount: rows.length,
+            verifiedCount: rows.filter(row => row.healthStates.includes('verified')).length,
+            blockedCount: rows.filter(row => row.blockers.some(blocker => blocker.blocking)).length,
+            retryScheduledCount: rows.filter(row => row.healthStates.includes('retry_scheduled')).length,
+            terminalFailureCount: rows.filter(row => row.healthStates.includes('terminal_failure')).length,
+            disabledCount: rows.filter(row => row.healthStates.includes('disabled')).length,
+            policyBlockedCount: rows.filter(row => row.healthStates.includes('policy_blocked')).length,
+        },
+        blockers: uniqueDashboardReadinessBlockers([
+            ...policyBlockers,
+            ...rows.flatMap(row => row.blockers),
+        ]),
+        destinations: rows,
+    }
+}
+
 export function buildDwmWebhookDestinationLifecycle({
     destinations,
     deliveries = [],
@@ -3196,6 +3363,44 @@ function uniqueAlertReadinessBlockers(blockers: ReturnType<typeof alertReadiness
         unique.push(blocker)
     }
     return unique
+}
+
+function dashboardReadinessBlocker(
+    code: string,
+    message: string,
+    destinationId: string | null = null,
+    reason: string | null = null,
+    blocking = true
+) {
+    return { code, message, destinationId, reason, blocking }
+}
+
+function uniqueDashboardReadinessBlockers(blockers: ReturnType<typeof dashboardReadinessBlocker>[]) {
+    const seen = new Set<string>()
+    const unique: ReturnType<typeof dashboardReadinessBlocker>[] = []
+    for (const blocker of blockers) {
+        const key = `${blocker.code}:${blocker.destinationId || ''}:${blocker.reason || ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(blocker)
+    }
+    return unique
+}
+
+function dashboardPrimaryHealthStatus(states: string[]) {
+    const priority = [
+        'policy_blocked',
+        'disabled',
+        'secret_missing',
+        'test_failed',
+        'terminal_failure',
+        'retry_scheduled',
+        'verified',
+    ]
+    for (const status of priority) {
+        if (states.includes(status)) return status
+    }
+    return 'unverified'
 }
 
 function validateWebhookEndpointForContract(rawEndpoint: string) {
