@@ -1350,12 +1350,13 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     const selectedDelivery = latestDeliveryForActionRail(selected, caseDetail, actionDeliveries, orgContext)
     if (selectedDelivery) {
+        const ledgerHref = deliveryLedgerHref(orgContext, selected, selectedDelivery)
         rows.push({
             id: 'open_delivery_ledger',
             label: 'Open delivery ledger',
-            detail: `GET ${deliveryLedgerHref(orgContext)}; selected delivery ${selectedDelivery.id}:${selectedDelivery.status}.`,
+            detail: `GET ${ledgerHref}; selected delivery ${selectedDelivery.id}:${selectedDelivery.status}.`,
             tone: selectedDelivery.status === 'failed' || selectedDelivery.status === 'skipped' ? 'blocked' : 'ready',
-            href: deliveryLedgerHref(orgContext),
+            href: ledgerHref,
         })
     }
     if (activeWebhook && orgContext?.organization) {
@@ -3031,10 +3032,13 @@ function caseExportHref(caseDetailHref: string) {
     return `${path.replace(/\/$/, '')}/export?${params.toString()}`
 }
 
-function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined) {
+function deliveryLedgerHref(orgContext: WorkbenchOrgContext | undefined, selected?: WorkbenchCase, delivery?: WorkbenchDeliveryEvidence | CaseDelivery) {
     const params = new URLSearchParams()
     if (orgContext?.organization?.id || orgContext?.scope.organizationId) params.set('organizationId', orgContext.organization?.id || orgContext.scope.organizationId || '')
     if (orgContext?.scope.tenantId) params.set('tenantId', orgContext.scope.tenantId)
+    if (selected?.kind === 'dwm_alert') params.set('alertId', selected.id)
+    if (delivery?.id) params.set('deliveryId', delivery.id)
+    if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
     const query = params.toString()
     return `/api/dwm/webhooks/deliveries${query ? `?${query}` : ''}`
 }
