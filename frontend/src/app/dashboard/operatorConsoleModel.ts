@@ -305,6 +305,7 @@ export type ProductProgressReadinessPayload = {
         webhookHealth?: string
         dashboardAlerts?: string
         entitlement?: string
+        organizationReadiness?: string
         organizations?: string
         watchlists?: string
         operations?: string

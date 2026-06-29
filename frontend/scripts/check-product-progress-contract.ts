@@ -11,6 +11,7 @@ const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx'
 const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
 const productReadinessRouteSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
+const organizationAlertReadinessRouteSource = readFileSync(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -20,6 +21,7 @@ const routes = {
     deployProbe: '/api/product-progress',
     sourceProxy: '/api/ti/scraper/control?q=LockBit',
     entitlement: '/api/dwm/entitlements/readiness',
+    organizationReadiness: '/api/organizations/org_acme/alert-readiness',
     orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
@@ -353,6 +355,84 @@ assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checke
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).webhookHealth?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).helpdeskAudit?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).dwmProduct?.status, 'ready')
+
+const organizationReadinessProof = {
+    schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
+    organizationId: 'org_acme',
+    tenantId: 'org_acme',
+    actor: { role: 'admin', canExportActiveTerms: true },
+    counts: {
+        activeMemberCount: 4,
+        activeAdminCount: 2,
+        pendingInviteCount: 1,
+        activeWatchlistTermCount: 7,
+        pausedWatchlistCount: 1,
+        archivedWatchlistCount: 0,
+    },
+    readiness: {
+        organizationCanGenerateAlerts: true,
+        actorCanExportActiveTerms: true,
+        readyForWorker3Replay: true,
+        readyForDashboard: true,
+        cleanupRequired: false,
+    },
+    blockers: [],
+} as const
+const organizationProofBackedPayload = buildProductProgressPayload({
+    generatedAt,
+    checkedAt: generatedAt,
+    query: 'watchlist terms',
+    routes,
+    sourceProxy,
+    alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
+    entitlement: {
+        schemaVersion: 'dwm.entitlement.readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: routes.organizationReadiness,
+        href: '/dashboard/dwm',
+        organizationId: 'org_acme',
+        policy: 'organization_readiness',
+        allowed: true,
+        checkedRole: organizationReadinessProof.actor.role,
+        blockers: [],
+        ownerLane: 'org',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'entitlement_readiness',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.actor.canExportActiveTerms and blockers.',
+        backendProofContractVersion: organizationReadinessProof.schemaVersion,
+    },
+    orgAlertExport: {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: routes.organizationReadiness,
+        href: '/dashboard/dwm',
+        organizationId: 'org_acme',
+        activeTermCount: organizationReadinessProof.counts.activeWatchlistTermCount,
+        pausedCount: organizationReadinessProof.counts.pausedWatchlistCount,
+        archivedCount: organizationReadinessProof.counts.archivedWatchlistCount,
+        canGenerateAlerts: true,
+        exportedAt: generatedAt,
+        blockers: [],
+        ownerLane: 'org',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'org_alert_export',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: organizationReadinessProof.schemaVersion,
+    },
+})
+assert.equal(organizationProofBackedPayload.entitlement?.source, routes.organizationReadiness)
+assert.equal(organizationProofBackedPayload.entitlement?.backendProofContractVersion, 'organization.worker3_ui_readiness_proof.v1')
+assert.equal(organizationProofBackedPayload.entitlement?.policy, 'organization_readiness')
+assert.equal(organizationProofBackedPayload.orgAlertExport?.source, routes.organizationReadiness)
+assert.equal(organizationProofBackedPayload.orgAlertExport?.activeTermCount, 7)
+assert.equal(organizationProofBackedPayload.orgAlertExport?.backendProofContractVersion, 'organization.worker3_ui_readiness_proof.v1')
+assert.equal(buildProductProgressExternalState(organizationProofBackedPayload, { checkedAt: generatedAt }).entitlement?.status, 'ready')
+assert.equal(buildProductProgressExternalState(organizationProofBackedPayload, { checkedAt: generatedAt }).orgAlertExport?.status, 'ready')
 const readyContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -520,6 +600,13 @@ for (const scopedProgressToken of [
     '\'userId\'',
     '\'actor\'',
     'orgAlertExportReadiness',
+    'organizationReadinessProof',
+    'entitlementReadinessFromOrganizationProof',
+    'organization.worker3_ui_readiness_proof.v1',
+    '/api/organizations/:id/alert-readiness',
+    'readinessProof.readiness.organizationCanGenerateAlerts',
+    'readinessProof?.readiness.actorCanExportActiveTerms',
+    'readinessProof.actor.canExportActiveTerms',
     'webhookHealthReadiness',
     'helpdeskAuditReadiness',
     'dwmProductReadiness',
@@ -541,6 +628,14 @@ for (const scopedReadinessToken of [
     'actor',
 ]) {
     assert.ok(productReadinessRouteSource.includes(scopedReadinessToken), `Product-readiness route missing scoped bridge token: ${scopedReadinessToken}`)
+}
+
+for (const orgReadinessRouteToken of [
+    '/v1/organizations/${encodeURIComponent(id)}/alert-readiness',
+    'proxyTiRequest',
+    'force-dynamic',
+]) {
+    assert.ok(organizationAlertReadinessRouteSource.includes(orgReadinessRouteToken), `Organization alert-readiness proxy missing token: ${orgReadinessRouteToken}`)
 }
 
 for (const visibleExample of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {

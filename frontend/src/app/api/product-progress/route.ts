@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
-import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
     const organizationWebhooks = selectedOrganization
         ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks`)
         : { ok: false, status: 0, error: 'No selected organization available for webhook readiness.' }
+    const organizationReadiness = selectedOrganization
+        ? await fetchInternalJson(request, `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness`)
+        : { ok: false, status: 0, error: 'No selected organization available for organization readiness.' }
+    const organizationProof = organizationReadinessProof(organizationReadiness)
     const deliveryRows = rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
     const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
@@ -48,12 +52,20 @@ export async function GET(request: NextRequest) {
         deliveries: deliveryRows,
         orgAlertExport: orgAlertExportReadiness({
             generatedAt,
-            route: routes.orgAlertExport || '/api/dwm/watchlists',
+            route: selectedOrganization ? `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness` : routes.orgAlertExport || '/api/dwm/watchlists',
             organization: selectedOrganization,
             watchlists: watchlistRows,
             fetchOk: watchlists.ok,
             fetchStatus: watchlists.status,
             fetchError: watchlists.error,
+            readinessProof: organizationProof,
+        }),
+        entitlement: entitlementReadinessFromOrganizationProof({
+            generatedAt,
+            route: selectedOrganization ? `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness` : routes.organizationReadiness || '/api/organizations/:id/alert-readiness',
+            organization: selectedOrganization,
+            fetch: organizationReadiness,
+            readinessProof: organizationProof,
         }),
         webhookHealth: webhookHealthReadiness({
             generatedAt,
@@ -94,6 +106,7 @@ function productProgressRoutes(query: string) {
         deployProbe: '/api/product-progress',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
         entitlement: '/api/dwm/entitlements/readiness',
+        organizationReadiness: '/api/organizations/:id/alert-readiness',
         orgAlertExport: '/api/dwm/watchlists',
         webhookHealth: '/api/organizations/:id/webhooks',
         dashboardAlerts: '/api/dwm/alerts',
@@ -186,14 +199,19 @@ function orgAlertExportReadiness(input: {
     fetchOk: boolean
     fetchStatus: number
     fetchError?: string
+    readinessProof?: OrganizationWorker3ReadinessProof
 }): OrganizationAlertExportReadiness {
     const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
     const activeTermCount = activeWatchlists.reduce((sum, item) => sum + (item.terms || []).length, 0)
+    const proofTermCount = input.readinessProof?.counts.activeWatchlistTermCount
+    const canGenerateAlerts = input.readinessProof?.readiness.organizationCanGenerateAlerts ?? blockersFromProof(input.readinessProof).length === 0
+    const normalizedTermCount = typeof proofTermCount === 'number' ? proofTermCount : activeTermCount
     const blockers = [
         input.organization ? '' : 'No selected organization was loaded for watchlist export readiness.',
-        input.fetchOk ? '' : input.fetchError || `Watchlist route returned HTTP ${input.fetchStatus}.`,
-        activeWatchlists.length ? '' : 'No active shared watchlist was returned for this scope.',
-        activeTermCount > 0 ? '' : 'No active watchlist terms were returned for alert generation.',
+        input.readinessProof || input.fetchOk ? '' : input.fetchError || `Watchlist route returned HTTP ${input.fetchStatus}.`,
+        canGenerateAlerts ? '' : 'Organization readiness proof does not allow alert generation.',
+        normalizedTermCount > 0 ? '' : 'No active watchlist terms were returned for alert generation.',
+        ...blockersFromProof(input.readinessProof).filter(blocker => blocker !== 'role_not_allowed'),
     ].filter(Boolean)
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
@@ -202,9 +220,9 @@ function orgAlertExportReadiness(input: {
         source: input.route,
         href: '/dashboard/dwm',
         organizationId: input.organization?.id,
-        activeTermCount,
-        pausedCount: input.watchlists.filter(item => item.status === 'paused').length,
-        archivedCount: 0,
+        activeTermCount: normalizedTermCount,
+        pausedCount: input.readinessProof?.counts.pausedWatchlistCount ?? input.watchlists.filter(item => item.status === 'paused').length,
+        archivedCount: input.readinessProof?.counts.archivedWatchlistCount ?? 0,
         canGenerateAlerts: blockers.length === 0,
         exportedAt: input.generatedAt,
         blockers,
@@ -213,9 +231,89 @@ function orgAlertExportReadiness(input: {
         staleAfterSeconds: 900,
         proofTimestamp: input.generatedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/dwm/watchlists with org scope must return active shared terms that can generate alerts.',
-        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
-        detail: blockers.length ? blockers.join('; ') : `${activeTermCount} active shared watchlist term${activeTermCount === 1 ? '' : 's'} loaded for alert generation.`,
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: input.readinessProof?.schemaVersion || 'organization.watchlist_alert_terms_export.v1',
+        detail: blockers.length ? blockers.join('; ') : `${normalizedTermCount} active shared watchlist term${normalizedTermCount === 1 ? '' : 's'} loaded for alert generation.`,
+    }
+}
+
+type OrganizationWorker3ReadinessProof = {
+    schemaVersion: 'organization.worker3_ui_readiness_proof.v1'
+    organizationId?: string
+    tenantId?: string
+    actor?: {
+        role?: string
+        canExportActiveTerms?: boolean
+    }
+    counts: {
+        activeMemberCount?: number
+        activeAdminCount?: number
+        pendingInviteCount?: number
+        activeWatchlistTermCount?: number
+        pausedWatchlistCount?: number
+        archivedWatchlistCount?: number
+    }
+    readiness: {
+        organizationCanGenerateAlerts?: boolean
+        actorCanExportActiveTerms?: boolean
+        readyForWorker3Replay?: boolean
+        readyForDashboard?: boolean
+        cleanupRequired?: boolean
+    }
+    blockers?: string[]
+}
+
+function organizationReadinessProof(result: FetchResult): OrganizationWorker3ReadinessProof | undefined {
+    const payload = result.json as { alertReadiness?: { readinessProof?: unknown } } | undefined
+    const proof = payload?.alertReadiness?.readinessProof
+    if (!proof || typeof proof !== 'object') return undefined
+    const candidate = proof as Partial<OrganizationWorker3ReadinessProof>
+    if (candidate.schemaVersion !== 'organization.worker3_ui_readiness_proof.v1') return undefined
+    if (!candidate.counts || typeof candidate.counts !== 'object') return undefined
+    if (!candidate.readiness || typeof candidate.readiness !== 'object') return undefined
+    return candidate as OrganizationWorker3ReadinessProof
+}
+
+function blockersFromProof(proof: OrganizationWorker3ReadinessProof | undefined) {
+    return Array.isArray(proof?.blockers) ? proof.blockers.filter(Boolean).map(String) : []
+}
+
+function entitlementReadinessFromOrganizationProof(input: {
+    generatedAt: string
+    route: string
+    organization?: DwmOrganizationSummary
+    fetch: FetchResult
+    readinessProof?: OrganizationWorker3ReadinessProof
+}): EntitlementReadiness {
+    const proofBlockers = blockersFromProof(input.readinessProof)
+    const allowed = input.readinessProof?.readiness.actorCanExportActiveTerms === true
+    const blockers = [
+        input.organization ? '' : 'No selected organization was loaded for entitlement readiness.',
+        input.readinessProof || input.fetch.ok ? '' : input.fetch.error || `Organization readiness route returned HTTP ${input.fetch.status}.`,
+        input.readinessProof ? '' : 'Organization readiness proof was not returned.',
+        allowed ? '' : 'Organization readiness proof does not allow this actor to export active watchlist terms.',
+        ...proofBlockers,
+    ].filter(Boolean)
+    const role = input.readinessProof?.actor?.role || 'unknown'
+    return {
+        schemaVersion: 'dwm.entitlement.readiness.v1',
+        status: blockers.length ? 'blocked' : 'ready',
+        checkedAt: input.generatedAt,
+        source: input.route,
+        href: '/dashboard/dwm',
+        organizationId: input.organization?.id || input.readinessProof?.organizationId,
+        policy: 'organization_readiness',
+        allowed,
+        checkedRole: role,
+        blockers,
+        ownerLane: 'org',
+        unavailableReason: blockers.length ? 'missing_dwm_entitlement_readiness_api' : undefined,
+        staleAfterSeconds: 900,
+        proofTimestamp: input.generatedAt,
+        expectedDashboardRowId: 'entitlement_readiness',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.actor.canExportActiveTerms and blockers.',
+        backendProofContractVersion: input.readinessProof?.schemaVersion || 'dwm.entitlement.readiness.v1',
+        detail: blockers.length ? blockers.join('; ') : `Organization readiness allows ${role} to export active watchlist terms.`,
     }
 }
 
