@@ -6664,6 +6664,7 @@ function supportRecentAuditTimeline(filters: Record<string, unknown>, rows: Reco
         reason: event.reason,
         before: event.before,
         after: event.after,
+        actionEvidence: event.actionEvidence,
         context: event.context,
         links: event.links,
     }))
@@ -7032,8 +7033,8 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             detailRoutes: timeline.map(event => event.links?.detail).filter(Boolean),
         },
         timelineShape: {
-            requiredFields: ['id', 'timestamp', 'actionType', 'severity', 'outcome', 'actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason'],
-            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract'],
+            requiredFields: ['id', 'timestamp', 'actionType', 'severity', 'outcome', 'actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason', 'actionEvidence'],
+            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract', 'actionEvidenceRollup'],
             redactionRequired: true,
         },
         exampleQueries: {
@@ -7141,6 +7142,7 @@ function supportAuditEventIntegrationFixture(input: {
             'requestId',
             'reason',
             'timestamp',
+            'actionEvidence',
         ],
         assertions: {
             reasonRequiredForSupportActions: true,
@@ -7381,6 +7383,7 @@ function auditTimelineSummary(timeline: Array<Record<string, any>>) {
         actorIds: uniqueTimelineValues(timeline.map(event => event.actor?.id)),
         entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
         entityLinkRollup: supportAuditEntityLinkRollup(timeline),
+        actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
     }
 }
 
@@ -7395,6 +7398,7 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
         redacted: true,
         redactedSummary: supportAuditRedactedSummary(timeline),
         entityLinkRollup: supportAuditEntityLinkRollup(timeline),
+        actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
         filterReadiness: supportAuditFilterReadiness(filters, timeline),
         stableRequestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
         correlationIds: uniqueTimelineValues(timeline.map(event => event.context?.correlationId || event.requestId)),
@@ -7668,6 +7672,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
         blockers,
         redactedSummary: summary,
         entityLinkRollup: supportAuditEntityLinkRollup(timeline),
+        actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
         copyText: [
             'Support audit export proof',
             `Replay: ${replayQuery}`,
@@ -7726,6 +7731,7 @@ function supportAuditCompliancePacket(filters: Record<string, unknown>, timeline
             requestIds: summary.requestIds,
             reasonsPresent,
             entityLinks: supportAuditEntityLinkRollup(timeline),
+            actionEvidence: supportAuditActionEvidenceRollup(timeline),
         },
         redactionAttestation: {
             contextRedacted: true,
@@ -7737,6 +7743,7 @@ function supportAuditCompliancePacket(filters: Record<string, unknown>, timeline
             'audit_unavailable',
             'event_id_unavailable',
             'missing_reason_on_some_events',
+            'missing_action_evidence',
             'redaction_required',
         ],
         blockers,
@@ -7763,8 +7770,70 @@ function supportAuditRedactedSummary(timeline: Array<Record<string, any>>) {
         entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
         requestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
         reasonsPresent: timeline.filter(event => Boolean(event.reason)).length,
+        actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
         entityLinks: supportAuditEntityLinkRollup(timeline),
         contextsRedacted: true,
+    }
+}
+
+function supportAuditActionEvidenceRollup(timeline: Array<Record<string, any>>) {
+    const evidence = timeline
+        .map(event => event.actionEvidence)
+        .filter(item => item && typeof item === 'object') as Array<Record<string, any>>
+    const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const missingEvidenceEventIds = timeline
+        .filter(event => !event.actionEvidence)
+        .map(event => event.id)
+        .filter((id): id is number => Number.isFinite(id))
+    const evidenceBlockers = uniqueTimelineValues(evidence.flatMap(item => Array.isArray(item.blockers) ? item.blockers : []))
+    const reasonMissingEventIds = evidence
+        .filter(item => item.controls?.reasonRequired && !item.reasonPresent)
+        .map(item => Number(timeline.find(event => event.actionEvidence === item)?.id))
+        .filter((id): id is number => Number.isFinite(id))
+    const scopeMissingEventIds = evidence
+        .filter(item => item.controls?.scopeRequired && !item.scope)
+        .map(item => Number(timeline.find(event => event.actionEvidence === item)?.id))
+        .filter((id): id is number => Number.isFinite(id))
+    const durationMissingEventIds = evidence
+        .filter(item => item.controls?.durationOrExpiryRequired && !item.durationMinutes && !item.expiresAt)
+        .map(item => Number(timeline.find(event => event.actionEvidence === item)?.id))
+        .filter((id): id is number => Number.isFinite(id))
+
+    return {
+        schemaVersion: 'support.audit.action_evidence_rollup.v1',
+        eventCount: timeline.length,
+        evidenceCount: evidence.length,
+        eventIds,
+        workflows: uniqueTimelineValues(evidence.map(item => item.workflow)),
+        actionTypes: uniqueTimelineValues(evidence.map(item => item.actionType)),
+        outcomes: uniqueTimelineValues(evidence.map(item => item.outcome)),
+        supportSessionIds: uniqueTimelineValues(evidence.map(item => item.supportSessionId)),
+        idempotencyKeys: uniqueTimelineValues(evidence.map(item => item.idempotencyKey)),
+        reasonRequiredCount: evidence.filter(item => item.controls?.reasonRequired).length,
+        reasonPresentCount: evidence.filter(item => item.reasonPresent).length,
+        scopeRequiredCount: evidence.filter(item => item.controls?.scopeRequired).length,
+        durationOrExpiryRequiredCount: evidence.filter(item => item.controls?.durationOrExpiryRequired).length,
+        missingEvidenceEventIds,
+        reasonMissingEventIds,
+        scopeMissingEventIds,
+        durationMissingEventIds,
+        blockerCodes: evidenceBlockers,
+        blockers: [
+            missingEvidenceEventIds.length ? 'missing_action_evidence' : '',
+            reasonMissingEventIds.length ? 'missing_reason_on_source_event' : '',
+            scopeMissingEventIds.length ? 'missing_scope_on_source_event' : '',
+            durationMissingEventIds.length ? 'missing_duration_or_expiry_on_source_event' : '',
+            'redaction_required',
+        ].filter(Boolean),
+        redacted: true,
+        copyText: [
+            'Support audit action evidence rollup',
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Evidence: ${evidence.length}/${timeline.length}`,
+            `Missing reason: ${reasonMissingEventIds.join(', ') || 'none'}`,
+            `Missing scope: ${scopeMissingEventIds.join(', ') || 'none'}`,
+            `Missing duration/expiry: ${durationMissingEventIds.join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
