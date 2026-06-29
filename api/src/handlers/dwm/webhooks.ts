@@ -26,6 +26,7 @@ import {
     buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDeliveryRetryQueue,
     buildDwmWebhookDeliveryRetryRequestContract,
+    buildDwmWebhookDeliveryRetryWorkOrders,
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
     createDwmWebhookDestination,
@@ -133,6 +134,20 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
                 : null,
         }),
         deliveryRetryRequest: buildDwmWebhookDeliveryRetryRequestContract({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: membership?.role,
+                    status: 'active',
+                    userActive: true,
+                    alertVisibilityPolicy: membership?.alert_visibility_policy,
+                }
+                : null,
+        }),
+        deliveryRetryWorkOrders: buildDwmWebhookDeliveryRetryWorkOrders({
             destinations,
             deliveries,
             auditEvents,
@@ -587,6 +602,37 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                     }
                     : null,
             }),
+        deliveryRetryWorkOrders: visibilityResult && !visibilityResult.decision.allowed
+            ? buildDwmWebhookDeliveryRetryWorkOrders({
+                deliveries: [],
+                auditEvents: [],
+                destinations: [],
+                filters: deliveryFilters,
+                ...destinationLifecycleAccess(orgId, userId, visibility),
+                visibility: orgId && orgId !== userId
+                    ? {
+                        role: visibility?.role,
+                        status: visibility?.status,
+                        userActive: visibility?.user_active,
+                        alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                    }
+                    : null,
+            })
+            : buildDwmWebhookDeliveryRetryWorkOrders({
+                deliveries,
+                auditEvents,
+                destinations,
+                filters: deliveryFilters,
+                ...destinationLifecycleAccess(orgId, userId, visibility),
+                visibility: orgId && orgId !== userId
+                    ? {
+                        role: visibility?.role,
+                        status: visibility?.status,
+                        userActive: visibility?.user_active,
+                        alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                    }
+                    : null,
+            }),
         destinationDeliveryMatrix: buildDwmWebhookDestinationDeliveryMatrix({
             deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
             auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
@@ -753,6 +799,20 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             canManage: true,
         }),
         deliveryRetryRequest: buildDwmWebhookDeliveryRetryRequestContract({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+            viewerRole: 'admin',
+            canManage: true,
+        }),
+        deliveryRetryWorkOrders: buildDwmWebhookDeliveryRetryWorkOrders({
             deliveries: ledgerDeliveries,
             auditEvents,
             destinations,

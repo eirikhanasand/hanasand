@@ -22,6 +22,7 @@ import {
     buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDeliveryRetryQueue,
     buildDwmWebhookDeliveryRetryRequestContract,
+    buildDwmWebhookDeliveryRetryWorkOrders,
     buildDwmWebhookDestinationContracts,
     filterDwmWebhookDeliveryEvidenceForVisibility,
     filterDwmWebhookDestinationHealthForVisibility,
@@ -1825,6 +1826,16 @@ const deliveryRetryRequest = buildDwmWebhookDeliveryRetryRequestContract({
     canManage: true,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const deliveryRetryWorkOrders = buildDwmWebhookDeliveryRetryWorkOrders({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const memberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -1845,6 +1856,16 @@ const memberDeliveryRetryRequest = buildDwmWebhookDeliveryRetryRequestContract({
     canManage: false,
     visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const memberDeliveryRetryWorkOrders = buildDwmWebhookDeliveryRetryWorkOrders({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'member',
+    canManage: false,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const nonmemberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -1856,6 +1877,16 @@ const nonmemberDeliveryRetryQueue = buildDwmWebhookDeliveryRetryQueue({
     visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
 })
 const nonmemberDeliveryRetryRequest = buildDwmWebhookDeliveryRetryRequestContract({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDeliveryRetryWorkOrders = buildDwmWebhookDeliveryRetryWorkOrders({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
     deliveries: auditDeliveryRows,
@@ -2333,6 +2364,9 @@ const queuedDeliveredEntry = deliveryRetryQueue.entries.find(item => item.idempo
 const queuedTerminalEntry = deliveryRetryQueue.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
 const retryRequestEntry = deliveryRetryRequest.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract')
 const deliveredRetryRequestEntry = deliveryRetryRequest.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+const retryWorkOrder = deliveryRetryWorkOrders.workOrders.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_live_contract:dwm_dedupe_live_contract')
+const deliveredRetryWorkOrder = deliveryRetryWorkOrders.workOrders.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
+const terminalRetryWorkOrder = deliveryRetryWorkOrders.workOrders.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
 const matrixReplayDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const matrixRetryDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_live_contract')
 const matrixDisabledDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -2359,6 +2393,14 @@ expect(deliveredRetryRequestEntry?.dryRunRequest.canSend === false && deliveredR
 expect(memberDeliveryRetryRequest.entries.some(item => item.dryRunRequest.canSend === false && item.blockers.some(blocker => blocker.code === 'permission_denied')) && memberDeliveryRetryRequest.access.memberSafe === true, 'Delivery retry request should expose read-only member proof without retry permission.', memberDeliveryRetryRequest)
 expect(nonmemberDeliveryRetryRequest.entries.length === 0 && nonmemberDeliveryRetryRequest.blockers.some(item => item.code === 'permission_denied'), 'Delivery retry request should deny nonmembers without leaking retry actions.', nonmemberDeliveryRetryRequest)
 expect(!JSON.stringify(deliveryRetryRequest).includes(secret), 'Delivery retry request should redact endpoint, response, and error secrets.', deliveryRetryRequest)
+expect(deliveryRetryWorkOrders.schemaVersion === 'dwm.webhook.delivery_retry_work_orders.v1' && deliveryRetryWorkOrders.noNetwork === true && deliveryRetryWorkOrders.counts.dryRunReady >= 1, 'Delivery retry work orders should expose no-network retry operations.', deliveryRetryWorkOrders)
+expect(retryWorkOrder?.state === 'dry_run_ready' && retryWorkOrder.eligibility.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryWorkOrder.audit.nextAction === 'delivery.retry_requested', 'Delivery retry work orders should mark retryable failures as dry-run ready with audit action hints.', retryWorkOrder)
+expect(retryWorkOrder?.request.dryRunBody.destinationId === 'destination_live_contract' && retryWorkOrder.request.dryRunBody.dedupeKey === 'dwm_dedupe_live_contract' && retryWorkOrder.worker3Proof.expectedDryRunStatus === 'dry_run', 'Delivery retry work orders should carry safe retry request proof for Worker 3.', retryWorkOrder)
+expect(deliveredRetryWorkOrder?.state === 'already_delivered' && deliveredRetryWorkOrder.audit.nextAction === 'delivery.retry_skipped_duplicate', 'Delivery retry work orders should preserve duplicate live-send protection.', deliveredRetryWorkOrder)
+expect(terminalRetryWorkOrder?.state === 'terminal_failure' && terminalRetryWorkOrder.eligibility.terminalFailure === true && terminalRetryWorkOrder.audit.nextAction === 'delivery.retry_terminal_failure', 'Delivery retry work orders should separate terminal failures from retryable failures.', terminalRetryWorkOrder)
+expect(memberDeliveryRetryWorkOrders.workOrders.some(item => item.state === 'permission_denied') && memberDeliveryRetryWorkOrders.access.memberSafe === true, 'Delivery retry work orders should keep members read-only without retry actions.', memberDeliveryRetryWorkOrders)
+expect(nonmemberDeliveryRetryWorkOrders.workOrders.length === 0 && nonmemberDeliveryRetryWorkOrders.blockers.some(item => item.code === 'permission_denied'), 'Delivery retry work orders should deny nonmembers without leaking work orders.', nonmemberDeliveryRetryWorkOrders)
+expect(!JSON.stringify(deliveryRetryWorkOrders).includes(secret), 'Delivery retry work orders should redact endpoint, response, and error secrets.', deliveryRetryWorkOrders)
 expect(destinationDeliveryMatrix.schemaVersion === 'dwm.webhook.destination_delivery_matrix.v1' && destinationDeliveryMatrix.summary.destinationCount === operationDestinations.length, 'Destination delivery matrix should summarize org destinations.', destinationDeliveryMatrix)
 expect(matrixReplayDestination?.eventCoverage.replayed === true && matrixReplayDestination.deliveryProof.lastReplayed?.requestId === 'delivery_replay_duplicate_contract', 'Destination delivery matrix should expose replay delivery proof by destination.', matrixReplayDestination)
 expect(matrixReplayDestination?.routes.test === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && matrixReplayDestination.audit.auditEventContracts.length > 0, 'Destination delivery matrix should expose route hints and admin audit contracts.', matrixReplayDestination)
@@ -2520,6 +2562,11 @@ console.log(JSON.stringify({
         'delivery retry queue delivered/terminal blockers',
         'delivery retry queue member/nonmember gates',
         'delivery retry queue secret redaction',
+        'delivery retry work orders dry-run readiness',
+        'delivery retry work orders duplicate protection',
+        'delivery retry work orders terminal failure state',
+        'delivery retry work orders member/nonmember gates',
+        'delivery retry work orders secret redaction',
         'destination delivery matrix route hints',
         'destination delivery matrix replay/test proof',
         'destination delivery matrix retry/disabled blockers',
@@ -2616,6 +2663,11 @@ console.log(JSON.stringify({
             'deliveryRetryRequest.entries[].dryRunRequest.body.dedupeKey',
             'deliveryRetryRequest.entries[].liveRequest.blockers[].code',
             'deliveryRetryRequest.entries[].externalSendEnabled',
+            'deliveryRetryWorkOrders.schemaVersion',
+            'deliveryRetryWorkOrders.workOrders[].state',
+            'deliveryRetryWorkOrders.workOrders[].eligibility.nextRetryAt',
+            'deliveryRetryWorkOrders.workOrders[].audit.nextAction',
+            'deliveryRetryWorkOrders.workOrders[].worker3Proof.expectedDryRunStatus',
             'destinationDeliveryMatrix.schemaVersion',
             'destinationDeliveryMatrix.routes.deliveryList',
             'destinationDeliveryMatrix.destinations[].deliveryProof.lastReplayed.requestId',
