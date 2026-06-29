@@ -1981,7 +1981,7 @@ function EmptyWorkspace() {
     )
 }
 
-function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[], compact: boolean }) {
+function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, orgContext, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext?: WorkbenchOrgContext, compact: boolean }) {
     const localDeliveries = item.deliveryEvidence || []
     const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
     const deliveries = detailDeliveries.length ? detailDeliveries : mergeDeliveryEvidence(actionDeliveries, localDeliveries)
@@ -2059,7 +2059,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, com
                             </div>
                         </>
                     ) : null}
-                    <DeliveryEvidenceRows deliveries={deliveries} />
+                    <DeliveryEvidenceRows deliveries={deliveries} selected={item} orgContext={orgContext} />
                 </div>
                 <div className='grid gap-3'>
                     {caseDetail?.status === 'ready' && (
@@ -2092,7 +2092,7 @@ function InspectionNotice({ tone, title, body }: { tone: 'neutral' | 'blocked', 
     )
 }
 
-function DeliveryEvidenceRows({ deliveries }: { deliveries: Array<WorkbenchDeliveryEvidence | CaseDelivery> }) {
+function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries: Array<WorkbenchDeliveryEvidence | CaseDelivery>, selected: WorkbenchCase, orgContext?: WorkbenchOrgContext }) {
     if (!deliveries.length) {
         return (
             <InspectionNotice
@@ -2107,23 +2107,31 @@ function DeliveryEvidenceRows({ deliveries }: { deliveries: Array<WorkbenchDeliv
         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
             <h4 className='text-sm font-semibold text-[#171a21]'>Webhook delivery evidence</h4>
             <div className='mt-3 grid gap-2'>
-                {deliveries.map(delivery => (
-                    <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            <span className='font-mono text-xs font-semibold text-[#171a21]'>{delivery.id}</span>
-                            <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
-                            {delivery.deliveryKind && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{delivery.deliveryKind}</span>}
+                {deliveries.map(delivery => {
+                    const ledgerHref = deliveryLedgerHref(orgContext, selected, delivery)
+                    return (
+                        <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <div className='flex min-w-0 flex-wrap items-center gap-2'>
+                                    <span className='font-mono text-xs font-semibold text-[#171a21]'>{delivery.id}</span>
+                                    <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
+                                    {delivery.deliveryKind && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{delivery.deliveryKind}</span>}
+                                </div>
+                                <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                                    Open ledger
+                                </Link>
+                            </div>
+                            <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                                <p><span className='font-semibold text-[#475467]'>Alert:</span> {delivery.alertId}</p>
+                                <p><span className='font-semibold text-[#475467]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
+                                <p><span className='font-semibold text-[#475467]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
+                                {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#475467]'>HTTP:</span> {delivery.httpStatus}</p>}
+                            </div>
+                            <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
+                            {delivery.error && <p className='mt-2 text-xs font-semibold text-[#9a3412]'>{delivery.error}</p>}
                         </div>
-                        <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                            <p><span className='font-semibold text-[#475467]'>Alert:</span> {delivery.alertId}</p>
-                            <p><span className='font-semibold text-[#475467]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
-                            <p><span className='font-semibold text-[#475467]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
-                            {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#475467]'>HTTP:</span> {delivery.httpStatus}</p>}
-                        </div>
-                        <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
-                        {delivery.error && <p className='mt-2 text-xs font-semibold text-[#9a3412]'>{delivery.error}</p>}
-                    </div>
-                ))}
+                    )
+                })}
             </div>
         </div>
     )
@@ -2627,7 +2635,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 </section>
             ) : null}
 
-            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} actionDeliveries={actionDeliveries} compact={compact} />
+            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} actionDeliveries={actionDeliveries} orgContext={orgContext} compact={compact} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
