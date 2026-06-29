@@ -242,6 +242,7 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
     : ageMinutes !== undefined && ageMinutes > staleAfterMinutes
       ? "stale"
       : "fresh";
+  const sourceHealth = buildDwmSourceHealthOperationsSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt });
   const snapshot = {
     schemaVersion: "dwm.source_pack_worker_readiness.v1",
     generatedAt,
@@ -267,7 +268,8 @@ export function buildDwmSourcePackWorkerReadinessSnapshot(
       collectionReadyRows: workerState.readiness.collectionReadyRows
     },
     workerReadiness: workerState.readiness,
-    sourceHealth: buildDwmSourceHealthOperationsSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt }),
+    sourceHealth,
+    sourceOperationsReadiness: buildDwmSourceOperationsReadinessSnapshot(packs, options, { freshness, staleAfterMinutes, generatedAt, sourceHealth }),
     parserSourceFamilyCounts: growth.parserSourceFamilyCounts,
     sourceFamilyCounts: growth.sourceFamilyCounts,
     redactedSourcePackIds: packs.map((pack) => ({
@@ -319,6 +321,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
   counters: Record<string, number>;
   workerReadiness: Record<string, any>;
   sourceHealth: Record<string, any>;
+  sourceOperationsReadiness: Record<string, any>;
   parserSourceFamilyCounts: Record<string, Record<string, number>>;
   sourceFamilyCounts: Record<string, unknown>;
   redactedSourcePackIds: Array<{ id: string; safeRef: string; rawTargetsExposed: boolean }>;
@@ -339,6 +342,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
     verificationCheck("queue_counters_present", Number.isFinite(snapshot.counters.queuedCollectionTasks), snapshot.counters.queuedCollectionTasks ?? "missing"),
     verificationCheck("source_health_present", snapshot.sourceHealth.schemaVersion === "dwm.source_health_operations.v1", snapshot.sourceHealth.schemaVersion),
     verificationCheck("source_health_blockers_typed", Array.isArray(snapshot.sourceHealth.typedBlockers), snapshot.sourceHealth.typedBlockers?.length ?? "missing"),
+    verificationCheck("source_operations_readiness_present", snapshot.sourceOperationsReadiness.schemaVersion === "dwm.source_operations_readiness.v1", snapshot.sourceOperationsReadiness.schemaVersion),
+    verificationCheck("source_operations_next_actions_present", Array.isArray(snapshot.sourceOperationsReadiness.nextOperatorActions), snapshot.sourceOperationsReadiness.nextOperatorActions?.length ?? "missing"),
     verificationCheck("parser_family_counts_present", Object.keys(snapshot.parserSourceFamilyCounts).length > 0, Object.keys(snapshot.parserSourceFamilyCounts)),
     verificationCheck("source_family_counts_present", Object.keys(snapshot.sourceFamilyCounts).length > 0, Object.keys(snapshot.sourceFamilyCounts)),
     verificationCheck("pack_ids_redacted", snapshot.redactedSourcePackIds.every((pack) => pack.safeRef && pack.rawTargetsExposed === false), snapshot.redactedSourcePackIds.length),
@@ -368,6 +373,9 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourceInventory.sourcePackWorker.sourceHealth.family.telegram",
       "sourceInventory.sourcePackWorker.sourceHealth.typedBlockers[].code",
       "sourceInventory.sourcePackWorker.sourceHealth.lastWorkerReceipt",
+      "sourceInventory.sourcePackWorker.sourceOperationsReadiness.actionability.canRetry",
+      "sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions[].action",
+      "sourceInventory.sourcePackWorker.sourceOperationsReadiness.lastActionIds[]",
       "sourceInventory.sourcePackWorker.parserSourceFamilyCounts",
       "sourceInventory.sourcePackWorker.sourceFamilyCounts",
       "sourceInventory.sourcePackWorker.rejectedCandidates[].targetRef.rawStored",
@@ -375,6 +383,7 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       "sourceInventory.sourcePackWorker.safeOutput.liveNetworkScrapeStarted",
       "sourcePacks.workerReadiness.activeSourceRows",
       "sourcePacks.sourceHealth.typedBlockers",
+      "sourcePacks.sourceOperationsReadiness.summary.candidateCount",
       "sourcePacks.readiness.state",
       "sourcePacks.proxyVerification.state"
     ],
@@ -388,6 +397,8 @@ function buildDwmSourcePackWorkerProxyVerification(snapshot: {
       ".sourceInventory.sourcePackWorker.rejectedCandidates | all(.targetRef.rawStored == false)",
       ".sourceInventory.sourcePackWorker.sourceHealth.safeOutput.liveNetworkScrapeStarted == false",
       ".sourceInventory.sourcePackWorker.sourceHealth.typedBlockers | all(has(\"code\") and has(\"severity\"))",
+      ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.schemaVersion == \"dwm.source_operations_readiness.v1\"",
+      ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions | all(has(\"action\") and has(\"reason\"))",
       ".sourcePacks.proxyVerification.checks | any(.id == \"safe_output_no_live_network\" and .status == \"pass\")"
     ],
     blockers: snapshot.readiness.blockers,
@@ -496,6 +507,165 @@ function buildDwmSourceHealthOperationsSnapshot(
       restrictedPayloadDownloadAllowed: false
     }
   };
+}
+
+function buildDwmSourceOperationsReadinessSnapshot(
+  packs: SourcePackRegistry[],
+  options: ApiServerOptions,
+  input: { freshness: string; staleAfterMinutes: number; generatedAt: string; sourceHealth: Record<string, any> }
+) {
+  const packIds = new Set(packs.map((pack) => pack.id));
+  const activeRows = sourcePackActiveSourceStore(options).list().filter((row) => packIds.has(row.packId));
+  const receipts = sourcePackCollectionReceiptStore(options).list().filter((receipt) => packIds.has(receipt.packId));
+  const sources = options.store.listSources().filter((source) => packIds.has(String(sourceCandidate(source).sourcePackId ?? source.metadata?.sourcePack?.packId ?? "")));
+  const candidateRows = packs.flatMap((pack) => pack.candidates.map((candidate) => ({
+    pack,
+    candidate,
+    source: candidate.sourceId ? sources.find((source) => source.id === candidate.sourceId) : undefined,
+    receipt: receipts.find((receipt) => receipt.candidateId === candidate.id)
+  })));
+  const duplicateRows = candidateRows.filter((row) => isDuplicateSourcePackCandidate(row.candidate));
+  const suppressedDuplicateRows = duplicateRows.filter((row) => row.candidate.status === "suppressed" || row.candidate.decision === "suppressed_duplicate");
+  const policyRejectedRows = candidateRows.filter((row) => isRejectedPolicySourcePackCandidate(row.candidate));
+  const retryableRows = candidateRows.filter((row) => isRetryableSourcePackCandidate(row.candidate) || Boolean(row.source?.metadata?.lastCollectionOutcome?.retryAfter));
+  const activationReadyRows = candidateRows.filter((row) => row.source && !isDuplicateSourcePackCandidate(row.candidate) && !isRejectedPolicySourcePackCandidate(row.candidate) && row.source.status !== "active");
+  const parserFailureRows = candidateRows.filter((row) => row.candidate.failure || String(row.candidate.parserStatus ?? "").includes("failed") || String(row.candidate.parserStatus ?? "").includes("blocked") || String(row.candidate.parserStatus ?? "").includes("retry"));
+  const latestAudit = packs
+    .flatMap((pack) => pack.audit.map((event) => ({ pack, event })))
+    .sort((a, b) => String(b.event.at ?? "").localeCompare(String(a.event.at ?? "")))
+    .slice(0, 12);
+  const lastActionIds = latestAudit.map(({ pack, event }) => stableId("dwm_source_pack_action_event", `${pack.id}:${String(event.at ?? "")}:${String(event.action ?? "")}:${String(event.candidateId ?? "")}`));
+  const nextOperatorActions = buildDwmSourceOperationsNextActions({ candidateRows, freshness: input.freshness, staleAfterMinutes: input.staleAfterMinutes });
+  const typedBlockers = buildDwmSourceOperationsTypedBlockers({ packs, candidateRows, sourceHealth: input.sourceHealth, freshness: input.freshness, staleAfterMinutes: input.staleAfterMinutes });
+  const byFamily = SOURCE_GROWTH_FAMILIES.reduce<Record<SourceGrowthFamily, Record<string, unknown>>>((acc, family) => {
+    const rows = candidateRows.filter((row) => row.candidate.declaredFamily === family);
+    acc[family] = {
+      candidateCount: rows.length,
+      activeSourceCount: rows.filter((row) => row.source?.status === "active" || row.candidate.status === "active" || row.candidate.decision === "approved").length,
+      retryableCount: rows.filter((row) => isRetryableSourcePackCandidate(row.candidate) || Boolean(row.source?.metadata?.lastCollectionOutcome?.retryAfter)).length,
+      suppressedDuplicateCount: rows.filter((row) => isDuplicateSourcePackCandidate(row.candidate) && (row.candidate.status === "suppressed" || row.candidate.decision === "suppressed_duplicate")).length,
+      policyRejectedCount: rows.filter((row) => isRejectedPolicySourcePackCandidate(row.candidate)).length,
+      parserFailureCount: rows.filter((row) => row.candidate.failure || String(row.candidate.parserStatus ?? "").includes("failed") || String(row.candidate.parserStatus ?? "").includes("blocked") || String(row.candidate.parserStatus ?? "").includes("retry")).length,
+      actionability: {
+        canActivate: rows.some((row) => row.source && row.source.status !== "active" && !isDuplicateSourcePackCandidate(row.candidate) && !isRejectedPolicySourcePackCandidate(row.candidate)),
+        canRetry: rows.some((row) => isRetryableSourcePackCandidate(row.candidate) || Boolean(row.source?.metadata?.lastCollectionOutcome?.retryAfter)),
+        canSuppressDuplicate: rows.some((row) => isDuplicateSourcePackCandidate(row.candidate) && row.candidate.status !== "suppressed" && row.candidate.decision !== "suppressed_duplicate")
+      }
+    };
+    return acc;
+  }, {} as Record<SourceGrowthFamily, Record<string, unknown>>);
+
+  return {
+    schemaVersion: "dwm.source_operations_readiness.v1",
+    generatedAt: input.generatedAt,
+    summary: {
+      packCount: packs.length,
+      candidateCount: candidateRows.length,
+      activeSourceCount: activeRows.length,
+      parserFailureCount: parserFailureRows.length,
+      retryableCount: retryableRows.length,
+      suppressedDuplicateCount: suppressedDuplicateRows.length,
+      duplicateCount: duplicateRows.length,
+      policyRejectedCount: policyRejectedRows.length,
+      staleWorker: input.freshness === "stale",
+      missingWorker: input.freshness === "missing",
+      lastWorkerReceiptPresent: receipts.length > 0
+    },
+    byFamily,
+    actionability: {
+      canGrowSources: activationReadyRows.length > 0 || activeRows.length > 0,
+      canActivate: activationReadyRows.length > 0,
+      canRetry: retryableRows.length > 0,
+      canSuppressDuplicates: duplicateRows.length > suppressedDuplicateRows.length,
+      canResolvePolicyRejected: policyRejectedRows.length > 0,
+      staleWorkerBlocksActions: input.freshness === "stale"
+    },
+    parserHealth: {
+      failureCount: parserFailureRows.length,
+      retryableParserFailures: retryableRows.length,
+      byFamily: Object.fromEntries(SOURCE_GROWTH_FAMILIES.map((family) => [family, input.sourceHealth.family?.[family]?.parserStatusCounts ?? {}]))
+    },
+    lastActionIds,
+    lastActions: latestAudit.map(({ pack, event }, index) => ({
+      id: lastActionIds[index],
+      sourcePackId: pack.id,
+      safeRef: stableId("dwm_source_pack_ref", pack.id),
+      action: String(event.action ?? "unknown"),
+      at: event.at,
+      candidateId: event.candidateId,
+      sourceId: event.sourceId,
+      actor: event.actor,
+      reason: event.reason
+    })),
+    nextOperatorActions,
+    typedBlockers,
+    sourcePackCrudGaps: [
+      "org/customer-scoped durable source-pack ownership",
+      "bulk source-pack update and archive contracts",
+      "operator assignment and approval queue persistence",
+      "source-pack import provenance signatures",
+      "cross-tenant source dedupe review workflow"
+    ],
+    safeOutput: {
+      rawUnsafeRowsStored: false,
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function buildDwmSourceOperationsNextActions(input: {
+  candidateRows: Array<{ pack: SourcePackRegistry; candidate: SourcePackRegistryCandidate; source?: SourceRecord; receipt?: DwmSourcePackCollectionQueueReceiptRecord }>;
+  freshness: string;
+  staleAfterMinutes: number;
+}) {
+  const actions: Array<Record<string, unknown>> = [];
+  if (input.freshness === "stale") actions.push({ action: "run_source_pack_worker", reason: `source-pack worker older than ${input.staleAfterMinutes} minutes`, priority: "high" });
+  if (input.freshness === "missing") actions.push({ action: "run_source_pack_worker", reason: "source-pack worker has not produced readiness state", priority: "high" });
+  for (const row of input.candidateRows) {
+    const safeRef = stableId("dwm_source_pack_ref", row.pack.id);
+    if (isDuplicateSourcePackCandidate(row.candidate) && row.candidate.status !== "suppressed" && row.candidate.decision !== "suppressed_duplicate") {
+      actions.push({ action: "suppress_duplicate", sourcePackId: row.pack.id, safeRef, candidateId: row.candidate.id, reason: "duplicate source candidate should be suppressed or linked", priority: "medium" });
+    }
+    if (isRetryableSourcePackCandidate(row.candidate) || row.source?.metadata?.lastCollectionOutcome?.retryAfter) {
+      actions.push({ action: "retry_candidate", sourcePackId: row.pack.id, safeRef, candidateId: row.candidate.id, sourceId: row.source?.id, reason: "retryable parser or collection failure", priority: "high" });
+    }
+    if (isRejectedPolicySourcePackCandidate(row.candidate)) {
+      actions.push({ action: "review_policy_rejection", sourcePackId: row.pack.id, safeRef, candidateId: row.candidate.id, reason: String(row.candidate.failure?.message ?? row.candidate.reason ?? "policy rejected"), priority: "medium" });
+    }
+    if (row.source && row.source.status !== "active" && !isDuplicateSourcePackCandidate(row.candidate) && !isRejectedPolicySourcePackCandidate(row.candidate)) {
+      actions.push({ action: "activate_candidate", sourcePackId: row.pack.id, safeRef, candidateId: row.candidate.id, sourceId: row.source.id, reason: "candidate has source row and is eligible for activation review", priority: "high" });
+    }
+  }
+  return actions.slice(0, 50);
+}
+
+function buildDwmSourceOperationsTypedBlockers(input: {
+  packs: SourcePackRegistry[];
+  candidateRows: Array<{ pack: SourcePackRegistry; candidate: SourcePackRegistryCandidate; source?: SourceRecord; receipt?: DwmSourcePackCollectionQueueReceiptRecord }>;
+  sourceHealth: Record<string, any>;
+  freshness: string;
+  staleAfterMinutes: number;
+}) {
+  const blockers: Array<Record<string, unknown>> = [...(Array.isArray(input.sourceHealth.typedBlockers) ? input.sourceHealth.typedBlockers : [])];
+  if (input.packs.length === 0) blockers.push({ code: "missing_source_pack", severity: "blocking", message: "no source packs are registered", retryable: true });
+  if (input.freshness === "stale") blockers.push({ code: "stale_worker", severity: "blocking", message: `source-pack worker older than ${input.staleAfterMinutes} minutes`, retryable: true });
+  for (const row of input.candidateRows) {
+    if ((isRetryableSourcePackCandidate(row.candidate) || row.source?.metadata?.lastCollectionOutcome?.retryAfter) && !row.source && row.candidate.status !== "retry_scheduled") {
+      blockers.push({ code: "no_retry_eligibility", severity: "blocking", sourcePackId: row.pack.id, candidateId: row.candidate.id, retryable: false });
+    }
+    if (!row.source && !isDuplicateSourcePackCandidate(row.candidate) && !isRejectedPolicySourcePackCandidate(row.candidate) && row.candidate.status !== "retry_scheduled") {
+      blockers.push({ code: "activation_disabled", severity: "warning", sourcePackId: row.pack.id, candidateId: row.candidate.id, retryable: true });
+    }
+    const familyHealth = input.sourceHealth.family?.[row.candidate.declaredFamily];
+    if (familyHealth && Number(familyHealth.candidateCount ?? 0) > 0 && Number(familyHealth.activeCount ?? 0) === 0) {
+      blockers.push({ code: "source_family_inactive", severity: "warning", family: row.candidate.declaredFamily, sourcePackId: row.pack.id, retryable: true });
+    }
+  }
+  return blockers.filter((blocker, index, all) => index === all.findIndex((item) => JSON.stringify(item) === JSON.stringify(blocker)));
 }
 
 function buildDwmSourceHealthTypedBlockers(input: {

@@ -606,6 +606,52 @@ describe("dwm source requests", () => {
       expect.objectContaining({ code: "duplicate_source", family: "telegram", retryable: false }),
       expect.objectContaining({ code: "rejected_policy", family: "darkweb_onion", retryable: false })
     ]));
+    expect(inventoryBody.sourcePackWorker.sourceOperationsReadiness).toMatchObject({
+      schemaVersion: "dwm.source_operations_readiness.v1",
+      summary: {
+        candidateCount: 4,
+        activeSourceCount: 1,
+        retryableCount: 1,
+        duplicateCount: 1,
+        policyRejectedCount: 1,
+        suppressedDuplicateCount: 1
+      },
+      actionability: {
+        canGrowSources: true,
+        canRetry: true,
+        canSuppressDuplicates: false,
+        canResolvePolicyRejected: true
+      },
+      parserHealth: {
+        failureCount: expect.any(Number),
+        byFamily: { telegram: expect.any(Object), darkweb_onion: expect.any(Object) }
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        rawTargetsExposed: false,
+        privateTelegramContentExposed: false,
+        restrictedPayloadDownloadAllowed: false
+      }
+    });
+    expect(inventoryBody.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "retry_candidate", candidateId: retryCandidate.id, reason: expect.any(String) }),
+      expect.objectContaining({ action: "review_policy_rejection", candidateId: rejectedCandidate.id, reason: expect.any(String) })
+    ]));
+    expect(inventoryBody.sourcePackWorker.sourceOperationsReadiness.typedBlockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate_source", retryable: false }),
+      expect.objectContaining({ code: "rejected_policy", retryable: false })
+    ]));
+    expect(inventoryBody.sourcePackWorker.proxyVerification).toMatchObject({
+      checks: expect.arrayContaining([
+        expect.objectContaining({ id: "source_operations_readiness_present", status: "pass" }),
+        expect.objectContaining({ id: "source_operations_next_actions_present", status: "pass" })
+      ]),
+      worker3JsonAssertions: expect.arrayContaining([
+        ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.schemaVersion == \"dwm.source_operations_readiness.v1\"",
+        ".sourceInventory.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions | all(has(\"action\") and has(\"reason\"))"
+      ])
+    });
+    expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceOperationsReadiness)).not.toContain("password-dump");
     expect(JSON.stringify(inventoryBody.sourcePackWorker.sourceHealth)).not.toContain("password-dump");
     expect(frontier.snapshot()).toHaveLength(1);
   });

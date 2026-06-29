@@ -283,13 +283,42 @@ describe("dwm source inventory", () => {
         expect.objectContaining({ code: "parser_failure", family: "darkweb_onion", retryable: false }),
         expect.objectContaining({ code: "no_active_source_family", family: "darkweb_onion", retryable: true })
       ]));
+      expect(inventoryBody.sourcePackWorker.sourceOperationsReadiness).toMatchObject({
+        schemaVersion: "dwm.source_operations_readiness.v1",
+        summary: {
+          packCount: 1,
+          candidateCount: 4,
+          activeSourceCount: 1,
+          retryableCount: 1,
+          duplicateCount: 1,
+          policyRejectedCount: 1
+        },
+        actionability: {
+          canGrowSources: true,
+          canRetry: true,
+          canResolvePolicyRejected: true
+        },
+        safeOutput: { liveNetworkScrapeStarted: false, rawTargetsExposed: false }
+      });
+      expect(inventoryBody.sourcePackWorker.sourceOperationsReadiness.nextOperatorActions).toEqual(expect.arrayContaining([
+        expect.objectContaining({ action: "retry_candidate", priority: "high" }),
+        expect.objectContaining({ action: "suppress_duplicate", priority: "medium" }),
+        expect.objectContaining({ action: "review_policy_rejection", priority: "medium" })
+      ]));
       expect(inventoryBody.sourcePackWorker.proxyVerification.checks).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: "source_health_present", status: "pass" }),
-        expect.objectContaining({ id: "source_health_blockers_typed", status: "pass" })
+        expect.objectContaining({ id: "source_health_blockers_typed", status: "pass" }),
+        expect.objectContaining({ id: "source_operations_readiness_present", status: "pass" }),
+        expect.objectContaining({ id: "source_operations_next_actions_present", status: "pass" })
       ]));
       expect(packsBody.sourceHealth).toMatchObject({
         schemaVersion: "dwm.source_health_operations.v1",
         sourcePackGrowthDeltas: { queuedCollectionReceipts: 1 },
+        safeOutput: { liveNetworkScrapeStarted: false }
+      });
+      expect(packsBody.sourceOperationsReadiness).toMatchObject({
+        schemaVersion: "dwm.source_operations_readiness.v1",
+        summary: { candidateCount: 4, activeSourceCount: 1 },
         safeOutput: { liveNetworkScrapeStarted: false }
       });
       expect(JSON.stringify(health)).not.toContain("password-dump");
@@ -434,6 +463,12 @@ describe("dwm source inventory", () => {
           sourcePackGrowthDeltas: { activeSourceRows: 2, queuedCollectionReceipts: 2 },
           safeOutput: { liveNetworkScrapeStarted: false }
         },
+        sourceOperationsReadiness: {
+          schemaVersion: "dwm.source_operations_readiness.v1",
+          summary: { activeSourceCount: 2, candidateCount: 4 },
+          actionability: { canGrowSources: true },
+          safeOutput: { liveNetworkScrapeStarted: false }
+        },
         safeOutput: { rawTargetsExposed: false }
       });
 
@@ -447,6 +482,13 @@ describe("dwm source inventory", () => {
       expect(staleBody.proxyVerification).toMatchObject({
         state: "stale",
         safeOutput: { liveNetworkScrapeStarted: false }
+      });
+      expect(staleBody.sourceOperationsReadiness).toMatchObject({
+        summary: { staleWorker: true },
+        actionability: { staleWorkerBlocksActions: true },
+        typedBlockers: expect.arrayContaining([
+          expect.objectContaining({ code: "stale_worker", severity: "blocking", retryable: true })
+        ])
       });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
