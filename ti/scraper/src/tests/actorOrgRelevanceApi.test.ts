@@ -1,0 +1,335 @@
+import { describe, expect, test, mkdtempSync, rmSync, join, tmpdir, handleApiRequest } from "./apiTestHarness.ts";
+import { FocusedFrontier } from "../frontier/frontier.ts";
+import type { PublicTiOrgRelevanceProofLike } from "../product/analystHandoff.ts";
+import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
+import { InMemoryScraperStore } from "../storage/memoryStore.ts";
+
+describe("actor org relevance API", () => {
+  test("stores a ready actor relevance review with alert, case, webhook, and provenance handoffs", async () => {
+    const store = new InMemoryScraperStore();
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({
+        tenantId: "tenant_microsoft",
+        organizationId: "org_microsoft",
+        orgRelevance: readyRelevance(),
+        staleEvidenceBefore: "2026-06-01T00:00:00.000Z",
+        generatedAt: "2026-06-29T09:30:00.000Z"
+      })
+    }), { store, frontier: new FocusedFrontier() });
+    const payload = await response.json() as any;
+
+    expect(response.status).toBe(201);
+    expect(payload.record).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.review.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      state: "ready"
+    });
+    expect(payload.summary).toMatchObject({
+      state: "ready",
+      sourceEvidenceCount: 1,
+      affected: {
+        vendors: ["Microsoft"],
+        domains: ["microsoft.com"],
+        regions: ["United States"]
+      },
+      handoffs: { watchlist: true, alertGeneration: true, caseHandoff: true, webhookTrigger: true },
+      routes: {
+        publicTi: "/ti/apt29%20microsoft",
+        watchlist: "/v1/dwm/watchlists",
+        alert: "/v1/dwm/alerts/rebuild",
+        case: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+        webhook: "/v1/dwm/webhooks/deliver"
+      }
+    });
+    expect(payload.summary.provenance[0]).toMatchObject({
+      sourceId: "microsoft",
+      captureId: "capture_microsoft_apt29",
+      provenance: "https://www.microsoft.com/en-us/security/blog/"
+    });
+    expect(payload.record.handoff.webhookTrigger.request.body).toMatchObject({
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      alertId: "dwm_alert_microsoft",
+      webhookDestinationIds: ["webhook_soc"],
+      dryRun: true
+    });
+  });
+
+  test("lists only the requested organization queue and blocks cross-org detail reads", async () => {
+    const store = new InMemoryScraperStore();
+    const first = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+    await submit(store, {
+      ...readyRelevance(),
+      actorId: "actor:apt29-contoso",
+      query: "apt29 contoso",
+      organizationRefs: [{
+        tenantId: "tenant_contoso",
+        organizationId: "org_contoso",
+        watchlistId: "watchlist_contoso",
+        watchlistItemId: "watch_contoso",
+        kind: "domain" as const,
+        value: "contoso.com"
+      }],
+      candidateTerms: [{ kind: "domain" as const, value: "contoso.com", matched: true, sourceEvidenceRefs: ["microsoft"] }],
+      alertCaseRefs: [{
+        alertId: "dwm_alert_contoso",
+        casePath: "/v1/cases/case_contoso_apt29?alertId=dwm_alert_contoso",
+        caseIdCandidate: "case_contoso_apt29",
+        organizationId: "org_contoso",
+        tenantId: "tenant_contoso",
+        captureIds: ["capture_microsoft_apt29"],
+        webhookDestinationIds: ["webhook_contoso"]
+      }]
+    }, "tenant_contoso", "org_contoso");
+
+    const listResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance?tenantId=tenant_microsoft&organizationId=org_microsoft"), { store, frontier: new FocusedFrontier() });
+    const list = await listResponse.json() as any;
+
+    expect(listResponse.status).toBe(200);
+    expect(list).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.queue.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      counts: { total: 1, ready: 1, blocked: 0 }
+    });
+    expect(list.records).toHaveLength(1);
+    expect(list.records[0].query).toBe("apt29 microsoft");
+
+    const forbidden = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${first.record.id}?tenantId=tenant_contoso&organizationId=org_contoso`), { store, frontier: new FocusedFrontier() });
+    expect(forbidden.status).toBe(404);
+  });
+
+  test("turns missing evidence into owner actions instead of a generic teaser state", async () => {
+    const store = new InMemoryScraperStore();
+    const payload = await submit(store, {
+      ...readyRelevance(),
+      sourceEvidence: [],
+      sourceCoverage: [],
+      alertCaseRefs: [],
+      handoffRows: [],
+      freshness: {
+        generatedAt: "2026-06-29T08:00:00.000Z",
+        lastSeen: "2026-01-01T00:00:00.000Z",
+        stale: true,
+        reason: "Old source."
+      }
+    }, "tenant_microsoft", "org_microsoft");
+
+    expect(payload.record.state).toBe("blocked");
+    expect(payload.summary.blockerCodes).toEqual(expect.arrayContaining([
+      "missing_provenance",
+      "stale_evidence",
+      "absent_alert_id",
+      "missing_case_route",
+      "missing_webhook_destination"
+    ]));
+    expect(payload.summary.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ownerLane: "source", route: "/dashboard/ti/enrichment" }),
+      expect.objectContaining({ ownerLane: "alert", route: "/dashboard/dwm" }),
+      expect.objectContaining({ ownerLane: "case", route: "/v1/cases" }),
+      expect.objectContaining({ ownerLane: "webhook", route: "/dashboard/dwm" })
+    ]));
+    for (const phrase of ["control room", "how this feeds", "signal", "named examples", "dashboard slop", "acceptance criteria"]) {
+      expect(JSON.stringify(payload).toLowerCase()).not.toContain(phrase);
+    }
+  });
+
+  test("persists actor relevance reviews through the file-backed scraper store", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "actor-org-relevance-"));
+    try {
+      const snapshotPath = join(dir, "store.json");
+      const store = new FileBackedScraperStore({ snapshotPath });
+      const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+
+      const rehydrated = new FileBackedScraperStore({ snapshotPath });
+      const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}?tenantId=tenant_microsoft&organizationId=org_microsoft`), { store: rehydrated, frontier: new FocusedFrontier() });
+      const detail = await detailResponse.json() as any;
+
+      expect(detailResponse.status).toBe(200);
+      expect(detail.record.id).toBe(created.record.id);
+      expect(detail.record.timeline).toEqual(expect.arrayContaining([
+        expect.objectContaining({ eventType: "ready", blockerCodes: [] })
+      ]));
+      expect(detail.summary.routes.case).toBe("/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+async function submit(store: InMemoryScraperStore | FileBackedScraperStore, orgRelevance: PublicTiOrgRelevanceProofLike, tenantId: string, organizationId: string) {
+  const response = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify({
+      tenantId,
+      organizationId,
+      orgRelevance,
+      staleEvidenceBefore: "2026-06-01T00:00:00.000Z",
+      generatedAt: "2026-06-29T09:30:00.000Z"
+    })
+  }), { store, frontier: new FocusedFrontier() });
+  expect(response.status).toBeLessThan(300);
+  return await response.json() as any;
+}
+
+function readyRelevance(): PublicTiOrgRelevanceProofLike {
+  return {
+    schemaVersion: "ti.public_actor.org_relevance.v1",
+    state: "ready",
+    actorId: "actor:apt29-microsoft",
+    query: "apt29 microsoft",
+    generatedAt: "2026-06-29T08:00:00.000Z",
+    actorIdentity: {
+      canonicalName: "APT29",
+      aliases: ["Midnight Blizzard", "Nobelium"],
+      actorClass: "State-linked espionage actor",
+      sectors: ["Technology"],
+      regions: ["United States"],
+      motivations: ["Strategic intelligence collection"]
+    },
+    freshness: {
+      generatedAt: "2026-06-29T08:00:00.000Z",
+      lastSeen: "2026-06-29T00:00:00.000Z",
+      stale: false,
+      reason: "Fresh source evidence is attached."
+    },
+    sourceCoverage: [{
+      sourceId: "microsoft",
+      sourceName: "Microsoft",
+      sourceFamily: "vendor_disclosure",
+      status: "active",
+      lastCollectedAt: "2026-06-29T00:00:00.000Z",
+      coverage: "primary",
+      captureIds: ["capture_microsoft_apt29"]
+    }],
+    organizationRefs: [{
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      watchlistId: "watchlist_microsoft",
+      watchlistItemId: "watch_microsoft",
+      kind: "company" as const,
+      value: "Microsoft",
+      route: "organization_watchlist",
+      casePath: "/dashboard/dwm?organizationId=org_microsoft&watchlistItemId=watch_microsoft"
+    }],
+    candidateTerms: [{
+      kind: "company" as const,
+      value: "Microsoft",
+      notes: "Source reporting names Microsoft identity activity.",
+      matched: true,
+      sourceEvidenceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"]
+    }],
+    sourceEvidence: [{
+      sourceId: "microsoft",
+      sourceName: "Microsoft",
+      provenance: "https://www.microsoft.com/en-us/security/blog/",
+      captureId: "capture_microsoft_apt29",
+      confidence: 0.84,
+      supportsTerms: ["Microsoft"]
+    }],
+    alertCaseRefs: [{
+      alertId: "dwm_alert_microsoft",
+      casePath: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+      caseIdCandidate: "case_microsoft_apt29",
+      organizationId: "org_microsoft",
+      tenantId: "tenant_microsoft",
+      captureIds: ["capture_microsoft_apt29"],
+      webhookDestinationIds: ["webhook_soc"]
+    }],
+    affectedEntities: {
+      vendors: [{
+        value: "Microsoft",
+        matched: true,
+        provenanceRefs: ["microsoft", "capture_microsoft_apt29"],
+        watchlistItemIds: ["watch_microsoft"],
+        alertIds: ["dwm_alert_microsoft"]
+      }],
+      domains: [{
+        value: "microsoft.com",
+        matched: false,
+        provenanceRefs: ["capture_microsoft_apt29"],
+        watchlistItemIds: [],
+        alertIds: ["dwm_alert_microsoft"]
+      }],
+      regions: [{
+        value: "United States",
+        matched: false,
+        provenanceRefs: ["capture_microsoft_apt29"],
+        watchlistItemIds: [],
+        alertIds: ["dwm_alert_microsoft"]
+      }]
+    },
+    handoffRows: [{
+      rowId: "watchlist:watch_microsoft",
+      kind: "watchlist_match",
+      state: "ready",
+      ownerLane: "org",
+      label: "Microsoft",
+      action: "Open saved watchlist item",
+      route: "/dashboard/dwm",
+      sourceFamily: "watchlist",
+      provenanceRefs: ["watchlist_microsoft", "watch_microsoft"],
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      watchlistId: "watchlist_microsoft",
+      watchlistItemId: "watch_microsoft",
+      captureIds: [],
+      webhookDestinationIds: [],
+      blockers: []
+    }, {
+      rowId: "source:microsoft:capture_microsoft_apt29",
+      kind: "source_evidence",
+      state: "ready",
+      ownerLane: "source",
+      label: "Microsoft",
+      action: "Use capture as evidence",
+      route: "/dashboard/ti/enrichment",
+      sourceFamily: "vendor_disclosure",
+      provenanceRefs: ["microsoft", "capture_microsoft_apt29", "https://www.microsoft.com/en-us/security/blog/"],
+      captureIds: ["capture_microsoft_apt29"],
+      webhookDestinationIds: [],
+      blockers: []
+    }, {
+      rowId: "alert:dwm_alert_microsoft",
+      kind: "alert_case",
+      state: "ready",
+      ownerLane: "case",
+      label: "dwm_alert_microsoft",
+      action: "Open related case",
+      route: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+      sourceFamily: "case",
+      provenanceRefs: ["dwm_alert_microsoft", "case_microsoft_apt29", "capture_microsoft_apt29"],
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      alertId: "dwm_alert_microsoft",
+      casePath: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+      captureIds: ["capture_microsoft_apt29"],
+      webhookDestinationIds: ["webhook_soc"],
+      blockers: []
+    }, {
+      rowId: "webhook:dwm_alert_microsoft",
+      kind: "webhook_delivery",
+      state: "ready",
+      ownerLane: "webhook",
+      label: "dwm_alert_microsoft",
+      action: "Prepare delivery dry run",
+      route: "/v1/dwm/webhooks/deliver",
+      sourceFamily: "webhook",
+      provenanceRefs: ["dwm_alert_microsoft", "capture_microsoft_apt29", "webhook_soc"],
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      alertId: "dwm_alert_microsoft",
+      casePath: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+      captureIds: ["capture_microsoft_apt29"],
+      webhookDestinationIds: ["webhook_soc"],
+      blockers: []
+    }],
+    blockers: []
+  };
+}

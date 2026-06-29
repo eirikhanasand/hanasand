@@ -15,6 +15,7 @@ export class InMemoryScraperStore implements ScraperStore {
   private organizations = new Map<string, any>(); private organizationMembers = new Map<string, any>(); private organizationInvites = new Map<string, any>(); private webhookDestinations = new Map<string, any>();
   private cases = new Map<string, any>();
   private dwmWatchlists = new Map<string, any>(); private dwmAlerts = new Map<string, any>(); private dwmWebhookDeliveries = new Map<string, any>();
+  private actorOrgRelevanceReviews = new Map<string, any>();
   private replayJobs = new Map<string, CaptureReplayJob>(); private discoveryEvidence = new Map<string, DiscoveryEvidence>(); private liveSearchSnapshots = new Map<string, LiveSearchSnapshot>(); private evidenceDeltas = new Map<string, EvidenceDelta>(); private cursorOwners = new Map<string, string>(); private sequence = 0;
   private evidenceQueries = new InMemoryEvidenceQueries(() => ({ captures: this.listCaptures(), incidents: this.listIncidents(), replayJobs: this.listReplayJobs(), discoveryEvidence: this.listDiscoveryEvidence(), liveSearchSnapshots: this.listLiveSearchSnapshots(), evidenceDeltas: this.listEvidenceDeltas() }));
   saveCapture(capture: RawCapture): RawCapture { return this.saveCaptureWithDedupe(capture).capture; }
@@ -66,6 +67,7 @@ export class InMemoryScraperStore implements ScraperStore {
   saveDwmWatchlist(watchlist: any) { return put(this.dwmWatchlists, watchlist); } getDwmWatchlist(id: string) { return this.dwmWatchlists.get(id); } listDwmWatchlists() { return mapValues(this.dwmWatchlists); }
   saveDwmAlert(alert: any) { return put(this.dwmAlerts, alert); } getDwmAlert(id: string) { return this.dwmAlerts.get(id); } listDwmAlerts() { return mapValues(this.dwmAlerts); }
   saveDwmWebhookDelivery(delivery: any) { return put(this.dwmWebhookDeliveries, delivery); } getDwmWebhookDelivery(id: string) { return this.dwmWebhookDeliveries.get(id); } listDwmWebhookDeliveries() { return mapValues(this.dwmWebhookDeliveries); }
+  saveActorOrgRelevanceReview(review: any) { return put(this.actorOrgRelevanceReviews, review); } getActorOrgRelevanceReview(id: string) { return this.actorOrgRelevanceReviews.get(id); } listActorOrgRelevanceReviews() { return mapValues(this.actorOrgRelevanceReviews); }
 }
 installMemoryStoreReplayMethods(InMemoryScraperStore); installMemoryStoreDiscoveryMethods(InMemoryScraperStore);
 export { canonicalizeUrl, captureDedupeKey, InMemoryObjectEvidenceStore };
