@@ -28,6 +28,7 @@ import {
     organizationMemberAccessContract,
     organizationReadinessProof,
     organizationSettingsFromRow,
+    organizationSettingsMutationDenial,
     organizationSharedWatchlistDownstreamProof,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
@@ -259,7 +260,32 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
     }
 
     if (!roleCanManageOrganization(organization.role)) {
-        return res.status(403).send({ error: 'Only organization owners and admins can update settings.' })
+        const attemptedFields = Object.entries({
+            name: req.body?.name,
+            slug: req.body?.slug,
+            defaultWebhookPolicy: req.body?.defaultWebhookPolicy ?? req.body?.default_webhook_policy,
+            alertVisibilityPolicy: req.body?.alertVisibilityPolicy ?? req.body?.alert_visibility_policy,
+            lifecycleStatus: req.body?.lifecycleStatus ?? req.body?.lifecycle_status,
+            retentionDays: req.body?.retentionDays ?? req.body?.retention_days,
+            auditSafeMetadata: req.body?.auditSafeMetadata ?? req.body?.audit_safe_metadata,
+        }).filter(([, value]) => value !== undefined).map(([key]) => key)
+        const requestId = typeof req.headers['x-request-id'] === 'string' ? req.headers['x-request-id'] : null
+        const message = 'Only organization owners and admins can update settings.'
+        const denial = organizationSettingsMutationDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            attemptedFields,
+            requestId,
+            message,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            actorRole: organization.role,
+            attemptedFields: denial.attemptedFields,
+            denialReason: denial.denialReason,
+        })
+        return res.status(403).send({ error: message, settingsMutationDenial: denial })
     }
 
     let input

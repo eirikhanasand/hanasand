@@ -362,18 +362,52 @@ assert.equal(invalidSettingsResponse.statusCode, 400, invalidSettingsResponse.bo
 const memberSettingsUpdateResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${organization.id}/settings`,
-    headers: authHeaders('org_smoke_member', 'member-token'),
+    headers: { ...authHeaders('org_smoke_member', 'member-token'), 'x-request-id': 'smoke-member-settings-denied' },
     payload: { alertVisibilityPolicy: 'admins' },
 })
 assert.equal(memberSettingsUpdateResponse.statusCode, 403, memberSettingsUpdateResponse.body)
+const memberSettingsDenied = parseBody(memberSettingsUpdateResponse.body).settingsMutationDenial
+assert.equal(memberSettingsDenied.schemaVersion, 'organization.settings_mutation_denial.v1')
+assert.equal(memberSettingsDenied.organizationId, organization.id)
+assert.equal(memberSettingsDenied.tenantId, organization.id)
+assert.equal(memberSettingsDenied.actorId, 'org_smoke_member')
+assert.equal(memberSettingsDenied.actorRole, 'member')
+assert.deepEqual(memberSettingsDenied.attemptedFields, ['alertVisibilityPolicy'])
+assert.equal(memberSettingsDenied.denialReason, 'role_not_allowed')
+assert.deepEqual(memberSettingsDenied.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberSettingsDenied.readableRoles, ['owner', 'admin', 'member', 'viewer'])
+assert.ok(memberSettingsDenied.editableFields.includes('defaultWebhookPolicy'))
+assert.ok(memberSettingsDenied.editableFields.includes('alertVisibilityPolicy'))
+assert.equal(memberSettingsDenied.memberCanReadSettings, true)
+assert.equal(memberSettingsDenied.memberCanUpdateSettings, false)
+assert.equal(memberSettingsDenied.viewerCanReadSettings, true)
+assert.equal(memberSettingsDenied.viewerCanUpdateSettings, false)
+assert.equal(memberSettingsDenied.nonmemberEnumeration, false)
+assert.ok(memberSettingsDenied.safeFields.includes('attemptedFields'))
+assert.ok(memberSettingsDenied.noLeakFields.includes('destination.secret'))
+assert.equal(memberSettingsDenied.serviceLogAction, 'organization_settings_mutation_denied')
+assert.equal(memberSettingsDenied.requestId, 'smoke-member-settings-denied')
+assert.equal(memberSettingsDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 
 const viewerSettingsUpdateResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${organization.id}/settings`,
-    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+    headers: { ...authHeaders('org_smoke_viewer', 'viewer-token'), 'x-request-id': 'smoke-viewer-settings-denied' },
     payload: { defaultWebhookPolicy: 'disabled' },
 })
 assert.equal(viewerSettingsUpdateResponse.statusCode, 403, viewerSettingsUpdateResponse.body)
+const viewerSettingsDenied = parseBody(viewerSettingsUpdateResponse.body).settingsMutationDenial
+assert.equal(viewerSettingsDenied.schemaVersion, 'organization.settings_mutation_denial.v1')
+assert.equal(viewerSettingsDenied.organizationId, organization.id)
+assert.equal(viewerSettingsDenied.actorId, 'org_smoke_viewer')
+assert.equal(viewerSettingsDenied.actorRole, 'viewer')
+assert.deepEqual(viewerSettingsDenied.attemptedFields, ['defaultWebhookPolicy'])
+assert.equal(viewerSettingsDenied.denialReason, 'role_not_allowed')
+assert.equal(viewerSettingsDenied.viewerCanReadSettings, true)
+assert.equal(viewerSettingsDenied.viewerCanUpdateSettings, false)
+assert.equal(viewerSettingsDenied.nonmemberEnumeration, false)
+assert.equal(viewerSettingsDenied.serviceLogAction, 'organization_settings_mutation_denied')
+assert.equal(viewerSettingsDenied.requestId, 'smoke-viewer-settings-denied')
 
 const adminSettingsResponse = await app.inject({
     method: 'PUT',
@@ -3525,6 +3559,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_invite_managemen
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_management_denied' && log.metadata.requestId === 'smoke-viewer-revoke-denied' && log.metadata.action === 'revoke_invite' && log.metadata.actorRole === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_resent' && log.metadata.requestId === 'smoke-resend-pending-ops'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_settings_mutation_denied' && log.metadata.requestId === 'smoke-member-settings-denied' && log.metadata.actorRole === 'member' && log.metadata.attemptedFields.includes('alertVisibilityPolicy')))
+assert.ok(serviceLogs.some(log => log.message === 'organization_settings_mutation_denied' && log.metadata.requestId === 'smoke-viewer-settings-denied' && log.metadata.actorRole === 'viewer' && log.metadata.attemptedFields.includes('defaultWebhookPolicy')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_settings_updated' && log.metadata.fields.includes('defaultWebhookPolicy')))
 assert.ok(serviceLogs.some(log => log.message === 'organization_ownership_transferred' && log.metadata.targetUserId === 'org_smoke_admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_removed' && log.metadata.targetUserId === 'org_smoke_viewer'))

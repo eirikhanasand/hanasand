@@ -4866,6 +4866,54 @@ export function organizationInviteManagementDenial(input: {
     }
 }
 
+export function organizationSettingsMutationDenial(input: {
+    organizationId: string
+    actorId: string
+    actorRole?: OrganizationRole | null
+    attemptedFields: string[]
+    requestId?: string | null
+    message: string
+}) {
+    const attemptedFields = [...new Set(input.attemptedFields)].sort()
+    return {
+        schemaVersion: 'organization.settings_mutation_denial.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        actorRole: input.actorRole ?? null,
+        attemptedFields,
+        denialReason: 'role_not_allowed' as const,
+        message: input.message,
+        statusCode: 403,
+        allowedRoles: ['owner', 'admin'] as Array<'owner' | 'admin'>,
+        readableRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        editableFields: ['name', 'slug', 'defaultWebhookPolicy', 'alertVisibilityPolicy', 'retentionDays', 'auditSafeMetadata'] as const,
+        memberCanReadSettings: true,
+        memberCanUpdateSettings: false,
+        viewerCanReadSettings: true,
+        viewerCanUpdateSettings: false,
+        nonmemberEnumeration: false as const,
+        safeFields: [
+            'schemaVersion',
+            'organizationId',
+            'tenantId',
+            'actorRole',
+            'attemptedFields',
+            'denialReason',
+            'requestId',
+        ],
+        noLeakFields: [
+            'auditSafeMetadata.sensitive',
+            'otherOrg.settings',
+            'destination.secret',
+            'member.email',
+        ],
+        serviceLogAction: 'organization_settings_mutation_denied' as const,
+        requestId: input.requestId ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
     const lifecycleState = organizationWatchlistEnabledState(status)
