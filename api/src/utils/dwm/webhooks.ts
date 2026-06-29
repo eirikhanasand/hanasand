@@ -5353,12 +5353,12 @@ async function deliverToDwmWebhookDestination({
                 signal: AbortSignal.timeout(Number(process.env.DWM_WEBHOOK_TIMEOUT_MS || 8000)),
             })
             responseStatus = response.status
-            responseBody = truncate(await response.text().catch(() => ''), 2000)
+            responseBody = sanitizeDwmWebhookDeliveryDiagnostic(await response.text().catch(() => ''))
             status = response.ok ? 'delivered' : 'failed'
-            error = response.ok ? null : `Webhook returned HTTP ${response.status}.`
+            error = response.ok ? null : sanitizeDwmWebhookDeliveryDiagnostic(`Webhook returned HTTP ${response.status}.`)
         } catch (sendError) {
             status = 'failed'
-            error = sendError instanceof Error ? sendError.message : String(sendError)
+            error = sanitizeDwmWebhookDeliveryDiagnostic(sendError instanceof Error ? sendError.message : String(sendError))
         }
     }
 
@@ -6852,6 +6852,11 @@ function redactDeliveryEvidenceText(value: string) {
         .replace(/(api\/webhooks\/[^/\s"']+\/)[^/\s"']+/gi, '$1...')
         .replace(/([?&](?:token|secret|password|key|credential)=)[^&\s"']+/gi, '$1[redacted]')
         .replace(/((?:token|secret|password|credential)\s*[:=]\s*)[^,\s"'}]+/gi, '$1[redacted]')
+}
+
+export function sanitizeDwmWebhookDeliveryDiagnostic(value: unknown, max = 2000) {
+    const text = clean(value)
+    return text ? redactDeliveryEvidenceText(truncate(text, max)) : null
 }
 
 function redactNullableDeliveryText(value: string | null) {
