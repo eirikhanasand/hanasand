@@ -140,6 +140,12 @@ export type PublicTiProvenanceReadiness = ProductReadinessSnapshotBase & {
     relatedCaseCount?: number
     enrichmentGapCount?: number
     handoffRouteCount?: number
+    sourceFamilyCoverageCount?: number
+    publicTiReadyFamilyCount?: number
+    alertReadyFamilyCount?: number
+    gapFamilyCount?: number
+    retryFamilyCount?: number
+    sourceFamilyOperationTypeCount?: number
     latestArtifactAt?: string
 }
 
@@ -1686,6 +1692,9 @@ function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {
         typeof input.evidenceCount === 'number' ? `${input.evidenceCount} evidence item${input.evidenceCount === 1 ? '' : 's'}` : '',
         typeof input.dashboardHandoffCount === 'number' ? `${input.dashboardHandoffCount} operator workflow${input.dashboardHandoffCount === 1 ? '' : 's'}` : '',
         typeof input.sourceProvenanceCount === 'number' ? `${input.sourceProvenanceCount} provenance row${input.sourceProvenanceCount === 1 ? '' : 's'}` : '',
+        typeof input.sourceFamilyCoverageCount === 'number' ? `${input.sourceFamilyCoverageCount} source famil${input.sourceFamilyCoverageCount === 1 ? 'y' : 'ies'}` : '',
+        typeof input.publicTiReadyFamilyCount === 'number' ? `${input.publicTiReadyFamilyCount} public-TI-ready famil${input.publicTiReadyFamilyCount === 1 ? 'y' : 'ies'}` : '',
+        typeof input.alertReadyFamilyCount === 'number' ? `${input.alertReadyFamilyCount} alert-ready famil${input.alertReadyFamilyCount === 1 ? 'y' : 'ies'}` : '',
         typeof input.watchlistCandidateCount === 'number' ? `${input.watchlistCandidateCount} watchlist candidate${input.watchlistCandidateCount === 1 ? '' : 's'}` : '',
         typeof input.handoffRouteCount === 'number' ? `${input.handoffRouteCount} handoff route${input.handoffRouteCount === 1 ? '' : 's'}` : '',
     ].filter(Boolean)

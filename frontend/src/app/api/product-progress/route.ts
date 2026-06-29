@@ -260,6 +260,12 @@ function publicTiProvenanceReadiness(input: {
                 alertRebuild?: { method?: string, endpoint?: string, missing?: string[] }
                 caseCreate?: { method?: string, endpoint?: string, missing?: string[] }
             }
+            sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix
+        }
+        proofArtifacts?: {
+            publicTiQueryAdapter?: {
+                sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix
+            }
         }
     } | undefined
     const evidenceRows = rows(payload?.rows || payload?.results)
@@ -277,6 +283,18 @@ function publicTiProvenanceReadiness(input: {
         actionability?.handoffs?.alertRebuild?.endpoint,
         actionability?.handoffs?.caseCreate?.endpoint,
     ].filter(Boolean).map(String)
+    const sourceFamilyMatrix = sourceFamilyCoverageMatrix(payload)
+    const sourceFamilySummary = sourceFamilyMatrix?.summary
+    const sourceFamilyRows = rows(sourceFamilyMatrix?.rows)
+    const publicTiReadyFamilies = stringsFrom(sourceFamilySummary?.publicTiReadyFamilies)
+    const alertReadyFamilies = stringsFrom(sourceFamilySummary?.alertReadyFamilies)
+    const gapFamilies = stringsFrom(sourceFamilySummary?.gapFamilies)
+    const retryFamilies = stringsFrom(sourceFamilySummary?.retryFamilies)
+    const operationTypes = stringsFrom(sourceFamilySummary?.operationTypes)
+    const sourceFamilyMatrixReady = sourceFamilyMatrix?.schemaVersion === 'ti.public_actor.source_family_coverage_matrix.v1'
+        && sourceFamilyRows.length > 0
+        && publicTiReadyFamilies.length > 0
+        && stringOrUndefined(sourceFamilySummary?.latestCaptureAt)
     const sourceIds = new Set([
         ...evidenceRows.map(row => String(row.sourceId || '')).filter(Boolean),
         ...ledgerRefs.map(row => String(row.sourceId || '')).filter(Boolean),
@@ -291,6 +309,7 @@ function publicTiProvenanceReadiness(input: {
         && actionabilityLoaded
         && sourceProvenance.length > 0
         && handoffRoutes.length >= 3
+        && sourceFamilyMatrixReady
         && sourceIds.size > 0
         && warningCodes.length === 0
     const blockers = [
@@ -301,6 +320,7 @@ function publicTiProvenanceReadiness(input: {
         actionabilityLoaded ? '' : 'Public TI search route did not return ti.query.actionability.v1.',
         sourceProvenance.length > 0 ? '' : 'Public TI actionability returned no source provenance rows.',
         handoffRoutes.length >= 3 ? '' : 'Public TI actionability returned incomplete watchlist, alert, and case workflow routes.',
+        sourceFamilyMatrixReady ? '' : 'Public TI actionability did not return ti.public_actor.source_family_coverage_matrix.v1 with ready source families and latest capture time.',
         sourceIds.size > 0 ? '' : 'Public TI search route returned no source references.',
         ...warningCodes.map(code => `Public TI quality warning: ${code}.`),
     ].filter(Boolean)
@@ -323,6 +343,12 @@ function publicTiProvenanceReadiness(input: {
         relatedCaseCount: relatedCases.length,
         enrichmentGapCount: enrichmentGaps.length,
         handoffRouteCount: handoffRoutes.length,
+        sourceFamilyCoverageCount: sourceFamilyRows.length,
+        publicTiReadyFamilyCount: publicTiReadyFamilies.length,
+        alertReadyFamilyCount: alertReadyFamilies.length,
+        gapFamilyCount: gapFamilies.length,
+        retryFamilyCount: retryFamilies.length,
+        sourceFamilyOperationTypeCount: operationTypes.length,
         latestArtifactAt,
         blockers,
         ownerLane: 'public-ti' as const,
@@ -330,12 +356,35 @@ function publicTiProvenanceReadiness(input: {
         staleAfterSeconds: 3600,
         proofTimestamp: latestArtifactAt || input.generatedAt,
         expectedDashboardRowId: 'public_ti_provenance',
-        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, evidenceLedgerReferences, and actionability.schemaVersion=ti.query.actionability.v1 with watchlist, alert, and case workflow routes.',
-        backendProofContractVersion: actionabilityLoaded ? 'ti.search.public_answer.v1 + ti.query.actionability.v1' : 'ti.search.public_answer.v1',
+        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, evidenceLedgerReferences, actionability.schemaVersion=ti.query.actionability.v1, and ti.public_actor.source_family_coverage_matrix.v1.',
+        backendProofContractVersion: sourceFamilyMatrixReady ? 'ti.search.public_answer.v1 + ti.query.actionability.v1 + ti.public_actor.source_family_coverage_matrix.v1' : actionabilityLoaded ? 'ti.search.public_answer.v1 + ti.query.actionability.v1' : 'ti.search.public_answer.v1',
         detail: blockers.length
             ? blockers.join('; ')
-            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'} and ${handoffRoutes.length} backed workflow route${handoffRoutes.length === 1 ? '' : 's'}.`,
+            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'}, ${sourceFamilyRows.length} source famil${sourceFamilyRows.length === 1 ? 'y' : 'ies'}, and ${handoffRoutes.length} backed workflow route${handoffRoutes.length === 1 ? '' : 's'}.`,
     }
+}
+
+type SourceFamilyCoverageMatrix = {
+    schemaVersion?: string
+    rows?: unknown[]
+    summary?: {
+        totalFamilies?: number
+        publicTiReadyFamilies?: unknown[]
+        alertReadyFamilies?: unknown[]
+        gapFamilies?: unknown[]
+        retryFamilies?: unknown[]
+        operationTypes?: unknown[]
+        latestCaptureAt?: string
+        latestEnrichmentAt?: string
+    }
+}
+
+function sourceFamilyCoverageMatrix(payload: {
+    actionability?: { sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix }
+    proofArtifacts?: { publicTiQueryAdapter?: { sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix } }
+} | undefined) {
+    return payload?.actionability?.sourceFamilyCoverageMatrix
+        || payload?.proofArtifacts?.publicTiQueryAdapter?.sourceFamilyCoverageMatrix
 }
 
 function alertGenerationReadiness(input: {
