@@ -1154,6 +1154,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     sharedWatchlistSupportInspection: OrganizationSharedWatchlistSupportInspection
     sharedWatchlistAlertQueueVisibility: OrganizationSharedWatchlistAlertQueueVisibility
     webhookDestinationOwnership: OrganizationWebhookDestinationOwnershipContract
+    webhookDestinationAccessDecision: OrganizationWebhookDestinationAccessDecision
     consumerReadiness: OrganizationSharedWatchlistConsumerReadiness
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
@@ -1241,6 +1242,57 @@ export type OrganizationWebhookDestinationOwnershipContract = {
     requiredDeliveryFields: string[]
     redactedFields: string[]
     blockerCodes: string[]
+}
+
+export type OrganizationWebhookDestinationAccessDecision = {
+    schemaVersion: 'organization.webhook_destination_access_decision.v1'
+    organizationId: string
+    tenantId: string
+    sourceFamily: 'organization_watchlist'
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    route: 'POST /v1/dwm/webhooks/deliver'
+    destinationScope: {
+        requiredDestinationOrgId: string
+        selectedDestinationOrgField: 'destination.org_id'
+        selectedDestinationIdField: 'webhookDestinationIds[]'
+        crossOrgDestinationAllowed: false
+        nonmemberDestinationEnumeration: false
+    }
+    allowedActions: {
+        automaticDelivery: boolean
+        manualTrigger: boolean
+        configureDestination: boolean
+        readDeliverySummary: true
+    }
+    roleGates: {
+        automaticDelivery: Array<'owner' | 'admin'>
+        manualTrigger: Array<'owner' | 'admin'>
+        configureDestination: Array<'owner' | 'admin'>
+        readDeliverySummary: OrganizationRole[]
+    }
+    denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | 'manual_webhook_selection_required' | 'role_not_allowed' | null
+    blockerCodes: string[]
+    requiredAlertFields: string[]
+    requiredDeliveryFields: string[]
+    proofAssertions: Array<
+        | 'destination_org_matches_alert_org'
+        | 'idempotency_scoped_to_org_destination_alert'
+        | 'manual_trigger_owner_admin_only'
+        | 'member_viewer_cannot_configure_destination'
+        | 'nonmember_cannot_enumerate_destinations'
+    >
+    noLeakFields: Array<
+        | 'destination.secret'
+        | 'destination.endpoint'
+        | 'otherOrg.destinationIds'
+        | 'otherOrg.alertGeneratorKeys'
+        | 'activeTerms[].term'
+    >
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
 export type OrganizationSharedWatchlistConsumerReadiness = {
@@ -5275,6 +5327,60 @@ export function organizationWatchlistAlertTermsExport(
         sharedWatchlistDownstreamProof,
         downstreamAuthorization
     ).webhookDestinationOwnership
+    const canManageWebhookDestinations = roleCanManageOrganization(member.role)
+    const webhookDestinationAccessDecision: OrganizationWebhookDestinationAccessDecision = {
+        schemaVersion: 'organization.webhook_destination_access_decision.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        sourceFamily: 'organization_watchlist',
+        member: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        route: webhookDestinationOwnership.route,
+        destinationScope: {
+            requiredDestinationOrgId: webhookDestinationOwnership.requiredDestinationOrgId,
+            selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+            selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+            crossOrgDestinationAllowed: false,
+            nonmemberDestinationEnumeration: webhookDestinationOwnership.nonmemberDestinationEnumeration,
+        },
+        allowedActions: {
+            automaticDelivery: webhookDestinationOwnership.roleGates.automaticDeliveryAllowed,
+            manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowed,
+            configureDestination: canManageWebhookDestinations,
+            readDeliverySummary: true,
+        },
+        roleGates: {
+            automaticDelivery: ['owner', 'admin'],
+            manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
+            configureDestination: ['owner', 'admin'],
+            readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+        },
+        denialReason: webhookDestinationOwnership.roleGates.denialReason ?? (canManageWebhookDestinations ? null : 'role_not_allowed'),
+        blockerCodes: Array.from(new Set([
+            ...webhookDestinationOwnership.blockerCodes,
+            ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+        ])),
+        requiredAlertFields: webhookDestinationOwnership.requiredAlertFields,
+        requiredDeliveryFields: webhookDestinationOwnership.requiredDeliveryFields,
+        proofAssertions: [
+            'destination_org_matches_alert_org',
+            'idempotency_scoped_to_org_destination_alert',
+            'manual_trigger_owner_admin_only',
+            'member_viewer_cannot_configure_destination',
+            'nonmember_cannot_enumerate_destinations',
+        ],
+        noLeakFields: [
+            'destination.secret',
+            'destination.endpoint',
+            'otherOrg.destinationIds',
+            'otherOrg.alertGeneratorKeys',
+            'activeTerms[].term',
+        ],
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     const supportAccess: OrganizationWatchlistAlertBridgeContract['supportAccess'] = {
         mode: 'support_contract_only',
         blockerCode: 'support_only_access',
@@ -5566,6 +5672,7 @@ export function organizationWatchlistAlertTermsExport(
         sharedWatchlistSupportInspection,
         sharedWatchlistAlertQueueVisibility,
         webhookDestinationOwnership,
+        webhookDestinationAccessDecision,
         consumerReadiness,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
