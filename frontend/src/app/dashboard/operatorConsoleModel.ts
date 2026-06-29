@@ -1522,6 +1522,13 @@ function buildProductReadiness(input: {
             expectedDashboardRowId: analystWorkflow?.expectedDashboardRowId,
             integrationProbeHint: analystWorkflow?.integrationProbeHint,
             backendProofContractVersion: analystWorkflow?.backendProofContractVersion || analystWorkflow?.schemaVersion,
+            caseId: analystWorkflow?.caseId,
+            alertId: analystWorkflow?.alertId,
+            caseStatus: analystWorkflow?.caseStatus,
+            assignedOwner: analystWorkflow?.assignedOwner,
+            caseDetailHref: analystWorkflow?.caseDetailRoute || (analystWorkflow?.caseId ? `/api/cases/${encodeURIComponent(analystWorkflow.caseId)}` : undefined),
+            caseDetailReady: analystWorkflow?.caseDetailReady,
+            caseDetailTimelineCount: analystWorkflow?.caseDetailTimelineCount,
         },
         {
             id: 'source_inventory_probe',

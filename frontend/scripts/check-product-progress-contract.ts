@@ -668,6 +668,9 @@ assert.ok(longLabelContext.readiness.productReadiness.every(item => typeof item.
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.deepLinkTarget === item.href))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.ownerLane && item.operatorAction))
 assert.ok(longLabelContext.readiness.productReadiness.every(item => item.backendProofContractVersion && item.proofTimestamp && item.staleAfterSeconds), 'Every product-readiness row needs proof contract metadata.')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseId, 'case_acme_1')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseDetailHref, '/api/cases/case_acme_1')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseDetailTimelineCount, 1)
 
 for (const attribute of [
     'data-readiness-row-id',
@@ -846,6 +849,7 @@ assert.ok(workbenchSource.includes('inspect_generated_alerts'), 'Alert readiness
 assert.ok(workbenchSource.includes('GET /api/dwm/alerts returns the persisted alert queue'), 'Generated alert action should name the backed alerts API contract.')
 assert.ok(workbenchSource.includes('open_dwm_alert_workflow'), 'Alert readiness should deep-link to the DWM workflow for watchlist/rebuild work.')
 assert.ok(workbenchSource.includes('\'dashboard_evidence\', \'analyst_workflow\', \'source_inventory_probe\''), 'Operator action rail should prioritize blocked analyst workflow readiness after dashboard evidence.')
+assert.ok(workbenchSource.includes('item.caseDetailTimelineCount'), 'Analyst workflow readiness rail should surface backed case timeline proof.')
 assert.ok(workbenchSource.includes('orgInviteDisabledReason(orgContext, selectedCaseDetail)'), 'Invite handler should use the same org/case access guard as the invite UI.')
 assert.ok(workbenchSource.includes('orgInviteDisabledReason(orgContext, caseDetail)'), 'Invite UI should use the shared org/case access guard.')
 assert.ok(workbenchSource.includes('Invite is disabled because the case API marked this member read-only or visibility-blocked.'), 'Invite action should name the backed case access blocker.')

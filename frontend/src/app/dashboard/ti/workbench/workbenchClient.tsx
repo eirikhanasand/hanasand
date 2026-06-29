@@ -187,6 +187,13 @@ export type WorkbenchProductReadinessItem = {
     backendProofContractVersion?: string
     ownerLane?: string
     operatorAction?: string
+    caseId?: string
+    alertId?: string
+    caseStatus?: string
+    assignedOwner?: string
+    caseDetailHref?: string
+    caseDetailReady?: boolean
+    caseDetailTimelineCount?: number
 }
 
 export type WorkbenchOrgContext = {
@@ -1656,14 +1663,19 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
         .filter(item => item.status !== 'ready' && priority.includes(item.id))
         .sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id))
         .slice(0, 3)
-        .map(item => ({
-            id: `readiness_${item.id}`,
-            label: item.label,
-            detail: item.detail,
-            tone: productReadinessTone(item.status),
-            href: item.href,
-            disabledReason: item.status === 'unavailable' ? item.source : undefined,
-        }))
+        .map(item => {
+            const analystCaseDetail = item.id === 'analyst_workflow' && item.caseId
+                ? ` Case ${item.caseId}${item.caseStatus ? ` is ${item.caseStatus}` : ''}${item.caseDetailTimelineCount ? ` with ${item.caseDetailTimelineCount} timeline event${item.caseDetailTimelineCount === 1 ? '' : 's'}` : ''}.`
+                : ''
+            return {
+                id: `readiness_${item.id}`,
+                label: item.operatorAction || item.label,
+                detail: `${item.detail}${analystCaseDetail}`,
+                tone: productReadinessTone(item.status),
+                href: item.href,
+                disabledReason: item.status === 'unavailable' ? item.source : undefined,
+            }
+        })
 }
 
 function relatedLinkHref(selected: WorkbenchCase, label: string) {
