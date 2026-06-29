@@ -387,6 +387,16 @@ type WorkbenchApiPayload = {
     deliveredAt?: string
     delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
     deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
+    latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
+    deliveryEvidence?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
+    deliveryProof?: {
+        latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
+        deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
+    }
+    testResult?: {
+        delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
+        deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
+    }
     case?: { id?: string, status?: string, organizationId?: string }
     receipt?: { id?: string, deliveryMode?: string, webhookDeliveryId?: string }
     watchlist?: { id?: string, status?: string }
@@ -2873,9 +2883,23 @@ async function readJson(response: Response) {
 
 function deliveryEvidenceFromPayload(payload: WorkbenchApiPayload | undefined, fallbackAlertId: string) {
     const attemptedAt = payload?.deliveredAt || payload?.testedAt || new Date().toISOString()
-    return [payload?.delivery, ...(payload?.deliveries || [])]
+    return deliveryCandidatesFromPayload(payload)
         .map(delivery => normalizeDeliveryEvidence(delivery, fallbackAlertId, attemptedAt))
         .filter((delivery): delivery is WorkbenchDeliveryEvidence => Boolean(delivery))
+}
+
+function deliveryCandidatesFromPayload(payload: WorkbenchApiPayload | undefined): Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean } | undefined> {
+    if (!payload) return []
+    return [
+        payload.delivery,
+        payload.latestDelivery,
+        ...(payload.deliveries || []),
+        ...(payload.deliveryEvidence || []),
+        payload.deliveryProof?.latestDelivery,
+        ...(payload.deliveryProof?.deliveries || []),
+        payload.testResult?.delivery,
+        ...(payload.testResult?.deliveries || []),
+    ]
 }
 
 function normalizeDeliveryEvidence(delivery: WorkbenchApiPayload['delivery'] | undefined, fallbackAlertId: string, fallbackAttemptedAt: string): WorkbenchDeliveryEvidence | undefined {
@@ -3050,8 +3074,8 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
         if (Number.isFinite(inserted) || Number.isFinite(failed)) return `Canary run finished with ${Number.isFinite(inserted) ? inserted : 0} capture${inserted === 1 ? '' : 's'} and ${Number.isFinite(failed) ? failed : 0} failure${failed === 1 ? '' : 's'}.`
         return 'Canary collection run accepted.'
     }
-    if (payload.delivery?.id) return `Webhook test ${payload.delivery.status || 'recorded'} as ${payload.delivery.id}.`
-    if (payload.deliveries?.[0]?.id) return `Latest delivery ${payload.deliveries[0].id} is ${payload.deliveries[0].status || 'recorded'}.`
+    const webhookDeliveries = deliveryEvidenceFromPayload(payload, 'webhook_action')
+    if (webhookDeliveries[0]) return `Webhook test ${webhookDeliveries[0].status || 'recorded'} as ${webhookDeliveries[0].id}.`
     if (payload.testedAt) return `Webhook test recorded at ${payload.testedAt}.`
     return `${action.label} completed.`
 }
