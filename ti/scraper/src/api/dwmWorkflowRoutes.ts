@@ -1388,12 +1388,24 @@ function buildDwmAlertNextBestAction(alert: any, deliveries: any[]) {
 
 function buildDwmAlertCaseHandoff(alert: any) {
   try {
-    return buildAlertCaseHandoff({
+    const handoff = buildAlertCaseHandoff({
       alert,
       tenantId: alert.tenantId,
       organizationId: alert.organizationId,
       createdAt: alert.updatedAt ?? alert.savedAt ?? alert.lastSeenAt
     });
+    const createdEvent = buildDwmAlertCreatedEventSummary(alert);
+    if (!createdEvent) return handoff;
+    return {
+      ...handoff,
+      payload: {
+        ...handoff.payload,
+        body: {
+          ...handoff.payload.body,
+          createdEvent
+        }
+      }
+    };
   } catch (caught) {
     return {
       schemaVersion: "hanasand.analyst_handoff_error.v1",

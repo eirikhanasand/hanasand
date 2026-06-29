@@ -369,7 +369,14 @@ describe("dwm workflow persistence", () => {
       alertId: alert.id,
       caseIdCandidate: alert.caseIdCandidate,
       casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
-      captureIds: ["cap_workflow_acme"]
+      captureIds: ["cap_workflow_acme"],
+      createdEvent: {
+        schemaVersion: "dwm.alert_created_event.v1",
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        dedupeKey: alert.dedupeKey,
+        recommendedRoute: "identity_response"
+      }
     });
     expect(triage.alert.nextBestAction).toMatchObject({ action: "investigate_or_route", route: "identity_response" });
     expect(triage.alert.deliveryReadiness).toMatchObject({ ready: false, state: "missing_route", evidenceCount: 1 });
@@ -560,7 +567,13 @@ describe("dwm workflow persistence", () => {
       alertId: alert.id,
       caseIdCandidate: alert.caseIdCandidate,
       casePath: `/v1/cases/case_workflow_live?alertId=${alert.id}`,
-      watchlistItemIds: expect.arrayContaining([expect.stringContaining("acme.com")])
+      watchlistItemIds: expect.arrayContaining([expect.stringContaining("acme.com")]),
+      createdEvent: {
+        sourceFamily: "telegram_public",
+        captureIds: ["cap_workflow_acme"],
+        dedupeKey: alert.dedupeKey,
+        recommendedRoute: "identity_response"
+      }
     });
     expect(detail.nextBestAction).toMatchObject({ action: "investigate_or_route" });
     expect(detail.deliveryReadiness).toMatchObject({ ready: false, blocker: "missing_webhook_route" });
