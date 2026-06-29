@@ -710,6 +710,27 @@ export async function getSupportSession(req: FastifyRequest<{ Params: SupportSes
         auditEventIds: state.auditEventIds,
     })
     const workflowRoutes = supportSessionWorkflowRoutes(state)
+    const timelineFilters = {
+        supportSession: supportSessionId,
+        entity: supportSessionId,
+        request: state.requestId,
+        action: 'support.session',
+        source: 'admin',
+        service: 'hanasand-api',
+    }
+    const auditTimeline = {
+        schemaVersion: 'support.scoped_session.audit_timeline.v1',
+        filters: timelineFilters,
+        eventIds: timeline.map(event => event.id),
+        summary: auditTimelineSummary(timeline),
+        filterContract: supportAuditFilterContract(timelineFilters, timeline),
+        exportProof: supportAuditExportProof(timelineFilters, timeline),
+        redacted: true,
+        links: {
+            timeline: auditFilterQuery(timelineFilters),
+            details: timeline.map(event => event.links?.detail).filter(Boolean),
+        },
+    }
     return res.send({
         supportSession: response,
         detail: {
@@ -717,10 +738,11 @@ export async function getSupportSession(req: FastifyRequest<{ Params: SupportSes
             generatedAt: new Date().toISOString(),
             supportSession: response,
             timeline,
+            auditTimeline,
             readinessProof: {
                 schemaVersion: 'support.scoped_session.readiness_proof.v1',
                 route: '/api/admin/support/sessions/:sessionId',
-                auditRoute: `/api/admin/audit-events?supportSession=${encodeURIComponent(supportSessionId)}&source=admin&service=hanasand-api`,
+                auditRoute: auditTimeline.links.timeline,
                 revokeRoute: `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}/revoke`,
                 availableActions: state.allowedActions,
                 scope: state.scope,
@@ -738,6 +760,7 @@ export async function getSupportSession(req: FastifyRequest<{ Params: SupportSes
                 `Scope: ${state.scope.join(', ') || 'none'}`,
                 `Expires: ${state.expiresAt}`,
                 `Audit events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
+                `Timeline: ${auditTimeline.links.timeline}`,
             ].join('\n'),
         },
     })
