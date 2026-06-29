@@ -1315,6 +1315,66 @@ assert.equal(archivedOrgReadiness.readinessProof.routes.alertTermsExport, 'GET /
 assert.ok(archivedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_archived'))
 assert.ok(archivedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_archived'))
 
+const archivedInviteDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { email: 'archived-invite@example.test', role: 'member', requestId: 'smoke-archived-invite-denied' },
+})
+assert.equal(archivedInviteDeniedResponse.statusCode, 409, archivedInviteDeniedResponse.body)
+assert.equal(parseBody(archivedInviteDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedInviteDeniedResponse.body).lifecycleBlocker.action, 'invite members')
+
+const archivedInviteResendDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/invites/${bulkInviteWorkflow.results[1].inviteId}/actions`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { action: 'resend', reason: 'Archived org should not resend invites.', requestId: 'smoke-archived-resend-denied' },
+})
+assert.equal(archivedInviteResendDeniedResponse.statusCode, 409, archivedInviteResendDeniedResponse.body)
+assert.equal(parseBody(archivedInviteResendDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedInviteResendDeniedResponse.body).lifecycleBlocker.action, 'resend invites')
+
+const archivedRoleUpdateDeniedResponse = await app.inject({
+    method: 'PATCH',
+    url: `/api/organizations/${organization.id}/members/org_smoke_viewer/role`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { role: 'member', reason: 'Archived org should not change roles.', requestId: 'smoke-archived-role-denied' },
+})
+assert.equal(archivedRoleUpdateDeniedResponse.statusCode, 409, archivedRoleUpdateDeniedResponse.body)
+assert.equal(parseBody(archivedRoleUpdateDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedRoleUpdateDeniedResponse.body).lifecycleBlocker.action, 'change member roles')
+
+const archivedOwnershipTransferDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/ownership-transfer`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { targetUserId: 'org_smoke_admin', reason: 'Archived org should not transfer ownership.', requestId: 'smoke-archived-transfer-denied' },
+})
+assert.equal(archivedOwnershipTransferDeniedResponse.statusCode, 409, archivedOwnershipTransferDeniedResponse.body)
+assert.equal(parseBody(archivedOwnershipTransferDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedOwnershipTransferDeniedResponse.body).lifecycleBlocker.action, 'transfer ownership')
+
+const archivedWatchlistCreateDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { kind: 'domain', value: 'archived-org.example', reason: 'Archived org should not add terms.', requestId: 'smoke-archived-watchlist-create-denied' },
+})
+assert.equal(archivedWatchlistCreateDeniedResponse.statusCode, 409, archivedWatchlistCreateDeniedResponse.body)
+assert.equal(parseBody(archivedWatchlistCreateDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedWatchlistCreateDeniedResponse.body).lifecycleBlocker.action, 'create shared watchlists')
+
+const archivedWatchlistPauseDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { action: 'pause', reason: 'Archived org should not pause terms.', requestId: 'smoke-archived-watchlist-pause-denied' },
+})
+assert.equal(archivedWatchlistPauseDeniedResponse.statusCode, 409, archivedWatchlistPauseDeniedResponse.body)
+assert.equal(parseBody(archivedWatchlistPauseDeniedResponse.body).lifecycleBlocker.code, 'org_archived')
+assert.equal(parseBody(archivedWatchlistPauseDeniedResponse.body).lifecycleBlocker.action, 'pause shared watchlists')
+
 const deleteOrganizationResponse = await app.inject({
     method: 'PUT',
     url: `/api/organizations/${organization.id}/settings`,
@@ -1363,6 +1423,33 @@ assert.ok(deletedOrgReadiness.readinessProof.blockers.includes('org_deleted'))
 assert.ok(deletedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_deleted'))
 assert.ok(deletedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_deleted'))
 assert.equal(deletedOrgReadiness.readinessProof.cleanupProof.cleanupIdempotent, true)
+
+const deletedInviteAcceptDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/invites/${bulkInviteWorkflow.results[2].inviteId}/accept`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(deletedInviteAcceptDeniedResponse.statusCode, 404, deletedInviteAcceptDeniedResponse.body)
+
+const deletedWatchlistCreateDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { kind: 'keyword', value: 'deleted org term', reason: 'Deleted org should not add terms.', requestId: 'smoke-deleted-watchlist-create-denied' },
+})
+assert.equal(deletedWatchlistCreateDeniedResponse.statusCode, 409, deletedWatchlistCreateDeniedResponse.body)
+assert.equal(parseBody(deletedWatchlistCreateDeniedResponse.body).lifecycleBlocker.code, 'org_deleted')
+assert.equal(parseBody(deletedWatchlistCreateDeniedResponse.body).lifecycleBlocker.action, 'create shared watchlists')
+
+const deletedWatchlistResumeDeniedResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists/${ownerWatchlistItem.id}/actions`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { action: 'resume', reason: 'Deleted org should not resume terms.', requestId: 'smoke-deleted-watchlist-resume-denied' },
+})
+assert.equal(deletedWatchlistResumeDeniedResponse.statusCode, 409, deletedWatchlistResumeDeniedResponse.body)
+assert.equal(parseBody(deletedWatchlistResumeDeniedResponse.body).lifecycleBlocker.code, 'org_deleted')
+assert.equal(parseBody(deletedWatchlistResumeDeniedResponse.body).lifecycleBlocker.action, 'resume shared watchlists')
 
 const reactivateOrganizationResponse = await app.inject({
     method: 'PUT',
@@ -1927,6 +2014,8 @@ async function fakeRun(query: string, params: any[] = []) {
         const [inviteId, userId] = params
         const invite = invites.get(inviteId)
         if (!invite || invite.status !== 'pending' || Date.parse(invite.expires_at) <= Date.now()) return rows([])
+        const organization = organizations.get(invite.organization_id)
+        if (!organization || (organization.status ?? 'active') !== 'active') return rows([])
         const acceptedAt = iso()
         const acceptedInvite = { ...invite, status: 'accepted', accepted_by: userId, accepted_at: acceptedAt }
         invites.set(inviteId, acceptedInvite)

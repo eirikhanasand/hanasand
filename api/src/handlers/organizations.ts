@@ -434,6 +434,11 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'change member roles')
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+    }
+
     const target = await loadOrganizationMembership(req.params.id, req.params.userId)
     if (!target || target.status !== 'active') {
         return res.status(404).send({ error: 'Organization member not found.' })
@@ -514,6 +519,11 @@ export async function postOrganizationOwnershipTransfer(req: FastifyRequest<{ Pa
         return res.status(403).send({ error: 'Only organization owners can transfer ownership.' })
     }
 
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'transfer ownership')
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+    }
+
     let input
     try {
         input = normalizeOwnershipTransferInput(req.body)
@@ -591,6 +601,11 @@ export async function postOrganizationInvites(req: FastifyRequest<{ Params: Orga
 
     if (!roleCanManageOrganization(organization.role)) {
         return res.status(403).send({ error: 'Only organization owners and admins can invite members.' })
+    }
+
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'invite members')
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
     }
 
     let input
@@ -735,6 +750,13 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
         return res.status(409).send({ error: 'Accepted invites cannot be revoked or resent; manage the member instead.' })
     }
 
+    const lifecycleBlocker = input.action === 'resend'
+        ? inactiveOrganizationMutationBlocker(organization, 'resend invites')
+        : null
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+    }
+
     const resendExpiresAt = input.expiresAt ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
     const result = input.action === 'resend'
         ? await run(`
@@ -818,6 +840,12 @@ export async function postOrganizationInviteAccept(req: FastifyRequest<{ Params:
             WHERE id = $1
               AND status = 'pending'
               AND expires_at > NOW()
+              AND EXISTS (
+                  SELECT 1
+                  FROM organizations
+                  WHERE organizations.id = organization_invites.organization_id
+                    AND COALESCE(organizations.status, 'active') = 'active'
+              )
             RETURNING *
         ),
         member AS (
@@ -1117,6 +1145,11 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
         return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
     }
 
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'create shared watchlists')
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
+    }
+
     let input
     try {
         input = normalizeWatchlistInput(req.body)
@@ -1188,6 +1221,11 @@ export async function putOrganizationWatchlist(req: FastifyRequest<{ Params: Wat
 
     if (!roleCanWriteWatchlist(organization.role)) {
         return res.status(403).send({ error: 'Only organization owners and admins can update watchlists.' })
+    }
+
+    const lifecycleBlocker = inactiveOrganizationMutationBlocker(organization, 'update shared watchlists')
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
     }
 
     let input
@@ -1312,6 +1350,13 @@ export async function postOrganizationWatchlistAction(req: FastifyRequest<{ Para
         input = normalizeWatchlistActionInput(req.body)
     } catch (error) {
         return res.status(400).send({ error: error instanceof Error ? error.message : 'Invalid watchlist action.' })
+    }
+
+    const lifecycleBlocker = input.action === 'archive'
+        ? null
+        : inactiveOrganizationMutationBlocker(organization, `${input.action} shared watchlists`)
+    if (lifecycleBlocker) {
+        return sendOrganizationLifecycleBlocker(res, lifecycleBlocker)
     }
 
     const nextStatus = input.action === 'resume' || input.action === 'restore' ? 'active' : input.action === 'pause' ? 'paused' : 'archived'
@@ -1623,6 +1668,30 @@ function logOrganizationEvent(req: FastifyRequest, action: string, organizationI
             ...metadata,
         },
     }).catch(error => req.log.warn({ error, action, organizationId }, 'Failed to persist organization event log'))
+}
+
+function inactiveOrganizationMutationBlocker(organization: Pick<OrganizationRow, 'id' | 'status'>, action: string) {
+    const status = organization.status ?? 'active'
+    if (status !== 'archived' && status !== 'deleted') {
+        return null
+    }
+
+    return {
+        schemaVersion: 'organization.lifecycle_mutation_blocker.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        status,
+        code: status === 'deleted' ? 'org_deleted' : 'org_archived',
+        action,
+        message: `Organization is ${status}; reactivate it before ${action}.`,
+    }
+}
+
+function sendOrganizationLifecycleBlocker(res: FastifyReply, blocker: NonNullable<ReturnType<typeof inactiveOrganizationMutationBlocker>>) {
+    return res.status(409).send({
+        error: blocker.message,
+        lifecycleBlocker: blocker,
+    })
 }
 
 function organizationSettingsPermissions(role: OrganizationRole | undefined) {
