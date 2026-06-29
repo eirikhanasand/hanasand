@@ -6,6 +6,7 @@ import { buildProductNorthStarScoreboard } from '../src/utils/productProgress/no
 const here = new URL('.', import.meta.url)
 const pageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 const modelSource = readFileSync(new URL('../src/utils/productProgress/northStar.ts', here), 'utf8')
+const routeSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T10:00:00.000Z'
 const routes = {
@@ -112,7 +113,19 @@ for (const token of [
     assert.ok(pageSource.includes(token), `Readiness page missing ${token}.`)
 }
 
-for (const phrase of ['powered by', 'confidence', 'signals', 'dashboard slop', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
+for (const token of [
+    '/api/product-progress',
+    'buildProductNorthStarScoreboard',
+    'parseProductProgressReadinessPayload',
+    'cache-control',
+    'no-store',
+    'x-organization-id',
+]) {
+    assert.ok(routeSource.includes(token), `Product readiness API route missing ${token}.`)
+}
+
+for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'named examples', 'dashboard slop', 'how this feeds', 'acceptance criteria', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)
+    assert.equal(routeSource.toLowerCase().includes(phrase), false, `Product readiness API route contains banned copy: ${phrase}`)
 }
