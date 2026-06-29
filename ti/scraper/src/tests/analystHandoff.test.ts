@@ -5,7 +5,12 @@ import {
   buildActorWatchlistCandidateHandoff,
   buildAlertCaseHandoff,
   buildAlertWebhookTriggerHandoff,
-  buildWatchlistAlertGenerationHandoff
+  buildWatchlistAlertGenerationHandoff,
+  orgWatchlistTermsToAlertGenerationRequest,
+  persistedAlertToCaseHandoffPayload,
+  persistedAlertToWebhookTriggerContext,
+  publicTiArtifactToOrgWatchlistCreate,
+  type AnalystHandoffBlockerCode
 } from "../product/analystHandoff.ts";
 import { buildDwmProductSnapshot, type DwmAlert } from "../product/dwmProduct.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -154,6 +159,153 @@ describe("analyst handoff contract", () => {
     const alert = alertFixture({ organizationId: "org_other" });
 
     expect(() => buildAlertCaseHandoff({ parent, alert })).toThrow(AnalystHandoffIdentityMismatchError);
+  });
+
+  test("adapter layer emits stable requests and webhook idempotency without UI glue", () => {
+    const watchlist = publicTiArtifactToOrgWatchlistCreate({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      requestedByUserId: "user_analyst",
+      query: "Lumma C2",
+      artifact: {
+        id: "artifact_lumma_acme",
+        kind: "tool",
+        label: "Lumma C2",
+        confidence: 88,
+        freshness: "2026-06-28T16:10:00.000Z",
+        provenance: ["public TI profile", "telegram broker-room capture"],
+        watchlistTerms: [{ kind: "domain", value: "acme.com", notes: "Observed in Lumma C2 broker-room context." }]
+      },
+      generatedAt: "2026-06-28T16:10:00.000Z"
+    });
+    expect(watchlist.ok).toBe(true);
+    if (!watchlist.ok) throw new Error("watchlist adapter failed");
+    expect(watchlist.value.request).toMatchObject({
+      method: "POST",
+      path: "/v1/dwm/watchlists",
+      body: {
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        requestedByUserId: "user_analyst",
+        actorQuery: "Lumma C2",
+        artifactId: "artifact_lumma_acme",
+        terms: [{ kind: "domain", value: "acme.com" }]
+      }
+    });
+
+    const generation = orgWatchlistTermsToAlertGenerationRequest({
+      parent: watchlist.value.handoff,
+      watchlistId: "watch_acme",
+      watchlistItemIds: ["watch_item_acme_domain"],
+      webhookDestinationIds: ["webhook_discord"],
+      createdAt: "2026-06-28T16:11:00.000Z"
+    });
+    expect(generation.ok).toBe(true);
+    if (!generation.ok) throw new Error("generation adapter failed");
+    expect(generation.value.request.body).toMatchObject({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      watchlistId: "watch_acme",
+      watchlistItemIds: ["watch_item_acme_domain"],
+      publicTiHandoffId: watchlist.value.handoff.handoffId
+    });
+
+    const alert = alertFixture({
+      caseIdCandidate: "case_acme_lumma",
+      casePath: "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"
+    });
+    const casePayload = persistedAlertToCaseHandoffPayload({
+      parent: generation.value.handoff,
+      alert,
+      requestedByUserId: "user_analyst",
+      createdAt: "2026-06-28T16:12:00.000Z"
+    });
+    expect(casePayload.ok).toBe(true);
+    if (!casePayload.ok) throw new Error("case adapter failed");
+    expect(casePayload.value.request.body).toMatchObject({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "dwm_alert_acme",
+      caseIdCandidate: "case_acme_lumma",
+      captureIds: ["cap_handoff_acme"],
+      watchlistItemIds: ["watch_item_acme_domain"]
+    });
+
+    const webhook = persistedAlertToWebhookTriggerContext({
+      parent: casePayload.value.handoff,
+      alert,
+      requestedByUserId: "user_analyst",
+      dryRun: true,
+      createdAt: "2026-06-28T16:13:00.000Z"
+    });
+    expect(webhook.ok).toBe(true);
+    if (!webhook.ok) throw new Error("webhook adapter failed");
+    expect(webhook.value.request.body).toMatchObject({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "dwm_alert_acme",
+      dedupeKey: "dwm_dedupe_acme",
+      webhookDestinationIds: ["webhook_discord"],
+      captureIds: ["cap_handoff_acme"],
+      dryRun: true
+    });
+    expect(webhook.value.idempotencyKey).toMatch(/^dwm_webhook_trigger_/);
+    expect(webhook.value.idempotencyKey).toBe(webhook.value.request.body.idempotencyKey);
+    expect(webhook.value.handoff.identity).toMatchObject({
+      requestedByUserId: "user_analyst",
+      actorQuery: "lumma c2",
+      artifactId: "artifact_lumma_acme",
+      watchlistId: "watch_acme",
+      alertId: "dwm_alert_acme",
+      caseIdCandidate: "case_acme_lumma"
+    });
+  });
+
+  test("adapters return typed blockers for missing org, stale evidence, missing provenance, absent alert id, and unsupported artifacts", () => {
+    const publicFailure = publicTiArtifactToOrgWatchlistCreate({
+      tenantId: "tenant_acme",
+      query: "Lumma C2",
+      artifact: {
+        id: "artifact_bad",
+        kind: "note",
+        label: "Unsupported note",
+        freshness: "2026-01-01T00:00:00.000Z",
+        watchlistTerms: []
+      },
+      staleEvidenceBefore: "2026-06-01T00:00:00.000Z"
+    });
+    expect(publicFailure.ok).toBe(false);
+    if (publicFailure.ok) throw new Error("expected public failure");
+    const publicBlockers: AnalystHandoffBlockerCode[] = [
+      "missing_org",
+      "missing_provenance",
+      "missing_watchlist_term",
+      "stale_evidence",
+      "unsupported_actor_artifact"
+    ];
+    expect(publicFailure.blockers.map(item => item.code).sort()).toEqual(publicBlockers.sort());
+
+    const alertWithoutId = { ...alertFixture(), id: "" };
+    const alertFailure = persistedAlertToCaseHandoffPayload({
+      alert: {
+        ...alertWithoutId,
+        organizationId: undefined,
+        workflowContext: { ...alertWithoutId.workflowContext, organizationId: undefined, captureIds: [] },
+        webhookContext: { ...alertWithoutId.webhookContext, organizationId: undefined, captureIds: [] },
+        provenance: { ...alertWithoutId.provenance, captureIds: [], sourceIds: [] },
+        lastSeenAt: "2026-01-01T00:00:00.000Z"
+      },
+      staleEvidenceBefore: "2026-06-01T00:00:00.000Z"
+    });
+    expect(alertFailure.ok).toBe(false);
+    if (alertFailure.ok) throw new Error("expected alert failure");
+    const alertBlockers: AnalystHandoffBlockerCode[] = [
+      "absent_alert_id",
+      "missing_org",
+      "missing_provenance",
+      "stale_evidence"
+    ];
+    expect(alertFailure.blockers.map(item => item.code).sort()).toEqual(alertBlockers.sort());
   });
 });
 

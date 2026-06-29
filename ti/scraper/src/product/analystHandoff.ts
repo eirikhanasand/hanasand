@@ -99,8 +99,82 @@ export type AlertWebhookTriggerPayload = {
     webhookDestinationIds: string[];
     captureIds: string[];
     evidenceCount: number;
+    idempotencyKey: string;
     dryRun?: boolean;
   };
+};
+
+export type AnalystHandoffBlockerCode =
+  | "missing_org"
+  | "missing_provenance"
+  | "stale_evidence"
+  | "absent_alert_id"
+  | "unsupported_actor_artifact"
+  | "missing_watchlist_term"
+  | "missing_watchlist_id"
+  | "missing_watchlist_item"
+  | "identity_mismatch";
+
+export type AnalystHandoffBlocker = {
+  code: AnalystHandoffBlockerCode;
+  field: string;
+  detail: string;
+  recoverable: boolean;
+};
+
+export type AnalystHandoffAdapterResult<T> =
+  | { ok: true; value: T; blockers: [] }
+  | { ok: false; blockers: AnalystHandoffBlocker[]; partial?: Partial<T> };
+
+export type OrgWatchlistCreateRequest = {
+  method: "POST";
+  path: "/v1/dwm/watchlists";
+  body: {
+    tenantId: string;
+    organizationId: string;
+    name: string;
+    terms: Array<DwmWatchTerm & { notes?: string }>;
+    status: "active";
+    source: "public_ti";
+    actorQuery: string;
+    artifactId: string;
+    requestedByUserId?: string;
+  };
+};
+
+export type ActorArtifactAdapterInput = {
+  tenantId: string;
+  organizationId?: string;
+  requestedByUserId?: string;
+  query: string;
+  artifact: ActorWatchlistCandidatePayload["artifact"] & {
+    watchlistTerms?: Array<DwmWatchTerm & { notes?: string }>;
+    readiness?: { state?: string; blockers?: string[] };
+  };
+  terms?: Array<DwmWatchTerm & { notes?: string }>;
+  staleEvidenceBefore?: string;
+  generatedAt?: string;
+};
+
+export type ActorWatchlistAdapterValue = {
+  handoff: AnalystHandoffEnvelope<"actor_watchlist_candidate", ActorWatchlistCandidatePayload>;
+  request: OrgWatchlistCreateRequest;
+};
+
+export type AlertGenerationAdapterValue = {
+  handoff: AnalystHandoffEnvelope<"watchlist_alert_generation_request", AlertGenerationRequestPayload>;
+  request: AlertGenerationRequestPayload;
+};
+
+export type AlertCaseAdapterValue = {
+  handoff: AnalystHandoffEnvelope<"alert_case_handoff", AlertCaseHandoffPayload>;
+  request: AlertCaseHandoffPayload;
+};
+
+export type AlertWebhookAdapterValue = {
+  handoff: AnalystHandoffEnvelope<"alert_webhook_trigger", AlertWebhookTriggerPayload>;
+  request: AlertWebhookTriggerPayload;
+  idempotencyKey: string;
 };
 
 export type AnalystAlertLike = DwmAlert & {
@@ -279,10 +353,119 @@ export function buildAlertWebhookTriggerHandoff(input: {
         webhookDestinationIds: identity.webhookDestinationIds || [],
         captureIds: identity.captureIds || [],
         evidenceCount: input.alert.evidenceSummary?.evidenceCount ?? input.alert.evidence.length,
+        idempotencyKey: webhookTriggerIdempotencyKey(input.alert, identity, input.dryRun),
         dryRun: input.dryRun || undefined
       }
     }
   });
+}
+
+export function publicTiArtifactToOrgWatchlistCreate(input: ActorArtifactAdapterInput): AnalystHandoffAdapterResult<ActorWatchlistAdapterValue> {
+  const terms = normalizeAdapterTerms(input.terms || input.artifact.watchlistTerms || []);
+  const blockers = actorArtifactBlockers(input, terms);
+  if (blockers.length) return { ok: false, blockers };
+  const handoff = buildActorWatchlistCandidateHandoff({
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    requestedByUserId: input.requestedByUserId,
+    query: input.query,
+    artifact: input.artifact,
+    terms,
+    generatedAt: input.generatedAt
+  });
+  return {
+    ok: true,
+    blockers: [],
+    value: {
+      handoff,
+      request: {
+        method: "POST",
+        path: "/v1/dwm/watchlists",
+        body: {
+          tenantId: input.tenantId,
+          organizationId: input.organizationId!,
+          name: `${input.query} exposure watchlist`,
+          terms,
+          status: "active",
+          source: "public_ti",
+          actorQuery: input.query,
+          artifactId: input.artifact.id,
+          requestedByUserId: input.requestedByUserId
+        }
+      }
+    }
+  };
+}
+
+export function orgWatchlistTermsToAlertGenerationRequest(input: {
+  parent: AnalystHandoffEnvelope<"actor_watchlist_candidate", ActorWatchlistCandidatePayload>;
+  watchlistId?: string;
+  watchlistItemIds?: string[];
+  webhookDestinationIds?: string[];
+  createdAt?: string;
+}): AnalystHandoffAdapterResult<AlertGenerationAdapterValue> {
+  const blockers: AnalystHandoffBlocker[] = [];
+  if (!input.parent.identity.organizationId) blockers.push(blocker("missing_org", "organizationId", "Alert generation requires an organization-scoped watchlist.", true));
+  if (!input.watchlistId) blockers.push(blocker("missing_watchlist_id", "watchlistId", "Alert generation requires the persisted watchlist id.", true));
+  if (!input.watchlistItemIds?.length) blockers.push(blocker("missing_watchlist_item", "watchlistItemIds", "Alert generation requires persisted watchlist item ids.", true));
+  if (blockers.length) return { ok: false, blockers };
+  const handoff = buildWatchlistAlertGenerationHandoff({
+    parent: input.parent,
+    watchlistId: input.watchlistId!,
+    watchlistItemIds: input.watchlistItemIds!,
+    webhookDestinationIds: input.webhookDestinationIds,
+    createdAt: input.createdAt
+  });
+  return { ok: true, blockers: [], value: { handoff, request: handoff.payload } };
+}
+
+export function persistedAlertToCaseHandoffPayload(input: {
+  parent?: AnalystHandoffEnvelope<AnalystHandoffKind, unknown>;
+  alert: AnalystAlertLike;
+  tenantId?: string;
+  organizationId?: string;
+  requestedByUserId?: string;
+  staleEvidenceBefore?: string;
+  createdAt?: string;
+}): AnalystHandoffAdapterResult<AlertCaseAdapterValue> {
+  const blockers = alertAdapterBlockers(input.alert, input);
+  if (blockers.length) return { ok: false, blockers };
+  try {
+    const handoff = buildAlertCaseHandoff(input);
+    return { ok: true, blockers: [], value: { handoff, request: handoff.payload } };
+  } catch (error) {
+    if (error instanceof AnalystHandoffIdentityMismatchError) return { ok: false, blockers: [blocker("identity_mismatch", error.field, error.message, false)] };
+    throw error;
+  }
+}
+
+export function persistedAlertToWebhookTriggerContext(input: {
+  parent?: AnalystHandoffEnvelope<AnalystHandoffKind, unknown>;
+  alert: AnalystAlertLike;
+  tenantId?: string;
+  organizationId?: string;
+  requestedByUserId?: string;
+  staleEvidenceBefore?: string;
+  dryRun?: boolean;
+  createdAt?: string;
+}): AnalystHandoffAdapterResult<AlertWebhookAdapterValue> {
+  const blockers = alertAdapterBlockers(input.alert, input);
+  if (blockers.length) return { ok: false, blockers };
+  try {
+    const handoff = buildAlertWebhookTriggerHandoff(input);
+    return {
+      ok: true,
+      blockers: [],
+      value: {
+        handoff,
+        request: handoff.payload,
+        idempotencyKey: handoff.payload.body.idempotencyKey
+      }
+    };
+  } catch (error) {
+    if (error instanceof AnalystHandoffIdentityMismatchError) return { ok: false, blockers: [blocker("identity_mismatch", error.field, error.message, false)] };
+    throw error;
+  }
 }
 
 export function mergeAnalystHandoffIdentity(base: AnalystHandoffIdentity, next: Partial<AnalystHandoffIdentity>): AnalystHandoffIdentity {
@@ -323,6 +506,30 @@ function identityFromAlert(alert: AnalystAlertLike, input: { tenantId?: string; 
   });
 }
 
+function actorArtifactBlockers(input: ActorArtifactAdapterInput, terms: Array<DwmWatchTerm & { notes?: string }>): AnalystHandoffBlocker[] {
+  const blockers: AnalystHandoffBlocker[] = [];
+  if (!input.organizationId) blockers.push(blocker("missing_org", "organizationId", "Public TI watchlist creation requires an organization id.", true));
+  if (!supportedArtifactKind(input.artifact.kind)) blockers.push(blocker("unsupported_actor_artifact", "artifact.kind", `Unsupported actor artifact kind: ${input.artifact.kind}.`, false));
+  if (!terms.length) blockers.push(blocker("missing_watchlist_term", "terms", "Public TI artifact did not include a usable watchlist term.", true));
+  if (!input.artifact.provenance?.length) blockers.push(blocker("missing_provenance", "artifact.provenance", "Public TI artifact needs source provenance before becoming an org watchlist term.", true));
+  if (isStale(input.artifact.freshness, input.staleEvidenceBefore) || input.artifact.readiness?.state === "stale") blockers.push(blocker("stale_evidence", "artifact.freshness", "Public TI artifact evidence is stale and needs refresh before handoff.", true));
+  return blockers;
+}
+
+function alertAdapterBlockers(alert: AnalystAlertLike, input: { organizationId?: string; staleEvidenceBefore?: string }): AnalystHandoffBlocker[] {
+  const identity = identityFromAlert(alert, input);
+  const blockers: AnalystHandoffBlocker[] = [];
+  if (!alert.id) blockers.push(blocker("absent_alert_id", "alert.id", "Persisted alert handoff requires an alert id.", false));
+  if (!identity.organizationId) blockers.push(blocker("missing_org", "organizationId", "Persisted alert handoff requires organization scope.", true));
+  if (!identity.captureIds?.length || !alert.provenance?.sourceIds?.length) blockers.push(blocker("missing_provenance", "alert.provenance", "Persisted alert handoff requires capture and source provenance.", true));
+  if (isStale(alert.lastSeenAt, input.staleEvidenceBefore)) blockers.push(blocker("stale_evidence", "alert.lastSeenAt", "Persisted alert evidence is stale and needs refresh before case or webhook handoff.", true));
+  return blockers;
+}
+
+function webhookTriggerIdempotencyKey(alert: AnalystAlertLike, identity: AnalystHandoffIdentity, dryRun: boolean | undefined): string {
+  return stableId("dwm_webhook_trigger", `${identity.tenantId}:${identity.organizationId || ""}:${alert.id}:${identity.alertDedupeKey || alert.dedupeKey}:${(identity.webhookDestinationIds || []).join(",")}:${dryRun ? "dry_run" : "live"}`);
+}
+
 function envelope<TKind extends AnalystHandoffKind, TPayload>(input: {
   kind: TKind;
   source: AnalystHandoffSource;
@@ -346,6 +553,23 @@ function envelope<TKind extends AnalystHandoffKind, TPayload>(input: {
 
 function casePathFor(caseIdCandidate: string, alertId: string, dedupeKey: string) {
   return `/v1/cases/${encodeURIComponent(caseIdCandidate)}?alertId=${encodeURIComponent(alertId)}&dedupeKey=${encodeURIComponent(dedupeKey)}`;
+}
+
+function blocker(code: AnalystHandoffBlockerCode, field: string, detail: string, recoverable: boolean): AnalystHandoffBlocker {
+  return { code, field, detail, recoverable };
+}
+
+function supportedArtifactKind(kind: string) {
+  return ["country", "tool", "campaign", "infrastructure", "technique"].includes(kind);
+}
+
+function normalizeAdapterTerms(terms: Array<DwmWatchTerm & { notes?: string }>): Array<DwmWatchTerm & { notes?: string }> {
+  return terms.map((term) => ({ ...term, value: term.value.trim() })).filter((term) => term.value.length > 0);
+}
+
+function isStale(value: string | undefined, staleEvidenceBefore: string | undefined) {
+  if (!value || !staleEvidenceBefore) return false;
+  return value < staleEvidenceBefore;
 }
 
 function compactIdentity(identity: AnalystHandoffIdentity): AnalystHandoffIdentity {
