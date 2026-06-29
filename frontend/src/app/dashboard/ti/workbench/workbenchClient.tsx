@@ -1500,11 +1500,25 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     if (selected.kind === 'watchlist_readiness') {
         rows.push({
+            id: 'open_watchlist_workflow',
+            label: 'Edit watchlist',
+            detail: 'Open the DWM workflow to create shared terms, attach delivery scope, and rebuild generated alerts.',
+            tone: 'ready',
+            href: '/dashboard/dwm',
+        })
+        rows.push({
             id: 'inspect_watchlists',
             label: 'Inspect watchlists',
             detail: 'GET /api/dwm/watchlists returns shared watchlist terms and destination scope for alert generation.',
             tone: orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
             href: '/api/dwm/watchlists',
+        })
+        rows.push({
+            id: 'inspect_watchlist_alert_queue',
+            label: 'Generated alerts',
+            detail: 'GET /api/dwm/alerts returns persisted alerts generated from shared watchlists and source coverage.',
+            tone: orgContext?.readiness.liveAlertCount ? 'ready' : orgContext?.readiness.activeWatchlistCount ? 'needs_action' : 'blocked',
+            href: '/api/dwm/alerts',
         })
         if (orgContext?.organization) {
             rows.push({
