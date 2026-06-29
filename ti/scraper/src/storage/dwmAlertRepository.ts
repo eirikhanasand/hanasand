@@ -128,6 +128,21 @@ export type DwmAlertWorkflowExecutionReadiness = {
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
   };
+  createdEventDispatch?: {
+    schemaVersion: "dwm.alert_created_event_dispatch.v1";
+    ready: boolean;
+    eventId?: string;
+    eventType: string;
+    alertId?: string;
+    organizationId?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    selectedCaptureIds: string[];
+    deliveryDedupeKey?: string;
+    idempotencyKey?: string;
+    workflowEventCount: number;
+    blockerCodes: DwmAlertWorkflowExecutionBlockerCode[];
+  };
   ready: boolean;
   action: "assign" | "note" | "transition" | "case_link" | "replay" | "close" | "reopen" | "suppress" | "deliver";
   expectedWorkflowEventCount?: number;
@@ -468,18 +483,34 @@ export function buildDwmAlertWorkflowExecutionReadiness(input: {
     input.supportOnlyRedactionNeeded === true ? workflowExecutionBlocker("support_redaction_only", "support.redactionRequired", "Actor can only consume redacted support context for this alert.", true) : undefined,
     ...lifecycleBlockers
   ].filter(Boolean) as DwmAlertWorkflowExecutionReadiness["blockers"];
+  const blockerCodes = uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertWorkflowExecutionBlockerCode[];
   return {
     schemaVersion: "dwm.alert_workflow_execution_readiness.v1",
     alertId: alert?.id,
     organizationId: input.organizationId ?? alert?.organizationId,
     createdEvent,
+    createdEventDispatch: createdEvent ? {
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: blockerCodes.length === 0,
+      eventId: createdEvent.eventId,
+      eventType: createdEvent.eventType ?? "dwm.alert.created",
+      alertId: alert?.id,
+      organizationId: input.organizationId ?? alert?.organizationId,
+      sourceFamily: createdEvent.sourceFamily ?? alert?.sourceFamily ?? workflowContext.sourceFamily,
+      captureIds: createdEvent.captureIds,
+      selectedCaptureIds,
+      deliveryDedupeKey: createdEvent.deliveryDedupeKey ?? workflowContext.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
+      idempotencyKey: alert ? stableId("dwm_alert_created_workflow_dispatch", `${alert.id}:${createdEvent.eventId ?? "missing"}:${currentWorkflowEventCount ?? 0}:${action}`) : undefined,
+      workflowEventCount: currentWorkflowEventCount ?? 0,
+      blockerCodes
+    } : undefined,
     ready: blockers.length === 0,
     action,
     expectedWorkflowEventCount: input.expectedWorkflowEventCount,
     currentWorkflowEventCount,
     expectedUpdatedAt: input.expectedUpdatedAt,
     currentUpdatedAt,
-    blockerCodes: uniqueStrings(blockers.map((blocker) => blocker.code)) as DwmAlertWorkflowExecutionBlockerCode[],
+    blockerCodes,
     blockers,
     requiredBody: ["organizationId", "status|action|note|assignedOwner|severityOverride|caseId", "expectedWorkflowEventCount?"],
     idempotencyKey: alert ? stableId("dwm_workflow_execution", `${alert.id}:${currentWorkflowEventCount ?? 0}:${action}`) : undefined

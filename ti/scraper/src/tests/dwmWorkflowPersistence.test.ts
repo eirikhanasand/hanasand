@@ -455,6 +455,19 @@ describe("dwm workflow persistence", () => {
         dedupeKey: alert.dedupeKey
       }
     });
+    expect(staleMutation.workflowExecutionReadiness.createdEventDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: false,
+      eventId: alert.alertCreatedEvent.id,
+      alertId: alert.id,
+      organizationId,
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_workflow_acme"],
+      selectedCaptureIds: ["cap_workflow_acme"],
+      workflowEventCount: 1,
+      blockerCodes: ["stale_workflow_version"]
+    });
+    expect(staleMutation.workflowExecutionReadiness.createdEventDispatch.idempotencyKey).toMatch(/^dwm_alert_created_workflow_dispatch_/);
     expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(1);
 
     const invalidTransitionResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}`, {
@@ -825,6 +838,16 @@ describe("dwm workflow persistence", () => {
       blockerCodes: ["stale_workflow_version"],
       expectedWorkflowEventCount: 0,
       currentWorkflowEventCount: 1
+    });
+    expect(staleReplay.workflowExecutionReadiness.createdEventDispatch).toMatchObject({
+      schemaVersion: "dwm.alert_created_event_dispatch.v1",
+      ready: false,
+      organizationId: alphaOrg.id,
+      sourceFamily: "darkweb_metadata",
+      captureIds: ["cap_workflow_onion_acme"],
+      selectedCaptureIds: ["cap_workflow_onion_acme"],
+      workflowEventCount: 1,
+      blockerCodes: ["stale_workflow_version"]
     });
 
     store.saveCapture(darkwebFollowupCapture);
