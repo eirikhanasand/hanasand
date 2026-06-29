@@ -55,6 +55,35 @@ assert.equal(missingAlertGeneration.dashboardEvidence?.status, 'needs_action')
 assert.equal(missingAlertGeneration.dashboardEvidence?.unavailableReason, 'missing_alert_generation_readiness')
 assert.ok(missingAlertGeneration.dashboardEvidence?.detail?.includes('DWM alert generation readiness proof is not loaded.'))
 
+const missingEvidenceWindow = buildProductProgressPayload({
+    generatedAt,
+    checkedAt: generatedAt,
+    query: 'LockBit',
+    routes,
+    sourceProxy,
+    alerts,
+    deliveries,
+    deploy,
+    alertGeneration: {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'needs_action',
+        readyForCustomerDelivery: true,
+        candidateCount: 4,
+        captureRefCount: 4,
+        matchedCandidateCount: 4,
+        missingRouteCandidateCount: 0,
+        generationEvidenceWindowReady: false,
+        generationEvidenceWindowCaptureCount: 0,
+        blockers: ['DWM alert-generation proof did not include a generation evidence window with capture timestamps.'],
+        source: '/api/dwm/alerts/generation-readiness',
+        proofTimestamp: generatedAt,
+    },
+})
+
+assert.equal(missingEvidenceWindow.dashboardEvidence?.status, 'needs_action')
+assert.equal(missingEvidenceWindow.dashboardEvidence?.unavailableReason, 'missing_alert_generation_readiness')
+assert.ok(missingEvidenceWindow.dashboardEvidence?.detail?.includes('generation evidence window'))
+
 const backedAlertGeneration = buildProductProgressPayload({
     generatedAt,
     checkedAt: generatedAt,
@@ -72,8 +101,12 @@ const backedAlertGeneration = buildProductProgressPayload({
         captureRefCount: 4,
         matchedCandidateCount: 4,
         missingRouteCandidateCount: 0,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 4,
+        generationEvidenceWindowSourceFamilies: ['telegram_public', 'darkweb_metadata'],
+        latestEvidenceAt: '2026-06-29T11:59:00.000Z',
         source: '/api/dwm/alerts/generation-readiness',
-        proofTimestamp: generatedAt,
+        proofTimestamp: '2026-06-29T11:59:00.000Z',
     },
 })
 
@@ -81,13 +114,18 @@ assert.equal(backedAlertGeneration.dashboardEvidence?.status, 'ready')
 assert.equal(backedAlertGeneration.dashboardEvidence?.unavailableReason, undefined)
 assert.equal(backedAlertGeneration.dashboardEvidence?.backendProofContractVersion, 'dwm.alert_generation_readiness.v1')
 assert.ok(backedAlertGeneration.dashboardEvidence?.integrationProbeHint?.includes('/api/dwm/alerts/generation-readiness'))
-assert.ok(backedAlertGeneration.dashboardEvidence?.detail?.includes('4 alert generation candidates'))
+assert.ok(backedAlertGeneration.dashboardEvidence?.integrationProbeHint?.includes('generation evidence window'))
+assert.ok(backedAlertGeneration.dashboardEvidence?.detail?.includes('4 evidence-window captures'))
 
 for (const token of [
     'alertGenerationReadiness',
     '/api/dwm/alerts/generation-readiness',
     'dwm.alert_generation_readiness.v1',
     'readyForCustomerDelivery',
+    'generationEvidenceWindowFromProof',
+    'generationEvidenceWindowReady',
+    'latestEvidenceAt',
+    'evidenceWindow',
     'candidateCount',
     'captureRefCount',
     'missingRouteCandidateCount',
