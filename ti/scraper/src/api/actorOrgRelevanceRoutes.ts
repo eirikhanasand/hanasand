@@ -4,6 +4,7 @@ import {
   buildActorOrgRelevanceReviewRecord,
   createActorOrgRelevanceAlertGenerationRequest,
   createActorOrgRelevanceCaseHandoffRequest,
+  createActorOrgRelevanceWebhookTriggerRequest,
   materializeActorOrgRelevanceWatchlist,
   summarizeActorOrgRelevanceReview,
   updateActorOrgRelevanceReviewWorkflow,
@@ -171,6 +172,31 @@ export async function createActorOrgRelevanceReviewCaseHandoffRequest(request: R
     record: record!,
     request: {
       actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      generatedAt: body.generatedAt || nowIso()
+    }
+  });
+  if (!result.ok) return error(result.code, result.message, 400);
+  (options.store as any).saveActorOrgRelevanceReview(result.record);
+  return json({
+    receipt: result.receipt,
+    record: result.record,
+    summary: summarizeActorOrgRelevanceReview(result.record)
+  }, 201);
+}
+
+export async function createActorOrgRelevanceReviewWebhookTriggerRequest(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to prepare actor relevance webhook delivery.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const result = createActorOrgRelevanceWebhookTriggerRequest({
+    record: record!,
+    request: {
+      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      dryRun: body.dryRun !== false,
       generatedAt: body.generatedAt || nowIso()
     }
   });

@@ -31,6 +31,7 @@ export type ActorOrgRelevanceReviewRecord = {
   notes: ActorOrgRelevanceNote[];
   alertGenerationReceipts: ActorOrgRelevanceAlertGenerationReceipt[];
   caseHandoffReceipts: ActorOrgRelevanceCaseHandoffReceipt[];
+  webhookTriggerReceipts: ActorOrgRelevanceWebhookTriggerReceipt[];
   nextActions: ActorOrgRelevanceNextAction[];
   timeline: ActorOrgRelevanceTimelineEvent[];
 };
@@ -57,6 +58,7 @@ export type ActorOrgRelevanceReviewSummary = {
   workflow: ActorOrgRelevanceWorkflowState;
   latestAlertGeneration?: ActorOrgRelevanceAlertGenerationReceipt;
   latestCaseHandoff?: ActorOrgRelevanceCaseHandoffReceipt;
+  latestWebhookTrigger?: ActorOrgRelevanceWebhookTriggerReceipt;
   nextActions: ActorOrgRelevanceNextAction[];
   routes: {
     publicTi: string;
@@ -79,7 +81,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested" | "case_handoff_requested" | "webhook_trigger_prepared";
   summary: string;
   blockerCodes: string[];
 };
@@ -247,6 +249,51 @@ export type ActorOrgRelevanceCaseHandoffRequestResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceCaseHandoffReceipt }
   | { ok: false; code: string; message: string };
 
+export type ActorOrgRelevanceWebhookTriggerReceipt = {
+  schemaVersion: "hanasand.actor_org_relevance.webhook_trigger_receipt.v1";
+  id: string;
+  tenantId: string;
+  organizationId: string;
+  reviewId: string;
+  actorId: string;
+  query: string;
+  createdAt: string;
+  createdBy?: string;
+  caseHandoffReceiptId: string;
+  idempotencyKey: string;
+  request: {
+    method: "POST";
+    path: "/v1/dwm/webhooks/deliver";
+    body: ActorOrgRelevanceHandoffValue["webhookTrigger"]["request"]["body"] & {
+      actorOrgRelevanceReviewId: string;
+      caseHandoffReceiptId: string;
+    };
+  };
+  destination: {
+    webhookDestinationIds: string[];
+    dryRun: boolean;
+  };
+  provenance: {
+    alertId: string;
+    dedupeKey: string;
+    captureIds: string[];
+    evidenceCount: number;
+    casePath?: string;
+    sourceIds: string[];
+    sourceFamilies: string[];
+  };
+};
+
+export type ActorOrgRelevanceWebhookTriggerRequestInput = {
+  actorId?: string;
+  dryRun?: boolean;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceWebhookTriggerRequestResult =
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceWebhookTriggerReceipt }
+  | { ok: false; code: string; message: string };
+
 export type ActorOrgRelevanceQueue = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION;
   generatedAt: string;
@@ -323,6 +370,7 @@ export function buildActorOrgRelevanceReviewRecord(input: {
     notes: input.existing?.notes ?? [],
     alertGenerationReceipts: input.existing?.alertGenerationReceipts ?? [],
     caseHandoffReceipts: input.existing?.caseHandoffReceipts ?? [],
+    webhookTriggerReceipts: input.existing?.webhookTriggerReceipts ?? [],
     nextActions: nextActionsForReadiness(readiness),
     timeline: [...(input.existing?.timeline ?? []), timelineEvent]
   };
@@ -351,6 +399,7 @@ export function summarizeActorOrgRelevanceReview(record: ActorOrgRelevanceReview
     workflow: record.workflow,
     latestAlertGeneration: record.alertGenerationReceipts.at(-1),
     latestCaseHandoff: record.caseHandoffReceipts.at(-1),
+    latestWebhookTrigger: record.webhookTriggerReceipts.at(-1),
     nextActions: record.nextActions,
     routes: {
       publicTi: `/ti/${encodeURIComponent(record.query)}`,
@@ -696,6 +745,82 @@ export function createActorOrgRelevanceCaseHandoffRequest(input: {
         actorId: input.request?.actorId,
         eventType: "case_handoff_requested",
         summary: `Prepared case handoff for ${receipt.routing.casePath}.`,
+        blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+      }]
+    }
+  };
+}
+
+export function createActorOrgRelevanceWebhookTriggerRequest(input: {
+  record: ActorOrgRelevanceReviewRecord;
+  request?: ActorOrgRelevanceWebhookTriggerRequestInput;
+}): ActorOrgRelevanceWebhookTriggerRequestResult {
+  const record = input.record;
+  if (record.state !== "ready" || !record.handoff) {
+    return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before preparing webhook delivery." };
+  }
+  const caseHandoffReceipt = record.caseHandoffReceipts.at(-1);
+  if (!caseHandoffReceipt) {
+    return { ok: false, code: "missing_case_handoff_receipt", message: "Prepare the case handoff before preparing webhook delivery." };
+  }
+  const generatedAt = input.request?.generatedAt || nowIso();
+  const dryRun = input.request?.dryRun ?? true;
+  const body = {
+    ...record.handoff.webhookTrigger.request.body,
+    dryRun,
+    actorOrgRelevanceReviewId: record.id,
+    caseHandoffReceiptId: caseHandoffReceipt.id
+  };
+  const receipt: ActorOrgRelevanceWebhookTriggerReceipt = {
+    schemaVersion: "hanasand.actor_org_relevance.webhook_trigger_receipt.v1",
+    id: stableId("actor_org_relevance_webhook_trigger", `${record.id}:${caseHandoffReceipt.id}:${generatedAt}:${dryRun ? "dry_run" : "live"}`),
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    reviewId: record.id,
+    actorId: record.actorId,
+    query: record.query,
+    createdAt: generatedAt,
+    createdBy: input.request?.actorId,
+    caseHandoffReceiptId: caseHandoffReceipt.id,
+    idempotencyKey: stableId("actor_org_relevance_webhook_trigger_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${caseHandoffReceipt.id}:${dryRun ? "dry_run" : "live"}`),
+    request: {
+      method: "POST",
+      path: "/v1/dwm/webhooks/deliver",
+      body
+    },
+    destination: {
+      webhookDestinationIds: record.handoff.webhookTrigger.request.body.webhookDestinationIds,
+      dryRun
+    },
+    provenance: {
+      alertId: record.handoff.webhookTrigger.request.body.alertId,
+      dedupeKey: record.handoff.webhookTrigger.request.body.dedupeKey,
+      captureIds: record.handoff.webhookTrigger.request.body.captureIds,
+      evidenceCount: record.handoff.webhookTrigger.request.body.evidenceCount,
+      casePath: caseHandoffReceipt.routing.casePath,
+      sourceIds: caseHandoffReceipt.provenance.sourceIds,
+      sourceFamilies: caseHandoffReceipt.provenance.sourceFamilies
+    }
+  };
+  return {
+    ok: true,
+    receipt,
+    record: {
+      ...record,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: input.request?.actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      webhookTriggerReceipts: [...record.webhookTriggerReceipts, receipt],
+      timeline: [...record.timeline, {
+        id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:webhook_trigger_prepared:${caseHandoffReceipt.id}:${dryRun ? "dry_run" : "live"}`),
+        occurredAt: generatedAt,
+        actorId: input.request?.actorId,
+        eventType: "webhook_trigger_prepared",
+        summary: `Prepared webhook ${dryRun ? "dry run" : "delivery"} for ${receipt.destination.webhookDestinationIds.join(",")}.`,
         blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
       }]
     }

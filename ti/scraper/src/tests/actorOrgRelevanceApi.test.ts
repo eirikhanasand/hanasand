@@ -431,6 +431,95 @@ describe("actor org relevance API", () => {
     expect(crossOrgResponse.status).toBe(404);
   });
 
+  test("persists webhook trigger receipts after case handoff readiness", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+
+    const premature = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:31:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    expect(premature.status).toBe(400);
+    expect(await premature.json()).toMatchObject({ error: { code: "missing_case_handoff_receipt" } });
+
+    await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/watchlist?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ webhookDestinationId: "webhook_soc", generatedAt: "2026-06-29T10:32:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/alert-generation-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:33:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const caseResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/case-handoff-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ generatedAt: "2026-06-29T10:34:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const casePayload = await caseResponse.json() as any;
+
+    const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ dryRun: true, generatedAt: "2026-06-29T10:35:00.000Z" })
+    }), { store, frontier: new FocusedFrontier() });
+    const payload = await webhookResponse.json() as any;
+
+    expect(webhookResponse.status).toBe(201);
+    expect(payload.receipt).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.webhook_trigger_receipt.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      reviewId: created.record.id,
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      createdBy: "user_ti",
+      caseHandoffReceiptId: casePayload.receipt.id,
+      request: {
+        method: "POST",
+        path: "/v1/dwm/webhooks/deliver",
+        body: {
+          tenantId: "tenant_microsoft",
+          organizationId: "org_microsoft",
+          alertId: "dwm_alert_microsoft",
+          webhookDestinationIds: ["webhook_soc"],
+          captureIds: ["capture_microsoft_apt29"],
+          evidenceCount: 1,
+          dryRun: true,
+          actorOrgRelevanceReviewId: created.record.id,
+          caseHandoffReceiptId: casePayload.receipt.id
+        }
+      },
+      destination: {
+        webhookDestinationIds: ["webhook_soc"],
+        dryRun: true
+      },
+      provenance: {
+        alertId: "dwm_alert_microsoft",
+        captureIds: ["capture_microsoft_apt29"],
+        evidenceCount: 1,
+        casePath: "/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft",
+        sourceIds: ["microsoft"],
+        sourceFamilies: ["public_advisory"]
+      }
+    });
+    expect(payload.receipt.idempotencyKey).toContain("actor_org_relevance_webhook_trigger_idempotency_");
+    expect(payload.summary.latestWebhookTrigger.id).toBe(payload.receipt.id);
+    expect(payload.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "webhook_trigger_prepared", actorId: "user_ti" })
+    ]));
+    expect((store as any).getActorOrgRelevanceReview(created.record.id).webhookTriggerReceipts).toHaveLength(1);
+
+    const crossOrgResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}/webhook-trigger-request?tenantId=tenant_other&organizationId=org_other`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({})
+    }), { store, frontier: new FocusedFrontier() });
+    expect(crossOrgResponse.status).toBe(404);
+  });
+
   test("turns missing evidence into owner actions instead of a generic teaser state", async () => {
     const store = new InMemoryScraperStore();
     const payload = await submit(store, {
