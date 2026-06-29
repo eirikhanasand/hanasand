@@ -2090,16 +2090,19 @@ export function buildReadinessCases(input: {
             nextTasks: alertVisibilityBlocked
                 ? ['Owner: operator. Verify the dashboard session maps to an active organization member.', 'Retry GET /api/dwm/alerts with userEmail or userId for the selected organization.', 'Do not treat fallback alerts as proof until org visibility succeeds.']
                 : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }],
+            relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
             workflowPath: path,
-            missingDependency: alertVisibilityBlocked ? alertAccessMessage : undefined,
-            actions: !alertVisibilityBlocked && activeWatchlists.length ? [{
-                id: 'rebuild_alerts',
-                label: 'Rebuild alerts',
-                method: 'POST',
-                href: '/api/dwm/alerts/rebuild',
-                body: actionScope(input.scope),
-            }] : [],
+            missingDependency: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
+            actions: [
+                { id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET', href: '/api/dwm/alerts/generation-readiness' },
+                ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
+                    id: 'rebuild_alerts',
+                    label: 'Rebuild alerts',
+                    method: 'POST' as const,
+                    href: '/api/dwm/alerts/rebuild',
+                    body: actionScope(input.scope),
+                }] : []),
+            ],
         }),
     ]
 }

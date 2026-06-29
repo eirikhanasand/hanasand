@@ -702,6 +702,9 @@ assert.ok(workbenchSource.includes('handledActionIds'), 'Operator action rail sh
 assert.ok(workbenchSource.includes('selected.actions || []'), 'Operator action rail should expose backed actions attached to selected readiness items.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
+assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')
+assert.ok(dashboardModelSource.includes('/api/dwm/alerts/generation-readiness'), 'Alert readiness case should link to generation-readiness API.')
+assert.ok(dashboardModelSource.includes('Inspect generation readiness before treating fallback rows as customer evidence.'), 'Fallback alert queue should name the exact generation-readiness blocker.')
 
 const backendProofCommits = {
     helpdeskAuditFilters: '016a8ef7',

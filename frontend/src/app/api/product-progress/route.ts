@@ -255,7 +255,7 @@ function publicTiProvenanceReadiness(input: {
         status: statusReady ? 'ready' as const : 'needs_action' as const,
         checkedAt: input.generatedAt,
         source: input.route,
-        href: `/ti/${encodeURIComponent(input.query.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || input.query)}`,
+        href: '/ti',
         query: payload?.query || input.query,
         artifactCount: evidenceRows.length,
         sourceCount: sourceIds.size || payload?.actorProfile?.datasets?.sourceCount,

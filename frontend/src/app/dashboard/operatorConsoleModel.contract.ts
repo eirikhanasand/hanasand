@@ -1055,7 +1055,7 @@ void expectProductReadinessLink(productProgressOrgContext, 'org_alert_export', '
 void expectProductReadinessLink(productProgressOrgContext, 'webhook_health', '/dashboard/automations?setup=dwm')
 void expectProductReadinessLink(productProgressOrgContext, 'helpdesk_audit', '/dashboard/system/impersonation')
 void expectProductReadinessLink(productProgressOrgContext, 'deploy_probe', '/status')
-void expectProductReadinessLink(productProgressOrgContext, 'public_ti_provenance', '/ti/akira')
+void expectProductReadinessLink(productProgressOrgContext, 'public_ti_provenance', '/ti')
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
