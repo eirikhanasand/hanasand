@@ -22,6 +22,7 @@ export type TiActionabilityModel = {
     geographyHandoffs: GeographyHandoff[]
     sourceClusters: SourceCluster[]
     evidencePriority: PublicTiEvidencePriority[]
+    sourceHealthQueue: PublicTiSourceHealthQueue
     watchlistRelevance: WatchlistRelevanceContract
     orgRelevance: PublicTiOrgRelevanceProof
     createAlertHandoff: WorkflowHandoffContract
@@ -362,6 +363,37 @@ export type EnrichmentGapQueueItem = {
     requestedFields: string[]
 }
 
+export type PublicTiSourceHealthQueue = {
+    schemaVersion: 'ti.public_actor.source_health_queue.v1'
+    query: string
+    generatedAt: string
+    rows: PublicTiSourceHealthRow[]
+    summary: {
+        total: number
+        ready: number
+        review: number
+        blocked: number
+    }
+}
+
+export type PublicTiSourceHealthRow = {
+    id: string
+    sourceName: string
+    sourceFamily: PublicTiOrgSourceFamily
+    provenance: string
+    timestamp: string
+    parserStatus: string
+    state: 'ready' | 'review' | 'blocked'
+    confidence?: number
+    captureId?: string
+    sourceRequestId?: string
+    sourceId?: string
+    route: string
+    requestedFields: string[]
+    ownerLane: PublicTiReadinessBlocker['ownerLane']
+    nextAction: string
+}
+
 type WatchlistCandidate = {
     kind: 'company' | 'domain' | 'vendor'
     value: string
@@ -522,6 +554,13 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         relatedAlerts,
         relatedCases,
     })
+    const sourceHealthQueue = buildPublicTiSourceHealthQueue({
+        result,
+        actor,
+        orgRelevance,
+        enrichmentGapQueue,
+        exportPayloads,
+    })
     const actionPayloads = buildPublicTiActionPayloads({
         result,
         actor,
@@ -553,6 +592,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         geographyHandoffs,
         sourceClusters,
         evidencePriority,
+        sourceHealthQueue,
         watchlistRelevance: buildWatchlistRelevance({
             state: matches.length ? 'backed_matches' : candidates.length ? 'candidate_handoff' : 'missing_terms',
             endpoint: watchlistEndpoint,
@@ -1697,6 +1737,107 @@ function buildEnrichmentGapQueue(gaps: NonNullable<TiActionabilityContract['enri
         sourceFamily: gap.sourceFamily ?? sourceFamilyForGap(gap),
         requestedFields: gap.requestedFields?.length ? gap.requestedFields : requestedFieldsForGap(gap),
     }))
+}
+
+function buildPublicTiSourceHealthQueue(input: {
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    orgRelevance: PublicTiOrgRelevanceProof
+    enrichmentGapQueue: EnrichmentGapQueueItem[]
+    exportPayloads: TiActionabilityModel['exportPayloads']
+}): PublicTiSourceHealthQueue {
+    const coverageRows = input.orgRelevance.sourceCoverage.map((source): PublicTiSourceHealthRow => {
+        const matchingProvenance = input.actor.provenanceRows.find(row =>
+            row.sourceId === source.sourceId
+            || row.sourceName === source.sourceName
+            || row.provenance === source.provenance
+        )
+        const matchingGaps = input.orgRelevance.enrichmentGaps.filter(gap =>
+            gap.sourceFamily === source.sourceFamily
+            || /source|capture|provenance/i.test(gap.field)
+            || (source.status === 'missing_capture' && /capture/i.test(gap.field))
+        )
+        const requestedFields = uniqueStrings([
+            ...matchingGaps.map(gap => gap.field),
+            ...(!source.captureId ? ['sourceProvenance[].captureId'] : []),
+            ...(!source.sourceRequestId && !source.captureId ? ['sourceProvenance[].sourceRequestId'] : []),
+            ...(!matchingProvenance?.reportDate && !source.lastCollectedAt ? ['actorIntelligence.structuredProvenance[].reportDate'] : []),
+        ])
+        const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || input.result.generatedAt
+        const stale = input.actor.freshness.stale || input.actor.sourceCoverage.stale
+        const parserStatus = source.parserStatus || (source.status === 'capture_ready'
+            ? stale ? 'capture linked; freshness review' : 'capture linked'
+            : source.status === 'missing_capture'
+                ? source.sourceRequestId ? 'source request queued' : 'capture needed'
+                : stale ? 'public reference; freshness review' : 'public reference')
+        const state: PublicTiSourceHealthRow['state'] = source.status === 'capture_ready'
+            ? stale ? 'review' : 'ready'
+            : source.status === 'missing_capture'
+                ? source.sourceRequestId ? 'review' : 'blocked'
+                : stale || requestedFields.length ? 'review' : 'ready'
+
+        return {
+            id: `source-health:${source.sourceId ?? source.sourceName}:${source.provenance}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: source.sourceName,
+            sourceFamily: source.sourceFamily,
+            provenance: source.provenance,
+            timestamp,
+            parserStatus,
+            state,
+            confidence: source.confidence,
+            captureId: source.captureId,
+            sourceRequestId: source.sourceRequestId,
+            sourceId: source.sourceId,
+            route: matchingGaps[0]?.route || input.exportPayloads.enrichment.backedRoute || '/dashboard/ti/enrichment',
+            requestedFields,
+            ownerLane: source.status === 'missing_capture' ? 'source' : stale ? 'public-ti' : 'source',
+            nextAction: source.status === 'capture_ready'
+                ? stale ? 'Refresh this source before using it as customer-facing evidence.' : 'Inspect this capture and attach it to the selected case draft when relevant.'
+                : source.status === 'missing_capture'
+                    ? source.sourceRequestId ? 'Track the source request and attach the resulting capture ID when collection completes.' : 'Attach a capture ID or source request ID in source enrichment.'
+                    : 'Verify report date and source capture before routing to alert or case work.',
+        }
+    })
+
+    const coverageKeys = new Set(coverageRows.map(row => `${row.sourceFamily}:${row.sourceName}`.toLowerCase()))
+    const gapRows = input.enrichmentGapQueue
+        .filter(gap => !coverageKeys.has(`${gap.sourceFamily}:${gap.title}`.toLowerCase()))
+        .map((gap): PublicTiSourceHealthRow => ({
+            id: `source-health-gap:${gap.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: gap.title,
+            sourceFamily: sourceHealthFamilyForGap(gap.sourceFamily),
+            provenance: gap.dependency,
+            timestamp: input.actor.sourceCoverage.latestReportDate || input.result.lastSeen || input.result.generatedAt,
+            parserStatus: 'enrichment queued',
+            state: gap.severity === 'high' ? 'blocked' : 'review',
+            route: gap.route,
+            requestedFields: gap.requestedFields,
+            ownerLane: gap.sourceFamily === 'alert' ? 'alert' : gap.sourceFamily === 'case' ? 'case' : gap.sourceFamily === 'watchlist' ? 'org' : 'source',
+            nextAction: gap.detail,
+        }))
+
+    const rows = uniqueBy([...coverageRows, ...gapRows], row => row.id).sort((a, b) => {
+        const stateRank = { blocked: 0, review: 1, ready: 2 }
+        return stateRank[a.state] - stateRank[b.state] || a.sourceName.localeCompare(b.sourceName)
+    }).slice(0, 10)
+
+    return {
+        schemaVersion: 'ti.public_actor.source_health_queue.v1',
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        rows,
+        summary: {
+            total: rows.length,
+            ready: rows.filter(row => row.state === 'ready').length,
+            review: rows.filter(row => row.state === 'review').length,
+            blocked: rows.filter(row => row.state === 'blocked').length,
+        },
+    }
+}
+
+function sourceHealthFamilyForGap(sourceFamily: EnrichmentGapQueueItem['sourceFamily']): PublicTiOrgSourceFamily {
+    if (sourceFamily === 'actor_profile' || sourceFamily === 'source_capture' || sourceFamily === 'watchlist' || sourceFamily === 'alert' || sourceFamily === 'case' || sourceFamily === 'geography' || sourceFamily === 'indicator') return sourceFamily
+    return 'source_capture'
 }
 
 function buildExportPayloads(input: {

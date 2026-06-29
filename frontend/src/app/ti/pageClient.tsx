@@ -180,7 +180,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
-    const sourceHealthRows = sourceHealthRowsFor(result, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
     const openGapCount = actionability.enrichmentGapQueue.length
@@ -430,7 +429,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} />
-                        <SourceHealthPanel rows={sourceHealthRows} payload={actionability.exportPayloads.enrichment} />
+                        <SourceHealthPanel queue={actionability.sourceHealthQueue} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
                             <ActionPanel
@@ -693,23 +692,7 @@ type EnrichmentTask = {
     detail: string
 }
 
-type SourceHealthRow = {
-    id: string
-    sourceName: string
-    sourceFamily: string
-    provenance: string
-    timestamp: string
-    parserStatus: string
-    state: 'ready' | 'review' | 'blocked'
-    confidence?: number
-    captureId?: string
-    sourceRequestId?: string
-    sourceId?: string
-    route: string
-    requestedFields: string[]
-    ownerLane: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
-    nextAction: string
-}
+type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
 
 function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
@@ -2514,18 +2497,17 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function SourceHealthPanel({ rows, payload }: { rows: SourceHealthRow[]; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
-    const readyCount = rows.filter(row => row.state === 'ready').length
-    const blockedCount = rows.filter(row => row.state === 'blocked').length
+function SourceHealthPanel({ queue, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
+    const rows = queue.rows
 
     return (
         <Panel title='Source Health' description='Source family, timestamp, parser status, and enrichment route for source-backed review.' icon={<Database className='h-4 w-4' />}>
             <div data-ti-source-health-queue='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {rows.length} source row{rows.length === 1 ? '' : 's'} · {readyCount} ready · {blockedCount} blocked
+                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {queue.summary.ready} ready · {queue.summary.blocked} blocked
                     </p>
-                    <CopyPayloadButton label='Source health queue' payload={{ schemaVersion: 'ti.public_actor.source_health_queue.v1', rows, enrichmentPayload: payload }} />
+                    <CopyPayloadButton label='Source health queue' payload={{ ...queue, enrichmentPayload: payload }} />
                 </div>
                 {rows.length ? rows.slice(0, 5).map(row => (
                     <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -3318,78 +3300,6 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
                 : 'No stable related case id is attached; this page can export a handoff payload but cannot persist the case from public context.',
         },
     ]
-}
-
-function sourceHealthRowsFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): SourceHealthRow[] {
-    const coverageRows = actionability.orgRelevance.sourceCoverage.map((source): SourceHealthRow => {
-        const matchingProvenance = actor.provenanceRows.find(row => row.sourceId === source.sourceId || row.sourceName === source.sourceName || row.provenance === source.provenance)
-        const matchingGaps = actionability.orgRelevance.enrichmentGaps.filter(gap =>
-            gap.sourceFamily === source.sourceFamily
-            || /source|capture|provenance/i.test(gap.field)
-            || (source.status === 'missing_capture' && /capture/i.test(gap.field))
-        )
-        const requestedFields = unique([
-            ...matchingGaps.map(gap => gap.field),
-            ...(!source.captureId ? ['sourceProvenance[].captureId'] : []),
-            ...(!source.sourceRequestId && !source.captureId ? ['sourceProvenance[].sourceRequestId'] : []),
-            ...(!matchingProvenance?.reportDate && !source.lastCollectedAt ? ['actorIntelligence.structuredProvenance[].reportDate'] : []),
-        ])
-        const timestamp = source.lastCollectedAt || matchingProvenance?.reportDate || actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
-        const stale = actor.freshness.stale || actor.sourceCoverage.stale
-        const parserStatus = source.parserStatus || (source.status === 'capture_ready'
-            ? stale ? 'capture linked; freshness review' : 'capture linked'
-            : source.status === 'missing_capture'
-                ? source.sourceRequestId ? 'source request queued' : 'capture needed'
-                : stale ? 'public reference; freshness review' : 'public reference')
-        const state: SourceHealthRow['state'] = source.status === 'capture_ready'
-            ? stale ? 'review' : 'ready'
-            : source.status === 'missing_capture'
-                ? source.sourceRequestId ? 'review' : 'blocked'
-                : stale || requestedFields.length ? 'review' : 'ready'
-        return {
-            id: `source-health:${source.sourceId ?? source.sourceName}:${source.provenance}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
-            sourceName: source.sourceName,
-            sourceFamily: source.sourceFamily,
-            provenance: source.provenance,
-            timestamp,
-            parserStatus,
-            state,
-            confidence: source.confidence,
-            captureId: source.captureId,
-            sourceRequestId: source.sourceRequestId,
-            sourceId: source.sourceId,
-            route: matchingGaps[0]?.route || actionability.exportPayloads.enrichment.backedRoute || '/dashboard/ti/enrichment',
-            requestedFields,
-            ownerLane: source.status === 'missing_capture' ? 'source' : stale ? 'public-ti' : 'source',
-            nextAction: source.status === 'capture_ready'
-                ? stale ? 'Refresh this source before using it as customer-facing evidence.' : 'Inspect this capture and attach it to the selected case draft when relevant.'
-                : source.status === 'missing_capture'
-                    ? source.sourceRequestId ? 'Track the source request and attach the resulting capture ID when collection completes.' : 'Attach a capture ID or source request ID in source enrichment.'
-                    : 'Verify report date and source capture before routing to alert or case work.',
-        }
-    })
-
-    const coverageKeys = new Set(coverageRows.map(row => `${row.sourceFamily}:${row.sourceName}`.toLowerCase()))
-    const gapRows = actionability.enrichmentGapQueue
-        .filter(gap => !coverageKeys.has(`${gap.sourceFamily}:${gap.title}`.toLowerCase()))
-        .map((gap): SourceHealthRow => ({
-            id: `source-health-gap:${gap.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
-            sourceName: gap.title,
-            sourceFamily: gap.sourceFamily,
-            provenance: gap.dependency,
-            timestamp: actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt,
-            parserStatus: 'enrichment queued',
-            state: gap.severity === 'high' ? 'blocked' : 'review',
-            route: gap.route,
-            requestedFields: gap.requestedFields,
-            ownerLane: gap.sourceFamily === 'alert' ? 'alert' : gap.sourceFamily === 'case' ? 'case' : gap.sourceFamily === 'watchlist' ? 'org' : 'source',
-            nextAction: gap.detail,
-        }))
-
-    return uniqueBy([...coverageRows, ...gapRows], row => row.id).sort((a, b) => {
-        const stateRank = { blocked: 0, review: 1, ready: 2 }
-        return stateRank[a.state] - stateRank[b.state] || a.sourceName.localeCompare(b.sourceName)
-    }).slice(0, 10)
 }
 
 function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, LocalDecision>) {

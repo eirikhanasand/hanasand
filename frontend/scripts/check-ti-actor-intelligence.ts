@@ -124,6 +124,7 @@ const fullPublicActionability = buildTiActionability(fixture, fullPublicProfile,
 const geo = actorGeoProfile(fixture)
 const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
+const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
 const bannedUiCopy = [
     'how this feeds',
     'control room',
@@ -196,6 +197,10 @@ assert(actionability.orgRelevance.sourceCoverage.some(item => item.sourceRequest
 assert(actionability.orgRelevance.sourceCoverage.some(item => item.status === 'missing_capture'), 'Org relevance should expose source coverage capture gaps.')
 assert(actionability.orgRelevance.enrichmentGaps.some(item => item.code === 'stale_evidence'), 'Org relevance should expose stale evidence gaps.')
 assert(actionability.orgRelevance.handoffRows.some(row => row.rowId === 'org-gap:stale_evidence:freshness.lastSeen'), 'Org relevance gaps should be visible as handoff rows.')
+assert(actionability.sourceHealthQueue.schemaVersion === 'ti.public_actor.source_health_queue.v1', 'Source health queue should be a versioned actionability contract.')
+assert(actionability.sourceHealthQueue.summary.total === actionability.sourceHealthQueue.rows.length, 'Source health queue summary should match the modeled rows.')
+assert(actionability.sourceHealthQueue.rows.some(item => item.sourceRequestId === 'src_req_microsoft_2024_01' && item.parserStatus === 'partial' && item.sourceFamily === 'vendor_disclosure'), 'Source health queue should preserve source request, parser, and source family metadata.')
+assert(actionability.sourceHealthQueue.rows.some(item => item.requestedFields.includes('sourceProvenance[].captureId')), 'Source health queue should expose capture enrichment requirements.')
 assert(actionability.createAlertHandoff.kind === 'create_alert' && actionability.createAlertHandoff.endpoint === '/v1/dwm/alerts/rebuild', 'Actionability should expose explicit alert handoff fields.')
 assert(actionability.createAlertHandoff.backedRoute === '/dashboard/dwm', 'Alert handoff should point to the backed DWM route even when blocked.')
 assert(actionability.caseHandoff.kind === 'case' && actionability.caseHandoff.endpoint === '/v1/cases', 'Actionability should expose explicit case handoff fields.')
@@ -616,10 +621,10 @@ assert(pageClientSource.includes('ti.public_actor.staged_handoff_bundle.v1'), 'S
 assert(pageClientSource.includes('data-ti-staged-handoff-queue'), 'Public TI should render a session-local staged handoff queue.')
 assert(pageClientSource.includes('stagedHandoffFor'), 'Staged handoffs should combine review, source drilldown, and case draft payloads.')
 assert(pageClientSource.includes('data-ti-source-health-queue'), 'Public TI should render a source-health queue from source coverage and enrichment gaps.')
-assert(pageClientSource.includes('ti.public_actor.source_health_queue.v1'), 'Source-health queue should expose a versioned export payload.')
+assert(actionabilitySource.includes('ti.public_actor.source_health_queue.v1'), 'Source-health queue should expose a versioned actionability payload.')
 assert(pageClientSource.includes('parserStatus'), 'Source-health rows should expose parser or capture status.')
 assert(pageClientSource.includes('requestedFields'), 'Source-health rows should expose requested enrichment fields.')
-assert(pageClientSource.includes('sourceHealthRowsFor'), 'Source-health rows should be derived from actor provenance and actionability data.')
+assert(pageClientSource.includes('actionability.sourceHealthQueue'), 'Source-health rows should be consumed from the actionability model.')
 assert(pageClientSource.includes('ti.public_actor.selected_source_drilldown.v1'), 'Selected evidence should export a versioned source drilldown payload.')
 assert(pageClientSource.includes('data-ti-selected-source-drilldown'), 'Selected evidence should render source drilldown rows for source/capture review.')
 assert(pageClientSource.includes('selectedSourceDrilldownFor'), 'Selected evidence drilldown should be built from the selected queue item and actionability model.')
