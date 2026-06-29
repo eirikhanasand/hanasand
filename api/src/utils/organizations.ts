@@ -739,6 +739,33 @@ export type OrganizationSharedWatchlistIntegrationGuardrails = {
     blockerCodes: OrganizationSharedWatchlistIntegrationGuardrailCode[]
 }
 
+export type OrganizationSharedWatchlistSupportInspection = {
+    schemaVersion: 'organization.shared_watchlist_support_inspection.v1'
+    organizationId: string
+    tenantId: string
+    supportMode: 'redacted_summary_only'
+    route: 'GET /api/admin/support/organizations/:id'
+    supportActionContract: 'admin_support'
+    redactionRequired: true
+    canInspectRawTerms: false
+    containsRawTerms: false
+    summary: {
+        activeTermCount: number
+        pausedCount: number
+        archivedCount: number
+        termFamilies: WatchlistKind[]
+        visibilityPolicy: OrganizationAlertVisibilityPolicy
+        allowedViewerRoles: OrganizationRole[]
+        cleanupRequired: boolean
+    }
+    safeFields: string[]
+    redactedFields: string[]
+    auditFields: string[]
+    downstreamCorrelationFields: string[]
+    blockerCodes: Array<'support_redaction_required' | 'support_only_access'>
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -756,6 +783,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     downstreamAuthorization: OrganizationDownstreamAuthorizationExport
     sharedWatchlistDownstreamProof: OrganizationSharedWatchlistDownstreamProof
     sharedWatchlistIntegrationGuardrails: OrganizationSharedWatchlistIntegrationGuardrails
+    sharedWatchlistSupportInspection: OrganizationSharedWatchlistSupportInspection
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -2016,6 +2044,51 @@ function sameStringSet(left: string[], right: string[]) {
     return left.every((value, index) => value === right[index])
 }
 
+export function organizationSharedWatchlistSupportInspection(input: {
+    organizationId: string
+    tenantId: string
+    redactedSummary: OrganizationWatchlistAlertBridgeContract['redactedSummary']
+    supportVisibility: OrganizationWatchlistAlertBridgeContract['supportVisibility']
+    supportAccess: OrganizationWatchlistAlertBridgeContract['supportAccess']
+    audit: OrganizationSharedWatchlistDownstreamProof['audit']
+}): OrganizationSharedWatchlistSupportInspection {
+    return {
+        schemaVersion: 'organization.shared_watchlist_support_inspection.v1',
+        organizationId: input.organizationId,
+        tenantId: input.tenantId,
+        supportMode: 'redacted_summary_only',
+        route: 'GET /api/admin/support/organizations/:id',
+        supportActionContract: input.supportVisibility.contract,
+        redactionRequired: true,
+        canInspectRawTerms: false,
+        containsRawTerms: false,
+        summary: {
+            activeTermCount: input.redactedSummary.activeTermCount,
+            pausedCount: input.redactedSummary.pausedCount,
+            archivedCount: input.redactedSummary.archivedCount,
+            termFamilies: input.redactedSummary.termFamilies,
+            visibilityPolicy: input.redactedSummary.visibilityPolicy,
+            allowedViewerRoles: input.redactedSummary.allowedViewerRoles,
+            cleanupRequired: input.redactedSummary.cleanupRequired,
+        },
+        safeFields: input.supportVisibility.safeFields,
+        redactedFields: [
+            ...new Set([
+                ...input.supportVisibility.redactedFields,
+                'sharedWatchlistDownstreamProof.activeTerms',
+                'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys',
+            ]),
+        ].sort(),
+        auditFields: [
+            ...input.audit.requiredMetadataFields,
+            ...input.audit.actorFields,
+        ].sort(),
+        downstreamCorrelationFields: input.audit.downstreamCorrelationFields,
+        blockerCodes: ['support_redaction_required', input.supportAccess.blockerCode],
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
+}
+
 export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
     const alertVisibilityPolicy = input.alertVisibilityPolicy ?? 'members'
     const allowedRoles = allowedOrganizationVisibilityRoles(alertVisibilityPolicy)
@@ -2620,6 +2693,56 @@ export function organizationWatchlistAlertTermsExport(
     const cleanupRequired = pausedCount + archivedCount > 0
     const sharedWatchlistDownstreamProof = organizationSharedWatchlistDownstreamProof(organization, items, member, alertGeneration, downstreamAuthorization)
     const sharedWatchlistIntegrationGuardrails = organizationSharedWatchlistIntegrationGuardrails(sharedWatchlistDownstreamProof)
+    const supportAccess: OrganizationWatchlistAlertBridgeContract['supportAccess'] = {
+        mode: 'support_contract_only',
+        blockerCode: 'support_only_access',
+        message: 'Support users must inspect org watchlist alert exports through the admin support contract, not member-scoped org routes.',
+    }
+    const supportVisibility: OrganizationWatchlistAlertBridgeContract['supportVisibility'] = {
+        mode: 'redacted_summary_only',
+        contract: 'admin_support',
+        safeFields: [
+            'organizationId',
+            'tenantId',
+            'activeTermCount',
+            'termFamilies',
+            'pausedCount',
+            'archivedCount',
+            'visibilityPolicy',
+            'allowedViewerRoles',
+        ],
+        redactedFields: [
+            'member.userId',
+            'activeTerms[].term',
+            'activeTerms[].value',
+            'activeTerms[].terms',
+            'activeTerms[].alertGenerationRef.term',
+            'activeTerms[].alertGenerationRef.lifecycle.createdBy',
+            'activeTerms[].alertGenerationRef.lifecycle.updatedBy',
+        ],
+        message: 'Support/admin consumers should use this summary unless an approved support action contract grants scoped member-visible inspection.',
+    }
+    const redactedSummary: OrganizationWatchlistAlertBridgeContract['redactedSummary'] = {
+        schemaVersion: 'organization.watchlist_alert_bridge_redacted_summary.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        activeTermCount: activeTerms.length,
+        termFamilies: alertGeneration.termFamilies,
+        pausedCount,
+        archivedCount,
+        cleanupRequired,
+        visibilityPolicy: alertGeneration.visibilityPolicy,
+        allowedViewerRoles: alertGeneration.allowedViewerRoles,
+        containsRawTerms: false,
+    }
+    const sharedWatchlistSupportInspection = organizationSharedWatchlistSupportInspection({
+        organizationId: organization.id,
+        tenantId: organization.id,
+        redactedSummary,
+        supportVisibility,
+        supportAccess,
+        audit: sharedWatchlistDownstreamProof.audit,
+    })
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -2642,35 +2765,8 @@ export function organizationWatchlistAlertTermsExport(
                 role: member.role,
                 status: 'active',
             },
-            supportAccess: {
-                mode: 'support_contract_only',
-                blockerCode: 'support_only_access',
-                message: 'Support users must inspect org watchlist alert exports through the admin support contract, not member-scoped org routes.',
-            },
-            supportVisibility: {
-                mode: 'redacted_summary_only',
-                contract: 'admin_support',
-                safeFields: [
-                    'organizationId',
-                    'tenantId',
-                    'activeTermCount',
-                    'termFamilies',
-                    'pausedCount',
-                    'archivedCount',
-                    'visibilityPolicy',
-                    'allowedViewerRoles',
-                ],
-                redactedFields: [
-                    'member.userId',
-                    'activeTerms[].term',
-                    'activeTerms[].value',
-                    'activeTerms[].terms',
-                    'activeTerms[].alertGenerationRef.term',
-                    'activeTerms[].alertGenerationRef.lifecycle.createdBy',
-                    'activeTerms[].alertGenerationRef.lifecycle.updatedBy',
-                ],
-                message: 'Support/admin consumers should use this summary unless an approved support action contract grants scoped member-visible inspection.',
-            },
+            supportAccess,
+            supportVisibility,
             deniedAccess: {
                 nonmember: 'nonmember_denied',
                 revokedMember: 'revoked_member_denied',
@@ -2681,19 +2777,7 @@ export function organizationWatchlistAlertTermsExport(
                 queryFields: ['organizationId', 'watchlistItemId'],
                 blockerCode: 'no_case_route',
             },
-            redactedSummary: {
-                schemaVersion: 'organization.watchlist_alert_bridge_redacted_summary.v1',
-                organizationId: organization.id,
-                tenantId: organization.id,
-                activeTermCount: activeTerms.length,
-                termFamilies: alertGeneration.termFamilies,
-                pausedCount,
-                archivedCount,
-                cleanupRequired,
-                visibilityPolicy: alertGeneration.visibilityPolicy,
-                allowedViewerRoles: alertGeneration.allowedViewerRoles,
-                containsRawTerms: false,
-            },
+            redactedSummary,
             lifecycleReadiness: {
                 schemaVersion: 'organization.watchlist_lifecycle_readiness.v1',
                 organization: {
@@ -2836,6 +2920,7 @@ export function organizationWatchlistAlertTermsExport(
         activeTerms,
         sharedWatchlistDownstreamProof,
         sharedWatchlistIntegrationGuardrails,
+        sharedWatchlistSupportInspection,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
