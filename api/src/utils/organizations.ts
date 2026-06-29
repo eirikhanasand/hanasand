@@ -498,6 +498,30 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             updatedBy: string | null
         }>
     }
+    audit: {
+        schemaVersion: 'organization.shared_watchlist_audit_contract.v1'
+        source: 'service_logs'
+        eventActions: Array<
+            | 'organization_invites_created'
+            | 'organization_invite_accepted'
+            | 'organization_invite_revoked'
+            | 'organization_invite_resent'
+            | 'organization_watchlist_upserted'
+            | 'organization_watchlist_updated'
+            | 'organization_watchlist_paused'
+            | 'organization_watchlist_resumed'
+            | 'organization_watchlist_archived'
+            | 'organization_watchlist_restored'
+            | 'organization_watchlist_cleanup_archived'
+            | 'organization_watchlist_alert_terms_exported'
+        >
+        requiredMetadataFields: string[]
+        requestIdFields: string[]
+        actorFields: string[]
+        downstreamCorrelationFields: string[]
+        idempotentActions: Array<'invite_resend' | 'invite_revoke' | 'watchlist_cleanup' | 'alert_terms_export'>
+        proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist'
+    }
     alertBridge: {
         route: 'organization_watchlist'
         canGenerateAlerts: boolean
@@ -1269,6 +1293,54 @@ export function organizationSharedWatchlistDownstreamProof(
                 updatedBy: term.updatedBy,
             })),
         },
+        audit: {
+            schemaVersion: 'organization.shared_watchlist_audit_contract.v1',
+            source: 'service_logs',
+            eventActions: [
+                'organization_invites_created',
+                'organization_invite_accepted',
+                'organization_invite_revoked',
+                'organization_invite_resent',
+                'organization_watchlist_upserted',
+                'organization_watchlist_updated',
+                'organization_watchlist_paused',
+                'organization_watchlist_resumed',
+                'organization_watchlist_archived',
+                'organization_watchlist_restored',
+                'organization_watchlist_cleanup_archived',
+                'organization_watchlist_alert_terms_exported',
+            ],
+            requiredMetadataFields: [
+                'requestId',
+                'watchlistItemId',
+                'inviteId',
+                'role',
+                'reason',
+                'action',
+                'status',
+            ],
+            requestIdFields: [
+                'metadata.requestId',
+                'activeTerms[].alertGenerationRef.lifecycle.requestId',
+                'watchlistOwnership.lifecycleStatuses[].watchlistItemId',
+            ],
+            actorFields: [
+                'actor.userId',
+                'actor.role',
+                'watchlistOwnership.lifecycleStatuses[].createdBy',
+                'watchlistOwnership.lifecycleStatuses[].updatedBy',
+            ],
+            downstreamCorrelationFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistOwnership.activeIds',
+                'alertBridge.alertGeneratorKeys',
+                'caseBridge.casePathTemplate',
+                'webhookBridge.route',
+            ],
+            idempotentActions: ['invite_resend', 'invite_revoke', 'watchlist_cleanup', 'alert_terms_export'],
+            proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist',
+        },
         alertBridge: {
             route: 'organization_watchlist',
             canGenerateAlerts: alertGeneration.canGenerateAlerts,
@@ -1329,6 +1401,8 @@ export function organizationSharedWatchlistDownstreamProof(
                 'alertBridge.expectedAlertFields',
                 'caseBridge.expectedCaseFields',
                 'webhookBridge.expectedDeliveryFields',
+                'audit.eventActions',
+                'audit.requiredMetadataFields',
                 'inviteLifecycle.pendingInviteCount',
             ],
             proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
