@@ -4694,6 +4694,40 @@ export function organizationMemberMutationDenial(input: {
     }
 }
 
+export function organizationLastOwnerGuard(input: {
+    organizationId: string
+    actorId: string
+    actorRole?: OrganizationRole | null
+    targetUserId: string
+    action: 'remove_owner' | 'change_owner_role'
+    requestedRole?: OrganizationRole | null
+    ownerCount: number
+    message: string
+    requestId?: string | null
+}) {
+    return {
+        schemaVersion: 'organization.last_owner_guard.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        actorRole: input.actorRole ?? null,
+        targetUserId: input.targetUserId,
+        action: input.action,
+        requestedRole: input.requestedRole ?? null,
+        ownerCount: input.ownerCount,
+        blockerCode: 'last_owner_guard' as const,
+        message: input.message,
+        statusCode: 409,
+        transferOwnershipRoute: 'POST /api/organizations/:id/ownership-transfer' as const,
+        transferOwnershipRequired: true,
+        destructiveMutationBlocked: true,
+        noOrphanedOrganization: true,
+        serviceLogAction: 'organization_last_owner_guard_blocked' as const,
+        requestId: input.requestId ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toWatchlistItem(row: OrganizationWatchlistRow) {
     const status = normalizeWatchlistStatus(row)
     const lifecycleState = organizationWatchlistEnabledState(status)

@@ -261,6 +261,29 @@ assert.equal(parseBody(adminAcceptResponse.body).membership.role, 'admin')
 assert.equal(parseBody(adminAcceptResponse.body).inviteAcceptance.inviteRole, 'admin')
 assert.equal(parseBody(adminAcceptResponse.body).inviteAcceptance.appliedRole, 'admin')
 
+const lastOwnerRoleChangeDeniedResponse = await app.inject({
+    method: 'PATCH',
+    url: `/api/organizations/${organization.id}/members/org_smoke_owner/role`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { role: 'admin', reason: 'Cannot demote the only owner.', requestId: 'smoke-last-owner-role-denied' },
+})
+assert.equal(lastOwnerRoleChangeDeniedResponse.statusCode, 409, lastOwnerRoleChangeDeniedResponse.body)
+const lastOwnerRoleGuard = parseBody(lastOwnerRoleChangeDeniedResponse.body).lastOwnerGuard
+assert.equal(lastOwnerRoleGuard.schemaVersion, 'organization.last_owner_guard.v1')
+assert.equal(lastOwnerRoleGuard.organizationId, organization.id)
+assert.equal(lastOwnerRoleGuard.actorId, 'org_smoke_owner')
+assert.equal(lastOwnerRoleGuard.actorRole, 'owner')
+assert.equal(lastOwnerRoleGuard.targetUserId, 'org_smoke_owner')
+assert.equal(lastOwnerRoleGuard.action, 'change_owner_role')
+assert.equal(lastOwnerRoleGuard.requestedRole, 'admin')
+assert.equal(lastOwnerRoleGuard.ownerCount, 1)
+assert.equal(lastOwnerRoleGuard.blockerCode, 'last_owner_guard')
+assert.equal(lastOwnerRoleGuard.transferOwnershipRoute, 'POST /api/organizations/:id/ownership-transfer')
+assert.equal(lastOwnerRoleGuard.transferOwnershipRequired, true)
+assert.equal(lastOwnerRoleGuard.noOrphanedOrganization, true)
+assert.equal(lastOwnerRoleGuard.serviceLogAction, 'organization_last_owner_guard_blocked')
+assert.equal(lastOwnerRoleGuard.requestId, 'smoke-last-owner-role-denied')
+
 const viewerInviteResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/invites`,
@@ -3214,6 +3237,19 @@ const lastOwnerGuardResponse = await app.inject({
     headers: authHeaders('org_smoke_admin', 'admin-token'),
 })
 assert.equal(lastOwnerGuardResponse.statusCode, 409, lastOwnerGuardResponse.body)
+const lastOwnerRemoveGuard = parseBody(lastOwnerGuardResponse.body).lastOwnerGuard
+assert.equal(lastOwnerRemoveGuard.schemaVersion, 'organization.last_owner_guard.v1')
+assert.equal(lastOwnerRemoveGuard.organizationId, organization.id)
+assert.equal(lastOwnerRemoveGuard.actorId, 'org_smoke_admin')
+assert.equal(lastOwnerRemoveGuard.actorRole, 'owner')
+assert.equal(lastOwnerRemoveGuard.targetUserId, 'org_smoke_admin')
+assert.equal(lastOwnerRemoveGuard.action, 'remove_owner')
+assert.equal(lastOwnerRemoveGuard.requestedRole, null)
+assert.equal(lastOwnerRemoveGuard.ownerCount, 1)
+assert.equal(lastOwnerRemoveGuard.blockerCode, 'last_owner_guard')
+assert.equal(lastOwnerRemoveGuard.destructiveMutationBlocked, true)
+assert.equal(lastOwnerRemoveGuard.noOrphanedOrganization, true)
+assert.equal(lastOwnerRemoveGuard.serviceLogAction, 'organization_last_owner_guard_blocked')
 
 const removeViewerResponse = await app.inject({
     method: 'DELETE',
@@ -3303,6 +3339,8 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_member_role_upda
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-member-role-denied' && log.metadata.action === 'change_member_role'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.requestId === 'smoke-admin-promote-denied' && log.metadata.requestedRole === 'admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_member_mutation_denied' && log.metadata.action === 'remove_member' && log.metadata.targetUserId === 'org_smoke_owner'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_last_owner_guard_blocked' && log.metadata.requestId === 'smoke-last-owner-role-denied' && log.metadata.action === 'change_owner_role'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_last_owner_guard_blocked' && log.metadata.action === 'remove_owner' && log.metadata.targetUserId === 'org_smoke_admin'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.requestId === 'smoke-archived-invite-denied' && log.metadata.blockerCode === 'org_archived'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.requestId === 'smoke-deleted-watchlist-resume-denied' && log.metadata.blockerCode === 'org_deleted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_lifecycle_mutation_blocked' && log.metadata.blockedAction === 'change member roles' && log.metadata.actorRole === 'owner'))

@@ -19,6 +19,7 @@ import {
     organizationAnalystPortalVisibilityAdapter,
     organizationAlertCaseWorkflowState,
     organizationInviteAcceptanceDenial,
+    organizationLastOwnerGuard,
     organizationLifecycleReadiness,
     organizationMemberMutationDenial,
     organizationDownstreamAuthorizationExport,
@@ -424,7 +425,26 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
 
     const ownerCount = await activeOwnerCount(req.params.id)
     if (target.role === 'owner' && ownerCount <= 1) {
-        return res.status(409).send({ error: 'Transfer ownership before removing the last owner.' })
+        const message = 'Transfer ownership before removing the last owner.'
+        const guard = organizationLastOwnerGuard({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            targetUserId: req.params.userId,
+            action: 'remove_owner',
+            ownerCount,
+            message,
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        logOrganizationEvent(req, guard.serviceLogAction, req.params.id, userId, {
+            requestId: guard.requestId,
+            targetUserId: req.params.userId,
+            actorRole: organization.role,
+            action: guard.action,
+            blockerCode: guard.blockerCode,
+            ownerCount,
+        })
+        return res.status(409).send({ error: message, lastOwnerGuard: guard })
     }
 
     const removed = await run(`
@@ -512,7 +532,29 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
 
     const ownerCount = await activeOwnerCount(req.params.id)
     if (target.role === 'owner' && input.role !== 'owner' && ownerCount <= 1) {
-        return res.status(409).send({ error: 'Transfer ownership before changing the last owner role.' })
+        const message = 'Transfer ownership before changing the last owner role.'
+        const guard = organizationLastOwnerGuard({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            targetUserId: req.params.userId,
+            action: 'change_owner_role',
+            requestedRole: input.role,
+            ownerCount,
+            message,
+            requestId: input.requestId,
+        })
+        logOrganizationEvent(req, guard.serviceLogAction, req.params.id, userId, {
+            requestId: guard.requestId,
+            targetUserId: req.params.userId,
+            actorRole: organization.role,
+            action: guard.action,
+            requestedRole: input.role,
+            blockerCode: guard.blockerCode,
+            ownerCount,
+            reason: input.reason,
+        })
+        return res.status(409).send({ error: message, lastOwnerGuard: guard })
     }
 
     const result = await run(`
