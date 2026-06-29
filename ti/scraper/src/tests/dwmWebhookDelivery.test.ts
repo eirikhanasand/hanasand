@@ -78,6 +78,7 @@ describe("dwm webhook delivery", () => {
     expect(delivered.deliveries[0].status).toBe("delivered");
     expect(seen[0].url).toBe("https://hooks.example.com/dwm");
     expect(seen[0].body.eventType).toBe("darkweb.monitoring.match");
+    expect(seen[0].body.alertDetailPath).toContain(`/v1/dwm/alerts/${seen[0].body.alertId}`);
     expect(seen[0].body).toMatchObject({
       tenantId: "tenant_acme",
       sourceFamily: "telegram_public",
@@ -118,6 +119,8 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].body.alertCreatedEvent.id).toMatch(/^dwm_alert_created_event_/);
     expect(seen[0].body.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
     expect(seen[0].body.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
+    expect(seen[0].body.alertCreatedEvent.alertDetailPath).toBe(seen[0].body.alertDetailPath);
+    expect(seen[0].body.deliveryReadinessContext.alertDetailPath).toBe(seen[0].body.alertDetailPath);
     expect(seen[0].body.alertCreatedDispatch).toMatchObject({
       schemaVersion: "dwm.alert_created_event_dispatch.v1",
       ready: true,
@@ -239,9 +242,11 @@ describe("dwm webhook delivery", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].url).toBe("https://hooks.example.com/dwm-update");
     expect(seen[0].body.selectedCaptureIds).toEqual(["cap_webhook_acme", "cap_webhook_acme_followup"]);
+    expect(seen[0].body.alertDetailPath).toBe(firstRebuild.alerts[0].alertDetailPath);
     expect(seen[0].body.alertUpdatedEvent).toMatchObject({
       schemaVersion: "dwm.alert_updated_event.v1",
       eventType: "dwm.alert.updated",
+      alertDetailPath: firstRebuild.alerts[0].alertDetailPath,
       alertId: firstRebuild.alerts[0].id,
       addedCaptureIds: ["cap_webhook_acme_followup"],
       evidenceCount: 2,

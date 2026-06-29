@@ -679,6 +679,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     confidenceReasoning: alert.confidenceReasoning ?? [],
     provenance: alert.provenance,
     dedupeKey: alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    alertDetailPath: alertDetailPathFor(alert),
     caseIdCandidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate,
     caseId: alert.caseId,
     casePath: alert.casePath ?? alert.workflowContext?.casePath,
@@ -1248,8 +1249,10 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
   return {
     schemaVersion: "dwm.alert_detail_consumer_contract.v1",
     route: "/v1/dwm/alerts/:id",
+    alertDetailPath: alertDetailPathFor(alert),
     stableFields: [
       "alert.id",
+      "alert.alertDetailPath",
       "alert.organizationId",
       "alert.watchlistIds",
       "alert.watchlistItemIds",
@@ -1324,6 +1327,7 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
   const downstreamHandoff = buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries, ...downstreamLifecycleForAlert(options, alert) });
   return {
     ...alert,
+    alertDetailPath: alertDetailPathFor(alert),
     workflowSummary,
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
@@ -1421,6 +1425,7 @@ function buildDwmAlertQueueVisibility(input: {
       route: "/v1/dwm/alerts",
       stableFields: [
         "alerts[].id",
+        "alerts[].alertDetailPath",
         "alerts[].organizationId",
         "alerts[].sourceFamily",
         "alerts[].workflowSummary",
@@ -1747,6 +1752,27 @@ function uniqueAlertStrings(values: string[]) {
   return [...new Set(values)];
 }
 
+function alertDetailPathFor(alert: any) {
+  const existing = alert.alertDetailPath
+    ?? alert.deliveryReadinessContext?.alertDetailPath
+    ?? alert.workflowContext?.alertDetailPath
+    ?? alert.webhookContext?.alertDetailPath
+    ?? alert.alertCreatedEvent?.alertDetailPath
+    ?? alert.alertUpdatedEvent?.alertDetailPath;
+  if (existing) return String(existing);
+  const alertId = String(alert.id ?? "").trim();
+  if (!alertId) return undefined;
+  const params = new URLSearchParams();
+  const organizationId = alert.organizationId ?? alert.workflowContext?.organizationId ?? alert.webhookContext?.organizationId;
+  const tenantId = alert.tenantId ?? alert.workflowContext?.tenantId ?? alert.webhookContext?.tenantId;
+  const dedupeKey = alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.workflowContext?.dedupeKey ?? alert.webhookContext?.dedupeKey;
+  if (organizationId) params.set("organizationId", String(organizationId));
+  else if (tenantId) params.set("tenantId", String(tenantId));
+  if (dedupeKey) params.set("dedupeKey", String(dedupeKey));
+  const query = params.toString();
+  return `/v1/dwm/alerts/${encodeURIComponent(alertId)}${query ? `?${query}` : ""}`;
+}
+
 function buildDwmAlertCreatedEventSummary(alert: any) {
   const alertCreatedEvent = alert.alertCreatedEvent;
   const deliveryContext = alert.deliveryReadinessContext ?? {};
@@ -1763,7 +1789,8 @@ function buildDwmAlertCreatedEventSummary(alert: any) {
       ? alertCreatedEvent.captureIds
       : deliveryContext.selectedCaptureIds ?? alert.provenance?.captureIds ?? []).map(String).filter(Boolean)),
     dedupeKey: alertCreatedEvent?.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
-    recommendedRoute: alertCreatedEvent?.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute
+    recommendedRoute: alertCreatedEvent?.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
+    alertDetailPath: alertCreatedEvent?.alertDetailPath ?? alertDetailPathFor(alert)
   };
 }
 
@@ -1781,7 +1808,8 @@ function buildDwmAlertUpdatedEventSummary(alert: any) {
     evidenceCount: updatedEvent.evidenceCount ?? alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
     previousEvidenceCount: updatedEvent.previousEvidenceCount,
     dedupeKey: updatedEvent.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
-    recommendedRoute: updatedEvent.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute
+    recommendedRoute: updatedEvent.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
+    alertDetailPath: updatedEvent.alertDetailPath ?? alertDetailPathFor(alert)
   };
 }
 

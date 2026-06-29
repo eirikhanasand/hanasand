@@ -929,6 +929,9 @@ describe("dwm workflow persistence", () => {
       }
     });
     expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.dedupeKey).toBe(alphaDarkweb.dedupeKey);
+    expect(alphaUpdatedList.alerts[0].alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
+    expect(alphaUpdatedList.alerts[0].alertEventSummary.createdEvent.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
+    expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
     expect(alphaUpdatedList.alertQueueVisibility).toMatchObject({
       consumerContract: {
         schemaVersion: "dwm.alert_queue_consumer_contract.v1",
@@ -944,6 +947,7 @@ describe("dwm workflow persistence", () => {
       }
     });
     expect(alphaUpdatedList.alertQueueVisibility.consumerContract.stableFields).toEqual(expect.arrayContaining([
+      "alerts[].alertDetailPath",
       "alerts[].alertEventSummary",
       "alerts[].evidenceFreshness",
       "alertQueueVisibility.zeroAlertProof",
@@ -955,12 +959,14 @@ describe("dwm workflow persistence", () => {
     }), options);
     const alphaUpdatedDetail = await alphaUpdatedDetailResponse.json() as any;
     expect(alphaUpdatedDetailResponse.status).toBe(200);
+    expect(alphaUpdatedDetail.alert.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
     expect(alphaUpdatedDetail.alertEventSummary).toMatchObject({
       schemaVersion: "dwm.alert_event_summary.v1",
       eventTypes: ["dwm.alert.created", "dwm.alert.updated"],
       hasUpdatedEvent: true,
       updatedEvent: {
         eventType: "dwm.alert.updated",
+        alertDetailPath: alphaDarkweb.alertDetailPath,
         addedCaptureIds: ["cap_workflow_onion_acme_followup"],
         captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
       }
@@ -974,6 +980,7 @@ describe("dwm workflow persistence", () => {
     expect(alphaUpdatedDetail.consumerContract).toMatchObject({
       schemaVersion: "dwm.alert_detail_consumer_contract.v1",
       route: "/v1/dwm/alerts/:id",
+      alertDetailPath: alphaDarkweb.alertDetailPath,
       eventShapes: {
         created: "dwm.alert_created_event.v1",
         updated: "dwm.alert_updated_event.v1"
@@ -996,6 +1003,7 @@ describe("dwm workflow persistence", () => {
       }
     });
     expect(alphaUpdatedDetail.consumerContract.stableFields).toEqual(expect.arrayContaining([
+      "alert.alertDetailPath",
       "workflowSummary",
       "alertEventSummary",
       "evidenceReplay",
