@@ -191,16 +191,21 @@ async function inspectRenderedPage(page, spec) {
         }
 
         const rowElements = Array.from(document.querySelectorAll('[data-readiness-row-id], .source-ops-workbench button, .source-ops-workbench a'))
-        const visibleRows = rowElements.map(visibleRect).filter(Boolean)
+        const visibleRows = rowElements
+            .map((element, index) => ({ element, rect: visibleRect(element), index }))
+            .filter(item => item.rect)
         let overlapCount = 0
         for (let index = 0; index < visibleRows.length; index += 1) {
             for (let next = index + 1; next < visibleRows.length; next += 1) {
-                if (overlapArea(visibleRows[index], visibleRows[next]) > 8) overlapCount += 1
+                const first = visibleRows[index]
+                const second = visibleRows[next]
+                if (first.element.contains(second.element) || second.element.contains(first.element)) continue
+                if (overlapArea(first.rect, second.rect) > 8) overlapCount += 1
             }
         }
 
         let narrowActionCount = 0
-        for (const rect of visibleRows) {
+        for (const { rect } of visibleRows) {
             if (rect.text.length > 6 && rect.width < 56 && rect.height > 40) narrowActionCount += 1
             if (rect.text.length > 10 && rect.height > rect.width * 1.8) narrowActionCount += 1
         }

@@ -113,7 +113,7 @@ for (const bannedUiCopy of ['APT29', 'LockBit', 'dashboard slop', 'how this feed
     assert.equal(sourceOpsSource.includes(bannedUiCopy) || pageSource.includes(bannedUiCopy) || modelSource.includes(bannedUiCopy), false, `Dashboard visible source includes prompt/example copy: ${bannedUiCopy}`)
 }
 
-for (const sourceOpsGuard of ['min-w-32', 'min-w-44', 'sm:whitespace-nowrap', 'dark:border-[#2a3d5c]', 'dark:bg-[#111827]', 'grid gap-2 sm:grid-cols-2']) {
+for (const sourceOpsGuard of ['min-w-32', 'min-w-44', 'sm:whitespace-nowrap', 'dark:border-[#2a3d5c]', 'dark:bg-[#111827]', 'dark:bg-[#0f172a]', 'grid gap-2 sm:grid-cols-2', 'Organization-scoped source actions require explicit membership']) {
     assert.ok(sourceOpsSource.includes(sourceOpsGuard), `Source operations action guard missing: ${sourceOpsGuard}`)
 }
 
@@ -170,6 +170,7 @@ const worker3Matrix = {
         'white translucent dark-mode borders',
         'missing screenshot or acceptance JSON artifact',
         'overlapping readiness rows or source operation actions',
+        'nested readiness links counted as overlaps',
         'action/status text clipped or stacked vertically',
     ],
 }

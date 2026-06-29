@@ -210,7 +210,7 @@ export default function TiScraperControlClient() {
             {actionResult ? <Notice tone={actionResult.ok ? 'ok' : 'bad'} title={actionResult.ok ? 'Action completed' : 'Action failed'} body={actionSummary(actionResult)} /> : null}
             {!snapshot?.baseConfigured && !loading ? <Notice tone='bad' title='Backend not configured' body='Set TI_SCRAPER_API_BASE for live scraper control. The workbench still labels session-local actions honestly instead of pretending they persisted.' /> : null}
 
-            <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
+            <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#22334d] dark:bg-[#0f172a]'>
                 <div className='grid border-b border-[#dfe5ee] bg-[#171a21] p-4 text-white dark:border-[#22334d] xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end'>
                     <div className='min-w-0'>
                         <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Source operations</p>
@@ -307,8 +307,8 @@ export default function TiScraperControlClient() {
                                 </section>
 
                                 <section className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                                    <div className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
-                                        <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                                    <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#2a3d5c] dark:bg-[#111827]'>
+                                        <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>
                                             <FileSearch className='h-4 w-4 text-[#3056d3]' />
                                             Evidence and provenance
                                         </div>
@@ -320,8 +320,8 @@ export default function TiScraperControlClient() {
                                         </div>
                                     </div>
 
-                                    <div className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
-                                        <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                                    <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#2a3d5c] dark:bg-[#111827]'>
+                                        <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>
                                             <SlidersHorizontal className='h-4 w-4 text-[#3056d3]' />
                                             Actions
                                         </div>
@@ -344,23 +344,23 @@ export default function TiScraperControlClient() {
                                     </div>
                                 </section>
 
-                                <section className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
-                                    <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+                                <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#2a3d5c] dark:bg-[#111827]'>
+                                    <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>
                                         <Workflow className='h-4 w-4 text-[#3056d3]' />
                                         Next work
                                     </div>
                                     <div className='mt-3 grid gap-3 md:grid-cols-3'>
                                         {selected.nextActions.map((action, index) => (
-                                            <div key={action} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                                <p className='text-xs font-semibold uppercase text-[#667085]'>Step {index + 1}</p>
-                                                <p className='mt-2 text-sm leading-6 text-[#344054]'>{action}</p>
+                                            <div key={action} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+                                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Step {index + 1}</p>
+                                                <p className='mt-2 text-sm leading-6 text-[#344054] dark:text-[#d8deea]'>{action}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </section>
                             </div>
                         ) : (
-                            <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085]'>Waiting for scraper state.</div>
+                            <div className='grid min-h-96 place-items-center rounded-lg border border-dashed border-[#d8dee9] bg-white p-8 text-center text-sm text-[#667085] dark:border-[#2a3d5c] dark:bg-[#111827] dark:text-[#aab6ca]'>Waiting for scraper state.</div>
                         )}
                     </main>
 
@@ -412,7 +412,7 @@ export default function TiScraperControlClient() {
                                     <ActionButton compact busy={busyAction === 'request_restricted_source'} icon={<DatabaseZap className='h-4 w-4' />} onClick={() => runAction('request_restricted_source')}>Request metadata</ActionButton>
                                 </div>
                                 <label className='grid gap-1'>
-                                    <span className='text-xs font-semibold uppercase text-[#667085]'>Org/default watch terms</span>
+                                    <span className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Organization watch terms</span>
                                     <textarea
                                         value={watchTerms}
                                         onChange={event => setWatchTerms(event.target.value)}
@@ -424,7 +424,7 @@ export default function TiScraperControlClient() {
                                     <ActionButton compact busy={busyAction === 'create_watchlist'} icon={<ListChecks className='h-4 w-4' />} onClick={() => runAction('create_watchlist')}>Save watchlist</ActionButton>
                                     <ActionButton compact busy={busyAction === 'rebuild_alerts'} icon={<RefreshCcw className='h-4 w-4' />} onClick={() => runAction('rebuild_alerts')}>Rebuild alerts</ActionButton>
                                 </div>
-                                <p>Org scope currently maps to tenant `default` through the scraper API. Next backend work is explicit orgId, membership auth, watchlist ownership, and alert/webhook isolation per org.</p>
+                                <p>Organization-scoped source actions require explicit membership, watchlist ownership, and alert delivery isolation from the source API.</p>
                             </SidePanel>
 
                             <SidePanel title='Audit and History' icon={<History className='h-4 w-4' />}>
@@ -789,9 +789,9 @@ function sourceGrowthKpis(snapshot: ControlSnapshot | null, sources: SourceRow[]
 
 function EvidenceLine({ title, body }: { title: string; body: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{title}</p>
-            <p className='mt-2 text-sm leading-6 text-[#344054]'>{body}</p>
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{title}</p>
+            <p className='mt-2 text-sm leading-6 text-[#344054] dark:text-[#d8deea]'>{body}</p>
         </div>
     )
 }
@@ -799,51 +799,51 @@ function EvidenceLine({ title, body }: { title: string; body: string }) {
 function Metric({ title, value, detail, icon, tone }: { title: string; value: string; detail: string; icon: ReactNode; tone: 'ok' | 'warn' | 'bad' | 'hold' }) {
     const className = tone === 'ok' ? 'text-[#147a3b]' : tone === 'warn' ? 'text-[#b45309]' : tone === 'bad' ? 'text-[#b42318]' : 'text-[#3056d3]'
     return (
-        <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
+        <div className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#2a3d5c] dark:bg-[#111827]'>
             <div className={`flex items-center justify-between ${className}`}>
                 <p className='text-xs font-semibold uppercase'>{title}</p>
                 {icon}
             </div>
-            <p className='mt-3 text-xl font-semibold text-[#171a21]'>{value}</p>
-            <p className='mt-1 text-sm leading-5 text-[#596170]'>{detail}</p>
+            <p className='mt-3 text-xl font-semibold text-[#171a21] dark:text-[#d8deea]'>{value}</p>
+            <p className='mt-1 text-sm leading-5 text-[#596170] dark:text-[#aab6ca]'>{detail}</p>
         </div>
     )
 }
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
     return (
-        <div className='rounded-lg border border-[#dfe5ee] bg-white px-2 py-2'>
-            <p className='text-[10px] font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 text-sm font-semibold text-[#171a21]'>{value}</p>
+        <div className='rounded-lg border border-[#dfe5ee] bg-white px-2 py-2 dark:border-[#2a3d5c] dark:bg-[#111827]'>
+            <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{label}</p>
+            <p className='mt-1 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>{value}</p>
         </div>
     )
 }
 
 function Info({ label, value }: { label: string; value: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21]'>{value || 'unknown'}</p>
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
+            <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>{value || 'unknown'}</p>
         </div>
     )
 }
 
 function SidePanel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
     return (
-        <section className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
-            <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+        <section className='rounded-lg border border-[#e0e5ed] bg-white p-4 dark:border-[#2a3d5c] dark:bg-[#111827]'>
+            <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>
                 <span className='text-[#3056d3]'>{icon}</span>
                 {title}
             </div>
-            <div className='mt-3 grid gap-2 text-xs leading-5 text-[#596170]'>{children}</div>
+            <div className='mt-3 grid gap-2 text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>{children}</div>
         </section>
     )
 }
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
-            <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
+        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#2a3d5c] dark:bg-[#111827]'>
+            <div className='mb-3 flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>
                 <span className='text-[#3056d3]'>{icon}</span>
                 {title}
             </div>
