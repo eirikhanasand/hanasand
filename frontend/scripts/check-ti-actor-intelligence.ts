@@ -145,6 +145,10 @@ const publicTiImplementationPhrases = [
     'API activity result',
     'TI search API',
     'search API',
+    'actionability contract',
+    'built-in actor enrichment fallback',
+    'watchlistMatches',
+    'actorIntelligence.malwareTools',
 ]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
@@ -464,12 +468,20 @@ assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose
 assert(pageClientSource.includes('Handoff readiness'), 'Public TI page should expose consumer-ready workflow state.')
 assert(pageClientSource.includes('Action exports'), 'Public TI page should expose validated action exports.')
 assert(pageClientSource.includes('Validated request bodies for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
-assert(pageClientSource.includes('Local triage list; source evidence stays attached.'), 'Public TI queue should use analyst-native local triage copy.')
+assert(pageClientSource.includes('data-ti-section-rail'), 'Public TI page should expose a section rail for analyst scanning.')
+assert(pageClientSource.includes('Evidence ordered by severity, confidence, and recency.'), 'Public TI activity queue should explain backed ordering.')
+assert(pageClientSource.includes('Matched watchlists'), 'Public TI evidence fit should show matched organization watchlists when present.')
 assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
 assert(pageClientSource.includes('source gap'), 'Public TI enrichment statuses should use source-gap language instead of implementation labels.')
 assert(pageClientSource.includes('Readiness'), 'Public TI page should expose backed readiness and degraded states.')
 assert(pageClientSource.includes('Backed IDs, blockers, and next handoff owner'), 'Public TI page should describe backed readiness without prompt-shaped language.')
+for (const section of ['Overview', 'Activity', 'Targeting', 'Infrastructure', 'Sources', 'Evidence', 'Watchlist Relevance', 'Related alerts/cases', 'Collection Gaps', 'Actions']) {
+    assert(pageClientSource.toLowerCase().includes(section.toLowerCase()), `Public TI page should expose analyst-native section: ${section}.`)
+}
+for (const oldLabel of ['Priority Queue', 'Actor Profile', 'Reported Victims and Targets', 'Observed Tradecraft', 'Alert Packet', 'Workflow', 'Company Exposure', 'Monitoring Coverage', 'Monitoring Mix', 'Sources Used', 'Enrichment Queue']) {
+    assert(!pageClientSource.includes(oldLabel), `Public TI page should not use legacy/demo-like section label: ${oldLabel}.`)
+}
 assert(pageClientSource.includes('Review sources'), 'Public TI decision flow should start with source review.')
 assert(pageClientSource.includes('Prepare watchlist'), 'Public TI decision flow should include watchlist preparation.')
 assert(pageClientSource.includes('Rebuild alerts'), 'Public TI decision flow should include alert rebuild.')

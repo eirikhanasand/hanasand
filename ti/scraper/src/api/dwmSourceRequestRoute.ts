@@ -964,8 +964,9 @@ function sourceActivationProof(input: {
   const alertableFields = alertableFieldsForFamily(family);
   const watchlistTerms = String(input.scope ?? "").split(/[,\n]/).map((term) => term.trim()).filter(Boolean);
   const blocking = input.blockers.filter((blocker) => blocker.severity === "blocking");
-  const canProduceCapture = Boolean(input.source) && parserAvailable && policy.allowed && state !== "blocked" && state !== "failed";
+  const canProduceCapture = Boolean(input.source) && parserAvailable && policy.allowed && state !== "blocked" && state !== "failed" && state !== "paused";
   const canProduceAlert = canProduceCapture && alertableFields.length > 0 && (input.activeRow?.alertGradeEvidenceEligible === true || input.source?.status === "active");
+  const actorEnrichment = sourceActorEnrichmentReadiness({ family, watchlistTerms, state, parserAvailable, policyAllowed: policy.allowed, blockers: blocking });
   return {
     schemaVersion: "dwm.source_activation_proof.v1",
     generatedAt: input.generatedAt,
@@ -1004,6 +1005,7 @@ function sourceActivationProof(input: {
         alertGenerationPath: "/v1/dwm/source-requests?action=record_capture -> /v1/dwm/alerts/rebuild"
       }
     },
+    actorEnrichment,
     activationBlockers: blocking,
     retryReadiness: sourceActivationRetryReadiness({ candidate: input.candidate, source: input.source, receipt: input.receipt, generatedAt: input.generatedAt }),
     safeOutput: {
@@ -1067,6 +1069,59 @@ function alertableFieldsForFamily(family: SourceGrowthFamily): string[] {
   if (family === "actor_page") return ["title", "actorName", "aliases", "ttps", "targetSectors"];
   if (family === "public_advisory") return ["title", "vendor", "cve", "publishedAt", "ttps", "affectedProducts"];
   return ["title", "url", "publishedAt", "extractedTerms"];
+}
+
+function sourceActorEnrichmentReadiness(input: {
+  family: SourceGrowthFamily;
+  watchlistTerms: string[];
+  state: "canary" | "active" | "paused" | "failed" | "blocked";
+  parserAvailable: boolean;
+  policyAllowed: boolean;
+  blockers: Array<Record<string, unknown>>;
+}) {
+  const enrichmentFields = actorEnrichmentFieldsForFamily(input.family);
+  const canEnrichActor = input.policyAllowed
+    && input.parserAvailable
+    && input.state !== "paused"
+    && input.state !== "failed"
+    && input.state !== "blocked"
+    && enrichmentFields.length > 0;
+  return {
+    schemaVersion: "dwm.actor_source_enrichment_readiness.v1",
+    canEnrichActor,
+    sourceFamily: input.family,
+    actorSignals: enrichmentFields,
+    watchlistMatchFields: watchlistMatchFieldsForFamily(input.family),
+    watchlistTerms: input.watchlistTerms,
+    enrichmentPath: "/v1/dwm/source-requests?action=record_capture -> actor overview/product snapshot",
+    blockers: [
+      ...(input.state === "paused" ? [{ code: "paused_source", severity: "blocking", retryable: true }] : []),
+      ...(input.state === "failed" ? [{ code: "parser_or_collection_failed", severity: "blocking", retryable: true }] : []),
+      ...(input.state === "blocked" ? [{ code: "policy_blocked_source", severity: "blocking", retryable: false }] : []),
+      ...input.blockers
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function actorEnrichmentFieldsForFamily(family: SourceGrowthFamily): string[] {
+  if (family === "telegram") return ["actorHints", "aliases", "campaignNames", "linkedUrls"];
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return ["actorHandle", "claimTitle", "victimName", "firstSeen", "mirrorState"];
+  if (family === "actor_page") return ["actorName", "aliases", "ttps", "targetSectors", "relatedMalware"];
+  if (family === "public_advisory") return ["actorName", "cves", "ttps", "affectedProducts", "vendorAttribution"];
+  return ["titleTerms", "extractedEntities", "linkedUrls"];
+}
+
+function watchlistMatchFieldsForFamily(family: SourceGrowthFamily): string[] {
+  if (family === "telegram") return ["text", "channel", "urls"];
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return ["victimName", "actorHandle", "claimTitle"];
+  if (family === "actor_page") return ["actorName", "aliases", "ttps"];
+  if (family === "public_advisory") return ["title", "cve", "vendor", "affectedProducts"];
+  return ["title", "url", "extractedTerms"];
 }
 
 function sourceActivationRetryReadiness(input: {

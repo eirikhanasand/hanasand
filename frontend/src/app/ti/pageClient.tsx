@@ -162,7 +162,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const actionability = useMemo(() => buildTiActionability(result, actorIntel, victimObservations), [result, actorIntel, victimObservations])
     const actorArtifacts = useMemo(() => buildActorArtifacts(result, actorIntel, victimObservations, actionability), [result, actorIntel, victimObservations, actionability])
     const workItems = useMemo(() => analystWorkItemsFor(result, victimObservations, sourceUrlById), [result, victimObservations, sourceUrlById])
-    const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel), [result, victimObservations, sources, actorIntel])
+    const watchlist = useMemo(() => watchlistRelevanceFor(result, victimObservations, sources, actorIntel, actionability), [result, victimObservations, sources, actorIntel, actionability])
     const [selectedId, setSelectedId] = useState(workItems[0]?.id ?? '')
     const [selectedArtifactId, setSelectedArtifactId] = useState(actorArtifacts[0]?.id ?? '')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
@@ -194,6 +194,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Handoff', value: `${readyHandoffCount}/${totalHandoffCount} ready` },
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
     ]
+    const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
 
     useEffect(() => {
         if (!workItems.length) return
@@ -251,6 +252,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                         ))}
                     </div>
+                    <SectionOverviewRail items={sectionOverview} />
                 </div>
 
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[320px_minmax(0,1fr)_340px]'>
@@ -258,8 +260,8 @@ function Results({ result }: { result: TiSearchResponse }) {
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
-                                    <h2 className='text-sm font-semibold text-[#171a21]'>Priority Queue</h2>
-                                    <p className='mt-1 text-xs text-[#667085]'>Local triage list; source evidence stays attached.</p>
+                                    <h2 className='text-sm font-semibold text-[#171a21]'>Activity</h2>
+                                    <p className='mt-1 text-xs text-[#667085]'>Evidence ordered by severity, confidence, and recency.</p>
                                 </div>
                                 <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{workItems.length}</span>
                             </div>
@@ -357,13 +359,20 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </section>
 
                                 <section className='grid gap-4 xl:grid-cols-[1fr_1fr]'>
-                                    <Panel title='Reported Victims and Targets' description='Country-level observations with the victim, sector, timeframe, incident, and source basis visible immediately.' icon={<Target className='h-4 w-4' />}>
+                                    <Panel title='Targeting' description='Country, victim, sector, timeframe, incident, and source basis for the selected actor/query.' icon={<Target className='h-4 w-4' />}>
                                         {victimObservations.length ? victimObservations.map(item => (
                                             <VictimObservationRow key={`${item.victim}-${item.timeframe}`} item={item} />
                                         )) : <EmptyLine text='No country-level victim or target observations returned yet.' />}
                                     </Panel>
 
-                                    <Panel title='Observed Tradecraft' description='Reported tactics, techniques, and procedures, usually mapped to ATT&CK where available.' icon={<Waypoints className='h-4 w-4' />}>
+                                    <Panel title='Infrastructure and Tradecraft' description='Reported infrastructure patterns and techniques, usually mapped to ATT&CK where available.' icon={<Waypoints className='h-4 w-4' />}>
+                                        {actorIntel.infrastructure.length ? (
+                                            <div className='mb-3 flex flex-wrap gap-1.5'>
+                                                {actorIntel.infrastructure.slice(0, 8).map(item => (
+                                                    <span key={item} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#344054]'>{item}</span>
+                                                ))}
+                                            </div>
+                                        ) : <EmptyLine text='No infrastructure rows returned yet.' />}
                                         {result.ttps.length ? result.ttps.map(item => (
                                             <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                                                 <div className='flex flex-wrap items-center gap-2'>
@@ -404,7 +413,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             />
                         </div>
 
-                        <Panel title='Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
+                        <Panel title='Evidence Timeline' description='Evidence timestamps plus analyst decisions made in this browser session.' icon={<Clock3 className='h-4 w-4' />}>
                             <div className='grid gap-3'>
                                 {[...timelineFor(result, selected), ...sessionEvents].slice(0, 8).map(event => (
                                     <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
@@ -416,7 +425,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                         </Panel>
 
-                        <Panel title='Collection Tasks' description='What the collection layer has checked or should check next for this profile.' icon={<Database className='h-4 w-4' />}>
+                        <Panel title='Collection Gaps' description='Source families and missing fields that need collection or enrichment before stronger handoff.' icon={<Database className='h-4 w-4' />}>
                             <div className='grid gap-2'>
                                 {(result.analystLoop?.nextSteps ?? defaultNextStepsFor(result)).map(step => (
                                     <div key={`${step.state}-${step.label}`} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
@@ -434,7 +443,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <Panel title='Company Exposure' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
+                <Panel title='Watchlist Relevance' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
                     {alertItems.length ? alertItems.map(item => (
                         <div key={item.title} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
                             <div className='flex items-center justify-between gap-3'>
@@ -446,7 +455,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     )) : <EmptyLine text='No company, domain, vendor, or product matches returned yet.' />}
                 </Panel>
 
-                <Panel title='Monitoring Coverage' description='The data families checked for this result, such as actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
+                <Panel title='Sources' description='Data families checked for this result, including actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
                     {datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
@@ -492,11 +501,18 @@ type LocalDecision = {
 
 type WatchlistRelevance = {
     terms: string[]
+    matchedTerms: string[]
     organizations: string[]
     sectors: string[]
     countries: string[]
     domains: string[]
     rationale: string
+}
+
+type SectionOverviewItem = {
+    label: 'Overview' | 'Activity' | 'Targeting' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Collection gaps' | 'Actions'
+    value: string
+    state: 'ready' | 'review' | 'blocked'
 }
 
 type AlertPacket = {
@@ -527,7 +543,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
         <section data-ti-actor-dossier='true' className='w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='w-full min-w-0 lg:flex-1 lg:basis-64'>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor Profile</p>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Overview</p>
                     <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>{actor.actorClass}</h2>
                     <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{actor.attribution}</p>
                 </div>
@@ -541,10 +557,10 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
 
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 <DossierList title='Motivation' values={actor.motivation} />
-                <DossierList title='Malware and tools' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
+                <DossierList title='Tooling' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Campaigns' values={actor.campaigns} artifactKind='campaign' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Indicators' values={actor.indicators} />
-                <DossierList title='Target sectors' values={actor.targetSectors} />
+                <DossierList title='Targeting' values={actor.targetSectors} />
                 <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
             </div>
@@ -556,6 +572,22 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <StructuredProvenancePanel rows={actor.provenanceRows} />
             </div>
         </section>
+    )
+}
+
+function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
+    return (
+        <div data-ti-section-rail='true' className='grid min-w-0 gap-1.5 sm:grid-cols-2 lg:col-span-2 lg:grid-cols-5'>
+            {items.map(item => (
+                <div key={item.label} className='min-w-0 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] px-2.5 py-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                    <div className='flex flex-wrap items-center justify-between gap-1.5'>
+                        <p className='min-w-0 wrap-break-word text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{item.label}</p>
+                        <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
+                    </div>
+                    <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.value}</p>
+                </div>
+            ))}
+        </div>
     )
 }
 
@@ -852,7 +884,8 @@ function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: Anal
                 </div>
                 <span className={severityClass(selected.severity)}>{selected.kind === 'exposure' ? 'alert candidate' : 'context for watchlists'}</span>
             </div>
-            <div className='mt-3 grid gap-3 md:grid-cols-3'>
+            <div className='mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                <WatchlistBlock title='Matched watchlists' values={watchlist.matchedTerms} />
                 <WatchlistBlock title='Watch terms' values={watchlist.terms} />
                 <WatchlistBlock title='Organizations' values={watchlist.organizations} />
                 <WatchlistBlock title='Sectors / countries' values={[...watchlist.sectors.slice(0, 4), ...watchlist.countries.slice(0, 4)]} />
@@ -885,7 +918,7 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
 
 function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     return (
-        <Panel title='Alert Packet' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
+        <Panel title='Evidence' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div>
                     <p className='text-sm font-semibold text-[#171a21]'>{packet.title}</p>
@@ -925,28 +958,14 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     const decisionSteps = decisionStepsFor(actionability)
 
     return (
-        <Panel title='Workflow' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Actions' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <ConsumerReadinessPanel actionability={actionability} />
                 <ReadinessBlockersPanel actionability={actionability} />
                 <ActionPayloadsPanel actionability={actionability} />
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <div className='flex items-center justify-between gap-2'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlists</p>
-                        <span className={actionability.watchlist.state === 'backed_matches' ? 'rounded-lg bg-[#e9f8ef] px-2 py-1 text-[11px] font-semibold text-[#147a3b]' : 'rounded-lg bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3]'}>
-                            {formatLabel(actionability.watchlistRelevance.state)}
-                        </span>
-                    </div>
-                    <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Candidate terms preserve source provenance for authenticated review.</p>
-                    <div className='mt-2 flex flex-wrap gap-1.5'>
-                        {actionability.watchlistRelevance.terms.length ? actionability.watchlistRelevance.terms.slice(0, 6).map(payload => (
-                            <span key={`${payload.kind}-${payload.value}`} className={payload.matched ? 'max-w-full wrap-break-word rounded-md bg-[#e9f8ef] px-2 py-1 text-xs font-semibold text-[#147a3b]' : 'max-w-full wrap-break-word rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'}>{payload.kind}: {payload.value}</span>
-                        )) : <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No watchlist payload returned</span>}
-                    </div>
-                    {actionability.watchlistRelevance.blockers.length ? <BlockerList blockers={actionability.watchlistRelevance.blockers} /> : null}
-                </div>
+                <OrgRelevancePanel actionability={actionability} />
 
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Geography</p>
@@ -1009,17 +1028,106 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                     />
                 ) : null}
 
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Records</p>
-                    <p className='mt-2 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {actionability.relatedAlerts.length} alert{actionability.relatedAlerts.length === 1 ? '' : 's'} · {actionability.relatedCases.length} case{actionability.relatedCases.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'webhook ready' : 'webhook blocked'}
-                    </p>
-                    {!actionability.relatedAlerts.length && !actionability.relatedCases.length ? (
-                        <p className='mt-2 text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached to {query}; rebuild alerts after saving a matching watchlist term.</p>
-                    ) : null}
-                </div>
+                <RelatedRecordsPanel actionability={actionability} query={query} />
             </div>
         </Panel>
+    )
+}
+
+function RelatedRecordsPanel({ actionability, query }: { actionability: TiActionabilityModel; query: string }) {
+    const records = [
+        ...actionability.relatedAlerts.map(alert => ({
+            id: `alert:${alert.id}`,
+            label: alert.title || alert.id,
+            meta: [alert.id, alert.status, alert.severity].filter(Boolean).join(' · '),
+            route: alert.casePath || alert.recommendedRoute,
+            kind: 'Alert',
+        })),
+        ...actionability.relatedCases.map(item => ({
+            id: `case:${item.id}`,
+            label: item.title || item.id,
+            meta: [item.id, item.status, item.priority].filter(Boolean).join(' · '),
+            route: item.path,
+            kind: 'Case',
+        })),
+    ]
+
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related alerts/cases</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery blocked'}
+                    </p>
+                </div>
+                <CopyPayloadButton label='Related alerts and cases' payload={{ alerts: actionability.relatedAlerts, cases: actionability.relatedCases, blockers: actionability.readiness.blockers }} />
+            </div>
+            {records.length ? (
+                <div className='mt-3 grid gap-2'>
+                    {records.slice(0, 4).map(record => (
+                        <div key={record.id} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                            <div className='flex flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{record.kind}: {record.label}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{record.meta}</p>
+                                </div>
+                                {record.route ? (
+                                    <a href={record.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                        <ExternalLink className='h-3.5 w-3.5' />
+                                        Open
+                                    </a>
+                                ) : null}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 dark:border-[#5a4316] dark:bg-[#231b0c]'>
+                    <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Blocked</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached to {query}; rebuild alerts after saving a matching watchlist term.</p>
+                </div>
+            )}
+        </div>
+    )
+}
+
+function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityModel }) {
+    const proof = actionability.orgRelevance
+    const firstBlocker = proof.blockers[0]
+    return (
+        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist relevance</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {proof.organizationRefs.length} organization match{proof.organizationRefs.length === 1 ? '' : 'es'} · {proof.candidateTerms.length} candidate term{proof.candidateTerms.length === 1 ? '' : 's'} · {proof.sourceEvidence.length} source row{proof.sourceEvidence.length === 1 ? '' : 's'}
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(proof.state)}>{decisionStepStatusLabel(proof.state)}</span>
+                    <CopyPayloadButton label='Watchlist relevance' payload={proof} />
+                </div>
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {proof.candidateTerms.length ? proof.candidateTerms.slice(0, 4).map(term => (
+                    <div key={`${term.kind}-${term.value}`} className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{term.kind}: {term.value}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{term.notes || `${term.sourceEvidenceRefs.length} source reference${term.sourceEvidenceRefs.length === 1 ? '' : 's'} attached.`}</p>
+                            </div>
+                            <span className={term.matched ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>{term.matched ? 'matched' : 'candidate'}</span>
+                        </div>
+                    </div>
+                )) : (
+                    <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c]'>No source-backed watchlist term is attached yet.</p>
+                )}
+            </div>
+            {firstBlocker ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{readinessOwnerLabel(firstBlocker.ownerLane)}: {firstBlocker.handoff}</p>
+            ) : null}
+        </div>
     )
 }
 
@@ -1342,20 +1450,9 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     )
 }
 
-function BlockerList({ blockers }: { blockers: string[] }) {
-    return (
-        <div className='mt-3 rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 dark:border-[#5a4316] dark:bg-[#231b0c]'>
-            <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Missing dependency</p>
-            <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#8a5a00]'>
-                {blockers.map(item => <li key={item}>{item}</li>)}
-            </ul>
-        </div>
-    )
-}
-
 function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     return (
-        <Panel title='Enrichment Queue' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Collection Gaps' description='Source, capture, and data work required before this result can support stronger alerts.' icon={<Database className='h-4 w-4' />}>
             <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2'>
                 {tasks.map(task => (
                     <div key={task.title} className='min-w-0 max-w-full overflow-hidden rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -1501,7 +1598,32 @@ function defaultNextStepsFor(result: TiSearchResponse): NonNullable<TiSearchResp
     }]
 }
 
-function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile): WatchlistRelevance {
+function sectionOverviewFor(input: {
+    result: TiSearchResponse
+    actorIntel: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    workItems: AnalystWorkItem[]
+    victimObservations: ReturnType<typeof victimObservationsFor>
+    watchlist: WatchlistRelevance
+}): SectionOverviewItem[] {
+    const relatedRecords = input.actionability.relatedAlerts.length + input.actionability.relatedCases.length
+    const readyActions = Object.values(input.actionability.actionPayloads.payloads).filter(payload => payload.ready).length
+    const sourceRows = input.actorIntel.provenanceRows.length || input.actionability.sourceProvenance.length || input.result.sources.length
+    return [
+        { label: 'Overview', value: `${Math.round(input.actorIntel.confidence * 100)}% confidence`, state: input.actorIntel.provenanceRows.length ? 'ready' : 'blocked' },
+        { label: 'Activity', value: `${input.workItems.length} item${input.workItems.length === 1 ? '' : 's'}`, state: input.workItems.length ? 'ready' : 'review' },
+        { label: 'Targeting', value: `${input.victimObservations.length || input.actorIntel.targetSectors.length} row${(input.victimObservations.length || input.actorIntel.targetSectors.length) === 1 ? '' : 's'}`, state: input.victimObservations.length || input.actorIntel.targetSectors.length ? 'ready' : 'review' },
+        { label: 'Infrastructure', value: `${input.actorIntel.infrastructure.length} pattern${input.actorIntel.infrastructure.length === 1 ? '' : 's'}`, state: input.actorIntel.infrastructure.length ? 'ready' : 'review' },
+        { label: 'Sources', value: `${sourceRows} provenance row${sourceRows === 1 ? '' : 's'}`, state: sourceRows ? 'ready' : 'blocked' },
+        { label: 'Evidence', value: `${input.workItems.filter(item => item.evidence.length).length} supported`, state: input.workItems.some(item => item.evidence.length) ? 'ready' : 'blocked' },
+        { label: 'Watchlist relevance', value: input.actionability.orgRelevance.organizationRefs.length ? `${input.actionability.orgRelevance.organizationRefs.length} matched` : `${input.actionability.orgRelevance.candidateTerms.length} candidate${input.actionability.orgRelevance.candidateTerms.length === 1 ? '' : 's'}`, state: input.actionability.orgRelevance.state },
+        { label: 'Related alerts/cases', value: `${relatedRecords} linked`, state: relatedRecords ? 'ready' : 'blocked' },
+        { label: 'Collection gaps', value: `${input.actionability.enrichmentGapQueue.length} open`, state: input.actionability.enrichmentGapQueue.length ? 'review' : 'ready' },
+        { label: 'Actions', value: `${readyActions}/5 ready`, state: readyActions === 5 ? 'ready' : readyActions ? 'review' : 'blocked' },
+    ]
+}
+
+function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): WatchlistRelevance {
     const organizations = unique([
         ...victimObservations.map(item => item.victim),
         ...result.recentActivity.map(item => item.victimName).filter((value): value is string => Boolean(value)),
@@ -1527,16 +1649,20 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
         ...actor.campaigns.slice(0, 4),
         ...actor.malwareTools.slice(0, 4),
     ].filter(Boolean)).slice(0, 14)
+    const matchedTerms = actionability.watchlistRelevance.terms.filter(term => term.matched).map(term => `${term.kind}: ${term.value}`)
 
     return {
         terms,
+        matchedTerms,
         organizations,
         sectors,
         countries,
         domains,
-        rationale: organizations.length
-            ? 'Use the actor, aliases, victim organizations, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs before creating customer alerts.'
-            : 'Use the actor, aliases, sectors, countries, campaigns, tools, and source domains as candidate watchlist inputs; no customer organization match was returned yet.',
+        rationale: matchedTerms.length
+            ? `${matchedTerms.length} organization watchlist match${matchedTerms.length === 1 ? '' : 'es'} returned for this query.`
+            : organizations.length
+                ? 'Candidate watchlist inputs are present; no persisted organization watchlist match was returned yet.'
+                : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms are present only when returned by the profile or source rows.',
     }
 }
 
@@ -1588,26 +1714,26 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             status: hasActorCore ? 'ready' : 'needs_api',
             detail: hasActorCore
                 ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert enrichment.`
-                : 'Missing actorIntelligence.malwareTools, campaigns, infrastructure, confidence reasoning, or source provenance in the search response.',
+                : 'Missing tooling, campaigns, infrastructure, confidence reasoning, or source provenance from actor enrichment.',
         },
         {
             title: 'Persist alert review decision',
             status: 'needs_api',
-            detail: 'Public /ti scratch notes are session-local. Persisted review needs selected finding id, review state, owner, rationale, and delivery hold/release state in the authenticated case workflow.',
+            detail: 'Scratch notes are session-local. Persisted review needs selected finding ID, review state, owner, rationale, and delivery hold/release state in the authenticated case workflow.',
         },
         {
             title: 'Attach source capture provenance',
             status: hasSourceUrls ? 'ready' : 'needs_api',
             detail: hasSourceUrls
                 ? 'Returned sources include URL/provenance references that can be opened or mapped into console evidence.'
-                : 'The search response needs source URLs, capture ids, or redacted source hashes for every queue item before analyst trust is strong.',
+                : 'The result needs source URLs, capture IDs, or redacted source hashes for every queue item before analyst trust is strong.',
         },
         {
             title: 'Map actor to customer watchlists',
             status: hasOrganizations ? 'watch' : 'needs_api',
             detail: hasOrganizations
                 ? `Candidate watched objects include ${watchlist.organizations.slice(0, 3).join(', ')}.`
-                : 'Missing watchlistMatches or organization/domain relevance for this public result.',
+                : 'No persisted organization/domain relevance was returned for this public result.',
         },
         {
             title: 'Promote evidence to case queue',
@@ -1875,7 +2001,7 @@ function Panel({ title, description, icon, children }: { title: string; descript
 
 function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] }) {
     return (
-        <Panel title='Monitoring Mix' description='How the result is assembled: public indexes can seed coverage, direct monitored pages provide freshness, and advisories add vulnerability context.' icon={<Database className='h-4 w-4' />}>
+        <Panel title='Source Coverage' description='How the result is assembled: public indexes can seed coverage, direct monitored pages provide freshness, and advisories add vulnerability context.' icon={<Database className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 {sources.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4).map(source => (
                     <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
@@ -1896,7 +2022,7 @@ function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] })
     const visibleSources = sources.slice(0, 5)
     const hiddenCount = Math.max(0, sources.length - visibleSources.length)
     return (
-        <Panel title='Sources Used' description='Named sources used for this result. Public visitors see a limited set; customer console access can show additional source links and internal capture details.' icon={<ExternalLink className='h-4 w-4' />}>
+        <Panel title='Source Records' description='Named sources used for this result. Public visitors see a limited set; customer console access can show additional source links and internal capture details.' icon={<ExternalLink className='h-4 w-4' />}>
             <div className='grid gap-1'>
                 {visibleSources.map(source => {
                     const href = source.url || linkFromText(source.provenance)

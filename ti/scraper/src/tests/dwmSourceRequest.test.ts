@@ -710,6 +710,12 @@ describe("dwm source requests", () => {
             retryable: true,
             failureCategory: "parser_retry_scheduled",
             remediation: expect.stringContaining("Retry the parser fixture")
+          }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: false,
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "parser_or_collection_failed", severity: "blocking" })
+            ])
           })
         }),
         allowedOperatorActions: expect.arrayContaining([
@@ -731,7 +737,13 @@ describe("dwm source requests", () => {
           state: "blocked",
           policyResult: expect.objectContaining({ allowed: false, category: "policy_rejected" }),
           expectedCapture: expect.objectContaining({ type: "darkweb_onion_metadata_observation", restrictedPayloadStored: false }),
-          safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: false,
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "policy_blocked_source", severity: "blocking" })
+            ])
+          })
         }),
         typedBlockers: expect.arrayContaining([
           expect.objectContaining({ code: "rejected_policy", severity: "blocking" }),
@@ -1125,13 +1137,14 @@ describe("dwm source requests", () => {
         candidates: [
           { target: "@activation_proof_public", type: "telegram_channel", family: "telegram" },
           { target: "metadata://darkweb/apt29/claims", type: "restricted_metadata", family: "darkweb_metadata" },
-          { target: "https://example.com/security/advisory/apt29", type: "public_url", family: "public_advisory" }
+          { target: "https://example.com/security/advisory/apt29", type: "public_url", family: "public_advisory" },
+          { target: "https://example.com/threat-actors/apt29", type: "public_url", family: "actor_page" }
         ]
       })
     }), options);
     const createdBody = await created.json() as any;
     expect(created.status).toBe(201);
-    expect(createdBody.summary).toMatchObject({ acceptedCount: 3, rejectedCount: 0 });
+    expect(createdBody.summary).toMatchObject({ acceptedCount: 4, rejectedCount: 0 });
 
     const worker = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1139,8 +1152,8 @@ describe("dwm source requests", () => {
     }), options);
     const workerBody = await worker.json() as any;
     expect(worker.status).toBe(200);
-    expect(workerBody.activation.summary.activeSourceCount).toBe(3);
-    expect(workerBody.collectionQueue.summary.taskCount).toBe(3);
+    expect(workerBody.activation.summary.activeSourceCount).toBe(4);
+    expect(workerBody.collectionQueue.summary.taskCount).toBe(4);
 
     const config = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
@@ -1165,7 +1178,13 @@ describe("dwm source requests", () => {
           state: "canary",
           credentialBoundary: expect.objectContaining({ noAutoJoin: true, noCredentialCollection: true }),
           expectedCapture: expect.objectContaining({ type: "telegram_public_message_preview" }),
-          alertability: expect.objectContaining({ canProduceAlert: true, alertableFields: expect.arrayContaining(["text"]) })
+          alertability: expect.objectContaining({ canProduceAlert: true, alertableFields: expect.arrayContaining(["text"]) }),
+          actorEnrichment: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_enrichment_readiness.v1",
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["actorHints"]),
+            watchlistMatchFields: expect.arrayContaining(["text"])
+          })
         })
       }),
       expect.objectContaining({
@@ -1174,7 +1193,12 @@ describe("dwm source requests", () => {
           state: "active",
           policyResult: expect.objectContaining({ allowed: true, category: "restricted_metadata_only", metadataOnly: true }),
           expectedCapture: expect.objectContaining({ type: "darkweb_metadata_observation", restrictedPayloadStored: false }),
-          alertability: expect.objectContaining({ alertableFields: expect.arrayContaining(["victimHints", "claimType"]) })
+          alertability: expect.objectContaining({ alertableFields: expect.arrayContaining(["victimHints", "claimType"]) }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["actorHandle", "victimName"]),
+            watchlistMatchFields: expect.arrayContaining(["victimName"])
+          })
         })
       }),
       expect.objectContaining({
@@ -1185,13 +1209,72 @@ describe("dwm source requests", () => {
           credentialBoundary: expect.objectContaining({ noDownloads: true, noCredentialCollection: true }),
           parserAvailability: expect.objectContaining({ profile: "public_advisory", available: true }),
           expectedCapture: expect.objectContaining({ type: "public_advisory_metadata", liveNetworkRequiredForProof: false }),
-          alertability: expect.objectContaining({ watchlistTerms: ["APT29", "example.com"], alertableFields: expect.arrayContaining(["cve", "ttps"]) })
+          alertability: expect.objectContaining({ watchlistTerms: ["APT29", "example.com"], alertableFields: expect.arrayContaining(["cve", "ttps"]) }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["vendorAttribution"]),
+            watchlistMatchFields: expect.arrayContaining(["cve"])
+          })
+        })
+      }),
+      expect.objectContaining({
+        family: "actor_page",
+        activationProof: expect.objectContaining({
+          state: "canary",
+          policyResult: expect.objectContaining({ allowed: true, category: "public_ti_metadata" }),
+          parserAvailability: expect.objectContaining({ profile: "actor_page_metadata", available: true }),
+          expectedCapture: expect.objectContaining({ type: "actor_page_metadata", liveNetworkRequiredForProof: false }),
+          actorEnrichment: expect.objectContaining({
+            canEnrichActor: true,
+            actorSignals: expect.arrayContaining(["actorName", "aliases", "ttps"]),
+            watchlistMatchFields: expect.arrayContaining(["actorName", "aliases"])
+          })
         })
       })
     ]));
     expect(configBody.sourceConfigs.every((row: any) => row.activationProof.safeOutput.liveNetworkScrapeStarted === false)).toBe(true);
-    expect(frontier.snapshot()).toHaveLength(3);
+    expect(frontier.snapshot()).toHaveLength(4);
     expect(JSON.stringify(configBody)).not.toContain("apt29/claims");
+
+    const status = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({ action: "pack_status", sourcePackId: "pack_activation_proof_mixed" })
+    }), options);
+    const statusBody = await status.json() as any;
+    const telegramCandidate = statusBody.registry.candidates.find((candidate: any) => candidate.declaredFamily === "telegram");
+    const suppressed = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_review",
+        packAction: "suppress",
+        candidateIds: [telegramCandidate.id],
+        decidedBy: "source-proof-worker",
+        reason: "pause source during actor enrichment proof"
+      })
+    }), options);
+    expect(suppressed.status).toBe(200);
+    const pausedConfig = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        sourcePackId: "pack_activation_proof_mixed",
+        tenantId: "tenant_acme",
+        orgId: "org_acme",
+        scope: "APT29,example.com"
+      })
+    }), options);
+    const pausedConfigBody = await pausedConfig.json() as any;
+    const pausedTelegram = pausedConfigBody.sourceConfigs.find((row: any) => row.family === "telegram");
+    expect(pausedTelegram.activationProof).toMatchObject({
+      state: "paused",
+      alertability: { canProduceCapture: false, canProduceAlert: false },
+      actorEnrichment: {
+        canEnrichActor: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "paused_source", severity: "blocking" })
+        ])
+      }
+    });
   });
 
   test("retrieves source packs across scraper store restarts through durable adapter", async () => {

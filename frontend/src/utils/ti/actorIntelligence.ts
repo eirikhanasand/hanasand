@@ -158,7 +158,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
         reportDate: undefined,
         captureId: undefined,
         confidence: fallback.confidence,
-        shownBecause: 'Used to support the built-in actor enrichment fallback.',
+        shownBecause: 'Used to support actor enrichment when newer source rows are not returned.',
     }))
 
     return uniqueBy([
@@ -169,7 +169,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
             provenance: source.provenance,
             captureId: source.captureId,
             confidence: source.confidence,
-            shownBecause: 'Returned by the actionability contract as evidence for watchlist, alert, or case handoff.',
+            shownBecause: 'Returned as evidence for watchlist, alert, or case handoff.',
         })),
         ...sourceRows,
         ...fallbackRows,
