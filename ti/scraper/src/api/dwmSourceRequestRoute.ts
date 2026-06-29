@@ -3063,6 +3063,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
+      sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       alertCaseHandoffReadiness: actorReadiness.alertCaseHandoffReadiness
@@ -3080,6 +3081,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourceOperationsQueue: actorReadiness.sourceOperationsQueue,
       sourceFamilyHealth: actorReadiness.sourceFamilyHealth,
+      sourceConsumerBridge: actorReadiness.sourceConsumerBridge,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
       retryBlockers: actorReadiness.retryBlockers,
@@ -3108,6 +3110,8 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.sourceOperationsQueue.queueItems | all(.route.path | length > 0 and .liveNetworkFetch == false and .safeOutput.liveNetworkScrapeStarted == false)",
       ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
       ".actorReadiness.sourceFamilyHealth.rows | all(has(\"family\") and has(\"parserState\") and has(\"timestamps\") and has(\"confidence\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
+      ".actorReadiness.sourceConsumerBridge.consumers | all(has(\"consumer\") and has(\"ready\") and has(\"sourceFamilies\") and .safeOutput.liveNetworkScrapeStarted == false)",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3246,6 +3250,23 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourceOperationsQueue,
     freshness
   });
+  const sourceConsumerBridge = sourceActorConsumerBridge({
+    query,
+    sourceFamilyHealth,
+    evidenceReadiness,
+    alertGenerationReadiness,
+    alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
+      query,
+      alertability,
+      latestCaptureAt,
+      candidateGaps,
+      retryBlockers,
+      missingSections
+    }),
+    sourceOperationsQueue,
+    candidateGaps,
+    freshness
+  });
   return {
     proofId: stableId("dwm_actor_source_readiness", `${query}:${readinessArtifact.generatedAt}:${latestCaptureAt ?? "no_capture"}:${latestEnrichmentAt ?? "no_enrichment"}`),
     query,
@@ -3280,15 +3301,9 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     alertGenerationReadiness,
     sourceOperationsQueue,
     sourceFamilyHealth,
+    sourceConsumerBridge,
     alertability,
-    alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
-      query,
-      alertability,
-      latestCaptureAt,
-      candidateGaps,
-      retryBlockers,
-      missingSections
-    }),
+    alertCaseHandoffReadiness: sourceConsumerBridge.alertCaseHandoffReadiness,
     safeOutput: {
       rawTargetsExposed: false,
       privateTelegramContentExposed: false,
@@ -3900,6 +3915,123 @@ function sourceActorFamilyHealth(input: {
         ? Math.round((confidenceRows.reduce((sum, row) => sum + row.confidence, 0) / confidenceRows.length) * 100) / 100
         : 0
     },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorConsumerBridge(input: {
+  query: string;
+  sourceFamilyHealth: Record<string, any>;
+  evidenceReadiness: Record<string, any>;
+  alertGenerationReadiness: Record<string, any>;
+  alertCaseHandoffReadiness: Record<string, any>;
+  sourceOperationsQueue: Record<string, any>;
+  candidateGaps: Array<Record<string, any>>;
+  freshness: Record<string, any>;
+}) {
+  const familyRows = input.sourceFamilyHealth.rows ?? [];
+  const evidenceFieldsByFamily = new Map((input.evidenceReadiness.rows ?? []).map((row: any) => [String(row.family), row.evidenceFields ?? []]));
+  const nextActionsByFamily = new Map<string, Array<Record<string, any>>>();
+  for (const item of input.sourceOperationsQueue.queueItems ?? []) {
+    const families = item.family === "all_active" ? familyRows.map((row: any) => String(row.family)) : [String(item.family)];
+    for (const family of families) nextActionsByFamily.set(family, [...(nextActionsByFamily.get(family) ?? []), {
+      id: item.id,
+      type: item.type,
+      priority: item.priority,
+      reasonCode: item.reasonCode,
+      route: item.route,
+      liveNetworkFetch: false
+    }]);
+  }
+  const consumerRows = familyRows.map((row: any) => ({
+    schemaVersion: "dwm.actor_source_consumer_bridge_row.v1",
+    proofId: stableId("dwm_actor_source_consumer_bridge_row", `${input.query}:${row.family}:${row.state}:${row.parserState}:${row.captureState}:${row.alertability?.alertReady === true}`),
+    query: input.query,
+    family: row.family,
+    state: row.state,
+    parserState: row.parserState,
+    captureState: row.captureState,
+    confidence: row.confidence,
+    confidenceTier: row.confidenceTier,
+    timestamps: row.timestamps,
+    freshnessState: row.freshnessState,
+    provenance: {
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      privacyBoundary: row.privacyBoundary,
+      sourceTrust: row.sourceTrust
+    },
+    consumers: {
+      publicTiActorPage: row.alertability?.canEnrichActor === true || Boolean(row.gap),
+      sharedWatchlistAlerts: row.alertability?.canProduceAlert === true,
+      caseHandoff: row.alertability?.alertReady === true && Boolean(row.timestamps?.lastCaptureAt)
+    },
+    fields: {
+      evidence: evidenceFieldsByFamily.get(String(row.family)) ?? [],
+      matchable: row.alertability?.matchableFields ?? [],
+      alertable: row.alertability?.alertableFields ?? []
+    },
+    blockers: row.blockers ?? [],
+    gap: row.gap,
+    retryBackoff: row.retryBackoff,
+    nextActions: nextActionsByFamily.get(String(row.family)) ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  }));
+  const consumerReadiness = (consumer: "publicTiActorPage" | "sharedWatchlistAlerts" | "caseHandoff", ready: boolean) => {
+    const usableRows = consumerRows.filter((row) => row.consumers[consumer] === true);
+    const blockerRows = consumer === "publicTiActorPage"
+      ? input.candidateGaps
+      : consumer === "sharedWatchlistAlerts"
+        ? input.alertGenerationReadiness.blockers ?? []
+        : input.alertCaseHandoffReadiness.blockers ?? [];
+    return {
+      consumer,
+      ready,
+      sourceFamilies: uniqueSourceReadinessStrings(usableRows.map((row) => row.family)),
+      proofRows: usableRows.map((row) => row.proofId),
+      matchableFields: uniqueSourceReadinessStrings(usableRows.flatMap((row) => row.fields.matchable)),
+      alertableFields: uniqueSourceReadinessStrings(usableRows.flatMap((row) => row.fields.alertable)),
+      blockers: dedupeBlockers(blockerRows),
+      nextActions: uniqueSourceReadinessStrings(consumerRows.flatMap((row) => row.nextActions.map((action: any) => action.type))),
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  };
+  return {
+    schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+    proofId: stableId("dwm_actor_source_consumer_bridge", `${input.query}:${consumerRows.map((row) => `${row.family}:${row.state}:${row.parserState}:${row.confidenceTier}`).join(",")}`),
+    query: input.query,
+    rows: consumerRows,
+    consumers: [
+      consumerReadiness("publicTiActorPage", input.evidenceReadiness.evidenceReady === true),
+      consumerReadiness("sharedWatchlistAlerts", input.alertGenerationReadiness.alertReady === true),
+      consumerReadiness("caseHandoff", input.alertCaseHandoffReadiness.caseReady === true)
+    ],
+    summary: {
+      publicTiReady: input.evidenceReadiness.evidenceReady === true,
+      alertReady: input.alertGenerationReadiness.alertReady === true,
+      caseReady: input.alertCaseHandoffReadiness.caseReady === true,
+      sourceFamilies: uniqueSourceReadinessStrings(consumerRows.map((row) => row.family)),
+      alertableFamilies: uniqueSourceReadinessStrings(consumerRows.filter((row) => row.consumers.sharedWatchlistAlerts === true).map((row) => row.family)),
+      gapFamilies: uniqueSourceReadinessStrings(input.candidateGaps.map((gap) => gap.family)),
+      retryFamilies: input.sourceFamilyHealth.summary?.retryFamilies ?? [],
+      lastProofAt: latestIso(consumerRows.flatMap((row) => [row.timestamps?.lastCaptureAt, row.timestamps?.lastEnrichmentAt])) ?? input.freshness.checkedAt
+    },
+    alertCaseHandoffReadiness: input.alertCaseHandoffReadiness,
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,

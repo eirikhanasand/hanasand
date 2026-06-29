@@ -1598,6 +1598,56 @@ describe("dwm source requests", () => {
           ]),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
+        sourceConsumerBridge: {
+          schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+          proofId: expect.any(String),
+          summary: expect.objectContaining({
+            publicTiReady: true,
+            alertReady: true,
+            caseReady: true,
+            alertableFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"]),
+            lastProofAt: expect.any(String)
+          }),
+          consumers: expect.arrayContaining([
+            expect.objectContaining({
+              consumer: "publicTiActorPage",
+              ready: true,
+              sourceFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              consumer: "sharedWatchlistAlerts",
+              ready: true,
+              sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion"]),
+              matchableFields: expect.arrayContaining(["text"]),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              consumer: "caseHandoff",
+              ready: true,
+              sourceFamilies: expect.arrayContaining(["telegram"])
+            })
+          ]),
+          rows: expect.arrayContaining([
+            expect.objectContaining({
+              family: "telegram",
+              provenance: expect.objectContaining({
+                sourceIds: expect.arrayContaining([expect.any(String)]),
+                privacyBoundary: expect.objectContaining({ noPrivateTelegram: true })
+              }),
+              fields: expect.objectContaining({
+                matchable: expect.arrayContaining(["text"]),
+                alertable: expect.arrayContaining(["actorHints"])
+              }),
+              consumers: expect.objectContaining({
+                publicTiActorPage: true,
+                sharedWatchlistAlerts: true,
+                caseHandoff: true
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ])
+        },
         alertCaseHandoffReadiness: {
           schemaVersion: "dwm.actor_alert_case_handoff_readiness.v1",
           alertReady: true,
@@ -1675,6 +1725,12 @@ describe("dwm source requests", () => {
               expect.objectContaining({ family: "telegram", confidence: expect.any(Number), parserState: "ready" })
             ])
           }),
+          sourceConsumerBridge: expect.objectContaining({
+            schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+            consumers: expect.arrayContaining([
+              expect.objectContaining({ consumer: "publicTiActorPage", ready: true })
+            ])
+          }),
           freshness: expect.objectContaining({
             captureFreshness: expect.objectContaining({ state: "fresh" })
           })
@@ -1710,6 +1766,12 @@ describe("dwm source requests", () => {
               alertReadyFamilies: expect.arrayContaining(["telegram"])
             })
           }),
+          sourceConsumerBridge: expect.objectContaining({
+            summary: expect.objectContaining({
+              publicTiReady: true,
+              alertReady: true
+            })
+          }),
           freshnessState: "fresh"
         },
         worker3Assertions: expect.arrayContaining([
@@ -1719,6 +1781,7 @@ describe("dwm source requests", () => {
           ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
           ".actorReadiness.sourceOperationsQueue.schemaVersion == \"dwm.actor_source_operations_queue.v1\"",
           ".actorReadiness.sourceFamilyHealth.schemaVersion == \"dwm.actor_source_family_health.v1\"",
+          ".actorReadiness.sourceConsumerBridge.schemaVersion == \"dwm.actor_source_consumer_bridge.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2054,6 +2117,37 @@ describe("dwm source requests", () => {
         ]),
         safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
       },
+      sourceConsumerBridge: {
+        schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+        summary: expect.objectContaining({
+          publicTiReady: true,
+          alertReady: false,
+          caseReady: false,
+          gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
+        }),
+        consumers: expect.arrayContaining([
+          expect.objectContaining({
+            consumer: "publicTiActorPage",
+            ready: true,
+            sourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "actor_page"])
+          }),
+          expect.objectContaining({
+            consumer: "sharedWatchlistAlerts",
+            ready: false,
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "capture_required" })
+            ])
+          })
+        ]),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "darkweb_onion",
+            consumers: expect.objectContaining({ publicTiActorPage: true, sharedWatchlistAlerts: false }),
+            gap: expect.objectContaining({ state: "missing" }),
+            safeOutput: expect.objectContaining({ restrictedMetadataLeaked: false })
+          })
+        ])
+      },
       safeOutput: {
         liveNetworkScrapeStarted: false,
         privateTelegramContentExposed: false,
@@ -2220,6 +2314,12 @@ describe("dwm source requests", () => {
           schemaVersion: "dwm.actor_source_family_health.v1",
           rows: expect.arrayContaining([
             expect.objectContaining({ family: "darkweb_onion", parserState: "missing_source" })
+          ])
+        }),
+        sourceConsumerBridge: expect.objectContaining({
+          schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+          consumers: expect.arrayContaining([
+            expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
           ])
         }),
         freshnessState: "needs_capture"
@@ -2411,6 +2511,32 @@ describe("dwm source requests", () => {
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           })
         ])
+      },
+      sourceConsumerBridge: {
+        schemaVersion: "dwm.actor_source_consumer_bridge.v1",
+        summary: expect.objectContaining({
+          publicTiReady: false,
+          alertReady: false,
+          retryFamilies: expect.arrayContaining(["telegram"])
+        }),
+        consumers: expect.arrayContaining([
+          expect.objectContaining({
+            consumer: "sharedWatchlistAlerts",
+            ready: false,
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "retry_required", family: "telegram" })
+            ])
+          })
+        ]),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            parserState: "retry_required",
+            nextActions: expect.arrayContaining([
+              expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
+            ])
+          })
+        ])
       }
     });
     expect(retryBody.proofArtifacts).toMatchObject({
@@ -2428,6 +2554,11 @@ describe("dwm source requests", () => {
         sourceFamilyHealth: expect.objectContaining({
           rows: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", parserState: "retry_required" })
+          ])
+        }),
+        sourceConsumerBridge: expect.objectContaining({
+          consumers: expect.arrayContaining([
+            expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
           ])
         })
       },
