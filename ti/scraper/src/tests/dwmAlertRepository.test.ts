@@ -427,6 +427,14 @@ describe("dwm alert repository", () => {
         watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
         captureIds: ["cap_repo_tg_acme"],
         selectedCaptureIds: ["cap_repo_tg_acme"],
+        evidenceExcerpts: [{
+          evidenceId: "cap_repo_tg_acme",
+          captureId: "cap_repo_tg_acme",
+          sourceFamily: "telegram_public",
+          observedAt: "2026-06-28T13:04:00.000Z",
+          contentHash: "hash-repo-tg-acme",
+          excerpt: expect.stringContaining("acme.com")
+        }],
         evidenceCount: 1,
         dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         deliveryDedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
@@ -515,6 +523,28 @@ describe("dwm alert repository", () => {
     expect(telegramAlert?.sourceProvenanceSummary.generationEvidenceWindow?.sourceFamilies).toEqual(["telegram_public", "darkweb_metadata", "public_advisory"]);
     expect(telegramAlert?.sourceProvenanceSummary.generationEvidenceWindow?.contentHashes).toEqual(expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]));
     const darkwebAlert = first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");
+    expect(darkwebAlert?.alertCreatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      eventType: "dwm.alert.created",
+      sourceFamily: "darkweb_metadata",
+      captureIds: ["cap_repo_darkweb_acme"],
+      selectedCaptureIds: ["cap_repo_darkweb_acme"],
+      evidenceExcerpts: [{
+        evidenceId: "cap_repo_darkweb_acme",
+        captureId: "cap_repo_darkweb_acme",
+        sourceFamily: "darkweb_metadata",
+        observedAt: "2026-06-28T13:09:00.000Z",
+        contentHash: "hash-repo-darkweb-acme",
+        excerpt: expect.stringContaining("acme.com"),
+        redactionState: "metadata_only"
+      }],
+      recommendedRoute: "vendor_risk",
+      provenance: {
+        matchBasis: "watchlist_capture_text",
+        captureIds: ["cap_repo_darkweb_acme"],
+        sourceIds: ["src_repo_darkweb"]
+      }
+    });
     expect(darkwebAlert?.sourceProvenanceSummary.sourceFamily).toBe("darkweb_metadata");
     expect(darkwebAlert?.sourceProvenanceSummary.sourceFamilies).toEqual(["darkweb_metadata"]);
     expect(darkwebAlert?.sourceProvenanceSummary.captureIds).toEqual(["cap_repo_darkweb_acme"]);
@@ -686,6 +716,24 @@ describe("dwm alert repository", () => {
         captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
         selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
         addedCaptureIds: ["cap_repo_tg_acme_followup"],
+        evidenceExcerpts: [
+          expect.objectContaining({
+            evidenceId: "cap_repo_tg_acme",
+            captureId: "cap_repo_tg_acme",
+            sourceFamily: "telegram_public",
+            observedAt: "2026-06-28T13:04:00.000Z",
+            contentHash: "hash-repo-tg-acme",
+            excerpt: expect.stringContaining("acme.com")
+          }),
+          expect.objectContaining({
+            evidenceId: "cap_repo_tg_acme_followup",
+            captureId: "cap_repo_tg_acme_followup",
+            sourceFamily: "telegram_public",
+            observedAt: "2026-06-28T13:16:00.000Z",
+            contentHash: "hash-repo-tg-acme-followup",
+            excerpt: expect.stringContaining("acme.com")
+          })
+        ],
         evidenceCount: 2,
         previousEvidenceCount: 1,
         dedupeKey: existing.dedupeKey,

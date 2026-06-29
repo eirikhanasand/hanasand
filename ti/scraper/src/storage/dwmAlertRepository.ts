@@ -2852,6 +2852,7 @@ function buildDwmAlertEventConsumerPayload(input: {
     captureIds: input.captureIds,
     selectedCaptureIds: input.selectedCaptureIds,
     addedCaptureIds: input.addedCaptureIds ?? [],
+    evidenceExcerpts: buildDwmAlertEventEvidenceExcerpts(input.alert),
     evidenceCount: input.evidenceCount,
     previousEvidenceCount: input.previousEvidenceCount,
     dedupeKey: input.dedupeKey,
@@ -2870,6 +2871,20 @@ function buildDwmAlertEventConsumerPayload(input: {
     },
     generationEvidenceWindow: input.workflowContext.generationEvidenceWindow
   };
+}
+
+function buildDwmAlertEventEvidenceExcerpts(alert: DwmAlert & Record<string, any>) {
+  const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  return evidence.map((item: any) => ({
+    evidenceId: String(item.id),
+    captureId: item.provenance?.captureId ? String(item.provenance.captureId) : item.id ? String(item.id) : undefined,
+    sourceId: item.provenance?.sourceId ? String(item.provenance.sourceId) : item.sourceId ? String(item.sourceId) : undefined,
+    sourceFamily: item.sourceFamily ? String(item.sourceFamily) : alert.sourceFamily ? String(alert.sourceFamily) : undefined,
+    observedAt: item.observedAt ?? item.firstSeenAt ? String(item.observedAt ?? item.firstSeenAt) : undefined,
+    contentHash: item.contentHash ? String(item.contentHash) : undefined,
+    excerpt: item.excerpt ? String(item.excerpt) : undefined,
+    redactionState: item.redactionState ? String(item.redactionState) : undefined
+  }));
 }
 
 function mergeAlertEvents(existingEvents: any[], nextEvent: any | undefined): any[] {
