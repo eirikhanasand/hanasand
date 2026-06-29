@@ -2219,8 +2219,21 @@ describe("dwm source requests", () => {
           }),
           sourceEnrichmentFreshnessLedger: expect.objectContaining({
             schemaVersion: "ti.public_actor.source_enrichment_freshness_ledger.v1",
-            rows: expect.any(Array),
+            rows: expect.arrayContaining([
+              expect.objectContaining({
+                sourceFamily: "telegram",
+                freshnessSla: expect.objectContaining({
+                  state: "fresh",
+                  staleAfterHours: 24,
+                  captureRequired: false,
+                  retryable: false,
+                  nextRefreshAction: "monitor_freshness",
+                  liveNetworkFetch: false
+                })
+              })
+            ]),
             summary: expect.objectContaining({
+              freshFamilies: expect.arrayContaining(["telegram"]),
               latestCaptureAt: expect.any(String)
             })
           }),
@@ -3070,6 +3083,23 @@ describe("dwm source requests", () => {
         })
       ])
     });
+    const partialFreshnessLedger = body.proofArtifacts.publicTiQueryAdapter.sourceEnrichmentFreshnessLedger;
+    expect(partialFreshnessLedger.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceFamily: "darkweb_onion",
+        freshnessSla: expect.objectContaining({
+          state: "needs_capture",
+          staleAfterHours: 24,
+          captureRequired: true,
+          retryable: false,
+          nextRefreshAction: "record_capture",
+          liveNetworkFetch: false
+        })
+      })
+    ]));
+    expect(partialFreshnessLedger.summary).toEqual(expect.objectContaining({
+      captureSlaRequiredFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"])
+    }));
     expect(body.proofArtifacts).toMatchObject({
       publicTiQueryAdapter: {
         schemaVersion: "ti.public_actor.query_adapter.v1",
@@ -3403,6 +3433,7 @@ describe("dwm source requests", () => {
             })
           ]),
           summary: expect.objectContaining({
+            captureSlaRequiredFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
             gapFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
             nextActionTypes: expect.arrayContaining(["request_candidate"])
           }),
@@ -3796,393 +3827,159 @@ describe("dwm source requests", () => {
         ])
       }
     });
-    expect(retryBody.proofArtifacts).toMatchObject({
-      dashboardSourceReadiness: {
+    const retryDashboard = retryBody.proofArtifacts.dashboardSourceReadiness;
+    expect(retryDashboard).toMatchObject({
+      alertReady: false,
+      caseReady: false,
+      retryBlockers: expect.arrayContaining([
+        expect.objectContaining({ family: "telegram" })
+      ]),
+      sourceOperationsQueue: expect.objectContaining({
+        queueItems: expect.arrayContaining([
+          expect.objectContaining({ type: "retry_parser", family: "telegram", liveNetworkFetch: false })
+        ])
+      }),
+      sourceFamilyHealth: expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({ family: "telegram", parserState: "retry_required" })
+        ])
+      })
+    });
+
+    const retryQueryAdapter = retryBody.proofArtifacts.publicTiActorPage.queryAdapter;
+    expect(retryQueryAdapter).toMatchObject({
+      schemaVersion: "ti.public_actor.query_adapter.v1",
+      readiness: expect.objectContaining({
+        state: "partial",
+        publicTiReady: false,
         alertReady: false,
-        caseReady: false,
-        retryBlockers: expect.arrayContaining([
-          expect.objectContaining({ family: "telegram" })
-        ]),
-        sourceOperationsQueue: expect.objectContaining({
-          queueItems: expect.arrayContaining([
-            expect.objectContaining({ type: "retry_parser", family: "telegram", liveNetworkFetch: false })
-          ])
+        watchlistMatchReady: false
+      }),
+      parserStatusLedger: expect.objectContaining({
+        summary: expect.objectContaining({
+          retryFamilies: expect.arrayContaining(["telegram"]),
+          missingFamilies: expect.arrayContaining(["actor_page"]),
+          nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
         }),
-        sourceFamilyHealth: expect.objectContaining({
-          rows: expect.arrayContaining([
-            expect.objectContaining({ family: "telegram", parserState: "retry_required" })
-          ])
-        }),
-        sourceConsumerBridge: expect.objectContaining({
-          consumers: expect.arrayContaining([
-            expect.objectContaining({ consumer: "sharedWatchlistAlerts", ready: false })
-          ])
-        }),
-        sourceOperationsAdapter: expect.objectContaining({
-          schemaVersion: "dwm.dashboard.source_operations_adapter.v1",
-          rows: expect.arrayContaining([
-            expect.objectContaining({
-              sourceFamily: "telegram",
-              parserStatus: expect.objectContaining({
-                state: "retry_required",
-                retryBackoff: expect.objectContaining({ retryable: true })
-              }),
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ action: "retry", liveNetworkFetch: false }),
-                expect.objectContaining({ action: "retry_parser", liveNetworkFetch: false })
-              ]),
-              sourceOperationsReadiness: expect.objectContaining({
-                proofId: expect.any(String),
-                state: "actionable",
-                parserStatus: expect.objectContaining({
-                  state: "retry_required",
-                  retryBackoff: expect.objectContaining({ retryable: true })
-                }),
-                operatorActionTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
-                blockers: expect.arrayContaining([
-                  expect.objectContaining({ code: "parser_retry_required" })
-                ])
-              }),
-              blockers: expect.arrayContaining([
-                expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
-              ])
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            parserState: "retry_required",
+            retryBackoff: expect.objectContaining({
+              retryable: true,
+              failureCategories: expect.arrayContaining(["parser_timeout"])
             })
-          ]),
-          summary: expect.objectContaining({
-            alertReady: false,
-            retryFamilies: expect.arrayContaining(["telegram"]),
-            sourceOperationsActionableFamilies: expect.arrayContaining(["telegram"]),
-            nextActionTypes: expect.arrayContaining(["retry", "retry_parser", "request_candidate"])
           })
-        }),
-        sourceSectionReadiness: expect.objectContaining({
-          sections: expect.arrayContaining([
-            expect.objectContaining({ section: "overview", state: "missing_source" })
+        ])
+      }),
+      sourceOperationsHandoff: expect.objectContaining({
+        operations: expect.arrayContaining([
+          expect.objectContaining({
+            type: "retry_parser",
+            family: "telegram",
+            route: expect.objectContaining({
+              body: expect.objectContaining({ action: "pack_review", packAction: "retry" }),
+              liveNetworkFetch: false
+            })
+          }),
+          expect.objectContaining({
+            type: "retry_capture",
+            family: "telegram",
+            route: expect.objectContaining({
+              body: expect.objectContaining({ action: "record_capture" }),
+              liveNetworkFetch: false
+            })
+          })
+        ]),
+        summary: expect.objectContaining({
+          retryReady: true,
+          actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+        })
+      }),
+      sourceFamilyCoverageMatrix: expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            sourceFamily: "telegram",
+            parserState: "retry_required",
+            operationTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
+            gapState: "failed",
+            blockerCodes: expect.arrayContaining(["parser_retry_required"])
+          })
+        ])
+      }),
+      sourcePackActivationPreview: expect.objectContaining({
+        actions: expect.arrayContaining([
+          expect.objectContaining({
+            action: "retry",
+            family: "telegram",
+            route: expect.objectContaining({
+              path: "/v1/dwm/source-requests",
+              liveNetworkFetch: false,
+              body: expect.objectContaining({ action: "pack_review", packAction: "retry", dryRun: true })
+            })
+          })
+        ])
+      }),
+      alertEnrichmentHandoff: expect.objectContaining({
+        ready: false,
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "retry_required", family: "telegram" })
+        ])
+      })
+    });
+    expect(retryQueryAdapter.downstreamFixtureExport).toMatchObject({
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram",
+          parserStatus: expect.objectContaining({
+            state: "retry_required",
+            retryBackoff: expect.objectContaining({ retryable: true })
+          }),
+          gap: expect.objectContaining({ state: "failed" }),
+          blockers: expect.arrayContaining([
+            expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
           ])
         })
-      },
-      publicTiActorPage: {
-        queryAdapter: expect.objectContaining({
-          schemaVersion: "ti.public_actor.query_adapter.v1",
-          readiness: expect.objectContaining({
-            state: "partial",
-            publicTiReady: false,
-            alertReady: false,
-            watchlistMatchReady: false
-          }),
-          sections: expect.arrayContaining([
-            expect.objectContaining({
-              section: "overview",
-              state: "missing_source",
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
-              ])
-            })
-          ]),
-          sourceHealth: expect.arrayContaining([
-            expect.objectContaining({
-              family: "telegram",
-              state: "failed",
-              parserState: "retry_required",
-              nextActions: expect.arrayContaining([
-                expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
-              ])
-            })
-          ]),
-          parserStatusLedger: expect.objectContaining({
-            schemaVersion: "ti.public_actor.parser_status_ledger.v1",
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              missingFamilies: expect.arrayContaining(["actor_page"]),
-              nextActionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
-            }),
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                family: "telegram",
-                parserState: "retry_required",
-                retryBackoff: expect.objectContaining({
-                  retryable: true,
-                  failureCategories: expect.arrayContaining(["parser_timeout"])
-                }),
-                nextActions: expect.arrayContaining([
-                  expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
-                ])
-              })
-            ])
-          }),
-          sourcePackIntakeHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_pack_intake_handoff.v1",
-            ready: true,
-            candidates: expect.arrayContaining([
-              expect.objectContaining({
-                family: "telegram",
-                policyResult: expect.objectContaining({ allowed: true, publicOnly: true }),
-                parserExpectation: expect.objectContaining({ profile: "public_channel_handoff" }),
-                provenance: expect.objectContaining({ gapState: "failed" })
-              }),
-              expect.objectContaining({
-                family: "actor_page",
-                parserExpectation: expect.objectContaining({ profile: "actor_page_metadata" }),
-                activationReadiness: expect.objectContaining({ requiresOperatorApproval: true })
-              })
-            ]),
-            sourcePackWorkflow: expect.objectContaining({
-              steps: expect.arrayContaining([
-                expect.objectContaining({ step: "validate_candidates", liveNetworkFetch: false })
-              ])
-            })
-          }),
-          alertEvidenceHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.alert_evidence_handoff.v1",
-            ready: false,
-            rows: [],
-            blockers: expect.arrayContaining([
-              expect.objectContaining({ code: "retry_required", family: "telegram" })
-            ]),
-            sourceSections: expect.arrayContaining([
-              expect.objectContaining({
-                section: "overview",
-                state: "missing_source",
-                nextActions: expect.arrayContaining([
-                  expect.objectContaining({ type: "retry_parser", liveNetworkFetch: false })
-                ])
-              })
-            ])
-          }),
-          alertGenerationConsumerHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.alert_generation_consumer_handoff.v1",
-            ready: false,
-            rows: [],
-            route: expect.objectContaining({
-              path: "/v1/dwm/alerts/rebuild",
-              liveNetworkFetch: false,
-              body: expect.objectContaining({
-                actor: "APT28",
-                sourceFamilies: [],
-                watchlistTerms: [],
-                dryRun: true
-              })
-            }),
-            summary: expect.objectContaining({
-              readyRows: 0,
-              blockedRows: 0,
-              sourceFamilies: [],
-              parserStates: []
-            }),
-            blockers: expect.arrayContaining([
-              expect.objectContaining({ code: "retry_required", family: "telegram" })
-            ]),
-            gaps: expect.arrayContaining([
-              expect.objectContaining({ family: "telegram", state: "failed" }),
-              expect.objectContaining({ family: "actor_page", state: "missing" })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          consumerProofLedger: expect.objectContaining({
-            schemaVersion: "ti.public_actor.consumer_proof_ledger.v1",
-            rows: expect.any(Array),
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              alertReadyFamilies: []
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          sourceOperationsHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_operations_handoff.v1",
-            operations: expect.arrayContaining([
-              expect.objectContaining({
-                type: "retry_parser",
-                family: "telegram",
-                route: expect.objectContaining({
-                  body: expect.objectContaining({ action: "pack_review", packAction: "retry" }),
-                  liveNetworkFetch: false
-                }),
-                parserStatus: expect.objectContaining({ state: "retry_required" }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              }),
-              expect.objectContaining({
-                type: "retry_capture",
-                family: "telegram",
-                route: expect.objectContaining({
-                  body: expect.objectContaining({ action: "record_capture" }),
-                  liveNetworkFetch: false
-                })
-              })
-            ]),
-            summary: expect.objectContaining({
-              retryReady: true,
-              actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
-            })
-          }),
-          downstreamFixtureExport: expect.objectContaining({
-            schemaVersion: "ti.public_actor.downstream_fixture_export.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                parserStatus: expect.objectContaining({
-                  state: "retry_required",
-                  retryBackoff: expect.objectContaining({ retryable: true })
-                }),
-                gap: expect.objectContaining({ state: "failed" }),
-                blockers: expect.arrayContaining([
-                  expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
-                ])
-              })
-            ]),
-            operations: expect.arrayContaining([
+      ]),
+      sourceOperationsReadiness: expect.objectContaining({
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            sourceFamily: "telegram",
+            state: "actionable",
+            operatorActions: expect.arrayContaining([
               expect.objectContaining({ type: "retry_parser" }),
               expect.objectContaining({ type: "retry_capture" })
-            ]),
-            sourceOperationsReadiness: expect.objectContaining({
-              schemaVersion: "ti.public_actor.downstream_source_operations_readiness.v1",
-              rows: expect.arrayContaining([
-                expect.objectContaining({
-                  sourceFamily: "telegram",
-                  state: "actionable",
-                  parserStatus: expect.objectContaining({
-                    state: "retry_required",
-                    retryBackoff: expect.objectContaining({ retryable: true })
-                  }),
-                  operatorActions: expect.arrayContaining([
-                    expect.objectContaining({ type: "retry_parser" }),
-                    expect.objectContaining({ type: "retry_capture" })
-                  ]),
-                  blockers: expect.arrayContaining([
-                    expect.objectContaining({ code: "parser_retry_required" })
-                  ])
-                })
-              ]),
-              summary: expect.objectContaining({
-                actionableFamilies: expect.arrayContaining(["telegram"]),
-                operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
-              })
-            }),
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"]),
-              sourceOperationsActionableFamilies: expect.arrayContaining(["telegram"])
-            }),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          sourceFamilyCoverageMatrix: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_family_coverage_matrix.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                parserState: "retry_required",
-                operationTypes: expect.arrayContaining(["retry_parser", "retry_capture"]),
-                gapState: "failed",
-                blockerCodes: expect.arrayContaining(["parser_retry_required"])
-              })
-            ]),
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              operationTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
-            })
-          }),
-          sourcePackActivationPreview: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_pack_activation_preview.v1",
-            mode: "prepare_no_network",
-            ready: true,
-            actions: expect.arrayContaining([
-              expect.objectContaining({
-                action: "retry",
-                family: "telegram",
-                route: expect.objectContaining({
-                  path: "/v1/dwm/source-requests",
-                  liveNetworkFetch: false,
-                  body: expect.objectContaining({
-                    action: "pack_review",
-                    packAction: "retry",
-                    dryRun: true
-                  })
-                }),
-                parserStatus: expect.objectContaining({ state: "retry_required" }),
-                gap: expect.objectContaining({ state: "failed" }),
-                blockers: expect.arrayContaining([
-                  expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
-                ]),
-                provenance: expect.objectContaining({
-                  coverageProofId: expect.any(String)
-                }),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              intakeFamilies: expect.arrayContaining(["actor_page"]),
-              actionTypes: expect.arrayContaining(["retry", "request_candidate"]),
-              parserStates: expect.arrayContaining(["retry_required"])
-            })
-          }),
-          sourceEnrichmentFreshnessLedger: expect.objectContaining({
-            schemaVersion: "ti.public_actor.source_enrichment_freshness_ledger.v1",
-            rows: expect.arrayContaining([
-              expect.objectContaining({
-                sourceFamily: "telegram",
-                freshnessState: expect.any(String),
-                parserStatus: expect.objectContaining({
-                  state: "retry_required",
-                  retryBackoff: expect.objectContaining({ retryable: true })
-                }),
-                gap: expect.objectContaining({ state: "failed" }),
-                nextActions: expect.arrayContaining([
-                  expect.objectContaining({
-                    action: "retry",
-                    liveNetworkFetch: false,
-                    route: expect.objectContaining({ path: "/v1/dwm/source-requests" })
-                  })
-                ]),
-                blockers: expect.arrayContaining([
-                  expect.objectContaining({ code: "parser_retry_required", family: "telegram" })
-                ]),
-                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-              })
-            ]),
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              nextActionTypes: expect.arrayContaining(["retry", "request_candidate"])
-            })
-          }),
-          alertEnrichmentHandoff: expect.objectContaining({
-            schemaVersion: "ti.public_actor.alert_enrichment_handoff.v1",
-            ready: false,
-            rows: [],
-            summary: expect.objectContaining({
-              readyRows: 0,
-              blockedRows: 0,
-              sourceFamilies: [],
-              watchlistTerms: []
-            }),
-            blockers: expect.arrayContaining([
-              expect.objectContaining({ code: "retry_required", family: "telegram" })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
-          }),
-          watchlistAlertabilityBridge: expect.objectContaining({
-            schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
-            ready: false,
-            rows: [],
-            summary: expect.objectContaining({
-              retryFamilies: expect.arrayContaining(["telegram"]),
-              gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
-              readyRows: 0,
-              blockedRows: 0
-            }),
-            blockers: expect.arrayContaining([
-              expect.objectContaining({ code: "retry_required", family: "telegram" })
-            ]),
-            safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            ])
           })
-        }),
-        alertCaseHandoffReadiness: expect.objectContaining({
-          blockers: expect.arrayContaining([
-            expect.objectContaining({ code: "retry_required", family: "telegram" })
-          ])
+        ])
+      })
+    });
+    expect(retryQueryAdapter.sourceEnrichmentFreshnessLedger).toMatchObject({
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          sourceFamily: "telegram",
+          freshnessSla: expect.objectContaining({
+            state: "needs_capture",
+            staleAfterHours: 24,
+            captureRequired: true,
+            retryable: true,
+            nextRefreshAction: "retry_source",
+            liveNetworkFetch: false
+          })
         })
-      }
+      ]),
+      summary: expect.objectContaining({
+        retryFamilies: expect.arrayContaining(["telegram"]),
+        retryableRefreshFamilies: expect.arrayContaining(["telegram"]),
+        captureSlaRequiredFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+        gapFamilies: expect.arrayContaining(["telegram", "actor_page"]),
+        nextActionTypes: expect.arrayContaining(["retry", "request_candidate"])
+      })
+    });
+    expect(retryBody.proofArtifacts.publicTiActorPage.alertCaseHandoffReadiness).toMatchObject({
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "retry_required", family: "telegram" })
+      ])
     });
   });
 

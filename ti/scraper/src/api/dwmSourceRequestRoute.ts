@@ -3869,6 +3869,10 @@ function sourceActorPublicTiSourceEnrichmentFreshnessLedger(input: {
       : coverage?.captureState === "capture_required"
         ? "needs_capture"
         : gap?.state ?? "unknown";
+    const captureFreshness = timestamps.lastCaptureAt
+      ? sourceActorCaptureFreshness(timestamps.lastCaptureAt, timestamps.checkedAt ?? nowIso())
+      : { state: "needs_capture", staleAfterHours: 24, ageHours: undefined };
+    const retryable = consumer?.parserStatus?.retryBackoff?.retryable === true || actions.some((action) => action.action === "retry");
     return {
       schemaVersion: "ti.public_actor.source_enrichment_freshness_row.v1",
       proofId: stableId("ti_public_actor_source_enrichment_freshness_row", `${input.query}:${family}:${freshnessState}:${consumer?.parserStatus?.state ?? coverage?.parserState}`),
@@ -3885,6 +3889,19 @@ function sourceActorPublicTiSourceEnrichmentFreshnessLedger(input: {
       confidence: consumer?.confidence ?? coverage?.confidence ?? 0,
       confidenceTier: consumer?.confidenceTier ?? coverage?.confidenceTier ?? "missing",
       timestamps,
+      freshnessSla: {
+        state: captureFreshness.state,
+        staleAfterHours: captureFreshness.staleAfterHours,
+        ageHours: captureFreshness.ageHours,
+        captureRequired: !timestamps.lastCaptureAt,
+        retryable,
+        nextRefreshAction: retryable
+          ? "retry_source"
+          : timestamps.lastCaptureAt
+            ? "monitor_freshness"
+            : "record_capture",
+        liveNetworkFetch: false
+      },
       provenance: {
         evidenceProofId: consumer?.provenance?.evidenceProofId ?? coverage?.provenance?.evidenceProofId,
         sourceHealthProofId: consumer?.provenance?.sourceHealthProofId ?? coverage?.provenance?.sourceHealthProofId,
@@ -3938,6 +3955,9 @@ function sourceActorPublicTiSourceEnrichmentFreshnessLedger(input: {
       freshFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.freshnessState === "fresh").map((row: any) => row.sourceFamily)),
       captureRequiredFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserStatus?.captureState === "capture_required").map((row: any) => row.sourceFamily)),
       retryFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.parserStatus?.retryBackoff?.retryable === true || row.nextActions.some((action: any) => action.action === "retry")).map((row: any) => row.sourceFamily)),
+      staleFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.freshnessSla?.state === "stale").map((row: any) => row.sourceFamily)),
+      captureSlaRequiredFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.freshnessSla?.captureRequired === true).map((row: any) => row.sourceFamily)),
+      retryableRefreshFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.freshnessSla?.retryable === true).map((row: any) => row.sourceFamily)),
       gapFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.gap).map((row: any) => row.sourceFamily)),
       alertableFamilies: uniqueSourceReadinessStrings(rows.filter((row: any) => row.alertability.watchlistAlertable).map((row: any) => row.sourceFamily)),
       nextActionTypes: uniqueSourceReadinessStrings(rows.flatMap((row: any) => row.nextActions.map((action: any) => action.action))),
