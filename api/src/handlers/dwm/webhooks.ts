@@ -15,6 +15,7 @@ import {
     buildDwmWebhookDeliveryAuditTrail,
     buildDwmWebhookDeliveryAttemptContract,
     buildDwmWebhookDeliveryAttemptPersistenceProof,
+    buildDwmWebhookDeliveryAttemptPersistenceReadModel,
     buildDwmWebhookDashboardReadinessAdapter,
     buildDwmWebhookCustomerSetupProof,
     buildDwmWebhookDestinationCrudContract,
@@ -622,6 +623,12 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryAttemptPersistence: buildDwmWebhookDeliveryAttemptPersistenceReadModel({
+            deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
+            auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
+            destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,
+            filters: deliveryFilters,
+        }),
         deliveryReceipts: buildDwmWebhookDeliveryReceipts({
             deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
             auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
