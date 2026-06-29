@@ -1,6 +1,6 @@
 import { PUBLIC_TI_HANDOFF_ACTIONS, PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_HANDOFF_SOURCE, validatePublicTiHandoffPayload, type PublicTiHandoffPayload } from '@/utils/ti/actorWorkbench'
-import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, resolveDashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary } from './operatorConsoleModel'
-import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
+import { applyScope, buildOrgOperatingContext, buildPublicTiHandoffCase, buildReadinessCases, resolveDashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationState, type DwmWatchlistSummary, type ProductReadinessExternalState } from './operatorConsoleModel'
+import type { OperatorActionRailRow, WorkbenchAction, WorkbenchActionOutcome, WorkbenchCase, WorkbenchCaseMutationPayload, WorkbenchDeliveryEvidence, WorkbenchInvitePayload, WorkbenchKeyboardState, WorkbenchOrgContext, WorkbenchProductReadinessItem, WorkbenchPublicTiHandoff, WorkbenchReadinessEvidenceState, WorkbenchWatchlistUpsertPayload } from './ti/workbench/workbenchClient'
 
 const organizationState = {
     organizations: [{
@@ -105,6 +105,69 @@ const deliveries = [{
     deliveryKind: 'discord',
 }] satisfies DwmDeliveryItem[]
 
+const externalReadiness = {
+    publicTiProvenance: {
+        schemaVersion: 'ti.public_provenance.readiness.v1',
+        status: 'ready',
+        query: 'akira',
+        artifactCount: 3,
+        sourceCount: 4,
+        evidenceCount: 6,
+        dashboardHandoffCount: 1,
+        latestArtifactAt: '2026-06-28T10:15:00.000Z',
+        checkedAt: '2026-06-28T10:16:00.000Z',
+        source: 'GET /api/public-ti/provenance/readiness',
+        href: '/ti/akira',
+    },
+    helpdeskAudit: {
+        schemaVersion: 'support.audit.readiness.v1',
+        status: 'ready',
+        auditedActions: 8,
+        openRecoveryRequests: 0,
+        impersonationSessions: 0,
+        supportQueueDepth: 1,
+        latestAuditEventAt: '2026-06-28T10:17:00.000Z',
+        source: 'GET /api/admin/support/readiness',
+    },
+    deployProbe: {
+        schemaVersion: 'product.deploy_probe.readiness.v1',
+        status: 'ready',
+        deployedCommit: 'a4ebed05',
+        frontendHealthy: true,
+        apiHealthy: true,
+        scraperHealthy: true,
+        latestProbeAt: '2026-06-28T10:18:00.000Z',
+        dashboardAlertId: 'alert_acme_1',
+        deliveryId: 'deliv_acme_1',
+        ledgerPath: '/tmp/hanasand-integration-ledger.md',
+        source: 'GET /api/product-progress',
+    },
+    sourceGrowth: {
+        schemaVersion: 'dwm.source_inventory.v1',
+        status: 'needs_action',
+        proxyExposed: false,
+        registeredTotal: 349,
+        activeSourceCount: 349,
+        catalogCandidates: 8000,
+        netNewCandidates: 7816,
+        duplicateCandidates: 184,
+        reviewQueueCount: 8000,
+        latestInventoryAt: '2026-06-28T10:19:00.000Z',
+        checkedAt: '2026-06-28T10:19:00.000Z',
+        source: 'Scraper network /v1/dwm/source-inventory; missing frontend proxy',
+    },
+} satisfies ProductReadinessExternalState
+const operatorReachableExternalReadiness = {
+    ...externalReadiness,
+    sourceGrowth: {
+        ...externalReadiness.sourceGrowth,
+        status: 'ready',
+        proxyExposed: true,
+        source: 'GET /api/dwm/source-inventory',
+        href: '/dashboard/ti/sources',
+    },
+} satisfies ProductReadinessExternalState
+
 const cases = buildReadinessCases({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -184,6 +247,18 @@ const orgContext = buildOrgOperatingContext({
     deliveries,
     liveAlertCount: 1,
     liveAlertIds: ['alert_acme_1'],
+    externalReadiness,
+})
+const sourceProofOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: operatorReachableExternalReadiness,
 })
 const blockedDeliveryOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -194,6 +269,7 @@ const blockedDeliveryOrgContext = buildOrgOperatingContext({
     deliveries,
     liveAlertCount: 1,
     liveAlertIds: ['alert_without_delivery'],
+    externalReadiness,
 })
 const blockedAlertOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
@@ -466,6 +542,14 @@ const readinessEvidenceBlocked = {
     sourceCount: 0,
 } satisfies WorkbenchReadinessEvidenceState
 
+function expectProductReadinessStatus(context: WorkbenchOrgContext, id: string, status: WorkbenchProductReadinessItem['status']) {
+    const item = context.readiness.productReadiness.find(row => row.id === id)
+    if (!item || item.status !== status) {
+        throw new Error(`Expected ${id} to be ${status}, got ${item?.status || 'missing'}.`)
+    }
+    return item
+}
+
 const blockedFallbackAlert = {
     ...selectedLiveAlert,
     id: 'fallback_alert_acme',
@@ -567,12 +651,18 @@ void (orgContext.readiness.sourceCoverage?.activeSourceCount satisfies number | 
 void (orgContext.readiness.latestDelivery satisfies WorkbenchDeliveryEvidence | undefined)
 void (orgContext.readiness.fullChainReady satisfies boolean)
 void (orgContext.readiness.productReadiness[0]?.status satisfies string | undefined)
+void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
+void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
+void expectProductReadinessStatus(orgContext, 'public_ti_provenance', 'ready')
+void expectProductReadinessStatus(orgContext, 'helpdesk_audit', 'ready')
+void expectProductReadinessStatus(orgContext, 'deploy_probe', 'ready')
 void (blockedDeliveryOrgContext.readiness.fullChainReady satisfies boolean)
 void (blockedDeliveryOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
+void expectProductReadinessStatus(blockedDeliveryOrgContext, 'webhook_delivery', 'needs_action')
 void (blockedAlertOrgContext.readiness.fullChainReady satisfies boolean)
 void (blockedAlertOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void (blockedAlertOrgContext.readiness.productReadiness.find(item => item.id === 'dashboard_alert')?.status satisfies string | undefined)
-void (orgContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.status satisfies string | undefined)
+void expectProductReadinessStatus(orgContext, 'source_inventory_probe', 'needs_action')
 void (blockedOrgContext.readiness.blockedReasons satisfies string[])
 void (publicTiDecode.ok satisfies boolean)
 void (malformedPublicTiDecode.ok satisfies boolean)

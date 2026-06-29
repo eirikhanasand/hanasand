@@ -914,18 +914,18 @@ function OperatorActionRail({ selected, orgContext, busyAction, onRunAction, onC
     const rows = actionRailRows(selected, orgContext)
 
     return (
-        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-            <div className='border-b border-[#eef1f5] px-4 py-3'>
-                <h3 className='text-sm font-semibold text-[#171a21]'>Operator actions</h3>
-                <p className='mt-0.5 text-xs text-[#667085]'>Selected blocker to concrete route, mutation, or exact handoff copy.</p>
+        <section className='rounded-lg border border-[#d8e1ef] bg-white dark:border-[#2d3a52] dark:bg-[#0f172a]'>
+            <div className='border-b border-[#e7edf6] px-4 py-3 dark:border-[#26344c]'>
+                <h3 className='text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>Operator actions</h3>
+                <p className='mt-0.5 text-xs text-[#667085] dark:text-[#aab6ca]'>Selected blocker to backed route, mutation, or exact handoff copy.</p>
             </div>
             <div className='grid gap-2 p-3'>
                 {rows.map(row => (
-                    <div key={row.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                    <div key={row.id} className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#111827]'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#667085]'>{row.label}</p>
-                                <p className='mt-1 text-xs leading-5 text-[#596170]'>{row.detail}</p>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{row.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>{row.detail}</p>
                             </div>
                             <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'blocked' : label(row.tone)}</span>
                         </div>
@@ -1026,9 +1026,26 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     } else {
         rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
     }
+    rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
     if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })
-    return rows.slice(0, 5)
+    return rows.slice(0, 7)
+}
+
+function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
+    const priority = ['source_inventory_probe', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
+    return (orgContext?.readiness.productReadiness || [])
+        .filter(item => item.status !== 'ready' && priority.includes(item.id))
+        .sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id))
+        .slice(0, 3)
+        .map(item => ({
+            id: `readiness_${item.id}`,
+            label: item.label,
+            detail: item.detail,
+            tone: productReadinessTone(item.status),
+            href: item.href,
+            disabledReason: item.status === 'unavailable' ? item.source : undefined,
+        }))
 }
 
 function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
@@ -1181,11 +1198,11 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     }
 
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+        <div className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#667085]'>Product readiness</p>
-                    <p className='mt-1 text-xs leading-5 text-[#596170]'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product readiness</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>
                         {orgContext?.readiness.fullChainReady
                             ? 'Org, watchlist, sources, dashboard alert, and delivery evidence are loaded.'
                             : `Not complete: ${(orgContext?.readiness.fullChainBlockedBy || ['dashboard alert evidence missing']).join('; ')}.`}

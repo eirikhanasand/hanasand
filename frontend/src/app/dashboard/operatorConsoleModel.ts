@@ -107,6 +107,67 @@ export type DwmDeliveryItem = {
     error?: string
 }
 
+type ReadinessStatus = WorkbenchProductReadinessItem['status']
+
+export type ProductReadinessSnapshotBase = {
+    status: ReadinessStatus
+    checkedAt?: string
+    detail?: string
+    source?: string
+    href?: string
+    blockers?: string[]
+}
+
+export type PublicTiProvenanceReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'ti.public_provenance.readiness.v1' | string
+    query?: string
+    artifactCount?: number
+    sourceCount?: number
+    evidenceCount?: number
+    dashboardHandoffCount?: number
+    latestArtifactAt?: string
+}
+
+export type HelpdeskAuditReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'support.audit.readiness.v1' | string
+    auditedActions?: number
+    openRecoveryRequests?: number
+    impersonationSessions?: number
+    supportQueueDepth?: number
+    latestAuditEventAt?: string
+}
+
+export type DeployProbeReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'product.deploy_probe.readiness.v1' | string
+    deployedCommit?: string
+    frontendHealthy?: boolean
+    apiHealthy?: boolean
+    scraperHealthy?: boolean
+    latestProbeAt?: string
+    dashboardAlertId?: string
+    deliveryId?: string
+    ledgerPath?: string
+}
+
+export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'dwm.source_inventory.v1' | string
+    proxyExposed?: boolean
+    registeredTotal?: number
+    activeSourceCount?: number
+    catalogCandidates?: number
+    netNewCandidates?: number
+    duplicateCandidates?: number
+    reviewQueueCount?: number
+    latestInventoryAt?: string
+}
+
+export type ProductReadinessExternalState = {
+    publicTiProvenance?: PublicTiProvenanceReadiness
+    helpdeskAudit?: HelpdeskAuditReadiness
+    deployProbe?: DeployProbeReadiness
+    sourceGrowth?: SourceGrowthReadiness
+}
+
 export type DwmAlertAccessState = {
     status: 'loaded' | 'identity_missing' | 'visibility_denied' | 'unavailable'
     code?: string
@@ -343,6 +404,7 @@ export function buildOrgOperatingContext(input: {
     deliveries?: DwmDeliveryItem[]
     liveAlertCount?: number
     liveAlertIds?: string[]
+    externalReadiness?: ProductReadinessExternalState
 }) {
     const organization = input.organizationState.selectedOrganization
     const activeMembers = input.organizationState.members.filter(item => item.status === 'active')
@@ -380,9 +442,11 @@ export function buildOrgOperatingContext(input: {
         liveAlertIds: [...liveAlertIds],
         dashboardAlertDelivery,
         latestDelivery,
+        externalReadiness: input.externalReadiness,
     })
+    const fullChainGateIds = ['org_members', 'shared_watchlists', 'source_coverage', 'source_inventory_probe', 'dashboard_alert', 'webhook_delivery']
     const fullChainBlockedBy = productReadiness
-        .filter(item => item.status !== 'ready' && ['org_members', 'shared_watchlists', 'source_coverage', 'dashboard_alert', 'webhook_delivery'].includes(item.id))
+        .filter(item => item.status !== 'ready' && fullChainGateIds.includes(item.id))
         .map(item => `${item.label}: ${item.detail}`)
     const fullChainReady = fullChainBlockedBy.length === 0
 
@@ -469,6 +533,7 @@ function buildProductReadiness(input: {
     liveAlertIds: string[]
     dashboardAlertDelivery?: DwmDeliveryItem
     latestDelivery?: DwmDeliveryItem
+    externalReadiness?: ProductReadinessExternalState
 }): WorkbenchProductReadinessItem[] {
     const organizationStatus: WorkbenchProductReadinessItem['status'] = !input.backendConfigured
         ? 'unavailable'
@@ -481,6 +546,14 @@ function buildProductReadiness(input: {
     const deliveryStatus: WorkbenchProductReadinessItem['status'] = input.dashboardAlertDelivery
         ? 'ready'
         : input.activeWebhookCount ? 'needs_action' : 'blocked'
+
+    const publicTiProvenance = input.externalReadiness?.publicTiProvenance
+    const helpdeskAudit = input.externalReadiness?.helpdeskAudit
+    const deployProbe = input.externalReadiness?.deployProbe
+    const sourceGrowth = input.externalReadiness?.sourceGrowth
+    const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowth?.proxyExposed === true && sourceGrowth.status === 'ready'
+        ? 'ready'
+        : sourceGrowth ? sourceGrowth.status === 'blocked' ? 'blocked' : 'needs_action' : 'unavailable'
 
     return [
         {
@@ -537,36 +610,94 @@ function buildProductReadiness(input: {
         {
             id: 'source_inventory_probe',
             label: 'Source inventory proof',
-            status: 'unavailable',
-            detail: 'Source pack and inventory proof is available inside the scraper network, but the dashboard has no safe operator proxy yet.',
-            source: 'Missing /api/dwm/source-packs proxy',
+            status: sourceGrowthStatus,
+            detail: sourceGrowth
+                ? sourceGrowth.detail || sourceGrowthDetail(sourceGrowth)
+                : 'Source pack and inventory proof is available inside the scraper network, but the dashboard has no safe operator proxy yet.',
+            source: sourceGrowth?.source || (sourceGrowth?.proxyExposed ? 'GET /api/dwm/source-inventory' : 'Missing /api/dwm/source-packs proxy'),
             href: '/dashboard/ti/sources',
+            checkedAt: sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
         },
         {
             id: 'public_ti_provenance',
             label: 'Public TI provenance',
-            status: 'needs_action',
-            detail: 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
-            source: 'Public TI handoff contract',
-            href: '/ti/apt29',
+            status: publicTiProvenance?.status || 'needs_action',
+            detail: publicTiProvenance
+                ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
+                : 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
+            source: publicTiProvenance?.source || 'Public TI handoff contract',
+            href: publicTiProvenance?.href || '/ti/apt29',
+            checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
         },
         {
             id: 'helpdesk_audit',
             label: 'Helpdesk and audit',
-            status: 'unavailable',
-            detail: 'Support/audit routes exist, but this dashboard does not fetch a helpdesk readiness snapshot yet.',
-            source: 'Missing dashboard readiness API',
+            status: helpdeskAudit?.status || 'unavailable',
+            detail: helpdeskAudit
+                ? helpdeskAudit.detail || helpdeskAuditDetail(helpdeskAudit)
+                : 'Support/audit routes exist, but this dashboard does not fetch a helpdesk readiness snapshot yet.',
+            source: helpdeskAudit?.source || 'Missing dashboard readiness API',
             href: '/dashboard/system/impersonation',
+            checkedAt: helpdeskAudit?.checkedAt || helpdeskAudit?.latestAuditEventAt,
         },
         {
             id: 'deploy_probe',
             label: 'Deploy and live probes',
-            status: 'unavailable',
-            detail: 'Deploy/probe recency is tracked in integration handoffs; no product-progress API is loaded by this dashboard.',
-            source: 'Missing /api/product-progress contract',
+            status: deployProbe?.status || 'unavailable',
+            detail: deployProbe
+                ? deployProbe.detail || deployProbeDetail(deployProbe)
+                : 'Deploy/probe recency is tracked in integration handoffs; no product-progress API is loaded by this dashboard.',
+            source: deployProbe?.source || 'Missing /api/product-progress contract',
             href: '/status',
+            checkedAt: deployProbe?.checkedAt || deployProbe?.latestProbeAt,
         },
     ]
+}
+
+function publicTiProvenanceDetail(input: PublicTiProvenanceReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const query = input.query ? `${input.query}: ` : ''
+    const counts = [
+        typeof input.artifactCount === 'number' ? `${input.artifactCount} artifact${input.artifactCount === 1 ? '' : 's'}` : '',
+        typeof input.sourceCount === 'number' ? `${input.sourceCount} source${input.sourceCount === 1 ? '' : 's'}` : '',
+        typeof input.evidenceCount === 'number' ? `${input.evidenceCount} evidence item${input.evidenceCount === 1 ? '' : 's'}` : '',
+        typeof input.dashboardHandoffCount === 'number' ? `${input.dashboardHandoffCount} dashboard handoff${input.dashboardHandoffCount === 1 ? '' : 's'}` : '',
+    ].filter(Boolean)
+    return counts.length ? `${query}${counts.join(', ')}.` : `${query}Public TI provenance snapshot loaded.`
+}
+
+function helpdeskAuditDetail(input: HelpdeskAuditReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const counts = [
+        typeof input.auditedActions === 'number' ? `${input.auditedActions} audited action${input.auditedActions === 1 ? '' : 's'}` : '',
+        typeof input.openRecoveryRequests === 'number' ? `${input.openRecoveryRequests} open recovery request${input.openRecoveryRequests === 1 ? '' : 's'}` : '',
+        typeof input.impersonationSessions === 'number' ? `${input.impersonationSessions} impersonation session${input.impersonationSessions === 1 ? '' : 's'}` : '',
+        typeof input.supportQueueDepth === 'number' ? `${input.supportQueueDepth} support queue item${input.supportQueueDepth === 1 ? '' : 's'}` : '',
+    ].filter(Boolean)
+    return counts.length ? counts.join(', ') + '.' : 'Helpdesk and structured audit snapshot loaded.'
+}
+
+function deployProbeDetail(input: DeployProbeReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const services = [
+        input.frontendHealthy ? 'frontend healthy' : '',
+        input.apiHealthy ? 'API healthy' : '',
+        input.scraperHealthy ? 'scraper healthy' : '',
+    ].filter(Boolean)
+    const proof = input.dashboardAlertId && input.deliveryId ? `dashboard alert ${input.dashboardAlertId} matched delivery ${input.deliveryId}` : 'dashboard alert plus delivery proof not loaded'
+    return `${input.deployedCommit ? `Commit ${input.deployedCommit}; ` : ''}${services.length ? `${services.join(', ')}; ` : ''}${proof}.`
+}
+
+function sourceGrowthDetail(input: SourceGrowthReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const counts = [
+        typeof input.activeSourceCount === 'number' && typeof input.registeredTotal === 'number' ? `${input.activeSourceCount}/${input.registeredTotal} active sources` : '',
+        typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
+        typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
+        typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
+    ].filter(Boolean)
+    const proxy = input.proxyExposed ? 'operator proxy loaded' : 'scraper inventory works, dashboard proxy still missing'
+    return counts.length ? `${counts.join(', ')}; ${proxy}.` : proxy + '.'
 }
 
 function publicTiHandoffCase(input: {
