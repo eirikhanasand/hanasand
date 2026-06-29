@@ -18,6 +18,7 @@ import {
     normalizeWatchlistRequestId,
     organizationAnalystPortalVisibilityAdapter,
     organizationAlertCaseWorkflowState,
+    organizationInviteActionDenial,
     organizationInviteAcceptanceDenial,
     organizationLastOwnerGuard,
     organizationLifecycleReadiness,
@@ -844,7 +845,27 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
     }
 
     if (existing.status === 'accepted') {
-        return res.status(409).send({ error: 'Accepted invites cannot be revoked or resent; manage the member instead.' })
+        const message = 'Accepted invites cannot be revoked or resent; manage the member instead.'
+        const denial = organizationInviteActionDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            invite: existing,
+            action: input.action,
+            requestId: input.requestId,
+            reason: input.reason,
+            message,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            inviteId: req.params.inviteId,
+            role: existing.role,
+            actorRole: organization.role,
+            action: input.action,
+            blockerCode: denial.blockerCode,
+            reason: input.reason,
+        })
+        return res.status(409).send({ error: message, inviteActionDenial: denial })
     }
 
     const lifecycleBlocker = input.action === 'resend'

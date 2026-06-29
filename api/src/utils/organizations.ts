@@ -4640,6 +4640,58 @@ export function organizationInviteAcceptanceDenial(input: {
     }
 }
 
+export function organizationInviteActionDenial(input: {
+    organizationId: string
+    actorId: string
+    actorRole?: OrganizationRole | null
+    invite: OrganizationInviteRow
+    action: OrganizationInviteAction
+    requestId?: string | null
+    reason?: string | null
+    message: string
+}) {
+    return {
+        schemaVersion: 'organization.invite_action_denial.v1' as const,
+        organizationId: input.organizationId,
+        tenantId: input.organizationId,
+        actorId: input.actorId,
+        actorRole: input.actorRole ?? null,
+        inviteId: input.invite.id,
+        acceptanceToken: input.invite.id,
+        inviteStatus: input.invite.status,
+        inviteRole: input.invite.role,
+        action: input.action,
+        blockerCode: input.invite.status === 'accepted' ? 'invite_already_accepted' as const : 'invite_not_actionable' as const,
+        message: input.message,
+        statusCode: 409,
+        memberManagementRoute: 'GET /api/organizations/:id/members' as const,
+        replacementActions: ['update_member_role', 'remove_member'] as const,
+        nonmemberEnumeration: false as const,
+        safeFields: [
+            'schemaVersion',
+            'organizationId',
+            'tenantId',
+            'inviteId',
+            'inviteStatus',
+            'inviteRole',
+            'action',
+            'blockerCode',
+            'memberManagementRoute',
+            'requestId',
+        ],
+        noLeakFields: [
+            'invite.email',
+            'otherOrg.invites',
+            'otherOrg.members',
+            'acceptanceToken.email',
+        ],
+        serviceLogAction: 'organization_invite_action_denied' as const,
+        requestId: input.requestId ?? null,
+        reason: input.reason ?? null,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+    }
+}
+
 export function toMember(row: OrganizationMemberRow) {
     return {
         organizationId: row.organization_id,
