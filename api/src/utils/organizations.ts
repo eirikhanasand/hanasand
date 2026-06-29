@@ -514,6 +514,7 @@ export type OrganizationSharedWatchlistDownstreamProof = {
             | 'organization_watchlist_restored'
             | 'organization_watchlist_cleanup_archived'
             | 'organization_watchlist_alert_terms_exported'
+            | 'organization_watchlist_alert_terms_export_denied'
             | 'organization_lifecycle_mutation_blocked'
         >
         requiredMetadataFields: string[]
@@ -790,6 +791,17 @@ export type OrganizationSharedWatchlistAlertQueueVisibility = {
         allowedRoles: OrganizationRole[]
         nonmemberEnumeration: false
     }
+    denialResponseContract: {
+        appliesWhen: 'visibility.allowed_false'
+        blocked: boolean
+        statusCode: 403
+        errorCode: 'org_alert_visibility_denied'
+        reason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | null
+        responseShape: string[]
+        safeFields: string[]
+        noLeakFields: string[]
+        auditEventAction: 'organization_watchlist_alert_visibility_denied'
+    }
     allowedActions: OrganizationAlertCaseAction[]
     actionGates: OrganizationSharedWatchlistDownstreamProof['alertBridge']['queueVisibilityContract']['actionGates']
     watchlistScope: {
@@ -885,6 +897,29 @@ export type OrganizationWatchlistAlertTermsExport = {
     }
     blockedReasons: string[]
     canGenerateAlerts: boolean
+}
+
+export type OrganizationWatchlistAlertTermsExportDenial = {
+    schemaVersion: 'organization.watchlist_alert_terms_export_denial.v1'
+    organizationId: string
+    tenantId: string
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    visibility: OrganizationVisibilityDecision
+    allowedActions: OrganizationAlertCaseAction[]
+    routes: {
+        alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+        alertReadiness: 'GET /api/organizations/:id/alert-readiness'
+        listWatchlists: 'GET /api/organizations/:id/watchlists'
+    }
+    safeFields: string[]
+    redactedFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys'>
+    blockerCodes: Array<OrganizationVisibilityDenyReason | 'alert_export_unavailable'>
+    nonmemberEnumeration: false
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
 export type OrganizationDwmAlertReference = {
@@ -1613,6 +1648,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 'organization_watchlist_restored',
                 'organization_watchlist_cleanup_archived',
                 'organization_watchlist_alert_terms_exported',
+                'organization_watchlist_alert_terms_export_denied',
                 'organization_lifecycle_mutation_blocked',
             ],
             requiredMetadataFields: [
@@ -2189,6 +2225,36 @@ export function organizationSharedWatchlistAlertQueueVisibility(
             allowedRoles: queue.actorVisibility.allowedRoles,
             nonmemberEnumeration: false,
         },
+        denialResponseContract: {
+            appliesWhen: 'visibility.allowed_false',
+            blocked: !queue.actorVisibility.allowed,
+            statusCode: 403,
+            errorCode: 'org_alert_visibility_denied',
+            reason: queue.actorVisibility.denialReason,
+            responseShape: [
+                'error',
+                'message',
+                'organizationId',
+                'visibilityDecision',
+                'allowedRoles',
+                'requestId',
+            ],
+            safeFields: [
+                'organizationId',
+                'tenantId',
+                'visibility.policy',
+                'visibility.denialReason',
+                'visibility.allowedRoles',
+                'blockerCodes',
+            ],
+            noLeakFields: [
+                'activeTerms',
+                'watchlistScope.alertGeneratorKeys',
+                'persistedAlertContract',
+                'member.userId',
+            ],
+            auditEventAction: 'organization_watchlist_alert_visibility_denied',
+        },
         allowedActions: proof.actor.allowedActions,
         actionGates: queue.actionGates,
         watchlistScope: {
@@ -2267,6 +2333,54 @@ export function organizationSharedWatchlistAlertQueueVisibility(
         ],
         redactedFields: queue.redactedFields,
         blockerCodes: queue.blockerCodes,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
+}
+
+export function organizationWatchlistAlertTermsExportDenial(input: {
+    organizationId: string
+    tenantId?: string | null
+    member: {
+        userId: string
+        role: OrganizationRole
+    }
+    visibility: OrganizationVisibilityDecision
+}): OrganizationWatchlistAlertTermsExportDenial {
+    return {
+        schemaVersion: 'organization.watchlist_alert_terms_export_denial.v1',
+        organizationId: input.organizationId,
+        tenantId: input.tenantId ?? input.organizationId,
+        member: {
+            userId: input.member.userId,
+            role: input.member.role,
+            status: 'active',
+        },
+        visibility: input.visibility,
+        allowedActions: organizationAlertCaseRoleActions(input.member.role),
+        routes: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            alertReadiness: 'GET /api/organizations/:id/alert-readiness',
+            listWatchlists: 'GET /api/organizations/:id/watchlists',
+        },
+        safeFields: [
+            'organizationId',
+            'tenantId',
+            'member.role',
+            'visibility.alertVisibilityPolicy',
+            'visibility.allowedRoles',
+            'visibility.reason',
+            'allowedActions',
+            'routes',
+            'blockerCodes',
+        ],
+        redactedFields: [
+            'activeTerms[]',
+            'activeWatchlistTerms[]',
+            'alertGeneratorKeys[]',
+            'watchlistScope.alertGeneratorKeys',
+        ],
+        blockerCodes: [input.visibility.reason ?? 'alert_export_unavailable'],
+        nonmemberEnumeration: false,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
 }

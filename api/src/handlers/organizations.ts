@@ -17,6 +17,7 @@ import {
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationLifecycleReadiness,
+    organizationAlertCaseRoleActions,
     organizationDownstreamAuthorizationExport,
     organizationReadinessProof,
     organizationSettingsFromRow,
@@ -24,6 +25,7 @@ import {
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
     organizationWatchlistAlertTermsExport,
+    organizationWatchlistAlertTermsExportDenial,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -1104,6 +1106,39 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
+    const requestId = normalizeWatchlistRequestId(req.query?.requestId ?? req.query?.request_id)
+    const visibility = organizationVisibilityDecision({
+        role: organization.role,
+        status: 'active',
+        userActive: true,
+        alertVisibilityPolicy: organization.alert_visibility_policy,
+    })
+    const allowedActions = organizationAlertCaseRoleActions(organization.role)
+    if (!visibility.allowed && allowedActions.length === 0) {
+        const deniedExport = organizationWatchlistAlertTermsExportDenial({
+            organizationId: organization.id,
+            tenantId: organization.id,
+            member: {
+                userId,
+                role: organization.role ?? 'viewer',
+            },
+            visibility,
+        })
+        logOrganizationEvent(req, 'organization_watchlist_alert_terms_export_denied', req.params.id, userId, {
+            requestId,
+            role: organization.role,
+            alertVisibilityPolicy: visibility.alertVisibilityPolicy,
+            allowedRoles: visibility.allowedRoles,
+            denialReason: visibility.reason,
+            blockerCodes: deniedExport.blockerCodes,
+        })
+        return res.status(403).send({
+            error: 'Organization alert visibility does not allow this member to export alert terms.',
+            organization: toOrganization(organization),
+            alertTermsExportDenial: deniedExport,
+        })
+    }
+
     const result = await run(`
         SELECT *
         FROM organization_watchlist_items
@@ -1115,7 +1150,32 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
         userId,
         role: organization.role ?? 'viewer',
     })
-    const requestId = normalizeWatchlistRequestId(req.query?.requestId ?? req.query?.request_id)
+    if (!exportContract.downstreamAuthorization.visibility.allowed && exportContract.excluded.archivedCount === 0) {
+        const denial = organizationWatchlistAlertTermsExportDenial({
+            organizationId: organization.id,
+            tenantId: organization.id,
+            member: {
+                userId,
+                role: organization.role ?? 'viewer',
+            },
+            visibility: exportContract.downstreamAuthorization.visibility,
+        })
+        logOrganizationEvent(req, 'organization_watchlist_alert_terms_export_denied', req.params.id, userId, {
+            requestId,
+            role: organization.role,
+            alertVisibilityPolicy: denial.visibility.alertVisibilityPolicy,
+            allowedRoles: denial.visibility.allowedRoles,
+            denialReason: denial.visibility.reason,
+            blockerCodes: denial.blockerCodes,
+        })
+
+        return res.status(403).send({
+            error: 'Organization alert visibility does not allow this member to export alert terms.',
+            organization: toOrganization(organization),
+            alertTermsExportDenial: denial,
+        })
+    }
+
     logOrganizationEvent(req, 'organization_watchlist_alert_terms_exported', req.params.id, userId, {
         requestId,
         activeTermCount: exportContract.activeTerms.length,

@@ -696,30 +696,19 @@ const alertTermsWhilePausedResponse = await app.inject({
     url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-alert-terms-paused`,
     headers: authHeaders('org_smoke_member', 'member-token'),
 })
-assert.equal(alertTermsWhilePausedResponse.statusCode, 200, alertTermsWhilePausedResponse.body)
-const alertTermsWhilePaused = parseBody(alertTermsWhilePausedResponse.body).alertTermsExport
-assert.equal(alertTermsWhilePaused.schemaVersion, 'organization.watchlist_alert_terms_export.v1')
-assert.equal(alertTermsWhilePaused.organizationId, organization.id)
-assert.equal(alertTermsWhilePaused.member.userId, 'org_smoke_member')
-assert.equal(alertTermsWhilePaused.member.role, 'member')
-assert.equal(alertTermsWhilePaused.activeTerms.length, 1)
-assert.equal(alertTermsWhilePaused.excluded.pausedCount, 1)
-assert.deepEqual(alertTermsWhilePaused.alertBridgeContract.typedBlockers.map((blocker: Row) => blocker.code), ['paused_watchlist_excluded'])
-assert.equal(alertTermsWhilePaused.alertBridgeContract.typedBlockers[0].severity, 'notice')
-assert.equal(alertTermsWhilePaused.alertBridgeContract.typedBlockers[0].count, 1)
-assert.deepEqual(alertTermsWhilePaused.alertBridgeContract.lifecycleReadiness.typedBlockers.map((blocker: Row) => blocker.code), ['watchlist_paused', 'cleanup_required'])
-assert.equal(alertTermsWhilePaused.alertBridgeContract.lifecycleReadiness.watchlists.cleanupRequired, true)
-assert.equal(alertTermsWhilePaused.alertBridgeContract.lifecycleReadiness.watchlists.cleanupIdempotent, true)
-assert.equal(alertTermsWhilePaused.alertBridgeContract.lifecycleReadiness.alertReplay.status, 'ready')
-assert.equal(alertTermsWhilePaused.activeTerms[0].status, 'active')
-assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationReference.status, 'active')
-assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.status, 'active')
-assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.lifecycle.status, 'active')
-assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationRef.dedupe.scope, 'organization_watchlist_term')
-assert.equal(alertTermsWhilePaused.downstreamAuthorization.watchlists.activeCount, 1)
-assert.equal(alertTermsWhilePaused.downstreamAuthorization.watchlists.pausedCount, 1)
-assert.deepEqual(alertTermsWhilePaused.downstreamAuthorization.downstream.alertGeneration.blockerCodes, ['watchlist_paused'])
-assert.equal(alertTermsWhilePaused.downstreamAuthorization.lifecycleDenials.pausedWatchlist, 'watchlist_paused')
+assert.equal(alertTermsWhilePausedResponse.statusCode, 403, alertTermsWhilePausedResponse.body)
+const alertTermsWhilePausedDeniedBody = parseBody(alertTermsWhilePausedResponse.body)
+assert.equal(alertTermsWhilePausedDeniedBody.error, 'Organization alert visibility does not allow this member to export alert terms.')
+assert.ok(!('alertTermsExport' in alertTermsWhilePausedDeniedBody))
+const alertTermsWhilePausedDenied = alertTermsWhilePausedDeniedBody.alertTermsExportDenial
+assert.equal(alertTermsWhilePausedDenied.schemaVersion, 'organization.watchlist_alert_terms_export_denial.v1')
+assert.equal(alertTermsWhilePausedDenied.organizationId, organization.id)
+assert.equal(alertTermsWhilePausedDenied.member.userId, 'org_smoke_member')
+assert.equal(alertTermsWhilePausedDenied.member.role, 'member')
+assert.equal(alertTermsWhilePausedDenied.visibility.allowed, false)
+assert.equal(alertTermsWhilePausedDenied.visibility.reason, 'role_not_allowed')
+assert.ok(alertTermsWhilePausedDenied.redactedFields.includes('activeTerms[]'))
+assert.ok(!('activeTerms' in alertTermsWhilePausedDenied))
 
 const ownerResumesCompanyResponse = await app.inject({
     method: 'POST',
@@ -1212,6 +1201,7 @@ for (const action of [
     'organization_watchlist_restored',
     'organization_watchlist_cleanup_archived',
     'organization_watchlist_alert_terms_exported',
+    'organization_watchlist_alert_terms_export_denied',
     'organization_lifecycle_mutation_blocked',
 ] as const) {
     assert.ok(alertTermsExport.sharedWatchlistDownstreamProof.audit.eventActions.includes(action))
@@ -1301,6 +1291,16 @@ assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.den
 assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.allowedRoles, ['owner', 'admin'])
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.allowed, true)
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.nonmemberEnumeration, false)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.appliesWhen, 'visibility.allowed_false')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.blocked, false)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.statusCode, 403)
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.errorCode, 'org_alert_visibility_denied')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.reason, null)
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.responseShape.includes('visibilityDecision'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.safeFields.includes('visibility.allowedRoles'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.noLeakFields.includes('activeTerms'))
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.noLeakFields.includes('watchlistScope.alertGeneratorKeys'))
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.auditEventAction, 'organization_watchlist_alert_visibility_denied')
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.allowedActions.includes('acknowledge_alert'))
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.allowedActions.includes('assign_case'))
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.readAlertsAllowed, true)
@@ -1491,30 +1491,50 @@ const memberAlertTermsReadyResponse = await app.inject({
     url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-member-alert-terms-ready`,
     headers: authHeaders('org_smoke_member', 'member-token'),
 })
-assert.equal(memberAlertTermsReadyResponse.statusCode, 200, memberAlertTermsReadyResponse.body)
-const memberAlertTermsExport = parseBody(memberAlertTermsReadyResponse.body).alertTermsExport
-assert.equal(memberAlertTermsExport.member.userId, 'org_smoke_member')
-assert.equal(memberAlertTermsExport.member.role, 'member')
-assert.equal(memberAlertTermsExport.canGenerateAlerts, true)
-assert.equal(memberAlertTermsExport.activeTerms.length, 5)
-assert.equal(memberAlertTermsExport.downstreamAuthorization.visibility.allowed, false)
-assert.equal(memberAlertTermsExport.downstreamAuthorization.visibility.reason, 'role_not_allowed')
-assert.deepEqual(memberAlertTermsExport.downstreamAuthorization.allowedActions, ['acknowledge_alert'])
-assert.equal(memberAlertTermsExport.downstreamAuthorization.actionGates.edit_watchlist_terms.denialReason, 'role_not_allowed')
-assert.deepEqual(memberAlertTermsExport.alertBridgeContract.memberProvenance, {
+assert.equal(memberAlertTermsReadyResponse.statusCode, 403, memberAlertTermsReadyResponse.body)
+const memberAlertTermsDenialBody = parseBody(memberAlertTermsReadyResponse.body)
+assert.equal(memberAlertTermsDenialBody.error, 'Organization alert visibility does not allow this member to export alert terms.')
+assert.ok(!('alertTermsExport' in memberAlertTermsDenialBody))
+assert.equal(memberAlertTermsDenialBody.organization.id, organization.id)
+const memberAlertTermsDenial = memberAlertTermsDenialBody.alertTermsExportDenial
+assert.equal(memberAlertTermsDenial.schemaVersion, 'organization.watchlist_alert_terms_export_denial.v1')
+assert.equal(memberAlertTermsDenial.organizationId, organization.id)
+assert.equal(memberAlertTermsDenial.tenantId, organization.id)
+assert.deepEqual(memberAlertTermsDenial.member, {
     userId: 'org_smoke_member',
     role: 'member',
     status: 'active',
 })
-assert.deepEqual(memberAlertTermsExport.alertBridgeContract.alertCaseProof.memberVisibility, {
-    mode: 'member_scoped_export',
-    userId: 'org_smoke_member',
-    role: 'member',
-    status: 'active',
-    nonmemberEnumeration: false,
-    revokedMemberDenial: 'member_revoked',
-})
-assert.ok(memberAlertTermsExport.activeTerms.every((term: Row) => term.alertGenerationRef.dedupe.key === term.alertGeneratorKey))
+assert.equal(memberAlertTermsDenial.visibility.allowed, false)
+assert.equal(memberAlertTermsDenial.visibility.reason, 'role_not_allowed')
+assert.deepEqual(memberAlertTermsDenial.visibility.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(memberAlertTermsDenial.allowedActions, ['acknowledge_alert'])
+assert.equal(memberAlertTermsDenial.routes.alertTermsExport, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.ok(memberAlertTermsDenial.safeFields.includes('visibility.reason'))
+assert.ok(memberAlertTermsDenial.redactedFields.includes('activeTerms[]'))
+assert.ok(memberAlertTermsDenial.redactedFields.includes('watchlistScope.alertGeneratorKeys'))
+assert.deepEqual(memberAlertTermsDenial.blockerCodes, ['role_not_allowed'])
+assert.equal(memberAlertTermsDenial.nonmemberEnumeration, false)
+assert.equal(memberAlertTermsDenial.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
+const deniedQueueContract = orgUtils.organizationSharedWatchlistAlertQueueVisibility(readiness.sharedWatchlistDownstreamProof)
+assert.equal(deniedQueueContract.visibility.allowed, false)
+assert.equal(deniedQueueContract.visibility.denialReason, 'role_not_allowed')
+assert.equal(deniedQueueContract.actionGates.readAlertsAllowed, false)
+assert.equal(deniedQueueContract.denialResponseContract.blocked, true)
+assert.equal(deniedQueueContract.denialResponseContract.statusCode, 403)
+assert.equal(deniedQueueContract.denialResponseContract.errorCode, 'org_alert_visibility_denied')
+assert.equal(deniedQueueContract.denialResponseContract.reason, 'role_not_allowed')
+assert.deepEqual(deniedQueueContract.denialResponseContract.responseShape, [
+    'error',
+    'message',
+    'organizationId',
+    'visibilityDecision',
+    'allowedRoles',
+    'requestId',
+])
+assert.ok(deniedQueueContract.denialResponseContract.noLeakFields.includes('persistedAlertContract'))
+assert.ok(deniedQueueContract.denialResponseContract.noLeakFields.includes('member.userId'))
+assert.equal(deniedQueueContract.denialResponseContract.auditEventAction, 'organization_watchlist_alert_visibility_denied')
 
 const archiveOrganizationResponse = await app.inject({
     method: 'PUT',
@@ -1878,6 +1898,38 @@ const viewerReadinessResponse = await app.inject({
 assert.equal(viewerReadinessResponse.statusCode, 200, viewerReadinessResponse.body)
 assert.equal(parseBody(viewerReadinessResponse.body).alertReadiness.watchlistItemCount, 5)
 
+const viewerAlertTermsDeniedResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-viewer-alert-terms-denied`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(viewerAlertTermsDeniedResponse.statusCode, 403, viewerAlertTermsDeniedResponse.body)
+const viewerAlertTermsDeniedBody = parseBody(viewerAlertTermsDeniedResponse.body)
+assert.equal(viewerAlertTermsDeniedBody.error, 'Organization alert visibility does not allow this member to export alert terms.')
+assert.ok(!('alertTermsExport' in viewerAlertTermsDeniedBody))
+const viewerAlertTermsDenied = viewerAlertTermsDeniedBody.alertTermsExportDenial
+assert.equal(viewerAlertTermsDenied.schemaVersion, 'organization.watchlist_alert_terms_export_denial.v1')
+assert.equal(viewerAlertTermsDenied.organizationId, organization.id)
+assert.equal(viewerAlertTermsDenied.tenantId, organization.id)
+assert.deepEqual(viewerAlertTermsDenied.member, {
+    userId: 'org_smoke_viewer',
+    role: 'viewer',
+    status: 'active',
+})
+assert.equal(viewerAlertTermsDenied.visibility.allowed, false)
+assert.equal(viewerAlertTermsDenied.visibility.reason, 'role_not_allowed')
+assert.equal(viewerAlertTermsDenied.visibility.alertVisibilityPolicy, 'admins')
+assert.deepEqual(viewerAlertTermsDenied.visibility.allowedRoles, ['owner', 'admin'])
+assert.deepEqual(viewerAlertTermsDenied.blockerCodes, ['role_not_allowed'])
+assert.equal(viewerAlertTermsDenied.nonmemberEnumeration, false)
+assert.ok(viewerAlertTermsDenied.redactedFields.includes('activeTerms[]'))
+assert.ok(viewerAlertTermsDenied.redactedFields.includes('alertGeneratorKeys[]'))
+assert.ok(!('activeTerms' in viewerAlertTermsDenied))
+assert.ok(!('activeWatchlistTerms' in viewerAlertTermsDenied))
+assert.ok(!JSON.stringify(viewerAlertTermsDenied).includes('acme-shared.example'))
+assert.equal(viewerAlertTermsDenied.routes.alertReadiness, 'GET /api/organizations/:id/alert-readiness')
+assert.equal(viewerAlertTermsDenied.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
+
 const ownerDisablesActorResponse = await app.inject({
     method: 'DELETE',
     url: `/api/organizations/${organization.id}/watchlists/${actorWatchlistItem.id}?requestId=smoke-disable-actor`,
@@ -2008,7 +2060,7 @@ assert.ok(cleanupArchivedIds.includes(cleanupKeywordItem.id))
 const cleanupAfterArchiveExportResponse = await app.inject({
     method: 'GET',
     url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-cleanup-export-after`,
-    headers: authHeaders('org_smoke_member', 'member-token'),
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
 })
 assert.equal(cleanupAfterArchiveExportResponse.statusCode, 200, cleanupAfterArchiveExportResponse.body)
 const cleanupAfterArchiveExport = parseBody(cleanupAfterArchiveExportResponse.body).alertTermsExport
@@ -2024,7 +2076,14 @@ assert.equal(cleanupAfterArchiveExport.downstreamAuthorization.watchlists.archiv
 assert.ok(cleanupAfterArchiveExport.downstreamAuthorization.downstream.alertGeneration.blockerCodes.includes('watchlist_archived'))
 assert.ok(cleanupAfterArchiveExport.activeTerms.every((term: Row) => term.alertGenerationRef.status === 'active'))
 assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.actor.allowedActions, [
+    'create_watchlist',
+    'edit_watchlist_terms',
+    'archive_watchlist',
+    'restore_watchlist',
     'acknowledge_alert',
+    'assign_case',
+    'link_case',
+    'manage_invites',
 ])
 assert.deepEqual(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.roleGates.restore_watchlist, ['owner', 'admin'])
 assert.equal(cleanupAfterArchiveExport.alertBridgeContract.alertCaseProof.roleActionContract.lifecycleDenials.archivedWatchlist, 'watchlist_archived')
@@ -2186,6 +2245,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resume
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_restored' && log.metadata.requestId === 'smoke-restore-cleanup-keyword'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_export_denied' && log.metadata.requestId === 'smoke-viewer-alert-terms-denied' && log.metadata.denialReason === 'role_not_allowed'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_cleanup_archived' && log.metadata.requestId === 'smoke-proof-cleanup'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
