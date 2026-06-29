@@ -1781,10 +1781,16 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, com
                         </Link>
                     )}
                     {item.caseDetailHref && (
-                        <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                            Case API
-                            <ExternalLink className='h-3.5 w-3.5' />
-                        </Link>
+                        <>
+                            <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                Case API
+                                <ExternalLink className='h-3.5 w-3.5' />
+                            </Link>
+                            <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                Case export
+                                <ExternalLink className='h-3.5 w-3.5' />
+                            </Link>
+                        </>
                     )}
                 </div>
             </div>
@@ -2087,6 +2093,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
             <div>
                 <p className='text-xs font-semibold uppercase text-[#147a3b]'>Backed case actions</p>
                 <p className='mt-1 text-xs leading-5 text-[#596170]'>These controls PATCH /api/cases/:id, then reload the case detail pane before reporting success.</p>
+                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#596170]'>Case export uses GET {caseExportHref(item.caseDetailHref)} for audit-safe evidence, timeline, delivery, and next-action payloads.</p>}
             </div>
             <div className='flex flex-wrap gap-2'>
                 <CaseMutationButton
@@ -2815,6 +2822,16 @@ function deliveredCaseDelivery(detail: CaseDetailPayload) {
 function caseCustomerNotificationHref(caseDetailHref: string) {
     const [path, query] = caseDetailHref.split('?')
     return `${path.replace(/\/$/, '')}/customer-notification${query ? `?${query}` : ''}`
+}
+
+function caseExportHref(caseDetailHref: string) {
+    const [path, query] = caseDetailHref.split('?')
+    const params = new URLSearchParams(query || '')
+    params.set('shape', 'full')
+    params.set('timeline', 'true')
+    params.set('evidence', 'true')
+    params.set('nextActionPayloads', 'true')
+    return `${path.replace(/\/$/, '')}/export?${params.toString()}`
 }
 
 function caseDetailHrefFromPayload(payload: WorkbenchApiPayload | undefined, action: WorkbenchAction | undefined, orgContext: WorkbenchOrgContext | undefined) {

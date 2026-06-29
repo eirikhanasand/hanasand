@@ -13,6 +13,7 @@ const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-
 const productReadinessRouteSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 const organizationAlertReadinessRouteSource = readFileSync(new URL('../src/app/api/organizations/[id]/alert-readiness/route.ts', here), 'utf8')
 const caseCustomerNotificationProxySource = readFileSync(new URL('../src/app/api/cases/[id]/customer-notification/route.ts', here), 'utf8')
+const caseExportProxySource = readFileSync(new URL('../src/app/api/cases/[id]/export/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -776,6 +777,9 @@ assert.ok(workbenchSource.includes('caseCustomerNotificationHref'), 'Customer no
 assert.ok(workbenchSource.includes('Customer notification receipt requires decision rationale.'), 'Customer notification receipts should require analyst rationale before mutation.')
 assert.ok(workbenchSource.includes('customerNotificationContext'), 'Case continuity should expose backed customer notification receipt state.')
 assert.ok(caseCustomerNotificationProxySource.includes('/v1/cases/${encodeURIComponent(id)}/customer-notification'), 'Dashboard case notification proxy should forward to the TI case notification contract.')
+assert.ok(workbenchSource.includes('caseExportHref'), 'Selected backed cases should expose the audit-safe case export route.')
+assert.ok(workbenchSource.includes('Case export'), 'Selected backed case inspection should deep-link to the export payload.')
+assert.ok(caseExportProxySource.includes('/v1/cases/${encodeURIComponent(id)}/export'), 'Dashboard case export proxy should forward to the TI case export contract.')
 assert.ok(dashboardModelSource.includes('/api/dwm/source-requests'), 'Source readiness case should call the source request endpoint.')
 assert.ok(dashboardModelSource.includes('/api/dwm/canary/run'), 'Source readiness case should call the canary run endpoint.')
 assert.ok(dashboardModelSource.includes('open_alert_generation_readiness'), 'Alert readiness case should expose the backed generation-readiness proof.')
