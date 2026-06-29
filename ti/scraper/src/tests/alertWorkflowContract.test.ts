@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
+  DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
   buildAlertWorkflowAdminAuditAdapter,
   buildAlertWorkflowContract,
+  buildAlertProvenanceConsumerPacket,
   buildAlertWorkflowSupportEvidencePacket,
   buildAlertWorkflowSupportActionRequest,
   validateAlertWorkflowPreservation
@@ -96,6 +98,153 @@ describe("alert workflow preservation contract", () => {
     });
     expect(report.ok).toBe(true);
     expect(report.preserved).toMatchObject(fixture.preserved);
+  });
+
+  test("packages alert provenance for dashboard webhook public TI and case consumers", () => {
+    const contract = buildAlertWorkflowContract({
+      alert: alertFixture(),
+      checkedAt: "2026-06-29T13:08:00.000Z"
+    });
+    const packet = buildAlertProvenanceConsumerPacket({
+      contract,
+      generatedAt: "2026-06-29T13:09:00.000Z",
+      staleBefore: "2026-06-29T12:01:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      casePath: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+      dedupeKey: "dedupe_acme_lumma",
+      redacted: true,
+      provenance: {
+        redacted: true,
+        evidenceCount: 1,
+        captureIds: ["cap_acme_initial"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_initial"],
+        sourceFamilies: ["telegram_public", "darkweb_metadata"],
+        lastObservedAt: "2026-06-29T12:05:00.000Z"
+      },
+      orgWatchlistScope: {
+        organizationId: "org_acme",
+        watchlistIds: ["watch_acme"],
+        watchlistItemIds: ["watch_item_acme_domain"],
+        alertGeneratorKeys: ["org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com"]
+      },
+      lifecycle: {
+        state: "ready",
+        allowedTransitions: expect.arrayContaining([
+          "render_dashboard_provenance",
+          "prepare_webhook_dispatch",
+          "refresh_public_ti_profile",
+          "open_case_with_provenance"
+        ]),
+        blockedTransitions: []
+      },
+      consumers: {
+        dashboard: {
+          ready: true,
+          ownerLane: "dashboard",
+          route: "/dashboard/dwm/alerts/alert_acme_lumma",
+          requiredFields: expect.arrayContaining(["alertId", "organizationId", "provenance.captureIds"])
+        },
+        webhook: {
+          ready: true,
+          ownerLane: "webhook",
+          route: "/v1/dwm/webhooks/deliver",
+          requiredFields: expect.arrayContaining(["caseId", "orgWatchlistScope.alertGeneratorKeys", "provenance.captureIds"])
+        },
+        publicTI: {
+          ready: true,
+          ownerLane: "publicTI",
+          requiredFields: expect.arrayContaining(["provenance.sourceFamilies", "provenance.contentHashes"])
+        },
+        caseWorkflow: {
+          ready: true,
+          ownerLane: "case",
+          route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+          requiredFields: expect.arrayContaining(["caseId", "casePath", "workflowEventCount"])
+        }
+      },
+      blockers: []
+    });
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "provenance.captureIds",
+      "orgWatchlistScope.watchlistItemIds",
+      "consumers"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawEvidence");
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+  });
+
+  test("blocks alert provenance consumers for stale duplicate or incomplete alert context", () => {
+    const contract = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        organizationId: undefined,
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        casePath: undefined,
+        provenance: { captureIds: [] },
+        workflowContext: {},
+        webhookContext: {},
+        sourceProvenanceSummary: {
+          schemaVersion: "dwm.alert_source_provenance.v1",
+          captureIds: [],
+          sourceIds: [],
+          contentHashes: [],
+          sourceFamilies: ["telegram_public"],
+          lastObservedAt: "2026-06-28T12:00:00.000Z"
+        },
+        orgWatchlistScope: undefined,
+        evidence: []
+      },
+      checkedAt: "2026-06-29T13:08:00.000Z"
+    });
+    const packet = buildAlertProvenanceConsumerPacket({
+      contract,
+      staleBefore: "2026-06-29T12:00:00.000Z",
+      duplicateDedupeKeys: ["dedupe_acme_lumma"]
+    });
+
+    expect(packet.ok).toBe(false);
+    expect(packet.lifecycle.state).toBe("blocked");
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_org_scope", ownerLane: "org", path: "organizationId" }),
+      expect.objectContaining({ code: "missing_case_route", ownerLane: "case" }),
+      expect.objectContaining({ code: "missing_source_provenance", ownerLane: "source" }),
+      expect.objectContaining({ code: "stale_source_provenance", ownerLane: "source", path: "provenance.lastObservedAt" }),
+      expect.objectContaining({ code: "missing_org_watchlist_scope", ownerLane: "alert", path: "orgWatchlistScope" }),
+      expect.objectContaining({ code: "duplicate_alert_unresolved", ownerLane: "alert", path: "dedupeKey" })
+    ]));
+    expect(packet.consumers).toMatchObject({
+      dashboard: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_org_scope", "missing_source_provenance", "stale_source_provenance", "duplicate_alert_unresolved"])
+      },
+      webhook: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_org_scope", "missing_case_route", "missing_org_watchlist_scope", "duplicate_alert_unresolved"])
+      },
+      publicTI: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_source_provenance", "stale_source_provenance"])
+      },
+      caseWorkflow: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["missing_case_route", "duplicate_alert_unresolved"])
+      }
+    });
+    expect(packet.lifecycle.blockedTransitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "webhook", transition: "prepare_webhook_dispatch" }),
+      expect.objectContaining({ consumer: "publicTI", transition: "refresh_public_ti_profile" }),
+      expect.objectContaining({ consumer: "caseWorkflow", transition: "open_case_with_provenance" })
+    ]));
   });
 
   test("emits redacted admin audit metadata for preserved alert workflow", () => {

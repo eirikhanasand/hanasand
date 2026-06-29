@@ -5,6 +5,7 @@ export const DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION = "dwm.alert_workflo
 export const DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION = "dwm.alert_workflow_admin_audit.v1" as const;
 export const DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.alert_workflow_support_action_request.v1" as const;
 export const DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION = "dwm.alert_workflow_support_evidence_packet.v1" as const;
+export const DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION = "dwm.alert_provenance_consumer_packet.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -237,6 +238,65 @@ export type DwmAlertWorkflowSupportEvidencePacket = {
     message: string;
   }>;
   nextActions: DwmAlertWorkflowAdminAuditAdapter["nextActions"];
+};
+
+export type DwmAlertProvenanceConsumerPacket = {
+  schemaVersion: typeof DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  casePath?: string;
+  dedupeKey?: string;
+  redacted: true;
+  provenance: DwmAlertWorkflowContract["provenance"] & {
+    redacted: true;
+  };
+  orgWatchlistScope?: DwmAlertWorkflowContract["orgWatchlistScope"];
+  lifecycle: {
+    state: "ready" | "blocked";
+    reviewState?: string;
+    deliveryState?: string;
+    workflowStatus?: string;
+    allowedTransitions: Array<"render_dashboard_provenance" | "prepare_webhook_dispatch" | "refresh_public_ti_profile" | "open_case_with_provenance">;
+    blockedTransitions: Array<{
+      consumer: keyof DwmAlertProvenanceConsumerPacket["consumers"];
+      transition: "render_dashboard_provenance" | "prepare_webhook_dispatch" | "refresh_public_ti_profile" | "open_case_with_provenance";
+      blockerCodes: DwmAlertProvenanceConsumerBlocker["code"][];
+    }>;
+  };
+  consumers: {
+    dashboard: DwmAlertProvenanceConsumerReadiness;
+    webhook: DwmAlertProvenanceConsumerReadiness;
+    publicTI: DwmAlertProvenanceConsumerReadiness;
+    caseWorkflow: DwmAlertProvenanceConsumerReadiness;
+  };
+  blockers: DwmAlertProvenanceConsumerBlocker[];
+  payloadShape: string[];
+};
+
+export type DwmAlertProvenanceConsumerReadiness = {
+  ready: boolean;
+  ownerLane: "dashboard" | "webhook" | "publicTI" | "case";
+  route?: string;
+  requiredFields: string[];
+  blockerCodes: DwmAlertProvenanceConsumerBlocker["code"][];
+};
+
+export type DwmAlertProvenanceConsumerBlocker = {
+  code:
+    | "missing_org_scope"
+    | "missing_case_route"
+    | "missing_source_provenance"
+    | "stale_source_provenance"
+    | "missing_org_watchlist_scope"
+    | "duplicate_alert_unresolved";
+  ownerLane: "org" | "case" | "source" | "alert";
+  path: string;
+  message: string;
 };
 
 export function buildAlertWorkflowContract(input: {
@@ -570,6 +630,108 @@ export function buildAlertWorkflowSupportEvidencePacket(input: {
   };
 }
 
+export function buildAlertProvenanceConsumerPacket(input: {
+  contract: DwmAlertWorkflowContract;
+  generatedAt?: string;
+  staleBefore?: string;
+  duplicateDedupeKeys?: string[];
+}): DwmAlertProvenanceConsumerPacket {
+  const contract = input.contract;
+  const blockers = alertProvenanceConsumerBlockers(contract, input);
+  const consumerBlockers = {
+    dashboard: consumerBlockerCodes(blockers, ["missing_org_scope", "missing_source_provenance", "stale_source_provenance", "duplicate_alert_unresolved"]),
+    webhook: consumerBlockerCodes(blockers, ["missing_org_scope", "missing_case_route", "missing_source_provenance", "stale_source_provenance", "missing_org_watchlist_scope", "duplicate_alert_unresolved"]),
+    publicTI: consumerBlockerCodes(blockers, ["missing_source_provenance", "stale_source_provenance"]),
+    caseWorkflow: consumerBlockerCodes(blockers, ["missing_org_scope", "missing_case_route", "missing_source_provenance", "stale_source_provenance", "duplicate_alert_unresolved"])
+  };
+  const consumers = {
+    dashboard: alertProvenanceConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(contract.alertId)}`, [
+      "alertId",
+      "organizationId",
+      "provenance.captureIds",
+      "provenance.sourceIds",
+      "orgWatchlistScope.watchlistItemIds"
+    ], consumerBlockers.dashboard),
+    webhook: alertProvenanceConsumerReadiness("webhook", "/v1/dwm/webhooks/deliver", [
+      "alertId",
+      "organizationId",
+      "caseId",
+      "dedupeKey",
+      "orgWatchlistScope.watchlistItemIds",
+      "orgWatchlistScope.alertGeneratorKeys",
+      "provenance.captureIds"
+    ], consumerBlockers.webhook),
+    publicTI: alertProvenanceConsumerReadiness("publicTI", `/ti/${encodeURIComponent(contract.alertId)}`, [
+      "alertId",
+      "provenance.sourceFamilies",
+      "provenance.captureIds",
+      "provenance.contentHashes",
+      "provenance.lastObservedAt"
+    ], consumerBlockers.publicTI),
+    caseWorkflow: alertProvenanceConsumerReadiness("case", contract.casePath, [
+      "alertId",
+      "caseId",
+      "casePath",
+      "provenance.captureIds",
+      "workflowEventCount"
+    ], consumerBlockers.caseWorkflow)
+  };
+  const blockedTransitions = [
+    transitionBlock("dashboard", "render_dashboard_provenance", consumerBlockers.dashboard),
+    transitionBlock("webhook", "prepare_webhook_dispatch", consumerBlockers.webhook),
+    transitionBlock("publicTI", "refresh_public_ti_profile", consumerBlockers.publicTI),
+    transitionBlock("caseWorkflow", "open_case_with_provenance", consumerBlockers.caseWorkflow)
+  ].filter((transition): transition is DwmAlertProvenanceConsumerPacket["lifecycle"]["blockedTransitions"][number] => Boolean(transition));
+  const allowedTransitions = [
+    consumers.dashboard.ready ? "render_dashboard_provenance" as const : undefined,
+    consumers.webhook.ready ? "prepare_webhook_dispatch" as const : undefined,
+    consumers.publicTI.ready ? "refresh_public_ti_profile" as const : undefined,
+    consumers.caseWorkflow.ready ? "open_case_with_provenance" as const : undefined
+  ].filter(Boolean) as DwmAlertProvenanceConsumerPacket["lifecycle"]["allowedTransitions"];
+
+  return {
+    schemaVersion: DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION,
+    id: stableId("dwm_alert_provenance_consumer_packet", `${contract.id}:${input.generatedAt ?? contract.checkedAt}:${input.staleBefore ?? ""}:${(input.duplicateDedupeKeys ?? []).join(",")}`),
+    generatedAt: input.generatedAt ?? contract.checkedAt,
+    ok: blockers.length === 0,
+    tenantId: contract.tenantId,
+    organizationId: contract.organizationId,
+    alertId: contract.alertId,
+    caseId: contract.caseId,
+    casePath: contract.casePath,
+    dedupeKey: contract.dedupeKey,
+    redacted: true,
+    provenance: {
+      redacted: true,
+      ...contract.provenance
+    },
+    orgWatchlistScope: contract.orgWatchlistScope,
+    lifecycle: {
+      state: blockers.length === 0 ? "ready" : "blocked",
+      reviewState: contract.reviewState,
+      deliveryState: contract.deliveryState,
+      workflowStatus: contract.workflowStatus,
+      allowedTransitions,
+      blockedTransitions
+    },
+    consumers,
+    blockers,
+    payloadShape: [
+      "alertId",
+      "organizationId",
+      "caseId",
+      "dedupeKey",
+      "provenance.captureIds",
+      "provenance.sourceIds",
+      "provenance.contentHashes",
+      "provenance.sourceFamilies",
+      "orgWatchlistScope.watchlistItemIds",
+      "orgWatchlistScope.alertGeneratorKeys",
+      "consumers"
+    ]
+  };
+}
+
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
     + asStringArray(contract.provenance.captureIds).length
@@ -588,6 +750,82 @@ function orgWatchlistScopeScore(contract: DwmAlertWorkflowContract) {
     + scope.watchlistIds.length
     + scope.watchlistItemIds.length
     + scope.alertGeneratorKeys.length;
+}
+
+function alertProvenanceConsumerBlockers(
+  contract: DwmAlertWorkflowContract,
+  input: { staleBefore?: string; duplicateDedupeKeys?: string[] }
+): DwmAlertProvenanceConsumerBlocker[] {
+  const blockers: DwmAlertProvenanceConsumerBlocker[] = [];
+  if (!contract.organizationId) {
+    blockers.push(alertProvenanceBlocker("missing_org_scope", "org", "organizationId", "Alert provenance consumers require organization scope."));
+  }
+  if (!contract.caseId || !contract.casePath) {
+    blockers.push(alertProvenanceBlocker("missing_case_route", "case", !contract.caseId ? "caseId" : "casePath", "Case workflow consumers require case id and route."));
+  }
+  if (provenanceScore(contract) === 0 || contract.provenance.evidenceCount === 0 || !contract.provenance.captureIds.length) {
+    blockers.push(alertProvenanceBlocker("missing_source_provenance", "source", "provenance", "Alert provenance consumers require source-backed evidence."));
+  }
+  if (input.staleBefore && contract.provenance.lastObservedAt && contract.provenance.lastObservedAt < input.staleBefore) {
+    blockers.push(alertProvenanceBlocker("stale_source_provenance", "source", "provenance.lastObservedAt", "Alert provenance is older than the requested freshness boundary."));
+  }
+  if (orgWatchlistScopeScore(contract) === 0 || !contract.orgWatchlistScope?.watchlistItemIds.length || !contract.orgWatchlistScope.alertGeneratorKeys.length) {
+    blockers.push(alertProvenanceBlocker("missing_org_watchlist_scope", "alert", "orgWatchlistScope", "Alert provenance consumers require org watchlist item ids and alert generation refs."));
+  }
+  if (contract.dedupeKey && input.duplicateDedupeKeys?.includes(contract.dedupeKey)) {
+    blockers.push(alertProvenanceBlocker("duplicate_alert_unresolved", "alert", "dedupeKey", "Alert dedupe key is already associated with another unresolved alert."));
+  }
+  return uniqueAlertProvenanceBlockers(blockers);
+}
+
+function alertProvenanceConsumerReadiness(
+  ownerLane: DwmAlertProvenanceConsumerReadiness["ownerLane"],
+  route: string | undefined,
+  requiredFields: string[],
+  blockerCodes: DwmAlertProvenanceConsumerBlocker["code"][]
+): DwmAlertProvenanceConsumerReadiness {
+  return {
+    ready: blockerCodes.length === 0,
+    ownerLane,
+    route,
+    requiredFields,
+    blockerCodes
+  };
+}
+
+function consumerBlockerCodes(
+  blockers: DwmAlertProvenanceConsumerBlocker[],
+  codes: DwmAlertProvenanceConsumerBlocker["code"][]
+): DwmAlertProvenanceConsumerBlocker["code"][] {
+  return uniqueStrings(blockers.map((blocker) => blocker.code).filter((code) => codes.includes(code))) as DwmAlertProvenanceConsumerBlocker["code"][];
+}
+
+function transitionBlock(
+  consumer: keyof DwmAlertProvenanceConsumerPacket["consumers"],
+  transition: DwmAlertProvenanceConsumerPacket["lifecycle"]["allowedTransitions"][number],
+  blockerCodes: DwmAlertProvenanceConsumerBlocker["code"][]
+): DwmAlertProvenanceConsumerPacket["lifecycle"]["blockedTransitions"][number] | undefined {
+  if (!blockerCodes.length) return undefined;
+  return { consumer, transition, blockerCodes };
+}
+
+function alertProvenanceBlocker(
+  code: DwmAlertProvenanceConsumerBlocker["code"],
+  ownerLane: DwmAlertProvenanceConsumerBlocker["ownerLane"],
+  path: string,
+  message: string
+): DwmAlertProvenanceConsumerBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function uniqueAlertProvenanceBlockers(blockers: DwmAlertProvenanceConsumerBlocker[]): DwmAlertProvenanceConsumerBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function normalizeOrgWatchlistScope(value: any): DwmAlertWorkflowContract["orgWatchlistScope"] | undefined {
