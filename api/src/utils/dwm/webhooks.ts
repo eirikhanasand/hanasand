@@ -1292,6 +1292,25 @@ export function buildDwmWebhookDeliveryActionPlan({
         ])
         const dryRunRequest = retryEntry?.dryRunRequest || null
         const liveRequest = retryEntry?.liveRequest || null
+        const testDestinationRequest = latest.destinationId
+            ? {
+                canSend: timeline.access.canManage && !destinationUnavailable,
+                noNetwork: true,
+                externalSendEnabled: false,
+                route: `POST /api/dwm/webhook-destinations/${latest.destinationId}/test`,
+                body: {
+                    orgId: item.orgId,
+                    destinationId: latest.destinationId,
+                    eventType: 'dwm.alert.test' as DwmAlertEventType,
+                    dryRun: true,
+                    live: false,
+                    alertId: item.alertId,
+                    dedupeKey: item.dedupeKey,
+                    casePath: item.casePath,
+                },
+                blockers: blockers.filter(blocker => ['permission_denied', 'destination_unavailable'].includes(blocker.code)),
+            }
+            : null
 
         return {
             schemaVersion: 'dwm.webhook.delivery_action.v1',
@@ -1348,6 +1367,7 @@ export function buildDwmWebhookDeliveryActionPlan({
                         blockers: liveRequest.blockers,
                     }
                     : null,
+                testDestination: testDestinationRequest,
             },
             blockers,
             blockingCodes: blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code),

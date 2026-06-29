@@ -2897,8 +2897,10 @@ expect(!JSON.stringify(deliveryTimeline).includes(secret), 'Delivery timeline sh
 expect(deliveryActionPlan.schemaVersion === 'dwm.webhook.delivery_action_plan.v1' && deliveryActionPlan.noNetwork === true, 'Delivery action plan should expose safe next steps without network sends.', deliveryActionPlan)
 expect(deliveryActionRetry?.action === 'retry_dry_run' && deliveryActionRetry.requests.dryRunRetry?.canSend === true && deliveryActionRetry.requests.dryRunRetry.body.dedupeKey === 'dwm_dedupe_live_contract', 'Delivery action plan should build dry-run retry actions for retryable failures.', deliveryActionRetry)
 expect(deliveryActionRetry?.requests.liveRetry?.canSend === false && deliveryActionRetry.requests.liveRetry.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery action plan should block live retry unless live delivery is configured.', deliveryActionRetry)
+expect(deliveryActionRetry?.requests.testDestination?.route === 'POST /api/dwm/webhook-destinations/destination_live_contract/test' && deliveryActionRetry.requests.testDestination.noNetwork === true && deliveryActionRetry.requests.testDestination.body.eventType === 'dwm.alert.test', 'Delivery action plan should include a no-network destination test request for retry validation.', deliveryActionRetry?.requests.testDestination)
 expect(deliveryActionRetry?.operationLinks?.retryDryRun === 'POST /api/dwm/webhook-deliveries' && deliveryActionRetry.operationLinks.deliveryDetail.includes('delivery_live_failed_retry_contract'), 'Delivery action plan should expose operation links for dry-run retry and delivery detail.', deliveryActionRetry)
 expect(deliveryActionTerminal?.action === 'rotate_or_disable_destination' && deliveryActionTerminal.audit.nextAction === 'destination.update_requested', 'Delivery action plan should guide terminal failures to destination remediation.', deliveryActionTerminal)
+expect(deliveryActionTerminal?.requests.testDestination?.body.destinationId === 'destination_terminal_contract' && deliveryActionTerminal.requests.testDestination.body.alertId === 'alert_terminal_contract' && deliveryActionTerminal.requests.testDestination.body.dedupeKey === 'dwm_dedupe_terminal_contract' && Boolean(deliveryActionTerminal.requests.testDestination.body.casePath), 'Delivery action plan should preserve terminal-failure alert, dedupe, and case context in destination test requests.', deliveryActionTerminal?.requests.testDestination)
 expect(deliveryActionDelivered?.action === 'monitor' && deliveryActionDelivered.status === 'delivered', 'Delivery action plan should mark delivered attempts as monitor-only.', deliveryActionDelivered)
 expect(deliveryActionMissingDestination?.action === 'configure_destination' && deliveryActionMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery action plan should route missing destination outcomes to destination setup.', deliveryActionMissingDestination)
 expect(nonmemberDeliveryActionPlan.actions.length === 0 && nonmemberDeliveryActionPlan.blockers.some(item => item.code === 'permission_denied'), 'Delivery action plan should deny nonmembers without leaking actions.', nonmemberDeliveryActionPlan)
@@ -3266,6 +3268,7 @@ console.log(JSON.stringify({
             'deliveryActionPlan.actions[].action',
             'deliveryActionPlan.actions[].requests.dryRunRetry.body',
             'deliveryActionPlan.actions[].requests.liveRetry.blockers[].code',
+            'deliveryActionPlan.actions[].requests.testDestination.body',
             'deliveryActionPlan.actions[].operationLinks.retryDryRun',
             'deliveryActionPlan.actions[].audit.nextAction',
             'deliveryReplayGuard.schemaVersion',
