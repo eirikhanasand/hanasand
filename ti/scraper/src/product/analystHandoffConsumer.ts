@@ -15,7 +15,12 @@ import {
 
 export const ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION = "hanasand.analyst_handoff.consumer.v1" as const;
 export const ORG_ALERT_TERMS_EXPORT_SCHEMA_VERSION = "organization.watchlist_alert_terms_export.v1" as const;
+export const ORG_ALERT_GENERATION_REF_SCHEMA_VERSION = "organization.watchlist_alert_generation_ref.v1" as const;
 export const DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION = "dwm.webhook.audit_event.v1" as const;
+export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION = "dwm.webhook.destination_lifecycle.v1" as const;
+export const DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION = "dwm.entitlement_read_model.v1" as const;
+export const DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION = "dwm.source_worker_readiness.v1" as const;
+export const CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION = "case.route_availability.v1" as const;
 
 export type AnalystHandoffConsumerBlockerCode =
   | AnalystHandoffBlockerCode
@@ -26,13 +31,17 @@ export type AnalystHandoffConsumerBlockerCode =
   | "invalid_request"
   | "entitlement_blocked"
   | "nonmember"
+  | "alert_generation_ref_mismatch"
   | "org_terms_contract_mismatch"
   | "webhook_trigger_contract_mismatch"
-  | "webhook_audit_contract_mismatch";
+  | "webhook_audit_contract_mismatch"
+  | "webhook_destination_lifecycle_mismatch"
+  | "source_worker_not_ready"
+  | "case_route_unavailable";
 
 export type AnalystHandoffConsumerBlocker = Omit<AnalystHandoffBlocker, "code"> & {
   code: AnalystHandoffConsumerBlockerCode;
-  stage: AnalystHandoffConsumerStageName | "bundle" | "membership" | "entitlement" | "org_terms_export" | "webhook_audit";
+  stage: AnalystHandoffConsumerStageName | "bundle" | "membership" | "entitlement" | "org_terms_export" | "webhook_audit" | "webhook_lifecycle" | "source_readiness" | "case_route";
 };
 
 export type AnalystHandoffConsumerStageName = "publicTi" | "orgWatchlist" | "caseHandoff" | "webhookTrigger";
@@ -46,8 +55,30 @@ export type AnalystHandoffConsumerMembership = {
 };
 
 export type AnalystHandoffConsumerEntitlement = {
+  schemaVersion?: typeof DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION;
   allowed: boolean;
   reason?: string;
+  feature?: string;
+  plan?: string;
+  checkedAt?: string;
+};
+
+export type AnalystHandoffSourceWorkerReadiness = {
+  schemaVersion: typeof DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION;
+  ready: boolean;
+  freshProvenance: boolean;
+  sourceIds: string[];
+  blockers: string[];
+  checkedAt: string;
+};
+
+export type AnalystHandoffCaseRouteAvailability = {
+  schemaVersion: typeof CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION;
+  available: boolean;
+  path: "/v1/cases";
+  methods: Array<"POST">;
+  reason?: string;
+  checkedAt: string;
 };
 
 export type OrgWatchlistAlertTermsExportContract = {
@@ -67,7 +98,7 @@ export type OrgWatchlistAlertTermsExportContract = {
     term: string;
     source?: string;
     alertGenerationRef?: {
-      schemaVersion: "organization.watchlist_alert_generation_ref.v1";
+      schemaVersion: typeof ORG_ALERT_GENERATION_REF_SCHEMA_VERSION;
       source: "organization_shared_watchlist";
       organizationId: string;
       tenantId: string;
@@ -144,12 +175,60 @@ export type DwmWebhookAuditEventContract = {
   createdAt: string;
 };
 
+export type DwmWebhookDestinationLifecycleContract = {
+  schemaVersion: typeof DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION;
+  destinationId: string;
+  orgId: string;
+  type: string;
+  label: string;
+  status: string;
+  enabled: boolean;
+  access: {
+    role: string | null;
+    canReadStatus: boolean;
+    canManage: boolean;
+    canUpdate: boolean;
+    canTest: boolean;
+    canDisable: boolean;
+    memberSafe: boolean;
+  };
+  lifecycle: {
+    lastDryRun?: unknown;
+    lastTest?: unknown;
+    lastReplay?: unknown;
+    lastDelivery?: unknown;
+    lastFailure?: unknown;
+    lastLiveDisabled?: unknown;
+  };
+  retry: {
+    retryable: boolean;
+    nextRetryAt?: string | null;
+    attemptCount: number;
+    lastErrorCategory?: string | null;
+    reason?: string | null;
+    deliveryId?: string | null;
+    dedupeKey?: string | null;
+  };
+  health: {
+    status: string;
+    ready: boolean;
+    blockers: string[];
+    liveDeliveryEnabled: boolean;
+    idempotencyCoverage?: unknown;
+  };
+  auditEventContracts?: DwmWebhookAuditEventContract[];
+  updatedAt: string;
+  createdAt: string;
+};
+
 export type AnalystHandoffConsumerBundle = {
   schemaVersion: typeof ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION;
   generatedAt: string;
   staleEvidenceBefore?: string;
   entitlement?: AnalystHandoffConsumerEntitlement;
   membership?: AnalystHandoffConsumerMembership;
+  sourceReadiness?: AnalystHandoffSourceWorkerReadiness;
+  caseRoute?: AnalystHandoffCaseRouteAvailability;
   stages: Partial<{
     publicTi: ActorWatchlistAdapterValue;
     orgWatchlist: AlertGenerationAdapterValue & {
@@ -158,6 +237,7 @@ export type AnalystHandoffConsumerBundle = {
     caseHandoff: AlertCaseAdapterValue;
     webhookTrigger: AlertWebhookAdapterValue & {
       auditEvents?: DwmWebhookAuditEventContract[];
+      destinationLifecycle?: DwmWebhookDestinationLifecycleContract[];
     };
   }>;
 };
@@ -175,6 +255,9 @@ export type AnalystHandoffConsumerValidation = {
     caseHandoffSatisfied: boolean;
     webhookTriggerSatisfied: boolean;
     webhookAuditSatisfied: boolean;
+    webhookDestinationLifecycleSatisfied: boolean;
+    sourceReadinessSatisfied: boolean;
+    caseRouteAvailable: boolean;
   };
 };
 
@@ -221,6 +304,8 @@ export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHan
   blockers.push(...validateWebhookStage(stages.webhookTrigger, identity));
   blockers.push(...validateMembership(bundle.membership, identity));
   blockers.push(...validateEntitlement(bundle.entitlement));
+  blockers.push(...validateSourceReadiness(bundle.sourceReadiness, identity));
+  blockers.push(...validateCaseRouteAvailability(bundle.caseRoute));
 
   return {
     schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -235,6 +320,9 @@ export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHan
       caseHandoffSatisfied: hasNoStageBlockers(blockers, "caseHandoff"),
       webhookTriggerSatisfied: hasNoStageBlockers(blockers, "webhookTrigger"),
       webhookAuditSatisfied: Boolean(stages.webhookTrigger?.auditEvents?.length) && hasNoStageBlockers(blockers, "webhook_audit"),
+      webhookDestinationLifecycleSatisfied: Boolean(stages.webhookTrigger?.destinationLifecycle?.length) && hasNoStageBlockers(blockers, "webhook_lifecycle"),
+      sourceReadinessSatisfied: Boolean(bundle.sourceReadiness) && hasNoStageBlockers(blockers, "source_readiness"),
+      caseRouteAvailable: Boolean(bundle.caseRoute) && hasNoStageBlockers(blockers, "case_route"),
     }
   };
 }
@@ -250,6 +338,23 @@ export function summarizeAnalystHandoffConsumerBundle(input: unknown) {
     stageCount: validation.stageCount,
     identity: validation.identity,
     contracts: validation.contracts,
+    sourceReadiness: bundle.sourceReadiness
+      ? {
+          schemaVersion: bundle.sourceReadiness.schemaVersion,
+          ready: bundle.sourceReadiness.ready,
+          freshProvenance: bundle.sourceReadiness.freshProvenance,
+          sourceIds: bundle.sourceReadiness.sourceIds,
+          blockers: bundle.sourceReadiness.blockers
+        }
+      : undefined,
+    caseRoute: bundle.caseRoute
+      ? {
+          schemaVersion: bundle.caseRoute.schemaVersion,
+          available: bundle.caseRoute.available,
+          path: bundle.caseRoute.path,
+          methods: bundle.caseRoute.methods
+        }
+      : undefined,
     requests: {
       publicTi: requestSummary(bundle.stages?.publicTi?.request),
       orgWatchlist: requestSummary(bundle.stages?.orgWatchlist?.request),
@@ -353,13 +458,21 @@ function validateOrgTermsExport(
     }
   }
   const refMismatches = (termsExport.activeTerms || []).filter((item) => item.alertGenerationRef && (
-    item.alertGenerationRef.organizationId !== termsExport.organizationId
+    item.alertGenerationRef.schemaVersion !== ORG_ALERT_GENERATION_REF_SCHEMA_VERSION
+    || item.alertGenerationRef.organizationId !== termsExport.organizationId
     || item.alertGenerationRef.tenantId !== termsExport.tenantId
     || item.alertGenerationRef.watchlistItemId !== item.watchlistItemId
     || item.alertGenerationRef.dedupe.parts.watchlistItemId !== item.watchlistItemId
+    || item.alertGenerationRef.dedupe.parts.organizationId !== termsExport.organizationId
+    || item.alertGenerationRef.dedupe.parts.tenantId !== termsExport.tenantId
+    || item.alertGenerationRef.dedupe.parts.normalizedTerm !== item.alertGenerationRef.normalizedTerm
   ));
+  const missingRefs = (termsExport.activeTerms || []).filter((item) => !item.alertGenerationRef);
+  if (missingRefs.length) {
+    blockers.push(blocker("alert_generation_ref_mismatch", "org_terms_export", "orgWatchlist.termsExport.activeTerms.alertGenerationRef", "Active org terms must include organization.watchlist_alert_generation_ref.v1.", true));
+  }
   if (refMismatches.length) {
-    blockers.push(blocker("org_terms_contract_mismatch", "org_terms_export", "orgWatchlist.termsExport.activeTerms.alertGenerationRef", "Org alert generation refs must match export org, tenant, and watchlist item identity.", false));
+    blockers.push(blocker("alert_generation_ref_mismatch", "org_terms_export", "orgWatchlist.termsExport.activeTerms.alertGenerationRef", "Org alert generation refs must match export org, tenant, watchlist item, normalized term, and dedupe identity.", false));
   }
   return blockers;
 }
@@ -393,6 +506,7 @@ function validateWebhookStage(stage: AnalystHandoffConsumerBundle["stages"]["web
     blockers.push(blocker("identity_mismatch", "webhookTrigger", "webhookTrigger.request.body.organizationId", "Webhook trigger organization does not match identity.", false));
   }
   blockers.push(...validateWebhookAudit(stage.auditEvents, body));
+  blockers.push(...validateWebhookDestinationLifecycle(stage.destinationLifecycle, body, identity));
   return blockers;
 }
 
@@ -416,6 +530,36 @@ function validateWebhookAudit(
   return [];
 }
 
+function validateWebhookDestinationLifecycle(
+  lifecycleRows: DwmWebhookDestinationLifecycleContract[] | undefined,
+  body: Partial<AlertWebhookAdapterValue["request"]["body"]> | undefined,
+  identity?: AnalystHandoffIdentity
+): AnalystHandoffConsumerBlocker[] {
+  if (!body?.webhookDestinationIds?.length) return [];
+  if (!lifecycleRows?.length) {
+    return [blocker("webhook_destination_lifecycle_mismatch", "webhook_lifecycle", "webhookTrigger.destinationLifecycle", "Webhook destination lifecycle contract is missing.", true)];
+  }
+  const rowsById = new Map(lifecycleRows.map((row) => [row.destinationId, row]));
+  const blockers: AnalystHandoffConsumerBlocker[] = [];
+  for (const destinationId of body.webhookDestinationIds) {
+    const row = rowsById.get(destinationId);
+    if (!row) {
+      blockers.push(blocker("webhook_destination_lifecycle_mismatch", "webhook_lifecycle", "webhookTrigger.destinationLifecycle.destinationId", `Webhook destination ${destinationId} is missing lifecycle status.`, true));
+      continue;
+    }
+    if (row.schemaVersion !== DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION) {
+      blockers.push(blocker("unsupported_schema", "webhook_lifecycle", "webhookTrigger.destinationLifecycle.schemaVersion", `Expected ${DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION}.`, false));
+    }
+    if (identity?.organizationId && row.orgId !== identity.organizationId) {
+      blockers.push(blocker("identity_mismatch", "webhook_lifecycle", "webhookTrigger.destinationLifecycle.orgId", "Webhook destination lifecycle organization does not match handoff identity.", false));
+    }
+    if (!row.enabled || !row.health.ready || row.health.blockers.length) {
+      blockers.push(blocker("webhook_destination_lifecycle_mismatch", "webhook_lifecycle", "webhookTrigger.destinationLifecycle.health", `Webhook destination ${destinationId} is not ready: ${row.health.blockers.join(", ") || row.health.status}.`, true));
+    }
+  }
+  return blockers;
+}
+
 function validateMembership(membership: AnalystHandoffConsumerMembership | undefined, identity?: AnalystHandoffIdentity): AnalystHandoffConsumerBlocker[] {
   if (!membership) return [blocker("nonmember", "membership", "membership", "Active organization membership is required to consume handoff adapters.", true)];
   if (membership.status !== "active") return [blocker("nonmember", "membership", "membership.status", "Membership must be active.", false)];
@@ -431,8 +575,41 @@ function validateMembership(membership: AnalystHandoffConsumerMembership | undef
 
 function validateEntitlement(entitlement?: AnalystHandoffConsumerEntitlement): AnalystHandoffConsumerBlocker[] {
   if (!entitlement) return [];
+  if (entitlement.schemaVersion && entitlement.schemaVersion !== DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION) {
+    return [blocker("unsupported_schema", "entitlement", "entitlement.schemaVersion", `Expected ${DWM_ENTITLEMENT_READ_MODEL_SCHEMA_VERSION}.`, false)];
+  }
   if (!entitlement.allowed) {
     return [blocker("entitlement_blocked", "entitlement", "entitlement.allowed", entitlement.reason || "Current plan is not entitled to generate DWM alert handoffs.", true)];
+  }
+  return [];
+}
+
+function validateSourceReadiness(readiness: AnalystHandoffSourceWorkerReadiness | undefined, identity?: AnalystHandoffIdentity): AnalystHandoffConsumerBlocker[] {
+  if (!readiness) return [];
+  const blockers: AnalystHandoffConsumerBlocker[] = [];
+  if (readiness.schemaVersion !== DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION) {
+    blockers.push(blocker("unsupported_schema", "source_readiness", "sourceReadiness.schemaVersion", `Expected ${DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION}.`, false));
+  }
+  if (!readiness.ready || readiness.blockers.length) {
+    blockers.push(blocker("source_worker_not_ready", "source_readiness", "sourceReadiness.ready", `Source worker is not ready: ${readiness.blockers.join(", ") || "readiness false"}.`, true));
+  }
+  if (!readiness.freshProvenance) {
+    blockers.push(blocker("missing_provenance", "source_readiness", "sourceReadiness.freshProvenance", "Source worker readiness must confirm fresh provenance.", true));
+  }
+  const missingCaptureSource = (identity?.captureIds?.length || identity?.sourceFamily) && !readiness.sourceIds.length;
+  if (missingCaptureSource) {
+    blockers.push(blocker("missing_provenance", "source_readiness", "sourceReadiness.sourceIds", "Source worker readiness needs at least one source id for alert provenance.", true));
+  }
+  return blockers;
+}
+
+function validateCaseRouteAvailability(route: AnalystHandoffCaseRouteAvailability | undefined): AnalystHandoffConsumerBlocker[] {
+  if (!route) return [blocker("case_route_unavailable", "case_route", "caseRoute", "Case route availability contract is missing.", true)];
+  if (route.schemaVersion !== CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION) {
+    return [blocker("unsupported_schema", "case_route", "caseRoute.schemaVersion", `Expected ${CASE_ROUTE_AVAILABILITY_SCHEMA_VERSION}.`, false)];
+  }
+  if (!route.available || route.path !== "/v1/cases" || !route.methods.includes("POST")) {
+    return [blocker("case_route_unavailable", "case_route", "caseRoute.available", route.reason || "Case route must expose POST /v1/cases.", true)];
   }
   return [];
 }

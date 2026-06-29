@@ -11,6 +11,7 @@ import {
   validateAnalystHandoffConsumerBundle,
   type AnalystHandoffConsumerBlockerCode,
   type AnalystHandoffConsumerBundle,
+  type DwmWebhookDestinationLifecycleContract,
   type DwmWebhookAuditEventContract,
   type OrgWatchlistAlertTermsExportContract,
 } from "../product/analystHandoffConsumer.ts";
@@ -101,7 +102,7 @@ describe("analyst handoff consumer validation", () => {
       schemaVersion: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
       generatedAt: "2026-06-29T00:14:00.000Z",
       staleEvidenceBefore: "2026-06-01T00:00:00.000Z",
-      entitlement: { allowed: true },
+      entitlement: { schemaVersion: "dwm.entitlement_read_model.v1", allowed: true, feature: "dwm_alert_generation", plan: "enterprise" },
       membership: {
         userId: "user_analyst",
         organizationId: "org_acme",
@@ -109,6 +110,8 @@ describe("analyst handoff consumer validation", () => {
         status: "active",
         allowedRoles: ["owner", "admin", "analyst"]
       },
+      sourceReadiness: sourceReadiness(true),
+      caseRoute: caseRoute(true),
       stages: {
         publicTi: watchlist.value,
         orgWatchlist: {
@@ -118,7 +121,8 @@ describe("analyst handoff consumer validation", () => {
         caseHandoff: caseHandoff.value,
         webhookTrigger: {
           ...webhook.value,
-          auditEvents: webhookAuditEvents(webhook.value.request.body.idempotencyKey)
+          auditEvents: webhookAuditEvents(webhook.value.request.body.idempotencyKey),
+          destinationLifecycle: webhookLifecycle()
         }
       }
     };
@@ -144,7 +148,10 @@ describe("analyst handoff consumer validation", () => {
       alertRequestSatisfied: true,
       caseHandoffSatisfied: true,
       webhookTriggerSatisfied: true,
-      webhookAuditSatisfied: true
+      webhookAuditSatisfied: true,
+      webhookDestinationLifecycleSatisfied: true,
+      sourceReadinessSatisfied: true,
+      caseRouteAvailable: true
     });
   });
 
@@ -172,11 +179,65 @@ describe("analyst handoff consumer validation", () => {
       "entitlement_blocked",
       "nonmember",
       "identity_mismatch",
+      "alert_generation_ref_mismatch",
       "org_terms_contract_mismatch",
       "webhook_trigger_contract_mismatch",
-      "webhook_audit_contract_mismatch"
+      "webhook_audit_contract_mismatch",
+      "case_route_unavailable"
     ];
     for (const code of expected) expect(codes.has(code)).toBe(true);
+  });
+
+  test("reports partial success when org alert request is valid but webhook lifecycle is missing", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    delete fixture.stages.webhookTrigger?.destinationLifecycle;
+    const validation = validateAnalystHandoffConsumerBundle(fixture);
+    expect(validation.ok).toBe(false);
+    expect(validation.contracts.orgAlertTermsSatisfied).toBe(true);
+    expect(validation.contracts.alertRequestSatisfied).toBe(true);
+    expect(validation.contracts.caseHandoffSatisfied).toBe(true);
+    expect(validation.contracts.webhookTriggerSatisfied).toBe(true);
+    expect(validation.contracts.webhookDestinationLifecycleSatisfied).toBe(false);
+    expect(validation.blockers.map(item => item.code)).toContain("webhook_destination_lifecycle_mismatch");
+  });
+
+  test("reports partial success when alert handoff is valid but case route is absent", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    delete fixture.caseRoute;
+    delete fixture.stages.caseHandoff;
+    const validation = validateAnalystHandoffConsumerBundle(fixture);
+    expect(validation.ok).toBe(false);
+    expect(validation.contracts.alertRequestSatisfied).toBe(true);
+    expect(validation.contracts.webhookTriggerSatisfied).toBe(true);
+    expect(validation.contracts.caseHandoffSatisfied).toBe(false);
+    expect(validation.contracts.caseRouteAvailable).toBe(false);
+    expect(validation.blockers.map(item => item.code)).toContain("case_route_unavailable");
+  });
+
+  test("keeps fresh source provenance distinct from entitlement and membership blockers", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    fixture.entitlement = {
+      schemaVersion: "dwm.entitlement_read_model.v1",
+      allowed: false,
+      reason: "Plan does not include DWM alert rebuilds.",
+      feature: "dwm_alert_generation",
+      plan: "starter"
+    };
+    fixture.membership = {
+      userId: "user_external",
+      organizationId: "org_acme",
+      role: "viewer",
+      status: "active",
+      allowedRoles: ["owner", "admin", "analyst"]
+    };
+    fixture.sourceReadiness = sourceReadiness(true);
+    const validation = validateAnalystHandoffConsumerBundle(fixture);
+    expect(validation.ok).toBe(false);
+    const codes = validation.blockers.map(item => item.code);
+    expect(codes).toContain("entitlement_blocked");
+    expect(codes).toContain("nonmember");
+    expect(codes).not.toContain("source_worker_not_ready");
+    expect(validation.contracts.sourceReadinessSatisfied).toBe(true);
   });
 });
 
@@ -280,6 +341,80 @@ function webhookAuditEvents(idempotencyKey: string): DwmWebhookAuditEventContrac
     },
     createdAt: "2026-06-29T00:13:30.000Z"
   }];
+}
+
+function webhookLifecycle(): DwmWebhookDestinationLifecycleContract[] {
+  return [{
+    schemaVersion: "dwm.webhook.destination_lifecycle.v1",
+    destinationId: "webhook_discord",
+    orgId: "org_acme",
+    type: "discord",
+    label: "Discord SOC",
+    status: "active",
+    enabled: true,
+    access: {
+      role: "admin",
+      canReadStatus: true,
+      canManage: true,
+      canUpdate: true,
+      canTest: true,
+      canDisable: true,
+      memberSafe: false
+    },
+    lifecycle: {
+      lastDryRun: { deliveryId: "delivery_acme" },
+      lastTest: null,
+      lastReplay: null,
+      lastDelivery: null,
+      lastFailure: null,
+      lastLiveDisabled: null
+    },
+    retry: {
+      retryable: false,
+      nextRetryAt: null,
+      attemptCount: 1,
+      lastErrorCategory: null,
+      reason: null,
+      deliveryId: "delivery_acme",
+      dedupeKey: "dwm_dedupe_acme"
+    },
+    health: {
+      status: "ready",
+      ready: true,
+      blockers: [],
+      liveDeliveryEnabled: false,
+      idempotencyCoverage: { covered: true }
+    },
+    auditEventContracts: webhookAuditEvents("dwm_webhook_trigger_acme"),
+    updatedAt: "2026-06-29T00:13:30.000Z",
+    createdAt: "2026-06-29T00:00:00.000Z"
+  }];
+}
+
+function sourceReadiness(ready: boolean) {
+  return {
+    schemaVersion: "dwm.source_worker_readiness.v1" as const,
+    ready,
+    freshProvenance: ready,
+    sourceIds: ready ? ["src_consumer_tg"] : [],
+    blockers: ready ? [] : ["source worker is behind"],
+    checkedAt: "2026-06-29T00:13:00.000Z"
+  };
+}
+
+function caseRoute(available: boolean) {
+  return {
+    schemaVersion: "case.route_availability.v1" as const,
+    available,
+    path: "/v1/cases" as const,
+    methods: available ? ["POST" as const] : [],
+    reason: available ? undefined : "Case API route is not mounted.",
+    checkedAt: "2026-06-29T00:13:00.000Z"
+  };
+}
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function alertFixture(overrides: { organizationId?: string; caseIdCandidate?: string; casePath?: string } = {}): DwmAlert & {

@@ -3,7 +3,11 @@
   "generatedAt": "2026-06-29T00:14:00.000Z",
   "staleEvidenceBefore": "2026-06-01T00:00:00.000Z",
   "entitlement": {
-    "allowed": true
+    "schemaVersion": "dwm.entitlement_read_model.v1",
+    "allowed": true,
+    "feature": "dwm_alert_generation",
+    "plan": "enterprise",
+    "checkedAt": "2026-06-29T00:13:00.000Z"
   },
   "membership": {
     "userId": "user_analyst",
@@ -11,6 +15,21 @@
     "role": "admin",
     "status": "active",
     "allowedRoles": ["owner", "admin", "analyst"]
+  },
+  "sourceReadiness": {
+    "schemaVersion": "dwm.source_worker_readiness.v1",
+    "ready": true,
+    "freshProvenance": true,
+    "sourceIds": ["src_consumer_tg"],
+    "blockers": [],
+    "checkedAt": "2026-06-29T00:13:00.000Z"
+  },
+  "caseRoute": {
+    "schemaVersion": "case.route_availability.v1",
+    "available": true,
+    "path": "/v1/cases",
+    "methods": ["POST"],
+    "checkedAt": "2026-06-29T00:13:00.000Z"
   },
   "stages": {
     "publicTi": {
@@ -115,6 +134,39 @@
           "termFamily": "domain",
           "term": "acme.com",
           "source": "organization_shared_watchlist",
+          "alertGenerationRef": {
+            "schemaVersion": "organization.watchlist_alert_generation_ref.v1",
+            "source": "organization_shared_watchlist",
+            "organizationId": "org_acme",
+            "tenantId": "tenant_acme",
+            "ownerOrganizationId": "org_acme",
+            "watchlistId": "watch_item_acme_domain",
+            "watchlistItemId": "watch_item_acme_domain",
+            "itemId": "item_acme_domain",
+            "termFamily": "domain",
+            "category": "domain",
+            "term": "acme.com",
+            "normalizedTerm": "acme.com",
+            "status": "active",
+            "lifecycle": {
+              "status": "active",
+              "reason": "Consumer contract fixture.",
+              "requestId": "req-consumer-watchlist",
+              "createdBy": "user_analyst",
+              "updatedBy": "user_analyst"
+            },
+            "dedupe": {
+              "scope": "organization_watchlist_term",
+              "key": "org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com",
+              "parts": {
+                "organizationId": "org_acme",
+                "tenantId": "tenant_acme",
+                "watchlistItemId": "watch_item_acme_domain",
+                "termFamily": "domain",
+                "normalizedTerm": "acme.com"
+              }
+            }
+          },
           "alertGenerationReference": {
             "schemaVersion": "organization.watchlist_item_alert_reference.v1",
             "organizationId": "org_acme",
@@ -277,6 +329,70 @@
           "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"
         },
         "createdAt": "2026-06-29T00:13:30.000Z"
+      }],
+      "destinationLifecycle": [{
+        "schemaVersion": "dwm.webhook.destination_lifecycle.v1",
+        "destinationId": "webhook_discord",
+        "orgId": "org_acme",
+        "type": "discord",
+        "label": "Discord SOC",
+        "status": "active",
+        "enabled": true,
+        "access": {
+          "role": "admin",
+          "canReadStatus": true,
+          "canManage": true,
+          "canUpdate": true,
+          "canTest": true,
+          "canDisable": true,
+          "memberSafe": false
+        },
+        "lifecycle": {
+          "lastDryRun": { "deliveryId": "delivery_acme" },
+          "lastTest": null,
+          "lastReplay": null,
+          "lastDelivery": null,
+          "lastFailure": null,
+          "lastLiveDisabled": null
+        },
+        "retry": {
+          "retryable": false,
+          "nextRetryAt": null,
+          "attemptCount": 1,
+          "lastErrorCategory": null,
+          "reason": null,
+          "deliveryId": "delivery_acme",
+          "dedupeKey": "dwm_dedupe_acme"
+        },
+        "health": {
+          "status": "ready",
+          "ready": true,
+          "blockers": [],
+          "liveDeliveryEnabled": false,
+          "idempotencyCoverage": { "covered": true }
+        },
+        "auditEventContracts": [{
+          "schemaVersion": "dwm.webhook.audit_event.v1",
+          "auditEventId": "audit_webhook_acme",
+          "action": "delivery.dry_run",
+          "orgId": "org_acme",
+          "actorId": "user_analyst",
+          "destinationId": "webhook_discord",
+          "deliveryId": "delivery_acme",
+          "delivery": {
+            "alertId": "dwm_alert_acme",
+            "eventType": "darkweb.monitoring.match",
+            "status": "dry_run",
+            "dryRun": true,
+            "idempotencyKey": "idempotency_acme",
+            "watchlistId": "watch_acme",
+            "route": "identity_response",
+            "casePath": "/v1/cases/case_acme_lumma?alertId=dwm_alert_acme&dedupeKey=dwm_dedupe_acme"
+          },
+          "createdAt": "2026-06-29T00:13:30.000Z"
+        }],
+        "updatedAt": "2026-06-29T00:13:30.000Z",
+        "createdAt": "2026-06-29T00:00:00.000Z"
       }]
     }
   }
