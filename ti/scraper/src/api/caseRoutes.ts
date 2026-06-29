@@ -661,8 +661,10 @@ function alertMatchesOrganizationScope(alert: any, organizationId: string | unde
 function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access?: CaseAccessResult) {
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
-  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
+  const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
   const latestEvent = timeline[timeline.length - 1];
+  const latestCaseAction = [...timeline].reverse().find((event) => event.eventType === "case.action_recorded");
   return {
     id: caseRecord.id,
     caseId: caseRecord.id,
@@ -686,6 +688,8 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
     updatedAt: caseRecord.updatedAt,
     closedAt: caseRecord.closedAt,
     latestEvent,
+    latestCaseAction,
+    caseActionLedgerContext: caseActionLedgerContext(caseActionLedger),
     timeline,
     nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
   };

@@ -52,6 +52,46 @@ describe("org alert case action ledger in case detail", () => {
     expect(JSON.stringify(detail)).not.toContain("https://discord.com");
   });
 
+  test("adds latest case action state to the org-scoped case queue", async () => {
+    const { options } = fixtureRuntime();
+    writeOrgAlertCaseActionLedgerApiRecord({
+      repository: options.orgAlertCaseActionLedgerRepository,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      receipt: actionReceipt(),
+      recordedAt: "2026-06-29T15:06:00.000Z"
+    });
+
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const payload = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(payload.items).toHaveLength(1);
+    expect(payload.items[0]).toMatchObject({
+      id: "case_acme_lumma",
+      caseActionLedgerContext: {
+        ok: true,
+        eventCount: 1,
+        blockerCount: 0,
+        route: "/v1/dwm/org-alert-case-actions/timeline"
+      },
+      latestCaseAction: {
+        eventType: "case.action_recorded",
+        related: {
+          caseActionReceiptId: "receipt_acme_open_case",
+          caseActionAuditEventId: expect.stringMatching(/^org_alert_case_action_audit_/)
+        },
+        provenance: {
+          source: "org_alert_case_action_ledger",
+          receiptId: "receipt_acme_open_case"
+        }
+      }
+    });
+    expect(payload.items[0].latestEvent.eventType).toBe("case.action_recorded");
+  });
+
   test("does not leak case actions to the wrong organization or nonmembers", async () => {
     const { options } = fixtureRuntime();
     writeOrgAlertCaseActionLedgerApiRecord({
@@ -68,12 +108,16 @@ describe("org alert case action ledger in case detail", () => {
     const detail = await detailResponse.json() as any;
     const deniedResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_acme_lumma?organizationId=org_acme"), options);
     const denied = await deniedResponse.json() as any;
+    const deniedListResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme"), options);
+    const deniedList = await deniedListResponse.json() as any;
 
     expect(detailResponse.status).toBe(200);
     expect(detail.caseActionLedgerContext).toMatchObject({ ok: true, eventCount: 0, blockerCount: 0 });
     expect(detail.timeline.some((event: any) => event.related?.caseActionReceiptId === "receipt_other_open_case")).toBe(false);
     expect(deniedResponse.status).toBe(403);
     expect(denied.error).toMatchObject({ code: "organization_visibility_denied", reason: "not_member" });
+    expect(deniedListResponse.status).toBe(403);
+    expect(deniedList.error).toMatchObject({ code: "organization_visibility_denied", reason: "not_member" });
   });
 });
 
