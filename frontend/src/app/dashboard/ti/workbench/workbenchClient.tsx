@@ -1334,6 +1334,26 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.',
         })
     }
+    if (selected.kind === 'source_capture') {
+        const sourceHref = relatedLinkHref(selected, 'Open source')
+        const domainHref = relatedLinkHref(selected, 'Open domain')
+        rows.push({
+            id: 'open_capture_source',
+            label: 'Open source',
+            detail: sourceHref ? `${selected.sourceLabel} via ${sourceHref}.` : 'Selected evidence did not include a source profile link.',
+            tone: sourceHref ? 'ready' : 'blocked',
+            href: sourceHref,
+            disabledReason: sourceHref ? undefined : 'Source capture drill-in requires /dashboard/ti/sources/:id.',
+        })
+        rows.push({
+            id: 'open_capture_domain',
+            label: 'Open domain',
+            detail: domainHref ? `${selected.matchedTerm} via ${domainHref}.` : 'Selected evidence did not include a domain context link.',
+            tone: domainHref ? 'ready' : 'blocked',
+            href: domainHref,
+            disabledReason: domainHref ? undefined : 'Domain drill-in requires /dashboard/ti/domains/:domain.',
+        })
+    }
     const activeWebhook = orgContext?.webhookDestinations.find(item => item.status === 'active')
     const sendAction = sendDeliveryActionFor(selected)
     if (sendAction) {
@@ -1501,6 +1521,10 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
             href: item.href,
             disabledReason: item.status === 'unavailable' ? item.source : undefined,
         }))
+}
+
+function relatedLinkHref(selected: WorkbenchCase, label: string) {
+    return selected.relatedLinks.find(link => link.label === label)?.href
 }
 
 function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
