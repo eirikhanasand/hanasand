@@ -219,6 +219,21 @@ export type DwmAlertCustomerProofHandoffRow = {
     deliveryDedupeKey?: string;
     recommendedRoute?: string;
   };
+  updatedEvent?: {
+    schemaVersion: "dwm.alert_updated_event.v1";
+    eventId?: string;
+    eventType?: string;
+    at?: string;
+    sourceFamily?: string;
+    captureIds: string[];
+    addedCaptureIds: string[];
+    removedCaptureIds: string[];
+    evidenceCount?: number;
+    previousEvidenceCount?: number;
+    dedupeKey?: string;
+    deliveryDedupeKey?: string;
+    recommendedRoute?: string;
+  };
   workflow: {
     status: string;
     reviewState?: string;
@@ -303,6 +318,15 @@ export type DwmAlertCustomerProofHandoffRow = {
       dispatchReady: boolean;
       deliveryDedupeKey: string;
       replayMarker?: string;
+      requiredFields: string[];
+    };
+    webhookUpdatedEvent?: {
+      eventType: "dwm.alert.updated";
+      eventId?: string;
+      dispatchReady: boolean;
+      deliveryDedupeKey: string;
+      replayMarker?: string;
+      addedCaptureIds: string[];
       requiredFields: string[];
     };
     publicTI: {
@@ -1257,6 +1281,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   const redactionRequired = input.supportOnlyRedactionNeeded === true || (alert.evidence ?? []).some((item: any) => item.redactionState === "raw_sensitive");
   const hasCaseRoute = Boolean(context.casePath ?? alert.casePath ?? workflow.casePath);
   const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
+  const updatedEvent = normalizeDwmAlertUpdatedEvent(alert, context, selectedCaptureIds);
   const blockers = [
     ...((context.blockers ?? []) as DwmAlertCustomerProofHandoffRow["typedBlockers"]),
     !alert.organizationId ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert proof requires an organization id.", true) : undefined,
@@ -1290,6 +1315,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       generatedAt: alert.provenance?.generatedAt
     },
     createdEvent,
+    updatedEvent,
     workflow: {
       status: String(alert.workflowStatus ?? "new"),
       reviewState: alert.reviewState,
@@ -1339,7 +1365,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       dashboard: {
         route: "organization_watchlist",
         casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
-        fields: ["organizationId", "tenantId", "alertId", "casePath", "watchlistItemIds", "workflow.status"]
+        fields: ["organizationId", "tenantId", "alertId", "casePath", "watchlistItemIds", "workflow.status", "updatedEvent"]
       },
       helpdesk: {
         redacted: true,
@@ -1362,14 +1388,14 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       schemaVersion: "dwm.alert_consumer_contract.v1",
       queue: {
         route: "/v1/dwm/alerts",
-        stableFields: ["alertId", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount"],
+        stableFields: ["alertId", "organizationId", "tenantId", "sourceFamily", "workflow.status", "delivery.state", "caseHandoff.casePath", "evidenceCount", "createdEvent", "updatedEvent"],
         workflowStatus: String(alert.workflowStatus ?? "new"),
         sourceFamily: String(context.sourceFamily ?? alert.sourceFamily ?? workflow.sourceFamily ?? "unknown"),
         evidenceCount
       },
       detail: {
         route: "/v1/dwm/alerts/:alertId",
-        stableFields: ["selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "dedupeKey", "watchlistItemIds"],
+        stableFields: ["selectedCaptureIds", "generationEvidenceWindow", "provenance.captureIds", "createdEvent", "updatedEvent", "dedupeKey", "watchlistItemIds"],
         selectedCaptureIds,
         provenanceCaptureIds: uniqueStrings(asStringArray(alert.provenance?.captureIds ?? selectedCaptureIds)),
         generationEvidenceWindow
@@ -1382,6 +1408,15 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
         replayMarker: context.replayMarker,
         requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
       },
+      webhookUpdatedEvent: updatedEvent ? {
+        eventType: "dwm.alert.updated",
+        eventId: updatedEvent.eventId,
+        dispatchReady: webhookDestinationIds.length > 0 && evidenceCount > 0 && updatedEvent.addedCaptureIds.length > 0,
+        deliveryDedupeKey: String(context.deliveryDedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.dedupeKey),
+        replayMarker: context.replayMarker,
+        addedCaptureIds: updatedEvent.addedCaptureIds,
+        requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
+      } : undefined,
       publicTI: {
         redacted: true,
         canConsume: alertGeneratorKeys.length > 0,
@@ -1407,6 +1442,28 @@ function normalizeDwmAlertCreatedEvent(alert: any | undefined, context: any, fal
     at,
     sourceFamily: event?.sourceFamily ?? context?.sourceFamily ?? alert?.sourceFamily,
     captureIds: uniqueStrings(asStringArray(event?.captureIds ?? fallbackCaptureIds)),
+    dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
+    deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
+    recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute
+  };
+}
+
+function normalizeDwmAlertUpdatedEvent(alert: any | undefined, context: any, fallbackCaptureIds: string[]) {
+  const event = alert?.alertUpdatedEvent;
+  const eventId = event?.id;
+  const at = event?.at;
+  if (!eventId && !at) return undefined;
+  return {
+    schemaVersion: "dwm.alert_updated_event.v1" as const,
+    eventId,
+    eventType: event?.eventType ?? "dwm.alert.updated",
+    at,
+    sourceFamily: event?.sourceFamily ?? context?.sourceFamily ?? alert?.sourceFamily,
+    captureIds: uniqueStrings(asStringArray(event?.captureIds ?? fallbackCaptureIds)),
+    addedCaptureIds: uniqueStrings(asStringArray(event?.addedCaptureIds)),
+    removedCaptureIds: uniqueStrings(asStringArray(event?.removedCaptureIds)),
+    evidenceCount: event?.evidenceCount,
+    previousEvidenceCount: event?.previousEvidenceCount,
     dedupeKey: event?.dedupeKey ?? alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
     deliveryDedupeKey: event?.deliveryDedupeKey ?? context?.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey,
     recommendedRoute: event?.recommendedRoute ?? context?.recommendedRoute ?? alert?.recommendedRoute ?? alert?.webhookDelivery?.recommendedRoute

@@ -1131,6 +1131,16 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_customer",
       sourceFamily: "telegram_public",
       evidenceCount: 2,
+      updatedEvent: {
+        schemaVersion: "dwm.alert_updated_event.v1",
+        eventType: "dwm.alert.updated",
+        addedCaptureIds: ["cap_repo_tg_acme_followup"],
+        captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+        evidenceCount: 2,
+        previousEvidenceCount: 1,
+        dedupeKey: alert.dedupeKey,
+        deliveryDedupeKey: alert.dedupeKey
+      },
       workflow: {
         status: "investigating",
         assignedOwner: "analyst-customer-proof",
@@ -1182,6 +1192,14 @@ describe("dwm alert repository", () => {
           deliveryDedupeKey: alert.dedupeKey,
           requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "selectedCaptureIds", "sourceFamily", "organizationId"]
         },
+        webhookUpdatedEvent: {
+          eventType: "dwm.alert.updated",
+          eventId: preserved.alertUpdatedEvent.id,
+          dispatchReady: true,
+          deliveryDedupeKey: alert.dedupeKey,
+          addedCaptureIds: ["cap_repo_tg_acme_followup"],
+          requiredFields: ["alertId", "eventId", "deliveryDedupeKey", "addedCaptureIds", "selectedCaptureIds", "sourceFamily", "organizationId"]
+        },
         publicTI: {
           redacted: true,
           canConsume: true,
@@ -1190,8 +1208,11 @@ describe("dwm alert repository", () => {
       }
     });
     expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
+    expect(proof.consumerContract.queue.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.detail.stableFields).toContain("generationEvidenceWindow");
+    expect(proof.consumerContract.detail.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.publicTI.stableFields).toContain("provenance.captureIds");
+    expect(proof.consumerAdapter.dashboard.fields).toContain("updatedEvent");
     expect(proof.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(proof.blockerCodes).toEqual(expect.arrayContaining(["duplicate_delivered_dedupe", "webhook_destination_not_verified"]));
   });
