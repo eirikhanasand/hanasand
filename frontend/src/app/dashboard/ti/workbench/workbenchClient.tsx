@@ -1518,11 +1518,27 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     if (selected.kind === 'source_readiness') {
         rows.push({
+            id: 'inspect_dwm_operations',
+            label: 'Source snapshot',
+            detail: sourceCoverage
+                ? `GET /api/dwm/operations shows ${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources, ${sourceCoverage.captureCount} captures, and ${sourceCoverage.watchlistMatchCount} watchlist matches.`
+                : 'GET /api/dwm/operations did not return a source-health snapshot for this dashboard session.',
+            tone: sourceCoverage ? sourceCoverage.activeSourceCount ? 'ready' : 'blocked' : 'needs_action',
+            href: '/api/dwm/operations',
+        })
+        rows.push({
             id: 'inspect_source_inventory',
             label: 'Inspect inventory',
             detail: 'GET /api/ti/scraper/control returns source inventory, source packs, canary state, alerts, watchlists, and deliveries.',
             tone: sourceCoverage ? 'ready' : 'needs_action',
             href: '/api/ti/scraper/control',
+        })
+        rows.push({
+            id: 'open_source_operations',
+            label: 'Source operations',
+            detail: 'Open the source operations workspace for parser checks, source requests, canary runs, and source apply-plan actions.',
+            tone: 'ready',
+            href: '/dashboard/ti/control',
         })
         for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
             rows.push({
