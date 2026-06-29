@@ -2125,7 +2125,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'source_health_at', at: input.operations?.latestRun?.updatedAt || now, title: input.operations?.latestRun ? 'Latest collection run' : 'Source snapshot missing', body: input.operations?.latestRun ? `${input.operations.latestRun.status}: ${input.operations.latestRun.captureCount} captures.` : 'Source coverage cannot be verified without TI scraper backend.' }],
             nextTasks: [`Owner: source-ops. Active sources: ${activeSources}/${sourceCount}.`, 'Approve bounded public Telegram coverage.', 'Approve metadata-only dark web source coverage.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }],
+            relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }, { href: '/api/ti/scraper/control', label: 'Source inventory API' }],
             workflowPath: path,
             actions: [
                 {

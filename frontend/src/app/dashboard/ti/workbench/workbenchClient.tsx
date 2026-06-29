@@ -1363,6 +1363,13 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
     }
     if (selected.kind === 'source_readiness') {
+        rows.push({
+            id: 'inspect_source_inventory',
+            label: 'Inspect inventory',
+            detail: 'GET /api/ti/scraper/control returns source inventory, source packs, canary state, alerts, watchlists, and deliveries.',
+            tone: sourceCoverage ? 'ready' : 'needs_action',
+            href: '/api/ti/scraper/control',
+        })
         for (const action of (selected.actions || []).filter(candidate => candidate.id === 'request_source_coverage' || candidate.id === 'run_canary_collection')) {
             rows.push({
                 id: action.id,
