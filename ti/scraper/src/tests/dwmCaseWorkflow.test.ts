@@ -518,6 +518,68 @@ describe("dwm case workflow", () => {
       });
       expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
 
+      const missingNotificationRationale = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}/customer-notification`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, webhookDeliveryId: deliveryPayload.deliveries[0].id })
+      }), options);
+      expect(missingNotificationRationale.status).toBe(400);
+      expect((await missingNotificationRationale.json() as any).error.code).toBe("missing_rationale");
+
+      const customerNotificationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}/customer-notification`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({
+          organizationId,
+          webhookDeliveryId: deliveryPayload.deliveries[0].id,
+          rationale: "Customer SOC received the delivered webhook and case evidence."
+        })
+      }), options);
+      const customerNotification = await customerNotificationResponse.json() as any;
+      expect(customerNotificationResponse.status).toBe(201);
+      expect(customerNotification.created).toBe(true);
+      expect(customerNotification.receipt).toMatchObject({
+        schemaVersion: "analyst.case_customer_notification.v1",
+        caseId: createCasePayload.case.id,
+        tenantId: organizationId,
+        organizationId,
+        alertId: alert.id,
+        actor: "analyst-1",
+        deliveryMode: "webhook_delivery",
+        webhookDeliveryId: deliveryPayload.deliveries[0].id,
+        webhookDestinationId: webhookPayload.destination.id,
+        webhookStatus: "delivered",
+        rationale: "Customer SOC received the delivered webhook and case evidence.",
+        evidence: {
+          evidenceCount: 1,
+          deliveryCount: 1,
+          delivered: true,
+          sourceIds: [source.id]
+        }
+      });
+      expect(customerNotification.case.customerNotifications).toHaveLength(1);
+      expect(customerNotification.detail.customerNotificationContext).toMatchObject({
+        notificationCount: 1,
+        notified: true,
+        latest: { id: customerNotification.receipt.id }
+      });
+      expect(customerNotification.detail.timeline.some((event: any) => event.eventType === "case.customer_notified" && event.related.webhookDeliveryId === deliveryPayload.deliveries[0].id)).toBe(true);
+
+      const duplicateNotificationResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}/customer-notification`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({
+          organizationId,
+          webhookDeliveryId: deliveryPayload.deliveries[0].id,
+          rationale: "Customer SOC received the delivered webhook and case evidence."
+        })
+      }), options);
+      const duplicateNotification = await duplicateNotificationResponse.json() as any;
+      expect(duplicateNotificationResponse.status).toBe(200);
+      expect(duplicateNotification.created).toBe(false);
+      expect(duplicateNotification.receipt.id).toBe(customerNotification.receipt.id);
+      expect(duplicateNotification.case.customerNotifications).toHaveLength(1);
+
       const escalateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${createCasePayload.case.id}`, {
         method: "PATCH",
         headers: { "x-actor-id": "analyst-2" },
@@ -562,7 +624,7 @@ describe("dwm case workflow", () => {
         reviewState: "resolved"
       });
       expect(rebuildAfterClose.alerts[0].workflowEvents.length).toBeGreaterThanOrEqual(3);
-      expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(3);
+      expect((store as any).getCase(closed.case.id).workflowEvents).toHaveLength(4);
 
       const replayAfterDeliveryResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
         method: "POST",
@@ -702,7 +764,7 @@ describe("dwm case workflow", () => {
       }), options);
       const detail = await detailResponse.json() as any;
       expect(detail.access).toMatchObject({ role: "viewer", readOnly: true });
-      expect(detail.case.workflowEvents).toHaveLength(3);
+      expect(detail.case.workflowEvents).toHaveLength(4);
       expect(detail.evidence[0]).toMatchObject({ sourceId: source.id, contentHash: "hash-case-acme" });
       expect(detail.alertContext).toMatchObject({
         caseIdCandidate: closed.case.id,
@@ -722,6 +784,11 @@ describe("dwm case workflow", () => {
         retryable: false
       });
       expect(detail.deliveryContext.latestDelivery).toMatchObject({ status: "delivered", webhookDestinationId: webhookPayload.destination.id });
+      expect(detail.customerNotificationContext).toMatchObject({
+        notificationCount: 1,
+        notified: true,
+        latest: { id: customerNotification.receipt.id, webhookDeliveryId: deliveryPayload.deliveries[0].id }
+      });
       const createdEvent = detail.timeline.find((event: any) => event.eventType === "case.created");
       expect(createdEvent).toMatchObject({
         eventType: "case.created",
@@ -734,6 +801,7 @@ describe("dwm case workflow", () => {
       });
       expect(createdEvent.related.watchlistItemIds).toEqual(alert.workflowContext.watchlistItemIds);
       expect(detail.timeline.some((event: any) => event.eventType === "webhook.delivered" && event.related.webhookDeliveryId === deliveryPayload.deliveries[0].id)).toBe(true);
+      expect(detail.timeline.some((event: any) => event.eventType === "case.customer_notified" && event.actor === "analyst-1")).toBe(true);
       expect(detail.nextAllowedActions.find((action: any) => action.id === "close")).toMatchObject({
         enabled: false,
         disabledReason: "read_only_member"
@@ -799,7 +867,8 @@ describe("dwm case workflow", () => {
           alertId: alert.id,
           dedupeKey: alert.dedupeKey,
           deliveryCount: 1,
-          delivered: true
+          delivered: true,
+          customerNotificationCount: 1
         },
         auditSafety: {
           rawSensitiveEvidenceIncluded: false,
@@ -813,6 +882,16 @@ describe("dwm case workflow", () => {
         status: "delivered",
         webhookDestinationId: webhookPayload.destination.id,
         alertId: alert.id
+      });
+      expect(viewerExport.customerNotificationContext).toMatchObject({
+        notificationCount: 1,
+        notified: true,
+        latest: { id: customerNotification.receipt.id }
+      });
+      expect(viewerExport.customerNotifications[0]).toMatchObject({
+        id: customerNotification.receipt.id,
+        webhookDeliveryId: deliveryPayload.deliveries[0].id,
+        deliveryMode: "webhook_delivery"
       });
       expect(viewerExport.evidence.find((item: any) => item.id === "evidence_raw_sensitive_case_secret")).toMatchObject({
         excerpt: "[redacted: raw sensitive evidence withheld]",
@@ -934,7 +1013,8 @@ describe("dwm case workflow", () => {
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
       expect((rehydrated as any).listCases()).toHaveLength(3);
       expect((rehydrated as any).getCase(closed.case.id).status).toBe("suppressed");
-      expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(5);
+      expect((rehydrated as any).getCase(closed.case.id).workflowEvents).toHaveLength(6);
+      expect((rehydrated as any).getCase(closed.case.id).customerNotifications).toHaveLength(1);
       expect((rehydrated as any).getDwmAlert(alert.id).caseId).toBe(closed.case.id);
       expect((rehydrated as any).getDwmAlert(alert.id).caseIdCandidate).toBe(closed.case.id);
       expect((rehydrated as any).getDwmWatchlist(watchlistId).status).toBe("paused");
@@ -1074,6 +1154,228 @@ describe("dwm case workflow", () => {
       }), options);
       const orgBList = await orgBListResponse.json() as any;
       expect(orgBList.items.map((item: any) => item.caseId)).toEqual(["case_shared_org_b"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("records customer notification receipts on org-scoped cases without leaking mutable access", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dwm-case-customer-notification-"));
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const options = { store, frontier: new FocusedFrontier() };
+      const createdAt = "2026-06-28T15:00:00.000Z";
+      const organizationId = "org_notify_case";
+      const alertId = "alert_notify_case";
+      const caseId = "case_notify_customer";
+      const deliveryId = "delivery_notify_customer";
+      (store as any).saveOrganization({
+        id: organizationId,
+        tenantId: organizationId,
+        name: "Notify Case Team",
+        slug: "notify-case",
+        status: "active",
+        createdAt,
+        updatedAt: createdAt
+      });
+      for (const member of [
+        { id: "member_notify_analyst", email: "analyst@notify.example", userId: "analyst-notify", role: "analyst" },
+        { id: "member_notify_viewer", email: "viewer@notify.example", userId: "viewer-notify", role: "viewer" }
+      ]) {
+        (store as any).saveOrganizationMember({
+          ...member,
+          organizationId,
+          status: "active",
+          acceptedAt: createdAt,
+          createdAt,
+          updatedAt: createdAt
+        });
+      }
+      (store as any).saveDwmAlert({
+        id: alertId,
+        tenantId: organizationId,
+        organizationId,
+        severity: "high",
+        company: "Notify Case Team",
+        matchedTerm: { kind: "domain", value: "notify.example" },
+        claimSummary: "Owned domain appeared in source-backed public evidence.",
+        evidence: [{
+          id: "evidence_notify_case",
+          sourceId: source.id,
+          sourceName: source.name,
+          sourceFamily: "telegram_public",
+          observedAt: createdAt,
+          captureMode: "public_preview",
+          contentHash: "hash-notify-case",
+          excerpt: "notify.example was named in public channel evidence.",
+          provenance: { captureId: capture.id, sourceId: source.id }
+        }],
+        dedupeKey: "dedupe_notify_case",
+        reviewState: "route_to_customer",
+        deliveryState: "ready_to_send",
+        updatedAt: createdAt
+      });
+      (store as any).saveCase({
+        id: caseId,
+        tenantId: organizationId,
+        organizationId,
+        sourceType: "dwm_alert",
+        sourceId: alertId,
+        alertId,
+        title: "Notify Case Team DWM exposure",
+        summary: "Analyst needs to record customer handoff after delivery.",
+        priority: "high",
+        status: "escalated",
+        assignedOwner: "analyst-notify",
+        createdAt,
+        updatedAt: createdAt,
+        workflowEvents: []
+      });
+      (store as any).saveDwmWebhookDelivery({
+        id: deliveryId,
+        tenantId: organizationId,
+        organizationId,
+        alertId,
+        watchlistId: "watchlist_notify_case",
+        webhookDestinationId: "webhook_notify_case",
+        status: "delivered",
+        deliveryKind: "discord",
+        attemptedAt: "2026-06-28T15:05:00.000Z",
+        httpStatus: 204,
+        endpointHash: "endpoint_hash_notify",
+        payloadHash: "payload_hash_notify",
+        dedupeKey: "dedupe_notify_case",
+        dryRun: false
+      });
+
+      const viewerReceiptResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "viewer@notify.example" },
+        body: JSON.stringify({ organizationId, webhookDeliveryId: deliveryId, rationale: "Viewer should not record customer notifications." })
+      }), options);
+      expect(viewerReceiptResponse.status).toBe(403);
+      expect((await viewerReceiptResponse.json() as any).error.code).toBe("case_read_only_member");
+      expect((store as any).getCase(caseId).customerNotifications ?? []).toHaveLength(0);
+
+      const missingRationaleResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "analyst@notify.example" },
+        body: JSON.stringify({ organizationId, webhookDeliveryId: deliveryId })
+      }), options);
+      expect(missingRationaleResponse.status).toBe(400);
+      expect((await missingRationaleResponse.json() as any).error.code).toBe("missing_rationale");
+
+      const receiptResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "analyst@notify.example" },
+        body: JSON.stringify({
+          organizationId,
+          webhookDeliveryId: deliveryId,
+          rationale: "Discord delivery was accepted and linked to the incident record."
+        })
+      }), options);
+      const receiptPayload = await receiptResponse.json() as any;
+      expect(receiptResponse.status).toBe(201);
+      expect(receiptPayload.created).toBe(true);
+      expect(receiptPayload.receipt).toMatchObject({
+        schemaVersion: "analyst.case_customer_notification.v1",
+        caseId,
+        organizationId,
+        alertId,
+        deliveryMode: "webhook_delivery",
+        webhookDeliveryId: deliveryId,
+        webhookDestinationId: "webhook_notify_case",
+        webhookStatus: "delivered",
+        evidence: {
+          evidenceCount: 1,
+          deliveryCount: 1,
+          delivered: true,
+          contentHashes: ["hash-notify-case"],
+          sourceIds: [source.id]
+        }
+      });
+      expect(receiptPayload.event).toMatchObject({ action: "customer_notified", note: "Discord delivery was accepted and linked to the incident record." });
+      expect(receiptPayload.detail.customerNotificationContext).toMatchObject({ notificationCount: 1, notified: true, modes: ["webhook_delivery"] });
+      expect(receiptPayload.detail.timeline.some((event: any) => event.eventType === "case.customer_notified")).toBe(true);
+      expect((store as any).getCase(caseId).deliveryState).toBe("delivered");
+      expect((store as any).getDwmAlert(alertId).workflowEvents.some((event: any) => String(event.note).includes("customer_notified"))).toBe(true);
+
+      const duplicateReceiptResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "analyst@notify.example" },
+        body: JSON.stringify({
+          organizationId,
+          webhookDeliveryId: deliveryId,
+          rationale: "Discord delivery was accepted and linked to the incident record."
+        })
+      }), options);
+      const duplicateReceipt = await duplicateReceiptResponse.json() as any;
+      expect(duplicateReceiptResponse.status).toBe(200);
+      expect(duplicateReceipt.created).toBe(false);
+      expect(duplicateReceipt.receipt.id).toBe(receiptPayload.receipt.id);
+      expect((store as any).getCase(caseId).customerNotifications).toHaveLength(1);
+      expect((store as any).getCase(caseId).workflowEvents).toHaveLength(1);
+
+      const missingManualReferenceResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "analyst@notify.example" },
+        body: JSON.stringify({ organizationId, deliveryMode: "manual_handoff", rationale: "Customer was notified outside webhook." })
+      }), options);
+      expect(missingManualReferenceResponse.status).toBe(400);
+      expect((await missingManualReferenceResponse.json() as any).error.code).toBe("missing_external_reference");
+
+      const manualReceiptResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
+        method: "POST",
+        headers: { "x-user-email": "analyst@notify.example" },
+        body: JSON.stringify({
+          organizationId,
+          deliveryMode: "manual_handoff",
+          externalReference: "support-ticket-123",
+          rationale: "Customer was notified by support and acknowledged the case."
+        })
+      }), options);
+      const manualReceipt = await manualReceiptResponse.json() as any;
+      expect(manualReceiptResponse.status).toBe(201);
+      expect(manualReceipt.receipt).toMatchObject({
+        deliveryMode: "manual_handoff",
+        externalReference: "support-ticket-123"
+      });
+      expect((store as any).getCase(caseId).customerNotifications).toHaveLength(2);
+
+      const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@notify.example" }
+      }), options);
+      const detail = await detailResponse.json() as any;
+      expect(detailResponse.status).toBe(200);
+      expect(detail.customerNotificationContext).toMatchObject({ notificationCount: 2, notified: true });
+      expect(detail.customerNotificationContext.modes).toEqual(["webhook_delivery", "manual_handoff"]);
+      expect(detail.timeline.filter((event: any) => event.eventType === "case.customer_notified")).toHaveLength(2);
+      expect(detail.nextActions).toContain("Review customer handoff receipt.");
+
+      const listResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@notify.example" }
+      }), options);
+      const listPayload = await listResponse.json() as any;
+      expect(listResponse.status).toBe(200);
+      expect(listPayload.items[0].latestCustomerNotification).toMatchObject({ deliveryMode: "manual_handoff", externalReference: "support-ticket-123" });
+
+      const exportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/export?organizationId=${organizationId}`, {
+        headers: { "x-user-email": "viewer@notify.example" }
+      }), options);
+      const exported = await exportResponse.json() as any;
+      expect(exportResponse.status).toBe(200);
+      expect(exported.summary).toMatchObject({
+        customerNotificationCount: 2,
+        latestCustomerNotificationAt: manualReceipt.receipt.at
+      });
+      expect(exported.customerNotifications).toHaveLength(2);
+      expect(exported.customerNotificationContext).toMatchObject({ notificationCount: 2, notified: true });
+      expect(exported.copyText).toContain("Customer notifications:");
+      expect(exported.copyText).toContain(manualReceipt.receipt.id);
+      expect(exported.exportChecksum).toMatch(/^case_export_/);
+
+      const rehydrated = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      expect((rehydrated as any).getCase(caseId).customerNotifications).toHaveLength(2);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

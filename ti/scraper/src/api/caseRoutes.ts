@@ -20,6 +20,31 @@ type AnalystCaseEvent = {
   note?: string;
 };
 
+type CaseCustomerNotificationReceipt = {
+  schemaVersion: "analyst.case_customer_notification.v1";
+  id: string;
+  caseId: string;
+  tenantId: string;
+  organizationId?: string;
+  alertId?: string;
+  at: string;
+  actor: string;
+  deliveryMode: "webhook_delivery" | "manual_handoff";
+  rationale: string;
+  idempotencyKey: string;
+  webhookDeliveryId?: string;
+  webhookDestinationId?: string;
+  webhookStatus?: string;
+  externalReference?: string;
+  evidence: {
+    evidenceCount: number;
+    deliveryCount: number;
+    delivered: boolean;
+    contentHashes: string[];
+    sourceIds: string[];
+  };
+};
+
 type AnalystCase = {
   id: string;
   tenantId: string;
@@ -36,6 +61,7 @@ type AnalystCase = {
   updatedAt: string;
   closedAt?: string;
   workflowEvents: AnalystCaseEvent[];
+  customerNotifications?: CaseCustomerNotificationReceipt[];
   lastDecision?: string;
   deliveryState?: string;
 };
@@ -142,6 +168,104 @@ export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: 
   return json(buildCaseExport(caseRecord, options, scope.organization, access, exportOptionsFromUrl(url)));
 }
 
+export async function recordCaseCustomerNotification(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
+  const existing = findCase(options, caseId);
+  if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  const body = await readJson<any>(request);
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+
+  const alert = findDwmAlert(options, existing.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === existing.alertId);
+  const generatedAt = nowIso();
+  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? request.headers.get("x-user-email") ?? "case-api");
+  const rationale = normalizeNote(body.rationale ?? body.note);
+  if (!rationale) return json({ error: { code: "missing_rationale", message: "Recording customer notification requires analyst rationale." } }, 400);
+
+  const deliveryMode = body.deliveryMode === "manual_handoff" ? "manual_handoff" : "webhook_delivery";
+  const externalReference = normalizeNote(body.externalReference ?? body.reference);
+  const selectedDelivery = selectNotificationDelivery(deliveries, body.webhookDeliveryId);
+  if (deliveryMode === "webhook_delivery" && !selectedDelivery) {
+    return json({ error: { code: "missing_delivered_webhook", message: "Select a delivered webhook delivery or record a manual handoff reference." } }, 400);
+  }
+  if (deliveryMode === "manual_handoff" && !externalReference) {
+    return json({ error: { code: "missing_external_reference", message: "Manual customer handoff requires an external reference." } }, 400);
+  }
+
+  const idempotencyKey = stableId("case_customer_notification_idempotency", `${existing.tenantId}:${existing.organizationId ?? ""}:${existing.id}:${deliveryMode}:${selectedDelivery?.id ?? externalReference ?? ""}`);
+  const existingReceipt = (existing.customerNotifications ?? []).find((receipt) => receipt.idempotencyKey === idempotencyKey);
+  if (existingReceipt) {
+    return json({
+      organization: scope.organization,
+      access: caseAccessSummary(access),
+      created: false,
+      receipt: existingReceipt,
+      case: existing,
+      detail: buildCaseDetail(existing, options, scope.organization, access)
+    });
+  }
+
+  const evidenceItems = alert?.evidence ?? [];
+  const receipt: CaseCustomerNotificationReceipt = {
+    schemaVersion: "analyst.case_customer_notification.v1",
+    id: stableId("case_customer_notification", `${existing.id}:${generatedAt}:${deliveryMode}:${selectedDelivery?.id ?? externalReference ?? ""}`),
+    caseId: existing.id,
+    tenantId: existing.tenantId,
+    organizationId: existing.organizationId,
+    alertId: existing.alertId,
+    at: generatedAt,
+    actor,
+    deliveryMode,
+    rationale,
+    idempotencyKey,
+    webhookDeliveryId: selectedDelivery?.id,
+    webhookDestinationId: selectedDelivery?.webhookDestinationId,
+    webhookStatus: selectedDelivery?.status,
+    externalReference,
+    evidence: {
+      evidenceCount: evidenceItems.length,
+      deliveryCount: deliveries.length,
+      delivered: deliveries.some((delivery: any) => delivery.status === "delivered"),
+      contentHashes: uniqueCaseStrings(evidenceItems.map((item: any) => item.contentHash)),
+      sourceIds: uniqueCaseStrings(evidenceItems.map((item: any) => item.sourceId))
+    }
+  };
+  const event = caseEvent({
+    caseId: existing.id,
+    generatedAt,
+    actor,
+    action: "customer_notified",
+    fromStatus: existing.status,
+    toStatus: existing.status,
+    fromOwner: existing.assignedOwner,
+    toOwner: existing.assignedOwner,
+    note: rationale
+  });
+  const caseRecord: AnalystCase = {
+    ...existing,
+    updatedAt: generatedAt,
+    workflowEvents: [...(existing.workflowEvents ?? []), event],
+    customerNotifications: [...(existing.customerNotifications ?? []), receipt],
+    lastDecision: rationale,
+    deliveryState: selectedDelivery?.status === "delivered" ? "delivered" : existing.deliveryState
+  };
+  const saved = (options.store as any).saveCase(caseRecord);
+  if (alert) syncAlertForCase(options, alert, saved, event);
+  return json({
+    organization: scope.organization,
+    access: caseAccessSummary(access),
+    created: true,
+    receipt,
+    case: saved,
+    event,
+    alert: alert ? findDwmAlert(options, alert.id) : undefined,
+    detail: buildCaseDetail(saved, options, scope.organization, access)
+  }, 201);
+}
+
 export async function updateCase(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
   const existing = findCase(options, caseId);
   if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
@@ -223,6 +347,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
       failed: deliveries.filter((delivery: any) => delivery.status === "failed"),
       retryable: deliveries.some((delivery: any) => delivery.status === "failed" || delivery.status === "skipped")
     },
+    customerNotificationContext: customerNotificationContext(caseRecord),
     deliveries,
     evidence: alert?.evidence ?? [],
     timeline,
@@ -281,7 +406,9 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
     closedAt: caseRecord.closedAt,
     evidenceCount: evidence.length,
     deliveryCount: deliveryEvidence.length,
-    delivered: deliveryEvidence.some((delivery) => delivery.status === "delivered")
+    delivered: deliveryEvidence.some((delivery) => delivery.status === "delivered"),
+    customerNotificationCount: (caseRecord.customerNotifications ?? []).length,
+    latestCustomerNotificationAt: latestCaseCustomerNotification(caseRecord)?.at
   };
   const exportBody = {
     schemaVersion: "analyst.case_export.v1",
@@ -323,9 +450,11 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
       source: event.source,
       related: event.related
     })),
+    customerNotifications: caseRecord.customerNotifications ?? [],
+    customerNotificationContext: customerNotificationContext(caseRecord),
     deliveryEvidence,
     nextAllowedActions,
-    copyText: caseExportCopyText(summary, evidence, deliveryEvidence, matchedWatchlistTerms),
+    copyText: caseExportCopyText(summary, evidence, deliveryEvidence, matchedWatchlistTerms, caseRecord.customerNotifications ?? []),
     auditSafety: {
       rawSensitiveEvidenceIncluded: false,
       redactedEvidenceCount: evidence.filter((item) => item.redaction.redacted).length,
@@ -339,7 +468,8 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
       evidence: exportBody.evidenceSummary,
       timeline: exportBody.timelineSummary,
       deliveryEvidence,
-      matchedWatchlistTerms
+      matchedWatchlistTerms,
+      customerNotifications: caseRecord.customerNotifications ?? []
     }))
   };
 }
@@ -400,7 +530,7 @@ function exportAction(action: any, caseRecord: AnalystCase, access: CaseAccessRe
   };
 }
 
-function caseExportCopyText(summary: any, evidence: Array<any>, deliveryEvidence: Array<any>, matchedWatchlistTerms: Array<any>): string {
+function caseExportCopyText(summary: any, evidence: Array<any>, deliveryEvidence: Array<any>, matchedWatchlistTerms: Array<any>, customerNotifications: Array<CaseCustomerNotificationReceipt>): string {
   const visibleEvidence = evidence.slice(0, 5).map((item) => `- ${item.sourceName ?? item.sourceFamily ?? item.id}: ${item.excerpt} (${item.contentHash})`).join("\n");
   return [
     `Case ${summary.caseId}: ${summary.title}`,
@@ -408,6 +538,7 @@ function caseExportCopyText(summary: any, evidence: Array<any>, deliveryEvidence
     `Alert: ${summary.alertId}; dedupe: ${summary.dedupeKey}`,
     `Matched watchlist terms: ${matchedWatchlistTerms.map((term) => `${term.kind}:${term.value}`).join(", ") || "none"}`,
     `Webhook deliveries: ${deliveryEvidence.map((delivery) => `${delivery.deliveryId}:${delivery.status}`).join(", ") || "none"}`,
+    `Customer notifications: ${customerNotifications.map((receipt) => `${receipt.id}:${receipt.deliveryMode}`).join(", ") || "none"}`,
     "Evidence:",
     visibleEvidence || "- No exportable evidence."
   ].join("\n");
@@ -544,6 +675,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
     watchlistItemIds: caseWatchlistItemIds(alert),
     webhookDeliveryIds: deliveries.map((delivery: any) => delivery.id),
     webhookStatuses: [...new Set(deliveries.map((delivery: any) => delivery.status).filter(Boolean))],
+    latestCustomerNotification: latestCaseCustomerNotification(caseRecord),
     createdAt: caseRecord.createdAt,
     updatedAt: caseRecord.updatedAt,
     closedAt: caseRecord.closedAt,
@@ -567,21 +699,23 @@ function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[
       rationale: caseRecord.summary,
       toStatus: "open"
     }),
-    ...(caseRecord.workflowEvents ?? []).map((event) => caseTimelineEvent({
-      id: event.id,
-      timestamp: event.at,
-      eventType: `case.${event.action}`,
-      title: event.action.replaceAll("_", " "),
-      source: "case",
-      caseId: caseRecord.id,
-      alert,
-      actor: event.actor,
-      rationale: event.note,
-      fromStatus: event.fromStatus,
-      toStatus: event.toStatus,
-      fromOwner: event.fromOwner,
-      toOwner: event.toOwner
-    })),
+    ...(caseRecord.workflowEvents ?? [])
+      .filter((event) => event.action !== "customer_notified")
+      .map((event) => caseTimelineEvent({
+        id: event.id,
+        timestamp: event.at,
+        eventType: `case.${event.action}`,
+        title: event.action.replaceAll("_", " "),
+        source: "case",
+        caseId: caseRecord.id,
+        alert,
+        actor: event.actor,
+        rationale: event.note,
+        fromStatus: event.fromStatus,
+        toStatus: event.toStatus,
+        fromOwner: event.fromOwner,
+        toOwner: event.toOwner
+      })),
     ...deliveries.map((delivery: any) => caseTimelineEvent({
       id: delivery.id,
       timestamp: delivery.attemptedAt,
@@ -592,6 +726,19 @@ function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[
       alert,
       webhookDelivery: delivery,
       rationale: delivery.error ?? `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`
+    })),
+    ...(caseRecord.customerNotifications ?? []).map((receipt) => caseTimelineEvent({
+      id: receipt.id,
+      timestamp: receipt.at,
+      eventType: "case.customer_notified",
+      title: "customer notified",
+      source: "case",
+      caseId: caseRecord.id,
+      alert,
+      customerNotification: receipt,
+      actor: receipt.actor,
+      rationale: receipt.rationale,
+      toStatus: caseRecord.status
     }))
   ].sort((a, b) => String(a.timestamp ?? "").localeCompare(String(b.timestamp ?? "")));
 }
@@ -605,6 +752,7 @@ function caseTimelineEvent(input: {
   caseId: string;
   alert?: any;
   webhookDelivery?: any;
+  customerNotification?: CaseCustomerNotificationReceipt;
   actor?: string;
   rationale?: string;
   fromStatus?: string;
@@ -633,9 +781,10 @@ function caseTimelineEvent(input: {
       dedupeKey: input.alert?.dedupeKey ?? input.alert?.webhookDelivery?.dedupeKey ?? input.alert?.workflowContext?.dedupeKey,
       watchlistIds: input.alert?.watchlistIds ?? input.alert?.workflowContext?.watchlistIds ?? [],
       watchlistItemIds: caseWatchlistItemIds(input.alert),
-      webhookDeliveryId: input.webhookDelivery?.id,
-      webhookDestinationId: input.webhookDelivery?.webhookDestinationId,
-      webhookStatus: input.webhookDelivery?.status
+      webhookDeliveryId: input.webhookDelivery?.id ?? input.customerNotification?.webhookDeliveryId,
+      webhookDestinationId: input.webhookDelivery?.webhookDestinationId ?? input.customerNotification?.webhookDestinationId,
+      webhookStatus: input.webhookDelivery?.status ?? input.customerNotification?.webhookStatus,
+      customerNotificationId: input.customerNotification?.id
     },
     fromStatus: input.fromStatus,
     toStatus: input.toStatus,
@@ -859,8 +1008,38 @@ function nextActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any
   if (caseRecord.status === "closed") return ["Keep closed unless new evidence changes the decision."];
   if (caseRecord.status === "false_positive" || caseRecord.status === "suppressed") return ["Monitor for new evidence before reopening."];
   if (!caseRecord.assignedOwner) return ["Assign an owner.", "Review evidence.", "Decide whether to notify the customer."];
+  if (deliveries.some((delivery: any) => delivery.status === "delivered") && !(caseRecord.customerNotifications ?? []).length) return ["Record customer notification.", "Add decision rationale.", "Close or keep the case open for follow-up."];
+  if ((caseRecord.customerNotifications ?? []).length) return ["Review customer handoff receipt.", "Close the case or keep it open for follow-up."];
   if (alert?.deliveryState === "ready_to_send" && !deliveries.some((delivery: any) => delivery.status === "delivered")) return ["Send or retry customer delivery.", "Record the delivery decision."];
   return ["Review evidence.", "Add decision rationale.", "Escalate, suppress, mark false positive, or close."];
+}
+
+function uniqueCaseStrings(values: unknown[]): string[] {
+  return [...new Set(values.filter((value): value is string => typeof value === "string" && value.length > 0))];
+}
+
+function latestCaseCustomerNotification(caseRecord: AnalystCase) {
+  return (caseRecord.customerNotifications ?? [])
+    .map((receipt, index) => ({ receipt, index }))
+    .sort((a, b) => String(b.receipt.at ?? "").localeCompare(String(a.receipt.at ?? "")) || b.index - a.index)[0]?.receipt;
+}
+
+function customerNotificationContext(caseRecord: AnalystCase) {
+  const receipts = caseRecord.customerNotifications ?? [];
+  const latest = latestCaseCustomerNotification(caseRecord);
+  return {
+    notificationCount: receipts.length,
+    latest,
+    notified: Boolean(latest),
+    modes: [...new Set(receipts.map((receipt) => receipt.deliveryMode))]
+  };
+}
+
+function selectNotificationDelivery(deliveries: any[], webhookDeliveryId: unknown) {
+  const requested = String(webhookDeliveryId ?? "").trim();
+  const delivered = deliveries.filter((delivery: any) => delivery.status === "delivered");
+  if (requested) return delivered.find((delivery: any) => delivery.id === requested);
+  return [...delivered].sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")))[0];
 }
 
 function findCase(options: ApiServerOptions, caseId: string | undefined): AnalystCase | undefined {
