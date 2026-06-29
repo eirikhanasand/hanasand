@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { demoDwmProductSnapshot } from '@/utils/dwm/product'
+import { dwmProductPayloadFromLedger, loadProductDwmProductProofLedger } from '@/utils/productProgress/dwmProductProofSource'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
     const allowDemoFallback = request.nextUrl.searchParams.get('demo') !== 'false'
+    const tenantId = request.nextUrl.searchParams.get('tenantId')?.trim() || 'default'
+    if (!process.env.TI_SCRAPER_API_BASE) {
+        const proofLedger = await loadProductDwmProductProofLedger(tenantId)
+        if (proofLedger) {
+            return NextResponse.json(dwmProductPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
+        }
+    }
+
     const upstream = await fetchTiDwmProduct(request)
     if (upstream.ok) {
         return NextResponse.json(upstream.payload, { headers: { 'cache-control': 'no-store' } })
