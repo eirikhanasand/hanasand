@@ -53,6 +53,11 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
     const delivery = alert ? chooseDeliveryForAlert(alert.id, input.deliveries || []) : undefined
     const sourceProxyReady = sourceProxyHasFreshWorker(input.sourceProxy)
     const deployProbeFresh = Boolean(input.deploy?.status === 'ready' && input.deploy.latestProbeAt)
+    const deployBlockers = input.deploy?.status === 'ready' && deployProbeFresh
+        ? []
+        : input.deploy?.blockers?.length
+            ? input.deploy.blockers
+            : ['No external deploy probe has confirmed this product-progress endpoint after deploy.']
 
     return {
         schemaVersion: 'product.progress.readiness.v1',
@@ -74,17 +79,17 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             latestProbeAt: input.deploy?.latestProbeAt,
             dashboardAlertId: alert?.id,
             deliveryId: delivery?.id,
-            blockers: input.deploy?.status === 'ready' && deployProbeFresh ? [] : ['No external deploy probe has confirmed this product-progress endpoint after deploy.'],
+            blockers: deployBlockers,
             ownerLane: 'integration',
             unavailableReason: input.deploy?.status === 'ready' && deployProbeFresh ? undefined : 'missing_live_deploy_probe',
             staleAfterSeconds: 600,
             proofTimestamp: input.deploy?.latestProbeAt || checkedAt,
             expectedDashboardRowId: 'deploy_probe',
             integrationProbeHint: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
-            backendProofContractVersion: 'product.deploy_probe.readiness.v1',
-            detail: input.deploy?.status === 'ready' && deployProbeFresh
+            backendProofContractVersion: input.deploy?.backendProofContractVersion || 'product.deploy_probe.readiness.v1',
+            detail: input.deploy?.detail || (input.deploy?.status === 'ready' && deployProbeFresh
                 ? `Deploy probe loaded for ${input.deploy.deployedCommit || 'current build'}.`
-                : 'Deploy proof is available only after a live probe records the deployed commit and service health.',
+                : 'Deploy proof is available only after a live probe records the deployed commit and service health.'),
         },
         sourceProxy: input.sourceProxy || {
             ok: false,

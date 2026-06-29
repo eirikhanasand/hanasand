@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
+    const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents, deployStatus] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
         fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search'),
@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         fetchInternalJson(request, routes.watchlists || '/api/dwm/watchlists'),
         fetchInternalJson(request, routes.supportRecovery || '/api/backend/admin/support/access-recovery'),
         fetchInternalJson(request, routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50'),
+        fetchInternalJson(request, routes.deployProbe || '/api/status'),
     ])
     const selectedOrganization = selectOrganization(organizations.json, request)
     const organizationWebhooks = selectedOrganization
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
     const deliveryRows = rows((deliveries.json as { deliveries?: unknown[] } | undefined)?.deliveries) as DwmDeliveryItem[]
     const watchlistRows = rows((watchlists.json as { watchlists?: unknown[] } | undefined)?.watchlists) as DwmWatchlistSummary[]
     const webhookRows = rows((organizationWebhooks.json as { destinations?: unknown[] } | undefined)?.destinations) as DwmOrganizationWebhookDestination[]
+    const normalizedSourceProxy = normalizeSourceProxy(sourceProxy, query, generatedAt)
 
     const payload = buildProductProgressPayload({
         generatedAt,
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
             route: routes.publicTiProvenance || '/api/ti/search',
             fetch: publicTi,
         }),
-        sourceProxy: normalizeSourceProxy(sourceProxy, query, generatedAt),
+        sourceProxy: normalizedSourceProxy,
         dwmProduct: dwmProductReadiness({
             generatedAt,
             route: routes.dwmProduct || '/api/dwm/product?demo=false',
@@ -98,17 +100,19 @@ export async function GET(request: NextRequest) {
             recovery: supportRecovery,
             audit: auditEvents,
         }),
-        deploy: {
-            status: 'needs_action',
-            frontendHealthy: true,
-            apiHealthy: false,
-            scraperHealthy: sourceProxy.ok,
-            source: '/api/product-progress',
-            blockers: ['No external deploy probe has confirmed this product-progress endpoint after deploy.'],
-        },
+        deploy: deployProbeReadiness({
+            generatedAt,
+            route: routes.deployProbe || '/api/status',
+            fetch: deployStatus,
+            sourceProxyOk: sourceProxyReady(normalizedSourceProxy),
+        }),
     })
 
     return NextResponse.json(payload, { headers: { 'cache-control': 'no-store' } })
+}
+
+function sourceProxyReady(input: DashboardSourceProofProxyPayload) {
+    return Boolean(input.ok && input.endpoints?.sourceInventory?.ok && input.endpoints?.sourcePacks?.ok)
 }
 
 function productProgressRoutes(query: string) {
@@ -117,7 +121,7 @@ function productProgressRoutes(query: string) {
         productProgress: '/api/product-progress',
         publicTiProvenance: `/api/ti/search?q=${encoded}&limit=10`,
         helpdeskAudit: '/api/backend/admin/support/access-recovery',
-        deployProbe: '/api/product-progress',
+        deployProbe: '/api/status',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
         entitlement: '/api/dwm/entitlements/readiness',
         organizationReadiness: '/api/organizations/:id/alert-readiness',
@@ -346,6 +350,73 @@ function isDwmAlertGenerationProof(input: unknown): input is DwmAlertGenerationP
 
 function numberOrUndefined(value: unknown) {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function deployProbeReadiness(input: {
+    generatedAt: string
+    route: string
+    fetch: FetchResult
+    sourceProxyOk: boolean
+}) {
+    const payload = input.fetch.json as {
+        overall?: string
+        generated_at?: string
+        checks?: Array<{
+            service?: string
+            check_name?: string
+            status?: string
+            checked_at?: string
+        }>
+    } | undefined
+    const checks = rows(payload?.checks)
+    const frontendHealthy = serviceHealthy(checks, ['website', 'frontend', 'content delivery'])
+    const apiHealthy = serviceHealthy(checks, ['api', 'core platform', 'service'])
+    const scraperHealthy = input.sourceProxyOk || serviceHealthy(checks, ['automation', 'ti scraper', 'scraper'])
+    const latestProbeAt = latestTimestamp([
+        payload?.generated_at || '',
+        ...checks.map(row => String(row.checked_at || '')),
+    ])
+    const blockers = [
+        input.fetch.ok ? '' : input.fetch.error || `Status route returned HTTP ${input.fetch.status}.`,
+        checks.length > 0 ? '' : 'Status route returned no service checks.',
+        frontendHealthy ? '' : 'Website health is not up in /api/status.',
+        apiHealthy ? '' : 'API health is not up in /api/status.',
+        scraperHealthy ? '' : 'Scraper health is not up in /api/status or source proxy.',
+        latestProbeAt ? '' : 'Status route did not include a probe timestamp.',
+    ].filter(Boolean)
+
+    return {
+        schemaVersion: 'product.deploy_probe.readiness.v1',
+        status: blockers.length ? 'needs_action' as const : 'ready' as const,
+        checkedAt: input.generatedAt,
+        source: input.route,
+        href: '/status',
+        deployedCommit: process.env.NEXT_PUBLIC_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || undefined,
+        frontendHealthy,
+        apiHealthy,
+        scraperHealthy,
+        latestProbeAt,
+        blockers,
+        ownerLane: 'integration' as const,
+        unavailableReason: blockers.length ? 'missing_live_deploy_probe' : undefined,
+        staleAfterSeconds: 600,
+        proofTimestamp: latestProbeAt || input.generatedAt,
+        expectedDashboardRowId: 'deploy_probe',
+        integrationProbeHint: 'GET /api/status must return fresh website/API checks and scraper health must be confirmed by /api/status or source proxy.',
+        backendProofContractVersion: 'status.public_service.v1',
+        detail: blockers.length
+            ? blockers.join('; ')
+            : 'Website, API, and scraper health are current.',
+    }
+}
+
+function serviceHealthy(checks: Array<Record<string, unknown>>, labels: string[]) {
+    return checks.some(check => {
+        const service = String(check.service || '').toLowerCase()
+        const name = String(check.check_name || '').toLowerCase()
+        const status = String(check.status || '').toLowerCase()
+        return status === 'up' && labels.some(label => service === label || name === label || service.includes(label) || name.includes(label))
+    })
 }
 
 function orgAlertExportReadiness(input: {
