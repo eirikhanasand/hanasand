@@ -53,6 +53,12 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             dashboardAlertId: alert?.id,
             deliveryId: delivery?.id,
             blockers: input.deploy?.status === 'ready' && deployProbeFresh ? [] : ['No external deploy probe has confirmed this product-progress endpoint after deploy.'],
+            ownerLane: 'integration',
+            unavailableReason: input.deploy?.status === 'ready' && deployProbeFresh ? undefined : 'missing_live_deploy_probe',
+            staleAfterSeconds: 600,
+            proofTimestamp: input.deploy?.latestProbeAt || checkedAt,
+            expectedDashboardRowId: 'deploy_probe',
+            integrationProbeHint: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
             detail: input.deploy?.status === 'ready' && deployProbeFresh
                 ? `Deploy probe loaded for ${input.deploy.deployedCommit || 'current build'}.`
                 : 'Deploy proof is available only after a live probe records the deployed commit and service health.',
@@ -109,6 +115,12 @@ function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvena
         href: '/ti',
         detail: 'Public TI provenance readiness endpoint is not wired into product progress yet.',
         blockers: ['Public TI owner must expose source/evidence/freshness readiness before this can become ready.'],
+        ownerLane: 'public-ti',
+        unavailableReason: 'missing_public_ti_provenance_readiness_api',
+        staleAfterSeconds: 3600,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'public_ti_provenance',
+        integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
     }
 }
 
@@ -121,6 +133,12 @@ function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditRe
         href: '/dashboard/system/impersonation',
         detail: 'Helpdesk and structured audit readiness endpoint is not wired into product progress yet.',
         blockers: ['Helpdesk owner must expose support action and audit readiness before this can become ready.'],
+        ownerLane: 'helpdesk',
+        unavailableReason: 'missing_helpdesk_audit_readiness_api',
+        staleAfterSeconds: 3600,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'helpdesk_audit',
+        integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
     }
 }
 
@@ -133,6 +151,12 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         href: '/dashboard/dwm',
         detail: 'Organization alert-term export readiness is not wired into product progress yet.',
         blockers: ['Org owner must expose active alert-term export readiness before this can become ready.'],
+        ownerLane: 'org',
+        unavailableReason: 'missing_org_alert_export_readiness_api',
+        staleAfterSeconds: 900,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'org_alert_export',
+        integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
     }
 }
 
@@ -150,6 +174,12 @@ function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveri
         latestDeliveryAt: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1),
         detail: 'Delivery rows can be counted, but webhook destination lifecycle health is not wired into product progress yet.',
         blockers: ['Webhook owner must expose destination lifecycle health before this can become ready.'],
+        ownerLane: 'webhook',
+        unavailableReason: 'missing_webhook_lifecycle_health_api',
+        staleAfterSeconds: 900,
+        proofTimestamp: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1) || checkedAt,
+        expectedDashboardRowId: 'webhook_health',
+        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
     }
 }
 
@@ -183,6 +213,30 @@ function dashboardEvidenceFromRows(input: {
         deployProbeFresh: input.deployProbeFresh,
         dashboardPath: input.alert?.id ? `/dashboard?case=${encodeURIComponent(input.alert.id)}` : '/dashboard',
         blockers,
+        ownerLane: 'dashboard',
+        unavailableReason: blockers.length ? dashboardEvidenceUnavailableReason({
+            visibleInDashboard,
+            deliveryEvidenceMatched,
+            sourceProxyReady: input.sourceProxyReady,
+            deployProbeFresh: input.deployProbeFresh,
+        }) : undefined,
+        staleAfterSeconds: 600,
+        proofTimestamp: input.alert?.updatedAt || input.alert?.createdAt || input.checkedAt,
+        expectedDashboardRowId: 'dashboard_evidence',
+        integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
         detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}.`,
     }
+}
+
+function dashboardEvidenceUnavailableReason(input: {
+    visibleInDashboard: boolean
+    deliveryEvidenceMatched: boolean
+    sourceProxyReady: boolean
+    deployProbeFresh: boolean
+}) {
+    if (!input.visibleInDashboard) return 'missing_dashboard_alert'
+    if (!input.deliveryEvidenceMatched) return 'missing_matching_delivery'
+    if (!input.sourceProxyReady) return 'missing_source_proxy_worker_readiness'
+    if (!input.deployProbeFresh) return 'missing_live_deploy_probe'
+    return 'dashboard_evidence_needs_action'
 }
