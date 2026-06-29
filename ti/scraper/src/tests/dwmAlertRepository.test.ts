@@ -135,6 +135,54 @@ const publicAdvisoryCapture: RawCapture = {
   metadata: { adapter: "public_advisory", title: "acme.com partner API key exposure" }
 } as RawCapture;
 
+const clearWebSource: SourceRecord = {
+  id: "src_repo_clear_web",
+  name: "Repository clear-web research",
+  type: "static_web",
+  url: "https://research.example/reports",
+  accessMethod: "public_http",
+  status: "active",
+  trustScore: 0.66,
+  legalNotes: "Public clear-web corroboration only.",
+  createdAt: "2026-06-28T13:00:00.000Z",
+  updatedAt: "2026-06-28T13:00:00.000Z"
+} as SourceRecord;
+
+const clearWebCapture: RawCapture = {
+  id: "cap_repo_clear_web_acme",
+  sourceId: clearWebSource.id,
+  url: "https://research.example/reports/acme-session-resale",
+  collectedAt: "2026-06-28T13:21:00.000Z",
+  mediaType: "text/html",
+  storageKind: "inline_text",
+  contentHash: "hash-repo-clear-web-acme",
+  sensitive: false,
+  body: "Clear-web research notes acme.com identity session resale chatter and recommends rotating exposed partner credentials.",
+  metadata: { adapter: "static_web", title: "acme.com session resale corroboration" }
+} as RawCapture;
+
+const clearWebFollowupCapture: RawCapture = {
+  ...clearWebCapture,
+  id: "cap_repo_clear_web_acme_followup",
+  url: "https://research.example/reports/acme-session-resale-update",
+  collectedAt: "2026-06-28T13:29:00.000Z",
+  contentHash: "hash-repo-clear-web-acme-followup",
+  body: "Clear-web follow-up repeats acme.com partner credential exposure and links it to the same resale cluster."
+} as RawCapture;
+
+const clearWebNonmatchCapture: RawCapture = {
+  id: "cap_repo_clear_web_quiet",
+  sourceId: clearWebSource.id,
+  url: "https://research.example/reports/general-credential-market",
+  collectedAt: "2026-06-28T13:31:00.000Z",
+  mediaType: "text/html",
+  storageKind: "inline_text",
+  contentHash: "hash-repo-clear-web-quiet",
+  sensitive: false,
+  body: "Clear-web roundup covers unrelated.example credential markets without naming the customer watchlist term.",
+  metadata: { adapter: "static_web", title: "general credential market roundup" }
+} as RawCapture;
+
 const substringFalsePositiveCapture: RawCapture = {
   id: "cap_repo_tg_notacme_false_positive",
   sourceId: telegramSource.id,
@@ -1216,6 +1264,167 @@ describe("dwm alert repository", () => {
     const deniedRebuild = rebuildDwmRuntimeAlerts({ store: deniedStore as any, tenantId: "org_repo_denied", organizationId: "org_repo_denied" });
     expect(deniedRebuild.savedAlertCount).toBe(0);
     expect((deniedStore as any).listDwmAlerts()).toEqual([]);
+  });
+
+  test("persists clear-web org watchlist matches without inflating duplicates or wiping workflow", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(clearWebSource);
+    store.saveCapture(clearWebCapture);
+    store.saveCapture(clearWebNonmatchCapture);
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_clear_web",
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web",
+      name: "Clear-web Acme research watch",
+      terms: [{ id: "watch_item_clear_web_acme", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_clear_web",
+      status: "active"
+    });
+
+    const readiness = buildDwmAlertGenerationReadiness({
+      watchlists: (store as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web",
+      sources: store.listSources(),
+      captures: store.listCaptures()
+    });
+    expect(readiness).toMatchObject({
+      readyForRebuild: true,
+      readyForCustomerDelivery: true,
+      counts: { candidateCount: 1, captureRefCount: 1, matchedCandidateCount: 1, unmatchedCandidateCount: 0 },
+      sourceFamilyCoverage: [{
+        sourceFamily: "clear_web",
+        candidateCount: 1,
+        captureRefCount: 1,
+        watchlistIds: ["watch_repo_clear_web"]
+      }],
+      blockerCodes: []
+    });
+
+    const first = rebuildDwmRuntimeAlerts({
+      store: store as any,
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web"
+    });
+    expect(first.savedAlertCount).toBe(1);
+    const alert = first.alerts[0];
+    expect(alert).toMatchObject({
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web",
+      sourceFamily: "clear_web",
+      matchedTerm: { kind: "domain", value: "acme.com" },
+      watchlistIds: ["watch_repo_clear_web"],
+      watchlistItemIds: ["watch_item_clear_web_acme"],
+      recommendedRoute: "identity_response",
+      deliveryState: "pending_review"
+    });
+    expect(alert.dedupeKey).toMatch(/^dwm_dedupe_/);
+    expect(alert.provenance.captureIds).toEqual(["cap_repo_clear_web_acme"]);
+    expect(alert.evidence).toHaveLength(1);
+    expect(alert.evidence[0]).toMatchObject({
+      id: "cap_repo_clear_web_acme",
+      sourceFamily: "clear_web",
+      contentHash: "hash-repo-clear-web-acme",
+      provenance: { captureId: "cap_repo_clear_web_acme", sourceId: "src_repo_clear_web" }
+    });
+    expect(alert.evidence[0].excerpt).toContain("acme.com");
+    expect(alert.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      sourceFamily: "clear_web",
+      sourceFamilies: ["clear_web"],
+      captureIds: ["cap_repo_clear_web_acme"],
+      sourceIds: ["src_repo_clear_web"],
+      contentHashes: ["hash-repo-clear-web-acme"],
+      evidenceCount: 1,
+      recommendedRoute: "identity_response",
+      provenance: {
+        matchBasis: "watchlist_capture_text",
+        metadataOnly: false
+      }
+    });
+    expect(alert.alertCreatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      eventType: "dwm.alert.created",
+      organizationId: "org_repo_clear_web",
+      sourceFamily: "clear_web",
+      captureIds: ["cap_repo_clear_web_acme"],
+      selectedCaptureIds: ["cap_repo_clear_web_acme"],
+      evidenceCount: 1,
+      dedupeKey: alert.dedupeKey,
+      recommendedRoute: "identity_response",
+      orgWatchlistScope: {
+        organizationId: "org_repo_clear_web",
+        watchlistIds: ["watch_repo_clear_web"],
+        watchlistItemIds: ["watch_item_clear_web_acme"]
+      }
+    });
+    expect(alert.workflowContext).toMatchObject({
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web",
+      sourceFamily: "clear_web",
+      primaryCaptureId: "cap_repo_clear_web_acme",
+      captureIds: ["cap_repo_clear_web_acme"],
+      evidenceCount: 1,
+      watchlistIds: ["watch_repo_clear_web"],
+      watchlistItemIds: ["watch_item_clear_web_acme"],
+      recommendedRoute: "identity_response"
+    });
+    expect(alert.alertDetailPath).toContain(`/v1/dwm/alerts/${alert.id}`);
+    expect(alert.casePath).toContain(`/v1/cases/${alert.caseIdCandidate}`);
+
+    store.saveDwmAlert({
+      ...alert,
+      reviewState: "false_positive",
+      deliveryState: "muted",
+      assignedOwner: "clear-web-analyst",
+      workflowNote: "Clear-web corroboration already handled by the analyst.",
+      workflowEvents: [{ id: "evt_clear_web_triage", at: "2026-06-28T13:25:00.000Z", toReviewState: "false_positive" }],
+      replayCount: 1,
+      lastReplayedAt: "2026-06-28T13:26:00.000Z",
+      deliveredAt: "2026-06-28T13:27:00.000Z"
+    });
+    store.saveCapture(clearWebFollowupCapture);
+
+    const second = rebuildDwmRuntimeAlerts({
+      store: store as any,
+      tenantId: "tenant_repo_clear_web",
+      organizationId: "org_repo_clear_web"
+    });
+    expect(second.savedAlertCount).toBe(1);
+    expect((store as any).listDwmAlerts()).toHaveLength(1);
+    const preserved = (store as any).listDwmAlerts()[0];
+    expect(preserved.reviewState).toBe("false_positive");
+    expect(preserved.deliveryState).toBe("muted");
+    expect(preserved.assignedOwner).toBe("clear-web-analyst");
+    expect(preserved.workflowNote).toBe("Clear-web corroboration already handled by the analyst.");
+    expect(preserved.workflowEvents).toHaveLength(1);
+    expect(preserved.replayCount).toBe(1);
+    expect(preserved.lastReplayedAt).toBe("2026-06-28T13:26:00.000Z");
+    expect(preserved.deliveredAt).toBe("2026-06-28T13:27:00.000Z");
+    expect(preserved.provenance.captureIds).toEqual(["cap_repo_clear_web_acme", "cap_repo_clear_web_acme_followup"]);
+    expect(preserved.provenance.captureIds).not.toContain("cap_repo_clear_web_quiet");
+    expect(preserved.evidence.map((item: any) => item.id)).toEqual(["cap_repo_clear_web_acme", "cap_repo_clear_web_acme_followup"]);
+    expect(preserved.workflowContext).toMatchObject({
+      sourceFamily: "clear_web",
+      captureIds: ["cap_repo_clear_web_acme", "cap_repo_clear_web_acme_followup"],
+      evidenceCount: 2,
+      generationEvidenceWindow: {
+        captureIds: ["cap_repo_clear_web_acme", "cap_repo_clear_web_acme_followup"],
+        sourceFamilies: ["clear_web"],
+        contentHashes: ["hash-repo-clear-web-acme", "hash-repo-clear-web-acme-followup"],
+        firstObservedAt: "2026-06-28T13:21:00.000Z",
+        lastObservedAt: "2026-06-28T13:29:00.000Z"
+      }
+    });
+    expect(preserved.alertUpdatedEvent.consumerPayload).toMatchObject({
+      eventType: "dwm.alert.updated",
+      sourceFamily: "clear_web",
+      selectedCaptureIds: ["cap_repo_clear_web_acme", "cap_repo_clear_web_acme_followup"],
+      addedCaptureIds: ["cap_repo_clear_web_acme_followup"],
+      previousEvidenceCount: 1,
+      evidenceCount: 2,
+      workflowEventCount: 1
+    });
   });
 
   test("builds customer proof rows from org export alerts while preserving workflow and delivery replay state", () => {
