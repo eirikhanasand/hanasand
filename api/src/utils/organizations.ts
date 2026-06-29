@@ -766,6 +766,73 @@ export type OrganizationSharedWatchlistSupportInspection = {
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
+export type OrganizationSharedWatchlistAlertQueueVisibility = {
+    schemaVersion: 'organization.shared_watchlist_alert_queue_visibility.v1'
+    organizationId: string
+    tenantId: string
+    sourceFamily: 'organization_watchlist'
+    routes: {
+        list: 'GET /v1/dwm/alerts'
+        detail: 'GET /v1/dwm/alerts/:id'
+        update: 'PATCH /v1/dwm/alerts/:id'
+        replay: 'POST /v1/dwm/alerts/:id/replay'
+    }
+    requiredQueryFields: Array<'organizationId'>
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    visibility: {
+        policy: OrganizationAlertVisibilityPolicy
+        allowed: boolean
+        denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | null
+        allowedRoles: OrganizationRole[]
+        nonmemberEnumeration: false
+    }
+    allowedActions: OrganizationAlertCaseAction[]
+    actionGates: OrganizationSharedWatchlistDownstreamProof['alertBridge']['queueVisibilityContract']['actionGates']
+    watchlistScope: {
+        ownerOrganizationId: string
+        watchlistItemIds: string[]
+        alertGeneratorKeys: string[]
+        alertGeneratorKeyField: 'workflowContext.alertGeneratorKeys[]'
+        visibilityDecisionField: 'workflowContext.visibilityDecision'
+        dedupeScope: 'organization_watchlist_term'
+        crossTenantCollisionAllowed: false
+    }
+    lifecycleExclusions: {
+        excludedStatuses: Array<'paused' | 'archived'>
+        pausedWatchlistIds: string[]
+        archivedWatchlistIds: string[]
+        blockerCodes: Array<'watchlist_paused' | 'watchlist_archived'>
+    }
+    persistedAlertContract: {
+        storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts'
+        requiredFields: string[]
+        workflowContextFields: string[]
+        persistedAlertFields: string[]
+        casePathField: 'casePath'
+    }
+    consumerContract: {
+        ownerLane: 'dwm_alert_workflow'
+        expectedAdapter: 'organizationSharedWatchlistAlertQueueVisibility'
+        payloadShape: string[]
+        requiredRouteBinding: 'organizationId_query_and_workflow_context'
+        requiredStorageBinding: 'workflowContext.organizationId'
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
+    support: {
+        mode: 'redacted_summary_only'
+        redactionRequired: true
+        supportOnlyBlocker: 'support_only_access'
+    }
+    safeFields: string[]
+    redactedFields: string[]
+    blockerCodes: Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>
+    proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+}
+
 export type OrganizationWatchlistAlertTermsExport = {
     schemaVersion: 'organization.watchlist_alert_terms_export.v1'
     organizationId: string
@@ -784,6 +851,7 @@ export type OrganizationWatchlistAlertTermsExport = {
     sharedWatchlistDownstreamProof: OrganizationSharedWatchlistDownstreamProof
     sharedWatchlistIntegrationGuardrails: OrganizationSharedWatchlistIntegrationGuardrails
     sharedWatchlistSupportInspection: OrganizationSharedWatchlistSupportInspection
+    sharedWatchlistAlertQueueVisibility: OrganizationSharedWatchlistAlertQueueVisibility
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -2089,6 +2157,100 @@ export function organizationSharedWatchlistSupportInspection(input: {
     }
 }
 
+export function organizationSharedWatchlistAlertQueueVisibility(
+    proof: OrganizationSharedWatchlistDownstreamProof
+): OrganizationSharedWatchlistAlertQueueVisibility {
+    const queue = proof.alertBridge.queueVisibilityContract
+    const persistence = proof.alertBridge.persistenceContract
+    return {
+        schemaVersion: 'organization.shared_watchlist_alert_queue_visibility.v1',
+        organizationId: proof.organizationId,
+        tenantId: proof.tenantId,
+        sourceFamily: 'organization_watchlist',
+        routes: queue.routes,
+        requiredQueryFields: queue.requiredQueryFields,
+        member: {
+            userId: proof.actor.userId,
+            role: proof.actor.role,
+            status: proof.actor.status,
+        },
+        visibility: {
+            policy: queue.actorVisibility.policy,
+            allowed: queue.actorVisibility.allowed,
+            denialReason: queue.actorVisibility.denialReason,
+            allowedRoles: queue.actorVisibility.allowedRoles,
+            nonmemberEnumeration: false,
+        },
+        allowedActions: proof.actor.allowedActions,
+        actionGates: queue.actionGates,
+        watchlistScope: {
+            ownerOrganizationId: proof.ownerOrganizationId,
+            watchlistItemIds: queue.watchlistScope.watchlistItemIds,
+            alertGeneratorKeys: queue.watchlistScope.alertGeneratorKeys,
+            alertGeneratorKeyField: queue.watchlistScope.alertGeneratorKeyField,
+            visibilityDecisionField: persistence.visibilityDecisionField,
+            dedupeScope: queue.watchlistScope.dedupeScope,
+            crossTenantCollisionAllowed: persistence.dedupe.crossTenantCollisionAllowed,
+        },
+        lifecycleExclusions: {
+            excludedStatuses: ['paused', 'archived'],
+            pausedWatchlistIds: proof.watchlistOwnership.pausedIds,
+            archivedWatchlistIds: proof.watchlistOwnership.archivedIds,
+            blockerCodes: ['watchlist_paused', 'watchlist_archived'],
+        },
+        persistedAlertContract: {
+            storageModule: persistence.storageModule,
+            requiredFields: persistence.requiredInputFields,
+            workflowContextFields: persistence.workflowContextFields,
+            persistedAlertFields: persistence.persistedAlertFields,
+            casePathField: persistence.casePathField,
+        },
+        consumerContract: {
+            ownerLane: 'dwm_alert_workflow',
+            expectedAdapter: 'organizationSharedWatchlistAlertQueueVisibility',
+            payloadShape: [
+                'organizationId',
+                'tenantId',
+                'routes.list',
+                'routes.detail',
+                'requiredQueryFields',
+                'visibility',
+                'allowedActions',
+                'actionGates',
+                'watchlistScope.watchlistItemIds',
+                'watchlistScope.alertGeneratorKeys',
+                'watchlistScope.visibilityDecisionField',
+                'persistedAlertContract.workflowContextFields',
+                'persistedAlertContract.persistedAlertFields',
+                'blockerCodes',
+            ],
+            requiredRouteBinding: 'organizationId_query_and_workflow_context',
+            requiredStorageBinding: 'workflowContext.organizationId',
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
+        support: {
+            mode: 'redacted_summary_only',
+            redactionRequired: true,
+            supportOnlyBlocker: 'support_only_access',
+        },
+        safeFields: [
+            'organizationId',
+            'tenantId',
+            'member.role',
+            'visibility.allowed',
+            'allowedActions',
+            'actionGates',
+            'watchlistScope.watchlistItemIds',
+            'watchlistScope.alertGeneratorKeys',
+            'lifecycleExclusions',
+            'blockerCodes',
+        ],
+        redactedFields: queue.redactedFields,
+        blockerCodes: queue.blockerCodes,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
+}
+
 export function organizationVisibilityDecision(input: OrganizationVisibilityDecisionInput): OrganizationVisibilityDecision {
     const alertVisibilityPolicy = input.alertVisibilityPolicy ?? 'members'
     const allowedRoles = allowedOrganizationVisibilityRoles(alertVisibilityPolicy)
@@ -2693,6 +2855,7 @@ export function organizationWatchlistAlertTermsExport(
     const cleanupRequired = pausedCount + archivedCount > 0
     const sharedWatchlistDownstreamProof = organizationSharedWatchlistDownstreamProof(organization, items, member, alertGeneration, downstreamAuthorization)
     const sharedWatchlistIntegrationGuardrails = organizationSharedWatchlistIntegrationGuardrails(sharedWatchlistDownstreamProof)
+    const sharedWatchlistAlertQueueVisibility = organizationSharedWatchlistAlertQueueVisibility(sharedWatchlistDownstreamProof)
     const supportAccess: OrganizationWatchlistAlertBridgeContract['supportAccess'] = {
         mode: 'support_contract_only',
         blockerCode: 'support_only_access',
@@ -2921,6 +3084,7 @@ export function organizationWatchlistAlertTermsExport(
         sharedWatchlistDownstreamProof,
         sharedWatchlistIntegrationGuardrails,
         sharedWatchlistSupportInspection,
+        sharedWatchlistAlertQueueVisibility,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
