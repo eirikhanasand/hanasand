@@ -89,11 +89,11 @@ assert.match(ensureSchema, /idx_admin_access_recovery_approved_by/)
 assert.match(ensureSchema, /idx_admin_access_recovery_denied_by/)
 
 const adminSupport = await readFile(new URL('../src/handlers/adminSupport.ts', import.meta.url), 'utf8')
-for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'reason', 'outcome', 'from', 'to']) {
+for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'reason', 'outcome', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing audit filter ${expected}.`)
 }
 assert.match(adminSupport, /const org = text\(query\.org \|\| query\.orgId \|\| query\.organizationId\)/)
-assert.match(adminSupport, /const actorFilter = text\(query\.actor \|\| query\.actorId\)/)
+assert.match(adminSupport, /const actorFilter = text\(query\.actor \|\| query\.actorId \|\| query\.supportActor \|\| query\.supportActorId\)/)
 assert.match(adminSupport, /const target = text\(query\.target \|\| query\.targetId \|\| query\.user \|\| query\.userId \|\| query\.targetUserId\)/)
 assert.match(adminSupport, /const action = text\(query\.action \|\| query\.actionType\)/)
 assert.match(adminSupport, /const entity = text\(query\.entity \|\| query\.entityId\)/)
