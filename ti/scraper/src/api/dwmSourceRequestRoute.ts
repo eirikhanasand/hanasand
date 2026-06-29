@@ -3134,6 +3134,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.downstreamFixtureExport.schemaVersion == \"ti.public_actor.downstream_fixture_export.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.sourceFamilyCoverageMatrix.schemaVersion == \"ti.public_actor.source_family_coverage_matrix.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.watchlistAlertabilityBridge.schemaVersion == \"ti.public_actor.watchlist_alertability_bridge.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3465,6 +3466,10 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertGenerationConsumerHandoff,
     sourceOperationsHandoff
   });
+  const sourceFamilyCoverageMatrix = sourceActorPublicTiSourceFamilyCoverageMatrix({
+    query,
+    downstreamFixtureExport
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3505,11 +3510,90 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     consumerProofLedger,
     sourceOperationsHandoff,
     downstreamFixtureExport,
-    sourceFamilyCoverageMatrix: sourceActorPublicTiSourceFamilyCoverageMatrix({
+    sourceFamilyCoverageMatrix,
+    watchlistAlertabilityBridge: sourceActorPublicTiWatchlistAlertabilityBridge({
       query,
-      downstreamFixtureExport
+      alertGenerationConsumerHandoff,
+      sourceFamilyCoverageMatrix
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiWatchlistAlertabilityBridge(input: {
+  query: string;
+  alertGenerationConsumerHandoff: Record<string, any>;
+  sourceFamilyCoverageMatrix: Record<string, any>;
+}) {
+  const coverageByFamily = new Map<string, Record<string, any>>((input.sourceFamilyCoverageMatrix.rows ?? []).map((row: any) => [String(row.sourceFamily), row]));
+  const rows = (input.alertGenerationConsumerHandoff.rows ?? []).map((row: any) => {
+    const coverage = coverageByFamily.get(String(row.family));
+    return {
+      schemaVersion: "ti.public_actor.watchlist_alertability_row.v1",
+      proofId: stableId("ti_public_actor_watchlist_alertability_row", `${input.query}:${row.watchlistTerm}:${row.family}:${row.state}`),
+      query: input.query,
+      watchlistTerm: row.watchlistTerm,
+      sourceFamily: row.family,
+      state: row.state === "ready_for_rebuild" ? "alertable" : "blocked",
+      parserState: row.parserStatus?.state ?? coverage?.parserState,
+      captureState: row.parserStatus?.captureState ?? coverage?.captureState,
+      confidence: row.confidence ?? coverage?.confidence ?? 0,
+      confidenceTier: row.confidenceTier ?? coverage?.confidenceTier,
+      matchableFields: row.matchableFields ?? [],
+      alertableFields: row.alertableFields ?? [],
+      timestamps: {
+        lastCaptureAt: row.timestamps?.lastCaptureAt ?? coverage?.lastCaptureAt,
+        lastEnrichmentAt: row.timestamps?.lastEnrichmentAt ?? coverage?.lastEnrichmentAt,
+        checkedAt: row.timestamps?.checkedAt
+      },
+      provenance: {
+        alertEvidenceProofId: row.provenance?.alertEvidenceProofId,
+        evidenceProofId: row.evidenceProofId ?? coverage?.provenance?.evidenceProofId,
+        sourceHealthProofId: row.provenance?.sourceHealthProofId ?? coverage?.provenance?.sourceHealthProofId,
+        parserProofId: coverage?.provenance?.parserProofId,
+        sourceIds: row.sourceIds ?? coverage?.provenance?.sourceIds ?? [],
+        candidateIds: row.candidateIds ?? coverage?.provenance?.candidateIds ?? [],
+        privacyBoundary: row.provenance?.privacyBoundary
+      },
+      route: input.alertGenerationConsumerHandoff.route,
+      blockers: row.blockers ?? [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  const alertableRows = rows.filter((row: any) => row.state === "alertable");
+  const blockedRows = rows.filter((row: any) => row.state !== "alertable");
+  return {
+    schemaVersion: "ti.public_actor.watchlist_alertability_bridge.v1",
+    proofId: stableId("ti_public_actor_watchlist_alertability_bridge", `${input.query}:${rows.map((row: any) => `${row.watchlistTerm}:${row.sourceFamily}:${row.state}`).join(",")}`),
+    query: input.query,
+    ready: input.alertGenerationConsumerHandoff.ready === true && alertableRows.length > 0,
+    route: input.alertGenerationConsumerHandoff.route,
+    rows,
+    summary: {
+      watchlistTerms: uniqueSourceReadinessStrings(rows.map((row: any) => row.watchlistTerm)),
+      alertableFamilies: uniqueSourceReadinessStrings(alertableRows.map((row: any) => row.sourceFamily)),
+      blockedFamilies: uniqueSourceReadinessStrings(blockedRows.map((row: any) => row.sourceFamily)),
+      gapFamilies: input.sourceFamilyCoverageMatrix.summary?.gapFamilies ?? [],
+      retryFamilies: input.sourceFamilyCoverageMatrix.summary?.retryFamilies ?? [],
+      readyRows: alertableRows.length,
+      blockedRows: blockedRows.length,
+      latestCaptureAt: latestIso(rows.map((row: any) => row.timestamps?.lastCaptureAt))
+    },
+    blockers: dedupeBlockers([
+      ...(input.alertGenerationConsumerHandoff.blockers ?? []),
+      ...blockedRows.flatMap((row: any) => row.blockers ?? [])
+    ]),
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
