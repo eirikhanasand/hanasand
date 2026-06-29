@@ -27,7 +27,15 @@ type AuditQuery = {
     source?: string
     service?: string
     entity?: string
+    entityType?: string
     request?: string
+    requestId?: string
+    correlation?: string
+    correlationId?: string
+    idempotency?: string
+    idempotencyKey?: string
+    idempotency_key?: string
+    reason?: string
     outcome?: string
     from?: string
     to?: string
@@ -230,6 +238,31 @@ const supportInspectionFilters = new Set([
     'limit',
 ])
 
+const adminAuditFilters = new Set([
+    'q',
+    'org',
+    'actor',
+    'target',
+    'action',
+    'severity',
+    'source',
+    'service',
+    'entity',
+    'entityType',
+    'request',
+    'requestId',
+    'correlation',
+    'correlationId',
+    'idempotency',
+    'idempotencyKey',
+    'idempotency_key',
+    'reason',
+    'outcome',
+    'from',
+    'to',
+    'limit',
+])
+
 export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
@@ -251,12 +284,20 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const source = text(query.source)
     const service = text(query.service)
     const entity = text(query.entity)
-    const request = text(query.request)
+    const entityType = text(query.entityType)
+    const request = text(query.request || query.requestId)
+    const correlation = text(query.correlation || query.correlationId)
+    const idempotency = text(query.idempotency || query.idempotencyKey || query.idempotency_key)
+    const reason = text(query.reason)
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 200)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 500) : 200
+    const filterError = adminAuditFilterError(query, { severity, outcome, from, to, limit })
+    if (filterError) {
+        return res.status(400).send(filterError)
+    }
 
     if (q) {
         const placeholder = add(`%${q}%`)
@@ -294,7 +335,14 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     if (source) where.push(`e.source ILIKE ${add(`%${source}%`)}`)
     if (service) where.push(`e.service ILIKE ${add(`%${service}%`)}`)
     if (entity) where.push(`e.entity_id ILIKE ${add(`%${entity}%`)}`)
+    if (entityType) where.push(`e.target_type ILIKE ${add(`%${entityType}%`)}`)
     if (request) where.push(`e.request_id ILIKE ${add(`%${request}%`)}`)
+    if (correlation) {
+        const placeholder = add(`%${correlation}%`)
+        where.push('(e.request_id ILIKE ' + placeholder + ' OR e.context->>\'correlationId\' ILIKE ' + placeholder + ')')
+    }
+    if (idempotency) where.push(`e.context->>'idempotencyKey' ILIKE ${add(`%${idempotency}%`)}`)
+    if (reason) where.push(`e.reason ILIKE ${add(`%${reason}%`)}`)
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
     if (to && !Number.isNaN(Date.parse(to))) where.push(`e.created_at <= ${add(new Date(to).toISOString())}`)
@@ -332,14 +380,16 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
 
     const events = result.rows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, reason, outcome, from, to, limit }
     return res.send({
         events,
-        filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
+        filters,
         detail: {
             schemaVersion: 'admin.audit.timeline.v1',
             generatedAt: new Date().toISOString(),
-            filters: { q, org, actor: actorFilter, target, action, severity, source, service, entity, request, outcome, from, to, limit },
+            filters,
             summary: auditTimelineSummary(timeline),
+            filterContract: supportAuditFilterContract(filters, timeline),
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
@@ -2917,9 +2967,56 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             after: beforeAfter.after,
             context,
             timelineEvent,
+            redactedSummary: {
+                schemaVersion: 'support.audit.redacted_summary.v1',
+                eventId: Number(event.id),
+                actionType: event.action_type,
+                outcome: event.outcome,
+                severity: event.severity,
+                actorId: event.actor_id,
+                targetId: event.target_id || null,
+                entityId: event.entity_id || null,
+                requestId: event.request_id || null,
+                correlationId: text(context.correlationId) || event.request_id || null,
+                idempotencyKey: text(context.idempotencyKey) || null,
+                reasonPresent: Boolean(event.reason),
+                contextRedacted: true,
+            },
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
     }
+}
+
+function adminAuditFilterError(rawQuery: AuditQuery, filter: { severity: string, outcome: string, from: string, to: string, limit: number }) {
+    const unsupported = Object.keys(rawQuery as Record<string, unknown>).filter(key => !adminAuditFilters.has(key))
+    if (unsupported.length) {
+        return supportError('unsupported_audit_filter', `Unsupported audit filter: ${unsupported[0]}.`, {
+            unavailableFilters: unsupported,
+            supportedFilters: Array.from(adminAuditFilters),
+        })
+    }
+    if (rawQuery.severity && !filter.severity) {
+        return supportError('invalid_audit_filter', 'Unsupported audit severity filter.', {
+            filter: 'severity',
+            supportedValues: ['info', 'notice', 'warning', 'critical'],
+        })
+    }
+    if (rawQuery.outcome && !filter.outcome) {
+        return supportError('invalid_audit_filter', 'Unsupported audit outcome filter.', {
+            filter: 'outcome',
+            supportedValues: ['success', 'denied', 'failed'],
+        })
+    }
+    if (filter.from && Number.isNaN(Date.parse(filter.from))) {
+        return supportError('invalid_audit_filter', 'Invalid audit start time.', { filter: 'from' })
+    }
+    if (filter.to && Number.isNaN(Date.parse(filter.to))) {
+        return supportError('invalid_audit_filter', 'Invalid audit end time.', { filter: 'to' })
+    }
+    if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
+        return supportError('invalid_audit_filter', 'Audit limit must be a positive number.', { filter: 'limit' })
+    }
+    return null
 }
 
 function auditTimelineSummary(timeline: Array<Record<string, any>>) {
@@ -2933,6 +3030,64 @@ function auditTimelineSummary(timeline: Array<Record<string, any>>) {
         actorIds: uniqueTimelineValues(timeline.map(event => event.actor?.id)),
         entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
     }
+}
+
+function supportAuditFilterContract(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const blockers = [
+        timeline.length ? '' : 'audit_unavailable',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'support.audit.filter_contract.v1',
+        filters,
+        supportedFilters: Array.from(adminAuditFilters),
+        redacted: true,
+        redactedSummary: supportAuditRedactedSummary(timeline),
+        stableRequestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
+        correlationIds: uniqueTimelineValues(timeline.map(event => event.context?.correlationId || event.requestId)),
+        idempotencyKeys: uniqueTimelineValues(timeline.map(event => event.context?.idempotencyKey)),
+        blockerCatalog: [
+            'missing_support_reason',
+            'support_role_required',
+            'ambiguous_target',
+            'unsupported_audit_filter',
+            'invalid_audit_filter',
+            'stale_prepare_payload',
+            'duplicate_request',
+            'audit_unavailable',
+            'redaction_required',
+        ],
+        blockers,
+        handoffPreviewLinkage: {
+            request: filters.request || null,
+            correlation: filters.correlation || null,
+            idempotency: filters.idempotency || null,
+            query: auditFilterQuery(filters),
+        },
+    }
+}
+
+function supportAuditRedactedSummary(timeline: Array<Record<string, any>>) {
+    return {
+        eventCount: timeline.length,
+        actions: uniqueTimelineValues(timeline.map(event => event.actionType)),
+        outcomes: uniqueTimelineValues(timeline.map(event => event.outcome)),
+        severities: uniqueTimelineValues(timeline.map(event => event.severity)),
+        actorIds: uniqueTimelineValues(timeline.map(event => event.actor?.id)),
+        targetIds: uniqueTimelineValues(timeline.map(event => event.target?.id)),
+        entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
+        requestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
+        reasonsPresent: timeline.filter(event => Boolean(event.reason)).length,
+        contextsRedacted: true,
+    }
+}
+
+function auditFilterQuery(filters: Record<string, unknown>) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) {
+        if (value === undefined || value === null || value === '') continue
+        params.set(key, String(value))
+    }
+    return `/api/admin/audit-events?${params.toString()}`
 }
 
 function uniqueTimelineValues(values: unknown[]) {
