@@ -10,6 +10,7 @@ const dashboardModelSource = readFileSync(new URL('../src/app/dashboard/operator
 const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', here), 'utf8')
 const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
 const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
+const productReadinessRouteSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -474,6 +475,17 @@ for (const scopedProgressToken of [
     '/api/organizations/:id/webhooks',
 ]) {
     assert.ok(productProgressRouteSource.includes(scopedProgressToken), `Product-progress route missing scoped readiness token: ${scopedProgressToken}`)
+}
+
+for (const scopedReadinessToken of [
+    'copyScopedParams(request, target)',
+    '/api/product-progress',
+    'buildProductNorthStarScoreboard',
+    'organizationId',
+    'userEmail',
+    'actor',
+]) {
+    assert.ok(productReadinessRouteSource.includes(scopedReadinessToken), `Product-readiness route missing scoped bridge token: ${scopedReadinessToken}`)
 }
 
 for (const visibleExample of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {

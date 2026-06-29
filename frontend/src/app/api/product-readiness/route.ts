@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
 async function loadProductProgress(request: NextRequest, query: string) {
     const target = new URL('/api/product-progress', request.nextUrl.origin)
     target.searchParams.set('q', query)
+    copyScopedParams(request, target)
     try {
         const response = await fetch(target, {
             cache: 'no-store',
@@ -26,6 +27,13 @@ async function loadProductProgress(request: NextRequest, query: string) {
         return parseProductProgressReadinessPayload(await response.json())
     } catch {
         return null
+    }
+}
+
+function copyScopedParams(request: NextRequest, target: URL) {
+    for (const name of ['organizationId', 'tenantId', 'userEmail', 'userId', 'actor']) {
+        const value = request.nextUrl.searchParams.get(name)
+        if (value && !target.searchParams.has(name)) target.searchParams.set(name, value)
     }
 }
 
