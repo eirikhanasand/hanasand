@@ -2114,6 +2114,14 @@ const replayDestinationTest = buildDwmWebhookDestinationTestContract({
     viewerRole: 'admin',
     canManage: true,
 })
+const persistedOnlyDestinationTest = buildDwmWebhookDestinationTestContract({
+    liveDeliveryEnabled: false,
+    destination: operationDestinations.find(item => item.id === 'destination_sent_contract') || null,
+    deliveries: [],
+    auditEvents: [],
+    viewerRole: 'admin',
+    canManage: true,
+})
 const disabledDestinationTest = buildDwmWebhookDestinationTestContract({
     liveDeliveryEnabled: false,
     destination: operationDestinations.find(item => item.id === 'destination_disabled_contract') || null,
@@ -2926,6 +2934,8 @@ expect(proofTestRequest?.route === 'POST /api/dwm/webhook-destinations/destinati
 expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.query.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.actionRequests.deliveryHistory.query.dedupeKey === 'dwm_dedupe_replay_contract', 'Alert delivery proof should include a delivery history query for the alert/dedupe key.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
 expect(orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.replayed') && orgAlertDeliveryProof.actionRequests.deliveryHistory.expectedAuditActions.includes('delivery.failed'), 'Alert delivery proof should list expected audit actions for delivery history verification.', orgAlertDeliveryProof.actionRequests.deliveryHistory)
 expect(!JSON.stringify(orgAlertDeliveryProof).includes(secret), 'Alert delivery proof should not leak endpoint, response, or audit secrets.', orgAlertDeliveryProof)
+expect(persistedOnlyDestinationTest.status === 'verified' && persistedOnlyDestinationTest.latestTest?.source === 'destination_persistence' && persistedOnlyDestinationTest.latestTest.status === 'dry_run', 'Destination test contract should honor persisted last-test status when ledger rows are omitted.', persistedOnlyDestinationTest)
+expect(persistedOnlyDestinationTest.preview === null && persistedOnlyDestinationTest.blockers.every(item => item.code !== 'no_verified_dry_run'), 'Persisted test status should not fake a payload preview or mark the destination untested.', persistedOnlyDestinationTest)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
@@ -3169,6 +3179,7 @@ console.log(JSON.stringify({
         'destination CRUD disable/enable/test preflight',
         'destination CRUD role denial',
         'destination CRUD idempotency/audit linkage',
+        'destination test persisted status fallback',
         'destination CRUD product-progress linkage',
         'destination CRUD secret redaction',
         'delivery evidence secret redaction',

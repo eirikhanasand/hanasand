@@ -4818,6 +4818,21 @@ export function buildDwmWebhookDestinationTestContract({
             .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
         : []
     const latestTest = scopedDeliveries[0] || null
+    const persistedLastTest = destination?.lastTestStatus
+        ? {
+            requestId: null,
+            deliveryId: null,
+            status: destination.lastTestStatus,
+            dryRun: destination.lastTestStatus === 'dry_run',
+            live: destination.lastTestStatus === 'delivered',
+            responseStatus: destination.lastTestHttpStatus,
+            error: destination.lastTestError ? redactDeliveryEvidenceText(destination.lastTestError) : null,
+            attemptedAt: destination.lastTestedAt,
+            payloadHash: null,
+            idempotencyKey: null,
+            source: 'destination_persistence',
+        }
+        : null
     const preview = latestTest ? buildDwmWebhookDeliveryPreview(latestTest) : null
     const health = destination
         ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents, liveDeliveryEnabled })[0] || null
@@ -4837,13 +4852,17 @@ export function buildDwmWebhookDestinationTestContract({
     if (!destination) blockers.push(testContractBlocker('destination_missing', 'Webhook destination is not available for this organization.', null))
     if (destination && destination.status !== 'active') blockers.push(testContractBlocker('destination_disabled', 'Destination is disabled and cannot be tested.', destination.id))
     if (destination && !destination.endpointHash && !destination.endpointHint) blockers.push(testContractBlocker('missing_webhook_url', 'Destination has no configured webhook URL reference.', destination.id))
-    if (!latestTest) blockers.push(testContractBlocker('no_verified_dry_run', 'Destination has not recorded a dry-run test delivery yet.', destinationId, false))
-    if (latestTest?.status === 'failed' || health?.lastTest.status === 'failed') blockers.push(testContractBlocker('test_failed', 'Latest destination test failed.', destinationId))
+    if (!latestTest && !persistedLastTest) blockers.push(testContractBlocker('no_verified_dry_run', 'Destination has not recorded a dry-run test delivery yet.', destinationId, false))
+    if (latestTest?.status === 'failed' || persistedLastTest?.status === 'failed' || health?.lastTest.status === 'failed') blockers.push(testContractBlocker('test_failed', 'Latest destination test failed.', destinationId))
     if (!latestAudit) blockers.push(testContractBlocker('audit_missing', 'Destination test has no linked audit event yet.', destinationId, false))
     if (!liveDeliveryEnabled) blockers.push(testContractBlocker('live_delivery_disabled', 'Live webhook delivery is disabled for this environment; tests default to dry-run.', destinationId, false))
     const uniqueBlockers = uniqueTestContractBlockers(blockers)
     const blockingCodes = uniqueBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
-    const verified = latestTest?.status === 'dry_run' || latestTest?.status === 'delivered'
+    const verified = latestTest?.status === 'dry_run'
+        || latestTest?.status === 'delivered'
+        || persistedLastTest?.status === 'dry_run'
+        || persistedLastTest?.status === 'delivered'
+    const latestTestStatus = latestTest?.status || persistedLastTest?.status || null
 
     return {
         schemaVersion: 'dwm.webhook.destination_test.v1',
@@ -4851,7 +4870,7 @@ export function buildDwmWebhookDestinationTestContract({
         destinationId,
         type: destination?.kind || null,
         label: destination?.name || null,
-        status: verified ? 'verified' : latestTest?.status === 'failed' || health?.lastTest.status === 'failed' ? 'test_failed' : destination?.status === 'archived' || destination?.status === 'paused' ? 'disabled' : 'pending',
+        status: verified ? 'verified' : latestTestStatus === 'failed' || health?.lastTest.status === 'failed' ? 'test_failed' : destination?.status === 'archived' || destination?.status === 'paused' ? 'disabled' : 'pending',
         noNetwork: true,
         liveDeliveryEnabled,
         externalSendEnabled: false,
@@ -4877,8 +4896,9 @@ export function buildDwmWebhookDestinationTestContract({
                 attemptedAt: latestTest.attemptedAt,
                 payloadHash: latestTest.payloadHash,
                 idempotencyKey: latestTest.idempotencyKey,
+                source: 'delivery_ledger',
             }
-            : null,
+            : persistedLastTest,
         preview: preview
             ? {
                 discord: {
