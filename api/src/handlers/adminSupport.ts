@@ -62,6 +62,14 @@ type SupportInspectionQuery = {
     outcome?: string
     source?: string
     service?: string
+    prepareAction?: string
+    reason?: string
+    context?: string
+    scope?: string
+    durationMinutes?: string
+    duration_minutes?: string
+    expiresAt?: string
+    expires_at?: string
     from?: string
     to?: string
     limit?: string
@@ -179,6 +187,15 @@ type SupportTimelineFilter = {
     unsupported: string[]
 }
 
+type SupportActionPreparationInput = {
+    action: 'invite_assist' | 'access_recovery' | 'impersonation'
+    reason: string
+    context: string
+    scope: string[]
+    durationMinutes: number | null
+    expiresAt: string | null
+}
+
 const supportInspectionFilters = new Set([
     'org',
     'orgId',
@@ -195,6 +212,14 @@ const supportInspectionFilters = new Set([
     'outcome',
     'source',
     'service',
+    'prepareAction',
+    'reason',
+    'context',
+    'scope',
+    'durationMinutes',
+    'duration_minutes',
+    'expiresAt',
+    'expires_at',
     'from',
     'to',
     'limit',
@@ -518,6 +543,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const action = text(query.action)
     const source = text(query.source)
     const service = text(query.service)
+    const prepareAction = normalizeOption(query.prepareAction, ['invite_assist', 'access_recovery', 'impersonation'])
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
@@ -527,6 +553,10 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
+    }
+    const preparationInput = supportActionPreparationInput(query, prepareAction)
+    if (preparationInput.error) {
+        return res.status(400).send(preparationInput.error)
     }
 
     if (!org && !user && !email && !request && !entity && !entityType && !action) {
@@ -597,6 +627,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         caseSummary,
         timeline,
         timelineFilter,
+        preparationInput: preparationInput.value,
     })
 
     await recordAdminAuditEvent(req, {
@@ -636,6 +667,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
             approvalRequests: approvalDetails,
             caseSummary,
             workbench,
+            actionPreparation: workbench.actionPreparation,
             recoveryEligibility,
             auditEventIds: timeline.map(event => event.id),
             auditTimeline: timeline,
@@ -2209,6 +2241,7 @@ function buildSupportWorkbench(input: {
     caseSummary: Record<string, any>
     timeline: Array<Record<string, any>>
     timelineFilter: SupportTimelineFilter
+    preparationInput?: SupportActionPreparationInput | null
 }) {
     const activeMemberships = input.memberships.filter(row => row.status === 'active')
     const inactiveMemberships = input.memberships.filter(row => row.status !== 'active')
@@ -2246,6 +2279,28 @@ function buildSupportWorkbench(input: {
         input.user ? '' : 'missing_user_target',
         userInactive ? 'inactive_user' : '',
     ])
+    const actionPreparation = input.preparationInput
+        ? buildSupportActionPreparation({
+            input: input.preparationInput,
+            organizationIds: input.organizationIds,
+            user: input.user,
+            email: input.email,
+            request: input.request,
+            inviteAssistBlockers,
+            accessRecoveryBlockers,
+            impersonationBlockers,
+            timeline: input.timeline,
+        })
+        : {
+            schemaVersion: 'support.action_prepare.v1',
+            requested: false,
+            supportedActions: ['invite_assist', 'access_recovery', 'impersonation'],
+            reasonRequired: true,
+            contextRequired: true,
+            scopeRequired: true,
+            durationRequiredFor: ['impersonation'],
+            expiryRelevantFor: ['invite_assist', 'access_recovery'],
+        }
 
     return {
         schemaVersion: 'support.workbench.v1',
@@ -2311,6 +2366,7 @@ function buildSupportWorkbench(input: {
             impersonation: auditTimelineLink({ target: input.user, request: input.request, action: 'impersonation' }),
             redacted: true,
         },
+        actionPreparation,
         blockers,
         copyText: [
             `Support workbench org=${input.org || input.organizationIds.join(',') || '*'} user=${input.user || '*'} email=${input.email || '*'} request=${input.request || '*'}`,
@@ -2320,6 +2376,188 @@ function buildSupportWorkbench(input: {
             `Audit events: ${input.timeline.map(event => event.id).join(', ') || 'none'}`,
         ].join('\n'),
     }
+}
+
+function buildSupportActionPreparation(input: {
+    input: SupportActionPreparationInput
+    organizationIds: string[]
+    user: string
+    email: string
+    request: string
+    inviteAssistBlockers: string[]
+    accessRecoveryBlockers: string[]
+    impersonationBlockers: string[]
+    timeline: Array<Record<string, any>>
+}) {
+    const actionBlockers = input.input.action === 'invite_assist'
+        ? input.inviteAssistBlockers
+        : input.input.action === 'access_recovery'
+            ? input.accessRecoveryBlockers
+            : input.impersonationBlockers
+    const blockers = uniqueTimelineValues([
+        ...actionBlockers,
+        input.input.scope.length ? '' : 'missing_scope',
+        input.input.action === 'impersonation' && !input.input.durationMinutes ? 'invalid_duration' : '',
+    ])
+    const allowed = blockers.length === 0
+    const actionType = input.input.action === 'impersonation'
+        ? 'impersonation.start'
+        : input.input.action === 'access_recovery'
+            ? 'support.organization.access_recovery'
+            : 'support.organization.invite_assist'
+    const organizationId = input.organizationIds[0] || null
+    const targetId = input.user || input.email || organizationId || null
+    const requestId = input.request || 'generated-on-submit'
+
+    return {
+        schemaVersion: 'support.action_prepare.v1',
+        requested: true,
+        dryRun: true,
+        action: input.input.action,
+        allowed,
+        outcome: allowed ? 'success' : 'denied',
+        requestId,
+        target: {
+            organizationId,
+            organizationIds: input.organizationIds,
+            userId: input.user || null,
+            email: input.email || null,
+        },
+        reason: input.input.reason,
+        context: input.input.context,
+        scope: input.input.scope,
+        durationMinutes: input.input.durationMinutes,
+        expiresAt: input.input.expiresAt,
+        blockers,
+        auditPreview: {
+            actionType,
+            source: 'admin',
+            service: 'hanasand-api',
+            severity: input.input.action === 'impersonation' || input.input.action === 'access_recovery' ? 'warning' : 'notice',
+            outcome: allowed ? 'success' : 'denied',
+            targetType: input.input.action === 'impersonation' ? 'user' : input.input.action === 'access_recovery' ? 'invite' : 'organization',
+            targetId,
+            organizationId,
+            entityId: targetId,
+            requestId,
+            reason: input.input.reason,
+            context: redactAuditValue({
+                schemaVersion: 'support.action_prepare.audit_preview.v1',
+                action: input.input.action,
+                dryRun: true,
+                targetUserId: input.user || null,
+                email: input.email || null,
+                organizationIds: input.organizationIds,
+                scope: input.input.scope,
+                durationMinutes: input.input.durationMinutes,
+                expiresAt: input.input.expiresAt,
+                blockers,
+                timelineEventIds: input.timeline.map(event => event.id),
+            }),
+        },
+        audit: auditTimelineLink({
+            org: organizationId,
+            target: input.user || input.email,
+            request: input.request,
+            action: input.input.action === 'impersonation' ? 'impersonation' : input.input.action,
+            outcome: allowed ? 'success' : 'denied',
+        }),
+        copyText: [
+            `Support action prepare ${input.input.action}`,
+            `Target org=${organizationId || '*'} user=${input.user || '*'} email=${input.email || '*'}`,
+            `Outcome: ${allowed ? 'allowed' : `blocked:${blockers.join(',')}`}`,
+            `Request: ${requestId}`,
+            `Reason: ${input.input.reason}`,
+        ].join('\n'),
+    }
+}
+
+function supportActionPreparationInput(query: SupportInspectionQuery, action: string): { value: SupportActionPreparationInput | null, error: Record<string, unknown> | null } {
+    if (!query.prepareAction) {
+        return { value: null, error: null }
+    }
+    if (!action) {
+        return {
+            value: null,
+            error: supportError('unsupported_support_action', 'Unsupported support action prepare request.', {
+                supportedActions: ['invite_assist', 'access_recovery', 'impersonation'],
+            }),
+        }
+    }
+
+    let reason = ''
+    try {
+        reason = requireAuditReason(query.reason, 'Support action preparation reason')
+    } catch (error) {
+        return {
+            value: null,
+            error: supportError('missing_support_reason', error instanceof Error ? error.message : 'Support action preparation reason is required.'),
+        }
+    }
+
+    const scopeResult = normalizeSupportPreparationScope(query.scope, action)
+    if (scopeResult.error) return { value: null, error: scopeResult.error }
+    const durationResult = normalizeSupportPreparationDuration(query.durationMinutes ?? query.duration_minutes, action)
+    if (durationResult.error) return { value: null, error: durationResult.error }
+    const expiryResult = normalizeSupportPreparationExpiry(query.expiresAt ?? query.expires_at)
+    if (expiryResult.error) return { value: null, error: expiryResult.error }
+
+    return {
+        value: {
+            action: action as SupportActionPreparationInput['action'],
+            reason,
+            context: cleanContext(query.context),
+            scope: scopeResult.value,
+            durationMinutes: durationResult.value,
+            expiresAt: expiryResult.value,
+        },
+        error: null,
+    }
+}
+
+function normalizeSupportPreparationScope(value: unknown, action: string): { value: string[], error: Record<string, unknown> | null } {
+    const allowedByAction: Record<string, Set<string>> = {
+        invite_assist: new Set(['invite:create', 'invite:resend', 'invite:revoke']),
+        access_recovery: new Set(['recovery:invite', 'recovery:approve', 'recovery:deny']),
+        impersonation: new Set(['read_profile', 'read_org', 'support_debug']),
+    }
+    const allowed = allowedByAction[action] || new Set<string>()
+    const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []
+    const scope = Array.from(new Set(raw.map(item => text(item).toLowerCase()).filter(Boolean)))
+    if (!scope.length) {
+        return { value: [], error: supportError('missing_scope', 'Support action preparation scope is required.', { supportedScopes: Array.from(allowed) }) }
+    }
+    const unsupported = scope.filter(item => !allowed.has(item))
+    if (unsupported.length) {
+        return { value: [], error: supportError('invalid_scope', `Unsupported support action scope: ${unsupported[0]}.`, { supportedScopes: Array.from(allowed) }) }
+    }
+    return { value: scope, error: null }
+}
+
+function normalizeSupportPreparationDuration(value: unknown, action: string): { value: number | null, error: Record<string, unknown> | null } {
+    if (action !== 'impersonation' && (value === undefined || value === null || value === '')) {
+        return { value: null, error: null }
+    }
+    if (value === undefined || value === null || value === '') {
+        return { value: null, error: supportError('invalid_duration', 'Impersonation preparation duration is required.') }
+    }
+    const parsed = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(parsed) || parsed !== Math.trunc(parsed) || parsed < 5 || parsed > 240) {
+        return { value: null, error: supportError('invalid_duration', 'Impersonation preparation duration must be between 5 and 240 minutes.') }
+    }
+    return { value: parsed, error: null }
+}
+
+function normalizeSupportPreparationExpiry(value: unknown): { value: string | null, error: Record<string, unknown> | null } {
+    const expiresAt = text(value)
+    if (!expiresAt) {
+        return { value: null, error: null }
+    }
+    const timestamp = Date.parse(expiresAt)
+    if (Number.isNaN(timestamp) || timestamp <= Date.now()) {
+        return { value: null, error: supportError('invalid_expiry', 'Support action preparation expiry must be a future timestamp.') }
+    }
+    return { value: new Date(timestamp).toISOString(), error: null }
 }
 
 function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: Omit<SupportTimelineFilter, 'unsupported'>) {
