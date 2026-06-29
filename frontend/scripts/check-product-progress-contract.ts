@@ -760,6 +760,8 @@ assert.ok(workbenchSource.includes('refreshBackedSelection(item, payload'), 'Rep
 assert.ok(workbenchSource.includes('caseDetailHrefFromPayload'), 'Open-case responses should be converted into /api/cases/:id detail refreshes.')
 assert.ok(workbenchSource.includes('payload?.case?.id'), 'Case detail refresh should depend on the backed case id returned by /api/cases.')
 assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail'), 'Selected alert detail should open linked /api/cases/:id detail when the alert API returns a case id.')
+assert.ok(workbenchSource.includes('backedCaseHref'), 'Operator action rail should use backed case links derived from live alert detail.')
+assert.ok(workbenchSource.includes('caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext)'), 'Operator action rail should open and export cases discovered from /api/dwm/alerts/:id detail.')
 assert.ok(workbenchSource.includes('alert?.workflowContext?.caseIdCandidate'), 'Alert-derived case detail should consume the workflow case candidate returned by /api/dwm/alerts/:id.')
 assert.ok(workbenchSource.includes('deliveryEvidenceFromPayload'), 'Webhook test/send responses should become inspectable delivery evidence in the selected workbench item.')
 assert.ok(workbenchSource.includes('mergeDeliveryEvidence(actionDeliveries'), 'Action-returned delivery evidence should be shown in the backed inspection panel before case detail reloads.')

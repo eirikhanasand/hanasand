@@ -927,6 +927,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 selected={selected}
                                 orgContext={orgContext}
                                 caseDetail={selectedCaseDetail}
+                                alertDetail={selectedAlertDetail}
                                 actionDeliveries={selectedActionDeliveries}
                                 busyAction={busyAction}
                                 onRunAction={(action) => selected && runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
@@ -1170,16 +1171,17 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     )
 }
 
-function OperatorActionRail({ selected, orgContext, caseDetail, actionDeliveries = [], busyAction, onRunAction, onCopyPayload }: {
+function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, actionDeliveries = [], busyAction, onRunAction, onCopyPayload }: {
     selected?: WorkbenchCase
     orgContext?: WorkbenchOrgContext
     caseDetail?: CaseDetailState
+    alertDetail?: AlertDetailState
     actionDeliveries?: WorkbenchDeliveryEvidence[]
     busyAction: string | null
     onRunAction: (action: WorkbenchAction) => void | Promise<void>
     onCopyPayload: (payload?: unknown) => void | Promise<void>
 }) {
-    const rows = actionRailRows(selected, orgContext, caseDetail, actionDeliveries)
+    const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries)
 
     return (
         <section className='rounded-lg border border-[#d8e1ef] bg-white dark:border-[#2d3a52] dark:bg-[#0f172a]'>
@@ -1249,7 +1251,7 @@ export type OperatorActionRailRow = {
     disabledReason?: string
 }
 
-function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = []): OperatorActionRailRow[] {
+function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = []): OperatorActionRailRow[] {
     if (!selected) return [{
         id: 'select_case',
         label: 'Select work',
@@ -1271,14 +1273,15 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
         })
     }
-    if (selected.caseDetailHref) {
-        rows.push({ id: 'open_case', label: 'Open selected case', detail: selected.caseDetailHref, tone: 'ready', href: selected.caseDetailHref })
+    const backedCaseHref = selected.caseDetailHref || (alertDetail?.status === 'ready' ? caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext) : undefined)
+    if (backedCaseHref) {
+        rows.push({ id: 'open_case', label: 'Open selected case', detail: backedCaseHref, tone: 'ready', href: backedCaseHref })
         rows.push({
             id: 'export_case_evidence',
             label: 'Export case evidence',
-            detail: `GET ${caseExportHref(selected.caseDetailHref)}.`,
+            detail: `GET ${caseExportHref(backedCaseHref)}.`,
             tone: 'ready',
-            href: caseExportHref(selected.caseDetailHref),
+            href: caseExportHref(backedCaseHref),
         })
     } else if (selected.kind === 'dwm_alert') {
         rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
