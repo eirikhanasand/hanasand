@@ -274,6 +274,7 @@ type AlertDetailPayload = {
     alert?: {
         id?: string
         reviewState?: string
+        workflowStatus?: string
         deliveryState?: string
         assignedOwner?: string
         caseId?: string
@@ -305,7 +306,35 @@ type AlertDetailPayload = {
             firstSeenAt?: string
             provenance?: { sourceId?: string, captureId?: string, captureMode?: string } | string
         }>
+        replayCount?: number
+        lastReplayedAt?: string
     }
+    workflowExecutionReadiness?: {
+        schemaVersion?: string
+        ready?: boolean
+        action?: string
+        currentWorkflowEventCount?: number
+        expectedWorkflowEventCount?: number
+        currentUpdatedAt?: string
+        expectedUpdatedAt?: string
+        idempotencyKey?: string
+        blockerCodes?: string[]
+        blockers?: Array<{ code?: string, field?: string, detail?: string, retryable?: boolean }>
+        createdEventDispatch?: { ready?: boolean, eventId?: string, idempotencyKey?: string, blockerCodes?: string[] }
+    }
+    analystWorkflowContract?: {
+        mutationRoute?: string
+        replayRoute?: string
+        idempotency?: { workflowEventCount?: number, updatedAt?: string, staleVersionBlocker?: string }
+        current?: { status?: string, assignedOwner?: string, caseId?: string, casePath?: string, replayCount?: number }
+    }
+    downstreamHandoff?: {
+        ready?: boolean
+        blockerCodes?: string[]
+        deliverySelection?: { ready?: boolean, selectedWebhookDestinationId?: string, blockerCodes?: string[] }
+        customerProof?: { ready?: boolean, blockerCodes?: string[] }
+    }
+    timeline?: CaseTimelineItem[]
     error?: { message?: string }
 }
 
@@ -487,10 +516,13 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
         await runPersistentAction(`decision:${item.id}`, async () => {
             const mapped: Partial<{ reviewState: string, deliveryState: string }> = decisionStatus ? mapDwmDecision(decisionStatus, item.status) : {}
+            const currentAlertDetail = alertDetails[item.id]
+            const mutationDetail = currentAlertDetail?.status === 'ready' ? currentAlertDetail.detail : undefined
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({
+                    ...alertWorkflowMutationBody(item, mutationDetail, orgContext),
                     reviewState: mapped.reviewState,
                     deliveryState: mapped.deliveryState,
                     note: decision.reason || (decision.owner ? `Assigned to ${decision.owner}.` : 'Updated from the analyst workbench.'),
@@ -508,10 +540,16 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     async function replayDwmAlert(item: WorkbenchCase) {
         await runPersistentAction(`replay:${item.id}`, async () => {
+            const currentAlertDetail = alertDetails[item.id]
+            const mutationDetail = currentAlertDetail?.status === 'ready' ? currentAlertDetail.detail : undefined
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(item.id)}/replay`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ actor: 'dashboard' }),
+                body: JSON.stringify({
+                    ...alertWorkflowMutationBody(item, mutationDetail, orgContext),
+                    action: 'replay',
+                    actor: 'dashboard',
+                }),
             })
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -1755,6 +1793,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, com
                     {alertDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading alert detail' body='Fetching /api/dwm/alerts/:id through the dashboard proxy.' />}
                     {alertDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Alert detail unavailable' body={alertDetail.error} />}
                     {alertRecord ? <AlertDetailSummary alert={alertRecord} fallback={item} /> : null}
+                    {alertDetail?.status === 'ready' ? <AlertWorkflowReadiness detail={alertDetail.detail} /> : null}
                     {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Fetching /api/cases/:id through the dashboard proxy.' />}
                     {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail unavailable' body={caseDetail.error} />}
                     {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Blocked dependency' body={blockedDependency} />}
@@ -1800,6 +1839,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, com
                         </>
                     )}
                     {caseDetail?.status !== 'ready' && alertEvidence.length ? <AlertEvidenceRows evidence={alertEvidence} /> : null}
+                    {caseDetail?.status !== 'ready' && alertDetail?.status === 'ready' && alertDetail.detail.timeline?.length ? <TimelineRows title='Alert timeline' rows={alertDetail.detail.timeline} /> : null}
                     {caseDetail?.status !== 'ready' && !deliveries.length && (
                         <InspectionNotice
                             tone='neutral'
@@ -1894,13 +1934,53 @@ function AlertDetailSummary({ alert, fallback }: { alert: NonNullable<AlertDetai
             <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
                 <p><span className='font-semibold text-[#475467]'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
                 <p><span className='font-semibold text-[#475467]'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Workflow:</span> {label(alert.workflowStatus || alert.reviewState || fallback.status)}</p>
                 <p><span className='font-semibold text-[#475467]'>Org:</span> {alert.organizationId || workflowContext?.organizationId || 'not returned'}</p>
                 <p><span className='font-semibold text-[#475467]'>Case:</span> {caseId || 'not linked'}</p>
                 <p><span className='font-semibold text-[#475467]'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
                 <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
+                <p><span className='font-semibold text-[#475467]'>Replays:</span> {alert.replayCount ?? 0}{alert.lastReplayedAt ? ` · ${relativeTime(alert.lastReplayedAt)}` : ''}</p>
                 <p className='break-all'><span className='font-semibold text-[#475467]'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'not returned'}</p>
                 <p className='break-all'><span className='font-semibold text-[#475467]'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'route available' : 'not returned')}</p>
             </div>
+        </div>
+    )
+}
+
+function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
+    const readiness = detail.workflowExecutionReadiness
+    const contract = detail.analystWorkflowContract
+    const downstream = detail.downstreamHandoff
+    const blockerCodes = [...(readiness?.blockerCodes || []), ...(downstream?.blockerCodes || [])]
+        .filter((code, index, source) => source.indexOf(code) === index)
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center gap-2'>
+                <h4 className='text-sm font-semibold text-[#171a21]'>Workflow guard</h4>
+                <span className={workflowStatusClass(readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready')}>{readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready'}</span>
+                {readiness?.action && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{label(readiness.action)}</span>}
+            </div>
+            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#475467]'>Mutation:</span> {contract?.mutationRoute || '/v1/dwm/alerts/:id'}</p>
+                <p><span className='font-semibold text-[#475467]'>Replay:</span> {contract?.replayRoute || '/v1/dwm/alerts/:id/replay'}</p>
+                <p><span className='font-semibold text-[#475467]'>Event count:</span> {readiness?.currentWorkflowEventCount ?? contract?.idempotency?.workflowEventCount ?? 'not returned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(readiness?.currentUpdatedAt || contract?.idempotency?.updatedAt || detail.alert?.updatedAt || detail.generatedAt || '')}</p>
+                <p><span className='font-semibold text-[#475467]'>Delivery selection:</span> {downstream?.deliverySelection?.ready === false ? 'blocked' : downstream?.deliverySelection?.selectedWebhookDestinationId || 'not returned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Customer proof:</span> {downstream?.customerProof?.ready === false ? 'blocked' : downstream?.customerProof?.ready === true ? 'ready' : 'not returned'}</p>
+            </div>
+            <div className='mt-3 flex flex-wrap gap-2'>
+                {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
+                {!blockerCodes.length && <span className='text-xs text-[#667085]'>No workflow blockers returned.</span>}
+            </div>
+            {readiness?.blockers?.length ? (
+                <div className='mt-3 grid gap-2'>
+                    {readiness.blockers.slice(0, 3).map(blocker => (
+                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-[#fed7aa] bg-[#fff7ed] px-2 py-1 text-xs text-[#9a3412]'>
+                            {label(blocker.code || 'workflow blocker')}{blocker.detail ? `: ${blocker.detail}` : ''}
+                        </p>
+                    ))}
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -2758,6 +2838,26 @@ function caseDetailHrefFromAlertDetail(payload: AlertDetailPayload | undefined, 
         || orgContext?.scope.organizationId
     const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
     return `/api/cases/${encodeURIComponent(caseId)}${query}`
+}
+
+function alertWorkflowMutationBody(item: WorkbenchCase, detail: AlertDetailPayload | undefined, orgContext: WorkbenchOrgContext | undefined) {
+    const alert = detail?.alert
+    const contract = detail?.analystWorkflowContract
+    const organizationId = stringValue(alert?.organizationId)
+        || stringValue(alert?.workflowContext?.organizationId)
+        || orgContext?.organization?.id
+        || orgContext?.scope.organizationId
+    const expectedWorkflowEventCount = detail?.workflowExecutionReadiness?.currentWorkflowEventCount
+        ?? contract?.idempotency?.workflowEventCount
+    const expectedUpdatedAt = detail?.workflowExecutionReadiness?.currentUpdatedAt
+        || contract?.idempotency?.updatedAt
+        || alert?.updatedAt
+    return {
+        ...(organizationId ? { organizationId } : scopeBody(orgContext)),
+        alertId: item.id,
+        ...(expectedWorkflowEventCount !== undefined ? { expectedWorkflowEventCount } : {}),
+        ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+    }
 }
 
 function stringValue(value: unknown) {
