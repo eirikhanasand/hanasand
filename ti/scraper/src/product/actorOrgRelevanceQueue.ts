@@ -13,6 +13,7 @@ export const ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION = "hanasand.actor_org_rel
 export const ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.queue.v1" as const;
 export const ACTOR_ORG_RELEVANCE_SOURCE_COLLECTION_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.source_collection_queue.v1" as const;
 export const ACTOR_ORG_RELEVANCE_HANDOFF_QUEUE_SCHEMA_VERSION = "hanasand.actor_org_relevance.handoff_queue.v1" as const;
+export const ACTOR_ORG_RELEVANCE_CASE_EVIDENCE_PACKET_SCHEMA_VERSION = "hanasand.actor_org_relevance.case_evidence_packet.v1" as const;
 
 export type ActorOrgRelevanceReviewRecord = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_REVIEW_SCHEMA_VERSION;
@@ -534,6 +535,80 @@ export type ActorOrgRelevanceCustomerNotificationInput = {
 export type ActorOrgRelevanceCustomerNotificationResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceCustomerNotificationReceipt; created: boolean }
   | { ok: false; code: string; message: string };
+
+export type ActorOrgRelevanceCaseEvidencePacketBlocker = {
+  code: "review_not_ready" | "missing_alert_generation_receipt" | "missing_case_handoff_receipt";
+  ownerLane: "public-ti" | "alert" | "case";
+  path: string;
+  message: string;
+};
+
+export type ActorOrgRelevanceCaseEvidencePacket = {
+  schemaVersion: typeof ACTOR_ORG_RELEVANCE_CASE_EVIDENCE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId: string;
+  reviewId: string;
+  actorId: string;
+  query: string;
+  redacted: true;
+  actor: {
+    canonicalName?: string;
+    aliases: string[];
+    actorClass?: string;
+    sectors: string[];
+    regions: string[];
+    motivations: string[];
+  };
+  caseHandoff?: {
+    receiptId: string;
+    alertGenerationReceiptId: string;
+    method: "POST";
+    route: "/v1/cases";
+    casePath: string;
+    alertId: string;
+    caseIdCandidate?: string;
+    recommendedRoute: string;
+    priority: string;
+    idempotencyKey: string;
+  };
+  watchlist: {
+    terms: Array<{ kind: string; value: string }>;
+    watchlistItemIds: string[];
+    publicTiHandoffId?: string;
+  };
+  evidence: {
+    redacted: true;
+    evidenceCount: number;
+    captureIds: string[];
+    sourceIds: string[];
+    sourceFamilies: string[];
+    provenance: Array<{
+      sourceId?: string;
+      sourceName: string;
+      captureId?: string;
+      provenance: string;
+      confidence?: number;
+      supportsTerms: string[];
+    }>;
+  };
+  routes: {
+    review: string;
+    publicTi: string;
+    case?: string;
+    alertGeneration?: string;
+    webhookTrigger?: string;
+  };
+  blockers: ActorOrgRelevanceCaseEvidencePacketBlocker[];
+  nextActions: Array<{
+    ownerLane: ActorOrgRelevanceCaseEvidencePacketBlocker["ownerLane"];
+    action: "review_actor_relevance" | "prepare_alert_generation" | "prepare_case_handoff";
+    blockerCode: ActorOrgRelevanceCaseEvidencePacketBlocker["code"];
+    route: string;
+  }>;
+};
 
 export type ActorOrgRelevanceCancelPreparedHandoffInput = {
   target: "alert_generation" | "case_handoff" | "webhook_trigger";
@@ -1535,6 +1610,87 @@ export function createActorOrgRelevanceCustomerNotification(input: {
   };
 }
 
+export function buildActorOrgRelevanceCaseEvidencePacket(input: {
+  record: ActorOrgRelevanceReviewRecord;
+  generatedAt?: string;
+}): ActorOrgRelevanceCaseEvidencePacket {
+  const record = input.record;
+  const generatedAt = input.generatedAt || nowIso();
+  const alertGenerationReceipt = latestActiveReceipt(record.alertGenerationReceipts);
+  const caseHandoffReceipt = latestActiveReceipt(record.caseHandoffReceipts);
+  const blockers = actorOrgCaseEvidencePacketBlockers(record, alertGenerationReceipt, caseHandoffReceipt);
+  const actorIdentity = (record.orgRelevance as any).actorIdentity ?? {};
+  const watchlistBody = record.handoff?.watchlist.request.body;
+  const caseBody = caseHandoffReceipt?.request.body;
+
+  return {
+    schemaVersion: ACTOR_ORG_RELEVANCE_CASE_EVIDENCE_PACKET_SCHEMA_VERSION,
+    id: stableId("actor_org_relevance_case_evidence_packet", `${record.tenantId}:${record.organizationId}:${record.id}:${caseHandoffReceipt?.id ?? "blocked"}:${generatedAt}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    reviewId: record.id,
+    actorId: record.actorId,
+    query: record.query,
+    redacted: true,
+    actor: {
+      canonicalName: stringOrUndefined(actorIdentity.canonicalName),
+      aliases: asCleanStrings(actorIdentity.aliases),
+      actorClass: stringOrUndefined(actorIdentity.actorClass),
+      sectors: asCleanStrings(actorIdentity.sectors),
+      regions: asCleanStrings(actorIdentity.regions),
+      motivations: asCleanStrings(actorIdentity.motivations)
+    },
+    caseHandoff: caseHandoffReceipt ? {
+      receiptId: caseHandoffReceipt.id,
+      alertGenerationReceiptId: caseHandoffReceipt.alertGenerationReceiptId,
+      method: caseHandoffReceipt.request.method,
+      route: caseHandoffReceipt.request.path,
+      casePath: caseHandoffReceipt.routing.casePath,
+      alertId: caseHandoffReceipt.routing.alertId,
+      caseIdCandidate: stringOrUndefined(caseBody?.caseIdCandidate),
+      recommendedRoute: caseHandoffReceipt.routing.recommendedRoute,
+      priority: caseHandoffReceipt.routing.priority,
+      idempotencyKey: caseHandoffReceipt.idempotencyKey
+    } : undefined,
+    watchlist: {
+      terms: (watchlistBody?.terms ?? []).map((term: DwmWatchTerm) => ({ kind: term.kind, value: term.value })),
+      watchlistItemIds: asCleanStrings(record.handoff?.alertGeneration.request.body.watchlistItemIds),
+      publicTiHandoffId: record.handoff?.watchlist.handoff.handoffId
+    },
+    evidence: {
+      redacted: true,
+      evidenceCount: caseHandoffReceipt?.provenance.evidenceCount ?? 0,
+      captureIds: caseHandoffReceipt?.provenance.captureIds ?? [],
+      sourceIds: caseHandoffReceipt?.provenance.sourceIds ?? [],
+      sourceFamilies: caseHandoffReceipt?.provenance.sourceFamilies ?? [],
+      provenance: sourceEvidenceRows(record).map((row) => ({
+        sourceId: row.sourceId,
+        sourceName: row.sourceName,
+        captureId: row.captureId,
+        provenance: row.provenance,
+        confidence: row.confidence,
+        supportsTerms: row.supportsTerms ?? []
+      }))
+    },
+    routes: {
+      review: `/v1/ti/actor-org-relevance/${record.id}`,
+      publicTi: `/ti/${encodeURIComponent(record.query)}`,
+      case: caseHandoffReceipt?.routing.casePath,
+      alertGeneration: record.handoff ? `/v1/ti/actor-org-relevance/${record.id}/alert-generation-request` : undefined,
+      webhookTrigger: caseHandoffReceipt ? `/v1/ti/actor-org-relevance/${record.id}/webhook-trigger-request` : undefined
+    },
+    blockers,
+    nextActions: blockers.map((blocker) => ({
+      ownerLane: blocker.ownerLane,
+      action: actorOrgCaseEvidenceActionFor(blocker.code),
+      blockerCode: blocker.code,
+      route: actorOrgCaseEvidenceRouteFor(record, blocker.code)
+    }))
+  };
+}
+
 export function cancelActorOrgRelevancePreparedHandoff(
   record: ActorOrgRelevanceReviewRecord,
   input: ActorOrgRelevanceCancelPreparedHandoffInput
@@ -1662,6 +1818,51 @@ function latestCustomerNotification(record: ActorOrgRelevanceReviewRecord) {
   return [...(record.customerNotificationReceipts ?? [])].reverse()[0];
 }
 
+function actorOrgCaseEvidencePacketBlockers(
+  record: ActorOrgRelevanceReviewRecord,
+  alertGenerationReceipt: ActorOrgRelevanceAlertGenerationReceipt | undefined,
+  caseHandoffReceipt: ActorOrgRelevanceCaseHandoffReceipt | undefined
+): ActorOrgRelevanceCaseEvidencePacketBlocker[] {
+  const blockers: ActorOrgRelevanceCaseEvidencePacketBlocker[] = [];
+  if (record.state !== "ready" || !record.handoff) {
+    blockers.push({
+      code: "review_not_ready",
+      ownerLane: "public-ti",
+      path: "record.state",
+      message: "Actor relevance review must be ready before packaging case evidence."
+    });
+  }
+  if (!alertGenerationReceipt) {
+    blockers.push({
+      code: "missing_alert_generation_receipt",
+      ownerLane: "alert",
+      path: "record.alertGenerationReceipts",
+      message: "Case evidence requires a prepared alert generation receipt."
+    });
+  }
+  if (!caseHandoffReceipt) {
+    blockers.push({
+      code: "missing_case_handoff_receipt",
+      ownerLane: "case",
+      path: "record.caseHandoffReceipts",
+      message: "Case evidence requires an active case handoff receipt."
+    });
+  }
+  return blockers;
+}
+
+function actorOrgCaseEvidenceActionFor(code: ActorOrgRelevanceCaseEvidencePacketBlocker["code"]): ActorOrgRelevanceCaseEvidencePacket["nextActions"][number]["action"] {
+  if (code === "missing_alert_generation_receipt") return "prepare_alert_generation";
+  if (code === "missing_case_handoff_receipt") return "prepare_case_handoff";
+  return "review_actor_relevance";
+}
+
+function actorOrgCaseEvidenceRouteFor(record: ActorOrgRelevanceReviewRecord, code: ActorOrgRelevanceCaseEvidencePacketBlocker["code"]) {
+  if (code === "missing_alert_generation_receipt") return `/v1/ti/actor-org-relevance/${record.id}/alert-generation-request`;
+  if (code === "missing_case_handoff_receipt") return `/v1/ti/actor-org-relevance/${record.id}/case-handoff-request`;
+  return `/v1/ti/actor-org-relevance/${record.id}`;
+}
+
 function evidenceReviewCounts(reviews: ActorOrgRelevanceEvidenceReview[]) {
   return {
     total: reviews.length,
@@ -1720,6 +1921,15 @@ function sourceEvidenceRows(record: ActorOrgRelevanceReviewRecord): Array<{
 
 function actorOrgEvidenceKey(evidence: { sourceId?: string; captureId?: string; provenance: string }) {
   return stableId("actor_org_relevance_evidence", `${evidence.sourceId || ""}:${evidence.captureId || ""}:${evidence.provenance}`);
+}
+
+function asCleanStrings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
 }
 
 function orgTenantId(orgRelevance: PublicTiOrgRelevanceProofLike) {
