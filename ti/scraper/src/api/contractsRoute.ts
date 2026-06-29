@@ -41,7 +41,20 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId"],
         queryFields: ["receiptId", "alertId", "casePath"],
         writeFields: ["tenantId", "organizationId", "receipt", "recordedAt", "allowBlockedReceipt"],
-        recordFields: ["receiptId", "watchlistId", "watchlistItemId", "alertIds", "casePaths", "action", "execution", "auditEventId"],
+        recordFields: [
+          "receiptId",
+          "watchlistId",
+          "watchlistItemId",
+          "alertIds",
+          "casePaths",
+          "action",
+          "execution",
+          "auditEventId",
+          "replayState",
+          "idempotencyKey",
+          "dedupeKey"
+        ],
+        caseQueueFilters: ["caseActionReceiptId", "caseActionAuditEventId", "caseActionIdempotencyKey", "caseActionDedupeKey", "caseActionReplayState"],
         blockerCodes: ["missing_tenant_scope", "missing_organization_scope", "organization_scope_mismatch", "blocked_receipt"],
         routeErrorCodes: ["missing_receipt", "method_not_allowed"],
         safeOutput: {

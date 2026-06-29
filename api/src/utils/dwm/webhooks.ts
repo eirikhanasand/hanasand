@@ -5920,10 +5920,23 @@ export function buildDwmWebhookDeliveryAttemptPersistenceReadModel({
     const evidence = buildDwmWebhookDeliveryEvidence({ deliveries, auditEvents, filters })
     const auditByDeliveryId = new Map(auditEvents.filter(audit => audit.deliveryId).map(audit => [audit.deliveryId, audit]))
     const destinationById = new Map(destinations.map(destination => [destination.id, destination]))
+    const attemptsByIdempotencyKey = new Map<string, typeof evidence>()
+    for (const item of evidence) {
+        const key = clean(item.idempotencyKey)
+        if (!key) continue
+        const attempts = attemptsByIdempotencyKey.get(key) || []
+        attempts.push(item)
+        attemptsByIdempotencyKey.set(key, attempts)
+    }
     const rows = evidence.map((item) => {
         const delivery = deliveries.find(row => row.id === item.deliveryId) || null
         const audit = auditByDeliveryId.get(item.deliveryId) || null
         const destination = item.destinationId ? destinationById.get(item.destinationId) || null : null
+        const idempotencyKey = clean(item.idempotencyKey)
+        const idempotencyAttempts = [...(idempotencyKey ? attemptsByIdempotencyKey.get(idempotencyKey) || [] : [])]
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        const deliveredAttempt = idempotencyAttempts.find(attempt => attempt.status === 'delivered' && !attempt.dryRun) || null
+        const duplicateAttemptCount = idempotencyAttempts.length > 1 ? idempotencyAttempts.length : 0
         const retryPlan = planDwmWebhookDeliveryRetry({
             status: delivery?.status || item.status,
             dryRun: delivery?.dryRun ?? item.dryRun,
@@ -5982,6 +5995,22 @@ export function buildDwmWebhookDeliveryAttemptPersistenceReadModel({
                 errorClass: delivery?.errorClass || retryPlan.errorClass,
                 reason: retryPlan.reason,
             },
+            idempotency: {
+                duplicate: duplicateAttemptCount > 0,
+                duplicateAttemptCount,
+                alreadyDelivered: Boolean(deliveredAttempt),
+                deliveredDeliveryId: deliveredAttempt?.deliveryId || null,
+                latestDeliveryId: idempotencyAttempts[0]?.deliveryId || null,
+                deliveryIds: idempotencyAttempts.map(attempt => attempt.deliveryId).slice(0, 5),
+            },
+            replayHistory: {
+                replay: item.replay,
+                replayAttemptCount: idempotencyAttempts.filter(attempt => attempt.replay).length,
+                dryRunAttemptCount: idempotencyAttempts.filter(attempt => attempt.dryRun).length,
+                liveAttemptCount: idempotencyAttempts.filter(attempt => attempt.live).length,
+                duplicateReplay: item.replay && duplicateAttemptCount > 0,
+                duplicateLiveBlocked: Boolean(deliveredAttempt && item.status === 'skipped'),
+            },
             audit: {
                 auditEventId: item.auditEventId || audit?.id || null,
                 action: item.auditAction || audit?.action || null,
@@ -6038,6 +6067,8 @@ export function buildDwmWebhookDeliveryAttemptPersistenceReadModel({
             replay: rows.filter(row => row.replay).length,
             retryable: rows.filter(row => row.retry.retryable).length,
             auditLinked: rows.filter(row => row.audit.auditEventId).length,
+            duplicateIdempotencyKeys: rows.filter(row => row.idempotency.duplicate).length,
+            duplicateReplayRows: rows.filter(row => row.replayHistory.duplicateReplay).length,
         },
         rows,
         blockers: rows.length
@@ -6107,6 +6138,8 @@ export function buildDwmWebhookDeliveryReplayApiContract({
             replay: row.replay,
             status: row.status,
             redactedDestination: row.redactedDestination,
+            idempotency: row.idempotency,
+            replayHistory: row.replayHistory,
             latestAttempt: {
                 status: row.status,
                 dryRun: row.dryRun,

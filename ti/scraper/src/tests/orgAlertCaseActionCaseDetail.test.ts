@@ -128,24 +128,33 @@ describe("org alert case action ledger in case detail", () => {
     const auditId = byReceiptFilter.payload.items[0].latestCaseAction.related.caseActionAuditEventId;
     const replayDedupeKey = byReceiptFilter.payload.items[0].latestCaseAction.related.caseActionDedupeKey;
     const byAuditFilter = await listCases(options, `caseActionAuditEventId=${encodeURIComponent(auditId)}`);
+    const byReplayState = await listCases(options, "caseActionReplayState=recorded");
+    const byIdempotencyKey = await listCases(options, "caseActionIdempotencyKey=receipt_acme_open_case");
+    const byDedupeKey = await listCases(options, `caseActionDedupeKey=${encodeURIComponent(replayDedupeKey)}`);
     const byReplayDedupe = await listCases(options, `q=${encodeURIComponent(replayDedupeKey)}`);
     const byWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T15:05:00.000Z")}&to=${encodeURIComponent("2026-06-29T15:07:00.000Z")}`);
     const outsideWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T16:00:00.000Z")}&to=${encodeURIComponent("2026-06-29T17:00:00.000Z")}`);
     const unrelatedQuery = await listCases(options, "q=receipt_other_open_case");
     const wrongReceipt = await listCases(options, "caseActionReceiptId=receipt_other_open_case");
     const wrongAudit = await listCases(options, "caseActionAuditEventId=audit_missing");
+    const wrongReplayState = await listCases(options, "caseActionReplayState=blocked");
 
     expect(byReceipt.payload.items).toHaveLength(1);
     expect(byReceipt.payload.items[0].latestCaseAction.related.caseActionReceiptId).toBe("receipt_acme_open_case");
     expect(byAudit.payload.items).toHaveLength(1);
     expect(byReceiptFilter.payload.items).toHaveLength(1);
     expect(byAuditFilter.payload.items).toHaveLength(1);
+    expect(byReplayState.payload.items).toHaveLength(1);
+    expect(byReplayState.payload.filters.caseActionReplayState).toBe("recorded");
+    expect(byIdempotencyKey.payload.items).toHaveLength(1);
+    expect(byDedupeKey.payload.items).toHaveLength(1);
     expect(byReplayDedupe.payload.items).toHaveLength(1);
     expect(byWindow.payload.items).toHaveLength(1);
     expect(outsideWindow.payload.items).toEqual([]);
     expect(unrelatedQuery.payload.items).toEqual([]);
     expect(wrongReceipt.payload.items).toEqual([]);
     expect(wrongAudit.payload.items).toEqual([]);
+    expect(wrongReplayState.payload.items).toEqual([]);
   });
 
   test("does not leak case actions to the wrong organization or nonmembers", async () => {

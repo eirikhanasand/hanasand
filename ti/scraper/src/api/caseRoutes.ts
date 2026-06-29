@@ -613,6 +613,9 @@ type CaseFilters = {
   webhookStatus?: string;
   caseActionReceiptId?: string;
   caseActionAuditEventId?: string;
+  caseActionIdempotencyKey?: string;
+  caseActionDedupeKey?: string;
+  caseActionReplayState?: string;
   from?: string;
   to?: string;
   query?: string;
@@ -631,6 +634,9 @@ function caseFiltersFromUrl(url: URL): CaseFilters {
     webhookStatus: normalizeFilter(url.searchParams.get("webhookStatus") ?? url.searchParams.get("deliveryStatus")),
     caseActionReceiptId: normalizeFilter(url.searchParams.get("caseActionReceiptId") ?? url.searchParams.get("receiptId")),
     caseActionAuditEventId: normalizeFilter(url.searchParams.get("caseActionAuditEventId") ?? url.searchParams.get("auditEventId")),
+    caseActionIdempotencyKey: normalizeFilter(url.searchParams.get("caseActionIdempotencyKey") ?? url.searchParams.get("idempotencyKey")),
+    caseActionDedupeKey: normalizeFilter(url.searchParams.get("caseActionDedupeKey") ?? url.searchParams.get("replayDedupeKey")),
+    caseActionReplayState: normalizeFilter(url.searchParams.get("caseActionReplayState") ?? url.searchParams.get("replayState")),
     from: normalizeFilter(url.searchParams.get("from") ?? url.searchParams.get("since")),
     to: normalizeFilter(url.searchParams.get("to") ?? url.searchParams.get("until")),
     query: normalizeFilter(url.searchParams.get("q") ?? url.searchParams.get("query") ?? url.searchParams.get("text"))
@@ -652,6 +658,9 @@ function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, optio
   if (filters.webhookStatus && !deliveries.some((delivery: any) => normalizeFilter(delivery.status) === filters.webhookStatus)) return false;
   if (filters.caseActionReceiptId && !caseActionLedger.rows.some((row) => normalizeFilter(row.receiptId) === filters.caseActionReceiptId)) return false;
   if (filters.caseActionAuditEventId && !caseActionLedger.rows.some((row) => normalizeFilter(row.provenance.auditEventId) === filters.caseActionAuditEventId)) return false;
+  if (filters.caseActionIdempotencyKey && !caseActionLedger.rows.some((row) => normalizeFilter(row.replay.idempotencyKey) === filters.caseActionIdempotencyKey)) return false;
+  if (filters.caseActionDedupeKey && !caseActionLedger.rows.some((row) => normalizeFilter(row.replay.dedupeKey) === filters.caseActionDedupeKey)) return false;
+  if (filters.caseActionReplayState && !caseActionLedger.rows.some((row) => normalizeFilter(row.replay.replayState) === filters.caseActionReplayState)) return false;
   if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters, caseActionLedger.rows)) return false;
   if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries, caseActionLedger.rows).includes(filters.query)) return false;
   return true;

@@ -3087,7 +3087,9 @@ function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityM
                         <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                             <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
                             <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                                <CopyPayloadButton label='Enrichment request' payload={sourceRefreshPayloadFor(row)} />
+                                <span data-ti-source-refresh-export='true' className='inline-flex'>
+                                    <CopyPayloadButton label='Enrichment request' payload={sourceRefreshPayloadFor(row, queue, intake, payload)} />
+                                </span>
                                 <a href={row.route} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
                                     <ExternalLink className='h-3.5 w-3.5' />
                                     Open
@@ -3103,9 +3105,25 @@ function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityM
     )
 }
 
-function sourceRefreshPayloadFor(row: SourceHealthRow) {
+function sourceRefreshPayloadFor(
+    row: SourceHealthRow,
+    queue: TiActionabilityModel['sourceHealthQueue'],
+    intake: TiActionabilityModel['sourceEnrichmentIntake'],
+    payload: TiActionabilityModel['exportPayloads']['enrichment'],
+) {
+    const matchingIntakeItems = intake.items.filter(item =>
+        item.sourceHealthRowId === row.id
+        || item.sourceRequestId === row.sourceRequestId
+        || item.sourceId === row.sourceId
+        || item.captureId === row.captureId
+        || item.requestedFields.some(field => row.requestedFields.includes(field))
+    )
     return {
         schemaVersion: 'ti.public_actor.source_refresh_request.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: queue.query,
+        generatedAt: queue.generatedAt,
         rowId: row.id,
         sourceName: row.sourceName,
         sourceFamily: row.sourceFamily,
@@ -3127,6 +3145,22 @@ function sourceRefreshPayloadFor(row: SourceHealthRow) {
             field,
             label: sourceHealthFieldLabel(field),
         })),
+        queueSummary: queue.summary,
+        sourceEnrichmentIntake: {
+            schemaVersion: intake.schemaVersion,
+            route: intake.route,
+            summary: intake.summary,
+            matchingItems: matchingIntakeItems,
+        },
+        enrichmentPayload: payload,
+        handoff: {
+            route: row.route || intake.route,
+            ready: row.state === 'ready',
+            blocked: row.state === 'blocked' || row.requestedFields.length > 0,
+            matchingIntakeItems: matchingIntakeItems.length,
+            sourceRequests: matchingIntakeItems.filter(item => Boolean(item.sourceRequestId)).length,
+            captures: matchingIntakeItems.filter(item => Boolean(item.captureId)).length,
+        },
         recommendedAction: row.captureId ? 'inspect_capture' : row.sourceRequestId ? 'track_source_request' : 'queue_enrichment',
         nextAction: row.nextAction,
     }

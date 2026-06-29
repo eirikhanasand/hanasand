@@ -962,6 +962,8 @@ export type DwmOrgAlertPipelineProof = {
     blockerCodes: DwmAlertGenerationBlockerCode[];
     counts: DwmAlertGenerationReadiness["counts"];
     sourceFamilyCoverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
+    sourceFamilyGaps: DwmAlertGenerationReadiness["sourceFamilyGaps"];
+    zeroAlertProof: DwmZeroAlertProof;
   };
   candidates: Array<{
     candidateId: string;
@@ -1575,7 +1577,9 @@ export function buildDwmOrgAlertPipelineProof(input: {
       readyForCustomerDelivery: readiness.readyForCustomerDelivery,
       blockerCodes: readiness.blockerCodes,
       counts: readiness.counts,
-      sourceFamilyCoverage: readiness.sourceFamilyCoverage
+      sourceFamilyCoverage: readiness.sourceFamilyCoverage,
+      sourceFamilyGaps: readiness.sourceFamilyGaps,
+      zeroAlertProof: readiness.zeroAlertProof
     },
     candidates,
     alerts: alertRows,

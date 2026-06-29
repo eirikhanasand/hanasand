@@ -45,7 +45,8 @@ describe("api regression sentinel", () => {
       },
       scopeFields: ["tenantId", "organizationId"],
       queryFields: ["receiptId", "alertId", "casePath"],
-      recordFields: expect.arrayContaining(["receiptId", "watchlistId", "alertIds", "casePaths", "auditEventId"]),
+      recordFields: expect.arrayContaining(["receiptId", "watchlistId", "alertIds", "casePaths", "auditEventId", "replayState", "idempotencyKey", "dedupeKey"]),
+      caseQueueFilters: expect.arrayContaining(["caseActionIdempotencyKey", "caseActionDedupeKey", "caseActionReplayState"]),
       blockerCodes: expect.arrayContaining(["missing_tenant_scope", "missing_organization_scope", "organization_scope_mismatch"]),
       routeErrorCodes: expect.arrayContaining(["missing_receipt", "method_not_allowed"]),
       safeOutput: {

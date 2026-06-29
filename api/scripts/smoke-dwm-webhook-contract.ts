@@ -3101,6 +3101,7 @@ expect(deliveryAttemptPersistenceRead.schemaVersion === 'dwm.webhook.delivery_at
 expect(deliveryAttemptPersistenceReadReplay?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptPersistenceReadReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery attempt persistence read model should expose Discord preview and audit linkage.', deliveryAttemptPersistenceReadReplay)
 expect(deliveryAttemptPersistenceReadReplay?.actionRequests.dryRunReplay.body?.dryRun === true && deliveryAttemptPersistenceReadReplay.actionRequests.liveReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery attempt persistence read model should expose dry-run replay and live-disabled blockers.', deliveryAttemptPersistenceReadReplay?.actionRequests)
 expect(deliveryAttemptPersistenceReadReplay?.redactedDestination.endpointExposed === false && deliveryAttemptPersistenceReadReplay.redactedDestination.label === 'Replay Discord', 'Delivery attempt persistence read model should expose redacted destination labels only.', deliveryAttemptPersistenceReadReplay?.redactedDestination)
+expect(deliveryAttemptPersistenceReadReplay?.idempotency.duplicate === true && deliveryAttemptPersistenceReadReplay.idempotency.duplicateAttemptCount === 2 && deliveryAttemptPersistenceReadReplay.replayHistory.duplicateReplay === true, 'Delivery attempt persistence read model should expose duplicate replay idempotency history.', deliveryAttemptPersistenceReadReplay)
 expect(!JSON.stringify(deliveryAttemptPersistenceRead).includes(secret), 'Delivery attempt persistence read model should not leak endpoint or payload secrets.', deliveryAttemptPersistenceRead)
 expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.status === 'skipped', 'Delivery history should expose duplicate replay live-send guard skipped attempts.', duplicateReplayGuardHistory)
 expect(duplicateReplayGuardSkipped?.deliveryProof.auditEventId === 'audit_duplicate_replay_skipped_contract' && duplicateReplayGuardSkipped.dedupe.alreadyDelivered === true, 'Duplicate replay guard should link skipped audit and prior delivered idempotency proof.', duplicateReplayGuardSkipped)
@@ -3158,6 +3159,7 @@ expect(deliveryReplayApi.schemaVersion === 'dwm.webhook.delivery_replay_api.v1' 
 expect(deliveryReplayApiReplay?.dryRunReplay.canSend === true && deliveryReplayApiReplay.dryRunReplay.body?.destinationId === 'destination_replay_contract' && deliveryReplayApiReplay.dryRunReplay.body?.dedupeKey === 'dwm_dedupe_replay_contract', 'Delivery replay API should build an exact dry-run replay body.', deliveryReplayApiReplay?.dryRunReplay)
 expect(deliveryReplayApiReplay?.liveReplay.canSend === false && deliveryReplayApiReplay.liveReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery replay API should block live replay while live delivery is disabled.', deliveryReplayApiReplay?.liveReplay)
 expect(deliveryReplayApiReplay?.latestAttempt.auditEventId === 'audit_replay_duplicate_contract' && deliveryReplayApiReplay.redactedDestination.endpointExposed === false, 'Delivery replay API should expose audit proof and redacted destination metadata.', deliveryReplayApiReplay)
+expect(deliveryReplayApiReplay?.idempotency.duplicateAttemptCount === 2 && deliveryReplayApiReplay.replayHistory.replayAttemptCount === 2, 'Delivery replay API should expose duplicate idempotency and replay attempt history.', deliveryReplayApiReplay)
 expect(nonmemberDeliveryReplayApi.requests.every(item => item.dryRunReplay.canSend === false) && nonmemberDeliveryReplayApi.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay API should deny nonmembers without sending replay requests.', nonmemberDeliveryReplayApi)
 expect(!JSON.stringify(deliveryReplayApi).includes(secret), 'Delivery replay API should redact endpoint, response, and payload secrets.', deliveryReplayApi)
 expect(orgAlertDeliveryContract.customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && orgAlertDeliveryContract.customerSetup.routes.deliver === 'POST /api/dwm/webhook-deliveries', 'Org alert delivery contract should include customer setup proof for delivery routes.', orgAlertDeliveryContract.customerSetup)
@@ -3461,6 +3463,7 @@ console.log(JSON.stringify({
         'delivery evidence replay/live/dry-run distinction',
         'delivery attempt typed payload contract',
         'delivery attempt field contract',
+        'delivery attempt duplicate replay history',
         'delivery attempt required field blockers',
         'delivery attempt wrong-org isolation',
         'delivery attempt unsupported destination blocker',
@@ -3518,6 +3521,8 @@ console.log(JSON.stringify({
             'deliveryAttemptPersistence.rows[].actionRequests.dryRunReplay.body',
             'deliveryAttemptPersistence.rows[].actionRequests.liveReplay.blockers[].code',
             'deliveryAttemptPersistence.rows[].operationLinks.deliveryDetail',
+            'deliveryAttemptPersistence.rows[].idempotency.duplicateAttemptCount',
+            'deliveryAttemptPersistence.rows[].replayHistory.duplicateReplay',
             'deliveryAttemptPersistence.blockers[].code',
             'deliveryReceipts.schemaVersion',
             'deliveryReceipts.receipts[].proof.auditEventId',
@@ -3555,6 +3560,8 @@ console.log(JSON.stringify({
             'deliveryReplayApi.requests[].liveReplay.blockers[].code',
             'deliveryReplayApi.requests[].latestAttempt.auditEventId',
             'deliveryReplayApi.requests[].redactedDestination.endpointHash',
+            'deliveryReplayApi.requests[].idempotency.duplicateAttemptCount',
+            'deliveryReplayApi.requests[].replayHistory.replayAttemptCount',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.persistedAttemptCount',

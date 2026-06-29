@@ -29,6 +29,19 @@ const capture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "pipeline_public", messageId: 15 }
 } as RawCapture;
 
+const nonmatchCapture: RawCapture = {
+  id: "cap_pipeline_quiet",
+  sourceId: source.id,
+  url: "https://t.me/pipeline_public/16",
+  collectedAt: "2026-06-28T16:05:00.000Z",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  contentHash: "hash-pipeline-quiet",
+  sensitive: false,
+  body: "quiet.example appeared in public Telegram chatter, but no customer watchlist term was present.",
+  metadata: { adapter: "telegram_public", channel: "pipeline_public", messageId: 16 }
+} as RawCapture;
+
 function watchlists() {
   const runtime = orgWatchlistContractToRuntimeDwmWatchlists({
     schemaVersion: "organization.watchlist_alert_generation.v1",
@@ -214,5 +227,83 @@ describe("dwm org alert pipeline proof", () => {
       route: "/v1/dwm/alerts/rebuild",
       candidateId: proof.candidates[0].candidateId
     })]);
+  });
+
+  test("surfaces zero-alert source-family blockers for consumer lanes without fake alert rows", () => {
+    const [watchlist] = watchlists();
+
+    const proof = buildDwmOrgAlertPipelineProof({
+      watchlists: [watchlist],
+      alerts: [],
+      tenantId: "tenant_pipeline",
+      organizationId: "org_pipeline",
+      sources: [source],
+      captures: [nonmatchCapture],
+      generatedAt: "2026-06-28T16:09:00.000Z"
+    });
+
+    expect(proof).toMatchObject({
+      schemaVersion: "dwm.org_alert_pipeline_proof.v1",
+      tenantId: "tenant_pipeline",
+      organizationId: "org_pipeline",
+      state: "blocked_before_rebuild",
+      alerts: [],
+      readiness: {
+        readyForRebuild: true,
+        readyForCustomerDelivery: false,
+        blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+        zeroAlertProof: {
+          schemaVersion: "dwm.zero_alert_proof.v1",
+          zeroAlert: true,
+          state: "blocked_no_matching_capture",
+          expectedAlertDelta: 0,
+          routes: {
+            readiness: "/v1/dwm/alerts/readiness",
+            rebuild: "/v1/dwm/alerts/rebuild",
+            alerts: "/v1/dwm/alerts"
+          },
+          nextAction: "Add or collect a recent capture containing the active watchlist term."
+        }
+      }
+    });
+    expect(proof.readiness.sourceFamilyGaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "telegram_public",
+        state: "active_no_match",
+        active: true,
+        blockerCode: "no_matching_captures",
+        watchlistIds: [watchlist.id]
+      }),
+      expect.objectContaining({
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "darkweb_metadata",
+        state: "inactive_or_unconfigured",
+        blockerCode: "source_family_inactive",
+        watchlistIds: [watchlist.id]
+      })
+    ]));
+    expect(proof.readiness.zeroAlertProof.watchlistTerms).toEqual([expect.objectContaining({
+      term: "acme.com",
+      watchlistIds: [watchlist.id],
+      watchlistItemIds: ["watch_item_pipeline_acme"],
+      hasMatchingCaptures: false,
+      sourceFamilies: [],
+      captureRefCount: 0
+    })]);
+    expect(proof.gaps).toEqual([
+      expect.objectContaining({
+        code: "readiness_blocked",
+        ownerLane: "source_operations",
+        route: "/v1/dwm/alerts/generation-readiness",
+        blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"])
+      }),
+      expect.objectContaining({
+        code: "alert_not_generated",
+        ownerLane: "alert_generation",
+        route: "/v1/dwm/alerts/rebuild",
+        blockerCodes: ["alert_not_generated"]
+      })
+    ]);
   });
 });
