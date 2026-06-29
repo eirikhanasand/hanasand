@@ -5469,6 +5469,38 @@ function auditTimelineLink(input: { org?: string | null, target?: string | null,
     }
 }
 
+function supportAuditEntityLinks(input: {
+    event: Record<string, any>
+    context: Record<string, unknown>
+    entityId?: unknown
+    supportSessionId?: string
+}) {
+    const organizationId = text(input.event.organization_id || input.context.organizationId || input.context.targetOrganizationId)
+    const targetUserId = text(input.context.targetUserId || (input.event.target_type === 'user' ? input.event.target_id : ''))
+    const inviteId = text(input.context.inviteId)
+        || (Array.isArray(input.context.inviteIds) ? text(input.context.inviteIds[0]) : '')
+        || (input.event.target_type === 'invite' ? text(input.event.entity_id || input.event.target_id) : '')
+    const requestId = text(input.event.request_id || input.context.requestId)
+    const entityId = text(input.entityId)
+    const inspectionParams = new URLSearchParams()
+    if (organizationId) inspectionParams.set('org', organizationId)
+    if (targetUserId) inspectionParams.set('user', targetUserId)
+    if (inviteId) inspectionParams.set('entity', inviteId)
+    if (requestId) inspectionParams.set('request', requestId)
+    const inspectionQuery = inspectionParams.toString()
+    return {
+        inspection: inspectionQuery ? `/api/admin/support/inspect?${inspectionQuery}` : null,
+        organization: organizationId ? `/api/admin/support/organizations/${encodeURIComponent(organizationId)}` : null,
+        user: targetUserId ? `/api/admin/support/users/${encodeURIComponent(targetUserId)}` : null,
+        inviteAction: organizationId && inviteId ? `/api/admin/support/organizations/${encodeURIComponent(organizationId)}/invites/${encodeURIComponent(inviteId)}/actions` : null,
+        accessRecovery: organizationId ? `/api/admin/support/organizations/${encodeURIComponent(organizationId)}/access-recovery` : null,
+        memberRoleRecovery: organizationId && targetUserId ? `/api/admin/support/organizations/${encodeURIComponent(organizationId)}/members/${encodeURIComponent(targetUserId)}/role-recovery` : null,
+        impersonation: targetUserId ? `/api/impersonation/events?target=${encodeURIComponent(targetUserId)}` : null,
+        auditEntity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(entityId)}` : null,
+        supportSession: input.supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSessionId)}` : null,
+    }
+}
+
 function toSupportInvite(row: Record<string, unknown>) {
     return {
         id: row.id,
@@ -5582,6 +5614,7 @@ function toSupportAuditTimelineEvent(row: Record<string, unknown>) {
             request: event.request_id ? `/api/admin/audit-events?request=${encodeURIComponent(String(event.request_id))}` : null,
             entity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(String(entityId))}` : null,
             supportSession: supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}` : null,
+            entities: supportAuditEntityLinks({ event, context, entityId, supportSessionId }),
         },
         createdAt: event.created_at,
         copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} entity=${event.entity_id || event.target_id || ''} request=${event.request_id || ''}`,
@@ -5645,6 +5678,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             request: event.request_id ? `/api/admin/audit-events?request=${encodeURIComponent(String(event.request_id))}` : null,
             entity: entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(String(entityId))}` : null,
             supportSession: supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}` : null,
+            entities: supportAuditEntityLinks({ event, context, entityId, supportSessionId }),
         },
     }
     return {
@@ -5683,6 +5717,7 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
                 reasonPresent: Boolean(event.reason),
                 contextRedacted: true,
                 detailRoute: `/api/admin/audit-events/${encodeURIComponent(String(event.id))}`,
+                relatedEntityLinks: timelineEvent.links.entities,
             },
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
