@@ -92,6 +92,30 @@ describe("org alert case action ledger in case detail", () => {
     expect(payload.items[0].latestEvent.eventType).toBe("case.action_recorded");
   });
 
+  test("filters the case queue by recorded case action text and time window", async () => {
+    const { options } = fixtureRuntime();
+    writeOrgAlertCaseActionLedgerApiRecord({
+      repository: options.orgAlertCaseActionLedgerRepository,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      receipt: actionReceipt(),
+      recordedAt: "2026-06-29T15:06:00.000Z"
+    });
+
+    const byReceipt = await listCases(options, "q=receipt_acme_open_case");
+    const byAudit = await listCases(options, "q=org_alert_case_action_audit");
+    const byWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T15:05:00.000Z")}&to=${encodeURIComponent("2026-06-29T15:07:00.000Z")}`);
+    const outsideWindow = await listCases(options, `from=${encodeURIComponent("2026-06-29T16:00:00.000Z")}&to=${encodeURIComponent("2026-06-29T17:00:00.000Z")}`);
+    const unrelatedQuery = await listCases(options, "q=receipt_other_open_case");
+
+    expect(byReceipt.payload.items).toHaveLength(1);
+    expect(byReceipt.payload.items[0].latestCaseAction.related.caseActionReceiptId).toBe("receipt_acme_open_case");
+    expect(byAudit.payload.items).toHaveLength(1);
+    expect(byWindow.payload.items).toHaveLength(1);
+    expect(outsideWindow.payload.items).toEqual([]);
+    expect(unrelatedQuery.payload.items).toEqual([]);
+  });
+
   test("does not leak case actions to the wrong organization or nonmembers", async () => {
     const { options } = fixtureRuntime();
     writeOrgAlertCaseActionLedgerApiRecord({
@@ -120,6 +144,13 @@ describe("org alert case action ledger in case detail", () => {
     expect(deniedList.error).toMatchObject({ code: "organization_visibility_denied", reason: "not_member" });
   });
 });
+
+async function listCases(options: ReturnType<typeof fixtureRuntime>["options"], query: string) {
+  const response = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases?organizationId=org_acme&${query}`, {
+    headers: { "x-user-email": "owner@acme.com" }
+  }), options);
+  return { response, payload: await response.json() as any };
+}
 
 function fixtureRuntime() {
   const store = new InMemoryScraperStore();

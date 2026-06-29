@@ -636,6 +636,7 @@ function caseFiltersFromUrl(url: URL): CaseFilters {
 function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, options: ApiServerOptions): boolean {
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   if (filters.status && caseRecord.status !== filters.status) return false;
   if (filters.assignee && normalizeFilter(caseRecord.assignedOwner) !== filters.assignee) return false;
   if (filters.severity && normalizeFilter(alert?.severity ?? caseRecord.priority) !== filters.severity) return false;
@@ -645,8 +646,8 @@ function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, optio
   if (filters.dedupeKey && normalizeFilter(alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.workflowContext?.dedupeKey) !== filters.dedupeKey) return false;
   if (filters.webhookDeliveryId && !deliveries.some((delivery: any) => delivery.id === filters.webhookDeliveryId)) return false;
   if (filters.webhookStatus && !deliveries.some((delivery: any) => normalizeFilter(delivery.status) === filters.webhookStatus)) return false;
-  if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters)) return false;
-  if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries).includes(filters.query)) return false;
+  if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters, caseActionLedger.rows)) return false;
+  if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries, caseActionLedger.rows).includes(filters.query)) return false;
   return true;
 }
 
@@ -884,10 +885,10 @@ function nextAllowedActionsForCase(caseRecord: AnalystCase, alert: any, deliveri
   return base.map((action) => ({ ...action, disabledReason: action.enabled ? undefined : readOnly ? "read_only_member" : "not_applicable_for_status" }));
 }
 
-function caseHasTimelineInWindow(caseRecord: AnalystCase, alert: any, deliveries: any[], filters: CaseFilters): boolean {
+function caseHasTimelineInWindow(caseRecord: AnalystCase, alert: any, deliveries: any[], filters: CaseFilters, caseActionRows: OrgAlertCaseActionTimelineRow[] = []): boolean {
   const from = filters.from ? Date.parse(filters.from) : undefined;
   const to = filters.to ? Date.parse(filters.to) : undefined;
-  return buildCaseTimeline(caseRecord, alert, deliveries).some((event) => {
+  return buildCaseTimeline(caseRecord, alert, deliveries, caseActionRows).some((event) => {
     const timestamp = Date.parse(event.timestamp);
     if (!Number.isFinite(timestamp)) return false;
     if (from !== undefined && Number.isFinite(from) && timestamp < from) return false;
@@ -896,7 +897,7 @@ function caseHasTimelineInWindow(caseRecord: AnalystCase, alert: any, deliveries
   });
 }
 
-function caseSearchBlob(caseRecord: AnalystCase, alert: any, deliveries: any[]): string {
+function caseSearchBlob(caseRecord: AnalystCase, alert: any, deliveries: any[], caseActionRows: OrgAlertCaseActionTimelineRow[] = []): string {
   return [
     caseRecord.id,
     caseRecord.title,
@@ -914,7 +915,21 @@ function caseSearchBlob(caseRecord: AnalystCase, alert: any, deliveries: any[]):
     alert?.webhookDelivery?.dedupeKey,
     alert?.workflowContext?.dedupeKey,
     ...(alert?.evidence ?? []).flatMap((item: any) => [item.id, item.sourceName, item.sourceFamily, item.contentHash, item.excerpt]),
-    ...deliveries.flatMap((delivery: any) => [delivery.id, delivery.status, delivery.webhookDestinationId, delivery.error])
+    ...deliveries.flatMap((delivery: any) => [delivery.id, delivery.status, delivery.webhookDestinationId, delivery.error]),
+    ...caseActionRows.flatMap((row) => [
+      row.receiptId,
+      row.action,
+      row.execution,
+      row.ownerLane,
+      row.analystId,
+      row.provenance.recordId,
+      row.provenance.auditEventId,
+      row.provenance.blockedByCodes.join(" "),
+      ...row.related.alertIds,
+      ...row.related.casePaths,
+      row.related.watchlistId,
+      row.related.watchlistItemId
+    ])
   ].map((value) => String(value ?? "").toLowerCase()).join(" ");
 }
 
