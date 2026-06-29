@@ -1319,6 +1319,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: selected.persistent ? alertDetailHref : undefined,
             disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
         })
+        const sourceProfileHref = alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined)
+        if (sourceProfileHref) {
+            rows.push({
+                id: 'inspect_alert_source_health',
+                label: 'Source health',
+                detail: `Open source inventory profile from backed alert evidence provenance: ${sourceProfileHref}.`,
+                tone: 'ready',
+                href: sourceProfileHref,
+            })
+        }
     }
     const backedCaseHref = selected.caseDetailHref || (alertDetail?.status === 'ready' ? caseDetailHrefFromAlertDetail(alertDetail.detail, orgContext) : undefined)
     if (backedCaseHref) {
@@ -3212,6 +3222,14 @@ function organizationWebhookDestinationHref(organizationId: string, webhookDesti
     const params = new URLSearchParams()
     params.set('destinationId', webhookDestinationId)
     return `/api/organizations/${encodeURIComponent(organizationId)}/webhooks?${params.toString()}`
+}
+
+function alertSourceProfileHref(detail: AlertDetailPayload | undefined) {
+    const evidence = detail?.alert?.evidence || []
+    const sourceId = evidence
+        .map(item => typeof item.provenance === 'object' ? stringValue(item.provenance?.sourceId) : undefined)
+        .find(Boolean)
+    return sourceId ? `/dashboard/ti/sources/${encodeURIComponent(sourceId)}` : undefined
 }
 
 function latestDeliveryForActionRail(selected: WorkbenchCase, caseDetail: CaseDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined) {
