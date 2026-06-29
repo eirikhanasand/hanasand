@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
+  buildSourceProvenanceAlertRebuildRequest,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
 } from "../product/sourceProvenanceTiPageContract.ts";
@@ -317,6 +319,55 @@ describe("source provenance TI page contract", () => {
     expect(JSON.stringify(candidate)).not.toContain("password");
   });
 
+  test("maps source provenance watchlist candidate to alert rebuild request", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow()]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract, includeSourceFamilies: false, includeRelationships: false });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({
+      bridge,
+      watchlistId: "watch_public_ti_apt29"
+    });
+    const request = buildSourceProvenanceAlertRebuildRequest({
+      candidate,
+      sourceContractId: contract.id
+    });
+
+    expect(request).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourceCandidateId: candidate.id,
+      blockers: [],
+      request: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          watchlistId: "watch_public_ti_apt29",
+          watchlistItemIds: [candidate.activeTerms[0].watchlistItemId],
+          alertGeneratorKeys: [candidate.activeTerms[0].alertGeneratorKey],
+          sourceBridgeId: bridge.id,
+          sourceContractId: contract.id,
+          dryRun: true
+        }
+      }
+    });
+    expect(request.payloadShape).toEqual(expect.arrayContaining([
+      "request.body.watchlistItemIds",
+      "request.body.alertGeneratorKeys",
+      "blockers[]"
+    ]));
+    expect(JSON.stringify(request)).not.toContain("rawText");
+    expect(JSON.stringify(request)).not.toContain("password");
+  });
+
   test("blocks alertability when source provenance is not ready or org scope is absent", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
@@ -368,6 +419,43 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(candidate)).not.toContain("cap_telegram_apt29");
     expect(JSON.stringify(candidate)).not.toContain("hash_telegram_apt29");
+  });
+
+  test("blocks alert rebuild request when source provenance candidate is not materialized", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [{
+        ...sourceRow(),
+        organizationId: undefined,
+        captureId: undefined,
+        contentHash: undefined
+      }]
+    });
+    const bridge = buildSourceProvenanceAlertabilityBridge({ contract });
+    const candidate = buildSourceProvenanceOrgWatchlistCandidate({ bridge });
+    const request = buildSourceProvenanceAlertRebuildRequest({ candidate });
+
+    expect(request.ok).toBe(false);
+    expect(request.request).toMatchObject({
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: "tenant_acme",
+        watchlistItemIds: [],
+        alertGeneratorKeys: [],
+        sourceBridgeId: bridge.id,
+        dryRun: true
+      }
+    });
+    expect(request.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "watchlist_candidate_blocked", ownerLane: "publicTI", path: "candidate.ok" }),
+      expect.objectContaining({ code: "missing_organization_scope", ownerLane: "org", path: "candidate.organizationId" }),
+      expect.objectContaining({ code: "missing_watchlist_id", ownerLane: "org", path: "candidate.watchlistId" }),
+      expect.objectContaining({ code: "missing_watchlist_items", ownerLane: "org", path: "candidate.activeTerms[].watchlistItemId" }),
+      expect.objectContaining({ code: "missing_alert_generation_refs", ownerLane: "alert", path: "candidate.activeTerms[].alertGeneratorKey" })
+    ]));
   });
 });
 

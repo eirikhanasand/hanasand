@@ -3,6 +3,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 export const TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_page_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERTABILITY_BRIDGE_SCHEMA_VERSION = "ti.source_provenance_alertability_bridge.v1" as const;
 export const TI_SOURCE_PROVENANCE_ORG_WATCHLIST_CANDIDATE_SCHEMA_VERSION = "organization.watchlist_alert_terms_export.v1" as const;
+export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_request.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -206,6 +207,39 @@ export type TiSourceProvenanceOrgWatchlistCandidateTerm = {
   };
 };
 
+export type TiSourceProvenanceAlertRebuildRequest = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  sourceCandidateId: string;
+  request: {
+    method: "POST";
+    path: "/v1/dwm/alerts/rebuild";
+    body: {
+      tenantId: string;
+      organizationId?: string;
+      watchlistId?: string;
+      watchlistItemIds: string[];
+      alertGeneratorKeys: string[];
+      sourceBridgeId: string;
+      sourceContractId?: string;
+      dryRun: true;
+    };
+  };
+  payloadShape: string[];
+  blockers: TiSourceProvenanceAlertRebuildRequestBlocker[];
+};
+
+export type TiSourceProvenanceAlertRebuildRequestBlocker = {
+  code: "watchlist_candidate_blocked" | "missing_organization_scope" | "missing_watchlist_id" | "missing_watchlist_items" | "missing_alert_generation_refs";
+  ownerLane: "publicTI" | "org" | "alert";
+  path: string;
+  message: string;
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -358,6 +392,50 @@ export function buildSourceProvenanceOrgWatchlistCandidate(input: {
     activeTerms,
     blockedReasons: input.bridge.blockers.map((blocker) => blocker.code),
     blockers: input.bridge.blockers
+  };
+}
+
+export function buildSourceProvenanceAlertRebuildRequest(input: {
+  candidate: TiSourceProvenanceOrgWatchlistCandidate;
+  sourceContractId?: string;
+  generatedAt?: string;
+}): TiSourceProvenanceAlertRebuildRequest {
+  const generatedAt = input.generatedAt ?? input.candidate.generatedAt;
+  const alertGeneratorKeys = uniqueStrings(input.candidate.activeTerms.map((term) => term.alertGeneratorKey).filter(Boolean));
+  const watchlistItemIds = uniqueStrings(input.candidate.activeTerms.map((term) => term.watchlistItemId).filter(Boolean));
+  const blockers = alertRebuildRequestBlockers(input.candidate, watchlistItemIds, alertGeneratorKeys);
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_alert_rebuild_request", `${input.candidate.id}:${generatedAt}:${watchlistItemIds.join(",")}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: input.candidate.tenantId,
+    organizationId: input.candidate.organizationId,
+    sourceCandidateId: input.candidate.id,
+    request: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: input.candidate.tenantId,
+        organizationId: input.candidate.organizationId,
+        watchlistId: input.candidate.watchlistId,
+        watchlistItemIds,
+        alertGeneratorKeys,
+        sourceBridgeId: input.candidate.sourceBridgeId,
+        sourceContractId: input.sourceContractId,
+        dryRun: true
+      }
+    },
+    payloadShape: [
+      "request.method",
+      "request.path",
+      "request.body.organizationId",
+      "request.body.watchlistId",
+      "request.body.watchlistItemIds",
+      "request.body.alertGeneratorKeys",
+      "blockers[]"
+    ],
+    blockers
   };
 }
 
@@ -563,6 +641,29 @@ function orgWatchlistCandidateTerm(input: {
       }
     }
   };
+}
+
+function alertRebuildRequestBlockers(
+  candidate: TiSourceProvenanceOrgWatchlistCandidate,
+  watchlistItemIds: string[],
+  alertGeneratorKeys: string[]
+): TiSourceProvenanceAlertRebuildRequestBlocker[] {
+  return [
+    !candidate.ok ? alertRebuildBlocker("watchlist_candidate_blocked", "publicTI", "candidate.ok", "Source provenance watchlist candidate is blocked.") : undefined,
+    !candidate.organizationId ? alertRebuildBlocker("missing_organization_scope", "org", "candidate.organizationId", "Alert rebuild requires organization scope.") : undefined,
+    !candidate.watchlistId ? alertRebuildBlocker("missing_watchlist_id", "org", "candidate.watchlistId", "Alert rebuild requires a persisted or planned watchlist id.") : undefined,
+    watchlistItemIds.length === 0 ? alertRebuildBlocker("missing_watchlist_items", "org", "candidate.activeTerms[].watchlistItemId", "Alert rebuild requires watchlist item ids.") : undefined,
+    alertGeneratorKeys.length === 0 ? alertRebuildBlocker("missing_alert_generation_refs", "alert", "candidate.activeTerms[].alertGeneratorKey", "Alert rebuild requires alert generation refs.") : undefined
+  ].filter(Boolean) as TiSourceProvenanceAlertRebuildRequestBlocker[];
+}
+
+function alertRebuildBlocker(
+  code: TiSourceProvenanceAlertRebuildRequestBlocker["code"],
+  ownerLane: TiSourceProvenanceAlertRebuildRequestBlocker["ownerLane"],
+  path: string,
+  message: string
+): TiSourceProvenanceAlertRebuildRequestBlocker {
+  return { code, ownerLane, path, message };
 }
 
 function blockerPath(code: TiSourceProvenancePageBlocker["code"]): string {
