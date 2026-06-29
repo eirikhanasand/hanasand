@@ -284,9 +284,15 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.blockers.some(blocker =>
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.missing.includes('captureId or source request ID')), 'Decoded APT29 payload should expose missing capture/source request IDs.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.every(source => source.ownerLane === 'source' && source.route === '/dashboard/ti/enrichment' && source.sourceFamily === 'source_capture'), 'Decoded APT29 source requests should carry source owner, route, and family.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.sourceRequests.some(source => source.requestedFields?.includes('sourceProvenance[].captureId') && source.requestedFields?.includes('sourceProvenance[].sourceRequestId')), 'Decoded APT29 source requests should carry requested source/capture fields.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.length === 4, 'Decoded APT29 payload should expose per-action readiness for watchlist, alert, case, and enrichment.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist && item.selected && item.ownerLane === 'org' && item.blockerCodes.includes('org_required')), 'Decoded APT29 watchlist readiness should carry selected action, org owner, and blocker code.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.case && item.endpoint === '/v1/cases' && item.blockerCodes.includes('stale_evidence')), 'Decoded APT29 case readiness should carry case endpoint and stale-evidence blocker.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.every(item => typeof item.sourceRequestCount === 'number' && item.sourceRequestCount === decodedWatchlist.payload.sourceRequests.length), 'Decoded APT29 action readiness should carry source request counts for dashboard consumers.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('selectedPayload'), 'Dashboard consumer contract should document selectedPayload.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests'), 'Dashboard consumer contract should document sourceRequests.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests[].requestedFields'), 'Dashboard consumer contract should document source request field metadata.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness'), 'Dashboard consumer contract should document actionReadiness.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness[].blockerCodes'), 'Dashboard consumer contract should document action readiness blocker codes.')
 const legacyDecoded = usHandoffs ? decodePublicTiHandoffPayload(encodeHandoffPayload({
     artifact: usHandoffs.authBridge.payload.artifact,
     watchlist: usHandoffs.watchlist,
@@ -583,6 +589,8 @@ assert(pageClientSource.includes('bridge.payload.sourceRequests'), 'Selected art
 assert(pageClientSource.includes('capture needed'), 'Selected artifact source request rows should show missing capture state honestly.')
 assert(pageClientSource.includes('sourceRequestFamilyLabel'), 'Selected artifact source requests should show source family in analyst language.')
 assert(pageClientSource.includes('sourceRequestRouteLabel'), 'Selected artifact source requests should show source queue routing in analyst language.')
+assert(pageClientSource.includes('row.payload.actionReadiness.find'), 'Selected artifact workflow rows should consume versioned action readiness metadata.')
+assert(pageClientSource.includes('actionOwnerLabel(row.readiness.ownerLane)'), 'Selected artifact workflow rows should show analyst-native action responsibility.')
 assert(pageClientSource.includes('data-ti-evidence-priority'), 'Selected evidence should expose backed priority proof.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')

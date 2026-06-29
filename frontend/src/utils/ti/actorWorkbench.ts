@@ -37,6 +37,15 @@ export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
     'missing',
     'blockers',
     'sourceRequests',
+    'actionReadiness',
+    'actionReadiness[].action',
+    'actionReadiness[].route',
+    'actionReadiness[].endpoint',
+    'actionReadiness[].backedRoute',
+    'actionReadiness[].ready',
+    'actionReadiness[].blockerCodes',
+    'actionReadiness[].ownerLane',
+    'actionReadiness[].sourceRequestCount',
     'sourceRequests[].ownerLane',
     'sourceRequests[].route',
     'sourceRequests[].sourceFamily',
@@ -45,6 +54,7 @@ export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
 
 export type ActorArtifactKind = 'country' | 'tool' | 'campaign' | 'infrastructure' | 'technique'
 export type PublicTiHandoffAction = typeof PUBLIC_TI_HANDOFF_ACTIONS[keyof typeof PUBLIC_TI_HANDOFF_ACTIONS]
+type PublicTiHandoffActionBlockerCode = 'org_required' | 'source_required' | 'stale_evidence' | 'missing_watchlist_term' | 'action_blocked'
 export type PublicTiHandoffDecodeFailureCode =
     | 'missing_payload'
     | 'malformed_json'
@@ -101,6 +111,18 @@ export type PublicTiHandoffPayload = {
     stale: boolean
     missing: string[]
     blockers: Array<{ code: 'org_required' | 'source_required' | 'stale_evidence' | 'missing_watchlist_term'; detail: string }>
+    actionReadiness: Array<{
+        action: PublicTiHandoffAction
+        route: TiHandoffExportPayload['route']
+        endpoint?: string
+        backedRoute?: string
+        ready: boolean
+        missing: string[]
+        blockerCodes: PublicTiHandoffActionBlockerCode[]
+        ownerLane: 'org' | 'alert' | 'case' | 'source'
+        selected: boolean
+        sourceRequestCount: number
+    }>
     sourceRequests: Array<{
         sourceName: string
         provenance: string
@@ -455,6 +477,7 @@ function buildPublicTiHandoffPayload(
         case: payloads.case,
         enrichment: payloads.enrichment,
     }
+    const sourceRequests = sourceRequestsFor(actionPayloads)
     return {
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
         source: PUBLIC_TI_HANDOFF_SOURCE,
@@ -470,7 +493,8 @@ function buildPublicTiHandoffPayload(
         stale: bridgeState.stale,
         missing: bridgeState.missing,
         blockers: blockersForBridge(artifact, bridgeState),
-        sourceRequests: sourceRequestsFor(actionPayloads),
+        actionReadiness: actionReadinessFor(action, actionPayloads, artifact, bridgeState, sourceRequests),
+        sourceRequests,
     }
 }
 
@@ -503,7 +527,11 @@ function normalizePublicTiHandoffPayload(value: unknown, intent?: string | null)
         stale: Boolean(value.stale),
         missing: Array.isArray(value.missing) ? value.missing.filter((item): item is string => typeof item === 'string') : [],
         blockers: Array.isArray(value.blockers) ? value.blockers as PublicTiHandoffPayload['blockers'] : [],
+        actionReadiness: Array.isArray(value.actionReadiness) ? value.actionReadiness as PublicTiHandoffPayload['actionReadiness'] : [],
         sourceRequests: Array.isArray(value.sourceRequests) ? value.sourceRequests as PublicTiHandoffPayload['sourceRequests'] : [],
+    }
+    if (!normalized.actionReadiness.length) {
+        normalized.actionReadiness = actionReadinessFor(action, normalized.actionPayloads, normalized.artifact, normalized, normalized.sourceRequests)
     }
     return { ok: true, payload: normalized, action, reasonCodes: [] }
 }
@@ -538,6 +566,7 @@ function normalizeLegacyPublicTiHandoffPayload(value: Record<string, unknown>, i
         stale: isRecord(artifact.readiness) && artifact.readiness.state === 'stale',
         missing,
     }
+    const sourceRequests = sourceRequestsFor(actionPayloads as PublicTiHandoffPayload['actionPayloads'])
     const payload: PublicTiHandoffPayload = {
         schemaVersion: PUBLIC_TI_HANDOFF_SCHEMA_VERSION,
         source: PUBLIC_TI_HANDOFF_SOURCE,
@@ -550,7 +579,8 @@ function normalizeLegacyPublicTiHandoffPayload(value: Record<string, unknown>, i
         actionPayloads: actionPayloads as PublicTiHandoffPayload['actionPayloads'],
         ...bridgeState,
         blockers: blockersForBridge(artifact, bridgeState),
-        sourceRequests: sourceRequestsFor(actionPayloads as PublicTiHandoffPayload['actionPayloads']),
+        actionReadiness: actionReadinessFor(action, actionPayloads as PublicTiHandoffPayload['actionPayloads'], artifact, bridgeState, sourceRequests),
+        sourceRequests,
     }
     return { ok: true, payload, action, reasonCodes: [] }
 }
@@ -569,6 +599,50 @@ function blockersForBridge(artifact: PublicTiHandoffArtifact, bridgeState: Pick<
         ...(bridgeState.stale ? [{ code: 'stale_evidence' as const, detail: `Fresh source is required after ${formatDate(artifact.freshness)} before claiming alert-ready status.` }] : []),
         ...(!artifact.watchlistTerms.length && artifact.kind !== 'technique' ? [{ code: 'missing_watchlist_term' as const, detail: 'Add or select an organization watchlist term before alert rebuild.' }] : []),
     ]
+}
+
+function actionReadinessFor(
+    selectedAction: PublicTiHandoffAction,
+    payloads: PublicTiHandoffPayload['actionPayloads'],
+    artifact: PublicTiHandoffArtifact,
+    bridgeState: Pick<AuthenticatedArtifactBridge, 'orgRequired' | 'sourceRequired' | 'stale' | 'missing'>,
+    sourceRequests: PublicTiHandoffPayload['sourceRequests']
+): PublicTiHandoffPayload['actionReadiness'] {
+    const entries = [
+        { action: PUBLIC_TI_HANDOFF_ACTIONS.watchlist, payload: payloads.watchlist, ownerLane: 'org' as const },
+        { action: PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild, payload: payloads.alertRebuild, ownerLane: 'alert' as const },
+        { action: PUBLIC_TI_HANDOFF_ACTIONS.case, payload: payloads.case, ownerLane: 'case' as const },
+        { action: PUBLIC_TI_HANDOFF_ACTIONS.enrichment, payload: payloads.enrichment, ownerLane: 'source' as const },
+    ]
+    return entries.map(entry => {
+        const missing = unique([
+            ...entry.payload.missing,
+            ...(entry.action === PUBLIC_TI_HANDOFF_ACTIONS.enrichment ? [] : artifact.readiness.blockers),
+        ])
+        const blockerCodes = uniqueBlockerCodes([
+            ...(bridgeState.orgRequired && (entry.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist || entry.action === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild || entry.action === PUBLIC_TI_HANDOFF_ACTIONS.case) ? ['org_required' as const] : []),
+            ...(bridgeState.sourceRequired ? ['source_required' as const] : []),
+            ...(bridgeState.stale ? ['stale_evidence' as const] : []),
+            ...(!artifact.watchlistTerms.length && (entry.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist || entry.action === PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild) ? ['missing_watchlist_term' as const] : []),
+            ...(entry.payload.blocked ? ['action_blocked' as const] : []),
+        ])
+        return {
+            action: entry.action,
+            route: entry.payload.route,
+            endpoint: entry.payload.endpoint,
+            backedRoute: entry.payload.backedRoute,
+            ready: !entry.payload.blocked && missing.length === 0 && !blockerCodes.length,
+            missing,
+            blockerCodes,
+            ownerLane: entry.ownerLane,
+            selected: entry.action === selectedAction,
+            sourceRequestCount: sourceRequests.length,
+        }
+    })
+}
+
+function uniqueBlockerCodes(values: PublicTiHandoffActionBlockerCode[]) {
+    return Array.from(new Set(values))
 }
 
 function sourceRequestsFor(payloads: PublicTiHandoffPayload['actionPayloads']): PublicTiHandoffPayload['sourceRequests'] {

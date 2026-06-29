@@ -898,6 +898,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
     ]
     const workflowRows = payloadRows.map(row => ({
         ...row,
+        readiness: row.payload.actionReadiness.find(item => item.action === row.payload.action),
         missing: row.payload.missing,
         endpoint: row.payload.selectedPayload.endpoint ?? row.payload.selectedPayload.backedRoute ?? row.route,
     }))
@@ -1012,8 +1013,18 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                             </div>
                             <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.endpoint}</p>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                {row.missing.length ? row.missing.slice(0, 2).join('; ') : 'Required artifact context is present.'}
+                                {row.readiness?.missing.length ? row.readiness.missing.slice(0, 2).join('; ') : row.missing.length ? row.missing.slice(0, 2).join('; ') : 'Required artifact context is present.'}
                             </p>
+                            {row.readiness ? (
+                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                        {actionOwnerLabel(row.readiness.ownerLane)}
+                                    </span>
+                                    <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                        {row.readiness.sourceRequestCount} source request{row.readiness.sourceRequestCount === 1 ? '' : 's'}
+                                    </span>
+                                </div>
+                            ) : null}
                         </div>
                     ))}
                 </div>
@@ -1955,6 +1966,14 @@ function sourceRequestFamilyLabel(value: string) {
 function sourceRequestRouteLabel(value: string) {
     if (value === '/dashboard/ti/enrichment') return 'source queue'
     return 'review route'
+}
+
+function actionOwnerLabel(value: string) {
+    if (value === 'org') return 'watchlist'
+    if (value === 'alert') return 'alerting'
+    if (value === 'case') return 'casework'
+    if (value === 'source') return 'source review'
+    return 'review'
 }
 
 type DecisionStep = {
