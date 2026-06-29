@@ -760,12 +760,41 @@ const ownerWatchlistOperation = parseBody(ownerWatchlistResponse.body).operation
 assert.equal(ownerWatchlistOperation.actorId, 'org_smoke_owner')
 assert.equal(ownerWatchlistOperation.requestId, 'smoke-domain-create')
 assert.equal(ownerWatchlistOperation.serviceLogAction, 'organization_watchlist_upserted')
+assert.equal(ownerWatchlistOperation.reason, 'Live proof domain seed.')
+assert.equal(ownerWatchlistOperation.duplicateTermScope, 'organization')
+assert.equal(ownerWatchlistOperation.upsert.schemaVersion, 'organization.watchlist_upsert.v1')
+assert.equal(ownerWatchlistOperation.upsert.idempotent, true)
+assert.equal(ownerWatchlistOperation.upsert.duplicateTermMatched, false)
+assert.equal(ownerWatchlistOperation.upsert.existingItemId, null)
+assert.equal(ownerWatchlistOperation.upsert.actionTaken, 'created_new_item')
+assert.equal(ownerWatchlistOperation.upsert.crossOrganizationDuplicateAllowed, true)
+assert.equal(ownerWatchlistOperation.upsert.sameOrganizationDuplicateCreatesNewItem, false)
 assert.equal(ownerWatchlistOperation.lifecycleTransition.schemaVersion, 'organization.watchlist_lifecycle_transition.v1')
 assert.equal(ownerWatchlistOperation.lifecycleTransition.statusAfter, 'active')
 assert.equal(ownerWatchlistOperation.lifecycleTransition.enabledAfter, true)
 assert.equal(ownerWatchlistOperation.lifecycleTransition.disabledReasonAfter, null)
 assert.equal(ownerWatchlistOperation.lifecycleTransition.alertGenerationEligibleAfter, true)
 assert.equal(ownerWatchlistOperation.lifecycleTransition.activeTermsExportRoute, 'GET /api/organizations/:id/watchlists/alert-terms')
+
+const duplicateOwnerWatchlistResponse = await app.inject({
+    method: 'POST',
+    url: `/api/organizations/${organization.id}/watchlists`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { kind: 'domain', value: 'acme-shared.example', notes: 'Repeat proof should update existing item.', reason: 'Repeat live proof seed.', requestId: 'smoke-domain-duplicate-upsert' },
+})
+assert.equal(duplicateOwnerWatchlistResponse.statusCode, 201, duplicateOwnerWatchlistResponse.body)
+const duplicateOwnerWatchlistItem = parseBody(duplicateOwnerWatchlistResponse.body).watchlistItem
+assert.equal(duplicateOwnerWatchlistItem.id, ownerWatchlistItem.id)
+assert.equal(duplicateOwnerWatchlistItem.lifecycleReason, 'Repeat live proof seed.')
+assert.equal(duplicateOwnerWatchlistItem.lifecycleRequestId, 'smoke-domain-duplicate-upsert')
+const duplicateOwnerWatchlistOperation = parseBody(duplicateOwnerWatchlistResponse.body).operation
+assert.equal(duplicateOwnerWatchlistOperation.action, 'updated')
+assert.equal(duplicateOwnerWatchlistOperation.duplicateTermScope, 'organization')
+assert.equal(duplicateOwnerWatchlistOperation.upsert.duplicateTermMatched, true)
+assert.equal(duplicateOwnerWatchlistOperation.upsert.existingItemId, ownerWatchlistItem.id)
+assert.equal(duplicateOwnerWatchlistOperation.upsert.actionTaken, 'updated_existing_item')
+assert.equal(duplicateOwnerWatchlistOperation.upsert.crossOrganizationDuplicateAllowed, true)
+assert.equal(duplicateOwnerWatchlistOperation.upsert.sameOrganizationDuplicateCreatesNewItem, false)
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',

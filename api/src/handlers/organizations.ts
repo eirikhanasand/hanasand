@@ -1552,7 +1552,10 @@ export async function postOrganizationWatchlist(req: FastifyRequest<{ Params: Or
             action: existing.rows[0] ? 'updated' : 'created',
             actorId: userId,
             requestId: input.requestId,
+            reason: input.reason,
             serviceLogAction,
+            existingItemId: existing.rows[0]?.id ?? null,
+            duplicateTermMatched: Boolean(existing.rows[0]),
         }),
     })
 }
@@ -2268,6 +2271,8 @@ function organizationWatchlistOperation(
         requestId?: string
         reason?: string
         serviceLogAction: string
+        existingItemId?: string | null
+        duplicateTermMatched?: boolean
     }
 ) {
     const decision = organizationVisibilityDecision({
@@ -2289,6 +2294,18 @@ function organizationWatchlistOperation(
         visibilityPolicy: decision.alertVisibilityPolicy,
         allowedViewerRoles: decision.allowedRoles,
         serviceLogAction: input.serviceLogAction,
+        duplicateTermScope: 'organization' as const,
+        upsert: input.action === 'created' || input.action === 'updated'
+            ? {
+                schemaVersion: 'organization.watchlist_upsert.v1' as const,
+                idempotent: true,
+                duplicateTermMatched: Boolean(input.duplicateTermMatched),
+                existingItemId: input.existingItemId ?? null,
+                actionTaken: input.duplicateTermMatched ? 'updated_existing_item' as const : 'created_new_item' as const,
+                crossOrganizationDuplicateAllowed: true,
+                sameOrganizationDuplicateCreatesNewItem: false,
+            }
+            : null,
         lifecycleTransition: {
             schemaVersion: 'organization.watchlist_lifecycle_transition.v1',
             action: input.action,
