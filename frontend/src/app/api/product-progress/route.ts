@@ -19,12 +19,13 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents, deployStatus] = await Promise.all([
+    const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, cases, deliveries, organizations, watchlists, supportRecovery, auditEvents, deployStatus] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
         fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness'),
+        fetchInternalJson(request, routes.cases || '/api/cases'),
         fetchInternalJson(request, routes.deliveries || '/api/dwm/webhooks/deliveries'),
         fetchInternalJson(request, routes.organizations || '/api/organizations'),
         fetchInternalJson(request, routes.watchlists || '/api/dwm/watchlists'),
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
             fetch: alertGeneration,
         }),
         deliveries: deliveryRows,
+        cases: rows((cases.json as { cases?: unknown[] } | undefined)?.cases),
         orgAlertExport: orgAlertExportReadiness({
             generatedAt,
             route: selectedOrganization ? `/api/organizations/${encodeURIComponent(selectedOrganization.id)}/alert-readiness` : routes.orgAlertExport || '/api/dwm/watchlists',
@@ -187,6 +189,7 @@ function productProgressRoutes(query: string) {
         webhookHealth: '/api/organizations/:id/webhooks',
         dashboardAlerts: '/api/dwm/alerts',
         alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
+        cases: '/api/cases',
         organizations: '/api/organizations',
         watchlists: '/api/dwm/watchlists',
         operations: '/api/dwm/operations',

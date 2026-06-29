@@ -20,6 +20,7 @@ const routes = {
     orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
+    cases: '/api/cases',
 }
 
 const partialPayload = buildProductProgressPayload({
@@ -92,6 +93,7 @@ const partialPayload = buildProductProgressPayload({
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
     deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
 })
 
@@ -153,7 +155,7 @@ assert.deepEqual(rowExpectedDashboardIds(partialScoreboard), {
     source_coverage: 'source_inventory_probe',
     real_alert_generation: 'dashboard_evidence',
     webhook_delivery: 'webhook_health,dashboard_evidence',
-    analyst_workflow: 'dashboard_evidence',
+    analyst_workflow: 'analyst_workflow',
     support_admin_audit: 'helpdesk_audit',
     public_ti_enrichment: 'public_ti_provenance',
     deploy_live_status: 'deploy_probe',
@@ -228,6 +230,7 @@ const readyPayload = {
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 2, canGenerateAlerts: true, unavailableReason: undefined },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1, unavailableReason: undefined },
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true, unavailableReason: undefined },
+    analystWorkflow: { ...partialPayload.analystWorkflow!, status: 'ready' as const, blockers: [], unavailableReason: undefined },
 }
 
 const readyScoreboard = buildProductNorthStarScoreboard(readyPayload, { generatedAt, query: 'LockBit' })

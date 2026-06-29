@@ -201,6 +201,15 @@ export type DashboardAlertEvidenceReadiness = ProductReadinessSnapshotBase & {
     dashboardPath?: string
 }
 
+export type AnalystWorkflowReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'analyst.workflow.readiness.v1' | string
+    caseId?: string
+    alertId?: string
+    caseStatus?: string
+    assignedOwner?: string
+    latestCaseAt?: string
+}
+
 export type EntitlementReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'dwm.entitlement.readiness.v1' | string
     organizationId?: string
@@ -255,17 +264,18 @@ export type ProductReadinessExternalState = {
     orgAlertExport?: OrganizationAlertExportReadiness
     webhookHealth?: WebhookHealthReadiness
     dashboardEvidence?: DashboardAlertEvidenceReadiness
+    analystWorkflow?: AnalystWorkflowReadiness
     entitlement?: EntitlementReadiness
     dwmProduct?: DwmProductSnapshotReadiness
 }
 
 export const PRODUCT_PROGRESS_SCHEMA_VERSION = 'product.progress.readiness.v1'
 
-export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'dwm_product_snapshot', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'dwm_product_snapshot', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'analyst_workflow', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'dwm_product_snapshot', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'dwm_product_snapshot', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'source_inventory_probe', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
+export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
 
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
@@ -359,6 +369,7 @@ export type ProductProgressReadinessPayload = {
         orgAlertExport?: string
         webhookHealth?: string
         dashboardAlerts?: string
+        cases?: string
         entitlement?: string
         organizationReadiness?: string
         organizations?: string
@@ -377,6 +388,7 @@ export type ProductProgressReadinessPayload = {
     orgAlertExport?: OrganizationAlertExportReadiness
     webhookHealth?: WebhookHealthReadiness
     dashboardEvidence?: DashboardAlertEvidenceReadiness
+    analystWorkflow?: AnalystWorkflowReadiness
     entitlement?: EntitlementReadiness
     dwmProduct?: DwmProductSnapshotReadiness
 }
@@ -408,6 +420,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
             orgAlertExport: unavailableOrgAlertExport(route, options.checkedAt),
             webhookHealth: unavailableWebhookHealth(route, options.checkedAt),
             dashboardEvidence: unavailableDashboardEvidence(route, options.checkedAt),
+            analystWorkflow: unavailableAnalystWorkflow(route, options.checkedAt),
             entitlement: unavailableEntitlementReadiness(route, options.checkedAt),
             dwmProduct: unavailableDwmProduct(route, options.checkedAt),
         }
@@ -437,6 +450,11 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
         orgAlertExport: normalizeOrgAlertExportReadiness(input.orgAlertExport, input.routes?.orgAlertExport || route, options.checkedAt),
         webhookHealth: normalizeWebhookHealthReadiness(input.webhookHealth, input.routes?.webhookHealth || route, options.checkedAt),
         dashboardEvidence,
+        analystWorkflow: normalizeAnalystWorkflowReadiness(input.analystWorkflow, {
+            checkedAt: input.checkedAt || input.generatedAt || options.checkedAt,
+            dashboardEvidence,
+            route: input.routes?.cases || route,
+        }),
         entitlement: normalizeEntitlementReadiness(input.entitlement, input.routes?.entitlement || route, options.checkedAt),
         dwmProduct: normalizeDwmProductReadiness(input.dwmProduct, input.routes?.dwmProduct || route, options.checkedAt),
     }
@@ -575,6 +593,25 @@ function unavailableDashboardEvidence(source: string, checkedAt: string): Dashbo
     }
 }
 
+function unavailableAnalystWorkflow(source: string, checkedAt: string): AnalystWorkflowReadiness {
+    return {
+        schemaVersion: 'analyst.workflow.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/ti/workbench',
+        detail: 'Analyst case readiness is not loaded by product progress.',
+        blockers: ['Analyst case readiness is not loaded by product progress.'],
+        ownerLane: 'dashboard',
+        unavailableReason: 'missing_analyst_case_readiness',
+        staleAfterSeconds: 600,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'analyst_workflow',
+        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+        backendProofContractVersion: 'analyst.workflow.readiness.v1',
+    }
+}
+
 function unavailableEntitlementReadiness(source: string, checkedAt: string): EntitlementReadiness {
     return {
         schemaVersion: 'dwm.entitlement.readiness.v1',
@@ -620,6 +657,37 @@ function normalizeDashboardEvidenceReadiness(input: DashboardAlertEvidenceReadin
         integrationProbeHint: input.integrationProbeHint || 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, and deploy probe is fresh.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dashboard.alert_evidence.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`),
+    }
+}
+
+function normalizeAnalystWorkflowReadiness(input: AnalystWorkflowReadiness | undefined, context: {
+    checkedAt: string
+    dashboardEvidence: DashboardAlertEvidenceReadiness
+    route: string
+}): AnalystWorkflowReadiness {
+    if (!input) return unavailableAnalystWorkflow(context.route, context.checkedAt)
+    const caseMatchesDashboardAlert = Boolean(input.caseId && input.alertId && context.dashboardEvidence.alertId === input.alertId)
+    const blockers = [
+        input.caseId ? '' : 'No analyst case id was loaded.',
+        caseMatchesDashboardAlert ? '' : 'No analyst case is linked to the dashboard-visible alert.',
+        context.dashboardEvidence.status === 'ready' ? '' : 'Dashboard alert evidence is not ready.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    return {
+        ...input,
+        status: blockers.length ? 'needs_action' : input.status === 'ready' ? 'ready' : 'needs_action',
+        checkedAt: input.checkedAt || context.checkedAt,
+        source: input.source || context.route,
+        href: input.href || (input.caseId ? `/dashboard/ti/workbench?case=${encodeURIComponent(input.caseId)}` : '/dashboard/ti/workbench'),
+        blockers,
+        ownerLane: input.ownerLane || 'dashboard',
+        unavailableReason: blockers.length ? input.unavailableReason || 'missing_analyst_case_readiness' : undefined,
+        staleAfterSeconds: input.staleAfterSeconds ?? 600,
+        proofTimestamp: input.proofTimestamp || input.latestCaseAt || input.checkedAt || context.checkedAt,
+        expectedDashboardRowId: input.expectedDashboardRowId || 'analyst_workflow',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'analyst.workflow.readiness.v1',
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `Analyst case ${input.caseId} is linked to dashboard alert ${input.alertId}.`),
     }
 }
 
@@ -1282,6 +1350,7 @@ function buildProductReadiness(input: {
     const orgAlertExport = input.externalReadiness?.orgAlertExport
     const webhookHealth = input.externalReadiness?.webhookHealth
     const dashboardEvidence = input.externalReadiness?.dashboardEvidence
+    const analystWorkflow = input.externalReadiness?.analystWorkflow
     const entitlement = input.externalReadiness?.entitlement
     const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowthReady(sourceGrowth)
         ? 'ready'
@@ -1430,6 +1499,23 @@ function buildProductReadiness(input: {
             expectedDashboardRowId: dashboardEvidence?.expectedDashboardRowId,
             integrationProbeHint: dashboardEvidence?.integrationProbeHint,
             backendProofContractVersion: dashboardEvidence?.backendProofContractVersion || dashboardEvidence?.schemaVersion,
+        },
+        {
+            id: 'analyst_workflow',
+            label: 'Analyst workflow',
+            status: analystWorkflow?.status || 'unavailable',
+            detail: analystWorkflow
+                ? analystWorkflow.detail || analystWorkflowDetail(analystWorkflow)
+                : 'Product progress has not provided a backed analyst case linked to the dashboard alert.',
+            source: analystWorkflow?.source || 'Missing analyst workflow readiness contract',
+            href: analystWorkflow?.href || '/dashboard/ti/workbench',
+            checkedAt: analystWorkflow?.checkedAt || analystWorkflow?.latestCaseAt,
+            staleAfterSeconds: analystWorkflow?.staleAfterSeconds,
+            proofTimestamp: analystWorkflow?.proofTimestamp,
+            unavailableReason: analystWorkflow?.unavailableReason,
+            expectedDashboardRowId: analystWorkflow?.expectedDashboardRowId,
+            integrationProbeHint: analystWorkflow?.integrationProbeHint,
+            backendProofContractVersion: analystWorkflow?.backendProofContractVersion || analystWorkflow?.schemaVersion,
         },
         {
             id: 'source_inventory_probe',
@@ -1637,6 +1723,13 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
                 staleAfterSeconds: 600,
                 unavailableReason: 'missing_dashboard_alert_evidence',
             }
+        case 'analyst_workflow':
+            return {
+                backendProofContractVersion: 'analyst.workflow.readiness.v1',
+                integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+                staleAfterSeconds: 600,
+                unavailableReason: 'missing_analyst_case_readiness',
+            }
         case 'public_ti_provenance':
             return {
                 backendProofContractVersion: 'ti.public_provenance.readiness.v1',
@@ -1744,6 +1837,12 @@ function dashboardEvidenceDetail(input: DashboardAlertEvidenceReadiness) {
     if (input.blockers?.length) return input.blockers.join('; ')
     if (input.alertId && input.deliveryId) return `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`
     return 'Dashboard evidence snapshot loaded.'
+}
+
+function analystWorkflowDetail(input: AnalystWorkflowReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    if (input.caseId && input.alertId) return `Analyst case ${input.caseId} is linked to alert ${input.alertId}.`
+    return 'Analyst workflow snapshot loaded.'
 }
 
 function entitlementDetail(input: EntitlementReadiness) {

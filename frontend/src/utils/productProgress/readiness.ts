@@ -1,4 +1,4 @@
-import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, DwmProductSnapshotReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { AnalystWorkflowReadiness, DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, DwmProductSnapshotReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 type AlertProofRow = {
     id?: string
@@ -11,6 +11,15 @@ type DeliveryProofRow = {
     alertId?: string
     status?: string
     attemptedAt?: string
+    createdAt?: string
+}
+
+type AnalystCaseProofRow = {
+    id?: string
+    alertId?: string
+    status?: string
+    assignedOwner?: string
+    updatedAt?: string
     createdAt?: string
 }
 
@@ -41,6 +50,7 @@ export type ProductProgressEndpointInput = {
     sourceProxy?: DashboardSourceProofProxyPayload
     alertGeneration?: DwmAlertGenerationReadinessInput
     alerts?: AlertProofRow[]
+    cases?: AnalystCaseProofRow[]
     deliveries?: DeliveryProofRow[]
     deploy?: Partial<DeployProbeReadiness>
     entitlement?: EntitlementReadiness
@@ -116,6 +126,12 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             sourceProxyReady,
             deployProbeFresh,
         }),
+        analystWorkflow: analystWorkflowFromRows({
+            checkedAt,
+            route: input.routes.cases || '/api/cases',
+            alert,
+            cases: input.cases || [],
+        }),
     }
 }
 
@@ -127,6 +143,11 @@ function chooseDashboardAlert(alerts: AlertProofRow[], deliveries: DeliveryProof
 function chooseDeliveryForAlert(alertId: string | undefined, deliveries: DeliveryProofRow[]) {
     if (!alertId) return undefined
     return deliveries.find(row => row.alertId === alertId && row.status !== 'failed' && row.status !== 'skipped')
+}
+
+function chooseCaseForAlert(alertId: string | undefined, cases: AnalystCaseProofRow[]) {
+    if (!alertId) return undefined
+    return cases.find(row => row.alertId === alertId && !['closed', 'false_positive', 'suppressed'].includes(row.status || ''))
 }
 
 function sourceProxyHealth(input: DashboardSourceProofProxyPayload | undefined) {
@@ -337,6 +358,42 @@ function dashboardEvidenceFromRows(input: {
         integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, deploy probe is fresh, and /api/dwm/alerts/generation-readiness returns customer-delivery readiness with a generation evidence window.',
         backendProofContractVersion: input.alertGeneration?.schemaVersion || 'dashboard.alert_evidence.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}. ${alertGenerationDetail}`,
+    }
+}
+
+function analystWorkflowFromRows(input: {
+    checkedAt: string
+    route: string
+    alert?: AlertProofRow
+    cases: AnalystCaseProofRow[]
+}): AnalystWorkflowReadiness {
+    const analystCase = chooseCaseForAlert(input.alert?.id, input.cases)
+    const latestCaseAt = analystCase?.updatedAt || analystCase?.createdAt
+    const blockers = [
+        input.alert?.id ? '' : 'No dashboard-visible backend alert was loaded.',
+        analystCase?.id ? '' : 'No analyst case is linked to the dashboard-visible alert.',
+        latestCaseAt ? '' : 'Analyst case timestamp is missing.',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'analyst.workflow.readiness.v1',
+        status: blockers.length ? 'needs_action' : 'ready',
+        checkedAt: input.checkedAt,
+        source: input.route,
+        href: analystCase?.id ? `/dashboard/ti/workbench?case=${encodeURIComponent(analystCase.id)}` : '/dashboard/ti/workbench',
+        caseId: analystCase?.id,
+        alertId: analystCase?.alertId,
+        caseStatus: analystCase?.status,
+        assignedOwner: analystCase?.assignedOwner,
+        latestCaseAt,
+        blockers,
+        ownerLane: 'dashboard',
+        unavailableReason: blockers.length ? 'missing_analyst_case_readiness' : undefined,
+        staleAfterSeconds: 600,
+        proofTimestamp: latestCaseAt || input.checkedAt,
+        expectedDashboardRowId: 'analyst_workflow',
+        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+        backendProofContractVersion: 'analyst.workflow.readiness.v1',
+        detail: blockers.length ? blockers.join('; ') : `Analyst case ${analystCase?.id} is linked to dashboard alert ${analystCase?.alertId}.`,
     }
 }
 

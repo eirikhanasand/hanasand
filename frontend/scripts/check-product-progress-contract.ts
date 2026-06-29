@@ -101,6 +101,7 @@ const partialPayload = buildProductProgressPayload({
     routes,
     sourceProxy,
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
     deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
 })
 
@@ -117,6 +118,8 @@ assert.equal(partialPayload.dashboardEvidence?.visibleInDashboard, true)
 assert.equal(partialPayload.dashboardEvidence?.deliveryEvidenceMatched, true)
 assert.equal(partialPayload.dashboardEvidence?.sourceProxyReady, true)
 assert.equal(partialPayload.dashboardEvidence?.deployProbeFresh, false)
+assert.equal(partialPayload.analystWorkflow?.caseId, 'case_acme_1')
+assert.equal(partialPayload.analystWorkflow?.alertId, 'alert_acme_1')
 assert.equal(partialPayload.deployProbe?.status, 'needs_action')
 assert.equal(partialPayload.publicTiProvenance?.status, 'unavailable')
 assert.equal(partialPayload.helpdeskAudit?.status, 'unavailable')
@@ -134,6 +137,7 @@ for (const dependency of [
     partialPayload.webhookHealth,
     partialPayload.dwmProduct,
     partialPayload.dashboardEvidence,
+    partialPayload.analystWorkflow,
 ]) {
     assertDependencyProofFields(dependency)
 }
@@ -319,6 +323,7 @@ const readyPayload = {
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
     dwmProduct: { ...partialPayload.dwmProduct!, status: 'ready' as const, blockers: [], watchlistTermCount: 1, alertCount: 1, sourceFamilyCount: 2, latestAlertAt: generatedAt, source: routes.dwmProduct, unavailableReason: undefined },
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true },
+    analystWorkflow: { ...partialPayload.analystWorkflow!, status: 'ready' as const, blockers: [], unavailableReason: undefined },
     deployProbe: { ...partialPayload.deployProbe!, status: 'ready' as const, blockers: [], apiHealthy: true, scraperHealthy: true, latestProbeAt: generatedAt },
 }
 const backedOrgWebhookPayload = buildProductProgressPayload({
