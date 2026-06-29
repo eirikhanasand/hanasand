@@ -2767,6 +2767,7 @@ const terminalRetryWorkOrder = deliveryRetryWorkOrders.workOrders.find(item => i
 const auditTrailRetry = deliveryAuditTrail.entries.find(item => item.auditEventId === 'audit_live_retry_contract')
 const auditTrailReplay = deliveryAuditTrail.entries.find(item => item.auditEventId === 'audit_replay_duplicate_contract')
 const auditTrailDestination = deliveryAuditTrail.entries.find(item => item.auditEventId === 'audit_destination_updated_contract')
+const memberAuditTrailRetry = memberDeliveryAuditTrail.entries.find(item => item.auditEventId === 'audit_live_retry_contract')
 const matrixReplayDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const matrixRetryDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_live_contract')
 const matrixDisabledDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_disabled_contract')
@@ -2803,9 +2804,12 @@ expect(nonmemberDeliveryRetryWorkOrders.workOrders.length === 0 && nonmemberDeli
 expect(!JSON.stringify(deliveryRetryWorkOrders).includes(secret), 'Delivery retry work orders should redact endpoint, response, and error secrets.', deliveryRetryWorkOrders)
 expect(deliveryAuditTrail.schemaVersion === 'dwm.webhook.audit_trail.v1' && deliveryAuditTrail.counts.delivery >= 1 && deliveryAuditTrail.counts.destination >= 1, 'Delivery audit trail should summarize destination and delivery events.', deliveryAuditTrail)
 expect(auditTrailRetry?.retry?.nextRetryAt === '2026-06-28T12:11:00.000Z' && auditTrailRetry.retry.canRetry === true && auditTrailRetry.routes.retry === 'POST /api/dwm/webhook-deliveries', 'Delivery audit trail should link failed deliveries to retry/backoff proof.', auditTrailRetry)
+expect(auditTrailRetry?.actionRequest?.action === 'retry_delivery' && auditTrailRetry.actionRequest.canSend === true && auditTrailRetry.actionRequest.body?.destinationId === 'destination_live_contract' && auditTrailRetry.actionRequest.expectedAuditAction === 'delivery.retry_requested', 'Delivery audit trail should expose a no-network retry request for retryable failures.', auditTrailRetry?.actionRequest)
 expect(auditTrailReplay?.delivery?.replay === true && auditTrailReplay.delivery.casePath === replayWorkflowAlert.casePath && auditTrailReplay.delivery.dedupeKey === 'dwm_dedupe_replay_contract', 'Delivery audit trail should preserve replay, case, and dedupe context.', auditTrailReplay)
 expect(auditTrailDestination?.category === 'destination' && auditTrailDestination.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash' && auditTrailDestination.metadata !== null, 'Delivery audit trail should include admin-visible destination audit context.', auditTrailDestination)
+expect(auditTrailDestination?.actionRequest?.action === 'test_destination' && auditTrailDestination.actionRequest.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && auditTrailDestination.actionRequest.expectedAuditAction === 'delivery.tested', 'Delivery audit trail should expose a no-network destination test request for destination audit events.', auditTrailDestination?.actionRequest)
 expect(memberDeliveryAuditTrail.access.memberSafe === true && memberDeliveryAuditTrail.entries.some(item => item.actorId === null && item.metadata === null && item.memberSafe === true), 'Delivery audit trail should expose member-safe rows without actor or metadata detail.', memberDeliveryAuditTrail)
+expect(memberAuditTrailRetry?.actionRequest?.canSend === false && memberAuditTrailRetry.actionRequest.body === null, 'Member-safe delivery audit trail should not expose runnable retry request bodies.', memberAuditTrailRetry?.actionRequest)
 expect(nonmemberDeliveryAuditTrail.entries.length === 0 && nonmemberDeliveryAuditTrail.blockers.some(item => item.code === 'permission_denied'), 'Delivery audit trail should deny nonmembers without leaking audit rows.', nonmemberDeliveryAuditTrail)
 expect(!JSON.stringify(deliveryAuditTrail).includes(secret) && !JSON.stringify(memberDeliveryAuditTrail).includes(secret), 'Delivery audit trail should redact endpoint, metadata, and delivery secrets.', { deliveryAuditTrail, memberDeliveryAuditTrail })
 expect(replayDestinationTest.schemaVersion === 'dwm.webhook.destination_test.v1' && replayDestinationTest.status === 'verified' && replayDestinationTest.latestTest?.dryRun === true, 'Destination test contract should expose verified dry-run test proof.', replayDestinationTest)
@@ -3307,6 +3311,7 @@ console.log(JSON.stringify({
             'deliveryAuditTrail.entries[].customerSummary',
             'deliveryAuditTrail.entries[].retry.nextRetryAt',
             'deliveryAuditTrail.entries[].delivery.casePath',
+            'deliveryAuditTrail.entries[].actionRequest.expectedAuditAction',
             'deliveryAuditTrail.entries[].routes.retry',
             'destinationTests[].schemaVersion',
             'destinationTests[].latestTest.status',

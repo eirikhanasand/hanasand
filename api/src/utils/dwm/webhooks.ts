@@ -2685,6 +2685,53 @@ export function buildDwmWebhookDeliveryAuditTrail({
             const summary = audit.category === 'destination'
                 ? `${audit.outcome} destination ${audit.destination?.label || audit.destinationId || 'webhook destination'}`
                 : `${audit.outcome} ${audit.delivery?.eventType || 'webhook delivery'} for alert ${audit.delivery?.alertId || 'unknown'}`
+            const retryActionRequest = retryWorkOrder
+                ? {
+                    action: retryWorkOrder.state === 'dry_run_ready' || retryWorkOrder.state === 'live_ready'
+                        ? 'retry_delivery'
+                        : retryWorkOrder.state === 'already_delivered'
+                            ? 'review_duplicate'
+                            : retryWorkOrder.state === 'terminal_failure'
+                                ? 'remediate_destination'
+                                : 'review_blocker',
+                    method: 'POST',
+                    route: 'POST /api/dwm/webhook-deliveries',
+                    canSend: access.canManage && retryWorkOrder.eligibility.dryRunReady,
+                    noNetwork: true,
+                    externalSendEnabled: false,
+                    body: access.canManage && retryWorkOrder.eligibility.dryRunReady
+                        ? retryWorkOrder.request.dryRunBody
+                        : null,
+                    expectedAuditAction: retryWorkOrder.audit.nextAction,
+                    expectedStatus: retryWorkOrder.eligibility.dryRunReady ? 'dry_run' : 'blocked',
+                    blockers: retryWorkOrder.eligibility.blockers,
+                }
+                : null
+            const destinationTestRequest = !retryActionRequest && audit.destinationId
+                ? {
+                    action: 'test_destination',
+                    method: 'POST',
+                    route: `POST /api/dwm/webhook-destinations/${audit.destinationId}/test`,
+                    canSend: access.canManage && audit.destination?.enabled === true,
+                    noNetwork: true,
+                    externalSendEnabled: false,
+                    body: access.canManage && audit.destination?.enabled === true
+                        ? {
+                            orgId: audit.orgId,
+                            destinationId: audit.destinationId,
+                            eventType: 'dwm.alert.test' as DwmAlertEventType,
+                            dryRun: true,
+                            live: false,
+                            idempotencyKey: buildIdempotencyKey('dwm.alert.test', audit.orgId, audit.destinationId, 'webhook_test'),
+                        }
+                        : null,
+                    expectedAuditAction: 'delivery.tested',
+                    expectedStatus: access.canManage && audit.destination?.enabled === true ? 'dry_run' : 'blocked',
+                    blockers: audit.destination?.enabled === true
+                        ? []
+                        : [auditTrailBlocker('destination_disabled', 'Destination is disabled and cannot be tested.', audit.destinationId, true)],
+                }
+                : null
 
             return {
                 schemaVersion: 'dwm.webhook.audit_trail_entry.v1',
@@ -2732,10 +2779,12 @@ export function buildDwmWebhookDeliveryAuditTrail({
                     }
                     : audit.retry,
                 metadata: access.canManage ? audit.metadata : null,
+                actionRequest: retryActionRequest || destinationTestRequest,
                 routes: {
                     delivery: audit.deliveryId ? `GET /api/dwm/webhook-deliveries?deliveryId=${audit.deliveryId}` : null,
                     destination: audit.destinationId ? `GET /api/dwm/webhooks?destinationId=${audit.destinationId}` : null,
                     retry: retryWorkOrder ? 'POST /api/dwm/webhook-deliveries' : null,
+                    testDestination: audit.destinationId ? `POST /api/dwm/webhook-destinations/${audit.destinationId}/test` : null,
                 },
                 memberSafe: access.memberSafe,
                 createdAt: audit.createdAt,
