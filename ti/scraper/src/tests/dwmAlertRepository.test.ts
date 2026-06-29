@@ -88,6 +88,17 @@ const telegramNoUrlCapture: RawCapture = {
   metadata: { adapter: "telegram_public", channel: "repo_public_no_url", messageId: 301 }
 } as RawCapture;
 
+const telegramMissingProvenanceCapture = {
+  id: "cap_repo_tg_missing_provenance_acme",
+  sourceId: telegramNoUrlSource.id,
+  url: "",
+  mediaType: "text/plain",
+  storageKind: "inline_text",
+  sensitive: false,
+  body: "acme.com appears in public Telegram evidence without timestamp or content hash metadata.",
+  metadata: { adapter: "telegram_public", channel: "repo_public_gap", messageId: 302 }
+} as RawCapture;
+
 const nonmatchCapture: RawCapture = {
   id: "cap_repo_tg_quiet",
   sourceId: telegramSource.id,
@@ -1777,6 +1788,97 @@ describe("dwm alert repository", () => {
     expect(preserved.workflowEvents).toHaveLength(1);
     expect(preserved.provenance.captureIds).toEqual(["cap_repo_tg_no_url_acme", "cap_repo_tg_no_url_acme_followup"]);
     expect(preserved.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.evidenceId).sort()).toEqual(["cap_repo_tg_no_url_acme", "cap_repo_tg_no_url_acme_followup"]);
+  });
+
+  test("persists captures with missing metadata using fallback provenance without fake links", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramNoUrlSource);
+    store.saveCapture(telegramMissingProvenanceCapture);
+    (store as any).saveDwmWatchlist({
+      id: "watch_repo_missing_provenance",
+      tenantId: "tenant_repo_missing_provenance",
+      organizationId: "org_repo_missing_provenance",
+      name: "Missing provenance watch",
+      terms: [{ id: "watch_item_missing_provenance", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_missing_provenance",
+      status: "active",
+      createdAt: "2026-06-28T13:30:00.000Z",
+      updatedAt: "2026-06-28T13:30:00.000Z"
+    });
+
+    const rebuild = rebuildDwmRuntimeAlerts({
+      store: store as any,
+      tenantId: "tenant_repo_missing_provenance",
+      organizationId: "org_repo_missing_provenance",
+      visibilityPolicy: "admins"
+    });
+    expect(rebuild.savedAlertCount).toBe(1);
+    const alert = rebuild.alerts[0];
+    expect(alert).toMatchObject({
+      tenantId: "tenant_repo_missing_provenance",
+      organizationId: "org_repo_missing_provenance",
+      sourceFamily: "telegram_public",
+      recommendedRoute: "analyst_review",
+      watchlistIds: ["watch_repo_missing_provenance"],
+      watchlistItemIds: ["watch_item_missing_provenance"]
+    });
+    expect(alert.evidence[0]).toMatchObject({
+      id: "cap_repo_tg_missing_provenance_acme",
+      sourceId: "src_repo_tg_no_url",
+      sourceFamily: "telegram_public",
+      provenance: { captureId: "cap_repo_tg_missing_provenance_acme", sourceId: "src_repo_tg_no_url" }
+    });
+    expect(alert.evidence[0].observedAt).toEqual(expect.any(String));
+    expect(alert.evidence[0].contentHash).toEqual(expect.any(String));
+    expect(alert.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      captureIds: ["cap_repo_tg_missing_provenance_acme"],
+      sourceIds: ["src_repo_tg_no_url"],
+      contentHashes: [alert.evidence[0].contentHash],
+      provenanceGaps: [expect.objectContaining({ code: "missing_source_url", evidenceId: "cap_repo_tg_missing_provenance_acme" })],
+      evidenceExcerpts: [expect.objectContaining({
+        captureId: "cap_repo_tg_missing_provenance_acme",
+        sourceKey: "src_repo_tg_no_url",
+        observedAt: expect.any(String),
+        contentHash: alert.evidence[0].contentHash
+      })]
+    });
+    expect(alert.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code)).not.toContain("missing_observed_at");
+    expect(alert.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code)).not.toContain("missing_content_hash");
+    expect(alert.alertCreatedEvent.consumerPayload.sourceProvenanceSummary.provenanceGaps).toEqual([
+      expect.objectContaining({ code: "missing_source_url" })
+    ]);
+    const proof = buildDwmAlertCustomerProofHandoffRow({ alert: { ...alert, sourceProvenanceSummary: undefined } });
+    expect(proof.sourceProvenanceSummary.provenanceGaps.map((gap) => gap.code).sort()).toEqual([
+      "missing_source_url"
+    ]);
+    expect(proof.consumerAdapter.publicTI.fields).toContain("sourceProvenanceSummary.provenanceGaps");
+
+    (store as any).saveDwmAlert({
+      ...alert,
+      workflowStatus: "triaged",
+      assignedOwner: "analyst-missing-provenance",
+      workflowDecision: "reviewed",
+      workflowNote: "Keep missing provenance visible to customer consumers.",
+      workflowEvents: [{ id: "evt_missing_provenance_review", at: "2026-06-28T13:45:00.000Z", toWorkflowStatus: "triaged", note: "Keep missing provenance visible to customer consumers." }]
+    });
+    const replay = rebuildDwmRuntimeAlerts({
+      store: store as any,
+      tenantId: "tenant_repo_missing_provenance",
+      organizationId: "org_repo_missing_provenance",
+      visibilityPolicy: "admins"
+    });
+    expect(replay.savedAlertCount).toBe(1);
+    const preserved = (store as any).listDwmAlerts()[0];
+    expect(preserved.workflowStatus).toBe("triaged");
+    expect(preserved.assignedOwner).toBe("analyst-missing-provenance");
+    expect(preserved.workflowDecision).toBe("reviewed");
+    expect(preserved.workflowNote).toBe("Keep missing provenance visible to customer consumers.");
+    expect(preserved.workflowEvents).toHaveLength(1);
+    expect(preserved.sourceProvenanceSummary.provenanceGaps.map((gap: any) => gap.code).sort()).toEqual([
+      "missing_source_url"
+    ]);
+    expect(preserved.sourceProvenanceSummary.contentHashes).toEqual([alert.evidence[0].contentHash]);
   });
 
   test("builds customer proof rows from org export alerts while preserving workflow and delivery replay state", () => {
