@@ -17,6 +17,7 @@ assert.deepEqual(redactAuditValue({
 
 const routes = await readFile(new URL('../src/routes.ts', import.meta.url), 'utf8')
 assert.match(routes, /fastify\.get\('\/admin\/audit-events'/)
+assert.match(routes, /fastify\.get\('\/admin\/audit-events\/:id'/)
 assert.match(routes, /fastify\.get\('\/admin\/support\/inspect'/)
 assert.match(routes, /fastify\.get\('\/admin\/support\/users\/:id'/)
 assert.match(routes, /fastify\.get\('\/admin\/support\/organizations\/:id'/)
@@ -73,6 +74,11 @@ for (const expected of ['orgId', 'userId', 'email', 'requestId', 'entityId', 'en
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing support inspection filter ${expected}.`)
 }
 assert.match(adminSupport, /getSupportInspection/)
+assert.match(adminSupport, /getAdminAuditEvent/)
+assert.match(adminSupport, /supportAuditEventDetailResponse/)
+assert.match(adminSupport, /invalid_audit_event_id/)
+assert.match(adminSupport, /audit_event_not_found/)
+assert.match(adminSupport, /\/api\/admin\/audit-events\/\$\{encodeURIComponent\(String\(event\.id\)\)\}/)
 assert.match(adminSupport, /support\.inspect/)
 assert.match(adminSupport, /support\.inspection\.v1/)
 assert.match(adminSupport, /support\.case_summary\.v1/)

@@ -51,6 +51,10 @@ type AuditQuery = {
     limit?: string
 }
 
+type AuditEventParams = {
+    id: string
+}
+
 type OrganizationParams = {
     id: string
 }
@@ -484,6 +488,60 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
+    })
+}
+
+export async function getAdminAuditEvent(req: FastifyRequest<{ Params: AuditEventParams }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const id = Number(req.params.id)
+    if (!Number.isFinite(id) || id < 1 || id !== Math.trunc(id)) {
+        return res.status(400).send(supportError('invalid_audit_event_id', 'Audit event id must be a positive integer.', {
+            field: 'id',
+        }))
+    }
+
+    const result = await run(`
+        SELECT
+            e.id,
+            e.action_type,
+            e.severity,
+            e.source,
+            e.service,
+            e.actor_id,
+            actor.name AS actor_name,
+            e.target_type,
+            e.target_id,
+            target_user.name AS target_name,
+            e.organization_id,
+            organization.name AS organization_name,
+            e.entity_id,
+            e.request_id,
+            e.outcome,
+            e.reason,
+            e.context,
+            e.ip,
+            e.user_agent,
+            e.created_at
+        FROM admin_audit_events e
+        LEFT JOIN users actor ON actor.id = e.actor_id
+        LEFT JOIN users target_user ON target_user.id = e.target_id
+        LEFT JOIN organizations organization ON organization.id = e.organization_id
+        WHERE e.id = $1
+        LIMIT 1
+    `, [id])
+    const row = result.rows[0] as Record<string, unknown> | undefined
+    if (!row) {
+        return res.status(404).send(supportError('audit_event_not_found', 'Audit event not found.', {
+            id,
+        }))
+    }
+
+    const event = toAdminAuditEvent(row)
+    return res.send({
+        event,
+        detail: supportAuditEventDetailResponse(event),
     })
 }
 
@@ -5344,6 +5402,48 @@ function toAdminAuditEvent(row: Record<string, unknown>): Record<string, any> {
             },
             copyText: `${event.created_at} ${event.severity}/${event.outcome} ${event.action_type} actor=${event.actor_id} target=${event.target_id || ''} org=${event.organization_id || ''} request=${event.request_id || ''} reason=${event.reason || ''}`,
         },
+    }
+}
+
+function supportAuditEventDetailResponse(event: Record<string, any>) {
+    const detail = event.detail || {}
+    const context = detail.context || {}
+    const timelineEvent = detail.timelineEvent || {}
+    const supportSessionId = text(context.supportSessionId)
+        || (text(detail.entityId).startsWith('support_session_') ? text(detail.entityId) : '')
+    const filters = {
+        org: detail.organizationId || '',
+        actor: detail.actorId || '',
+        target: detail.targetId || '',
+        action: detail.actionType || '',
+        severity: detail.severity || '',
+        entity: detail.entityId || '',
+        request: detail.requestId || '',
+        outcome: detail.outcome || '',
+        supportSession: supportSessionId,
+        source: detail.source || '',
+        service: detail.service || '',
+    }
+    return {
+        schemaVersion: 'admin.audit.event_detail.v1',
+        generatedAt: new Date().toISOString(),
+        event: detail,
+        timelineEvent,
+        redacted: true,
+        filterContract: supportAuditFilterContract(filters, [timelineEvent]),
+        exportProof: supportAuditExportProof(filters, [timelineEvent]),
+        links: {
+            self: `/api/admin/audit-events/${encodeURIComponent(String(event.id))}`,
+            timeline: auditFilterQuery(filters),
+            request: detail.requestId ? `/api/admin/audit-events?request=${encodeURIComponent(String(detail.requestId))}` : null,
+            entity: detail.entityId ? `/api/admin/audit-events?entity=${encodeURIComponent(String(detail.entityId))}` : null,
+            supportSession: supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(supportSessionId)}` : null,
+        },
+        copyText: [
+            detail.copyText,
+            `Detail: /api/admin/audit-events/${event.id}`,
+            `Timeline: ${auditFilterQuery(filters)}`,
+        ].filter(Boolean).join('\n'),
     }
 }
 
