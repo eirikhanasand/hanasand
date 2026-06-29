@@ -78,6 +78,7 @@ type OrganizationMemberParams = OrganizationParams & {
 }
 
 type SupportInspectionQuery = {
+    q?: string
     org?: string
     orgId?: string
     user?: string
@@ -267,6 +268,7 @@ type SupportOrganizationAvailability = {
 }
 
 type SupportTimelineFilter = {
+    q?: string
     org: string
     user: string
     email: string
@@ -299,6 +301,7 @@ type SupportActionPreparationInput = {
 }
 
 const supportInspectionFilters = new Set([
+    'q',
     'org',
     'orgId',
     'user',
@@ -1236,6 +1239,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     if (!actor) return
 
     const query = req.query as SupportInspectionQuery
+    const q = text(query.q)
     const requestedOrg = text(query.org || query.orgId)
     const requestedUser = text(query.user || query.userId)
     const email = text(query.email).toLowerCase()
@@ -1302,7 +1306,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const user = sessionState?.targetUserId || requestedUser || ''
     const request = requestedRequest || sessionState?.requestId || ''
     const entity = requestedEntity || supportSession
-    const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit })
+    const filterError = supportInspectionFilterError(query, { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
     }
@@ -1311,20 +1315,21 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         return res.status(400).send(preparationInput.error)
     }
 
-    if (!org && !user && !email && !request && !entity && !entityType && !supportSession && !action && !reason && !contextFilter) {
-        return res.status(400).send(supportError('missing_support_target', 'Add org, user, email, request, entity, entityType, supportSession, action, reason, or context to inspect support state.'))
+    if (!q && !org && !user && !email && !request && !entity && !entityType && !supportSession && !action && !reason && !contextFilter) {
+        return res.status(400).send(supportError('missing_support_target', 'Add q, org, user, email, request, entity, entityType, supportSession, action, reason, or context to inspect support state.'))
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
-        loadInspectionOrganizations({ org, user, email, request, limit }),
-        loadInspectionUsers({ user, request, limit }),
-        loadInspectionMemberships({ org, user, request, limit }),
-        loadInspectionInvites({ org, email, request, limit }),
-        loadInspectionApprovals({ org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit }),
+        loadInspectionOrganizations({ q, org, user, email, request, limit }),
+        loadInspectionUsers({ q, user, request, limit }),
+        loadInspectionMemberships({ q, org, user, request, limit }),
+        loadInspectionInvites({ q, org, email, request, limit }),
+        loadInspectionApprovals({ q, org, user, email, request, outcome, limit }),
+        loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit }),
     ])
-    const timelineFilter = supportTimelineFilter({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit })
     const auditTimelineFilters = {
+        q,
         org,
         target: user || email,
         request,
@@ -1440,7 +1445,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         outcome: 'success',
         context: {
             schemaVersion: 'support.inspection.v1',
-            filters: { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit },
+            filters: { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit },
             organizationCount: organizations.length,
             membershipCount: memberships.length,
             pendingInviteCount: invites.filter(row => row.status === 'pending').length,
@@ -1454,7 +1459,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         inspection: {
             schemaVersion: 'support.inspection.v1',
             generatedAt: new Date().toISOString(),
-            filters: { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit },
+            filters: { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit },
             supportSession: sessionState ? supportSessionResponse({
                 ...sessionState,
                 actorId: sessionState.actorId,
@@ -1519,7 +1524,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 },
             },
             copyText: [
-                `Support inspection org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'} session=${supportSession || '*'}`,
+                `Support inspection q=${q || '*'} org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'} session=${supportSession || '*'}`,
                 `Authorization: ${authorization.supportSessionScoped ? 'scoped support session' : 'support role'}`,
                 `Organizations: ${organizations.length}`,
                 `Memberships: ${memberships.length}`,
@@ -3590,7 +3595,7 @@ async function loadOrganizationSupportDetail(organizationId: string) {
     return result.rows[0] as OrganizationRow | undefined
 }
 
-async function loadInspectionOrganizations(input: { org: string, user: string, email: string, request: string, limit: number }) {
+async function loadInspectionOrganizations(input: { q?: string, org: string, user: string, email: string, request: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3600,6 +3605,17 @@ async function loadInspectionOrganizations(input: { org: string, user: string, e
     if (input.org) {
         const placeholder = add(`%${input.org}%`)
         where.push('(o.id ILIKE ' + placeholder + ' OR o.name ILIKE ' + placeholder + ' OR o.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
+        where.push(`(
+            o.id ILIKE ${placeholder}
+            OR o.name ILIKE ${placeholder}
+            OR o.slug ILIKE ${placeholder}
+            OR EXISTS (SELECT 1 FROM organization_members om WHERE om.organization_id = o.id AND om.user_id ILIKE ${placeholder})
+            OR EXISTS (SELECT 1 FROM organization_invites invite WHERE invite.organization_id = o.id AND invite.email ILIKE ${placeholder})
+            OR EXISTS (SELECT 1 FROM admin_audit_events event WHERE event.organization_id = o.id AND (event.action_type ILIKE ${placeholder} OR event.request_id ILIKE ${placeholder} OR event.entity_id ILIKE ${placeholder} OR event.reason ILIKE ${placeholder}))
+        )`)
     }
     if (input.user) {
         where.push(`EXISTS (
@@ -3644,7 +3660,7 @@ async function loadInspectionOrganizations(input: { org: string, user: string, e
     return result.rows as Record<string, unknown>[]
 }
 
-async function loadInspectionUsers(input: { user: string, request: string, limit: number }) {
+async function loadInspectionUsers(input: { q?: string, user: string, request: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3653,6 +3669,10 @@ async function loadInspectionUsers(input: { user: string, request: string, limit
     }
     if (input.user) {
         const placeholder = add(`%${input.user}%`)
+        where.push('(users.id ILIKE ' + placeholder + ' OR users.name ILIKE ' + placeholder + ')')
+    }
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
         where.push('(users.id ILIKE ' + placeholder + ' OR users.name ILIKE ' + placeholder + ')')
     }
     if (input.request) {
@@ -3682,7 +3702,7 @@ async function loadInspectionUsers(input: { user: string, request: string, limit
     return result.rows as Record<string, unknown>[]
 }
 
-async function loadInspectionMemberships(input: { org: string, user: string, request: string, limit: number }) {
+async function loadInspectionMemberships(input: { q?: string, org: string, user: string, request: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3694,6 +3714,10 @@ async function loadInspectionMemberships(input: { org: string, user: string, req
         where.push('(om.organization_id ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ')')
     }
     if (input.user) where.push(`om.user_id ILIKE ${add(`%${input.user}%`)}`)
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
+        where.push('(om.organization_id ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ' OR om.user_id ILIKE ' + placeholder + ' OR users.name ILIKE ' + placeholder + ' OR om.role ILIKE ' + placeholder + ' OR om.status ILIKE ' + placeholder + ')')
+    }
     if (input.request) {
         const placeholder = add(`%${input.request}%`)
         where.push(`EXISTS (
@@ -3731,7 +3755,7 @@ async function loadInspectionMemberships(input: { org: string, user: string, req
     return result.rows as Record<string, unknown>[]
 }
 
-async function loadInspectionInvites(input: { org: string, email: string, request: string, limit: number }) {
+async function loadInspectionInvites(input: { q?: string, org: string, email: string, request: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3743,6 +3767,10 @@ async function loadInspectionInvites(input: { org: string, email: string, reques
         where.push('(organization_invites.organization_id ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ')')
     }
     if (input.email) where.push(`lower(organization_invites.email) = lower(${add(input.email)})`)
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
+        where.push('(organization_invites.id ILIKE ' + placeholder + ' OR organization_invites.email ILIKE ' + placeholder + ' OR organization_invites.role ILIKE ' + placeholder + ' OR organization_invites.status ILIKE ' + placeholder + ' OR organizations.name ILIKE ' + placeholder + ' OR organizations.slug ILIKE ' + placeholder + ')')
+    }
     if (input.request) {
         const placeholder = add(`%${input.request}%`)
         where.push(`EXISTS (
@@ -3764,7 +3792,7 @@ async function loadInspectionInvites(input: { org: string, email: string, reques
     return result.rows as Record<string, unknown>[]
 }
 
-async function loadInspectionApprovals(input: { org: string, user: string, email: string, request: string, outcome: string, limit: number }) {
+async function loadInspectionApprovals(input: { q?: string, org: string, user: string, email: string, request: string, outcome: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3780,6 +3808,10 @@ async function loadInspectionApprovals(input: { org: string, user: string, email
         where.push('(approval.target_user_id ILIKE ' + placeholder + ' OR approval.requested_by ILIKE ' + placeholder + ' OR approval.approved_by ILIKE ' + placeholder + ' OR approval.denied_by ILIKE ' + placeholder + ')')
     }
     if (input.email) where.push(`lower(invite.email) = lower(${add(input.email)})`)
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
+        where.push('(approval.request_id ILIKE ' + placeholder + ' OR approval.requested_reason ILIKE ' + placeholder + ' OR approval.decision_reason ILIKE ' + placeholder + ' OR invite.email ILIKE ' + placeholder + ' OR invite.status ILIKE ' + placeholder + ' OR organization.name ILIKE ' + placeholder + ' OR organization.slug ILIKE ' + placeholder + ')')
+    }
     if (input.request) where.push(`approval.request_id ILIKE ${add(`%${input.request}%`)}`)
     if (input.outcome) where.push(`approval.outcome = ${add(input.outcome)}`)
     if (!where.length) return []
@@ -3813,7 +3845,7 @@ async function loadInspectionApprovals(input: { org: string, user: string, email
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, reason: string, context: string, from: string, to: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { q: string, org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, reason: string, context: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -3823,6 +3855,23 @@ async function loadInspectionAuditEvents(input: { org: string, user: string, ema
     if (input.org) {
         const placeholder = add(`%${input.org}%`)
         where.push('(event.organization_id ILIKE ' + placeholder + ' OR organization.name ILIKE ' + placeholder + ' OR organization.slug ILIKE ' + placeholder + ')')
+    }
+    if (input.q) {
+        const placeholder = add(`%${input.q}%`)
+        where.push(`(
+            event.action_type ILIKE ${placeholder}
+            OR event.actor_id ILIKE ${placeholder}
+            OR event.target_id ILIKE ${placeholder}
+            OR event.target_type ILIKE ${placeholder}
+            OR event.organization_id ILIKE ${placeholder}
+            OR organization.name ILIKE ${placeholder}
+            OR organization.slug ILIKE ${placeholder}
+            OR event.entity_id ILIKE ${placeholder}
+            OR event.request_id ILIKE ${placeholder}
+            OR event.outcome ILIKE ${placeholder}
+            OR event.reason ILIKE ${placeholder}
+            OR event.context::text ILIKE ${placeholder}
+        )`)
     }
     if (input.user) {
         const placeholder = add(`%${input.user}%`)
@@ -6319,7 +6368,7 @@ function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: 
     if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
         return supportError('invalid_support_filter', 'Support inspection limit must be a positive number.', { filter: 'limit' })
     }
-    const hasTarget = Boolean(filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.reason || filter.context)
+    const hasTarget = Boolean(filter.q || filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.reason || filter.context)
     if (!hasTarget && Boolean(filter.action || filter.source || filter.service || filter.severity || filter.outcome || filter.from || filter.to)) {
         return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, entityType, or supportSession with audit timeline filters.', {
             filters: supportTimelineFilter(filter),
@@ -6330,6 +6379,7 @@ function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: 
 
 function supportTimelineFilter(input: Omit<SupportTimelineFilter, 'unsupported'>): SupportTimelineFilter {
     return {
+        q: input.q || '',
         org: input.org,
         user: input.user,
         email: input.email,

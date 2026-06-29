@@ -108,16 +108,19 @@ assert.match(adminSupport, /e\.context::text ILIKE/)
 for (const expected of ['requestId', 'status', 'requester', 'approver']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing approval search filter ${expected}.`)
 }
-for (const expected of ['orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'action', 'severity', 'reason', 'supportReason', 'context', 'supportContext', 'from', 'to']) {
+for (const expected of ['q', 'orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'action', 'severity', 'reason', 'supportReason', 'context', 'supportContext', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing support inspection filter ${expected}.`)
 }
+assert.match(adminSupport, /const q = text\(query\.q\)/)
 assert.match(adminSupport, /const reason = text\(query\.reason \|\| query\.supportReason\)/)
 assert.match(adminSupport, /const contextFilter = text\(query\.context \|\| query\.supportContext\)/)
-assert.match(adminSupport, /loadInspectionAuditEvents\(\{ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit \}\)/)
-assert.match(adminSupport, /supportTimelineFilter\(\{ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit \}\)/)
+assert.match(adminSupport, /loadInspectionOrganizations\(\{ q, org, user, email, request, limit \}\)/)
+assert.match(adminSupport, /loadInspectionAuditEvents\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit \}\)/)
+assert.match(adminSupport, /supportTimelineFilter\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, reason, context: contextFilter, from, to, limit \}\)/)
+assert.match(adminSupport, /event\.action_type ILIKE \${placeholder}/)
 assert.match(adminSupport, /event\.reason ILIKE/)
 assert.match(adminSupport, /event\.context::text ILIKE/)
-assert.match(adminSupport, /reason, or context to inspect support state/)
+assert.match(adminSupport, /q, org, user, email, request, entity, entityType, supportSession, action, reason, or context to inspect support state/)
 assert.match(adminSupport, /getSupportInspection/)
 assert.match(adminSupport, /getAdminAuditEvent/)
 assert.match(adminSupport, /supportAuditEventDetailResponse/)
