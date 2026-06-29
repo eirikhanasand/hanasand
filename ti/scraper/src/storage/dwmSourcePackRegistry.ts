@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { CollectionTask, SourceRecord } from "../types.ts";
 
 export type DwmSourcePackFamily = "telegram" | "darkweb_onion" | "darkweb_metadata" | "actor_page" | "public_advisory" | "clear_web";
@@ -310,6 +312,39 @@ export type DwmSourcePackCollectionQueueResult = {
   safeOutput: Record<string, boolean>;
 };
 
+export type DwmSourcePackCollectionQueueReceiptRecord = DwmSourcePackCollectionQueueReceipt & {
+  packId: string;
+  requestId: string;
+  family: DwmSourcePackFamily;
+  queuedAt: string;
+  parserStatus: string;
+  validationJobKey: string;
+  targetRawStored: false;
+};
+
+export interface DwmSourcePackCollectionReceiptAdapter {
+  upsert(receipt: DwmSourcePackCollectionQueueReceiptRecord): DwmSourcePackCollectionQueueReceiptRecord;
+  list(): DwmSourcePackCollectionQueueReceiptRecord[];
+}
+
+export type DwmSourcePackWorkerRunRecord = {
+  id: string;
+  sourcePackId: string;
+  sourcePackLabel: string;
+  startedAt: string;
+  completedAt: string;
+  status: string;
+  actor: string;
+  validationJobKeys: string[];
+  sourceRecordSummary: Record<string, unknown>;
+  collectionQueueSummary: Record<string, unknown>;
+};
+
+export interface DwmSourcePackWorkerRunAdapter {
+  save(run: DwmSourcePackWorkerRunRecord): DwmSourcePackWorkerRunRecord;
+  list(): DwmSourcePackWorkerRunRecord[];
+}
+
 export type DwmSourcePackFrontierQueue = {
   enqueueTask(task: CollectionTask): unknown;
   snapshot?(): Array<{ id?: string; task?: { id?: string } }>;
@@ -514,6 +549,114 @@ export class InMemoryDwmSourcePackActiveSourceAdapter implements DwmSourcePackAc
 
   list(): DwmSourcePackActiveSourceRow[] {
     return [...this.rows.values()].map((row) => clone(row)).sort((a, b) => a.activatedAt.localeCompare(b.activatedAt) || a.sourceId.localeCompare(b.sourceId));
+  }
+}
+
+export class InMemoryDwmSourcePackWorkerRunAdapter implements DwmSourcePackWorkerRunAdapter {
+  protected readonly runs = new Map<string, DwmSourcePackWorkerRunRecord>();
+
+  constructor(seed: DwmSourcePackWorkerRunRecord[] = []) {
+    for (const run of seed) this.save(run);
+  }
+
+  save(run: DwmSourcePackWorkerRunRecord): DwmSourcePackWorkerRunRecord {
+    assertSafeWorkerRunRecord(run);
+    this.runs.set(run.id, clone(run));
+    return clone(run);
+  }
+
+  list(): DwmSourcePackWorkerRunRecord[] {
+    return [...this.runs.values()].map((run) => clone(run)).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  }
+}
+
+export class InMemoryDwmSourcePackCollectionReceiptAdapter implements DwmSourcePackCollectionReceiptAdapter {
+  protected readonly receipts = new Map<string, DwmSourcePackCollectionQueueReceiptRecord>();
+
+  constructor(seed: DwmSourcePackCollectionQueueReceiptRecord[] = []) {
+    for (const receipt of seed) this.upsert(receipt);
+  }
+
+  upsert(receipt: DwmSourcePackCollectionQueueReceiptRecord): DwmSourcePackCollectionQueueReceiptRecord {
+    assertSafeCollectionReceipt(receipt);
+    const previous = this.receipts.get(receipt.taskId);
+    const next = previous ?? clone(receipt);
+    this.receipts.set(receipt.taskId, next);
+    return clone(next);
+  }
+
+  list(): DwmSourcePackCollectionQueueReceiptRecord[] {
+    return [...this.receipts.values()].map((receipt) => clone(receipt)).sort((a, b) => a.queuedAt.localeCompare(b.queuedAt) || a.taskId.localeCompare(b.taskId));
+  }
+}
+
+export class FileBackedDwmSourcePackWorkerStateAdapter {
+  private readonly snapshotPath: string;
+  private hydrating = false;
+  private readonly validationQueueStore = new InMemoryDwmSourcePackValidationQueueAdapter();
+  private readonly activeSourceStore = new InMemoryDwmSourcePackActiveSourceAdapter();
+  private readonly workerRunStore = new InMemoryDwmSourcePackWorkerRunAdapter();
+  private readonly collectionReceiptStore = new InMemoryDwmSourcePackCollectionReceiptAdapter();
+  readonly validationQueue: DwmSourcePackValidationQueueAdapter;
+  readonly activeSources: DwmSourcePackActiveSourceAdapter;
+  readonly workerRuns: DwmSourcePackWorkerRunAdapter;
+  readonly collectionReceipts: DwmSourcePackCollectionReceiptAdapter;
+
+  constructor(options: { snapshotPath: string }) {
+    this.snapshotPath = options.snapshotPath;
+    this.validationQueue = {
+      enqueue: (record) => this.saved(() => this.validationQueueStore.enqueue(record)),
+      get: (jobKey) => this.validationQueueStore.get(jobKey),
+      list: () => this.validationQueueStore.list(),
+      transition: (jobKey, status, patch) => this.saved(() => this.validationQueueStore.transition(jobKey, status, patch))
+    };
+    this.activeSources = {
+      upsert: (row) => this.saved(() => this.activeSourceStore.upsert(row)),
+      get: (sourceId) => this.activeSourceStore.get(sourceId),
+      list: () => this.activeSourceStore.list()
+    };
+    this.workerRuns = {
+      save: (run) => this.saved(() => this.workerRunStore.save(run)),
+      list: () => this.workerRunStore.list()
+    };
+    this.collectionReceipts = {
+      upsert: (receipt) => this.saved(() => this.collectionReceiptStore.upsert(receipt)),
+      list: () => this.collectionReceiptStore.list()
+    };
+    mkdirSync(dirname(this.snapshotPath), { recursive: true });
+    this.hydrate();
+  }
+
+  private saved<T>(write: () => T): T {
+    const result = write();
+    this.persist();
+    return result;
+  }
+
+  private hydrate() {
+    if (!existsSync(this.snapshotPath)) return;
+    this.hydrating = true;
+    try {
+      const snapshot = JSON.parse(readFileSync(this.snapshotPath, "utf8"));
+      for (const record of snapshot.validationQueue ?? []) this.validationQueueStore.enqueue(record);
+      for (const row of snapshot.activeSources ?? []) this.activeSourceStore.upsert(row);
+      for (const run of snapshot.workerRuns ?? []) this.workerRunStore.save(run);
+      for (const receipt of snapshot.collectionReceipts ?? []) this.collectionReceiptStore.upsert(receipt);
+    } finally {
+      this.hydrating = false;
+    }
+  }
+
+  private persist() {
+    if (this.hydrating) return;
+    writeFileSync(this.snapshotPath, JSON.stringify({
+      schemaVersion: "ti.dwm_source_pack_worker_state.v1",
+      savedAt: new Date().toISOString(),
+      validationQueue: this.validationQueueStore.list(),
+      activeSources: this.activeSourceStore.list(),
+      workerRuns: this.workerRunStore.list(),
+      collectionReceipts: this.collectionReceiptStore.list()
+    }, null, 2));
   }
 }
 
@@ -1542,6 +1685,15 @@ function assertSafeActiveSourceRow(row: DwmSourcePackActiveSourceRow) {
   if (row.targetRawStored !== false) throw new Error("Source pack active source rows must not store raw targets");
   if (isRestrictedFamily(row.family) && row.activationState !== "metadata_only_active") throw new Error("Restricted source rows must activate metadata-only");
   if (isRestrictedFamily(row.family) && row.policyBoundary?.metadataOnly !== true) throw new Error("Restricted source rows require metadataOnly policy boundary");
+}
+
+function assertSafeWorkerRunRecord(run: DwmSourcePackWorkerRunRecord) {
+  assertNoUnsafeKeys(run);
+}
+
+function assertSafeCollectionReceipt(receipt: DwmSourcePackCollectionQueueReceiptRecord) {
+  assertNoUnsafeKeys(receipt);
+  if (receipt.targetRawStored !== false) throw new Error("Source pack collection receipt must not store raw targets");
 }
 
 function sourcePackSafeOutput() {
