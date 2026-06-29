@@ -797,6 +797,15 @@ export type OrganizationSharedWatchlistSupportInspection = {
     auditFields: string[]
     downstreamCorrelationFields: string[]
     blockerCodes: Array<'support_redaction_required' | 'support_only_access'>
+    guardrails: {
+        schemaVersion: 'organization.shared_watchlist_support_guardrails.v1'
+        ok: boolean
+        requiredSafeFields: Array<'activeTermCount' | 'termFamilies' | 'visibilityPolicy' | 'allowedViewerRoles'>
+        requiredRedactedFields: Array<'activeTerms[].term' | 'member.userId' | 'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys'>
+        requiredAuditFields: Array<'requestId' | 'actor.role'>
+        rawTermAccessAllowed: false
+        blockerCodes: Array<'support_safe_fields_missing' | 'support_redaction_missing' | 'support_audit_missing' | 'support_raw_access_enabled'>
+    }
     proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
 }
 
@@ -1238,6 +1247,30 @@ export type OrganizationReadinessProof = {
         nonmemberDestinationEnumeration: false
         expectedDeliveryFields: string[]
         blockerCodes: string[]
+    }
+    memberLifecycleProof: {
+        schemaVersion: 'organization.member_lifecycle_visibility_proof.v1'
+        activeMembershipRequired: true
+        actorStatus: 'active'
+        actorRole: OrganizationRole
+        visibilityInputs: Array<'role' | 'status' | 'userActive' | 'alertVisibilityPolicy'>
+        denialReasons: {
+            nonmember: 'not_member'
+            removedMember: 'member_removed'
+            deactivatedMember: 'member_deactivated'
+            expiredInvite: 'invite_expired'
+            roleNotAllowed: 'role_not_allowed'
+        }
+        protectedRoutes: Array<
+            | 'GET /api/organizations/:id'
+            | 'GET /api/organizations/:id/watchlists'
+            | 'GET /api/organizations/:id/alert-readiness'
+            | 'GET /api/organizations/:id/watchlists/alert-terms'
+            | 'POST|PUT|DELETE /api/organizations/:id/watchlists'
+        >
+        noLeakFields: Array<'activeTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'member.userId' | 'destination.secret'>
+        auditActions: Array<'organization_watchlist_alert_terms_export_denied' | 'organization_member_removed' | 'organization_invite_revoked'>
+        nonmemberEnumeration: false
     }
     uiProof: {
         safeFields: string[]
@@ -2384,6 +2417,25 @@ export function organizationSharedWatchlistSupportInspection(input: {
     supportAccess: OrganizationWatchlistAlertBridgeContract['supportAccess']
     audit: OrganizationSharedWatchlistDownstreamProof['audit']
 }): OrganizationSharedWatchlistSupportInspection {
+    const safeFields = input.supportVisibility.safeFields
+    const redactedFields = [
+        ...new Set([
+            ...input.supportVisibility.redactedFields,
+            'sharedWatchlistDownstreamProof.activeTerms',
+            'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys',
+        ]),
+    ].sort()
+    const auditFields = [
+        ...input.audit.requiredMetadataFields,
+        ...input.audit.actorFields,
+    ].sort()
+    const guardrails = organizationSharedWatchlistSupportGuardrails({
+        safeFields,
+        redactedFields,
+        auditFields,
+        canInspectRawTerms: false,
+    })
+
     return {
         schemaVersion: 'organization.shared_watchlist_support_inspection.v1',
         organizationId: input.organizationId,
@@ -2403,21 +2455,60 @@ export function organizationSharedWatchlistSupportInspection(input: {
             allowedViewerRoles: input.redactedSummary.allowedViewerRoles,
             cleanupRequired: input.redactedSummary.cleanupRequired,
         },
-        safeFields: input.supportVisibility.safeFields,
-        redactedFields: [
-            ...new Set([
-                ...input.supportVisibility.redactedFields,
-                'sharedWatchlistDownstreamProof.activeTerms',
-                'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys',
-            ]),
-        ].sort(),
-        auditFields: [
-            ...input.audit.requiredMetadataFields,
-            ...input.audit.actorFields,
-        ].sort(),
+        safeFields,
+        redactedFields,
+        auditFields,
         downstreamCorrelationFields: input.audit.downstreamCorrelationFields,
         blockerCodes: ['support_redaction_required', input.supportAccess.blockerCode],
+        guardrails,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
+}
+
+function organizationSharedWatchlistSupportGuardrails(input: {
+    safeFields: string[]
+    redactedFields: string[]
+    auditFields: string[]
+    canInspectRawTerms: boolean
+}): OrganizationSharedWatchlistSupportInspection['guardrails'] {
+    const requiredSafeFields: OrganizationSharedWatchlistSupportInspection['guardrails']['requiredSafeFields'] = [
+        'activeTermCount',
+        'termFamilies',
+        'visibilityPolicy',
+        'allowedViewerRoles',
+    ]
+    const requiredRedactedFields: OrganizationSharedWatchlistSupportInspection['guardrails']['requiredRedactedFields'] = [
+        'activeTerms[].term',
+        'member.userId',
+        'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys',
+    ]
+    const requiredAuditFields: OrganizationSharedWatchlistSupportInspection['guardrails']['requiredAuditFields'] = [
+        'requestId',
+        'actor.role',
+    ]
+    const blockerCodes: OrganizationSharedWatchlistSupportInspection['guardrails']['blockerCodes'] = []
+
+    if (!requiredSafeFields.every(field => input.safeFields.includes(field))) {
+        blockerCodes.push('support_safe_fields_missing')
+    }
+    if (!requiredRedactedFields.every(field => input.redactedFields.includes(field))) {
+        blockerCodes.push('support_redaction_missing')
+    }
+    if (!requiredAuditFields.every(field => input.auditFields.includes(field))) {
+        blockerCodes.push('support_audit_missing')
+    }
+    if (input.canInspectRawTerms) {
+        blockerCodes.push('support_raw_access_enabled')
+    }
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_support_guardrails.v1',
+        ok: blockerCodes.length === 0,
+        requiredSafeFields,
+        requiredRedactedFields,
+        requiredAuditFields,
+        rawTermAccessAllowed: false,
+        blockerCodes,
     }
 }
 
@@ -2986,6 +3077,39 @@ export function organizationReadinessProof(input: {
                 input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
             ].filter(Boolean).map(String),
         },
+        memberLifecycleProof: {
+            schemaVersion: 'organization.member_lifecycle_visibility_proof.v1',
+            activeMembershipRequired: true,
+            actorStatus: input.downstreamAuthorization.member.status,
+            actorRole: input.downstreamAuthorization.member.role,
+            visibilityInputs: ['role', 'status', 'userActive', 'alertVisibilityPolicy'],
+            denialReasons: {
+                nonmember: 'not_member',
+                removedMember: 'member_removed',
+                deactivatedMember: 'member_deactivated',
+                expiredInvite: 'invite_expired',
+                roleNotAllowed: 'role_not_allowed',
+            },
+            protectedRoutes: [
+                'GET /api/organizations/:id',
+                'GET /api/organizations/:id/watchlists',
+                'GET /api/organizations/:id/alert-readiness',
+                'GET /api/organizations/:id/watchlists/alert-terms',
+                'POST|PUT|DELETE /api/organizations/:id/watchlists',
+            ],
+            noLeakFields: [
+                'activeTerms[]',
+                'watchlistScope.alertGeneratorKeys',
+                'member.userId',
+                'destination.secret',
+            ],
+            auditActions: [
+                'organization_watchlist_alert_terms_export_denied',
+                'organization_member_removed',
+                'organization_invite_revoked',
+            ],
+            nonmemberEnumeration: false,
+        },
         uiProof: {
             safeFields: [
                 'organizationId',
@@ -2995,6 +3119,7 @@ export function organizationReadinessProof(input: {
                 'routes',
                 'alertQueueProof',
                 'webhookDeliveryProof',
+                'memberLifecycleProof',
                 'blockers',
                 'uiProof.nonmemberEnumeration',
             ],

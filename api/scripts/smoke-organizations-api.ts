@@ -922,11 +922,30 @@ assert.equal(readiness.readinessProof.webhookDeliveryProof.memberManualTriggerAl
 assert.equal(readiness.readinessProof.webhookDeliveryProof.nonmemberDestinationEnumeration, false)
 assert.deepEqual(readiness.readinessProof.webhookDeliveryProof.blockerCodes, ['manual_webhook_selection_required'])
 assert.ok(readiness.readinessProof.webhookDeliveryProof.expectedDeliveryFields.includes('orgAlertDelivery.destinationSelection.selectedDestinations'))
+assert.equal(readiness.readinessProof.memberLifecycleProof.schemaVersion, 'organization.member_lifecycle_visibility_proof.v1')
+assert.equal(readiness.readinessProof.memberLifecycleProof.activeMembershipRequired, true)
+assert.equal(readiness.readinessProof.memberLifecycleProof.actorStatus, 'active')
+assert.equal(readiness.readinessProof.memberLifecycleProof.actorRole, 'member')
+assert.deepEqual(readiness.readinessProof.memberLifecycleProof.visibilityInputs, ['role', 'status', 'userActive', 'alertVisibilityPolicy'])
+assert.deepEqual(readiness.readinessProof.memberLifecycleProof.denialReasons, {
+    nonmember: 'not_member',
+    removedMember: 'member_removed',
+    deactivatedMember: 'member_deactivated',
+    expiredInvite: 'invite_expired',
+    roleNotAllowed: 'role_not_allowed',
+})
+assert.ok(readiness.readinessProof.memberLifecycleProof.protectedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.ok(readiness.readinessProof.memberLifecycleProof.protectedRoutes.includes('POST|PUT|DELETE /api/organizations/:id/watchlists'))
+assert.ok(readiness.readinessProof.memberLifecycleProof.noLeakFields.includes('watchlistScope.alertGeneratorKeys'))
+assert.ok(readiness.readinessProof.memberLifecycleProof.noLeakFields.includes('destination.secret'))
+assert.ok(readiness.readinessProof.memberLifecycleProof.auditActions.includes('organization_member_removed'))
+assert.equal(readiness.readinessProof.memberLifecycleProof.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.uiProof.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.uiProof.dashboardFixture, 'organization_watchlist')
 assert.ok(readiness.readinessProof.uiProof.safeFields.includes('routes'))
 assert.ok(readiness.readinessProof.uiProof.safeFields.includes('alertQueueProof'))
 assert.ok(readiness.readinessProof.uiProof.safeFields.includes('webhookDeliveryProof'))
+assert.ok(readiness.readinessProof.uiProof.safeFields.includes('memberLifecycleProof'))
 assert.ok(readiness.readinessProof.uiProof.redactedFields.includes('activeTerms[].term'))
 assert.equal(readiness.readinessProof.cleanupProof.cleanupIdempotent, true)
 assert.equal(readiness.readinessProof.cleanupProof.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
@@ -1314,6 +1333,13 @@ assert.ok(alertTermsExport.sharedWatchlistSupportInspection.auditFields.includes
 assert.ok(alertTermsExport.sharedWatchlistSupportInspection.auditFields.includes('actor.role'))
 assert.ok(alertTermsExport.sharedWatchlistSupportInspection.downstreamCorrelationFields.includes('caseBridge.casePathTemplate'))
 assert.deepEqual(alertTermsExport.sharedWatchlistSupportInspection.blockerCodes, ['support_redaction_required', 'support_only_access'])
+assert.equal(alertTermsExport.sharedWatchlistSupportInspection.guardrails.schemaVersion, 'organization.shared_watchlist_support_guardrails.v1')
+assert.equal(alertTermsExport.sharedWatchlistSupportInspection.guardrails.ok, true)
+assert.deepEqual(alertTermsExport.sharedWatchlistSupportInspection.guardrails.requiredSafeFields, ['activeTermCount', 'termFamilies', 'visibilityPolicy', 'allowedViewerRoles'])
+assert.deepEqual(alertTermsExport.sharedWatchlistSupportInspection.guardrails.requiredRedactedFields, ['activeTerms[].term', 'member.userId', 'sharedWatchlistIntegrationGuardrails.orgScope.alertGeneratorKeys'])
+assert.deepEqual(alertTermsExport.sharedWatchlistSupportInspection.guardrails.requiredAuditFields, ['requestId', 'actor.role'])
+assert.equal(alertTermsExport.sharedWatchlistSupportInspection.guardrails.rawTermAccessAllowed, false)
+assert.deepEqual(alertTermsExport.sharedWatchlistSupportInspection.guardrails.blockerCodes, [])
 assert.equal(alertTermsExport.sharedWatchlistSupportInspection.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.schemaVersion, 'organization.shared_watchlist_alert_queue_visibility.v1')
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.organizationId, organization.id)
@@ -1707,6 +1733,9 @@ assert.ok(archivedOrgReadiness.readinessProof.blockers.includes('org_archived'))
 assert.equal(archivedOrgReadiness.readinessProof.routes.alertTermsExport, 'GET /api/organizations/:id/watchlists/alert-terms')
 assert.ok(archivedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_archived'))
 assert.ok(archivedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_archived'))
+assert.equal(archivedOrgReadiness.readinessProof.memberLifecycleProof.actorRole, 'admin')
+assert.equal(archivedOrgReadiness.readinessProof.memberLifecycleProof.denialReasons.removedMember, 'member_removed')
+assert.equal(archivedOrgReadiness.readinessProof.memberLifecycleProof.nonmemberEnumeration, false)
 
 const archivedInviteDeniedResponse = await app.inject({
     method: 'POST',
@@ -1819,6 +1848,8 @@ assert.equal(deletedOrgReadiness.readinessProof.readiness.readyForDashboard, fal
 assert.ok(deletedOrgReadiness.readinessProof.blockers.includes('org_deleted'))
 assert.ok(deletedOrgReadiness.readinessProof.alertQueueProof.blockerCodes.includes('org_deleted'))
 assert.ok(deletedOrgReadiness.readinessProof.webhookDeliveryProof.blockerCodes.includes('org_deleted'))
+assert.equal(deletedOrgReadiness.readinessProof.memberLifecycleProof.actorRole, 'admin')
+assert.ok(deletedOrgReadiness.readinessProof.memberLifecycleProof.noLeakFields.includes('activeTerms[]'))
 assert.equal(deletedOrgReadiness.readinessProof.cleanupProof.cleanupIdempotent, true)
 
 const deletedInviteAcceptDeniedResponse = await app.inject({
@@ -1938,6 +1969,9 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.organiza
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.activeTermCount, 1)
 assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.summary.termFamilies, ['domain'])
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.containsRawTerms, false)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.guardrails.ok, true)
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.guardrails.rawTermAccessAllowed, false)
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistSupportInspection.guardrails.blockerCodes, [])
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.organizationId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.tenantId, secondOrganization.id)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.visibility.allowed, true)
@@ -2353,6 +2387,8 @@ const removedViewerReadinessResponse = await app.inject({
     headers: authHeaders('org_smoke_viewer', 'viewer-token'),
 })
 assert.equal(removedViewerReadinessResponse.statusCode, 404, removedViewerReadinessResponse.body)
+assert.equal(readiness.readinessProof.memberLifecycleProof.denialReasons.removedMember, 'member_removed')
+assert.equal(readiness.readinessProof.memberLifecycleProof.denialReasons.expiredInvite, 'invite_expired')
 
 const outsiderResponse = await app.inject({
     method: 'GET',
