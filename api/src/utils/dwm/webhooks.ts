@@ -152,6 +152,15 @@ export type DwmAlertWebhookSkippedDeliveryIntent = {
     persistable: true
 }
 
+export type DwmAlertWebhookMissingDeliveryIntent = {
+    orgId: string
+    reason: 'missing_destination' | 'requested_destination_not_found'
+    requestedDestinationId: string | null
+    idempotencyKey: string
+    error: string
+    persistable: true
+}
+
 export type DwmWebhookDeliveryEvidenceFilters = {
     orgId?: unknown
     destinationId?: unknown
@@ -4882,6 +4891,16 @@ export async function deliverDwmAlertNotification(ownerId: string, input: DwmAle
             intent: skipped,
         }))
     }
+    const missingIntent = buildDwmAlertWebhookMissingDeliveryIntent(plan, destinationId || null)
+    if (!plan.selectedDestinations.length && !persistableSkipped.length && missingIntent) {
+        deliveries.push(await recordMissingDestinationDwmWebhookDelivery({
+            ownerId,
+            eventType: plan.eventType,
+            alert: plan.alert,
+            dryRun,
+            intent: missingIntent,
+        }))
+    }
     for (const destination of plan.selectedDestinations) {
         const normalizedAlert = normalizeAlert(plan.alert)
         const idempotencyKey = buildIdempotencyKey(plan.eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
@@ -5105,6 +5124,27 @@ export function buildDwmAlertWebhookSkippedDeliveryIntents(
                 persistable: true as const,
             }
         })
+}
+
+export function buildDwmAlertWebhookMissingDeliveryIntent(
+    plan: DwmAlertWebhookDispatchPlan,
+    requestedDestinationId: string | null = null
+): DwmAlertWebhookMissingDeliveryIntent | null {
+    if (plan.selectedDestinations.length > 0) return null
+    if (plan.skippedDestinations.some(skipped => skipped.reason !== 'org_mismatch')) return null
+
+    const normalizedAlert = normalizeAlert(plan.alert)
+    const reason = requestedDestinationId ? 'requested_destination_not_found' : 'missing_destination'
+    return {
+        orgId: plan.orgId,
+        reason,
+        requestedDestinationId,
+        idempotencyKey: buildIdempotencyKey(plan.eventType, plan.orgId, requestedDestinationId || 'missing_destination', normalizedAlert.dedupeKey || normalizedAlert.id),
+        error: requestedDestinationId
+            ? 'Delivery selection skipped because the requested webhook destination was not found for this organization.'
+            : 'Delivery selection skipped because no enabled webhook destination is configured for this organization.',
+        persistable: true,
+    }
 }
 
 export function buildDwmAlertDeliveryPayload({
@@ -5600,6 +5640,118 @@ async function recordSkippedSelectionDwmWebhookDelivery({
     return toDwmWebhookDelivery(delivery)
 }
 
+async function recordMissingDestinationDwmWebhookDelivery({
+    ownerId,
+    eventType,
+    alert,
+    dryRun,
+    intent,
+}: {
+    ownerId: string
+    eventType: DwmAlertEventType
+    alert: Record<string, unknown>
+    dryRun: boolean
+    intent: DwmAlertWebhookMissingDeliveryIntent
+}) {
+    const deliveryId = crypto.randomUUID()
+    const normalizedAlert = normalizeAlert(alert)
+    const watchlist = normalizeWatchlist(alert.watchlist)
+    const payload = buildDwmAlertDeliveryPayload({
+        destination: {
+            id: intent.requestedDestinationId || 'missing_destination',
+            kind: 'webhook',
+            name: 'Missing webhook destination',
+            org_id: intent.orgId,
+        },
+        alert,
+        eventType,
+        deliveryId,
+    })
+    const payloadHash = hashValue('payload', JSON.stringify(payload))
+    const attemptCount = await countDwmWebhookDeliveryAttempts(ownerId, intent.orgId, null, intent.idempotencyKey) + 1
+    const errorClass = classifyDeliveryError({ status: 'skipped', dryRun, error: intent.error })
+    const result = await run(`
+        INSERT INTO dwm_webhook_deliveries (
+            id,
+            destination_id,
+            owner_id,
+            org_id,
+            alert_id,
+            event_type,
+            status,
+            dry_run,
+            endpoint_hint,
+            endpoint_hash,
+            payload_hash,
+            payload,
+            response_status,
+            response_body,
+            error,
+            error_class,
+            attempt_count,
+            next_retry_at,
+            idempotency_key,
+            watchlist_id,
+            watchlist_name,
+            route,
+            case_path,
+            attempted_at
+        )
+        VALUES ($1, NULL, $2, $3, $4, $5, 'skipped', $6, $7, $8, $9, $10::JSONB, NULL, NULL, $11, $12, $13, NULL, $14, $15, $16, $17, $18, NOW())
+        RETURNING *
+    `, [
+        deliveryId,
+        ownerId,
+        intent.orgId,
+        normalizedAlert.id,
+        eventType,
+        dryRun,
+        intent.requestedDestinationId ? 'requested_destination_not_found' : 'no_webhook_destination',
+        intent.requestedDestinationId ? hashValue('endpoint', intent.requestedDestinationId) : 'no_webhook_destination',
+        payloadHash,
+        JSON.stringify(payload),
+        intent.error,
+        errorClass,
+        attemptCount,
+        intent.idempotencyKey,
+        watchlist.id,
+        watchlist.name,
+        normalizedAlert.route,
+        normalizedAlert.casePath,
+    ])
+
+    const delivery = result.rows[0] as DwmWebhookDeliveryRow
+    await recordDwmWebhookAudit({
+        ownerId,
+        actorId: ownerId,
+        orgId: delivery.org_id,
+        destinationId: null,
+        deliveryId: delivery.id,
+        action: 'delivery.skipped',
+        metadata: {
+            alertId: delivery.alert_id,
+            eventType: delivery.event_type,
+            status: delivery.status,
+            endpointHint: delivery.endpoint_hint,
+            endpointHash: delivery.endpoint_hash,
+            payloadHash: delivery.payload_hash,
+            dryRun: delivery.dry_run,
+            error: delivery.error,
+            errorClass: delivery.error_class,
+            attemptCount: delivery.attempt_count,
+            nextRetryAt: delivery.next_retry_at,
+            idempotencyKey: delivery.idempotency_key,
+            reason: intent.reason,
+            requestedDestinationId: intent.requestedDestinationId,
+            watchlistId: delivery.watchlist_id,
+            route: delivery.route,
+            casePath: delivery.case_path,
+        },
+    })
+
+    return toDwmWebhookDelivery(delivery)
+}
+
 async function recordDwmWebhookAudit({
     ownerId,
     actorId,
@@ -5709,7 +5861,7 @@ async function findDeliveredDwmWebhookDelivery(
 async function countDwmWebhookDeliveryAttempts(
     ownerId: string,
     orgId: string,
-    destinationId: string,
+    destinationId: string | null,
     idempotencyKey: string
 ) {
     const result = await run(`
@@ -5717,7 +5869,7 @@ async function countDwmWebhookDeliveryAttempts(
         FROM dwm_webhook_deliveries
         WHERE owner_id = $1
           AND org_id = $2
-          AND destination_id = $3
+          AND (($3::TEXT IS NULL AND destination_id IS NULL) OR destination_id = $3)
           AND idempotency_key = $4
     `, [ownerId, orgId, destinationId, idempotencyKey])
 

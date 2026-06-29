@@ -3,6 +3,7 @@ import {
     buildDwmAlertWebhookReadinessHandoff,
     buildDwmAlertWebhookNotificationInput,
     buildDwmAlertWebhookDispatchPlan,
+    buildDwmAlertWebhookMissingDeliveryIntent,
     buildDwmAlertWebhookSkippedDeliveryIntents,
     buildDwmOrgAlertWebhookDeliveryContract,
     buildDwmWebhookAuditEventContracts,
@@ -239,6 +240,27 @@ expect(skippedDeliveryIntents.map(item => item.destinationId).sort().join(',') =
 expect(skippedDeliveryIntents.every(item => item.persistable === true && item.idempotencyKey.includes(`:${item.orgId}:${item.destinationId}:`)), 'Skipped delivery intents should carry durable idempotency keys.', skippedDeliveryIntents)
 expect(skippedDeliveryIntents.some(item => item.reason === 'disabled' && item.error.includes('disabled')), 'Skipped delivery intents should explain disabled destinations.', skippedDeliveryIntents)
 expect(!JSON.stringify(skippedDeliveryIntents).includes('destination_foreign_org'), 'Skipped delivery intents must not persist foreign-org destination leakage.', skippedDeliveryIntents)
+const missingDestinationPlan = buildDwmAlertWebhookDispatchPlan({
+    ownerId: 'owner_contract',
+    input: {
+        organizationId: 'org_contract',
+        alertId: 'alert_missing_destination_contract',
+        eventType: 'dwm.alert.created',
+        watchlistItemId: 'watchlist_missing_destination_contract',
+        dedupeKey: 'dwm_dedupe_missing_destination_contract',
+        route: 'customer_discord',
+        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        evidenceCount: 1,
+        sourceFamily: 'telegram_public',
+    },
+    destinations: [],
+})
+const missingDestinationIntent = buildDwmAlertWebhookMissingDeliveryIntent(missingDestinationPlan)
+const requestedMissingDestinationIntent = buildDwmAlertWebhookMissingDeliveryIntent(missingDestinationPlan, 'destination_requested_missing')
+expect(missingDestinationIntent?.reason === 'missing_destination' && missingDestinationIntent.error.includes('no enabled webhook destination'), 'Missing destination dispatch should create a durable skipped delivery intent.', missingDestinationIntent)
+expect(requestedMissingDestinationIntent?.reason === 'requested_destination_not_found' && requestedMissingDestinationIntent.requestedDestinationId === 'destination_requested_missing', 'Requested missing destination should create a specific skipped delivery intent.', requestedMissingDestinationIntent)
+expect(missingDestinationIntent?.idempotencyKey === 'dwm.alert.created:org_contract:missing_destination:dwm_dedupe_missing_destination_contract', 'Missing destination intent should use a stable org alert idempotency key.', missingDestinationIntent)
+expect(missingDestinationIntent?.persistable === true && !JSON.stringify([missingDestinationIntent, requestedMissingDestinationIntent]).includes(secret), 'Missing destination intents should be persistable and secret-free.', { missingDestinationIntent, requestedMissingDestinationIntent })
 
 const bridgePayload = buildDwmAlertDeliveryPayload({
     destination: {
@@ -2856,6 +2878,7 @@ console.log(JSON.stringify({
         'destination selection',
         'disabled destination skip',
         'persistable skipped destination intents',
+        'persistable missing destination intent',
         'org/watchlist context propagation',
         'route/dedupe/case context',
         'alert replay trigger adapter',
