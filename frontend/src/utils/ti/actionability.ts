@@ -23,6 +23,7 @@ export type TiActionabilityModel = {
     sourceClusters: SourceCluster[]
     evidencePriority: PublicTiEvidencePriority[]
     sourceHealthQueue: PublicTiSourceHealthQueue
+    sourceEnrichmentIntake: PublicTiSourceEnrichmentIntake
     watchlistRelevance: WatchlistRelevanceContract
     orgRelevance: PublicTiOrgRelevanceProof
     createAlertHandoff: WorkflowHandoffContract
@@ -394,6 +395,46 @@ export type PublicTiSourceHealthRow = {
     nextAction: string
 }
 
+export type PublicTiSourceEnrichmentIntake = {
+    schemaVersion: 'ti.public_actor.source_enrichment_intake.v1'
+    query: string
+    generatedAt: string
+    route: '/dashboard/ti/enrichment'
+    items: PublicTiSourceEnrichmentIntakeItem[]
+    summary: {
+        total: number
+        ready: number
+        review: number
+        blocked: number
+        sourceRequests: number
+        captures: number
+    }
+}
+
+export type PublicTiSourceEnrichmentIntakeItem = {
+    schemaVersion: 'ti.public_actor.source_enrichment_intake_item.v1'
+    id: string
+    sourceHealthRowId: string
+    sourceName: string
+    sourceFamily: PublicTiOrgSourceFamily
+    state: PublicTiSourceHealthRow['state']
+    route: string
+    ownerLane: PublicTiReadinessBlocker['ownerLane']
+    sourceId?: string
+    sourceRequestId?: string
+    captureId?: string
+    requestedFields: string[]
+    evidence: {
+        provenance: string
+        timestamp: string
+        confidence?: number
+        parserStatus: string
+    }
+    blockedBy: PublicTiReadinessBlocker[]
+    recommendedAction: 'inspect_capture' | 'track_source_request' | 'attach_capture' | 'refresh_source' | 'queue_enrichment'
+    nextAction: string
+}
+
 type WatchlistCandidate = {
     kind: 'company' | 'domain' | 'vendor'
     value: string
@@ -561,6 +602,11 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         enrichmentGapQueue,
         exportPayloads,
     })
+    const sourceEnrichmentIntake = buildPublicTiSourceEnrichmentIntake({
+        result,
+        sourceHealthQueue,
+        readiness,
+    })
     const actionPayloads = buildPublicTiActionPayloads({
         result,
         actor,
@@ -571,6 +617,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         sourceProvenance,
         enrichmentGapQueue,
         sourceHealthQueue,
+        sourceEnrichmentIntake,
     })
 
     return {
@@ -594,6 +641,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         sourceClusters,
         evidencePriority,
         sourceHealthQueue,
+        sourceEnrichmentIntake,
         watchlistRelevance: buildWatchlistRelevance({
             state: matches.length ? 'backed_matches' : candidates.length ? 'candidate_handoff' : 'missing_terms',
             endpoint: watchlistEndpoint,
@@ -764,6 +812,7 @@ function buildPublicTiActionPayloads(input: {
     sourceProvenance: NonNullable<TiActionabilityContract['sourceProvenance']>
     enrichmentGapQueue: EnrichmentGapQueueItem[]
     sourceHealthQueue: PublicTiSourceHealthQueue
+    sourceEnrichmentIntake: PublicTiSourceEnrichmentIntake
 }): PublicTiActionPayloadSet {
     const actorId = actorIdForQuery(input.result.query)
     const sourceIds = uniqueStrings(input.sourceProvenance.map(source => source.sourceId))
@@ -882,6 +931,7 @@ function buildPublicTiActionPayloads(input: {
                     ...commonContext,
                     tasks: input.enrichmentGapQueue,
                     sourceHealthQueue: input.sourceHealthQueue,
+                    sourceEnrichmentIntake: input.sourceEnrichmentIntake,
                     noMutation: true,
                 },
                 provenance: input.exportPayloads.enrichment.provenance,
@@ -1836,6 +1886,76 @@ function buildPublicTiSourceHealthQueue(input: {
             blocked: rows.filter(row => row.state === 'blocked').length,
         },
     }
+}
+
+function buildPublicTiSourceEnrichmentIntake(input: {
+    result: TiSearchResponse
+    sourceHealthQueue: PublicTiSourceHealthQueue
+    readiness: PublicTiReadinessContract
+}): PublicTiSourceEnrichmentIntake {
+    const items = input.sourceHealthQueue.rows.map((row): PublicTiSourceEnrichmentIntakeItem => {
+        const blockedBy = sourceIntakeBlockers(row, input.readiness)
+        return {
+            schemaVersion: 'ti.public_actor.source_enrichment_intake_item.v1',
+            id: `source-intake:${row.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceHealthRowId: row.id,
+            sourceName: row.sourceName,
+            sourceFamily: row.sourceFamily,
+            state: blockedBy.length && row.state === 'ready' ? 'review' : row.state,
+            route: row.route,
+            ownerLane: row.ownerLane,
+            sourceId: row.sourceId,
+            sourceRequestId: row.sourceRequestId,
+            captureId: row.captureId,
+            requestedFields: row.requestedFields,
+            evidence: {
+                provenance: row.provenance,
+                timestamp: row.timestamp,
+                confidence: row.confidence,
+                parserStatus: row.parserStatus,
+            },
+            blockedBy,
+            recommendedAction: sourceIntakeAction(row, blockedBy),
+            nextAction: row.nextAction,
+        }
+    })
+
+    return {
+        schemaVersion: 'ti.public_actor.source_enrichment_intake.v1',
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        route: '/dashboard/ti/enrichment',
+        items,
+        summary: {
+            total: items.length,
+            ready: items.filter(item => item.state === 'ready').length,
+            review: items.filter(item => item.state === 'review').length,
+            blocked: items.filter(item => item.state === 'blocked').length,
+            sourceRequests: items.filter(item => Boolean(item.sourceRequestId)).length,
+            captures: items.filter(item => Boolean(item.captureId)).length,
+        },
+    }
+}
+
+function sourceIntakeBlockers(row: PublicTiSourceHealthRow, readiness: PublicTiReadinessContract): PublicTiReadinessBlocker[] {
+    const fields = row.requestedFields.join(' ')
+    const rowNeedsCapture = !row.captureId || /capture/i.test(fields)
+    const rowNeedsSource = !row.sourceId || !row.provenance || /source|provenance/i.test(fields)
+    return readiness.blockers.filter(blocker => {
+        if (blocker.ownerLane !== 'source' && blocker.ownerLane !== 'public-ti') return false
+        if (blocker.code === 'missing_capture') return rowNeedsCapture
+        if (blocker.code === 'missing_source_provenance') return rowNeedsSource
+        if (blocker.code === 'stale_provenance') return row.state !== 'ready' || /fresh|reportDate|lastSeen/i.test(fields)
+        return row.ownerLane === blocker.ownerLane
+    })
+}
+
+function sourceIntakeAction(row: PublicTiSourceHealthRow, blockers: PublicTiReadinessBlocker[]): PublicTiSourceEnrichmentIntakeItem['recommendedAction'] {
+    if (row.captureId && !blockers.some(blocker => blocker.code === 'stale_provenance')) return 'inspect_capture'
+    if (row.sourceRequestId && !row.captureId) return 'track_source_request'
+    if (blockers.some(blocker => blocker.code === 'stale_provenance')) return 'refresh_source'
+    if (!row.captureId) return 'attach_capture'
+    return 'queue_enrichment'
 }
 
 function sourceHealthFamilyForGap(sourceFamily: EnrichmentGapQueueItem['sourceFamily']): PublicTiOrgSourceFamily {

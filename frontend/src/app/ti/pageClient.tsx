@@ -429,7 +429,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} />
-                        <SourceHealthPanel queue={actionability.sourceHealthQueue} payload={actionability.exportPayloads.enrichment} />
+                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
                             <ActionPanel
@@ -2512,7 +2512,7 @@ function EnrichmentTasksPanel({ tasks }: { tasks: EnrichmentTask[] }) {
     )
 }
 
-function SourceHealthPanel({ queue, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
+function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
     const rows = queue.rows
 
     return (
@@ -2520,9 +2520,9 @@ function SourceHealthPanel({ queue, payload }: { queue: TiActionabilityModel['so
             <div data-ti-source-health-queue='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {queue.summary.ready} ready · {queue.summary.blocked} blocked
+                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {queue.summary.blocked} blocked
                     </p>
-                    <CopyPayloadButton label='Source health queue' payload={{ ...queue, enrichmentPayload: payload }} />
+                    <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, enrichmentPayload: payload }} />
                 </div>
                 {rows.length ? rows.slice(0, 5).map(row => (
                     <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
