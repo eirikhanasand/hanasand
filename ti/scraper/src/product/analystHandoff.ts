@@ -109,6 +109,8 @@ export type AnalystHandoffBlockerCode =
   | "missing_provenance"
   | "stale_evidence"
   | "absent_alert_id"
+  | "missing_case_route"
+  | "missing_webhook_destination"
   | "unsupported_actor_artifact"
   | "missing_watchlist_term"
   | "missing_watchlist_id"
@@ -175,6 +177,96 @@ export type AlertWebhookAdapterValue = {
   handoff: AnalystHandoffEnvelope<"alert_webhook_trigger", AlertWebhookTriggerPayload>;
   request: AlertWebhookTriggerPayload;
   idempotencyKey: string;
+};
+
+export type PublicTiOrgRelevanceProofLike = {
+  schemaVersion?: string;
+  state?: string;
+  actorId: string;
+  query: string;
+  generatedAt: string;
+  freshness?: {
+    generatedAt: string;
+    lastSeen: string;
+    stale: boolean;
+    reason: string;
+  };
+  organizationRefs?: Array<{
+    tenantId?: string;
+    organizationId?: string;
+    watchlistId?: string;
+    watchlistItemId?: string;
+    kind: DwmWatchTerm["kind"];
+    value: string;
+    route?: string;
+    casePath?: string;
+  }>;
+  candidateTerms?: Array<{
+    kind: DwmWatchTerm["kind"];
+    value: string;
+    notes?: string;
+    matched?: boolean;
+    sourceEvidenceRefs?: string[];
+  }>;
+  sourceEvidence?: Array<{
+    sourceId?: string;
+    sourceName: string;
+    provenance: string;
+    captureId?: string;
+    confidence?: number;
+    supportsTerms?: string[];
+  }>;
+  alertCaseRefs?: Array<{
+    alertId: string;
+    casePath?: string;
+    caseIdCandidate?: string;
+    organizationId?: string;
+    tenantId?: string;
+    captureIds: string[];
+    webhookDestinationIds: string[];
+  }>;
+  affectedEntities?: {
+    vendors?: Array<{ value: string; matched?: boolean; provenanceRefs?: string[]; watchlistItemIds?: string[]; alertIds?: string[] }>;
+    domains?: Array<{ value: string; matched?: boolean; provenanceRefs?: string[]; watchlistItemIds?: string[]; alertIds?: string[] }>;
+    regions?: Array<{ value: string; matched?: boolean; provenanceRefs?: string[]; watchlistItemIds?: string[]; alertIds?: string[] }>;
+  };
+  handoffRows?: Array<{
+    rowId: string;
+    kind: "watchlist_match" | "candidate_term" | "source_evidence" | "alert_case" | "webhook_delivery" | "enrichment_gap" | string;
+    state: "ready" | "review" | "blocked" | string;
+    ownerLane: string;
+    label: string;
+    action?: string;
+    route?: string;
+    sourceFamily?: string;
+    provenanceRefs?: string[];
+    tenantId?: string;
+    organizationId?: string;
+    watchlistId?: string;
+    watchlistItemId?: string;
+    alertId?: string;
+    casePath?: string;
+    captureIds?: string[];
+    webhookDestinationIds?: string[];
+    blockers?: Array<{ code?: string; field?: string; detail?: string; recoverable?: boolean }>;
+  }>;
+  blockers?: Array<{ code?: string; field?: string; detail?: string; recoverable?: boolean }>;
+};
+
+export type ActorOrgRelevanceHandoffValue = {
+  schemaVersion: "hanasand.actor_org_relevance_handoff.v1";
+  generatedAt: string;
+  actorId: string;
+  query: string;
+  state: "ready" | "blocked";
+  watchlist: ActorWatchlistAdapterValue;
+  alertGeneration: AlertGenerationAdapterValue;
+  caseHandoff: AlertCaseAdapterValue;
+  webhookTrigger: AlertWebhookAdapterValue;
+  affectedEntities: NonNullable<PublicTiOrgRelevanceProofLike["affectedEntities"]>;
+  sourceEvidence: NonNullable<PublicTiOrgRelevanceProofLike["sourceEvidence"]>;
+  handoffRows: NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>;
+  enrichmentGaps: NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>;
 };
 
 export type AnalystAlertLike = DwmAlert & {
@@ -468,6 +560,333 @@ export function persistedAlertToWebhookTriggerContext(input: {
   }
 }
 
+export function publicTiOrgRelevanceToAnalystHandoff(input: {
+  tenantId?: string;
+  organizationId?: string;
+  requestedByUserId?: string;
+  orgRelevance: PublicTiOrgRelevanceProofLike;
+  staleEvidenceBefore?: string;
+}): AnalystHandoffAdapterResult<ActorOrgRelevanceHandoffValue> {
+  const org = selectOrgRef(input.orgRelevance, input);
+  const term = selectWatchTerm(input.orgRelevance);
+  const source = selectSourceEvidence(input.orgRelevance, term?.value);
+  const alertRef = selectAlertRef(input.orgRelevance);
+  const rows = input.orgRelevance.handoffRows ?? [];
+  const blockers = uniqueBlockers([
+    ...orgRelevanceBlockers(input.orgRelevance, input, org, term, source, alertRef),
+    ...rows.flatMap(row => (row.blockers ?? []).map(rowBlocker => blockerFromPublicRow(row, rowBlocker)))
+  ]);
+  const artifact = {
+    id: input.orgRelevance.actorId,
+    kind: "actor",
+    label: input.orgRelevance.query,
+    confidence: source?.confidence,
+    freshness: input.orgRelevance.freshness?.lastSeen ?? input.orgRelevance.generatedAt,
+    provenance: uniqueOptionalStrings([
+      ...(source ? [source.sourceId, source.captureId, source.provenance] : []),
+      ...(term?.sourceEvidenceRefs ?? []),
+      ...(rows.flatMap(row => row.provenanceRefs ?? []))
+    ])
+  };
+  const watchlist = publicTiArtifactToOrgWatchlistCreate({
+    tenantId: org.tenantId,
+    organizationId: org.organizationId,
+    requestedByUserId: input.requestedByUserId,
+    query: input.orgRelevance.query,
+    artifact: {
+      ...artifact,
+      watchlistTerms: term ? [{ kind: term.kind, value: term.value, notes: term.notes }] : []
+    },
+    staleEvidenceBefore: input.staleEvidenceBefore,
+    generatedAt: input.orgRelevance.generatedAt
+  });
+  if (!watchlist.ok) blockers.push(...watchlist.blockers);
+
+  const alertGeneration = watchlist.ok ? orgWatchlistTermsToAlertGenerationRequest({
+    parent: watchlist.value.handoff,
+    watchlistId: org.watchlistId,
+    watchlistItemIds: org.watchlistItemId ? [org.watchlistItemId] : [],
+    webhookDestinationIds: alertRef?.webhookDestinationIds,
+    createdAt: input.orgRelevance.generatedAt
+  }) : undefined;
+  if (alertGeneration && !alertGeneration.ok) blockers.push(...alertGeneration.blockers);
+
+  const alert = alertRef && term && source ? alertFromOrgRelevance(input.orgRelevance, org, term, source, alertRef) : undefined;
+  const caseHandoff = alert && alertGeneration?.ok && alertRef?.casePath ? persistedAlertToCaseHandoffPayload({
+    parent: alertGeneration.value.handoff,
+    alert,
+    requestedByUserId: input.requestedByUserId,
+    staleEvidenceBefore: input.staleEvidenceBefore,
+    createdAt: input.orgRelevance.generatedAt
+  }) : undefined;
+  if (caseHandoff && !caseHandoff.ok) blockers.push(...caseHandoff.blockers);
+
+  const webhookTrigger = alert && caseHandoff?.ok && alertRef?.webhookDestinationIds.length ? persistedAlertToWebhookTriggerContext({
+    parent: caseHandoff.value.handoff,
+    alert,
+    requestedByUserId: input.requestedByUserId,
+    staleEvidenceBefore: input.staleEvidenceBefore,
+    dryRun: true,
+    createdAt: input.orgRelevance.generatedAt
+  }) : undefined;
+  if (webhookTrigger && !webhookTrigger.ok) blockers.push(...webhookTrigger.blockers);
+
+  const finalBlockers = uniqueBlockers(blockers);
+  if (finalBlockers.length || !watchlist.ok || !alertGeneration?.ok || !caseHandoff?.ok || !webhookTrigger?.ok) {
+    return {
+      ok: false,
+      blockers: finalBlockers,
+      partial: {
+        schemaVersion: "hanasand.actor_org_relevance_handoff.v1",
+        generatedAt: input.orgRelevance.generatedAt,
+        actorId: input.orgRelevance.actorId,
+        query: input.orgRelevance.query,
+        state: "blocked",
+        affectedEntities: input.orgRelevance.affectedEntities ?? {},
+        sourceEvidence: input.orgRelevance.sourceEvidence ?? [],
+        handoffRows: rows,
+        enrichmentGaps: rows.filter(row => row.kind === "enrichment_gap")
+      }
+    };
+  }
+
+  return {
+    ok: true,
+    blockers: [],
+    value: {
+      schemaVersion: "hanasand.actor_org_relevance_handoff.v1",
+      generatedAt: input.orgRelevance.generatedAt,
+      actorId: input.orgRelevance.actorId,
+      query: input.orgRelevance.query,
+      state: "ready",
+      watchlist: watchlist.value,
+      alertGeneration: alertGeneration.value,
+      caseHandoff: caseHandoff.value,
+      webhookTrigger: webhookTrigger.value,
+      affectedEntities: input.orgRelevance.affectedEntities ?? {},
+      sourceEvidence: input.orgRelevance.sourceEvidence ?? [],
+      handoffRows: rows,
+      enrichmentGaps: rows.filter(row => row.kind === "enrichment_gap")
+    }
+  };
+}
+
+function selectOrgRef(orgRelevance: PublicTiOrgRelevanceProofLike, input: { tenantId?: string; organizationId?: string }) {
+  const match = orgRelevance.organizationRefs?.find(ref => ref.organizationId || ref.watchlistId || ref.watchlistItemId);
+  const row = orgRelevance.handoffRows?.find(row => row.kind === "watchlist_match" && (row.organizationId || row.watchlistId || row.watchlistItemId));
+  return {
+    tenantId: input.tenantId || match?.tenantId || row?.tenantId || orgRelevance.alertCaseRefs?.[0]?.tenantId || "default",
+    organizationId: input.organizationId || match?.organizationId || row?.organizationId || orgRelevance.alertCaseRefs?.[0]?.organizationId,
+    watchlistId: match?.watchlistId || row?.watchlistId,
+    watchlistItemId: match?.watchlistItemId || row?.watchlistItemId,
+    kind: match?.kind,
+    value: match?.value
+  };
+}
+
+function selectWatchTerm(orgRelevance: PublicTiOrgRelevanceProofLike) {
+  return orgRelevance.candidateTerms?.find(term => term.matched) || orgRelevance.candidateTerms?.[0];
+}
+
+function selectSourceEvidence(orgRelevance: PublicTiOrgRelevanceProofLike, termValue: string | undefined) {
+  return orgRelevance.sourceEvidence?.find(source => termValue && source.supportsTerms?.some(term => normalizeValue(term) === normalizeValue(termValue)))
+    || orgRelevance.sourceEvidence?.[0];
+}
+
+function selectAlertRef(orgRelevance: PublicTiOrgRelevanceProofLike) {
+  return orgRelevance.alertCaseRefs?.find(ref => ref.alertId && ref.casePath && ref.captureIds.length && ref.webhookDestinationIds.length)
+    || orgRelevance.alertCaseRefs?.[0];
+}
+
+function orgRelevanceBlockers(
+  orgRelevance: PublicTiOrgRelevanceProofLike,
+  input: { organizationId?: string; staleEvidenceBefore?: string },
+  org: ReturnType<typeof selectOrgRef>,
+  term: ReturnType<typeof selectWatchTerm>,
+  source: ReturnType<typeof selectSourceEvidence>,
+  alertRef: ReturnType<typeof selectAlertRef>
+): AnalystHandoffBlocker[] {
+  const blockers: AnalystHandoffBlocker[] = [];
+  if (!org.organizationId) blockers.push(blocker("missing_org", "organizationId", "Actor relevance handoff requires organization scope.", true));
+  if (input.organizationId && org.organizationId && input.organizationId !== org.organizationId) blockers.push(blocker("identity_mismatch", "organizationId", `Actor relevance organization mismatch: ${input.organizationId} !== ${org.organizationId}.`, false));
+  if (!term) blockers.push(blocker("missing_watchlist_term", "candidateTerms", "Actor relevance proof does not include a watchlist term.", true));
+  if (!org.watchlistId) blockers.push(blocker("missing_watchlist_id", "organizationRefs[].watchlistId", "Alert rebuild requires a persisted watchlist id.", true));
+  if (!org.watchlistItemId) blockers.push(blocker("missing_watchlist_item", "organizationRefs[].watchlistItemId", "Alert rebuild requires a persisted watchlist item id.", true));
+  if (!source?.provenance || !(source.captureId || source.sourceId)) blockers.push(blocker("missing_provenance", "sourceEvidence", "Actor relevance handoff requires source provenance and capture/source identity.", true));
+  if (orgRelevance.freshness?.stale || isStale(orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt, input.staleEvidenceBefore)) blockers.push(blocker("stale_evidence", "freshness.lastSeen", "Actor relevance evidence is stale and needs refresh before alert or case handoff.", true));
+  if (!alertRef?.alertId) blockers.push(blocker("absent_alert_id", "alertCaseRefs[].alertId", "Case and webhook handoff require a related alert id.", true));
+  if (!alertRef?.casePath) blockers.push(blocker("missing_case_route", "alertCaseRefs[].casePath", "Case handoff requires an existing case route.", true));
+  if (!alertRef?.captureIds.length) blockers.push(blocker("missing_provenance", "alertCaseRefs[].captureIds", "Case and webhook handoff require capture evidence.", true));
+  if (!alertRef?.webhookDestinationIds.length) blockers.push(blocker("missing_webhook_destination", "alertCaseRefs[].webhookDestinationIds", "Webhook dry-run requires an active destination id.", true));
+  return blockers;
+}
+
+function blockerFromPublicRow(row: NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>[number], rowBlocker: NonNullable<NonNullable<PublicTiOrgRelevanceProofLike["handoffRows"]>[number]["blockers"]>[number]) {
+  return blocker(
+    blockerCodeFromPublic(rowBlocker.code),
+    rowBlocker.field || row.rowId,
+    rowBlocker.detail || row.action || row.label,
+    rowBlocker.recoverable ?? true
+  );
+}
+
+function blockerCodeFromPublic(code: string | undefined): AnalystHandoffBlockerCode {
+  if (code === "missing_org") return "missing_org";
+  if (code === "missing_org_watchlist" || code === "missing_watchlist_id") return "missing_watchlist_id";
+  if (code === "missing_watchlist_item") return "missing_watchlist_item";
+  if (code === "missing_source_provenance" || code === "missing_capture" || code === "missing_provenance") return "missing_provenance";
+  if (code === "stale_provenance" || code === "stale_evidence") return "stale_evidence";
+  if (code === "missing_alert" || code === "absent_alert_id") return "absent_alert_id";
+  if (code === "missing_case_route") return "missing_case_route";
+  if (code === "missing_webhook_destination") return "missing_webhook_destination";
+  return "missing_provenance";
+}
+
+function alertFromOrgRelevance(
+  orgRelevance: PublicTiOrgRelevanceProofLike,
+  org: ReturnType<typeof selectOrgRef>,
+  term: NonNullable<ReturnType<typeof selectWatchTerm>>,
+  source: NonNullable<ReturnType<typeof selectSourceEvidence>>,
+  alertRef: NonNullable<ReturnType<typeof selectAlertRef>>
+): AnalystAlertLike {
+  const sourceFamily = mapPublicSourceFamily(orgRelevance.handoffRows?.find(row => row.kind === "source_evidence")?.sourceFamily);
+  const captureIds = uniqueOptionalStrings([...(alertRef.captureIds ?? []), source.captureId]);
+  const sourceIds = uniqueOptionalStrings([source.sourceId]);
+  const evidenceId = stableId("public_ti_evidence", `${source.sourceId || source.sourceName}:${source.captureId || source.provenance}`);
+  return {
+    id: alertRef.alertId,
+    eventType: "darkweb.monitoring.match",
+    severity: "high",
+    confidence: source.confidence ?? 0.7,
+    matchedTerm: { kind: term.kind, value: term.value },
+    company: term.value,
+    actor: orgRelevance.query,
+    artifactType: "public_report",
+    sourceFamily,
+    sourceCount: sourceIds.length || 1,
+    firstSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+    lastSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+    claimSummary: `${orgRelevance.query} matched ${term.value} from ${source.sourceName}.`,
+    matchContext: {
+      normalizedTerm: normalizeValue(term.value),
+      termKind: term.kind,
+      matchType: "case_insensitive_substring",
+      matchedFieldHints: ["publicTi.orgRelevance"]
+    },
+    evidenceSummary: {
+      evidenceCount: 1,
+      sourceFamilyCounts: { [sourceFamily]: 1 },
+      metadataOnlyCount: 0,
+      publicSafeCount: 1,
+      firstObservedAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+      lastObservedAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt
+    },
+    routingContext: {
+      queue: "analyst_review",
+      urgency: "same_day",
+      customerVisibleEvidence: "redacted_excerpt",
+      reason: "Public TI actor relevance has a persisted organization watchlist match."
+    },
+    confidenceReasoning: [
+      "Source evidence is attached to the actor relevance proof.",
+      "Organization watchlist identity is attached to the actor relevance proof.",
+      "Alert, case, and destination identity are attached to the actor relevance proof."
+    ],
+    provenance: {
+      generatedAt: orgRelevance.generatedAt,
+      matchBasis: "watchlist_capture_text",
+      matchedEvidenceIds: [evidenceId],
+      sourceFamilies: [sourceFamily],
+      captureIds,
+      sourceIds,
+      extractorVersions: ["public_ti_org_relevance_v1"],
+      metadataOnly: false
+    },
+    dedupeKey: stableId("public_ti_org_relevance", `${orgRelevance.actorId}:${org.organizationId}:${term.kind}:${term.value}:${alertRef.alertId}`),
+    reviewState: "needs_review",
+    recommendedAction: "Open actor relevance case handoff.",
+    recommendedRoute: "analyst_review",
+    evidence: [{
+      id: evidenceId,
+      sourceId: source.sourceId || source.sourceName,
+      sourceName: source.sourceName,
+      sourceFamily,
+      url: source.provenance,
+      firstSeenAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+      observedAt: orgRelevance.freshness?.lastSeen ?? orgRelevance.generatedAt,
+      captureMode: "public_report",
+      redactionState: "public_safe",
+      contentHash: stableId("public_ti_hash", `${source.provenance}:${source.captureId || ""}`),
+      excerpt: `${source.sourceName} supports ${term.value}.`,
+      provenance: {
+        captureId: source.captureId || stableId("public_ti_capture", source.provenance),
+        sourceId: source.sourceId || source.sourceName,
+        sourceType: "public_ti",
+        collector: "public_ti_org_relevance",
+        captureMode: "public_report",
+        metadataOnly: false
+      }
+    }],
+    webhookDelivery: {
+      recommendedRoute: "analyst_review",
+      payloadHash: stableId("public_ti_webhook_payload", `${alertRef.alertId}:${alertRef.webhookDestinationIds.join(",")}`),
+      dedupeKey: stableId("public_ti_webhook", `${alertRef.alertId}:${alertRef.webhookDestinationIds.join(",")}`)
+    },
+    tenantId: org.tenantId,
+    organizationId: org.organizationId,
+    watchlistIds: org.watchlistId ? [org.watchlistId] : [],
+    watchlistItemIds: org.watchlistItemId ? [org.watchlistItemId] : [],
+    caseIdCandidate: alertRef.caseIdCandidate,
+    casePath: alertRef.casePath,
+    workflowContext: {
+      tenantId: org.tenantId,
+      organizationId: org.organizationId,
+      watchlistIds: org.watchlistId ? [org.watchlistId] : [],
+      watchlistItemIds: org.watchlistItemId ? [org.watchlistItemId] : [],
+      captureIds,
+      caseIdCandidate: alertRef.caseIdCandidate,
+      casePath: alertRef.casePath,
+      dedupeKey: stableId("public_ti_org_relevance", `${orgRelevance.actorId}:${org.organizationId}:${term.kind}:${term.value}:${alertRef.alertId}`),
+      recommendedRoute: "analyst_review",
+      webhookDestinationIds: alertRef.webhookDestinationIds
+    },
+    webhookContext: {
+      tenantId: org.tenantId,
+      organizationId: org.organizationId,
+      watchlistIds: org.watchlistId ? [org.watchlistId] : [],
+      watchlistItemIds: org.watchlistItemId ? [org.watchlistItemId] : [],
+      captureIds,
+      evidenceCount: 1,
+      dedupeKey: stableId("public_ti_org_relevance", `${orgRelevance.actorId}:${org.organizationId}:${term.kind}:${term.value}:${alertRef.alertId}`),
+      recommendedRoute: "analyst_review",
+      caseIdCandidate: alertRef.caseIdCandidate,
+      casePath: alertRef.casePath,
+      webhookDestinationIds: alertRef.webhookDestinationIds
+    }
+  };
+}
+
+function mapPublicSourceFamily(value: string | undefined): DwmAlert["sourceFamily"] {
+  if (value === "source_capture" || value === "darkweb_metadata") return "darkweb_metadata";
+  if (value === "vendor_disclosure" || value === "public_ti" || value === "actor_profile") return "public_advisory";
+  if (value === "watchlist") return "actor_page";
+  return "public_advisory";
+}
+
+function uniqueBlockers(blockers: AnalystHandoffBlocker[]) {
+  const seen = new Set<string>();
+  return blockers.filter((item) => {
+    const key = `${item.code}:${item.field}:${item.detail}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueOptionalStrings(values: Array<string | undefined>) {
+  return uniqueStrings(values.filter((value): value is string => Boolean(value)));
+}
+
 export function mergeAnalystHandoffIdentity(base: AnalystHandoffIdentity, next: Partial<AnalystHandoffIdentity>): AnalystHandoffIdentity {
   const merged: AnalystHandoffIdentity = { ...base };
   for (const [key, value] of Object.entries(next) as Array<[keyof AnalystHandoffIdentity, AnalystHandoffIdentity[keyof AnalystHandoffIdentity]]>) {
@@ -560,7 +979,7 @@ function blocker(code: AnalystHandoffBlockerCode, field: string, detail: string,
 }
 
 function supportedArtifactKind(kind: string) {
-  return ["country", "tool", "campaign", "infrastructure", "technique"].includes(kind);
+  return ["actor", "country", "tool", "campaign", "infrastructure", "technique"].includes(kind);
 }
 
 function normalizeAdapterTerms(terms: Array<DwmWatchTerm & { notes?: string }>): Array<DwmWatchTerm & { notes?: string }> {
