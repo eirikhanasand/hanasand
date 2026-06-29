@@ -1206,7 +1206,7 @@ function alertFromOrgRelevance(
     matchContext: {
       normalizedTerm: normalizeValue(term.value),
       termKind: term.kind,
-      matchType: "case_insensitive_substring",
+      matchType: "bounded_text_or_metadata",
       matchedFieldHints: ["publicTi.orgRelevance"]
     },
     evidenceSummary: {
