@@ -1,5 +1,5 @@
 import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
@@ -279,6 +279,23 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
   const entitlement = enforceDwmAlertRebuildEntitlement({ options, request, body, scope, access, action: "replay_dwm_alert" });
   if (entitlement.error) return entitlement.error;
   const generatedAt = nowIso();
+  const existingDeliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === existing.id);
+  const downstreamHandoff = buildDwmAlertDownstreamHandoff({
+    alert: existing,
+    deliveries: existingDeliveries,
+    organizationId: scope.organizationId,
+    expectedWorkflowEventCount: body.expectedWorkflowEventCount,
+    entitlementAllowed: true,
+    generatedAt
+  });
+  if (downstreamHandoff.blockerCodes.includes("duplicate_replay")) {
+    return json({
+      ...buildDwmAlertDetail(existing, options, access),
+      workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert: existing, organizationId: scope.organizationId, action: "replay", duplicateReplay: true }),
+      downstreamHandoff,
+      entitlement: entitlement.adapter
+    });
+  }
   const event = {
     id: stableId("dwm_alert_event", `${alertId}:${generatedAt}:replay:${existing.workflowEvents?.length ?? 0}`),
     at: generatedAt,
@@ -304,12 +321,12 @@ export async function replayDwmAlert(request: Request, options: ApiServerOptions
       organizationId: scope.organizationId,
       workflowContext: replayedAlert.workflowContext,
       existing: replayedAlert,
-      deliveries: ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === replayedAlert.id),
+      deliveries: existingDeliveries,
       generatedAt
     })
   });
   const usageEvent = recordDwmEntitlementUsageEvent(options, { organizationId: scope.organizationId, tenantId: scope.tenantId, action: "alert_rebuild", actor: entitlement.actor, requestId: entitlement.requestId, metadata: { route: "replay_dwm_alert", alertId: alert.id }, at: generatedAt });
-  return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
+  return json({ ...buildDwmAlertDetail(alert, options, access), workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: scope.organizationId, action: "replay" }), downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: existingDeliveries, organizationId: scope.organizationId, currentReplayAttempt: true, generatedAt }), entitlement: entitlement.adapter, entitlementUsageEvent: usageEvent });
 }
 
 export function listDwmWebhookDeliveries(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -1000,6 +1017,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
+    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
@@ -1025,6 +1043,7 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
     workflowSummary,
     workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
+    downstreamHandoff: buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
     deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),

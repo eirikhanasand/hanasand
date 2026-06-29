@@ -585,6 +585,38 @@ describe("dwm case workflow", () => {
         caseId: closed.case.id,
         assignedOwner: "ir-lead"
       });
+      expect(replayAfterDelivery.downstreamHandoff).toMatchObject({
+        schemaVersion: "dwm.alert_downstream_handoff.v1",
+        organizationId,
+        replay: { duplicate: false, canReplay: true },
+        deliveryReadiness: {
+          deliveryHistoryRefs: [deliveryPayload.deliveries[0].id]
+        }
+      });
+
+      const afterFirstReplay = (store as any).getDwmAlert(alert.id);
+      const firstReplayEventCount = afterFirstReplay.workflowEvents.length;
+      const duplicateReplayResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alert.id}/replay`, {
+        method: "POST",
+        headers: { "x-actor-id": "analyst-1" },
+        body: JSON.stringify({ organizationId, expectedWorkflowEventCount: firstReplayEventCount })
+      }), options);
+      const duplicateReplay = await duplicateReplayResponse.json() as any;
+      expect(duplicateReplayResponse.status).toBe(200);
+      expect(duplicateReplay.workflowExecutionReadiness).toMatchObject({
+        ready: false,
+        blockerCodes: ["duplicate_replay"]
+      });
+      expect(duplicateReplay.downstreamHandoff).toMatchObject({
+        blockerCodes: ["duplicate_replay"],
+        replay: { duplicate: true, canReplay: false },
+        deliveryReadiness: {
+          deliveryHistoryRefs: [deliveryPayload.deliveries[0].id]
+        }
+      });
+      expect((store as any).getDwmAlert(alert.id).workflowEvents).toHaveLength(firstReplayEventCount);
+      expect((store as any).getDwmAlert(alert.id).replayCount).toBe(1);
+      expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
 
       const replayProof = buildDwmAlertCustomerProofHandoffRow({
         alert: (store as any).getDwmAlert(alert.id),

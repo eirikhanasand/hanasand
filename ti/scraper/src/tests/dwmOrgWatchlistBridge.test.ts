@@ -211,7 +211,7 @@ describe("DWM org watchlist bridge", () => {
     });
     expect(rebuild.generationPlan.skippedWatchlists).toEqual([
       { watchlistId: "org_watch_acme_paused", reason: "paused" },
-      { watchlistId: "org_watch_acme_archived", reason: "paused" }
+      { watchlistId: "org_watch_acme_archived", reason: "archived" }
     ]);
     expect(rebuild.alerts.map((alert: any) => alert.sourceFamily).sort()).toEqual(["actor_page", "darkweb_metadata", "telegram_public"]);
     for (const alert of rebuild.alerts) {
