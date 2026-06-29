@@ -72,6 +72,17 @@ export type DwmEntitlementIntegrationHints = {
   };
 };
 
+export type DwmEntitlementEvaluation = {
+  status: DwmEntitlementStatus;
+  persistedPolicy: boolean;
+  usage: DwmEntitlementUsage;
+  projectedUsage?: DwmEntitlementUsage;
+  checks: Array<{ code: string; used: number; limit: number; remaining: number; allowed: boolean }>;
+  integrationHints: DwmEntitlementIntegrationHints;
+};
+
+export type DwmEntitlementPolicyEvaluation = DwmEntitlementEvaluation & { policy: DwmEntitlementPolicy };
+
 const planLimits: Record<DwmEntitlementPlan, DwmEntitlementLimits> = {
   trial: { activeWatchlists: 1, watchTerms: 5, webhookDestinations: 1, sourcePacks: 2, alertRebuildsPerDay: 5, openCases: 10 },
   team: { activeWatchlists: 10, watchTerms: 250, webhookDestinations: 5, sourcePacks: 25, alertRebuildsPerDay: 100, openCases: 100 },
@@ -159,17 +170,19 @@ export function evaluateDwmEntitlementPolicy(options: ApiServerOptions, organiza
   const usage = buildEntitlementUsage(options, organization);
   return {
     status: policy.status,
+    persistedPolicy: Boolean(getStoredEntitlementPolicy(options, organization.id)),
     usage,
     checks: entitlementChecks(policy, usage),
     integrationHints: policy.integrationHints
-  };
+  } satisfies DwmEntitlementEvaluation;
 }
 
-export function evaluateProposedDwmWatchlistEntitlement(options: ApiServerOptions, input: { organizationId?: string; tenantId: string; watchlistId?: string; terms: Array<{ value: string }>; status: "active" | "paused"; webhookDestinationId?: string }) {
+export function evaluateProposedDwmWatchlistEntitlement(options: ApiServerOptions, input: { organizationId?: string; tenantId: string; watchlistId?: string; terms: Array<{ value: string }>; status: "active" | "paused"; webhookDestinationId?: string }): { allowed: boolean; reason: string | null; evaluation?: DwmEntitlementPolicyEvaluation } {
   if (!input.organizationId) return { allowed: true, reason: null, evaluation: undefined };
   const organization = findOrganization(options, input.organizationId);
   if (!organization) return { allowed: false, reason: "organization_not_found", evaluation: undefined };
-  const policy = getOrDefaultEntitlementPolicy(options, organization);
+  const storedPolicy = getStoredEntitlementPolicy(options, organization.id);
+  const policy = storedPolicy ?? getOrDefaultEntitlementPolicy(options, organization);
   const usage = buildEntitlementUsage(options, organization, input.watchlistId);
   const projectedUsage = {
     ...usage,
@@ -177,8 +190,55 @@ export function evaluateProposedDwmWatchlistEntitlement(options: ApiServerOption
     watchTerms: input.status === "active" ? usage.watchTerms + input.terms.length : usage.watchTerms
   };
   const checks = entitlementChecks(policy, projectedUsage);
-  const denied = policy.status !== "active" ? "entitlement_suspended" : checks.find((check) => !check.allowed)?.code ?? null;
-  return { allowed: !denied, reason: denied, evaluation: { policy, usage, projectedUsage, checks, integrationHints: policy.integrationHints } };
+  const denied = storedPolicy
+    ? policy.status !== "active" ? "entitlement_suspended" : checks.find((check) => !check.allowed)?.code ?? null
+    : null;
+  return { allowed: !denied, reason: denied, evaluation: { policy, status: policy.status, persistedPolicy: Boolean(storedPolicy), usage, projectedUsage, checks, integrationHints: policy.integrationHints } };
+}
+
+export function buildDwmEntitlementReadAdapter(input: {
+  action: string;
+  reason: string | null;
+  evaluation: DwmEntitlementPolicyEvaluation;
+  requestId?: string;
+  actor?: string;
+}) {
+  const failedCheck = input.reason ? input.evaluation.checks.find((check) => check.code === input.reason) : undefined;
+  return {
+    entitlementStatus: input.evaluation.policy.status,
+    persistedPolicy: input.evaluation.persistedPolicy,
+    plan: input.evaluation.policy.plan,
+    usageSnapshot: input.evaluation.usage,
+    projectedUsage: input.evaluation.projectedUsage,
+    blockedAction: input.reason ? input.action : null,
+    reason: input.reason,
+    limit: failedCheck ? { code: failedCheck.code, used: failedCheck.used, limit: failedCheck.limit, remaining: failedCheck.remaining } : undefined,
+    nextStep: input.reason ? input.evaluation.integrationHints.dashboard.blockedActionCopy : "Watchlist write is within the current organization entitlement.",
+    dashboard: input.evaluation.integrationHints.dashboard,
+    helpdesk: input.evaluation.integrationHints.helpdesk,
+    audit: {
+      requestId: input.requestId,
+      actor: input.actor,
+      latestPolicyChange: redactedLatestAuditEvent(input.evaluation.policy)
+    }
+  };
+}
+
+export function buildDwmEntitlementBlocker(input: {
+  action: string;
+  reason: string;
+  evaluation: DwmEntitlementPolicyEvaluation;
+  requestId?: string;
+  actor?: string;
+}) {
+  return {
+    error: {
+      code: "dwm_entitlement_limit_exceeded",
+      message: "This organization has reached a DWM entitlement limit.",
+      reason: input.reason
+    },
+    entitlement: buildDwmEntitlementReadAdapter(input)
+  };
 }
 
 function saveEntitlementPolicy(options: ApiServerOptions, policy: DwmEntitlementPolicy): DwmEntitlementPolicy {
@@ -314,4 +374,19 @@ function isActiveMember(member: OrganizationMember): boolean {
 
 function dropUndefined(input: Record<string, unknown>) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+}
+
+function redactedLatestAuditEvent(policy: DwmEntitlementPolicy) {
+  const latest = policy.auditTrail.at(-1);
+  if (!latest) return undefined;
+  return {
+    at: latest.at,
+    action: latest.action,
+    requestId: latest.requestId,
+    actor: {
+      memberId: latest.actor?.memberId,
+      role: latest.actor?.role
+    },
+    reasonPreview: latest.reason.slice(0, 160)
+  };
 }

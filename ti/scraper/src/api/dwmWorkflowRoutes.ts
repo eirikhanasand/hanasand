@@ -2,6 +2,7 @@ import { normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts"
 import { buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { nowIso, stableId } from "../utils.ts";
+import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmWatchlistEntitlement } from "./dwmEntitlementRoutes.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -71,8 +72,10 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
     createdAt: existing?.createdAt ?? generatedAt,
     updatedAt: generatedAt
   };
+  const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "create_dwm_watchlist" });
+  if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) }, 201);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access) }, 201);
 }
 
 export function getDwmWatchlistDetail(url: URL, options: ApiServerOptions, watchlistId: string | undefined, request?: Request): Response {
@@ -119,8 +122,10 @@ export async function updateDwmWatchlist(request: Request, options: ApiServerOpt
     status: normalizeWatchlistStatus(body.status, existing.status),
     updatedAt: nowIso()
   };
+  const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "update_dwm_watchlist" });
+  if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
 }
 
 export async function disableDwmWatchlist(request: Request, options: ApiServerOptions, watchlistId: string | undefined): Promise<Response> {
@@ -727,6 +732,38 @@ function findDwmWatchlist(options: ApiServerOptions, watchlistId: string | undef
   return (options.store as any).getDwmWatchlist?.(watchlistId) ?? ((options.store as any).listDwmWatchlists?.() ?? []).find((row: DwmWatchlist) => row.id === watchlistId);
 }
 
+function enforceDwmWatchlistEntitlement(input: {
+  options: ApiServerOptions;
+  request: Request;
+  body: any;
+  scope: { organizationId?: string; tenantId: string };
+  access: DwmWorkflowAccessResult;
+  watchlist: DwmWatchlist;
+  action: "create_dwm_watchlist" | "update_dwm_watchlist";
+}): { adapter?: ReturnType<typeof buildDwmEntitlementReadAdapter>; error?: Response } {
+  const result = evaluateProposedDwmWatchlistEntitlement(input.options, {
+    organizationId: input.scope.organizationId,
+    tenantId: input.scope.tenantId,
+    watchlistId: input.watchlist.id,
+    terms: input.watchlist.terms,
+    status: input.watchlist.status,
+    webhookDestinationId: input.watchlist.webhookDestinationId
+  });
+  if (!result.evaluation) return {};
+
+  const requestId = entitlementRequestId(input.request, input.body);
+  const actor = entitlementActor(input.request, input.body, input.access);
+  if (!result.allowed && result.reason) {
+    return {
+      error: json({
+        ...buildDwmEntitlementBlocker({ action: input.action, reason: result.reason, evaluation: result.evaluation, requestId, actor }),
+        visibilityDecision: input.access.visibilityDecision
+      }, 402)
+    };
+  }
+  return { adapter: buildDwmEntitlementReadAdapter({ action: input.action, reason: null, evaluation: result.evaluation, requestId, actor }) };
+}
+
 function findDwmAlertByDedupeKey(options: ApiServerOptions, dedupeKey: string | undefined) {
   if (!dedupeKey) return undefined;
   return ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.dedupeKey === dedupeKey || row.webhookDelivery?.dedupeKey === dedupeKey);
@@ -766,6 +803,14 @@ function normalizeWebhookUrl(value: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function entitlementRequestId(request: Request, body: any): string | undefined {
+  return String(body.requestId ?? request.headers.get("x-request-id") ?? "").trim() || undefined;
+}
+
+function entitlementActor(request: Request, body: any, access: DwmWorkflowAccessResult): string | undefined {
+  return String(body.actor ?? body.actorEmail ?? body.userEmail ?? body.userId ?? request.headers.get("x-user-email") ?? request.headers.get("x-user-id") ?? request.headers.get("x-actor-id") ?? access.member?.email ?? access.member?.userId ?? access.member?.id ?? "").trim() || undefined;
 }
 
 function normalizeOwner(value: unknown): string | undefined {
@@ -977,6 +1022,9 @@ function alertMatchesDwmAlertFilters(alert: any, url: URL) {
   if (!matchesParam(url, ["severity"], alert.severityOverride ?? alert.severity)) return false;
   if (!matchesParam(url, ["severityOverride"], alert.severityOverride ?? "none")) return false;
   if (!matchesParam(url, ["sourceFamily"], alert.sourceFamily)) return false;
+  if (!matchesParam(url, ["visibilityPolicy"], alert.workflowContext?.visibilityPolicy ?? alert.webhookContext?.visibilityPolicy)) return false;
+  if (!matchesParam(url, ["termCategory", "category"], alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory)) return false;
+  if (!matchesAnyParam(url, ["allowedRole", "memberRole"], alert.workflowContext?.membershipContext?.allowedViewerRoles ?? alert.webhookContext?.membershipContext?.allowedViewerRoles ?? [])) return false;
   if (!matchesParam(url, ["recommendedRoute", "route"], alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute)) return false;
   if (!matchesAnyParam(url, ["watchlistId"], alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [])) return false;
   if (!matchesAnyParam(url, ["watchlistItemId"], alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [])) return false;
@@ -1062,6 +1110,9 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     evidenceCount: alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
     sourceFamily: alert.sourceFamily,
     watchlistIds: alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? [],
-    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? []
+    watchlistItemIds: alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds ?? [],
+    watchlistTermContexts: alert.workflowContext?.watchlistTermContexts ?? [],
+    matchedTermCategory: alert.workflowContext?.matchedTermCategory ?? alert.webhookContext?.matchedTermCategory,
+    membershipContext: alert.workflowContext?.membershipContext ?? alert.webhookContext?.membershipContext
   };
 }

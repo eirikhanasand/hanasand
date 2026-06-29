@@ -172,4 +172,183 @@ describe("dwm entitlement policy", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("enforces persisted org limits on DWM watchlist create and update without mutating denied writes", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dwm-entitlement-enforcement-"));
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const options = { store, frontier: new FocusedFrontier() };
+
+      const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@limits.example" },
+        body: JSON.stringify({ name: "Limited Monitor", ownerEmail: "owner@limits.example", ownerUserId: "owner-limits" })
+      }), options);
+      const orgPayload = await orgResponse.json() as any;
+      const organizationId = orgPayload.organization.id;
+
+      store.saveSource({
+        id: "src_limits_org",
+        name: "Limited org source pack",
+        type: "telegram_public",
+        url: "https://t.me/limits_org",
+        accessMethod: "public_http",
+        status: "active",
+        trustScore: 0.7,
+        legalNotes: "Public preview only.",
+        tenantId: organizationId,
+        organizationId,
+        createdAt: "2026-06-29T09:00:00.000Z",
+        updatedAt: "2026-06-29T09:00:00.000Z"
+      } as SourceRecord);
+      (store as any).saveCase({
+        id: "case_limits_open",
+        organizationId,
+        tenantId: organizationId,
+        status: "open",
+        title: "Limit usage case",
+        createdAt: "2026-06-29T09:01:00.000Z",
+        updatedAt: "2026-06-29T09:01:00.000Z"
+      });
+
+      const webhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks`, {
+        method: "POST",
+        headers: { "x-actor-id": "owner-limits" },
+        body: JSON.stringify({ name: "Limit Discord", url: "https://discord.com/api/webhooks/limit/token" })
+      }), options);
+      const webhookPayload = await webhookResponse.json() as any;
+      expect(webhookResponse.status).toBe(201);
+
+      const policyResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/entitlements`, {
+        method: "PUT",
+        headers: { "x-user-email": "owner@limits.example", "x-request-id": "req-policy-limit" },
+        body: JSON.stringify({
+          plan: "custom",
+          limits: { activeWatchlists: 1, watchTerms: 1, webhookDestinations: 5, sourcePacks: 5, openCases: 5 },
+          reason: "Contracted pilot allows one active monitored term."
+        })
+      }), options);
+      expect(policyResponse.status).toBe(201);
+
+      const allowedCreateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-user-email": "owner@limits.example", "x-request-id": "req-watch-allowed" },
+        body: JSON.stringify({
+          organizationId,
+          id: "watch_limit_allowed",
+          name: "Allowed limited watch",
+          terms: ["allowed.example"],
+          webhookDestinationId: webhookPayload.destination.id,
+          reason: "Create first contracted watchlist."
+        })
+      }), options);
+      const allowedCreate = await allowedCreateResponse.json() as any;
+      expect(allowedCreateResponse.status).toBe(201);
+      expect(allowedCreate.entitlement).toMatchObject({
+        entitlementStatus: "active",
+        persistedPolicy: true,
+        plan: "custom",
+        blockedAction: null,
+        usageSnapshot: { activeWatchlists: 0, watchTerms: 0, webhookDestinations: 1, sourcePacks: 1, openCases: 1 },
+        projectedUsage: { activeWatchlists: 1, watchTerms: 1 },
+        audit: { requestId: "req-watch-allowed", actor: "owner@limits.example" }
+      });
+
+      const allowedUpdateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists/watch_limit_allowed", {
+        method: "PATCH",
+        headers: { "x-user-email": "owner@limits.example", "x-request-id": "req-watch-update" },
+        body: JSON.stringify({ organizationId, name: "Allowed renamed limited watch", terms: ["allowed.example"] })
+      }), options);
+      const allowedUpdate = await allowedUpdateResponse.json() as any;
+      expect(allowedUpdateResponse.status).toBe(200);
+      expect(allowedUpdate.watchlist.name).toBe("Allowed renamed limited watch");
+      expect(allowedUpdate.entitlement).toMatchObject({ blockedAction: null, projectedUsage: { activeWatchlists: 1, watchTerms: 1 } });
+
+      const deniedCreateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-user-email": "owner@limits.example", "x-request-id": "req-watch-denied" },
+        body: JSON.stringify({
+          organizationId,
+          id: "watch_limit_denied",
+          name: "Denied second watch",
+          terms: ["blocked.example"],
+          webhookDestinationId: webhookPayload.destination.id,
+          reason: "Attempt to exceed contracted pilot limit."
+        })
+      }), options);
+      const deniedCreate = await deniedCreateResponse.json() as any;
+      expect(deniedCreateResponse.status).toBe(402);
+      expect(deniedCreate.error).toMatchObject({ code: "dwm_entitlement_limit_exceeded", reason: "active_watchlists" });
+      expect(deniedCreate.entitlement).toMatchObject({
+        entitlementStatus: "active",
+        persistedPolicy: true,
+        plan: "custom",
+        blockedAction: "create_dwm_watchlist",
+        reason: "active_watchlists",
+        limit: { code: "active_watchlists", used: 2, limit: 1, remaining: 0 },
+        usageSnapshot: { activeWatchlists: 1, watchTerms: 1, webhookDestinations: 1, sourcePacks: 1, openCases: 1 },
+        projectedUsage: { activeWatchlists: 2, watchTerms: 2 },
+        audit: { requestId: "req-watch-denied", actor: "owner@limits.example" }
+      });
+      expect(deniedCreate.entitlement.nextStep).toContain("DWM entitlement limit");
+      expect(deniedCreate.entitlement.helpdesk).toMatchObject({ lookupKey: organizationId, auditSource: "dwm_entitlement_policy" });
+      expect((store as any).getDwmWatchlist("watch_limit_denied")).toBeUndefined();
+      expect((store as any).listDwmWatchlists()).toHaveLength(1);
+      expect((store as any).listDwmAlerts()).toHaveLength(0);
+
+      const deniedUpdateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists/watch_limit_allowed", {
+        method: "PATCH",
+        headers: { "x-user-email": "owner@limits.example", "x-request-id": "req-watch-update-denied" },
+        body: JSON.stringify({ organizationId, terms: ["allowed.example", "extra.example"] })
+      }), options);
+      const deniedUpdate = await deniedUpdateResponse.json() as any;
+      expect(deniedUpdateResponse.status).toBe(402);
+      expect(deniedUpdate.entitlement).toMatchObject({
+        blockedAction: "update_dwm_watchlist",
+        reason: "watch_terms",
+        limit: { code: "watch_terms", used: 2, limit: 1, remaining: 0 },
+        audit: { requestId: "req-watch-update-denied" }
+      });
+      expect((store as any).getDwmWatchlist("watch_limit_allowed").terms).toEqual([{ value: "allowed.example", kind: "domain" }]);
+
+      const outsiderResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-user-email": "outsider@limits.example" },
+        body: JSON.stringify({ organizationId, terms: ["outsider.example"] })
+      }), options);
+      const outsiderPayload = await outsiderResponse.json() as any;
+      expect(outsiderResponse.status).toBe(403);
+      expect(outsiderPayload.error.code).toBe("organization_visibility_denied");
+      expect(outsiderPayload.entitlement).toBeUndefined();
+
+      const permissiveOrgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+        method: "POST",
+        headers: { "x-user-email": "owner@permissive.example" },
+        body: JSON.stringify({ name: "Permissive Monitor", ownerEmail: "owner@permissive.example", ownerUserId: "owner-permissive" })
+      }), options);
+      const permissiveOrg = await permissiveOrgResponse.json() as any;
+      for (let index = 0; index < 10; index += 1) {
+        (store as any).saveDwmWatchlist({
+          id: `watch_permissive_existing_${index}`,
+          organizationId: permissiveOrg.organization.id,
+          tenantId: permissiveOrg.organization.id,
+          name: `Permissive existing ${index}`,
+          terms: [{ value: `existing-${index}.example`, kind: "domain" }],
+          status: "active",
+          createdAt: "2026-06-29T09:05:00.000Z",
+          updatedAt: "2026-06-29T09:05:00.000Z"
+        });
+      }
+      const permissiveCreateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+        method: "POST",
+        headers: { "x-user-email": "owner@permissive.example", "x-request-id": "req-no-policy" },
+        body: JSON.stringify({ organizationId: permissiveOrg.organization.id, id: "watch_permissive_over_default", terms: ["over-default.example"] })
+      }), options);
+      const permissiveCreate = await permissiveCreateResponse.json() as any;
+      expect(permissiveCreateResponse.status).toBe(201);
+      expect(permissiveCreate.entitlement).toMatchObject({ persistedPolicy: false, blockedAction: null, projectedUsage: { activeWatchlists: 11, watchTerms: 11 } });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
