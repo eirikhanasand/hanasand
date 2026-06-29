@@ -2671,11 +2671,13 @@ const auditFailed = auditEventContracts.find(item => item.auditEventId === 'audi
 
 expect(destinationContract.type === 'discord' && destinationContract.label === 'Replay Discord', 'Destination contract should expose type and label.', destinationContract)
 expect(destinationContract.enabled === true && destinationContract.status === 'active', 'Destination contract should expose enabled status.', destinationContract)
+expect(destinationContract.display.label === 'Replay Discord' && destinationContract.display.channelLabel === 'Replay Discord' && destinationContract.display.enabled === true, 'Destination contract should expose persisted display/channel label and enabled state.', destinationContract.display)
 expect(disabledDestinationContract.enabled === false && disabledDestinationContract.status === 'archived' && disabledDestinationContract.failureReason === 'Disabled by owner', 'Destination contract should expose disabled status and failure reason.', disabledDestinationContract)
 expect(destinationContract.redactedUrl.includes('/api/webhooks/987654321/') && !JSON.stringify(destinationContract).includes(secret), 'Destination contract should only expose redacted destination refs.', destinationContract)
 expect(destinationContract.lastTest.requestId === 'delivery_test_contract' && destinationContract.lastTest.auditEventId === 'audit_delivery_test_contract', 'Destination contract should expose last test request and audit ids.', destinationContract)
 expect(destinationContract.lastDelivery.requestId === 'delivery_replay_contract' && destinationContract.lastDelivery.auditEventId === 'audit_replay_contract', 'Destination contract should expose last delivery request and audit ids.', destinationContract)
 expect(destinationContract.auditEventIds.includes('audit_destination_created_contract'), 'Destination contract should expose destination audit event ids.', destinationContract)
+expect(destinationContract.createdBy === 'owner_contract' && destinationContract.createdAt === '2026-06-28T11:00:00.000Z' && destinationContract.updatedAt === '2026-06-28T12:04:00.000Z', 'Destination contract should expose created/updated metadata.', destinationContract)
 expect(deliveryPreview.requestId === 'delivery_replay_contract' && deliveryPreview.discord.embeds.length === 1, 'Test preview should expose Discord-ready payload.', deliveryPreview)
 expect(deliveryPreview.context.org.id === 'org_contract', 'Test preview should expose org context.', deliveryPreview)
 expect(deliveryPreview.context.watchlist.id === 'watchlist_item_replay_contract', 'Test preview should expose watchlist context.', deliveryPreview)
@@ -3178,6 +3180,7 @@ console.log(JSON.stringify({
         'delivery evidence removed/deactivated denial',
         'delivery evidence admin-only policy',
         'destination contract create/list/update/disable/test fields',
+        'destination contract display/channel metadata',
         'destination contract audit ids',
         'structured audit contract create/update/disable/test/failure events',
         'structured audit contract retry state',

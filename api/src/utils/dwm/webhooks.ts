@@ -2820,6 +2820,13 @@ export function buildDwmWebhookDestinationContracts({
             kind: destination.kind,
             label: destination.name,
             name: destination.name,
+            display: {
+                label: destination.name,
+                channelLabel: destination.kind === 'discord' ? destination.name : null,
+                destinationType: destination.kind,
+                enabled: destination.status === 'active',
+                status: destination.status,
+            },
             status: destination.status,
             enabled: destination.status === 'active',
             events: destination.events,
