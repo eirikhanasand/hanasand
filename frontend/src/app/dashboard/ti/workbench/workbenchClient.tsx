@@ -194,6 +194,11 @@ export type WorkbenchProductReadinessItem = {
     caseDetailHref?: string
     caseDetailReady?: boolean
     caseDetailTimelineCount?: number
+    destinationCount?: number
+    activeDestinationCount?: number
+    deliveryReadyCount?: number
+    latestDeliveryAt?: string
+    latestAuditEventAt?: string
 }
 
 export type WorkbenchOrgContext = {
@@ -1667,10 +1672,13 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
             const analystCaseDetail = item.id === 'analyst_workflow' && item.caseId
                 ? ` Case ${item.caseId}${item.caseStatus ? ` is ${item.caseStatus}` : ''}${item.caseDetailTimelineCount ? ` with ${item.caseDetailTimelineCount} timeline event${item.caseDetailTimelineCount === 1 ? '' : 's'}` : ''}.`
                 : ''
+            const webhookHealthDetail = item.id === 'webhook_health'
+                ? ` Destinations ${item.activeDestinationCount ?? 0}/${item.destinationCount ?? 0} active; ${item.deliveryReadyCount ?? 0} delivery-ready${item.latestDeliveryAt ? `; latest delivery ${relativeTime(item.latestDeliveryAt)}` : item.latestAuditEventAt ? `; latest audit ${relativeTime(item.latestAuditEventAt)}` : ''}.`
+                : ''
             return {
                 id: `readiness_${item.id}`,
                 label: item.operatorAction || item.label,
-                detail: `${item.detail}${analystCaseDetail}`,
+                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}`,
                 tone: productReadinessTone(item.status),
                 href: item.href,
                 disabledReason: item.status === 'unavailable' ? item.source : undefined,

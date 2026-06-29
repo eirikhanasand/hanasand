@@ -1488,6 +1488,11 @@ function buildProductReadiness(input: {
             expectedDashboardRowId: webhookHealth?.expectedDashboardRowId,
             integrationProbeHint: webhookHealth?.integrationProbeHint,
             backendProofContractVersion: webhookHealth?.backendProofContractVersion || webhookHealth?.schemaVersion,
+            destinationCount: webhookHealth?.destinationCount,
+            activeDestinationCount: webhookHealth?.activeDestinationCount,
+            deliveryReadyCount: webhookHealth?.deliveryReadyCount,
+            latestDeliveryAt: webhookHealth?.latestDeliveryAt,
+            latestAuditEventAt: webhookHealth?.latestAuditEventAt,
         },
         {
             id: 'dashboard_evidence',
