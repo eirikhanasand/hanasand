@@ -185,6 +185,7 @@ for (const token of [
     'data-home-direction-state',
     'data-home-direction-backed-rows',
     'data-home-direction-owner-lanes',
+    'data-home-direction-href',
     'Customer workflow proof',
     'Current proof',
     'Inspect readiness',
@@ -197,6 +198,8 @@ for (const token of [
     'item.blocker || item.detail',
     'item.proofSummary',
     'item.href',
+    'md:grid-cols-[1.1fr_8rem_1.5fr_8rem]',
+    'wrap-break-word',
 ]) {
     assert.ok(homeSource.includes(token), `Homepage workflow proof is not wired to north-star direction data: ${token}.`)
 }

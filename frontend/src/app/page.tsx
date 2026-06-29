@@ -305,40 +305,39 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
                     <ArrowRight className='h-4 w-4' />
                 </Link>
             </div>
-            <div className='min-w-0 overflow-x-auto'>
-                <div className='min-w-[52rem]'>
-                    <div className='grid grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b border-[#eef1f5] px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#667085] dark:border-[#26364f] dark:text-[#97a6bd]'>
-                        <span>Workflow</span>
-                        <span>State</span>
-                        <span>Current proof</span>
-                        <span className='text-right'>Action</span>
-                    </div>
-                    <div className='divide-y divide-[#eef1f5] dark:divide-[#26364f]'>
-                        {scoreboard.direction.map(item => (
-                            <div
-                                key={item.id}
-                                className='grid grid-cols-[1.1fr_8rem_1.5fr_8rem] items-center gap-3 px-4 py-3 text-sm'
-                                data-home-direction-id={item.id}
-                                data-home-direction-state={item.state}
-                                data-home-direction-backed-rows={item.backedRowIds.join(',')}
-                                data-home-direction-owner-lanes={item.ownerLanes.join(',')}
-                            >
-                                <div className='min-w-0'>
-                                    <p className='truncate font-semibold text-[#171a21] dark:text-white'>{item.label}</p>
-                                    <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#97a6bd]'>{item.ownerLanes.join(', ') || 'owner not loaded'}</p>
-                                </div>
-                                <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
-                                    {homeStateLabel(item.state)}
-                                </span>
-                                <p className='min-w-0 truncate text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
-                                    {item.state === 'ready' ? item.proofSummary : item.blocker || item.detail}
-                                </p>
-                                <Link href={item.href} className='justify-self-end text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white'>
-                                    Open
-                                </Link>
+            <div>
+                <div className='hidden grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b border-[#eef1f5] px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#667085] dark:border-[#26364f] dark:text-[#97a6bd] md:grid'>
+                    <span>Workflow</span>
+                    <span>State</span>
+                    <span>Current proof</span>
+                    <span className='text-right'>Action</span>
+                </div>
+                <div className='divide-y divide-[#eef1f5] dark:divide-[#26364f]'>
+                    {scoreboard.direction.map(item => (
+                        <div
+                            key={item.id}
+                            className='grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_8rem_1.5fr_8rem] md:items-center md:py-3'
+                            data-home-direction-id={item.id}
+                            data-home-direction-state={item.state}
+                            data-home-direction-backed-rows={item.backedRowIds.join(',')}
+                            data-home-direction-owner-lanes={item.ownerLanes.join(',')}
+                            data-home-direction-href={item.href}
+                        >
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word font-semibold text-[#171a21] dark:text-white'>{item.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs text-[#667085] dark:text-[#97a6bd]'>{item.ownerLanes.join(', ') || 'owner not loaded'}</p>
                             </div>
-                        ))}
-                    </div>
+                            <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
+                                {homeStateLabel(item.state)}
+                            </span>
+                            <p className='min-w-0 wrap-break-word text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
+                                {item.state === 'ready' ? item.proofSummary : item.blocker || item.detail}
+                            </p>
+                            <Link href={item.href} className='w-fit text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
+                                Open
+                            </Link>
+                        </div>
+                    ))}
                 </div>
             </div>
         </section>
