@@ -22,7 +22,7 @@ const routes = {
     sourceProxy: '/api/ti/scraper/control?q=LockBit',
     entitlement: '/api/dwm/entitlements/readiness',
     organizationReadiness: '/api/organizations/org_acme/alert-readiness',
-    orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
+    orgAlertExport: '/api/organizations/org_acme/alert-readiness',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
     dwmProduct: '/api/dwm/product?demo=false',
@@ -146,6 +146,8 @@ assert.equal(partialPayload.entitlement?.unavailableReason, 'missing_dwm_entitle
 assert.equal(partialPayload.entitlement?.expectedDashboardRowId, 'entitlement_readiness')
 assert.equal(partialPayload.orgAlertExport?.ownerLane, 'org')
 assert.equal(partialPayload.orgAlertExport?.unavailableReason, 'missing_org_alert_export_readiness_api')
+assert.equal(partialPayload.orgAlertExport?.integrationProbeHint, 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.')
+assert.equal(partialPayload.orgAlertExport?.backendProofContractVersion, 'organization.worker3_ui_readiness_proof.v1')
 assert.equal(partialPayload.webhookHealth?.ownerLane, 'webhook')
 assert.equal(partialPayload.webhookHealth?.unavailableReason, 'missing_webhook_lifecycle_health_api')
 assert.equal(partialPayload.dashboardEvidence?.ownerLane, 'dashboard')
@@ -329,7 +331,7 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         status: 'ready',
         checkedAt: generatedAt,
-        source: '/api/dwm/watchlists',
+        source: routes.organizationReadiness,
         href: '/dashboard/dwm',
         organizationId: 'org_acme',
         activeTermCount: 2,
@@ -342,8 +344,8 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         staleAfterSeconds: 900,
         proofTimestamp: generatedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/dwm/watchlists with org scope must return active shared terms that can generate alerts.',
-        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     },
     webhookHealth: {
         schemaVersion: 'dwm.webhook_health.readiness.v1',
@@ -404,7 +406,8 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
     },
 })
 assert.equal(backedOrgWebhookPayload.orgAlertExport?.status, 'ready')
-assert.equal(backedOrgWebhookPayload.orgAlertExport?.source, '/api/dwm/watchlists')
+assert.equal(backedOrgWebhookPayload.orgAlertExport?.source, routes.organizationReadiness)
+assert.equal(backedOrgWebhookPayload.orgAlertExport?.backendProofContractVersion, 'organization.worker3_ui_readiness_proof.v1')
 assert.equal(backedOrgWebhookPayload.webhookHealth?.status, 'ready')
 assert.equal(backedOrgWebhookPayload.webhookHealth?.source, '/api/organizations/org_acme/webhooks')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).orgAlertExport?.status, 'ready')

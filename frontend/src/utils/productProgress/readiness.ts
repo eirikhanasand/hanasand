@@ -22,6 +22,10 @@ export type DwmAlertGenerationReadinessInput = {
     captureRefCount?: number
     matchedCandidateCount?: number
     missingRouteCandidateCount?: number
+    generationEvidenceWindowReady?: boolean
+    generationEvidenceWindowCaptureCount?: number
+    generationEvidenceWindowSourceFamilies?: string[]
+    latestEvidenceAt?: string
     blockerCodes?: string[]
     blockers?: string[]
     source?: string
@@ -189,8 +193,8 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
-        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     }
 }
 
@@ -291,9 +295,11 @@ function dashboardEvidenceFromRows(input: {
 }): DashboardAlertEvidenceReadiness {
     const visibleInDashboard = Boolean(input.alert?.id)
     const deliveryEvidenceMatched = Boolean(input.alert?.id && input.delivery?.alertId === input.alert.id && input.delivery.id)
-    const alertGenerationReady = input.alertGeneration?.status === 'ready' && input.alertGeneration.readyForCustomerDelivery === true
+    const alertGenerationReady = input.alertGeneration?.status === 'ready'
+        && input.alertGeneration.readyForCustomerDelivery === true
+        && input.alertGeneration.generationEvidenceWindowReady === true
     const alertGenerationDetail = alertGenerationReady
-        ? `${input.alertGeneration?.candidateCount ?? 0} alert generation candidate${input.alertGeneration?.candidateCount === 1 ? '' : 's'} with ${input.alertGeneration?.captureRefCount ?? 0} capture reference${input.alertGeneration?.captureRefCount === 1 ? '' : 's'}.`
+        ? `${input.alertGeneration?.candidateCount ?? 0} alert generation candidate${input.alertGeneration?.candidateCount === 1 ? '' : 's'} with ${input.alertGeneration?.generationEvidenceWindowCaptureCount ?? 0} evidence-window capture${input.alertGeneration?.generationEvidenceWindowCaptureCount === 1 ? '' : 's'} through ${input.alertGeneration?.latestEvidenceAt || 'the latest readiness proof'}.`
         : input.alertGeneration?.blockers?.filter(Boolean).join('; ') || 'DWM alert generation readiness proof is not loaded.'
     const blockers = [
         visibleInDashboard ? '' : 'No dashboard-visible backend alert was loaded.',
@@ -327,7 +333,7 @@ function dashboardEvidenceFromRows(input: {
         staleAfterSeconds: 600,
         proofTimestamp: input.alertGeneration?.proofTimestamp || input.alert?.updatedAt || input.alert?.createdAt || input.checkedAt,
         expectedDashboardRowId: 'dashboard_evidence',
-        integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, deploy probe is fresh, and /api/dwm/alerts/generation-readiness returns customer-delivery readiness.',
+        integrationProbeHint: 'Dashboard evidence is ready only when a backend alert is visible, delivery evidence matches it, source proxy is ready, deploy probe is fresh, and /api/dwm/alerts/generation-readiness returns customer-delivery readiness with a generation evidence window.',
         backendProofContractVersion: input.alertGeneration?.schemaVersion || 'dashboard.alert_evidence.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}. ${alertGenerationDetail}`,
     }

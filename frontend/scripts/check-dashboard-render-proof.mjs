@@ -38,7 +38,7 @@ const readinessRows = {
     },
     org_alert_export: {
         href: '/dashboard/dwm',
-        backendProbe: 'GET /api/dwm/watchlists with org scope',
+        backendProbe: 'GET /api/organizations/:id/alert-readiness readinessProof',
         commits: ['414c72a4', 'd0f53e04'],
     },
     webhook_health: {

@@ -526,8 +526,8 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
-        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     }
 }
 
@@ -677,8 +677,8 @@ function normalizeOrgAlertExportReadiness(input: OrganizationAlertExportReadines
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.exportedAt || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'org_alert_export',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
-        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'organization.watchlist_alert_terms_export.v1',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'organization.worker3_ui_readiness_proof.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : `${input.activeTermCount} active alert term${input.activeTermCount === 1 ? '' : 's'} exported for alert generation.`),
     }
 }
@@ -1612,8 +1612,8 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
             }
         case 'org_alert_export':
             return {
-                backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
-                integrationProbeHint: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
+                backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
+                integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_org_alert_export_readiness_api',
             }

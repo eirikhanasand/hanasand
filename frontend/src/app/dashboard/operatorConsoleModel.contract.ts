@@ -752,7 +752,17 @@ const publicTiWatchlistPayload = {
     stale: false,
     missing: [],
     blockers: [{ code: 'org_required', detail: 'Open this payload in an authenticated organization context before creating watchlists, rebuilding alerts, or creating cases.' }],
-    sourceRequests: [{ sourceName: 'Public TI', provenance: 'public-ti:actor:akira', captureId: 'cap_public_ti_akira', confidence: 86, missing: [] }],
+    sourceRequests: [{
+        sourceName: 'Public TI',
+        provenance: 'public-ti:actor:akira',
+        captureId: 'cap_public_ti_akira',
+        confidence: 86,
+        missing: [],
+        ownerLane: 'source',
+        route: '/dashboard/ti/enrichment',
+        sourceFamily: 'source_capture',
+        requestedFields: ['source provenance', 'capture id'],
+    }],
 } satisfies PublicTiHandoffPayload
 const stalePublicTiPayload = {
     ...publicTiWatchlistPayload,
