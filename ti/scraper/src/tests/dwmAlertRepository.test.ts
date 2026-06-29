@@ -363,6 +363,60 @@ describe("dwm alert repository", () => {
       { sourceFamily: "public_advisory", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
       { sourceFamily: "telegram_public", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] }
     ]);
+    expect(readiness.sourceFamilyGaps).toEqual([
+      {
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "actor_page",
+        state: "inactive_or_unconfigured",
+        active: false,
+        candidateCount: 0,
+        captureRefCount: 0,
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        blockerCode: "source_family_inactive",
+        detail: "actor_page has no active source row for this rebuild; alert generation must not invent evidence for this family."
+      },
+      {
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "clear_web",
+        state: "inactive_or_unconfigured",
+        active: false,
+        candidateCount: 0,
+        captureRefCount: 0,
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        blockerCode: "source_family_inactive",
+        detail: "clear_web has no active source row for this rebuild; alert generation must not invent evidence for this family."
+      },
+      {
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "darkweb_metadata",
+        state: "matched",
+        active: true,
+        candidateCount: 1,
+        captureRefCount: 1,
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        detail: "Active watchlist terms matched darkweb_metadata capture evidence."
+      },
+      {
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "public_advisory",
+        state: "matched",
+        active: true,
+        candidateCount: 1,
+        captureRefCount: 1,
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        detail: "Active watchlist terms matched public_advisory capture evidence."
+      },
+      {
+        schemaVersion: "dwm.alert_source_family_gap.v1",
+        sourceFamily: "telegram_public",
+        state: "matched",
+        active: true,
+        candidateCount: 1,
+        captureRefCount: 1,
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        detail: "Active watchlist terms matched telegram_public capture evidence."
+      }
+    ]);
     expect(readiness.blockerCodes).toEqual([]);
     expect(readiness.typedBlockers).toEqual([]);
     expect(readiness.blockers).toEqual([]);
@@ -1204,6 +1258,21 @@ describe("dwm alert repository", () => {
         nextAction: "Add or collect a recent capture containing the active watchlist term."
       }
     });
+    expect(noMatchReadiness.sourceFamilyGaps.find((row) => row.sourceFamily === "telegram_public")).toMatchObject({
+      schemaVersion: "dwm.alert_source_family_gap.v1",
+      sourceFamily: "telegram_public",
+      state: "active_no_match",
+      active: true,
+      candidateCount: 0,
+      captureRefCount: 0,
+      watchlistIds: ["watch_repo_nomatch"],
+      blockerCode: "no_matching_captures",
+      detail: "telegram_public has an active source, but no recent capture matched the active watchlist terms."
+    });
+    expect(noMatchReadiness.sourceFamilyGaps.find((row) => row.sourceFamily === "darkweb_metadata")).toMatchObject({
+      state: "inactive_or_unconfigured",
+      blockerCode: "source_family_inactive"
+    });
     const noMatchRebuild = rebuildDwmRuntimeAlerts({ store: noMatchStore as any, tenantId: "tenant_repo_nomatch", organizationId: "org_repo_nomatch" });
     expect(noMatchRebuild.savedAlertCount).toBe(0);
     expect(noMatchRebuild.zeroAlertProof).toMatchObject({
@@ -1248,6 +1317,15 @@ describe("dwm alert repository", () => {
     });
     expect(inactiveReadiness.typedBlockers.find((blocker) => blocker.code === "source_family_inactive")).toMatchObject({
       sourceFamilies: ["telegram_public"]
+    });
+    expect(inactiveReadiness.sourceFamilyGaps.find((row) => row.sourceFamily === "telegram_public")).toMatchObject({
+      schemaVersion: "dwm.alert_source_family_gap.v1",
+      sourceFamily: "telegram_public",
+      state: "matched",
+      active: false,
+      candidateCount: 1,
+      captureRefCount: 1,
+      watchlistIds: ["watch_repo_inactive"]
     });
     const inactiveRebuild = rebuildDwmRuntimeAlerts({ store: inactiveStore as any, tenantId: "tenant_repo_inactive", organizationId: "org_repo_inactive" });
     expect(inactiveRebuild.savedAlertCount).toBe(0);

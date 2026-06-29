@@ -854,6 +854,17 @@ export type DwmAlertGenerationReadiness = {
     unmatchedCandidateCount: number;
   };
   sourceFamilyCoverage: Array<{ sourceFamily: string; candidateCount: number; captureRefCount: number; watchlistIds: string[] }>;
+  sourceFamilyGaps: Array<{
+    schemaVersion: "dwm.alert_source_family_gap.v1";
+    sourceFamily: string;
+    state: "matched" | "active_no_match" | "inactive_or_unconfigured";
+    active: boolean;
+    candidateCount: number;
+    captureRefCount: number;
+    watchlistIds: string[];
+    blockerCode?: "no_matching_captures" | "source_family_inactive";
+    detail: string;
+  }>;
   webhookReadiness: {
     ready: boolean;
     routedCandidateCount: number;
@@ -1349,6 +1360,11 @@ export function buildDwmAlertGenerationReadiness(input: {
     .reduce((count, watchlist) => count + watchlist.terms.length, 0);
   const captureRefCount = plan.candidates.reduce((count, candidate) => count + candidate.captureRefs.length, 0);
   const sourceFamilyCoverage = buildSourceFamilyCoverage(plan.candidates);
+  const sourceFamilyGaps = buildSourceFamilyGaps({
+    coverage: sourceFamilyCoverage,
+    candidates: plan.candidates,
+    sources: input.sources ?? []
+  });
   const candidateIdsMissingRoute = plan.candidates.filter((candidate) => !candidate.hasWebhookRoute).map((candidate) => candidate.id);
   const productDedupePatched = input.productDedupePatched !== false;
   const typedBlockers = buildGenerationReadinessBlockers({
@@ -1383,6 +1399,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     readyForCustomerDelivery: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0 && captureRefCount > 0 && candidateIdsMissingRoute.length === 0 && productDedupePatched,
     counts,
     sourceFamilyCoverage,
+    sourceFamilyGaps,
     webhookReadiness: {
       ready: plan.candidateCount > 0 && candidateIdsMissingRoute.length === 0,
       routedCandidateCount: plan.candidates.filter((candidate) => candidate.hasWebhookRoute).length,
@@ -3144,6 +3161,50 @@ function buildSourceFamilyCoverage(candidates: DwmAlertGenerationCandidate[]): D
       watchlistIds: [...row.watchlistIds]
     }))
     .sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
+}
+
+const firstClassAlertSourceFamilies = ["telegram_public", "darkweb_metadata", "actor_page", "public_advisory", "clear_web"] as const;
+
+function buildSourceFamilyGaps(input: {
+  coverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
+  candidates: DwmAlertGenerationCandidate[];
+  sources: SourceRecord[];
+}): DwmAlertGenerationReadiness["sourceFamilyGaps"] {
+  const coverageByFamily = new Map(input.coverage.map((row) => [row.sourceFamily, row]));
+  const activeFamilies = new Set(input.sources
+    .filter((source) => ["active", "approved", "canary"].includes(String((source as any).status ?? "").toLowerCase()))
+    .map((source) => sourceFamilyFor(source, {} as RawCapture)));
+  const activeWatchlistIds = uniqueStrings(input.candidates.flatMap((candidate) => candidate.watchlistIds));
+  const families = uniqueStrings([
+    ...firstClassAlertSourceFamilies,
+    ...input.coverage.map((row) => row.sourceFamily),
+    ...Array.from(activeFamilies)
+  ]);
+  return families.map((sourceFamily) => {
+    const coverage = coverageByFamily.get(sourceFamily);
+    const active = activeFamilies.has(sourceFamily);
+    const candidateCount = coverage?.candidateCount ?? 0;
+    const captureRefCount = coverage?.captureRefCount ?? 0;
+    const state: DwmAlertGenerationReadiness["sourceFamilyGaps"][number]["state"] =
+      captureRefCount > 0 ? "matched" : active ? "active_no_match" : "inactive_or_unconfigured";
+    return {
+      schemaVersion: "dwm.alert_source_family_gap.v1" as const,
+      sourceFamily,
+      state,
+      active,
+      candidateCount,
+      captureRefCount,
+      watchlistIds: coverage?.watchlistIds ?? activeWatchlistIds,
+      blockerCode: state === "active_no_match" ? "no_matching_captures" as const : state === "inactive_or_unconfigured" ? "source_family_inactive" as const : undefined,
+      detail: sourceFamilyGapDetail(sourceFamily, state)
+    };
+  }).sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
+}
+
+function sourceFamilyGapDetail(sourceFamily: string, state: DwmAlertGenerationReadiness["sourceFamilyGaps"][number]["state"]): string {
+  if (state === "matched") return `Active watchlist terms matched ${sourceFamily} capture evidence.`;
+  if (state === "active_no_match") return `${sourceFamily} has an active source, but no recent capture matched the active watchlist terms.`;
+  return `${sourceFamily} has no active source row for this rebuild; alert generation must not invent evidence for this family.`;
 }
 
 function captureText(capture: RawCapture): string {
