@@ -3,11 +3,13 @@ import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+  DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
   buildWebhookDispatchReadiness,
+  buildWebhookDispatchReplayRequest,
   buildWebhookDispatchSupportPacket,
   buildWebhookEventSupportHandoff,
   buildWebhookSupportActionRequest,
@@ -299,6 +301,71 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(packet)).not.toContain("hash_acme_lumma");
   });
 
+  test("builds a redacted webhook dispatch replay request from readiness", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay",
+      generatedAt: "2026-06-29T12:24:00.000Z"
+    });
+
+    expect(replay).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:24:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      request: {
+        method: "POST",
+        route: "/v1/dwm/webhooks/deliver",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          alertId: "alert_acme_lumma",
+          caseId: "case_acme_lumma",
+          dedupeKey: "dedupe_acme_lumma",
+          webhookDestinationIds: ["webhook_discord"],
+          evidenceCaptureIds: ["capture_acme_lumma"],
+          dryRun: true,
+          reason: "webhook_dispatch_dry_run",
+          requestId: "req_webhook_dispatch_replay"
+        },
+        redacted: true
+      },
+      target: {
+        readinessId: readiness.id,
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme_lumma",
+        caseId: "case_acme_lumma",
+        destinationIds: ["webhook_discord"],
+        dedupeKey: "dedupe_acme_lumma"
+      },
+      evidenceSummary: {
+        redacted: true,
+        evidenceCount: 1,
+        captureCount: 1,
+        sourceCount: 1,
+        contentHashCount: 1
+      },
+      blockers: [],
+      nextActions: []
+    });
+    expect(replay.request.body.idempotencyKey).toMatch(/^dwm_webhook_dispatch_replay_/);
+    expect(replay.request.payloadShape).toEqual(expect.arrayContaining(["alertId", "organizationId", "webhookDestinationIds", "evidenceCaptureIds", "dryRun", "idempotencyKey"]));
+    expect(JSON.stringify(replay)).not.toContain("https://discord.com");
+    expect(JSON.stringify(replay)).not.toContain("payloadBody");
+    expect(JSON.stringify(replay)).not.toContain("endpoint_hash_acme");
+    expect(JSON.stringify(replay)).not.toContain("hash_acme_lumma");
+  });
+
   test("blocks webhook dispatch without case provenance active destination or duplicate-safe state", () => {
     const readiness = buildWebhookDispatchReadiness({
       alert: {
@@ -340,6 +407,66 @@ describe("webhook event contract", () => {
       expect.objectContaining({ action: "inspect_existing_delivery", blockerCode: "duplicate_delivered_dedupe" })
     ]));
     expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
+  });
+
+  test("keeps blocked webhook dispatch replay requests non-executable and actionable", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        status: "suppressed",
+        evidence: [],
+        provenance: { captureIds: [] },
+        workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+      },
+      destinations: [{ ...destinationFixture(), organizationId: "org_other", status: "disabled" }],
+      existingDeliveries: [{ ...deliveryFixture(), status: "delivered" }],
+      checkedAt: "2026-06-29T12:21:00.000Z"
+    });
+    const replay = buildWebhookDispatchReplayRequest({
+      readiness,
+      requestId: "req_webhook_dispatch_replay_blocked",
+      dryRun: false
+    });
+
+    expect(replay).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
+      ok: false,
+      request: {
+        method: "POST",
+        route: "/v1/dwm/webhooks/deliver",
+        body: {
+          alertId: "alert_acme_lumma",
+          webhookDestinationIds: ["webhook_discord"],
+          evidenceCaptureIds: [],
+          dryRun: false,
+          reason: "webhook_dispatch_replay",
+          requestId: "req_webhook_dispatch_replay_blocked"
+        },
+        redacted: true
+      },
+      evidenceSummary: {
+        evidenceCount: 0,
+        captureCount: 0,
+        sourceCount: 0,
+        contentHashCount: 0
+      }
+    });
+    expect(replay.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_case_id", ownerLane: "case", path: "alert.caseId" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "alert.evidence" }),
+      expect.objectContaining({ code: "disabled_destination", ownerLane: "webhook", path: "destinations[].status" }),
+      expect.objectContaining({ code: "suppressed_alert", ownerLane: "alert", path: "alert.status" })
+    ]));
+    expect(replay.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "link_case", blockerCode: "missing_case_id" }),
+      expect.objectContaining({ action: "restore_provenance", blockerCode: "missing_provenance" }),
+      expect.objectContaining({ action: "enable_destination", blockerCode: "disabled_destination" })
+    ]));
+    expect(JSON.stringify(replay)).not.toContain("https://discord.com");
+    expect(JSON.stringify(replay)).not.toContain("payloadBody");
+    expect(JSON.stringify(replay)).not.toContain("hash_acme_lumma");
   });
 
   test("keeps blocked webhook dispatch support packet actionable and redacted", () => {

@@ -6,6 +6,7 @@ export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_eve
 export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION = "dwm.webhook_dispatch_readiness.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION = "dwm.webhook_dispatch_support_packet.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION = "dwm.webhook_dispatch_replay_request.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -278,6 +279,60 @@ export type DwmWebhookDispatchSupportPacket = {
   blockers: Array<DwmWebhookDispatchReadinessBlocker | {
     code: "missing_support_target";
     ownerLane: "webhook" | "alert";
+    path: string;
+    message: string;
+  }>;
+  nextActions: DwmWebhookDispatchReadiness["nextActions"];
+};
+
+export type DwmWebhookDispatchReplayRequest = {
+  schemaVersion: typeof DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  request: {
+    method: "POST";
+    route: "/v1/dwm/webhooks/deliver";
+    body: {
+      tenantId: string;
+      organizationId?: string;
+      alertId: string;
+      caseId?: string;
+      dedupeKey?: string;
+      webhookDestinationIds: string[];
+      evidenceCaptureIds: string[];
+      dryRun: boolean;
+      reason: "webhook_dispatch_replay" | "webhook_dispatch_dry_run";
+      requestId?: string;
+      idempotencyKey: string;
+    };
+    payloadShape: string[];
+    redacted: true;
+  };
+  target: {
+    readinessId: string;
+    tenantId: string;
+    organizationId?: string;
+    alertId: string;
+    caseId?: string;
+    destinationIds: string[];
+    dedupeKey?: string;
+  };
+  evidenceSummary: {
+    redacted: true;
+    evidenceCount: number;
+    captureCount: number;
+    sourceCount: number;
+    contentHashCount: number;
+  };
+  blockers: Array<DwmWebhookDispatchReadinessBlocker | {
+    code: "missing_replay_target";
+    ownerLane: "alert" | "webhook";
     path: string;
     message: string;
   }>;
@@ -680,6 +735,68 @@ export function buildWebhookDispatchSupportPacket(input: {
   };
 }
 
+export function buildWebhookDispatchReplayRequest(input: {
+  readiness: DwmWebhookDispatchReadiness;
+  requestId?: string;
+  dryRun?: boolean;
+  generatedAt?: string;
+}): DwmWebhookDispatchReplayRequest {
+  const readiness = input.readiness;
+  const dryRun = input.dryRun ?? true;
+  const replayBlockers = dispatchReplayBlockers(readiness);
+  const blockers = [...readiness.blockers, ...replayBlockers];
+  const reason = dryRun ? "webhook_dispatch_dry_run" : "webhook_dispatch_replay";
+  const idempotencyKey = stableId("dwm_webhook_dispatch_replay", `${readiness.id}:${reason}:${input.requestId ?? ""}:${readiness.dispatch.destinationIds.join(",")}`);
+  return {
+    schemaVersion: DWM_WEBHOOK_DISPATCH_REPLAY_REQUEST_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_dispatch_replay_request", `${readiness.id}:${reason}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? readiness.checkedAt,
+    ok: readiness.ok && replayBlockers.length === 0,
+    tenantId: readiness.tenantId,
+    organizationId: readiness.organizationId,
+    alertId: readiness.alertId,
+    caseId: readiness.caseId,
+    redacted: true,
+    request: {
+      method: "POST",
+      route: readiness.dispatch.route,
+      body: {
+        tenantId: readiness.tenantId,
+        organizationId: readiness.organizationId,
+        alertId: readiness.alertId,
+        caseId: readiness.caseId,
+        dedupeKey: readiness.dedupeKey,
+        webhookDestinationIds: readiness.dispatch.destinationIds,
+        evidenceCaptureIds: readiness.evidence.captureIds,
+        dryRun,
+        reason,
+        requestId: stringValue(input.requestId),
+        idempotencyKey
+      },
+      payloadShape: ["tenantId", "organizationId", "alertId", "caseId", "dedupeKey", "webhookDestinationIds", "evidenceCaptureIds", "dryRun", "reason", "requestId", "idempotencyKey"],
+      redacted: true
+    },
+    target: {
+      readinessId: readiness.id,
+      tenantId: readiness.tenantId,
+      organizationId: readiness.organizationId,
+      alertId: readiness.alertId,
+      caseId: readiness.caseId,
+      destinationIds: readiness.dispatch.destinationIds,
+      dedupeKey: readiness.dedupeKey
+    },
+    evidenceSummary: {
+      redacted: true,
+      evidenceCount: readiness.evidence.evidenceCount,
+      captureCount: readiness.evidence.captureIds.length,
+      sourceCount: readiness.evidence.sourceIds.length,
+      contentHashCount: readiness.evidence.contentHashes.length
+    },
+    blockers,
+    nextActions: readiness.nextActions
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -827,6 +944,35 @@ function dispatchSupportBlockers(readiness: DwmWebhookDispatchReadiness): DwmWeb
       ownerLane: "webhook",
       path: "readiness.dispatch.destinationIds",
       message: "Support dispatch inspection requires at least one destination identity."
+    });
+  }
+  return blockers;
+}
+
+function dispatchReplayBlockers(readiness: DwmWebhookDispatchReadiness): DwmWebhookDispatchReplayRequest["blockers"] {
+  const blockers: DwmWebhookDispatchReplayRequest["blockers"] = [];
+  if (!readiness.alertId) {
+    blockers.push({
+      code: "missing_replay_target",
+      ownerLane: "alert",
+      path: "readiness.alertId",
+      message: "Webhook replay requires alert identity."
+    });
+  }
+  if (!readiness.organizationId) {
+    blockers.push({
+      code: "missing_replay_target",
+      ownerLane: "alert",
+      path: "readiness.organizationId",
+      message: "Webhook replay requires organization scope."
+    });
+  }
+  if (!readiness.dispatch.destinationIds.length) {
+    blockers.push({
+      code: "missing_replay_target",
+      ownerLane: "webhook",
+      path: "readiness.dispatch.destinationIds",
+      message: "Webhook replay requires at least one destination identity."
     });
   }
   return blockers;
