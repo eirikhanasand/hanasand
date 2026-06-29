@@ -492,6 +492,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             filterContract: supportAuditFilterContract(filters, timeline),
             exportProof: supportAuditExportProof(filters, timeline),
             bridgeAdapter: supportAuditBridgeAdapterContract(filters),
+            workflowRollup: supportAuditWorkflowRollup(filters, timeline),
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
@@ -5693,6 +5694,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         filterContract: supportAuditFilterContract(filters, [timelineEvent]),
         exportProof: supportAuditExportProof(filters, [timelineEvent]),
         bridgeAdapter: supportAuditBridgeAdapterContract(filters),
+        workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         relatedTimeline: {
             schemaVersion: 'admin.audit.event_related_timeline.v1',
             filters,
@@ -5843,6 +5845,57 @@ function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
             ],
         },
     }
+}
+
+function supportAuditWorkflowRollup(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const workflows = ['organization', 'watchlist', 'webhook', 'alert', 'impersonation', 'support']
+    const rollup = workflows.map(workflow => {
+        const events = timeline.filter(event => supportAuditWorkflowName(event) === workflow)
+        const workflowFilters = {
+            ...filters,
+            workflow,
+            source: filters.source || workflow,
+        }
+        return {
+            workflow,
+            eventCount: events.length,
+            eventIds: events.map(event => event.id).filter((id): id is number => Number.isFinite(id)),
+            actionTypes: uniqueTimelineValues(events.map(event => event.actionType)),
+            outcomes: uniqueTimelineValues(events.map(event => event.outcome)),
+            severities: uniqueTimelineValues(events.map(event => event.severity)),
+            requestIds: uniqueTimelineValues(events.map(event => event.requestId)),
+            redactedSummary: supportAuditRedactedSummary(events),
+            links: {
+                timeline: auditFilterQuery(workflowFilters),
+                details: events.map(event => event.links?.detail).filter(Boolean),
+            },
+        }
+    })
+    return {
+        schemaVersion: 'support.audit.workflow_rollup.v1',
+        filters,
+        workflows,
+        rollup,
+        redacted: true,
+        copyText: rollup
+            .filter(item => item.eventCount)
+            .map(item => `${item.workflow}: ${item.eventCount} event(s), actions=${item.actionTypes.join(',') || 'none'}`)
+            .join('\n'),
+    }
+}
+
+function supportAuditWorkflowName(event: Record<string, any>) {
+    const contextWorkflow = text(event.context?.workflow)
+    if (contextWorkflow) return contextWorkflow
+    const source = text(event.source)
+    if (source) return source
+    const action = text(event.actionType)
+    if (action.startsWith('organization.')) return 'organization'
+    if (action.includes('watchlist')) return 'watchlist'
+    if (action.includes('webhook')) return 'webhook'
+    if (action.includes('alert')) return 'alert'
+    if (action.startsWith('impersonation.')) return 'impersonation'
+    return 'support'
 }
 
 function supportAuditExportProof(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
