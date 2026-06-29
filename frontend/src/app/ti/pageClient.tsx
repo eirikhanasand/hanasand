@@ -698,6 +698,7 @@ type EnrichmentTask = {
 
 type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
 type WatchlistIntersectionRow = TiActionabilityModel['orgRelevance']['watchlistIntersections'][number]
+type CaseReviewIntakeItem = TiActionabilityModel['caseReviewIntake']['items'][number]
 
 function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
@@ -1784,11 +1785,23 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                         </div>
                         <CopyPayloadButton label='Case review intake' payload={caseIntake} />
                     </div>
-                    <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                    <div className='mt-2 grid min-w-0 gap-2'>
                         {caseIntake.items.slice(0, 3).map(item => (
-                            <span key={item.id} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
-                                {formatLabel(item.recommendedAction)} · {item.blockedBy.length} blocker{item.blockedBy.length === 1 ? '' : 's'}
-                            </span>
+                            <div key={item.id} className='rounded-md border border-[#ffe6a3] bg-white/70 p-2 dark:border-[#5a4316] dark:bg-[#1a1409]'>
+                                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                    <div className='min-w-0'>
+                                        <p className='wrap-break-word text-xs font-semibold text-[#8a5a00] dark:text-[#ffd77a]'>{item.title}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>
+                                            {formatLabel(item.recommendedAction)} · {item.reasons.length} reason{item.reasons.length === 1 ? '' : 's'} · {item.blockedBy.length} blocker{item.blockedBy.length === 1 ? '' : 's'}
+                                        </p>
+                                    </div>
+                                    <span className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(item.state)}</span>
+                                </div>
+                                <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                                    <p className='min-w-0 break-all font-mono text-[11px] text-[#8a5a00] dark:text-[#ffd77a]'>{item.casePaths[0] || item.route}</p>
+                                    <CopyPayloadButton label='Case candidate' payload={caseReviewCandidatePayloadFor(item, query)} />
+                                </div>
+                            </div>
                         ))}
                     </div>
                     <p className='mt-2 wrap-break-word text-xs leading-5 text-[#8a5a00]'>No alert or case ID is attached yet; rebuild alerts after saving a matching watchlist term or attach capture evidence before case creation.</p>
@@ -2708,6 +2721,29 @@ function watchlistIntersectionPayloadFor(row: WatchlistIntersectionRow) {
         sourceFamilies: row.sourceFamilies,
         recommendedAction: row.recommendedAction,
         blockers: row.blockers,
+    }
+}
+
+function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string) {
+    return {
+        schemaVersion: 'ti.public_actor.case_review_candidate.v1',
+        query,
+        candidateId: row.id,
+        evidenceRowId: row.evidenceRowId,
+        title: row.title,
+        score: row.score,
+        priority: row.priority,
+        state: row.state,
+        route: row.route,
+        alertIds: row.alertIds,
+        casePaths: row.casePaths,
+        captureIds: row.captureIds,
+        sourceIds: row.sourceIds,
+        watchlistTerms: row.watchlistTerms,
+        reasons: row.reasons,
+        blockers: row.blockedBy,
+        recommendedAction: row.recommendedAction,
+        nextAction: row.nextAction,
     }
 }
 

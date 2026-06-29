@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
 import { deployLedgerFromStatusPayload } from '@/utils/productProgress/deployLedger'
 import { helpdeskAuditFetchResultsFromLedger, loadProductHelpdeskAuditProofLedger } from '@/utils/productProgress/helpdeskAuditProofSource'
+import { loadProductPublicTiProofLedger, publicTiFetchResultFromLedger } from '@/utils/productProgress/publicTiProofSource'
 import type { DwmAlertGenerationReadinessInput } from '@/utils/productProgress/readiness'
 import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmProductSnapshotReadiness, DwmWatchlistSummary, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
@@ -47,6 +48,10 @@ export async function GET(request: NextRequest) {
         ? await loadProductHelpdeskAuditProofLedger()
         : undefined
     const helpdeskFallback = helpdeskProofLedger ? helpdeskAuditFetchResultsFromLedger(helpdeskProofLedger) : undefined
+    const publicTiProofLedger = !publicTiSearchReady(publicTi)
+        ? await loadProductPublicTiProofLedger(query)
+        : undefined
+    const publicTiFallback = publicTiProofLedger ? publicTiFetchResultFromLedger(publicTiProofLedger, query) : undefined
 
     const payload = buildProductProgressPayload({
         generatedAt,
@@ -57,7 +62,7 @@ export async function GET(request: NextRequest) {
             generatedAt,
             query,
             route: routes.publicTiProvenance || '/api/ti/search',
-            fetch: publicTi,
+            fetch: publicTiFallback || publicTi,
         }),
         sourceProxy: normalizedSourceProxy,
         dwmProduct: dwmProductReadiness({
@@ -120,6 +125,40 @@ export async function GET(request: NextRequest) {
 
 function sourceProxyReady(input: DashboardSourceProofProxyPayload) {
     return Boolean(input.ok && input.endpoints?.sourceInventory?.ok && input.endpoints?.sourcePacks?.ok)
+}
+
+function publicTiSearchReady(input: FetchResult) {
+    const payload = input.json as {
+        rows?: unknown[]
+        results?: unknown[]
+        publicTiAnswer?: { status?: string, evidenceLedgerReferences?: unknown[] }
+        actionability?: {
+            schemaVersion?: string
+            sourceProvenance?: unknown[]
+            handoffs?: {
+                watchlist?: { endpoint?: string }
+                alertRebuild?: { endpoint?: string }
+                caseCreate?: { endpoint?: string }
+            }
+            sourceFamilyCoverageMatrix?: SourceFamilyCoverageMatrix
+        }
+    } | undefined
+    const matrix = sourceFamilyCoverageMatrix(payload)
+    return Boolean(
+        input.ok
+        && rows(payload?.rows || payload?.results).length > 0
+        && payload?.publicTiAnswer?.status === 'ready'
+        && rows(payload.publicTiAnswer.evidenceLedgerReferences).length > 0
+        && payload.actionability?.schemaVersion === 'ti.query.actionability.v1'
+        && rows(payload.actionability.sourceProvenance).length > 0
+        && payload.actionability.handoffs?.watchlist?.endpoint
+        && payload.actionability.handoffs?.alertRebuild?.endpoint
+        && payload.actionability.handoffs?.caseCreate?.endpoint
+        && matrix?.schemaVersion === 'ti.public_actor.source_family_coverage_matrix.v1'
+        && rows(matrix.rows).length > 0
+        && stringsFrom(matrix.summary?.publicTiReadyFamilies).length > 0
+        && stringOrUndefined(matrix.summary?.latestCaptureAt),
+    )
 }
 
 type DwmWebhookProductProgressProof = {
