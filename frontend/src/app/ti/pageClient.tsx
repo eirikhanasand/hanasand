@@ -567,6 +567,7 @@ function ActorIntelligenceDossier({ actor, result, artifacts, selectedArtifactId
                 <DossierList title='Targeting' values={actor.targetSectors} />
                 <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
+                <TechniqueCoveragePanel techniques={actor.techniqueCoverage} />
             </div>
 
             <div className='mt-4 grid gap-3 xl:grid-cols-3'>
@@ -656,6 +657,41 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
                     Needs {coverage.missing.map(coverageMissingLabel).join(', ')}.
                 </div>
             ) : null}
+        </div>
+    )
+}
+
+function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenceProfile['techniqueCoverage'] }) {
+    return (
+        <div data-ti-technique-coverage='true' className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Techniques</p>
+                    <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {techniques.length ? `${techniques.length} mapped technique${techniques.length === 1 ? '' : 's'} with source coverage.` : 'No mapped technique rows returned.'}
+                    </p>
+                </div>
+                <span className={techniques.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(techniques.length ? 'review' : 'blocked')}>
+                    {techniques.some(item => item.freshness === 'ready') ? 'ready' : techniques.length ? 'review' : 'blocked'}
+                </span>
+            </div>
+            <div className='mt-2 grid gap-2'>
+                {techniques.length ? techniques.slice(0, 4).map(item => (
+                    <div key={`${item.attackId ?? item.name}-${item.tactic}`} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.name}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.tactic} · {Math.round(item.confidence * 100)}%</p>
+                            </div>
+                            {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
+                        </div>
+                        <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.detail}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                            {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} capture reference${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'}
+                        </p>
+                    </div>
+                )) : <p className='text-xs text-[#667085] dark:text-[#9aa8bd]'>Queue technique enrichment before detection or case routing.</p>}
+            </div>
         </div>
     )
 }

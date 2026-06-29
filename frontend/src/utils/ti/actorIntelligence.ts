@@ -25,6 +25,19 @@ export type TiActorSourceCoverage = {
     missing: string[]
 }
 
+export type TiActorTechniqueCoverage = {
+    attackId?: string
+    name: string
+    tactic: string
+    detail: string
+    confidence: number
+    sourceIds: string[]
+    captureIds: string[]
+    provenanceRefs: string[]
+    freshness: 'ready' | 'review'
+    missing: string[]
+}
+
 export type TiActorIntelligenceProfile = {
     actorClass: string
     attribution: string
@@ -35,6 +48,7 @@ export type TiActorIntelligenceProfile = {
     campaigns: string[]
     infrastructure: string[]
     indicators: string[]
+    techniqueCoverage: TiActorTechniqueCoverage[]
     targetSectors: string[]
     geographies: string[]
     confidence: number
@@ -72,6 +86,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
     ]).slice(0, 10)
     const provenanceRows = buildProvenanceRows(result, fallback)
     const sourceCoverage = buildSourceCoverage(provenanceRows, result.generatedAt)
+    const techniqueCoverage = buildTechniqueCoverage(result, provenanceRows)
     const indicators = unique([
         ...(contract?.indicators ?? []),
         ...fallback.indicators,
@@ -89,6 +104,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
         campaigns: unique([...(contract?.campaigns ?? []), ...fallback.campaigns]).slice(0, 10),
         infrastructure: unique([...(contract?.infrastructure ?? []), ...fallback.infrastructure]).slice(0, 10),
         indicators,
+        techniqueCoverage,
         targetSectors: targetSectors.length ? targetSectors.slice(0, 12) : fallback.targetSectors,
         geographies: geographies.length ? geographies.slice(0, 12) : fallback.geographies,
         confidence: contract?.confidence ?? result.confidence ?? fallback.confidence,
@@ -100,7 +116,7 @@ export function buildActorIntelligence(result: TiSearchResponse, victimObservati
     }
 }
 
-type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'freshness'>
+type TiActorIntelligenceFallback = Omit<TiActorIntelligenceProfile, 'provenanceRows' | 'sourceCoverage' | 'techniqueCoverage' | 'freshness'>
 
 function fallbackActorIntelligence(result: TiSearchResponse, victimObservations: VictimObservation[]): TiActorIntelligenceFallback {
     if (isApt29(result)) {
@@ -226,6 +242,32 @@ function buildSourceCoverage(rows: TiActorSourceProvenance[], generatedAt: strin
         stale: !latest || (Number.isFinite(generated) && generated - latest > 180 * 24 * 60 * 60 * 1000),
         missing,
     }
+}
+
+function buildTechniqueCoverage(result: TiSearchResponse, provenanceRows: TiActorSourceProvenance[]): TiActorTechniqueCoverage[] {
+    const sourceIds = unique(provenanceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)))
+    const captureIds = unique(provenanceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)))
+    const provenanceRefs = unique(provenanceRows.map(row => row.provenance)).slice(0, 6)
+    return result.ttps.map(item => {
+        const missing = [
+            sourceIds.length ? '' : 'sourceId',
+            captureIds.length ? '' : 'captureId',
+            item.attackId ? '' : 'attackId',
+        ].filter(Boolean)
+        const freshness: TiActorTechniqueCoverage['freshness'] = missing.length || item.confidence < 0.75 ? 'review' : 'ready'
+        return {
+            attackId: item.attackId,
+            name: item.name,
+            tactic: item.tactic,
+            detail: item.detail,
+            confidence: item.confidence,
+            sourceIds,
+            captureIds,
+            provenanceRefs,
+            freshness,
+            missing,
+        }
+    }).slice(0, 10)
 }
 
 function sourceFamilyFor(row: TiActorSourceProvenance) {
