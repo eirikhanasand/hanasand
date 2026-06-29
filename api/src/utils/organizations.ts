@@ -5071,7 +5071,11 @@ export function organizationSettingsMutationDenial(input: {
 export function organizationAccessDenial(input: {
     organizationId: string
     actorId: string
-    route: 'GET /api/organizations/:id'
+    route:
+        | 'GET /api/organizations/:id'
+        | 'GET /api/organizations/:id/watchlists'
+        | 'GET /api/organizations/:id/alert-readiness'
+        | 'GET /api/organizations/:id/watchlists/alert-terms'
     requestId?: string | null
 }) {
     return {

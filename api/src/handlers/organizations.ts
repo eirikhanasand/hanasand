@@ -1240,7 +1240,19 @@ export async function getOrganizationWatchlists(req: FastifyRequest<{ Params: Or
 
     const organization = await loadOrganizationForMember(req.params.id, userId)
     if (!organization) {
-        return res.status(404).send({ error: 'Organization not found.' })
+        const denial = organizationAccessDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            route: 'GET /api/organizations/:id/watchlists',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            route: denial.route,
+            blockerCode: denial.blockerCode,
+            denialReason: denial.denialReason,
+        })
+        return res.status(denial.statusCode).send({ error: denial.message, organizationAccessDenial: denial })
     }
 
     const query = req.query as WatchlistQuery | undefined
@@ -1399,7 +1411,19 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
 
     const organization = await loadOrganizationForMember(req.params.id, userId)
     if (!organization) {
-        return res.status(404).send({ error: 'Organization not found.' })
+        const denial = organizationAccessDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            route: 'GET /api/organizations/:id/alert-readiness',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            route: denial.route,
+            blockerCode: denial.blockerCode,
+            denialReason: denial.denialReason,
+        })
+        return res.status(denial.statusCode).send({ error: denial.message, organizationAccessDenial: denial })
     }
 
     const result = await run(`
@@ -1522,7 +1546,19 @@ export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ P
 
     const organization = await loadOrganizationForMember(req.params.id, userId)
     if (!organization) {
-        return res.status(404).send({ error: 'Organization not found.' })
+        const denial = organizationAccessDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            route: 'GET /api/organizations/:id/watchlists/alert-terms',
+            requestId: req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null,
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            route: denial.route,
+            blockerCode: denial.blockerCode,
+            denialReason: denial.denialReason,
+        })
+        return res.status(denial.statusCode).send({ error: denial.message, organizationAccessDenial: denial })
     }
 
     const requestId = normalizeWatchlistRequestId(req.query?.requestId ?? req.query?.request_id)
