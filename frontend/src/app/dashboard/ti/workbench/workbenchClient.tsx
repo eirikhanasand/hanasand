@@ -1362,6 +1362,44 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     } else {
         rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
     }
+    if (selected.kind === 'org_readiness') {
+        if (orgContext?.organization) {
+            rows.push({
+                id: 'inspect_org_members',
+                label: 'Inspect members',
+                detail: `GET /api/organizations/${orgContext.organization.id}/members returns active member and role state for assignment and alert visibility.`,
+                tone: orgContext.members.some(member => member.status === 'active') ? 'ready' : 'blocked',
+                href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/members`,
+            })
+            rows.push({
+                id: 'inspect_org_alert_readiness',
+                label: 'Alert readiness',
+                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns shared watchlist alertability proof.`,
+                tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
+                href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
+            })
+        } else {
+            rows.push({ id: 'create_org_context', label: 'Open organizations', detail: 'GET /api/organizations returned no selected organization for this operator scope.', tone: 'blocked', href: '/api/organizations' })
+        }
+    }
+    if (selected.kind === 'watchlist_readiness') {
+        rows.push({
+            id: 'inspect_watchlists',
+            label: 'Inspect watchlists',
+            detail: 'GET /api/dwm/watchlists returns shared watchlist terms and destination scope for alert generation.',
+            tone: orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
+            href: '/api/dwm/watchlists',
+        })
+        if (orgContext?.organization) {
+            rows.push({
+                id: 'inspect_watchlist_alertability',
+                label: 'Alertability proof',
+                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns active watchlist term counts and visibility readiness.`,
+                tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
+                href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
+            })
+        }
+    }
     if (selected.kind === 'source_readiness') {
         rows.push({
             id: 'inspect_source_inventory',
