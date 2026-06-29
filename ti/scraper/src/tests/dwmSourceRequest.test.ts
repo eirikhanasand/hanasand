@@ -1947,6 +1947,29 @@ describe("dwm source requests", () => {
             }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
           }),
+          sourceOperationsHandoff: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_operations_handoff.v1",
+            operations: expect.arrayContaining([
+              expect.objectContaining({
+                type: "rebuild_alerts",
+                priority: "high",
+                family: "all_active",
+                route: expect.objectContaining({
+                  path: "/v1/dwm/alerts/rebuild",
+                  liveNetworkFetch: false
+                }),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              })
+            ]),
+            summary: expect.objectContaining({
+              alertRebuildReady: true,
+              actionTypes: expect.arrayContaining(["rebuild_alerts"])
+            }),
+            policyBoundary: expect.objectContaining({
+              liveNetworkFetch: false,
+              metadataOnlyRestrictedSources: true
+            })
+          }),
           gaps: [],
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         },
@@ -2080,6 +2103,7 @@ describe("dwm source requests", () => {
           ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
           ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
+          ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
         ])
@@ -2804,6 +2828,31 @@ describe("dwm source requests", () => {
           }),
           safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
         }),
+        sourceOperationsHandoff: expect.objectContaining({
+          schemaVersion: "ti.public_actor.source_operations_handoff.v1",
+          operations: expect.arrayContaining([
+            expect.objectContaining({
+              type: "record_capture",
+              family: "telegram",
+              route: expect.objectContaining({
+                path: "/v1/dwm/source-requests",
+                body: expect.objectContaining({ action: "record_capture" }),
+                liveNetworkFetch: false
+              }),
+              parserStatus: expect.objectContaining({ state: "ready" }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            }),
+            expect.objectContaining({
+              type: "request_candidate",
+              family: "darkweb_onion",
+              gap: expect.objectContaining({ state: "missing" })
+            })
+          ]),
+          summary: expect.objectContaining({
+            captureRecordReady: true,
+            actionTypes: expect.arrayContaining(["record_capture", "request_candidate"])
+          })
+        }),
         gaps: expect.arrayContaining([
           expect.objectContaining({ family: "darkweb_onion", state: "missing" })
         ])
@@ -3252,6 +3301,33 @@ describe("dwm source requests", () => {
               alertReadyFamilies: []
             }),
             safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+          }),
+          sourceOperationsHandoff: expect.objectContaining({
+            schemaVersion: "ti.public_actor.source_operations_handoff.v1",
+            operations: expect.arrayContaining([
+              expect.objectContaining({
+                type: "retry_parser",
+                family: "telegram",
+                route: expect.objectContaining({
+                  body: expect.objectContaining({ action: "pack_review", packAction: "retry" }),
+                  liveNetworkFetch: false
+                }),
+                parserStatus: expect.objectContaining({ state: "retry_required" }),
+                safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+              }),
+              expect.objectContaining({
+                type: "retry_capture",
+                family: "telegram",
+                route: expect.objectContaining({
+                  body: expect.objectContaining({ action: "record_capture" }),
+                  liveNetworkFetch: false
+                })
+              })
+            ]),
+            summary: expect.objectContaining({
+              retryReady: true,
+              actionTypes: expect.arrayContaining(["retry_parser", "retry_capture", "request_candidate"])
+            })
           })
         }),
         alertCaseHandoffReadiness: expect.objectContaining({

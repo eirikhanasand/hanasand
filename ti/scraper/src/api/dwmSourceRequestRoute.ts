@@ -3131,6 +3131,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".proofArtifacts.publicTiQueryAdapter.sourcePackIntakeHandoff.schemaVersion == \"ti.public_actor.source_pack_intake_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.alertGenerationConsumerHandoff.schemaVersion == \"ti.public_actor.alert_generation_consumer_handoff.v1\"",
       ".proofArtifacts.publicTiQueryAdapter.consumerProofLedger.schemaVersion == \"ti.public_actor.consumer_proof_ledger.v1\"",
+      ".proofArtifacts.publicTiQueryAdapter.sourceOperationsHandoff.schemaVersion == \"ti.public_actor.source_operations_handoff.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
       ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -3440,6 +3441,16 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     alertEvidenceHandoff,
     sourceHealthRows
   });
+  const consumerProofLedger = sourceActorPublicTiConsumerProofLedger({
+    query,
+    actorReadiness,
+    evidenceRows,
+    sourceHealthRows,
+    parserStatusLedger,
+    sourcePackIntakeHandoff,
+    alertEvidenceHandoff,
+    alertGenerationConsumerHandoff
+  });
   return {
     schemaVersion: "ti.public_actor.query_adapter.v1",
     proofId: stableId("ti_public_actor_query_adapter", `${query}:${actorReadiness.proofId}:${sectionRows.map((row: any) => `${row.section}:${row.state}`).join(",")}`),
@@ -3477,17 +3488,90 @@ function sourceActorPublicTiQueryAdapter(query: string, actorReadiness: Record<s
     },
     alertEvidenceHandoff,
     alertGenerationConsumerHandoff,
-    consumerProofLedger: sourceActorPublicTiConsumerProofLedger({
+    consumerProofLedger,
+    sourceOperationsHandoff: sourceActorPublicTiSourceOperationsHandoff({
       query,
       actorReadiness,
-      evidenceRows,
-      sourceHealthRows,
-      parserStatusLedger,
-      sourcePackIntakeHandoff,
-      alertEvidenceHandoff,
-      alertGenerationConsumerHandoff
+      consumerProofLedger
     }),
     gaps: actorReadiness.candidateGaps ?? [],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function sourceActorPublicTiSourceOperationsHandoff(input: {
+  query: string;
+  actorReadiness: Record<string, any>;
+  consumerProofLedger: Record<string, any>;
+}) {
+  const proofByFamily = new Map<string, Record<string, any>>((input.consumerProofLedger.rows ?? []).map((row: any) => [String(row.family), row]));
+  const operations = (input.actorReadiness.sourceOperationsQueue?.queueItems ?? []).map((item: any) => {
+    const proof = proofByFamily.get(String(item.family));
+    const relatedFamilies = item.family === "all_active"
+      ? input.consumerProofLedger.summary?.alertReadyFamilies ?? []
+      : [item.family].filter(Boolean);
+    return {
+      schemaVersion: "ti.public_actor.source_operation.v1",
+      operationId: item.id,
+      query: input.query,
+      type: item.type,
+      priority: item.priority,
+      family: item.family,
+      relatedFamilies,
+      reasonCode: item.reasonCode,
+      route: {
+        method: item.route?.method ?? "POST",
+        path: item.route?.path ?? "/v1/dwm/source-requests",
+        body: item.route?.body ?? {},
+        dryRunSupported: item.route?.dryRunSupported !== false,
+        liveNetworkFetch: false
+      },
+      parserStatus: proof?.parserStatus,
+      confidence: proof?.confidence ?? 0,
+      timestamps: proof?.timestamps ?? {},
+      provenance: {
+        consumerProofId: proof?.proofId,
+        sourceIds: proof?.provenance?.sourceIds ?? item.sourceIds ?? [],
+        candidateIds: proof?.provenance?.candidateIds ?? item.candidateIds ?? [],
+        sourceFamily: item.family,
+        privacyBoundary: proof?.provenance?.privacyBoundary
+      },
+      blockers: item.blockers ?? [],
+      gap: proof?.gap,
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  return {
+    schemaVersion: "ti.public_actor.source_operations_handoff.v1",
+    proofId: stableId("ti_public_actor_source_operations_handoff", `${input.query}:${operations.map((item: any) => `${item.type}:${item.family}:${item.priority}:${item.reasonCode}`).join(",")}`),
+    query: input.query,
+    operations,
+    summary: {
+      total: operations.length,
+      critical: operations.filter((item: any) => item.priority === "critical").length,
+      high: operations.filter((item: any) => item.priority === "high").length,
+      actionTypes: uniqueSourceReadinessStrings(operations.map((item: any) => item.type)),
+      families: uniqueSourceReadinessStrings(operations.flatMap((item: any) => item.relatedFamilies.length ? item.relatedFamilies : [item.family])),
+      alertRebuildReady: operations.some((item: any) => item.type === "rebuild_alerts"),
+      retryReady: operations.some((item: any) => String(item.type).startsWith("retry")),
+      captureRecordReady: operations.some((item: any) => item.type === "record_capture")
+    },
+    policyBoundary: {
+      liveNetworkFetch: false,
+      publicTelegramOnly: true,
+      metadataOnlyRestrictedSources: true,
+      restrictedPayloadStored: false
+    },
     safeOutput: {
       rawTargetsExposed: false,
       restrictedMetadataLeaked: false,
