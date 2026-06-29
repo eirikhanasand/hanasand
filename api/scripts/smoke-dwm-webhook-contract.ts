@@ -2472,6 +2472,7 @@ const adminDisabledLifecycle = adminLifecycle.find(item => item.destinationId ==
 const memberReplayLifecycle = memberLifecycle.find(item => item.destinationId === 'destination_replay_contract')
 const orgAlertReplayHealth = orgAlertDeliveryContract.destinationHealth.find(item => item.destinationId === 'destination_replay_contract')
 const orgAlertRetryLifecycle = orgAlertDeliveryContract.destinationLifecycle.find(item => item.destinationId === 'destination_live_contract')
+const orgAlertDeliveryProof = orgAlertDeliveryContract.alertDeliveryProof
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -2677,6 +2678,15 @@ expect(replayGuardReplay?.latestReceipt?.discordPreview?.fieldNames.includes('Al
 expect(nonmemberDeliveryReplayGuard.entries.length === 0 && nonmemberDeliveryReplayGuard.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay guard should deny nonmembers without leaking replay keys.', nonmemberDeliveryReplayGuard)
 expect(orgAlertDeliveryContract.deliveryReplayGuard.schemaVersion === 'dwm.webhook.delivery_replay_guard.v1' && orgAlertDeliveryContract.deliveryReplayGuard.entries.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped replay guard.', orgAlertDeliveryContract.deliveryReplayGuard)
 expect(!JSON.stringify(deliveryReplayGuard).includes(secret), 'Delivery replay guard should redact endpoint, response, and payload secrets.', deliveryReplayGuard)
+expect(orgAlertDeliveryContract.customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && orgAlertDeliveryContract.customerSetup.routes.deliver === 'POST /api/dwm/webhook-deliveries', 'Org alert delivery contract should include customer setup proof for delivery routes.', orgAlertDeliveryContract.customerSetup)
+expect(orgAlertDeliveryProof.schemaVersion === 'dwm.webhook.alert_delivery_proof.v1' && orgAlertDeliveryProof.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.eventType === 'dwm.alert.replayed', 'Alert delivery proof should normalize replay alert context.', orgAlertDeliveryProof)
+expect(orgAlertDeliveryProof.noNetwork === true && orgAlertDeliveryProof.externalSendEnabled === false && orgAlertDeliveryProof.status === 'blocked', 'Alert delivery proof should preserve dry-run/no-network state and blockers.', orgAlertDeliveryProof)
+expect(orgAlertDeliveryProof.destinationSelection.selectedDestinationIds.includes('destination_replay_contract') && orgAlertDeliveryProof.destinationSelection.skippedDestinations.some(item => item.id === 'destination_disabled_contract'), 'Alert delivery proof should expose selected and skipped destinations.', orgAlertDeliveryProof.destinationSelection)
+expect(orgAlertDeliveryProof.setup.summary.destinationCount === auditDestinationRows.length && orgAlertDeliveryProof.setup.stepStatuses.some(item => item.id === 'deliver_org_alert' && item.route === 'POST /api/dwm/webhook-deliveries'), 'Alert delivery proof should expose customer setup progress and routes.', orgAlertDeliveryProof.setup)
+expect(orgAlertDeliveryProof.delivery.outcomeCounts.recorded >= 1 && orgAlertDeliveryProof.retryAndReplay.replayReadyCount >= 1 && orgAlertDeliveryProof.retryAndReplay.duplicateDeliveredCount === 0, 'Alert delivery proof should summarize scoped persisted delivery and replay guard state.', orgAlertDeliveryProof.retryAndReplay)
+expect(orgAlertDeliveryProof.delivery.latestAuditEventIds.includes('audit_replay_duplicate_contract') && orgAlertDeliveryProof.blockerCodes.includes('terminal_failure'), 'Alert delivery proof should expose audit ids and typed blockers for probes.', orgAlertDeliveryProof)
+expect(orgAlertDeliveryProof.dashboardProof.productProgress.schemaVersion === 'dwm.webhook.destination_admin_product_progress.v1' && orgAlertDeliveryProof.dashboardProof.deliveryRoute === 'POST /api/dwm/webhook-deliveries', 'Alert delivery proof should carry dashboard/integration readiness fields.', orgAlertDeliveryProof.dashboardProof)
+expect(!JSON.stringify(orgAlertDeliveryProof).includes(secret), 'Alert delivery proof should not leak endpoint, response, or audit secrets.', orgAlertDeliveryProof)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
@@ -2879,6 +2889,9 @@ console.log(JSON.stringify({
         'customer setup proof retry/terminal counts',
         'customer setup proof nonmember denial',
         'customer setup proof secret redaction',
+        'alert delivery proof setup/readiness bridge',
+        'alert delivery proof no-network blockers',
+        'alert delivery proof audit/dashboard probe fields',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
         'delivery retry role gate',
@@ -3027,6 +3040,16 @@ console.log(JSON.stringify({
             'orgAlertDelivery.deliveryActionPlan.actions[].action',
             'orgAlertDelivery.deliveryReplayGuard.schemaVersion',
             'orgAlertDelivery.deliveryReplayGuard.entries[].guard.liveBlocked',
+            'orgAlertDelivery.customerSetup.schemaVersion',
+            'orgAlertDelivery.alertDeliveryProof.schemaVersion',
+            'orgAlertDelivery.alertDeliveryProof.status',
+            'orgAlertDelivery.alertDeliveryProof.noNetwork',
+            'orgAlertDelivery.alertDeliveryProof.destinationSelection.selectedDestinationIds',
+            'orgAlertDelivery.alertDeliveryProof.setup.stepStatuses[]',
+            'orgAlertDelivery.alertDeliveryProof.delivery.latestAuditEventIds',
+            'orgAlertDelivery.alertDeliveryProof.retryAndReplay.replayReadyCount',
+            'orgAlertDelivery.alertDeliveryProof.dashboardProof.productProgress.status',
+            'orgAlertDelivery.alertDeliveryProof.blockerCodes',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,

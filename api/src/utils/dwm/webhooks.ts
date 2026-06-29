@@ -3863,6 +3863,34 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
             dedupeKey: normalizedAlert.dedupeKey,
         },
     })
+    const customerSetup = buildDwmWebhookCustomerSetupProof({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+    })
+    const alertDeliveryProof = buildDwmWebhookAlertDeliveryProof({
+        ownerId,
+        orgId: dispatch.orgId,
+        eventType: dispatch.eventType,
+        dryRun,
+        liveRequested,
+        liveDeliveryEnabled,
+        selectedDestinations: dispatch.selectedDestinations,
+        skippedDestinations: dispatch.skippedDestinations,
+        normalizedAlert,
+        watchlist,
+        customerSetup,
+        alertDestinationReadiness,
+        deliveryOutcome,
+        deliveryTimeline,
+        deliveryActionPlan,
+        deliveryReplayGuard,
+        destinationAdminProof,
+        auditEventContracts,
+    })
 
     return {
         schemaVersion: 'dwm.webhook.org_alert_delivery.v1',
@@ -3907,12 +3935,151 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
         destinationHealth,
         destinationLifecycle,
         destinationAdminProof,
+        customerSetup,
         alertDestinationReadiness,
+        alertDeliveryProof,
         deliveryOutcome,
         deliveryTimeline,
         deliveryActionPlan,
         deliveryReplayGuard,
         auditEventContracts,
+    }
+}
+
+function buildDwmWebhookAlertDeliveryProof({
+    ownerId,
+    orgId,
+    eventType,
+    dryRun,
+    liveRequested,
+    liveDeliveryEnabled,
+    selectedDestinations,
+    skippedDestinations,
+    normalizedAlert,
+    watchlist,
+    customerSetup,
+    alertDestinationReadiness,
+    deliveryOutcome,
+    deliveryTimeline,
+    deliveryActionPlan,
+    deliveryReplayGuard,
+    destinationAdminProof,
+    auditEventContracts,
+}: {
+    ownerId: string
+    orgId: string
+    eventType: DwmAlertEventType
+    dryRun: boolean
+    liveRequested: boolean
+    liveDeliveryEnabled: boolean
+    selectedDestinations: DwmAlertWebhookDispatchPlan['selectedDestinations']
+    skippedDestinations: DwmAlertWebhookDispatchPlan['skippedDestinations']
+    normalizedAlert: ReturnType<typeof normalizeAlert>
+    watchlist: ReturnType<typeof normalizeWatchlist>
+    customerSetup: ReturnType<typeof buildDwmWebhookCustomerSetupProof>
+    alertDestinationReadiness: ReturnType<typeof buildDwmAlertWebhookReadinessHandoff>
+    deliveryOutcome: ReturnType<typeof buildDwmOrgAlertWebhookDeliveryOutcome>
+    deliveryTimeline: ReturnType<typeof buildDwmWebhookDeliveryTimeline>
+    deliveryActionPlan: ReturnType<typeof buildDwmWebhookDeliveryActionPlan>
+    deliveryReplayGuard: ReturnType<typeof buildDwmWebhookDeliveryReplayGuard>
+    destinationAdminProof: ReturnType<typeof buildDwmWebhookDestinationAdminProof>
+    auditEventContracts: ReturnType<typeof buildDwmWebhookAuditEventContracts>
+}) {
+    const blockers = uniqueAlertDeliveryProofBlockers([
+        ...customerSetup.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...alertDestinationReadiness.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...deliveryOutcome.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...deliveryTimeline.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...deliveryActionPlan.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...deliveryReplayGuard.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...destinationAdminProof.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, true)),
+    ])
+    const blockingCodes = blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+    const auditEventIds = [...new Set(auditEventContracts.map(audit => audit.auditEventId).filter(Boolean))]
+    const recordedDeliveryCount = deliveryOutcome.counts.recorded
+    const status = customerSetup.status === 'permission_denied'
+        ? 'permission_denied'
+        : blockingCodes.length > 0
+            ? 'blocked'
+            : recordedDeliveryCount > 0
+                ? 'recorded'
+                : alertDestinationReadiness.ready
+                    ? 'ready'
+                    : 'needs_setup'
+
+    return {
+        schemaVersion: 'dwm.webhook.alert_delivery_proof.v1',
+        ownerId,
+        orgId: orgId || null,
+        alertId: normalizedAlert.id,
+        eventType,
+        status,
+        dryRun,
+        liveRequested,
+        liveDeliveryEnabled,
+        noNetwork: dryRun || !liveRequested || !liveDeliveryEnabled,
+        externalSendEnabled: liveRequested && !dryRun && liveDeliveryEnabled,
+        alert: {
+            id: normalizedAlert.id,
+            title: normalizedAlert.title,
+            severity: normalizedAlert.severity,
+            confidence: normalizedAlert.confidence,
+            sourceFamily: normalizedAlert.sourceFamily,
+            evidenceCount: normalizedAlert.evidenceCount,
+            route: normalizedAlert.route,
+            dedupeKey: normalizedAlert.dedupeKey,
+            casePath: normalizedAlert.casePath,
+            caseId: normalizedAlert.caseId,
+            alertUrl: normalizedAlert.alertUrl,
+            provenanceSummary: normalizedAlert.provenanceSummary,
+        },
+        watchlist,
+        destinationSelection: {
+            selectedCount: selectedDestinations.length,
+            skippedCount: skippedDestinations.length,
+            selectedDestinationIds: selectedDestinations.map(destination => destination.id),
+            skippedDestinations: skippedDestinations.map(destination => ({
+                id: destination.id,
+                orgId: destination.orgId,
+                reason: destination.reason,
+                blocking: destination.reason !== 'event_not_subscribed',
+            })),
+        },
+        setup: {
+            status: customerSetup.status,
+            summary: customerSetup.summary,
+            routeNames: customerSetup.routes,
+            stepStatuses: customerSetup.setupSteps.map(step => ({
+                id: step.id,
+                status: step.status,
+                route: step.route,
+                blockerCodes: step.blockers.map(blocker => blocker.code),
+            })),
+        },
+        delivery: {
+            ready: alertDestinationReadiness.ready,
+            state: alertDestinationReadiness.state,
+            outcomeCounts: deliveryOutcome.counts,
+            timelineCounts: deliveryTimeline.counts,
+            actionCounts: deliveryActionPlan.counts,
+            replayGuardCounts: deliveryReplayGuard.counts,
+            latestAuditEventIds: auditEventIds.slice(0, 10),
+        },
+        retryAndReplay: {
+            retryScheduledCount: deliveryActionPlan.counts.retryDryRun + deliveryActionPlan.counts.retryLive,
+            replayReadyCount: deliveryReplayGuard.counts.dryRunAllowed,
+            duplicateDeliveredCount: deliveryReplayGuard.counts.duplicateDelivered,
+            terminalFailureCount: deliveryReplayGuard.counts.terminalFailure,
+        },
+        dashboardProof: {
+            productProgress: destinationAdminProof.productProgress,
+            adminProofSummary: destinationAdminProof.summary,
+            customerSetupRoute: customerSetup.routes.list,
+            deliveryRoute: customerSetup.routes.deliver,
+            deliveryHistoryRoute: customerSetup.routes.deliveryHistory,
+        },
+        blockers,
+        blockerCodes: blockingCodes,
     }
 }
 
@@ -5699,6 +5866,27 @@ function uniqueOrgAlertOutcomeBlockers(blockers: ReturnType<typeof orgAlertOutco
 function uniqueAlertReadinessBlockers(blockers: ReturnType<typeof alertReadinessBlocker>[]) {
     const seen = new Set<string>()
     const unique: ReturnType<typeof alertReadinessBlocker>[] = []
+    for (const blocker of blockers) {
+        const key = `${blocker.code}:${blocker.destinationId || ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(blocker)
+    }
+    return unique
+}
+
+function alertDeliveryProofBlocker(
+    code: string,
+    message: string,
+    destinationId: string | null = null,
+    blocking = true
+) {
+    return { code, message, destinationId, blocking }
+}
+
+function uniqueAlertDeliveryProofBlockers(blockers: ReturnType<typeof alertDeliveryProofBlocker>[]) {
+    const seen = new Set<string>()
+    const unique: ReturnType<typeof alertDeliveryProofBlocker>[] = []
     for (const blocker of blockers) {
         const key = `${blocker.code}:${blocker.destinationId || ''}`
         if (seen.has(key)) continue
