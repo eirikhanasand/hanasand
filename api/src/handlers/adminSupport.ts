@@ -6114,6 +6114,7 @@ function toAccessRecoveryDecision(row: AccessRecoveryApprovalRow) {
 }
 
 function supportAccessRecoveryApprovalTimeline(filters: Record<string, unknown>, approvals: Array<Record<string, any>>) {
+    const auditFilters = accessRecoveryApprovalAuditFilters(filters)
     const timeline = approvals.map((approval) => {
         const actionType = approval.status === 'denied'
             ? 'support.organization.access_recovery.deny'
@@ -6178,22 +6179,37 @@ function supportAccessRecoveryApprovalTimeline(filters: Record<string, unknown>,
     return {
         schemaVersion: 'support.access_recovery.approval_timeline.v1',
         filters,
+        auditFilters,
         eventIds: timeline.map(event => event.id).filter(id => Number.isFinite(id) && id > 0),
         summary: auditTimelineSummary(timeline),
-        filterContract: supportAuditFilterContract(filters, timeline),
-        exportProof: supportAuditExportProof(filters, timeline),
-        workflowRollup: supportAuditWorkflowRollup(filters, timeline),
+        filterContract: supportAuditFilterContract(auditFilters, timeline),
+        exportProof: supportAuditExportProof(auditFilters, timeline),
+        workflowRollup: supportAuditWorkflowRollup(auditFilters, timeline),
         events: timeline,
         redacted: true,
         links: {
-            timeline: auditFilterQuery(filters),
+            timeline: auditFilterQuery(auditFilters),
             details: timeline.map(event => event.links.detail).filter(Boolean),
         },
         copyText: [
-            `Access recovery approval timeline: ${auditFilterQuery(filters)}`,
+            `Access recovery approval timeline: ${auditFilterQuery(auditFilters)}`,
             `Requests: ${approvals.map(approval => approval.requestId).filter(Boolean).join(', ') || 'none'}`,
             `Audit events: ${timeline.flatMap(event => event.context.auditEventIds || []).join(', ') || 'none'}`,
         ].join('\n'),
+    }
+}
+
+function accessRecoveryApprovalAuditFilters(filters: Record<string, unknown>) {
+    return {
+        org: filters.org || '',
+        request: filters.request || '',
+        action: 'support.organization.access_recovery',
+        outcome: filters.outcome || '',
+        source: 'admin',
+        service: 'hanasand-api',
+        from: filters.from || '',
+        to: filters.to || '',
+        limit: filters.limit || '',
     }
 }
 
