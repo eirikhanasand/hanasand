@@ -942,4 +942,140 @@ describe("dwm case workflow", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("keeps cases and case creation scoped to the requested organization inside a shared tenant", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dwm-case-org-scope-"));
+    try {
+      const store = new FileBackedScraperStore({ snapshotPath: join(dir, "store.json") });
+      const options = { store, frontier: new FocusedFrontier() };
+      const createdAt = "2026-06-28T14:00:00.000Z";
+      for (const organization of [
+        { id: "org_shared_a", tenantId: "tenant_shared", name: "Shared Tenant A", slug: "shared-a" },
+        { id: "org_shared_b", tenantId: "tenant_shared", name: "Shared Tenant B", slug: "shared-b" }
+      ]) {
+        (store as any).saveOrganization({
+          ...organization,
+          status: "active",
+          createdAt,
+          updatedAt: createdAt
+        });
+      }
+      for (const member of [
+        { id: "member_shared_a", organizationId: "org_shared_a", email: "analyst-a@example.test", userId: "analyst-a" },
+        { id: "member_shared_b", organizationId: "org_shared_b", email: "analyst-b@example.test", userId: "analyst-b" }
+      ]) {
+        (store as any).saveOrganizationMember({
+          ...member,
+          role: "analyst",
+          status: "active",
+          acceptedAt: createdAt,
+          createdAt,
+          updatedAt: createdAt
+        });
+      }
+      (store as any).saveDwmAlert({
+        id: "alert_shared_org_a",
+        tenantId: "tenant_shared",
+        organizationId: "org_shared_a",
+        severity: "high",
+        company: "Shared Tenant A",
+        matchedTerm: { kind: "domain", value: "shared-a.example" },
+        claimSummary: "Shared Tenant A domain appears in source-backed evidence.",
+        evidence: [],
+        reviewState: "new",
+        deliveryState: "ready_to_send",
+        updatedAt: createdAt
+      });
+      (store as any).saveCase({
+        id: "case_shared_org_b",
+        tenantId: "tenant_shared",
+        organizationId: "org_shared_b",
+        sourceType: "manual",
+        sourceId: "manual_org_b",
+        title: "Shared Tenant B only",
+        summary: "This case must not appear for organization A.",
+        priority: "high",
+        status: "open",
+        createdAt,
+        updatedAt: createdAt,
+        workflowEvents: []
+      });
+
+      const leakedListResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_shared_a", {
+        headers: { "x-user-email": "analyst-a@example.test" }
+      }), options);
+      const leakedList = await leakedListResponse.json() as any;
+      expect(leakedListResponse.status).toBe(200);
+      expect(leakedList.items).toHaveLength(0);
+      expect(leakedList.cases).toHaveLength(0);
+
+      const wrongOrgCreateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases", {
+        method: "POST",
+        headers: { "x-user-email": "analyst-b@example.test" },
+        body: JSON.stringify({
+          organizationId: "org_shared_b",
+          alertId: "alert_shared_org_a",
+          note: "Organization B must not open a case for organization A alert."
+        })
+      }), options);
+      expect(wrongOrgCreateResponse.status).toBe(404);
+      expect((await wrongOrgCreateResponse.json() as any).error.code).toBe("alert_not_found");
+      expect((store as any).listCases()).toHaveLength(1);
+
+      const createResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases", {
+        method: "POST",
+        headers: { "x-user-email": "analyst-a@example.test" },
+        body: JSON.stringify({
+          organizationId: "org_shared_a",
+          alertId: "alert_shared_org_a",
+          note: "Organization A owns this alert and opens the case."
+        })
+      }), options);
+      const created = await createResponse.json() as any;
+      expect(createResponse.status).toBe(201);
+      expect(created.case).toMatchObject({
+        tenantId: "tenant_shared",
+        organizationId: "org_shared_a",
+        alertId: "alert_shared_org_a",
+        status: "open"
+      });
+
+      const wrongOrgDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${created.case.id}?organizationId=org_shared_b`, {
+        headers: { "x-user-email": "analyst-b@example.test" }
+      }), options);
+      expect(wrongOrgDetailResponse.status).toBe(404);
+      expect((await wrongOrgDetailResponse.json() as any).error.code).toBe("case_not_found");
+
+      const wrongOrgUpdateResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${created.case.id}`, {
+        method: "PATCH",
+        headers: { "x-user-email": "analyst-b@example.test" },
+        body: JSON.stringify({
+          organizationId: "org_shared_b",
+          action: "close",
+          note: "Organization B must not close organization A case."
+        })
+      }), options);
+      expect(wrongOrgUpdateResponse.status).toBe(404);
+      expect((store as any).getCase(created.case.id).status).toBe("open");
+
+      const wrongOrgExportResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${created.case.id}/export?organizationId=org_shared_b`, {
+        headers: { "x-user-email": "analyst-b@example.test" }
+      }), options);
+      expect(wrongOrgExportResponse.status).toBe(404);
+
+      const orgAListResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_shared_a", {
+        headers: { "x-user-email": "analyst-a@example.test" }
+      }), options);
+      const orgAList = await orgAListResponse.json() as any;
+      expect(orgAList.items.map((item: any) => item.caseId)).toEqual([created.case.id]);
+
+      const orgBListResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_shared_b", {
+        headers: { "x-user-email": "analyst-b@example.test" }
+      }), options);
+      const orgBList = await orgBListResponse.json() as any;
+      expect(orgBList.items.map((item: any) => item.caseId)).toEqual(["case_shared_org_b"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

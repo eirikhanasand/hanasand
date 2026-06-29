@@ -48,6 +48,7 @@ export function listCases(url: URL, options: ApiServerOptions, request?: Request
   const filters = caseFiltersFromUrl(url);
   const cases = ((options.store as any).listCases?.() ?? [])
     .filter((row: AnalystCase) => row.tenantId === scope.tenantId)
+    .filter((row: AnalystCase) => caseMatchesOrganizationScope(row, scope.organizationId))
     .filter((row: AnalystCase) => caseMatchesFilters(row, filters, options))
     .sort((a: AnalystCase, b: AnalystCase) => sortCaseQueue(a, b));
   const items = cases.map((caseRecord: AnalystCase) => caseListItem(caseRecord, options, access));
@@ -75,7 +76,9 @@ export async function createCase(request: Request, options: ApiServerOptions): P
   if (!alertId) return json({ error: { code: "missing_alert_id", message: "A DWM alert ID is required to open a case." } }, 400);
 
   const alert = findDwmAlert(options, alertId);
-  if (!alert || alert.tenantId !== scope.tenantId) return json({ error: { code: "alert_not_found", message: "DWM alert not found for this organization." } }, 404);
+  if (!alert || alert.tenantId !== scope.tenantId || !alertMatchesOrganizationScope(alert, scope.organizationId)) {
+    return json({ error: { code: "alert_not_found", message: "DWM alert not found for this organization." } }, 404);
+  }
 
   const id = String(body.id ?? stableId("case", `${scope.tenantId}:${alert.id}`));
   const existing = (options.store as any).getCase?.(id) ?? findCaseByAlert(options, scope.tenantId, alert.id);
@@ -125,7 +128,7 @@ export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: strin
   const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const caseRecord = findCase(options, caseId);
-  if (!caseRecord || caseRecord.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
   return json(buildCaseDetail(caseRecord, options, scope.organization, access));
 }
 
@@ -135,7 +138,7 @@ export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: 
   const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const caseRecord = findCase(options, caseId);
-  if (!caseRecord || caseRecord.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
   return json(buildCaseExport(caseRecord, options, scope.organization, access, exportOptionsFromUrl(url)));
 }
 
@@ -147,7 +150,7 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   if (scope.error) return scope.error;
   const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
   if (access.error) return access.error;
-  if (existing.tenantId !== scope.tenantId) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
 
   const generatedAt = nowIso();
   const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? "case-api");
@@ -508,6 +511,14 @@ function caseMatchesFilters(caseRecord: AnalystCase, filters: CaseFilters, optio
   if ((filters.from || filters.to) && !caseHasTimelineInWindow(caseRecord, alert, deliveries, filters)) return false;
   if (filters.query && !caseSearchBlob(caseRecord, alert, deliveries).includes(filters.query)) return false;
   return true;
+}
+
+function caseMatchesOrganizationScope(caseRecord: AnalystCase, organizationId: string | undefined): boolean {
+  return !organizationId || !caseRecord.organizationId || caseRecord.organizationId === organizationId;
+}
+
+function alertMatchesOrganizationScope(alert: any, organizationId: string | undefined): boolean {
+  return !organizationId || !alert?.organizationId || alert.organizationId === organizationId;
 }
 
 function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access?: CaseAccessResult) {
