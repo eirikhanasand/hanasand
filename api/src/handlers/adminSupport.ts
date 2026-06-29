@@ -20,13 +20,19 @@ import {
 type AuditQuery = {
     q?: string
     org?: string
+    orgId?: string
+    organizationId?: string
     actor?: string
+    actorId?: string
     target?: string
+    targetId?: string
     action?: string
+    actionType?: string
     severity?: string
     source?: string
     service?: string
     entity?: string
+    entityId?: string
     entityType?: string
     request?: string
     requestId?: string
@@ -311,13 +317,19 @@ const supportInspectionFilters = new Set([
 const adminAuditFilters = new Set([
     'q',
     'org',
+    'orgId',
+    'organizationId',
     'actor',
+    'actorId',
     'target',
+    'targetId',
     'action',
+    'actionType',
     'severity',
     'source',
     'service',
     'entity',
+    'entityId',
     'entityType',
     'request',
     'requestId',
@@ -349,14 +361,14 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     }
 
     const q = text(query.q)
-    const org = text(query.org)
-    const actorFilter = text(query.actor)
-    const target = text(query.target)
-    const action = text(query.action)
+    const org = text(query.org || query.orgId || query.organizationId)
+    const actorFilter = text(query.actor || query.actorId)
+    const target = text(query.target || query.targetId)
+    const action = text(query.action || query.actionType)
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const source = text(query.source)
     const service = text(query.service)
-    const entity = text(query.entity)
+    const entity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const request = text(query.request || query.requestId)
     const correlation = text(query.correlation || query.correlationId)
