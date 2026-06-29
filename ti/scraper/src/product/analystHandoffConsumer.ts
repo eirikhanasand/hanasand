@@ -38,6 +38,7 @@ export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_
 export const ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION = "hanasand.analyst_handoff.readiness_matrix.v1" as const;
 export const PRODUCT_READINESS_SCHEMA_VERSION = "hanasand.product_readiness.v1" as const;
 export const BETA_READINESS_SCHEMA_VERSION = "hanasand.beta_readiness.v1" as const;
+export const BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION = "hanasand.beta_readiness.deploy_gate_coverage.v1" as const;
 export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
@@ -64,6 +65,7 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION,
   productReadiness: PRODUCT_READINESS_SCHEMA_VERSION,
   betaReadiness: BETA_READINESS_SCHEMA_VERSION,
+  betaDeployGateCoverage: BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION,
   uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION
 } as const;
 
@@ -525,6 +527,7 @@ export type AnalystHandoffValidationReport = {
   readinessMatrix: AnalystHandoffReadinessMatrix;
   productReadinessAggregate: ProductReadinessAggregate;
   betaReadiness: BetaReadinessArtifact;
+  betaDeployGateCoverage: BetaReadinessDeployGateCoverage;
   results: Array<{
     file?: string;
     ok: boolean;
@@ -567,6 +570,37 @@ export type AnalystHandoffDeployGateAssertions = {
   ownerLaneMap: Record<AnalystHandoffOwnerLane, AnalystHandoffOwnerLane>;
   rowsByOwner: Record<AnalystHandoffOwnerLane, { ok: boolean; rowCount: number; blockerCodes: string[] }>;
   rows: AnalystHandoffDeployGateRow[];
+};
+
+export type BetaReadinessDeployGateCoverageRow = {
+  capabilityId: BetaReadinessCapabilityId;
+  ownerLane: BetaReadinessRow["ownerLane"];
+  capabilityLabel: string;
+  route: string;
+  routeHandler: string;
+  storageModule: string;
+  proofRowId: string;
+  expectedAdapter: string;
+  payloadShape: string[];
+  proofCommand: string;
+  requiredDeployGateKinds: AnalystHandoffDeployGateRowKind[];
+  matchedDeployGateKinds: AnalystHandoffDeployGateRowKind[];
+  missingDeployGateKinds: AnalystHandoffDeployGateRowKind[];
+  productProofArtifactId: string;
+  productProofSchemaVersion: string;
+  customerVisibleState: ProductReadinessState;
+  deployRisk: ProductReadinessRow["deployRisk"];
+  blockerCodes: string[];
+  integrationStatus: "covered" | "product_proof_only" | "blocked";
+};
+
+export type BetaReadinessDeployGateCoverage = {
+  schemaVersion: typeof BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION;
+  ok: boolean;
+  checkedAt: string;
+  rowCount: number;
+  uncoveredCount: number;
+  rows: BetaReadinessDeployGateCoverageRow[];
 };
 
 export type AnalystHandoffReadinessCapability =
@@ -895,6 +929,7 @@ export function buildAnalystHandoffValidationReport(input: {
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
     result: results[index]
   })), productReadinessAggregate, checkedAt);
+  const betaDeployGateCoverage = buildBetaReadinessDeployGateCoverage(betaReadiness, deployGate, checkedAt);
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
     contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
@@ -909,8 +944,87 @@ export function buildAnalystHandoffValidationReport(input: {
     readinessMatrix,
     productReadinessAggregate,
     betaReadiness,
+    betaDeployGateCoverage,
     results
   };
+}
+
+export function buildBetaReadinessDeployGateCoverage(
+  betaReadiness: BetaReadinessArtifact,
+  deployGate: AnalystHandoffDeployGateAssertions,
+  checkedAt: string = nowIso()
+): BetaReadinessDeployGateCoverage {
+  const rows = betaReadiness.rows.map((row): BetaReadinessDeployGateCoverageRow => {
+    const requiredDeployGateKinds = deployGateKindsForBetaCapability(row.id);
+    const matchedDeployGateRows = deployGate.rows.filter((deployRow) => requiredDeployGateKinds.includes(deployRow.kind));
+    const matchedKinds = Array.from(new Set(matchedDeployGateRows.map((deployRow) => deployRow.kind)));
+    const missingKinds = requiredDeployGateKinds.filter((kind) => !matchedKinds.includes(kind));
+    const deployGateBlockers = matchedDeployGateRows.flatMap((deployRow) => deployRow.blockerCodes);
+    const blockerCodes = Array.from(new Set([
+      ...row.blockers,
+      ...deployGateBlockers,
+      ...missingKinds.map((kind) => `missing_deploy_gate_${kind}`)
+    ].filter(Boolean)));
+    const integrationStatus = blockerCodes.length
+      ? "blocked"
+      : requiredDeployGateKinds.length
+        ? "covered"
+        : "product_proof_only";
+    return {
+      capabilityId: row.id,
+      ownerLane: row.ownerLane,
+      capabilityLabel: row.capabilityLabel,
+      route: row.workflowContract.route,
+      routeHandler: row.workflowContract.routeHandler,
+      storageModule: row.workflowContract.storageModule,
+      proofRowId: row.workflowContract.proofRowId,
+      expectedAdapter: row.expectedAdapter,
+      payloadShape: row.payloadShape,
+      proofCommand: row.proofCommand,
+      requiredDeployGateKinds,
+      matchedDeployGateKinds: matchedKinds,
+      missingDeployGateKinds: missingKinds,
+      productProofArtifactId: row.proofArtifact.artifactId,
+      productProofSchemaVersion: row.proofArtifact.schemaVersion,
+      customerVisibleState: row.customerVisibleState,
+      deployRisk: row.deployRisk,
+      blockerCodes,
+      integrationStatus
+    };
+  });
+  return {
+    schemaVersion: BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION,
+    ok: rows.every((row) => row.integrationStatus !== "blocked"),
+    checkedAt,
+    rowCount: rows.length,
+    uncoveredCount: rows.filter((row) => row.integrationStatus === "blocked").length,
+    rows
+  };
+}
+
+function deployGateKindsForBetaCapability(id: BetaReadinessCapabilityId): AnalystHandoffDeployGateRowKind[] {
+  switch (id) {
+    case "create_organization":
+      return ["org_lifecycle"];
+    case "invite_teammate":
+      return ["support_executor"];
+    case "generate_alert":
+      return ["org_alert_watchlist_readiness"];
+    case "configure_destinations":
+      return ["webhook_destination"];
+    case "open_link_case":
+      return ["alert_case_handoff"];
+    case "deliver_discord_webhook":
+      return ["webhook_destination"];
+    case "support_access_recovery":
+      return ["support_executor"];
+    case "public_ti_actor_relevance":
+      return ["public_ti_readiness"];
+    case "create_shared_watchlist":
+    case "activate_source_coverage":
+    case "work_alert":
+      return [];
+  }
 }
 
 export function buildDeployGateAssertions(input: Array<{

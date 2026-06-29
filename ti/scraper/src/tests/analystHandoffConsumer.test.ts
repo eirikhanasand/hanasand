@@ -602,6 +602,39 @@ describe("analyst handoff consumer validation", () => {
       status: "ready",
       requiredRoute: "GET /v1/organizations/:id/entitlements/readiness"
     });
+    expect(report.betaDeployGateCoverage.schemaVersion).toBe("hanasand.beta_readiness.deploy_gate_coverage.v1");
+    expect(report.betaDeployGateCoverage.rowCount).toBe(report.betaReadiness.rowCount);
+    expect(report.betaDeployGateCoverage.rows.every((row) =>
+      row.route
+      && row.routeHandler
+      && row.storageModule
+      && row.proofRowId
+      && row.expectedAdapter
+      && row.payloadShape.length
+      && row.proofCommand
+      && row.productProofArtifactId
+    )).toBe(true);
+    expect(report.betaDeployGateCoverage.rows.find((row) => row.capabilityId === "generate_alert")).toMatchObject({
+      ownerLane: "alert",
+      route: "POST /v1/dwm/alerts/rebuild",
+      expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+      requiredDeployGateKinds: ["org_alert_watchlist_readiness"],
+      matchedDeployGateKinds: ["org_alert_watchlist_readiness"],
+      integrationStatus: "blocked",
+      blockerCodes: ["missing_org"]
+    });
+    expect(report.betaDeployGateCoverage.rows.find((row) => row.capabilityId === "configure_destinations")).toMatchObject({
+      ownerLane: "webhook",
+      requiredDeployGateKinds: ["webhook_destination"],
+      matchedDeployGateKinds: ["webhook_destination"],
+      blockerCodes: ["no_live_endpoint"]
+    });
+    expect(report.betaDeployGateCoverage.rows.find((row) => row.capabilityId === "create_shared_watchlist")).toMatchObject({
+      ownerLane: "watchlist",
+      integrationStatus: "product_proof_only",
+      requiredDeployGateKinds: [],
+      matchedDeployGateKinds: []
+    });
   });
 
   test("emits a product readiness aggregate for Worker 3 and UI consumers", () => {
@@ -845,6 +878,18 @@ describe("analyst handoff consumer validation", () => {
       }
     });
     expect(validateBetaReadinessArtifact(beta)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(report.betaDeployGateCoverage).toMatchObject({
+      schemaVersion: "hanasand.beta_readiness.deploy_gate_coverage.v1",
+      ok: true,
+      uncoveredCount: 0,
+      rowCount: beta.rowCount
+    });
+    expect(report.betaDeployGateCoverage.rows.find((row) => row.capabilityId === "generate_alert")).toMatchObject({
+      integrationStatus: "covered",
+      requiredDeployGateKinds: ["org_alert_watchlist_readiness"],
+      matchedDeployGateKinds: ["org_alert_watchlist_readiness"],
+      blockerCodes: []
+    });
     const serialized = JSON.stringify(beta);
     expect(serialized).not.toContain("\"stages\"");
     expect(serialized).not.toContain("\"deployGate\"");
