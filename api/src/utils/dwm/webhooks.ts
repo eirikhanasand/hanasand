@@ -1148,6 +1148,7 @@ export function buildDwmWebhookDeliveryTimeline({
                 terminalFailure: terminalFailureCount > 0,
             },
             latestReceipt: latest,
+            operationLinks: latest.operationLinks,
             receipts: sorted.slice(0, 10),
             blockers,
             blockingCodes: blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code),
@@ -1279,6 +1280,7 @@ export function buildDwmWebhookDeliveryActionPlan({
                 testDestination: latest.destinationId ? `POST /api/dwm/webhook-destinations/${latest.destinationId}/test` : null,
                 updateDestination: latest.destinationId ? `PUT /api/dwm/webhook-destinations/${latest.destinationId}` : null,
             },
+            operationLinks: latest.operationLinks,
             requests: {
                 dryRunRetry: dryRunRequest
                     ? {

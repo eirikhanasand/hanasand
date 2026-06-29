@@ -2660,6 +2660,7 @@ expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts sh
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
 expect(deliveryTimelineReplay?.latestReceipt.discordPreview?.fieldNames.includes('Alert URL') && deliveryTimelineReplay.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery timeline should preserve Discord preview and audit proof for replayed alerts.', deliveryTimelineReplay)
 expect(deliveryTimelineReplay?.watchlist.id === 'watchlist_item_replay_contract' && deliveryTimelineReplay.casePath === replayWorkflowAlert.casePath, 'Delivery timeline should keep watchlist and case context.', deliveryTimelineReplay)
+expect(deliveryTimelineReplay?.operationLinks?.deliveryHistory.includes('destination_replay_contract') && deliveryTimelineReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery timeline should expose stable operation links without requiring consumers to inspect receipt internals.', deliveryTimelineReplay)
 expect(deliveryTimelineRetry?.status === 'retry_scheduled' && deliveryTimelineRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryTimelineRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery timeline should expose retry/backoff state by alert.', deliveryTimelineRetry)
 expect(deliveryTimelineTerminal?.status === 'terminal_failure' && deliveryTimelineTerminal.retry.terminalFailure === true, 'Delivery timeline should expose terminal failure state by alert.', deliveryTimelineTerminal)
 expect(foreignDeliveryTimeline.timelines.length === 1 && foreignDeliveryTimeline.timelines.every(item => item.orgId === 'org_foreign'), 'Delivery timeline org filter should not leak another org delivery history.', foreignDeliveryTimeline)
@@ -2669,6 +2670,7 @@ expect(!JSON.stringify(deliveryTimeline).includes(secret), 'Delivery timeline sh
 expect(deliveryActionPlan.schemaVersion === 'dwm.webhook.delivery_action_plan.v1' && deliveryActionPlan.noNetwork === true, 'Delivery action plan should expose safe next steps without network sends.', deliveryActionPlan)
 expect(deliveryActionRetry?.action === 'retry_dry_run' && deliveryActionRetry.requests.dryRunRetry?.canSend === true && deliveryActionRetry.requests.dryRunRetry.body.dedupeKey === 'dwm_dedupe_live_contract', 'Delivery action plan should build dry-run retry actions for retryable failures.', deliveryActionRetry)
 expect(deliveryActionRetry?.requests.liveRetry?.canSend === false && deliveryActionRetry.requests.liveRetry.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery action plan should block live retry unless live delivery is configured.', deliveryActionRetry)
+expect(deliveryActionRetry?.operationLinks?.retryDryRun === 'POST /api/dwm/webhook-deliveries' && deliveryActionRetry.operationLinks.deliveryDetail.includes('delivery_live_failed_retry_contract'), 'Delivery action plan should expose operation links for dry-run retry and delivery detail.', deliveryActionRetry)
 expect(deliveryActionTerminal?.action === 'rotate_or_disable_destination' && deliveryActionTerminal.audit.nextAction === 'destination.update_requested', 'Delivery action plan should guide terminal failures to destination remediation.', deliveryActionTerminal)
 expect(deliveryActionDelivered?.action === 'monitor' && deliveryActionDelivered.status === 'delivered', 'Delivery action plan should mark delivered attempts as monitor-only.', deliveryActionDelivered)
 expect(nonmemberDeliveryActionPlan.actions.length === 0 && nonmemberDeliveryActionPlan.blockers.some(item => item.code === 'permission_denied'), 'Delivery action plan should deny nonmembers without leaking actions.', nonmemberDeliveryActionPlan)
@@ -2990,6 +2992,7 @@ console.log(JSON.stringify({
             'deliveryTimeline.schemaVersion',
             'deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
             'deliveryTimeline.timelines[].latestReceipt.discordPreview.fieldNames',
+            'deliveryTimeline.timelines[].operationLinks.deliveryHistory',
             'deliveryTimeline.timelines[].retry.nextRetryAt',
             'deliveryTimeline.timelines[].status',
             'deliveryTimeline.timelines[].blockers[].code',
@@ -2997,6 +3000,7 @@ console.log(JSON.stringify({
             'deliveryActionPlan.actions[].action',
             'deliveryActionPlan.actions[].requests.dryRunRetry.body',
             'deliveryActionPlan.actions[].requests.liveRetry.blockers[].code',
+            'deliveryActionPlan.actions[].operationLinks.retryDryRun',
             'deliveryActionPlan.actions[].audit.nextAction',
             'deliveryReplayGuard.schemaVersion',
             'deliveryReplayGuard.entries[].guard.dryRunAllowed',
