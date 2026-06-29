@@ -1,0 +1,199 @@
+import { describe, expect, test } from "bun:test";
+import {
+  DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
+  DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+  buildCaseCustomerNotificationEventContract,
+  buildWebhookDeliveryEventContract,
+  validateWebhookEventChain
+} from "../product/webhookEventContract.ts";
+import fixture from "./fixtures/webhook-event-chain-happy.json";
+
+describe("webhook event contract", () => {
+  test("builds and validates delivered webhook to customer notification chain", () => {
+    const alert = alertFixture();
+    const delivery = deliveryFixture();
+    const receipt = notificationReceiptFixture();
+    const deliveryEvent = buildWebhookDeliveryEventContract({ delivery, alert, actor: "analyst_acme" });
+    const notificationEvent = buildCaseCustomerNotificationEventContract({ receipt, caseRecord: caseFixture(), alert });
+    const chain = validateWebhookEventChain({
+      deliveryEvent,
+      customerNotificationEvent: notificationEvent,
+      checkedAt: "2026-06-29T12:30:00.000Z"
+    });
+
+    expect(deliveryEvent).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+      eventKind: "webhook.delivery_recorded",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      webhookDeliveryId: "delivery_acme_lumma",
+      webhookDestinationId: "webhook_discord",
+      status: "delivered",
+      delivery: {
+        deliveryKind: "discord",
+        dryRun: false,
+        payloadHash: "payload_hash_acme"
+      },
+      evidence: {
+        evidenceCount: 1,
+        captureIds: ["capture_acme_lumma"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_lumma"]
+      }
+    });
+    expect(notificationEvent).toMatchObject({
+      eventKind: "case.customer_notification_recorded",
+      webhookDeliveryId: "delivery_acme_lumma",
+      customerNotification: {
+        deliveryMode: "webhook_delivery",
+        rationale: "Customer SOC acknowledged delivered Discord evidence."
+      }
+    });
+    expect(chain).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
+      ok: true,
+      blockers: [],
+      identity: {
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme_lumma",
+        caseId: "case_acme_lumma",
+        webhookDeliveryId: "delivery_acme_lumma",
+        webhookDestinationId: "webhook_discord",
+        dedupeKey: "dedupe_acme_lumma"
+      }
+    });
+    expect(chain.events).toHaveLength(2);
+  });
+
+  test("validates checked-in fixture as integration proof", () => {
+    const chain = validateWebhookEventChain({
+      deliveryEvent: fixture.events[0] as any,
+      customerNotificationEvent: fixture.events[1] as any,
+      checkedAt: fixture.checkedAt
+    });
+    expect(chain.ok).toBe(true);
+    expect(chain.identity).toMatchObject(fixture.identity);
+    expect(chain.events.map((event) => event.eventKind)).toEqual(["webhook.delivery_recorded", "case.customer_notification_recorded"]);
+  });
+
+  test("returns owner-coded blockers for dry run mismatched or missing provenance chains", () => {
+    const alert = {
+      ...alertFixture(),
+      evidence: [],
+      provenance: { captureIds: [] },
+      workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+    };
+    const deliveryEvent = buildWebhookDeliveryEventContract({
+      delivery: { ...deliveryFixture(), id: "delivery_failed", status: "failed", dryRun: true, webhookDestinationId: "webhook_a" },
+      alert
+    });
+    const notificationEvent = buildCaseCustomerNotificationEventContract({
+      receipt: {
+        ...notificationReceiptFixture(),
+        webhookDeliveryId: "delivery_other",
+        webhookDestinationId: "webhook_b",
+        evidence: { evidenceCount: 0, sourceIds: [], contentHashes: [] }
+      },
+      caseRecord: caseFixture(),
+      alert
+    });
+    const chain = validateWebhookEventChain({
+      deliveryEvent,
+      customerNotificationEvent: notificationEvent,
+      checkedAt: "2026-06-29T12:31:00.000Z"
+    });
+    const codes = chain.blockers.map((item) => item.code);
+    expect(chain.ok).toBe(false);
+    expect(codes).toEqual(expect.arrayContaining([
+      "delivery_not_delivered",
+      "dry_run_delivery",
+      "identity_mismatch",
+      "notification_delivery_mismatch",
+      "missing_provenance"
+    ]));
+    expect(chain.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ ownerLane: "webhook", path: "deliveryEvent.status" }),
+      expect.objectContaining({ ownerLane: "case", path: "customerNotificationEvent.webhookDeliveryId" }),
+      expect.objectContaining({ ownerLane: "source", path: "deliveryEvent.evidence" })
+    ]));
+  });
+});
+
+function alertFixture() {
+  return {
+    id: "alert_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    caseId: "case_acme_lumma",
+    caseIdCandidate: "case_acme_lumma",
+    dedupeKey: "dedupe_acme_lumma",
+    provenance: { captureIds: ["capture_acme_lumma"] },
+    workflowContext: {
+      organizationId: "org_acme",
+      captureIds: ["capture_acme_lumma"],
+      evidenceCount: 1,
+      dedupeKey: "dedupe_acme_lumma"
+    },
+    evidence: [{
+      id: "evidence_acme_lumma",
+      sourceId: "src_acme_tg",
+      contentHash: "hash_acme_lumma"
+    }]
+  };
+}
+
+function deliveryFixture() {
+  return {
+    id: "delivery_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    alertId: "alert_acme_lumma",
+    caseId: "case_acme_lumma",
+    webhookDestinationId: "webhook_discord",
+    status: "delivered",
+    deliveryKind: "discord",
+    attemptedAt: "2026-06-29T12:00:00.000Z",
+    httpStatus: 204,
+    endpointHash: "endpoint_hash_acme",
+    payloadHash: "payload_hash_acme",
+    dedupeKey: "dedupe_acme_lumma",
+    idempotencyKey: "idem_acme_lumma",
+    dryRun: false
+  };
+}
+
+function notificationReceiptFixture() {
+  return {
+    id: "notification_acme_lumma",
+    caseId: "case_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    alertId: "alert_acme_lumma",
+    at: "2026-06-29T12:05:00.000Z",
+    actor: "analyst_acme",
+    deliveryMode: "webhook_delivery",
+    rationale: "Customer SOC acknowledged delivered Discord evidence.",
+    idempotencyKey: "notif_idem_acme_lumma",
+    webhookDeliveryId: "delivery_acme_lumma",
+    webhookDestinationId: "webhook_discord",
+    webhookStatus: "delivered",
+    evidence: {
+      evidenceCount: 1,
+      sourceIds: ["src_acme_tg"],
+      contentHashes: ["hash_acme_lumma"],
+      captureIds: ["capture_acme_lumma"]
+    }
+  };
+}
+
+function caseFixture() {
+  return {
+    id: "case_acme_lumma",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    alertId: "alert_acme_lumma"
+  };
+}

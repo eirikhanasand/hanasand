@@ -1,0 +1,240 @@
+import { stableId, uniqueStrings } from "../utils.ts";
+
+export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
+export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v1" as const;
+
+export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
+
+export type DwmWebhookEventContract = {
+  schemaVersion: typeof DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION;
+  id: string;
+  eventKind: DwmWebhookEventKind;
+  occurredAt: string;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  dedupeKey?: string;
+  idempotencyKey?: string;
+  webhookDeliveryId?: string;
+  webhookDestinationId?: string;
+  status?: string;
+  actor?: string;
+  route?: string;
+  delivery?: {
+    deliveryKind?: string;
+    httpStatus?: number;
+    dryRun?: boolean;
+    endpointHash?: string;
+    payloadHash?: string;
+  };
+  customerNotification?: {
+    deliveryMode?: string;
+    externalReference?: string;
+    rationale?: string;
+  };
+  evidence: {
+    evidenceCount: number;
+    captureIds: string[];
+    sourceIds: string[];
+    contentHashes: string[];
+  };
+};
+
+export type DwmWebhookEventChain = {
+  schemaVersion: typeof DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  blockers: DwmWebhookEventChainBlocker[];
+  identity?: {
+    tenantId: string;
+    organizationId?: string;
+    alertId: string;
+    caseId?: string;
+    webhookDeliveryId?: string;
+    webhookDestinationId?: string;
+    dedupeKey?: string;
+  };
+  events: DwmWebhookEventContract[];
+};
+
+export type DwmWebhookEventChainBlocker = {
+  code:
+    | "missing_delivery_event"
+    | "missing_customer_notification_event"
+    | "delivery_not_delivered"
+    | "dry_run_delivery"
+    | "identity_mismatch"
+    | "notification_delivery_mismatch"
+    | "missing_case_id"
+    | "missing_provenance";
+  ownerLane: "webhook" | "case" | "source";
+  message: string;
+  path: string;
+};
+
+export function buildWebhookDeliveryEventContract(input: {
+  delivery: Record<string, any>;
+  alert?: Record<string, any>;
+  caseId?: string;
+  actor?: string;
+  occurredAt?: string;
+}): DwmWebhookEventContract {
+  const delivery = input.delivery;
+  const alert = input.alert ?? {};
+  const alertId = stringValue(delivery.alertId ?? alert.id) ?? "";
+  const caseId = stringValue(input.caseId ?? delivery.caseId ?? alert.caseId ?? alert.caseIdCandidate);
+  const evidence = evidenceFromAlertAndDelivery(alert, delivery);
+  return {
+    schemaVersion: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_event", `delivery:${delivery.id ?? ""}:${alertId}:${delivery.status ?? ""}`),
+    eventKind: "webhook.delivery_recorded",
+    occurredAt: stringValue(input.occurredAt ?? delivery.attemptedAt ?? delivery.createdAt ?? alert.updatedAt) || new Date(0).toISOString(),
+    tenantId: stringValue(delivery.tenantId ?? alert.tenantId) ?? "",
+    organizationId: stringValue(delivery.organizationId ?? alert.organizationId ?? alert.workflowContext?.organizationId ?? alert.webhookContext?.organizationId),
+    alertId,
+    caseId,
+    dedupeKey: stringValue(delivery.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.workflowContext?.dedupeKey),
+    idempotencyKey: stringValue(delivery.idempotencyKey ?? alert.webhookContext?.idempotencyKey ?? alert.workflowContext?.idempotencyKey),
+    webhookDeliveryId: stringValue(delivery.id),
+    webhookDestinationId: stringValue(delivery.webhookDestinationId),
+    status: stringValue(delivery.status),
+    actor: stringValue(input.actor ?? delivery.actor ?? delivery.createdBy),
+    route: caseId ? `/v1/cases/${encodeURIComponent(caseId)}` : undefined,
+    delivery: {
+      deliveryKind: stringValue(delivery.deliveryKind),
+      httpStatus: typeof delivery.httpStatus === "number" ? delivery.httpStatus : undefined,
+      dryRun: Boolean(delivery.dryRun),
+      endpointHash: stringValue(delivery.endpointHash),
+      payloadHash: stringValue(delivery.payloadHash)
+    },
+    evidence
+  };
+}
+
+export function buildCaseCustomerNotificationEventContract(input: {
+  receipt: Record<string, any>;
+  caseRecord?: Record<string, any>;
+  alert?: Record<string, any>;
+}): DwmWebhookEventContract {
+  const receipt = input.receipt;
+  const caseRecord = input.caseRecord ?? {};
+  const alert = input.alert ?? {};
+  const alertId = stringValue(receipt.alertId ?? caseRecord.alertId ?? alert.id) ?? "";
+  const caseId = stringValue(receipt.caseId ?? caseRecord.id);
+  const evidence = evidenceFromReceiptCaseAndAlert(receipt, caseRecord, alert);
+  return {
+    schemaVersion: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_event", `customer_notification:${receipt.id ?? ""}:${caseId}:${receipt.webhookDeliveryId ?? receipt.externalReference ?? ""}`),
+    eventKind: "case.customer_notification_recorded",
+    occurredAt: stringValue(receipt.at ?? receipt.createdAt ?? caseRecord.updatedAt) || new Date(0).toISOString(),
+    tenantId: stringValue(receipt.tenantId ?? caseRecord.tenantId ?? alert.tenantId) ?? "",
+    organizationId: stringValue(receipt.organizationId ?? caseRecord.organizationId ?? alert.organizationId),
+    alertId,
+    caseId,
+    dedupeKey: stringValue(receipt.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? alert.workflowContext?.dedupeKey),
+    idempotencyKey: stringValue(receipt.idempotencyKey),
+    webhookDeliveryId: stringValue(receipt.webhookDeliveryId),
+    webhookDestinationId: stringValue(receipt.webhookDestinationId),
+    status: stringValue(receipt.webhookStatus),
+    actor: stringValue(receipt.actor ?? receipt.createdBy),
+    route: caseId ? `/v1/cases/${encodeURIComponent(caseId)}` : undefined,
+    customerNotification: {
+      deliveryMode: stringValue(receipt.deliveryMode),
+      externalReference: stringValue(receipt.externalReference),
+      rationale: stringValue(receipt.rationale)
+    },
+    evidence
+  };
+}
+
+export function validateWebhookEventChain(input: {
+  deliveryEvent?: DwmWebhookEventContract;
+  customerNotificationEvent?: DwmWebhookEventContract;
+  checkedAt?: string;
+}): DwmWebhookEventChain {
+  const blockers: DwmWebhookEventChainBlocker[] = [];
+  const delivery = input.deliveryEvent;
+  const notification = input.customerNotificationEvent;
+
+  if (!delivery) blockers.push(blocker("missing_delivery_event", "webhook", "deliveryEvent", "Webhook delivery event is required."));
+  if (!notification) blockers.push(blocker("missing_customer_notification_event", "case", "customerNotificationEvent", "Customer notification event is required."));
+
+  if (delivery) {
+    if (delivery.status !== "delivered") blockers.push(blocker("delivery_not_delivered", "webhook", "deliveryEvent.status", "Webhook delivery must be delivered."));
+    if (delivery.delivery?.dryRun) blockers.push(blocker("dry_run_delivery", "webhook", "deliveryEvent.delivery.dryRun", "Dry-run delivery cannot prove customer notification."));
+    if (!delivery.caseId) blockers.push(blocker("missing_case_id", "case", "deliveryEvent.caseId", "Webhook delivery event must resolve to a case id."));
+    if (!hasProvenance(delivery)) blockers.push(blocker("missing_provenance", "source", "deliveryEvent.evidence", "Webhook delivery event must retain evidence provenance."));
+  }
+
+  if (notification) {
+    if (!notification.caseId) blockers.push(blocker("missing_case_id", "case", "customerNotificationEvent.caseId", "Customer notification must reference a case id."));
+    if (!hasProvenance(notification)) blockers.push(blocker("missing_provenance", "source", "customerNotificationEvent.evidence", "Customer notification must retain evidence provenance."));
+  }
+
+  if (delivery && notification) {
+    for (const [path, left, right] of [
+      ["tenantId", delivery.tenantId, notification.tenantId],
+      ["organizationId", delivery.organizationId, notification.organizationId],
+      ["alertId", delivery.alertId, notification.alertId],
+      ["caseId", delivery.caseId, notification.caseId],
+      ["webhookDestinationId", delivery.webhookDestinationId, notification.webhookDestinationId]
+    ] as const) {
+      if (left && right && left !== right) blockers.push(blocker("identity_mismatch", path === "webhookDestinationId" ? "webhook" : "case", path, `Webhook event ${path} does not match customer notification.`));
+    }
+    if (notification.webhookDeliveryId && delivery.webhookDeliveryId && notification.webhookDeliveryId !== delivery.webhookDeliveryId) {
+      blockers.push(blocker("notification_delivery_mismatch", "case", "customerNotificationEvent.webhookDeliveryId", "Customer notification references a different webhook delivery."));
+    }
+  }
+
+  const identitySource = notification ?? delivery;
+  return {
+    schemaVersion: DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
+    checkedAt: input.checkedAt ?? new Date(0).toISOString(),
+    ok: blockers.length === 0,
+    blockers,
+    identity: identitySource ? {
+      tenantId: identitySource.tenantId,
+      organizationId: identitySource.organizationId,
+      alertId: identitySource.alertId,
+      caseId: identitySource.caseId,
+      webhookDeliveryId: identitySource.webhookDeliveryId,
+      webhookDestinationId: identitySource.webhookDestinationId,
+      dedupeKey: identitySource.dedupeKey
+    } : undefined,
+    events: [delivery, notification].filter((event): event is DwmWebhookEventContract => Boolean(event))
+  };
+}
+
+function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
+  const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  return {
+    evidenceCount: Number(alert.workflowContext?.evidenceCount ?? alert.webhookContext?.evidenceCount ?? evidence.length ?? 0),
+    captureIds: uniqueStrings([...(alert.provenance?.captureIds ?? []), ...(alert.workflowContext?.captureIds ?? []), ...(alert.webhookContext?.captureIds ?? []), ...(delivery.captureIds ?? [])].map(String)),
+    sourceIds: uniqueStrings(evidence.map((row: any) => row.sourceId).filter(Boolean).map(String)),
+    contentHashes: uniqueStrings(evidence.map((row: any) => row.contentHash).filter(Boolean).map(String))
+  };
+}
+
+function evidenceFromReceiptCaseAndAlert(receipt: Record<string, any>, caseRecord: Record<string, any>, alert: Record<string, any>): DwmWebhookEventContract["evidence"] {
+  const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  return {
+    evidenceCount: Number(receipt.evidence?.evidenceCount ?? evidence.length ?? 0),
+    captureIds: uniqueStrings([...(receipt.evidence?.captureIds ?? []), ...(alert.provenance?.captureIds ?? [])].map(String)),
+    sourceIds: uniqueStrings([...(receipt.evidence?.sourceIds ?? []), ...evidence.map((row: any) => row.sourceId)].filter(Boolean).map(String)),
+    contentHashes: uniqueStrings([...(receipt.evidence?.contentHashes ?? []), ...evidence.map((row: any) => row.contentHash)].filter(Boolean).map(String))
+  };
+}
+
+function hasProvenance(event: DwmWebhookEventContract): boolean {
+  return event.evidence.evidenceCount > 0 || event.evidence.captureIds.length > 0 || event.evidence.sourceIds.length > 0 || event.evidence.contentHashes.length > 0;
+}
+
+function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhookEventChainBlocker["ownerLane"], path: string, message: string): DwmWebhookEventChainBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function stringValue(value: unknown): string | undefined {
+  const text = String(value ?? "").trim();
+  return text || undefined;
+}
