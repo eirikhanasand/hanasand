@@ -11,6 +11,7 @@ import {
   DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION,
   DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION,
   DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION,
+  DWM_WEBHOOK_SOURCE_FRESHNESS_DISPATCH_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
@@ -19,6 +20,7 @@ import {
   buildWebhookDeliveryPersistenceProof,
   buildWebhookDispatchReadiness,
   buildWebhookOrgWatchlistDispatchPacket,
+  buildWebhookSourceFreshnessDispatchPacket,
   buildWebhookDispatchReplayHistory,
   buildWebhookDispatchReplayRequest,
   buildWebhookDispatchRetryAudit,
@@ -347,6 +349,154 @@ describe("webhook event contract", () => {
       watchlistItemIds: [],
       alertGeneratorKeys: []
     });
+  });
+
+  test("packages source freshness gate for webhook dashboard and source consumers", () => {
+    const alert = {
+      ...alertFixture(),
+      alertDetailPath: "/dashboard/dwm/alerts/alert_acme_lumma"
+    };
+    const readiness = buildWebhookDispatchReadiness({
+      alert,
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const packet = buildWebhookSourceFreshnessDispatchPacket({
+      readiness,
+      alert,
+      sourceFreshness: sourceFreshnessPacketFixture(),
+      generatedAt: "2026-06-29T12:21:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_SOURCE_FRESHNESS_DISPATCH_PACKET_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      readiness: {
+        schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+        readinessId: readiness.id,
+        ok: true,
+        blockerCodes: []
+      },
+      sourceFreshness: {
+        schemaVersion: "ti.source_provenance_source_freshness_gap_packet.v1",
+        packetId: "source_freshness_acme_lumma",
+        state: "fresh",
+        newestEvidenceAt: "2026-06-29T10:15:00.000Z",
+        maxAgeDays: 7,
+        gapCodes: [],
+        nextTransitions: []
+      },
+      dispatch: {
+        route: "/v1/dwm/webhooks/deliver",
+        dryRun: false,
+        destinationIds: ["webhook_discord"],
+        destinationKinds: ["discord"],
+        idempotencyKey: readiness.dispatch.idempotencyKey
+      },
+      consumerContracts: {
+        webhookDelivery: {
+          requiredFields: expect.arrayContaining(["sourceFreshness.packetId", "freshness.state", "evidence.captureIds"]),
+          sourceSchema: "ti.source_provenance_source_freshness_gap_packet.v1"
+        },
+        dashboard: {
+          requiredFields: expect.arrayContaining(["sourceFreshness.gapCodes", "sourceFreshness.nextTransitions"]),
+          alertDetailRoute: "/dashboard/dwm/alerts/alert_acme_lumma"
+        },
+        sourceOps: {
+          actionRoute: "/v1/dwm/source-requests"
+        }
+      },
+      blockers: []
+    });
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+    expect(JSON.stringify(packet)).not.toContain("endpoint_hash_acme");
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_lumma");
+  });
+
+  test("blocks webhook dispatch on stale source freshness org mismatch and unsupported destination", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        provenance: { captureIds: [] },
+        workflowContext: {
+          organizationId: "org_acme",
+          captureIds: [],
+          evidenceCount: 0,
+          dedupeKey: "dedupe_acme_lumma"
+        },
+        evidence: []
+      },
+      destinations: [{ ...destinationFixture(), deliveryKind: "email", type: "email" }],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const packet = buildWebhookSourceFreshnessDispatchPacket({
+      readiness,
+      sourceFreshness: sourceFreshnessPacketFixture({
+        organizationId: "org_other",
+        freshness: {
+          state: "stale",
+          newestEvidenceAt: "2026-06-01T10:15:00.000Z",
+          maxAgeDays: 7
+        },
+        gaps: [{
+          code: "stale_source_evidence",
+          ownerLane: "source",
+          stage: "enrichment_freshness",
+          path: "enrichmentFreshness.newestEvidenceAt",
+          message: "Newest case-ready source evidence is older than 7 days.",
+          nextAction: "inspect_source_health"
+        }],
+        lifecycle: {
+          stages: ["enrichment_freshness"],
+          blockedStages: ["enrichment_freshness"],
+          nextTransitions: ["inspect_source_health"]
+        }
+      }),
+      supportedDestinationKinds: ["discord"],
+      generatedAt: "2026-06-29T12:21:00.000Z"
+    });
+
+    expect(readiness.ok).toBe(false);
+    expect(packet.ok).toBe(false);
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_case_id", ownerLane: "case", path: "alert.caseId" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "alert.evidence" }),
+      expect.objectContaining({
+        code: "stale_source_evidence",
+        ownerLane: "source",
+        path: "sourceFreshness.enrichmentFreshness.newestEvidenceAt",
+        sourceGapCode: "stale_source_evidence"
+      }),
+      expect.objectContaining({
+        code: "source_org_mismatch",
+        ownerLane: "source",
+        path: "sourceFreshness.organizationId"
+      }),
+      expect.objectContaining({
+        code: "unsupported_destination",
+        ownerLane: "webhook",
+        path: "dispatch.destinationKinds",
+        destinationKind: "email"
+      })
+    ]));
+    expect(packet.sourceFreshness).toMatchObject({
+      state: "stale",
+      gapCodes: ["stale_source_evidence"],
+      nextTransitions: ["inspect_source_health"]
+    });
+    expect(packet.consumerContracts.webhookDelivery.requiredFields).toEqual(expect.arrayContaining([
+      "sourceFreshness.packetId",
+      "freshness.state"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+    expect(JSON.stringify(packet)).not.toContain("endpoint_hash_acme");
   });
 
   test("builds org-scoped destination lifecycle proof with test and retry state", () => {
@@ -1519,6 +1669,50 @@ function destinationFixture() {
     deliveryKind: "discord",
     endpointHash: "endpoint_hash_acme"
   };
+}
+
+function sourceFreshnessPacketFixture(overrides: Record<string, any> = {}) {
+  return {
+    schemaVersion: "ti.source_provenance_source_freshness_gap_packet.v1",
+    id: "source_freshness_acme_lumma",
+    generatedAt: "2026-06-29T12:19:00.000Z",
+    ok: true,
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    actor: "Lumma",
+    publicTiRoute: "/ti/Lumma",
+    ownerLane: "source",
+    sourcePackActivationReadinessId: "source_activation_acme_lumma",
+    actorCaseHandoffId: "case_handoff_acme_lumma",
+    freshness: {
+      state: "fresh",
+      newestEvidenceAt: "2026-06-29T10:15:00.000Z",
+      maxAgeDays: 7
+    },
+    sourceHealth: {
+      queuedForReview: 0,
+      blockedByPolicy: 0,
+      retryScheduled: 0,
+      parserReady: 1,
+      families: [],
+      nextRetryAt: undefined
+    },
+    gaps: [],
+    consumers: [],
+    lifecycle: {
+      stages: ["enrichment_freshness", "case_handoff"],
+      blockedStages: [],
+      nextTransitions: []
+    },
+    payloadShape: ["freshness.state", "gaps[].code", "consumers[].route"],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    },
+    ...overrides
+  } as any;
 }
 
 function notificationReceiptFixture() {

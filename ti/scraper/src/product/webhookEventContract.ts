@@ -1,4 +1,5 @@
 import { stableId, uniqueStrings } from "../utils.ts";
+import type { TiSourceProvenanceSourceFreshnessGapPacket } from "./sourceProvenanceTiPageContract.ts";
 
 export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
 export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v1" as const;
@@ -13,6 +14,7 @@ export const DWM_WEBHOOK_DESTINATION_LIFECYCLE_PROOF_SCHEMA_VERSION = "dwm.webho
 export const DWM_WEBHOOK_DESTINATION_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_destination_action_request.v1" as const;
 export const DWM_WEBHOOK_DELIVERY_PERSISTENCE_PROOF_SCHEMA_VERSION = "dwm.webhook_delivery_persistence_proof.v1" as const;
 export const DWM_WEBHOOK_ORG_WATCHLIST_DISPATCH_PACKET_SCHEMA_VERSION = "dwm.webhook_org_watchlist_dispatch_packet.v1" as const;
+export const DWM_WEBHOOK_SOURCE_FRESHNESS_DISPATCH_PACKET_SCHEMA_VERSION = "dwm.webhook_source_freshness_dispatch_packet.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -296,6 +298,72 @@ export type DwmWebhookOrgWatchlistDispatchBlocker = {
   ownerLane: "org" | "alert" | "webhook";
   path: string;
   message: string;
+};
+
+export type DwmWebhookSourceFreshnessDispatchPacket = {
+  schemaVersion: typeof DWM_WEBHOOK_SOURCE_FRESHNESS_DISPATCH_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  readiness: {
+    schemaVersion: typeof DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION;
+    readinessId: string;
+    checkedAt: string;
+    ok: boolean;
+    blockerCodes: DwmWebhookDispatchReadinessBlocker["code"][];
+  };
+  sourceFreshness: {
+    schemaVersion: TiSourceProvenanceSourceFreshnessGapPacket["schemaVersion"];
+    packetId: string;
+    state: TiSourceProvenanceSourceFreshnessGapPacket["freshness"]["state"];
+    newestEvidenceAt?: string;
+    maxAgeDays: number;
+    gapCodes: TiSourceProvenanceSourceFreshnessGapPacket["gaps"][number]["code"][];
+    nextTransitions: TiSourceProvenanceSourceFreshnessGapPacket["lifecycle"]["nextTransitions"];
+  };
+  dispatch: {
+    route: DwmWebhookDispatchReadiness["dispatch"]["route"];
+    dryRun: boolean;
+    destinationIds: string[];
+    destinationKinds: string[];
+    idempotencyKey: string;
+  };
+  consumerContracts: {
+    webhookDelivery: {
+      requiredFields: string[];
+      route: DwmWebhookDispatchReadiness["dispatch"]["route"];
+      sourceSchema: TiSourceProvenanceSourceFreshnessGapPacket["schemaVersion"];
+    };
+    dashboard: {
+      requiredFields: string[];
+      alertDetailRoute?: string;
+    };
+    sourceOps: {
+      requiredFields: string[];
+      actionRoute: "/v1/dwm/source-requests";
+    };
+  };
+  blockers: DwmWebhookSourceFreshnessDispatchBlocker[];
+};
+
+export type DwmWebhookSourceFreshnessDispatchBlocker = {
+  code:
+    | DwmWebhookDispatchReadinessBlocker["code"]
+    | "missing_fresh_evidence"
+    | "stale_source_evidence"
+    | "source_freshness_gap"
+    | "source_org_mismatch"
+    | "unsupported_destination";
+  ownerLane: "alert" | "case" | "source" | "webhook";
+  path: string;
+  message: string;
+  sourceGapCode?: TiSourceProvenanceSourceFreshnessGapPacket["gaps"][number]["code"];
+  destinationKind?: string;
 };
 
 export type DwmWebhookDispatchSupportPacket = {
@@ -1098,6 +1166,77 @@ export function buildWebhookOrgWatchlistDispatchPacket(input: {
       dashboard: {
         requiredFields: ["alertId", "caseId", "watchlistItemIds", "destinationIds", "evidenceSummary"],
         detailRoute: alertDetailPath
+      }
+    },
+    blockers
+  };
+}
+
+export function buildWebhookSourceFreshnessDispatchPacket(input: {
+  readiness: DwmWebhookDispatchReadiness;
+  sourceFreshness: TiSourceProvenanceSourceFreshnessGapPacket;
+  alert?: Record<string, any>;
+  supportedDestinationKinds?: string[];
+  generatedAt?: string;
+}): DwmWebhookSourceFreshnessDispatchPacket {
+  const readiness = input.readiness;
+  const sourceFreshness = input.sourceFreshness;
+  const generatedAt = input.generatedAt ?? readiness.checkedAt;
+  const supportedDestinationKinds = (input.supportedDestinationKinds ?? ["discord", "webhook"]).map((kind) => kind.toLowerCase());
+  const alertDetailRoute = stringValue(input.alert?.alertDetailPath ?? input.alert?.workflowContext?.alertDetailPath ?? input.alert?.webhookContext?.alertDetailPath);
+  const blockers = uniqueSourceFreshnessDispatchBlockers([
+    ...readiness.blockers.map(sourceFreshnessDispatchBlockerFromReadiness),
+    ...sourceFreshnessDispatchBlockers(sourceFreshness),
+    ...sourceFreshnessOrgBlockers(readiness, sourceFreshness),
+    ...sourceFreshnessDestinationBlockers(readiness, supportedDestinationKinds)
+  ]);
+
+  return {
+    schemaVersion: DWM_WEBHOOK_SOURCE_FRESHNESS_DISPATCH_PACKET_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_source_freshness_dispatch_packet", `${readiness.id}:${sourceFreshness.id}:${generatedAt}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: readiness.tenantId,
+    organizationId: readiness.organizationId,
+    alertId: readiness.alertId,
+    caseId: readiness.caseId,
+    redacted: true,
+    readiness: {
+      schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+      readinessId: readiness.id,
+      checkedAt: readiness.checkedAt,
+      ok: readiness.ok,
+      blockerCodes: readiness.blockers.map((blocker) => blocker.code)
+    },
+    sourceFreshness: {
+      schemaVersion: sourceFreshness.schemaVersion,
+      packetId: sourceFreshness.id,
+      state: sourceFreshness.freshness.state,
+      newestEvidenceAt: sourceFreshness.freshness.newestEvidenceAt,
+      maxAgeDays: sourceFreshness.freshness.maxAgeDays,
+      gapCodes: sourceFreshness.gaps.map((gap) => gap.code),
+      nextTransitions: sourceFreshness.lifecycle.nextTransitions
+    },
+    dispatch: {
+      route: readiness.dispatch.route,
+      dryRun: readiness.dispatch.dryRun,
+      destinationIds: readiness.dispatch.destinationIds,
+      destinationKinds: readiness.dispatch.destinationKinds,
+      idempotencyKey: readiness.dispatch.idempotencyKey
+    },
+    consumerContracts: {
+      webhookDelivery: {
+        requiredFields: ["alertId", "organizationId", "caseId", "destinationIds", "sourceFreshness.packetId", "freshness.state", "evidence.captureIds"],
+        route: readiness.dispatch.route,
+        sourceSchema: sourceFreshness.schemaVersion
+      },
+      dashboard: {
+        requiredFields: ["alertId", "caseId", "dispatch.destinationIds", "sourceFreshness.gapCodes", "sourceFreshness.nextTransitions"],
+        alertDetailRoute
+      },
+      sourceOps: {
+        requiredFields: ["sourceFreshness.packetId", "sourceFreshness.gapCodes", "sourceFreshness.nextTransitions"],
+        actionRoute: "/v1/dwm/source-requests"
       }
     },
     blockers
@@ -1975,6 +2114,69 @@ function uniqueDispatchBlockers(blockers: DwmWebhookDispatchReadinessBlocker[]):
   const seen = new Set<string>();
   return blockers.filter((blocker) => {
     const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourceFreshnessDispatchBlockerFromReadiness(
+  blocker: DwmWebhookDispatchReadinessBlocker
+): DwmWebhookSourceFreshnessDispatchBlocker {
+  return {
+    code: blocker.code,
+    ownerLane: blocker.ownerLane,
+    path: blocker.path,
+    message: blocker.message
+  };
+}
+
+function sourceFreshnessDispatchBlockers(
+  sourceFreshness: TiSourceProvenanceSourceFreshnessGapPacket
+): DwmWebhookSourceFreshnessDispatchBlocker[] {
+  return sourceFreshness.gaps.map((gap) => ({
+    code: gap.code === "missing_fresh_evidence" || gap.code === "stale_source_evidence" ? gap.code : "source_freshness_gap",
+    ownerLane: "source" as const,
+    path: `sourceFreshness.${gap.path}`,
+    message: gap.message,
+    sourceGapCode: gap.code
+  }));
+}
+
+function sourceFreshnessOrgBlockers(
+  readiness: DwmWebhookDispatchReadiness,
+  sourceFreshness: TiSourceProvenanceSourceFreshnessGapPacket
+): DwmWebhookSourceFreshnessDispatchBlocker[] {
+  if (!readiness.organizationId || !sourceFreshness.organizationId || readiness.organizationId === sourceFreshness.organizationId) return [];
+  return [{
+    code: "source_org_mismatch",
+    ownerLane: "source",
+    path: "sourceFreshness.organizationId",
+    message: "Source freshness packet belongs to a different organization."
+  }];
+}
+
+function sourceFreshnessDestinationBlockers(
+  readiness: DwmWebhookDispatchReadiness,
+  supportedDestinationKinds: string[]
+): DwmWebhookSourceFreshnessDispatchBlocker[] {
+  return readiness.dispatch.destinationKinds
+    .filter((kind) => kind && !supportedDestinationKinds.includes(kind.toLowerCase()))
+    .map((kind) => ({
+      code: "unsupported_destination" as const,
+      ownerLane: "webhook" as const,
+      path: "dispatch.destinationKinds",
+      message: "Webhook destination kind is not supported by this dispatch contract.",
+      destinationKind: kind
+    }));
+}
+
+function uniqueSourceFreshnessDispatchBlockers(
+  blockers: DwmWebhookSourceFreshnessDispatchBlocker[]
+): DwmWebhookSourceFreshnessDispatchBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}:${blocker.sourceGapCode ?? ""}:${blocker.destinationKind ?? ""}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
