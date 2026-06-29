@@ -68,6 +68,9 @@ type SupportInspectionQuery = {
     entity?: string
     entityId?: string
     entityType?: string
+    session?: string
+    supportSession?: string
+    supportSessionId?: string
     action?: string
     severity?: string
     outcome?: string
@@ -248,6 +251,7 @@ type SupportTimelineFilter = {
     request: string
     entity: string
     entityType: string
+    supportSession: string
     action: string
     severity: string
     outcome: string
@@ -280,6 +284,9 @@ const supportInspectionFilters = new Set([
     'entity',
     'entityId',
     'entityType',
+    'session',
+    'supportSession',
+    'supportSessionId',
     'action',
     'severity',
     'outcome',
@@ -911,12 +918,13 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     if (!actor) return
 
     const query = req.query as SupportInspectionQuery
-    const org = text(query.org || query.orgId)
-    const user = text(query.user || query.userId)
+    const requestedOrg = text(query.org || query.orgId)
+    const requestedUser = text(query.user || query.userId)
     const email = text(query.email).toLowerCase()
-    const request = text(query.request || query.requestId)
-    const entity = text(query.entity || query.entityId)
+    const requestedRequest = text(query.request || query.requestId)
+    const requestedEntity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
+    const supportSession = text(query.session || query.supportSession || query.supportSessionId)
     const action = text(query.action)
     const source = text(query.source)
     const service = text(query.service)
@@ -927,7 +935,15 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 50)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 100) : 50
-    const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit })
+    const sessionState = supportSession ? await loadSupportSessionState(supportSession) : null
+    if (supportSession && !sessionState) {
+        return res.status(404).send(supportError('support_session_not_found', 'Support session not found.', { supportSessionId: supportSession }))
+    }
+    const org = requestedOrg || sessionState?.organizationId || ''
+    const user = requestedUser || sessionState?.targetUserId || ''
+    const request = requestedRequest || sessionState?.requestId || ''
+    const entity = requestedEntity || supportSession
+    const filterError = supportInspectionFilterError(query, { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
     }
@@ -936,8 +952,8 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         return res.status(400).send(preparationInput.error)
     }
 
-    if (!org && !user && !email && !request && !entity && !entityType && !action) {
-        return res.status(400).send(supportError('missing_support_target', 'Add org, user, email, request, entity, entityType, or action to inspect support state.'))
+    if (!org && !user && !email && !request && !entity && !entityType && !supportSession && !action) {
+        return res.status(400).send(supportError('missing_support_target', 'Add org, user, email, request, entity, entityType, supportSession, or action to inspect support state.'))
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
@@ -946,9 +962,9 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionMemberships({ org, user, request, limit }),
         loadInspectionInvites({ org, email, request, limit }),
         loadInspectionApprovals({ org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit }),
+        loadInspectionAuditEvents({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit }),
     ])
-    const timelineFilter = supportTimelineFilter({ org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit })
     if (!organizations.length && !users.length && !memberships.length && !invites.length && !approvals.length && !audit.length) {
         return res.status(404).send(supportError('support_target_not_found', 'No support state matched the requested filters.', {
             filters: timelineFilter,
@@ -1010,16 +1026,16 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     await recordAdminAuditEvent(req, {
         actionType: 'support.inspect',
         actorId: actor.id,
-        targetType: user ? 'user' : email ? 'invite' : org ? 'organization' : 'request',
-        targetId: user || email || org || request,
+        targetType: user ? 'user' : email ? 'invite' : org ? 'organization' : supportSession ? 'support_session' : 'request',
+        targetId: user || email || org || supportSession || request,
         organizationId: organizationIds[0] || null,
-        entityId: request || user || email || org || null,
+        entityId: supportSession || request || user || email || org || null,
         requestId: supportRequestId(req),
         severity: 'info',
         outcome: 'success',
         context: {
             schemaVersion: 'support.inspection.v1',
-            filters: { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit },
+            filters: { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit },
             organizationCount: organizations.length,
             membershipCount: memberships.length,
             pendingInviteCount: invites.filter(row => row.status === 'pending').length,
@@ -1032,7 +1048,14 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         inspection: {
             schemaVersion: 'support.inspection.v1',
             generatedAt: new Date().toISOString(),
-            filters: { org, user, email, request, entity, entityType, action, severity, outcome, source, service, from, to, limit },
+            filters: { org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, from, to, limit },
+            supportSession: sessionState ? supportSessionResponse({
+                ...sessionState,
+                actorId: sessionState.actorId,
+                reason: sessionState.reason,
+                requestId: sessionState.requestId,
+                auditEventIds: sessionState.auditEventIds,
+            }) : null,
             organizations: organizations.map(row => ({
                 ...toOrganization(row as OrganizationRow),
                 adminAvailability: availabilityByOrg.get(String(row.id)) || null,
@@ -1057,6 +1080,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                     inviteAssistance: auditTimelineLink({ org, target: email, request, action: 'invite_assist', outcome }),
                     accessRecovery: auditTimelineLink({ org, target: user || email, request, action: 'access_recovery', outcome }),
                     impersonation: auditTimelineLink({ target: user, request, action: 'impersonation', outcome }),
+                    supportSession: supportSession ? auditTimelineLink({ request, action: 'support.session', outcome }) : null,
                 },
                 redacted: true,
             },
@@ -1066,6 +1090,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 memberRoleRecovery: memberships.map(member => `/api/admin/support/organizations/${encodeURIComponent(String(member.organization_id))}/members/${encodeURIComponent(String(member.user_id))}/role-recovery`),
                 accessRecovery: organizationIds.map(id => `/api/admin/support/organizations/${encodeURIComponent(id)}/access-recovery`),
                 approvalSearch: `/api/admin/support/access-recovery${request ? `?request=${encodeURIComponent(request)}` : ''}`,
+                supportSession: supportSession ? `/api/admin/support/sessions/${encodeURIComponent(supportSession)}` : null,
                 impersonationGuard: {
                     reasonRequired: true,
                     durationRequired: true,
@@ -1075,7 +1100,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
                 },
             },
             copyText: [
-                `Support inspection org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'}`,
+                `Support inspection org=${org || '*'} user=${user || '*'} email=${email || '*'} request=${request || '*'} session=${supportSession || '*'}`,
                 `Organizations: ${organizations.length}`,
                 `Memberships: ${memberships.length}`,
                 `Pending invites: ${invites.filter(row => row.status === 'pending').length}`,
@@ -2931,7 +2956,7 @@ async function loadInspectionApprovals(input: { org: string, user: string, email
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, action: string, severity: string, outcome: string, source: string, service: string, from: string, to: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -2954,6 +2979,10 @@ async function loadInspectionAuditEvents(input: { org: string, user: string, ema
     if (input.entity) {
         const placeholder = add(`%${input.entity}%`)
         where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.target_id ILIKE ' + placeholder + ' OR event.context->>\'inviteId\' ILIKE ' + placeholder + ')')
+    }
+    if (input.supportSession) {
+        const placeholder = add(`%${input.supportSession}%`)
+        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
     }
     if (input.entityType) where.push(`event.target_type ILIKE ${add(`%${input.entityType}%`)}`)
     if (input.action) where.push(`event.action_type ILIKE ${add(`%${input.action}%`)}`)
@@ -5096,9 +5125,9 @@ function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: 
     if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
         return supportError('invalid_support_filter', 'Support inspection limit must be a positive number.', { filter: 'limit' })
     }
-    const hasTarget = Boolean(filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType)
+    const hasTarget = Boolean(filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession)
     if (!hasTarget && Boolean(filter.action || filter.source || filter.service || filter.severity || filter.outcome || filter.from || filter.to)) {
-        return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, or entityType with audit timeline filters.', {
+        return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, entityType, or supportSession with audit timeline filters.', {
             filters: supportTimelineFilter(filter),
         })
     }
@@ -5113,6 +5142,7 @@ function supportTimelineFilter(input: Omit<SupportTimelineFilter, 'unsupported'>
         request: input.request,
         entity: input.entity,
         entityType: input.entityType,
+        supportSession: input.supportSession,
         action: input.action,
         severity: input.severity,
         outcome: input.outcome,

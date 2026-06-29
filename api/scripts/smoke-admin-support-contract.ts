@@ -64,7 +64,7 @@ for (const expected of ['q', 'org', 'actor', 'target', 'action', 'severity', 'so
 for (const expected of ['requestId', 'status', 'requester', 'approver']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing approval search filter ${expected}.`)
 }
-for (const expected of ['orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'action', 'severity', 'from', 'to']) {
+for (const expected of ['orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'action', 'severity', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing support inspection filter ${expected}.`)
 }
 assert.match(adminSupport, /getSupportInspection/)
@@ -102,6 +102,11 @@ assert.match(adminSupport, /loadSupportSessionTimeline/)
 assert.match(adminSupport, /recordSupportSessionRevokeAudit/)
 assert.match(adminSupport, /supportSessionResponse/)
 assert.match(adminSupport, /supportSessionWorkflowRoutes/)
+assert.match(adminSupport, /const sessionState = supportSession \? await loadSupportSessionState\(supportSession\) : null/)
+assert.match(adminSupport, /supportSession: sessionState \? supportSessionResponse/)
+assert.match(adminSupport, /supportSessionId\\' ILIKE/)
+assert.match(adminSupport, /supportSession: input\.supportSession/)
+assert.match(adminSupport, /filter\.supportSession/)
 assert.match(adminSupport, /normalizeSupportSessionActions/)
 assert.match(adminSupport, /normalizeSupportSessionScope/)
 assert.match(adminSupport, /normalizeSupportSessionDuration/)
