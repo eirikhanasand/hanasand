@@ -7,6 +7,7 @@ export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION = "ti.sou
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -447,6 +448,58 @@ export type TiSourceProvenanceActorProfileGap = {
   retryable: boolean;
 };
 
+export type TiSourceProvenanceActorProfileGapSourcePlan = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  profileContractId: string;
+  candidates: TiSourceProvenanceActorProfileGapSourceCandidate[];
+  gapsCovered: TiSourceProvenanceActorProfileFieldName[];
+  remainingGaps: TiSourceProvenanceActorProfileGap[];
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+    privateTelegramAccessRequested: false;
+  };
+};
+
+export type TiSourceProvenanceActorProfileGapSourceCandidate = {
+  candidateId: string;
+  field: TiSourceProvenanceActorProfileFieldName;
+  sourcePackLabel: string;
+  family: "actor_page" | "public_advisory" | "telegram_public" | "darkweb_metadata";
+  parserProfile: "actor_page_metadata" | "public_advisory" | "public_channel_handoff" | "restricted_metadata";
+  expectedCaptureType: "actor_metadata" | "advisory_metadata" | "public_channel_metadata" | "restricted_metadata";
+  activationState: "candidate" | "blocked";
+  nextAction: "request_candidate" | "approval_required";
+  reason: string;
+  policyBoundary: {
+    publicOnly: boolean;
+    metadataOnly: boolean;
+    restricted: boolean;
+    requiresGovernance: boolean;
+    noCredentials: true;
+    noAutoJoin: true;
+    noRepliesOrReactions: true;
+    noMediaDownloads: true;
+    liveNetworkFetch: false;
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -871,6 +924,50 @@ export function buildSourceProvenanceActorProfileContract(input: {
   };
 }
 
+export function buildSourceProvenanceActorProfileGapSourcePlan(input: {
+  profile: TiSourceProvenanceActorProfileContract;
+  generatedAt?: string;
+}): TiSourceProvenanceActorProfileGapSourcePlan {
+  const generatedAt = input.generatedAt ?? input.profile.generatedAt;
+  const fieldGaps = input.profile.gaps.filter((gap): gap is TiSourceProvenanceActorProfileGap & { field: TiSourceProvenanceActorProfileFieldName } => gap.field !== "sourceProvenance");
+  const candidates = fieldGaps.map((gap) => actorProfileGapSourceCandidate(input.profile, gap.field));
+  const gapsCovered = candidates.reduce<TiSourceProvenanceActorProfileFieldName[]>((fields, candidate) => {
+    if (!fields.includes(candidate.field)) fields.push(candidate.field);
+    return fields;
+  }, []);
+  const remainingGaps = input.profile.gaps.filter((gap) => gap.field === "sourceProvenance" || !gapsCovered.includes(gap.field));
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_profile_gap_source_plan", `${input.profile.id}:${generatedAt}:${gapsCovered.join(",")}`),
+    generatedAt,
+    ok: remainingGaps.length === 0,
+    tenantId: input.profile.tenantId,
+    organizationId: input.profile.organizationId,
+    actor: input.profile.actor,
+    publicTiRoute: input.profile.publicTiRoute,
+    profileContractId: input.profile.id,
+    candidates,
+    gapsCovered,
+    remainingGaps,
+    payloadShape: [
+      "candidates[].field",
+      "candidates[].family",
+      "candidates[].parserProfile",
+      "candidates[].policyBoundary",
+      "candidates[].activationState",
+      "remainingGaps[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false,
+      privateTelegramAccessRequested: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -1177,6 +1274,87 @@ function actorProfileFieldSpecs(
     { field: "techniques", values: values.techniques ?? [] },
     { field: "campaigns", values: values.campaigns ?? [] }
   ];
+}
+
+function actorProfileGapSourceCandidate(
+  profile: TiSourceProvenanceActorProfileContract,
+  field: TiSourceProvenanceActorProfileFieldName
+): TiSourceProvenanceActorProfileGapSourceCandidate {
+  const mapping = actorProfileGapSourceMapping(field);
+  const policyBoundary = {
+    publicOnly: !mapping.restricted,
+    metadataOnly: mapping.metadataOnly,
+    restricted: mapping.restricted,
+    requiresGovernance: mapping.restricted,
+    noCredentials: true as const,
+    noAutoJoin: true as const,
+    noRepliesOrReactions: true as const,
+    noMediaDownloads: true as const,
+    liveNetworkFetch: false as const
+  };
+
+  return {
+    candidateId: stableId("ti_source_provenance_actor_profile_gap_candidate", `${profile.id}:${field}:${mapping.family}:${mapping.parserProfile}`),
+    field,
+    sourcePackLabel: `${profile.actor} ${field} source coverage`,
+    family: mapping.family,
+    parserProfile: mapping.parserProfile,
+    expectedCaptureType: mapping.expectedCaptureType,
+    activationState: mapping.restricted ? "blocked" : "candidate",
+    nextAction: mapping.restricted ? "approval_required" : "request_candidate",
+    reason: mapping.reason,
+    policyBoundary,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+function actorProfileGapSourceMapping(field: TiSourceProvenanceActorProfileFieldName): Pick<TiSourceProvenanceActorProfileGapSourceCandidate, "family" | "parserProfile" | "expectedCaptureType" | "reason"> & {
+  restricted: boolean;
+  metadataOnly: boolean;
+} {
+  if (field === "motivations" || field === "aliases") {
+    return {
+      family: "actor_page",
+      parserProfile: "actor_page_metadata",
+      expectedCaptureType: "actor_metadata",
+      restricted: false,
+      metadataOnly: true,
+      reason: "Actor-page metadata can close identity and motivation gaps without collecting private content."
+    };
+  }
+  if (field === "sectors" || field === "regions" || field === "techniques") {
+    return {
+      family: "public_advisory",
+      parserProfile: "public_advisory",
+      expectedCaptureType: "advisory_metadata",
+      restricted: false,
+      metadataOnly: true,
+      reason: "Public advisory metadata can close targeting and technique gaps with timestamped provenance."
+    };
+  }
+  if (field === "infrastructure") {
+    return {
+      family: "darkweb_metadata",
+      parserProfile: "restricted_metadata",
+      expectedCaptureType: "restricted_metadata",
+      restricted: true,
+      metadataOnly: true,
+      reason: "Infrastructure gaps may need restricted metadata review; the plan keeps capture metadata-only until governance approves activation."
+    };
+  }
+  return {
+    family: "telegram_public",
+    parserProfile: "public_channel_handoff",
+    expectedCaptureType: "public_channel_metadata",
+    restricted: false,
+    metadataOnly: true,
+    reason: "Public Telegram metadata can close campaign freshness gaps without auto-joining channels or exposing private content."
+  };
 }
 
 function rowsForActorProfileField(

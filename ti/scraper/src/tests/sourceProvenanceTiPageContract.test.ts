@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
   TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
   buildSourceProvenanceActorProfileContract,
+  buildSourceProvenanceActorProfileGapSourcePlan,
   buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
@@ -679,6 +681,102 @@ describe("source provenance TI page contract", () => {
       expect.objectContaining({ code: "missing_techniques", field: "techniques", ownerLane: "publicTI" }),
       expect.objectContaining({ code: "missing_campaigns", field: "campaigns", ownerLane: "publicTI" })
     ]));
+  });
+
+  test("plans safe source-pack candidates for missing actor profile gaps without network fetches", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({
+      profile,
+      generatedAt: "2026-06-29T12:05:00.000Z"
+    });
+
+    expect(plan).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      profileContractId: profile.id,
+      gapsCovered: expect.arrayContaining(["motivations", "sectors", "regions", "infrastructure", "techniques", "campaigns"]),
+      remainingGaps: [],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        privateTelegramAccessRequested: false
+      }
+    });
+    expect(plan.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: "motivations",
+        family: "actor_page",
+        parserProfile: "actor_page_metadata",
+        expectedCaptureType: "actor_metadata",
+        activationState: "candidate",
+        nextAction: "request_candidate",
+        policyBoundary: expect.objectContaining({
+          publicOnly: true,
+          metadataOnly: true,
+          liveNetworkFetch: false,
+          noCredentials: true
+        })
+      }),
+      expect.objectContaining({
+        field: "campaigns",
+        family: "telegram_public",
+        parserProfile: "public_channel_handoff",
+        expectedCaptureType: "public_channel_metadata",
+        activationState: "candidate",
+        policyBoundary: expect.objectContaining({
+          publicOnly: true,
+          noAutoJoin: true,
+          noRepliesOrReactions: true
+        })
+      }),
+      expect.objectContaining({
+        field: "infrastructure",
+        family: "darkweb_metadata",
+        parserProfile: "restricted_metadata",
+        expectedCaptureType: "restricted_metadata",
+        activationState: "blocked",
+        nextAction: "approval_required",
+        policyBoundary: expect.objectContaining({
+          publicOnly: false,
+          metadataOnly: true,
+          restricted: true,
+          requiresGovernance: true,
+          liveNetworkFetch: false
+        })
+      })
+    ]));
+    expect(plan.payloadShape).toEqual(expect.arrayContaining([
+      "candidates[].parserProfile",
+      "candidates[].policyBoundary",
+      "remainingGaps[]"
+    ]));
+    expect(JSON.stringify(plan)).not.toContain("rawText");
+    expect(JSON.stringify(plan)).not.toContain("password");
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {
