@@ -5705,8 +5705,18 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             filters,
             eventIds: relatedTimeline.map(item => item.id),
             summary: auditTimelineSummary(relatedTimeline),
+            filterContract: supportAuditFilterContract(filters, relatedTimeline),
+            exportProof: supportAuditExportProof(filters, relatedTimeline),
+            workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline),
             timeline: relatedTimeline,
             redacted: true,
+            links: {
+                timeline: auditFilterQuery(filters),
+                details: relatedTimeline.map(item => item.links?.detail).filter(Boolean),
+            },
+            copyText: relatedTimeline
+                .map(item => `${item.timestamp} ${item.severity}/${item.outcome} ${item.actionType} actor=${item.actor?.id || ''} entity=${item.entity?.id || ''} request=${item.requestId || ''}`)
+                .join('\n'),
         },
         links: {
             self: `/api/admin/audit-events/${encodeURIComponent(String(event.id))}`,
