@@ -41,6 +41,40 @@ export type DwmAlertGenerationBlocker = {
   sourceFamilies?: string[];
 };
 
+export type DwmZeroAlertProof = {
+  schemaVersion: "dwm.zero_alert_proof.v1";
+  zeroAlert: boolean;
+  state:
+    | "alerts_expected"
+    | "blocked_no_watchlist"
+    | "blocked_no_matching_capture"
+    | "blocked_inactive_source"
+    | "blocked_entitlement"
+    | "blocked_org_lifecycle"
+    | "blocked_route"
+    | "blocked_missing_evidence"
+    | "blocked_unknown";
+  expectedAlertDelta: number;
+  blockerCodes: DwmAlertGenerationBlockerCode[];
+  blockers: DwmAlertGenerationBlocker[];
+  counts: {
+    activeWatchlists: number;
+    candidateCount: number;
+    captureRefCount: number;
+    matchedCandidateCount: number;
+    unmatchedCandidateCount: number;
+  };
+  sourceFamilyCoverage: Array<{ sourceFamily: string; candidateCount: number; captureRefCount: number; watchlistIds: string[] }>;
+  watchlistIds: string[];
+  candidateIdsMissingRoute: string[];
+  routes: {
+    readiness: "/v1/dwm/alerts/readiness";
+    rebuild: "/v1/dwm/alerts/rebuild";
+    alerts: "/v1/dwm/alerts";
+  };
+  nextAction: string;
+};
+
 export type DwmCustomerProofBlockerCode = DwmAlertGenerationBlockerCode | DwmDeliveryReadinessBlockerCode;
 
 export type DwmAlertDownstreamHandoffBlockerCode =
@@ -536,6 +570,7 @@ export type DwmAlertGenerationReadiness = {
   blockerCodes: DwmAlertGenerationBlockerCode[];
   typedBlockers: DwmAlertGenerationBlocker[];
   blockers: string[];
+  zeroAlertProof: DwmZeroAlertProof;
   plan: DwmAlertGenerationPlan;
 };
 
@@ -593,14 +628,17 @@ export type RebuildDwmRuntimeAlertsResult = {
   alerts: any[];
   watchlistIds: string[];
   generationPlan: DwmAlertGenerationPlan;
+  generationReadiness: DwmAlertGenerationReadiness;
+  zeroAlertProof: DwmZeroAlertProof;
   readiness: ReturnType<typeof buildDwmProductSnapshot>["readiness"];
 };
 
 export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): RebuildDwmRuntimeAlertsResult {
   const sources = input.store.listSources();
   const captures = input.store.listCaptures();
+  const watchlists = input.store.listDwmWatchlists();
   const generationPlan = buildDwmAlertGenerationPlan({
-    watchlists: input.store.listDwmWatchlists(),
+    watchlists,
     tenantId: input.tenantId,
     organizationId: input.organizationId,
     visibilityPolicy: input.visibilityPolicy,
@@ -614,6 +652,14 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     sources,
     captures,
     includeDemoIfEmpty: false
+  });
+  const generationReadiness = buildDwmAlertGenerationReadiness({
+    watchlists,
+    tenantId: input.tenantId,
+    organizationId: input.organizationId,
+    visibilityPolicy: input.visibilityPolicy,
+    sources,
+    captures
   });
 
   const alerts = snapshot.alerts
@@ -680,6 +726,8 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     alerts,
     watchlistIds: generationPlan.activeWatchlistIds,
     generationPlan,
+    generationReadiness,
+    zeroAlertProof: generationReadiness.zeroAlertProof,
     readiness: snapshot.readiness
   };
 }
@@ -886,6 +934,18 @@ export function buildDwmAlertGenerationReadiness(input: {
     productDedupePatched
   });
   const blockers = typedBlockers.map((blocker) => blocker.detail);
+  const counts = {
+    activeWatchlists: plan.activeWatchlistIds.length,
+    skippedWatchlists: plan.skippedWatchlists.length,
+    blockedWatchlists: plan.blockedWatchlists.length,
+    candidateCount: plan.candidateCount,
+    rawActiveTermCount,
+    duplicateCollapseCount: Math.max(0, rawActiveTermCount - plan.candidateCount),
+    captureRefCount,
+    matchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length > 0).length,
+    unmatchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length === 0).length
+  };
+  const blockerCodes = uniqueStrings(typedBlockers.map((blocker) => blocker.code)) as DwmAlertGenerationBlockerCode[];
 
   return {
     schemaVersion: "dwm.alert_generation_readiness.v1",
@@ -894,17 +954,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     visibilityPolicy: plan.visibilityPolicy,
     readyForRebuild: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0,
     readyForCustomerDelivery: plan.candidateCount > 0 && plan.blockedWatchlists.length === 0 && captureRefCount > 0 && candidateIdsMissingRoute.length === 0 && productDedupePatched,
-    counts: {
-      activeWatchlists: plan.activeWatchlistIds.length,
-      skippedWatchlists: plan.skippedWatchlists.length,
-      blockedWatchlists: plan.blockedWatchlists.length,
-      candidateCount: plan.candidateCount,
-      rawActiveTermCount,
-      duplicateCollapseCount: Math.max(0, rawActiveTermCount - plan.candidateCount),
-      captureRefCount,
-      matchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length > 0).length,
-      unmatchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length === 0).length
-    },
+    counts,
     sourceFamilyCoverage,
     webhookReadiness: {
       ready: plan.candidateCount > 0 && candidateIdsMissingRoute.length === 0,
@@ -926,9 +976,17 @@ export function buildDwmAlertGenerationReadiness(input: {
       requiredPatch: "Remove actor from product alert dedupe seed, dedupe merged alerts by alert.dedupeKey, and refresh evidenceSummary/webhook payload hash after merges.",
       requiredFields: ["matchContext", "evidenceSummary", "routingContext", "confidenceReasoning", "provenance", "dedupeKey", "recommendedRoute", "webhookDelivery"]
     },
-    blockerCodes: uniqueStrings(typedBlockers.map((blocker) => blocker.code)) as DwmAlertGenerationBlockerCode[],
+    blockerCodes,
     typedBlockers,
     blockers,
+    zeroAlertProof: buildDwmZeroAlertProof({
+      counts,
+      blockerCodes,
+      typedBlockers,
+      sourceFamilyCoverage,
+      watchlistIds: plan.activeWatchlistIds,
+      candidateIdsMissingRoute
+    }),
     plan
   };
 }
@@ -1550,6 +1608,72 @@ function buildGenerationReadinessBlockers(input: {
     }));
   }
   return blockers;
+}
+
+function buildDwmZeroAlertProof(input: {
+  counts: DwmAlertGenerationReadiness["counts"];
+  blockerCodes: DwmAlertGenerationBlockerCode[];
+  typedBlockers: DwmAlertGenerationBlocker[];
+  sourceFamilyCoverage: DwmAlertGenerationReadiness["sourceFamilyCoverage"];
+  watchlistIds: string[];
+  candidateIdsMissingRoute: string[];
+}): DwmZeroAlertProof {
+  const state = zeroAlertState(input);
+  const matchedSourceFamilyCount = input.sourceFamilyCoverage.filter((row) => row.captureRefCount > 0).length;
+  const expectedAlertDelta = state === "alerts_expected" || state === "blocked_route" ? matchedSourceFamilyCount : 0;
+  const zeroAlert = expectedAlertDelta === 0;
+  return {
+    schemaVersion: "dwm.zero_alert_proof.v1",
+    zeroAlert,
+    state,
+    expectedAlertDelta,
+    blockerCodes: input.blockerCodes,
+    blockers: input.typedBlockers,
+    counts: {
+      activeWatchlists: input.counts.activeWatchlists,
+      candidateCount: input.counts.candidateCount,
+      captureRefCount: input.counts.captureRefCount,
+      matchedCandidateCount: input.counts.matchedCandidateCount,
+      unmatchedCandidateCount: input.counts.unmatchedCandidateCount
+    },
+    sourceFamilyCoverage: input.sourceFamilyCoverage,
+    watchlistIds: input.watchlistIds,
+    candidateIdsMissingRoute: input.candidateIdsMissingRoute,
+    routes: {
+      readiness: "/v1/dwm/alerts/readiness",
+      rebuild: "/v1/dwm/alerts/rebuild",
+      alerts: "/v1/dwm/alerts"
+    },
+    nextAction: zeroAlertNextAction(state)
+  };
+}
+
+function zeroAlertState(input: {
+  counts: DwmAlertGenerationReadiness["counts"];
+  blockerCodes: DwmAlertGenerationBlockerCode[];
+}): DwmZeroAlertProof["state"] {
+  const codes = new Set(input.blockerCodes);
+  if (input.counts.matchedCandidateCount > 0 && input.counts.captureRefCount > 0 && !codes.size) return "alerts_expected";
+  if (codes.has("org_archived") || codes.has("org_deleted") || codes.has("member_revoked") || codes.has("role_not_allowed")) return "blocked_org_lifecycle";
+  if (codes.has("entitlement_denied") || codes.has("org_export_unavailable") || codes.has("no_org_export")) return "blocked_entitlement";
+  if (codes.has("source_family_inactive")) return "blocked_inactive_source";
+  if (codes.has("no_active_watchlist_terms") || input.counts.activeWatchlists === 0 || input.counts.candidateCount === 0) return "blocked_no_watchlist";
+  if (codes.has("no_matching_captures")) return "blocked_no_matching_capture";
+  if (codes.has("missing_evidence")) return "blocked_missing_evidence";
+  if (codes.has("case_route_unavailable") || codes.has("webhook_destination_not_verified")) return "blocked_route";
+  return "blocked_unknown";
+}
+
+function zeroAlertNextAction(state: DwmZeroAlertProof["state"]): string {
+  if (state === "alerts_expected") return "Run alert rebuild and verify persisted alert delta.";
+  if (state === "blocked_org_lifecycle") return "Restore active organization/member/watchlist export lifecycle before rebuilding alerts.";
+  if (state === "blocked_entitlement") return "Resolve organization entitlement or alert-generation export blockers.";
+  if (state === "blocked_inactive_source") return "Activate an approved source family that matches the watchlist term.";
+  if (state === "blocked_no_watchlist") return "Create or reactivate an org-scoped shared watchlist term.";
+  if (state === "blocked_no_matching_capture") return "Add or collect a recent capture containing the active watchlist term.";
+  if (state === "blocked_missing_evidence") return "Attach persisted evidence/capture references before customer delivery.";
+  if (state === "blocked_route") return "Configure case and webhook delivery routes for matched alert candidates.";
+  return "Inspect typed blockers before running another rebuild.";
 }
 
 function generationBlocker(input: DwmAlertGenerationBlocker): DwmAlertGenerationBlocker {

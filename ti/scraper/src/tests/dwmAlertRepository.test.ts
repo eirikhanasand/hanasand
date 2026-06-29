@@ -265,6 +265,14 @@ describe("dwm alert repository", () => {
     expect(readiness.blockerCodes).toEqual([]);
     expect(readiness.typedBlockers).toEqual([]);
     expect(readiness.blockers).toEqual([]);
+    expect(readiness.zeroAlertProof).toMatchObject({
+      schemaVersion: "dwm.zero_alert_proof.v1",
+      zeroAlert: false,
+      state: "alerts_expected",
+      expectedAlertDelta: 2,
+      blockerCodes: [],
+      counts: { activeWatchlists: 2, candidateCount: 1, captureRefCount: 2, matchedCandidateCount: 1, unmatchedCandidateCount: 0 }
+    });
     expect(readiness.plan.candidates[0].webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
 
     const blockedWithoutOrg = buildDwmAlertGenerationPlan({
@@ -620,10 +628,32 @@ describe("dwm alert repository", () => {
       readyForRebuild: true,
       readyForCustomerDelivery: false,
       counts: { candidateCount: 1, captureRefCount: 0, matchedCandidateCount: 0, unmatchedCandidateCount: 1 },
-      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"])
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+      zeroAlertProof: {
+        schemaVersion: "dwm.zero_alert_proof.v1",
+        zeroAlert: true,
+        state: "blocked_no_matching_capture",
+        expectedAlertDelta: 0,
+        blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"]),
+        counts: { activeWatchlists: 1, candidateCount: 1, captureRefCount: 0, matchedCandidateCount: 0, unmatchedCandidateCount: 1 },
+        watchlistIds: ["watch_repo_nomatch"],
+        routes: {
+          readiness: "/v1/dwm/alerts/readiness",
+          rebuild: "/v1/dwm/alerts/rebuild",
+          alerts: "/v1/dwm/alerts"
+        },
+        nextAction: "Add or collect a recent capture containing the active watchlist term."
+      }
     });
     const noMatchRebuild = rebuildDwmRuntimeAlerts({ store: noMatchStore as any, tenantId: "tenant_repo_nomatch", organizationId: "org_repo_nomatch" });
     expect(noMatchRebuild.savedAlertCount).toBe(0);
+    expect(noMatchRebuild.zeroAlertProof).toMatchObject({
+      schemaVersion: "dwm.zero_alert_proof.v1",
+      zeroAlert: true,
+      state: "blocked_no_matching_capture",
+      expectedAlertDelta: 0
+    });
+    expect(noMatchRebuild.generationReadiness.zeroAlertProof.state).toBe("blocked_no_matching_capture");
     expect((noMatchStore as any).listDwmAlerts()).toEqual([expect.objectContaining({ id: "alert_existing_nomatch" })]);
 
     const inactiveStore = new InMemoryScraperStore();
@@ -645,6 +675,12 @@ describe("dwm alert repository", () => {
       captures: inactiveStore.listCaptures()
     });
     expect(inactiveReadiness.blockerCodes).toContain("source_family_inactive");
+    expect(inactiveReadiness.zeroAlertProof).toMatchObject({
+      zeroAlert: true,
+      state: "blocked_inactive_source",
+      expectedAlertDelta: 0,
+      blockerCodes: expect.arrayContaining(["source_family_inactive"])
+    });
     expect(inactiveReadiness.typedBlockers.find((blocker) => blocker.code === "source_family_inactive")).toMatchObject({
       sourceFamilies: ["telegram_public"]
     });
@@ -685,7 +721,13 @@ describe("dwm alert repository", () => {
     });
     expect(deniedReadiness).toMatchObject({
       readyForRebuild: false,
-      blockerCodes: expect.arrayContaining(["entitlement_denied", "org_export_unavailable"])
+      blockerCodes: expect.arrayContaining(["entitlement_denied", "org_export_unavailable"]),
+      zeroAlertProof: {
+        zeroAlert: true,
+        state: "blocked_entitlement",
+        expectedAlertDelta: 0,
+        blockerCodes: expect.arrayContaining(["entitlement_denied", "org_export_unavailable"])
+      }
     });
     const deniedRebuild = rebuildDwmRuntimeAlerts({ store: deniedStore as any, tenantId: "org_repo_denied", organizationId: "org_repo_denied" });
     expect(deniedRebuild.savedAlertCount).toBe(0);
