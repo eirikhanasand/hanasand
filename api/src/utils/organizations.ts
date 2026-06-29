@@ -575,6 +575,39 @@ export type OrganizationSharedWatchlistDownstreamProof = {
     caseBridge: {
         route: 'POST /v1/cases'
         casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        caseWorkflowContract: {
+            schemaVersion: 'organization.watchlist_case_workflow_contract.v1'
+            organizationId: string
+            tenantId: string
+            sourceFamily: 'organization_watchlist'
+            routes: {
+                open: 'POST /v1/cases'
+                list: 'GET /v1/cases'
+                detail: 'GET /v1/cases/:id'
+                update: 'PATCH /v1/cases/:id'
+            }
+            requiredQueryFields: Array<'organizationId'>
+            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+            watchlistScope: {
+                watchlistItemIds: string[]
+                alertGeneratorKeys: string[]
+                evidenceRefField: 'case.evidence.watchlistItemIds[]'
+            }
+            actorActions: {
+                canReadCases: boolean
+                canOpenCase: boolean
+                canAssignCase: boolean
+                canLinkCase: boolean
+                canCloseCase: boolean
+                allowedActions: OrganizationAlertCaseAction[]
+                denialReason: OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason | null
+            }
+            requiredCaseFields: string[]
+            timelineEventTypes: Array<'case.opened' | 'case.linked_alert' | 'case.assigned' | 'case.status_changed' | 'case.note_added'>
+            evidenceFields: string[]
+            redactedFields: string[]
+            blockerCodes: Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>
+        }
         expectedCaseFields: string[]
         allowedActions: OrganizationAlertCaseAction[]
         blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[]
@@ -1323,6 +1356,10 @@ export function organizationSharedWatchlistDownstreamProof(
         ? (alertBlockers[0] ?? null)
         : downstreamAuthorization.visibility.reason
     const alertReadAllowed = downstreamAuthorization.visibility.allowed && alertBlockers.length === 0
+    const caseWorkflowDenialReason = downstreamAuthorization.visibility.allowed
+        ? (caseBlockers[0] ?? null)
+        : downstreamAuthorization.visibility.reason
+    const caseReadAllowed = downstreamAuthorization.visibility.allowed && caseBlockers.length === 0
     const webhookBlockers = Array.from(new Set([
         ...alertBlockers,
         downstreamAuthorization.downstream.webhook.denialReason,
@@ -1512,6 +1549,66 @@ export function organizationSharedWatchlistDownstreamProof(
         caseBridge: {
             route: 'POST /v1/cases',
             casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+            caseWorkflowContract: {
+                schemaVersion: 'organization.watchlist_case_workflow_contract.v1',
+                organizationId: organization.id,
+                tenantId: organization.id,
+                sourceFamily: 'organization_watchlist',
+                routes: {
+                    open: 'POST /v1/cases',
+                    list: 'GET /v1/cases',
+                    detail: 'GET /v1/cases/:id',
+                    update: 'PATCH /v1/cases/:id',
+                },
+                requiredQueryFields: ['organizationId'],
+                casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+                watchlistScope: {
+                    watchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+                    alertGeneratorKeys,
+                    evidenceRefField: 'case.evidence.watchlistItemIds[]',
+                },
+                actorActions: {
+                    canReadCases: caseReadAllowed,
+                    canOpenCase: caseReadAllowed && downstreamAuthorization.allowedActions.includes('link_case'),
+                    canAssignCase: caseReadAllowed && downstreamAuthorization.allowedActions.includes('assign_case'),
+                    canLinkCase: caseReadAllowed && downstreamAuthorization.allowedActions.includes('link_case'),
+                    canCloseCase: caseReadAllowed && downstreamAuthorization.allowedActions.includes('assign_case'),
+                    allowedActions: downstreamAuthorization.allowedActions,
+                    denialReason: caseWorkflowDenialReason,
+                },
+                requiredCaseFields: [
+                    'organizationId',
+                    'tenantId',
+                    'alertId',
+                    'casePath',
+                    'watchlistItemIds',
+                    'allowedActions',
+                    'visibilityDecision',
+                    'evidence.provenance',
+                ],
+                timelineEventTypes: [
+                    'case.opened',
+                    'case.linked_alert',
+                    'case.assigned',
+                    'case.status_changed',
+                    'case.note_added',
+                ],
+                evidenceFields: [
+                    'alertId',
+                    'watchlistItemIds',
+                    'alertGeneratorKeys',
+                    'matchedTerms',
+                    'source',
+                    'capturedAt',
+                    'casePath',
+                ],
+                redactedFields: [
+                    'activeTerms[].term',
+                    'activeTerms[].value',
+                    'case.evidence.rawContent',
+                ],
+                blockerCodes: caseBlockers,
+            },
             expectedCaseFields: [
                 'organizationId',
                 'tenantId',
@@ -1616,6 +1713,8 @@ export function organizationSharedWatchlistDownstreamProof(
                 'alertBridge.queueVisibilityContract.actorVisibility',
                 'alertBridge.queueVisibilityContract.watchlistScope',
                 'alertBridge.expectedAlertFields',
+                'caseBridge.caseWorkflowContract.actorActions',
+                'caseBridge.caseWorkflowContract.watchlistScope',
                 'caseBridge.expectedCaseFields',
                 'webhookBridge.expectedDeliveryFields',
                 'webhookBridge.deliveryContract.destinationSelection',
