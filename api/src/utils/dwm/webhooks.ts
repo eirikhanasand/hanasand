@@ -5971,6 +5971,115 @@ export function buildDwmWebhookDeliveryAttemptPersistenceReadModel({
     }
 }
 
+export function buildDwmWebhookDeliveryReplayApiContract({
+    deliveries,
+    auditEvents = [],
+    destinations = [],
+    filters = {},
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+    visibility = null,
+}: {
+    deliveries: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    destinations?: DwmWebhookDestinationPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+    visibility?: DwmWebhookEvidenceVisibilityInput | null
+}) {
+    const readModel = buildDwmWebhookDeliveryAttemptPersistenceReadModel({
+        deliveries,
+        auditEvents,
+        destinations,
+        filters,
+        liveDeliveryEnabled,
+    })
+    const replayGuard = buildDwmWebhookDeliveryReplayGuard({
+        deliveries,
+        auditEvents,
+        destinations,
+        filters,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+        visibility,
+    })
+    const guardByIdempotencyKey = new Map(replayGuard.entries.map(entry => [entry.idempotencyKey, entry]))
+    const requests = readModel.rows.map((row) => {
+        const guard = guardByIdempotencyKey.get(row.idempotencyKey) || null
+        const permissionBlocked = replayGuard.access.canReplay !== true
+        const dryRunBlockers = [
+            ...(guard?.blockers || []).filter(blocker => blocker.blocking && blocker.code !== 'live_delivery_disabled'),
+            ...(permissionBlocked ? [retryQueueBlocker('permission_denied', 'Only organization owners and admins can replay webhook deliveries.', row.destinationId, true)] : []),
+        ]
+        const dryRunAllowed = replayGuard.access.canReplay === true && dryRunBlockers.length === 0 && row.actionRequests.dryRunReplay.body !== null
+        return {
+            schemaVersion: 'dwm.webhook.delivery_replay_api_request.v1',
+            deliveryId: row.deliveryId,
+            requestId: row.requestId,
+            destinationId: row.destinationId,
+            orgId: row.orgId,
+            alertId: row.alertId,
+            dedupeKey: row.dedupeKey,
+            idempotencyKey: row.idempotencyKey,
+            replay: row.replay,
+            status: row.status,
+            redactedDestination: row.redactedDestination,
+            latestAttempt: {
+                status: row.status,
+                dryRun: row.dryRun,
+                live: row.live,
+                attemptedAt: row.timestamps.attemptedAt,
+                auditEventId: row.audit.auditEventId,
+            },
+            dryRunReplay: {
+                route: 'POST /api/dwm/webhook-deliveries',
+                canSend: dryRunAllowed,
+                noNetwork: true,
+                body: row.actionRequests.dryRunReplay.body,
+                expectedStatus: 'dry_run',
+                expectedAuditAction: 'delivery.replayed',
+                blockers: uniqueRetryQueueBlockers(dryRunBlockers),
+            },
+            liveReplay: {
+                route: 'POST /api/dwm/webhook-deliveries',
+                canSend: guard?.guard.liveAllowed === true,
+                noNetwork: !liveDeliveryEnabled,
+                body: row.actionRequests.liveReplay.body,
+                blockers: guard?.blockers || row.actionRequests.liveReplay.blockers,
+            },
+            retry: row.retry,
+            audit: row.audit,
+            operationLinks: row.operationLinks,
+        }
+    })
+
+    return {
+        schemaVersion: 'dwm.webhook.delivery_replay_api.v1',
+        noNetwork: true,
+        externalSendEnabled: replayGuard.externalSendEnabled,
+        liveDeliveryEnabled,
+        access: replayGuard.access,
+        visibility: replayGuard.visibility,
+        filters: readModel.filters,
+        counts: {
+            total: requests.length,
+            dryRunReady: requests.filter(request => request.dryRunReplay.canSend).length,
+            liveReady: requests.filter(request => request.liveReplay.canSend).length,
+            blocked: requests.filter(request => !request.dryRunReplay.canSend).length,
+            auditLinked: requests.filter(request => request.audit.auditEventId).length,
+        },
+        requests,
+        blockers: uniqueRetryQueueBlockers([
+            ...replayGuard.blockers,
+            ...requests.flatMap(request => request.dryRunReplay.blockers),
+        ]),
+    }
+}
+
 function toDwmWebhookDispatchDestinationForContract(destination: DwmWebhookDispatchDestination | DwmWebhookDestinationPublic): DwmWebhookDispatchDestination {
     const dispatchDestination = destination as DwmWebhookDispatchDestination
     const publicDestination = destination as DwmWebhookDestinationPublic

@@ -33,6 +33,7 @@ import {
     buildDwmWebhookDeliveryPersistenceProof,
     buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReplayGuard,
+    buildDwmWebhookDeliveryReplayApiContract,
     buildDwmWebhookDeliveryTimeline,
     buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDeliveryRetryQueue,
@@ -675,6 +676,21 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 : null,
         }),
         deliveryReplayGuard: buildDwmWebhookDeliveryReplayGuard({
+            deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
+            auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
+            destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,
+            filters: deliveryFilters,
+            ...destinationLifecycleAccess(orgId, userId, visibility),
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: visibility?.role,
+                    status: visibility?.status,
+                    userActive: visibility?.user_active,
+                    alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                }
+                : null,
+        }),
+        deliveryReplayApi: buildDwmWebhookDeliveryReplayApiContract({
             deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
             auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
             destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,

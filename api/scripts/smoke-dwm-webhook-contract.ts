@@ -28,6 +28,7 @@ import {
     buildDwmWebhookDeliveryAttemptPersistenceReadModel,
     buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReplayGuard,
+    buildDwmWebhookDeliveryReplayApiContract,
     buildDwmWebhookDeliveryTimeline,
     buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDeliveryRequestInput,
@@ -2112,12 +2113,32 @@ const deliveryReplayGuard = buildDwmWebhookDeliveryReplayGuard({
     canManage: true,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const deliveryReplayApi = buildDwmWebhookDeliveryReplayApiContract({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract', destinationId: 'destination_replay_contract' },
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const nonmemberDeliveryReplayGuard = buildDwmWebhookDeliveryReplayGuard({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
     deliveries: auditDeliveryRows,
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDeliveryReplayApi = buildDwmWebhookDeliveryReplayApiContract({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract', destinationId: 'destination_replay_contract' },
     viewerRole: null,
     canManage: false,
     visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
@@ -3025,6 +3046,7 @@ const deliveryActionDelivered = deliveryActionPlan.actions.find(item => item.ded
 const replayGuardReplay = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract')
 const replayGuardDelivered = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract')
 const replayGuardTerminal = deliveryReplayGuard.entries.find(item => item.idempotencyKey === 'dwm.alert.created:org_contract:destination_terminal_contract:dwm_dedupe_terminal_contract')
+const deliveryReplayApiReplay = deliveryReplayApi.requests.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const duplicateReplayGuardDelivered = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_delivered_contract')
 const duplicateReplayGuardSkipped = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_skipped_contract')
 expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && deliveryHistory.total === deliveryOperations.total, 'Delivery history should mirror customer-visible delivery operations.', deliveryHistory)
@@ -3104,6 +3126,12 @@ expect(replayGuardReplay?.latestReceipt?.proof.updatedAt === '2026-06-28T12:08:0
 expect(nonmemberDeliveryReplayGuard.entries.length === 0 && nonmemberDeliveryReplayGuard.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay guard should deny nonmembers without leaking replay keys.', nonmemberDeliveryReplayGuard)
 expect(orgAlertDeliveryContract.deliveryReplayGuard.schemaVersion === 'dwm.webhook.delivery_replay_guard.v1' && orgAlertDeliveryContract.deliveryReplayGuard.entries.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped replay guard.', orgAlertDeliveryContract.deliveryReplayGuard)
 expect(!JSON.stringify(deliveryReplayGuard).includes(secret), 'Delivery replay guard should redact endpoint, response, and payload secrets.', deliveryReplayGuard)
+expect(deliveryReplayApi.schemaVersion === 'dwm.webhook.delivery_replay_api.v1' && deliveryReplayApi.noNetwork === true && deliveryReplayApi.counts.dryRunReady >= 1, 'Delivery replay API should expose no-network replay requests for delivery history.', deliveryReplayApi)
+expect(deliveryReplayApiReplay?.dryRunReplay.canSend === true && deliveryReplayApiReplay.dryRunReplay.body?.destinationId === 'destination_replay_contract' && deliveryReplayApiReplay.dryRunReplay.body?.dedupeKey === 'dwm_dedupe_replay_contract', 'Delivery replay API should build an exact dry-run replay body.', deliveryReplayApiReplay?.dryRunReplay)
+expect(deliveryReplayApiReplay?.liveReplay.canSend === false && deliveryReplayApiReplay.liveReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery replay API should block live replay while live delivery is disabled.', deliveryReplayApiReplay?.liveReplay)
+expect(deliveryReplayApiReplay?.latestAttempt.auditEventId === 'audit_replay_duplicate_contract' && deliveryReplayApiReplay.redactedDestination.endpointExposed === false, 'Delivery replay API should expose audit proof and redacted destination metadata.', deliveryReplayApiReplay)
+expect(nonmemberDeliveryReplayApi.requests.every(item => item.dryRunReplay.canSend === false) && nonmemberDeliveryReplayApi.blockers.some(item => item.code === 'permission_denied'), 'Delivery replay API should deny nonmembers without sending replay requests.', nonmemberDeliveryReplayApi)
+expect(!JSON.stringify(deliveryReplayApi).includes(secret), 'Delivery replay API should redact endpoint, response, and payload secrets.', deliveryReplayApi)
 expect(orgAlertDeliveryContract.customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && orgAlertDeliveryContract.customerSetup.routes.deliver === 'POST /api/dwm/webhook-deliveries', 'Org alert delivery contract should include customer setup proof for delivery routes.', orgAlertDeliveryContract.customerSetup)
 expect(orgAlertDeliveryProof.schemaVersion === 'dwm.webhook.alert_delivery_proof.v1' && orgAlertDeliveryProof.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.eventType === 'dwm.alert.replayed', 'Alert delivery proof should normalize replay alert context.', orgAlertDeliveryProof)
 expect(orgAlertDeliveryProof.noNetwork === true && orgAlertDeliveryProof.externalSendEnabled === false && orgAlertDeliveryProof.status === 'blocked', 'Alert delivery proof should preserve dry-run/no-network state and blockers.', orgAlertDeliveryProof)
@@ -3490,6 +3518,11 @@ console.log(JSON.stringify({
             'deliveryReplayGuard.entries[].guard.duplicateLiveBlocked',
             'deliveryReplayGuard.entries[].blockers[].code',
             'deliveryReplayGuard.entries[].latestReceipt.discordPreview.fieldNames',
+            'deliveryReplayApi.schemaVersion',
+            'deliveryReplayApi.requests[].dryRunReplay.body',
+            'deliveryReplayApi.requests[].liveReplay.blockers[].code',
+            'deliveryReplayApi.requests[].latestAttempt.auditEventId',
+            'deliveryReplayApi.requests[].redactedDestination.endpointHash',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.persistedAttemptCount',
