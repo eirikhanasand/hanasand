@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -212,6 +213,8 @@ describe("dwm alert repository", () => {
       { sourceFamily: "darkweb_metadata", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
       { sourceFamily: "telegram_public", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] }
     ]);
+    expect(readiness.blockerCodes).toEqual([]);
+    expect(readiness.typedBlockers).toEqual([]);
     expect(readiness.blockers).toEqual([]);
     expect(readiness.plan.candidates[0].webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
 
@@ -235,6 +238,7 @@ describe("dwm alert repository", () => {
     expect(readinessWithoutOrg).toMatchObject({
       readyForRebuild: false,
       counts: { candidateCount: 0, blockedWatchlists: 2 },
+      blockerCodes: expect.arrayContaining(["blocked_watchlist_scope", "org_export_unavailable"]),
       plan: { candidates: [] }
     });
     expect(JSON.stringify(readinessWithoutOrg.plan.candidates)).not.toContain("acme.com");
@@ -298,6 +302,15 @@ describe("dwm alert repository", () => {
     expect(telegramSql.workflow_context.generationCandidateId).toBe(generationPlan.candidates[0].id);
     expect(telegramSql.workflow_context.webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
     expect(telegramSql.webhook_context.casePath).toContain(telegramSql.id);
+    expect(telegramSql.delivery_readiness_context).toMatchObject({
+      schemaVersion: "dwm.alert_delivery_persistence.v1",
+      organizationId: "org_repo_acme",
+      selectedCaptureIds: ["cap_repo_tg_acme"],
+      sourceFamily: "telegram_public",
+      deliveryDedupeKey: telegramAlert?.webhookDelivery.dedupeKey,
+      webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"],
+      blockerCodes: ["missing_org_ref"]
+    });
     expect(telegramSql.case_id_candidate).toBe(telegramAlert?.caseIdCandidate);
     expect(telegramSql.case_path).toContain(`/v1/cases/${telegramAlert?.caseIdCandidate}`);
 
@@ -335,6 +348,109 @@ describe("dwm alert repository", () => {
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
     expect(preserved?.evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_quiet");
     expect(preserved?.provenance.captureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preserved?.deliveryReadinessContext).toMatchObject({
+      state: "delivered",
+      blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),
+      selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+      deliveryHistoryRefs: []
+    });
+  });
+
+  test("matching probe reports blockers and preserves zero mutation for no match, inactive source, and entitlement denial", () => {
+    const noMatchStore = new InMemoryScraperStore();
+    noMatchStore.saveSource(telegramSource);
+    noMatchStore.saveCapture(nonmatchCapture);
+    (noMatchStore as any).saveDwmWatchlist({
+      id: "watch_repo_nomatch",
+      tenantId: "tenant_repo_nomatch",
+      organizationId: "org_repo_nomatch",
+      terms: [{ id: "watch_item_nomatch", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_nomatch",
+      status: "active"
+    });
+    (noMatchStore as any).saveDwmAlert({ id: "alert_existing_nomatch", tenantId: "tenant_repo_nomatch", dedupeKey: "existing", savedAt: "2026-06-28T13:00:00.000Z" });
+
+    const noMatchReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: (noMatchStore as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_nomatch",
+      organizationId: "org_repo_nomatch",
+      sources: noMatchStore.listSources(),
+      captures: noMatchStore.listCaptures()
+    });
+    expect(noMatchReadiness).toMatchObject({
+      readyForRebuild: true,
+      readyForCustomerDelivery: false,
+      counts: { candidateCount: 1, captureRefCount: 0, matchedCandidateCount: 0, unmatchedCandidateCount: 1 },
+      blockerCodes: expect.arrayContaining(["no_matching_captures", "missing_evidence"])
+    });
+    const noMatchRebuild = rebuildDwmRuntimeAlerts({ store: noMatchStore as any, tenantId: "tenant_repo_nomatch", organizationId: "org_repo_nomatch" });
+    expect(noMatchRebuild.savedAlertCount).toBe(0);
+    expect((noMatchStore as any).listDwmAlerts()).toEqual([expect.objectContaining({ id: "alert_existing_nomatch" })]);
+
+    const inactiveStore = new InMemoryScraperStore();
+    inactiveStore.saveSource({ ...telegramSource, id: "src_repo_tg_inactive", status: "candidate" } as SourceRecord);
+    inactiveStore.saveCapture({ ...telegramCapture, id: "cap_repo_inactive_acme", sourceId: "src_repo_tg_inactive" } as RawCapture);
+    (inactiveStore as any).saveDwmWatchlist({
+      id: "watch_repo_inactive",
+      tenantId: "tenant_repo_inactive",
+      organizationId: "org_repo_inactive",
+      terms: [{ id: "watch_item_inactive", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_inactive",
+      status: "active"
+    });
+    const inactiveReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: (inactiveStore as any).listDwmWatchlists(),
+      tenantId: "tenant_repo_inactive",
+      organizationId: "org_repo_inactive",
+      sources: inactiveStore.listSources(),
+      captures: inactiveStore.listCaptures()
+    });
+    expect(inactiveReadiness.blockerCodes).toContain("source_family_inactive");
+    expect(inactiveReadiness.typedBlockers.find((blocker) => blocker.code === "source_family_inactive")).toMatchObject({
+      sourceFamilies: ["telegram_public"]
+    });
+    const inactiveRebuild = rebuildDwmRuntimeAlerts({ store: inactiveStore as any, tenantId: "tenant_repo_inactive", organizationId: "org_repo_inactive" });
+    expect(inactiveRebuild.savedAlertCount).toBe(0);
+    expect((inactiveStore as any).listDwmAlerts()).toEqual([]);
+
+    const deniedStore = new InMemoryScraperStore();
+    deniedStore.saveSource(telegramSource);
+    deniedStore.saveCapture(telegramCapture);
+    for (const watchlist of orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_denied",
+      tenantId: "org_repo_denied",
+      ownerOrganizationId: "org_repo_denied",
+      entitlementStatus: "suspended",
+      canGenerateAlerts: false,
+      blockedReasons: ["entitlement_suspended"],
+      activeTerms: [{
+        watchlistId: "watch_repo_denied",
+        watchlistItemId: "watch_item_denied",
+        organizationId: "org_repo_denied",
+        tenantId: "org_repo_denied",
+        kind: "domain",
+        termFamily: "domain",
+        term: "acme.com",
+        status: "active"
+      }]
+    })) {
+      (deniedStore as any).saveDwmWatchlist(watchlist);
+    }
+    const deniedReadiness = buildDwmAlertGenerationReadiness({
+      watchlists: (deniedStore as any).listDwmWatchlists(),
+      tenantId: "org_repo_denied",
+      organizationId: "org_repo_denied",
+      sources: deniedStore.listSources(),
+      captures: deniedStore.listCaptures()
+    });
+    expect(deniedReadiness).toMatchObject({
+      readyForRebuild: false,
+      blockerCodes: expect.arrayContaining(["entitlement_denied", "org_export_unavailable"])
+    });
+    const deniedRebuild = rebuildDwmRuntimeAlerts({ store: deniedStore as any, tenantId: "org_repo_denied", organizationId: "org_repo_denied" });
+    expect(deniedRebuild.savedAlertCount).toBe(0);
+    expect((deniedStore as any).listDwmAlerts()).toEqual([]);
   });
 
   test("API rebuild and list expose generated alerts in product-ready shape", async () => {
