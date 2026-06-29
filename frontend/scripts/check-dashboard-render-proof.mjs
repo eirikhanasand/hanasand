@@ -42,7 +42,7 @@ const readinessRows = {
     },
     helpdesk_audit: {
         href: '/dashboard/system/impersonation',
-        backendProbe: 'GET /api/admin/support/readiness with audit filters 016a8ef7',
+        backendProbe: 'GET /api/backend/admin/support/access-recovery + GET /api/backend/admin/audit-events',
         commits: ['016a8ef7', '9e25b6ad', '5b7d9357'],
     },
     deploy_probe: {

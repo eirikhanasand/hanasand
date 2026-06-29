@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { buildProductProgressPayload } from '@/utils/productProgress/readiness'
-import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmWatchlistSummary, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { DashboardSourceProofProxyPayload, DwmDeliveryItem, DwmOrganizationSummary, DwmOrganizationWebhookDestination, DwmWatchlistSummary, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,12 +15,14 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, alerts, deliveries, organizations, watchlists] = await Promise.all([
+    const [sourceProxy, alerts, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.deliveries || '/api/dwm/webhooks/deliveries'),
         fetchInternalJson(request, routes.organizations || '/api/organizations'),
         fetchInternalJson(request, routes.watchlists || '/api/dwm/watchlists'),
+        fetchInternalJson(request, routes.supportRecovery || '/api/backend/admin/support/access-recovery'),
+        fetchInternalJson(request, routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50'),
     ])
     const selectedOrganization = selectOrganization(organizations.json, request)
     const organizationWebhooks = selectedOrganization
@@ -57,6 +59,13 @@ export async function GET(request: NextRequest) {
             fetchStatus: organizationWebhooks.status,
             fetchError: organizationWebhooks.error,
         }),
+        helpdeskAudit: helpdeskAuditReadiness({
+            generatedAt,
+            recoveryRoute: routes.supportRecovery || '/api/backend/admin/support/access-recovery',
+            auditRoute: routes.adminAuditEvents || '/api/backend/admin/audit-events?limit=50',
+            recovery: supportRecovery,
+            audit: auditEvents,
+        }),
         deploy: {
             status: 'needs_action',
             frontendHealthy: true,
@@ -75,7 +84,7 @@ function productProgressRoutes(query: string) {
     return {
         productProgress: '/api/product-progress',
         publicTiProvenance: '/api/public-ti/provenance/readiness',
-        helpdeskAudit: '/api/admin/support/readiness',
+        helpdeskAudit: '/api/backend/admin/support/access-recovery',
         deployProbe: '/api/product-progress',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
         entitlement: '/api/dwm/entitlements/readiness',
@@ -87,6 +96,8 @@ function productProgressRoutes(query: string) {
         operations: '/api/dwm/operations',
         deliveries: '/api/dwm/webhooks/deliveries',
         organizationWebhooks: '/api/organizations/:id/webhooks',
+        supportRecovery: '/api/backend/admin/support/access-recovery',
+        adminAuditEvents: '/api/backend/admin/audit-events?limit=50',
     }
 }
 
@@ -242,4 +253,54 @@ function webhookHealthReadiness(input: {
         backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
         detail: blockers.length ? blockers.join('; ') : `${activeDestinations.length} active webhook destination${activeDestinations.length === 1 ? '' : 's'} with ${deliveryReadyCount} delivery-ready row${deliveryReadyCount === 1 ? '' : 's'}.`,
     }
+}
+
+function helpdeskAuditReadiness(input: {
+    generatedAt: string
+    recoveryRoute: string
+    auditRoute: string
+    recovery: FetchResult
+    audit: FetchResult
+}): HelpdeskAuditReadiness {
+    const approvals = rows((input.recovery.json as { approvals?: unknown[] } | undefined)?.approvals)
+    const auditEvents = rows((input.audit.json as { events?: unknown[] } | undefined)?.events)
+    const openRecoveryRequests = approvals.filter(item => {
+        const status = String(item.status || item.outcome || '').toLowerCase()
+        return status === 'pending' || status === 'open' || status === 'requested'
+    }).length
+    const supportQueueDepth = approvals.length
+    const latestAuditEventAt = latestTimestamp(auditEvents.map(item => String(item.createdAt || item.timestamp || item.at || '')))
+    const blockers = [
+        input.recovery.ok ? '' : input.recovery.error || `Support recovery route returned HTTP ${input.recovery.status}.`,
+        input.audit.ok ? '' : input.audit.error || `Admin audit route returned HTTP ${input.audit.status}.`,
+        auditEvents.length ? '' : 'No admin audit events were returned for support readiness.',
+    ].filter(Boolean)
+
+    return {
+        schemaVersion: 'support.audit.readiness.v1',
+        status: blockers.length ? 'needs_action' : 'ready',
+        checkedAt: input.generatedAt,
+        source: `${input.recoveryRoute} + ${input.auditRoute}`,
+        href: '/dashboard/system/impersonation',
+        auditedActions: auditEvents.length,
+        openRecoveryRequests,
+        supportQueueDepth,
+        latestAuditEventAt,
+        blockers,
+        ownerLane: 'helpdesk',
+        unavailableReason: blockers.length ? 'missing_helpdesk_audit_readiness_api' : undefined,
+        staleAfterSeconds: 3600,
+        proofTimestamp: latestAuditEventAt || input.generatedAt,
+        expectedDashboardRowId: 'helpdesk_audit',
+        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery and GET /api/backend/admin/audit-events must return recovery queue and audit events.',
+        backendProofContractVersion: 'support.audit.readiness.v1',
+        detail: blockers.length ? blockers.join('; ') : `${auditEvents.length} audit event${auditEvents.length === 1 ? '' : 's'} and ${supportQueueDepth} recovery record${supportQueueDepth === 1 ? '' : 's'} loaded.`,
+    }
+}
+
+function latestTimestamp(values: string[]) {
+    return values
+        .filter(value => !Number.isNaN(new Date(value).getTime()))
+        .sort()
+        .at(-1)
 }

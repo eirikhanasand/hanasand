@@ -298,6 +298,8 @@ export type ProductProgressReadinessPayload = {
         operations?: string
         deliveries?: string
         organizationWebhooks?: string
+        supportRecovery?: string
+        adminAuditEvents?: string
     }
     publicTiProvenance?: PublicTiProvenanceReadiness
     helpdeskAudit?: HelpdeskAuditReadiness

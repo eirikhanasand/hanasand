@@ -299,6 +299,24 @@ const backedOrgWebhookPayload = buildProductProgressPayload({
         integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/dwm/webhooks/deliveries must return active destinations and delivery evidence.',
         backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
     },
+    helpdeskAudit: {
+        schemaVersion: 'support.audit.readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/backend/admin/support/access-recovery + /api/backend/admin/audit-events?limit=50',
+        href: '/dashboard/system/impersonation',
+        auditedActions: 2,
+        openRecoveryRequests: 1,
+        supportQueueDepth: 1,
+        latestAuditEventAt: generatedAt,
+        blockers: [],
+        ownerLane: 'helpdesk',
+        staleAfterSeconds: 3600,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'helpdesk_audit',
+        integrationProbeHint: 'GET /api/backend/admin/support/access-recovery and GET /api/backend/admin/audit-events must return recovery queue and audit events.',
+        backendProofContractVersion: 'support.audit.readiness.v1',
+    },
 })
 assert.equal(backedOrgWebhookPayload.orgAlertExport?.status, 'ready')
 assert.equal(backedOrgWebhookPayload.orgAlertExport?.source, '/api/dwm/watchlists')
@@ -306,6 +324,7 @@ assert.equal(backedOrgWebhookPayload.webhookHealth?.status, 'ready')
 assert.equal(backedOrgWebhookPayload.webhookHealth?.source, '/api/organizations/org_acme/webhooks')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).orgAlertExport?.status, 'ready')
 assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).webhookHealth?.status, 'ready')
+assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).helpdeskAudit?.status, 'ready')
 const readyContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -471,8 +490,11 @@ for (const scopedProgressToken of [
     '\'actor\'',
     'orgAlertExportReadiness',
     'webhookHealthReadiness',
+    'helpdeskAuditReadiness',
     '/api/dwm/watchlists',
     '/api/organizations/:id/webhooks',
+    '/api/backend/admin/support/access-recovery',
+    '/api/backend/admin/audit-events?limit=50',
 ]) {
     assert.ok(productProgressRouteSource.includes(scopedProgressToken), `Product-progress route missing scoped readiness token: ${scopedProgressToken}`)
 }
