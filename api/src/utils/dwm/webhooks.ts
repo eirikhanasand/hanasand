@@ -1896,6 +1896,181 @@ export function buildDwmWebhookAuditEventContracts({
         })
 }
 
+export function buildDwmWebhookDeliveryAuditTrail({
+    auditEvents,
+    deliveries = [],
+    destinations = [],
+    filters = {},
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+    visibility = null,
+}: {
+    auditEvents: DwmWebhookAuditPublic[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    destinations?: DwmWebhookDestinationPublic[]
+    filters?: DwmWebhookDeliveryEvidenceFilters
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+    visibility?: DwmWebhookEvidenceVisibilityInput | null
+}) {
+    const decision = visibility
+        ? organizationVisibilityDecision(visibility)
+        : {
+            allowed: true,
+            reason: null,
+            alertVisibilityPolicy: 'members' as const,
+            allowedRoles: ['owner', 'admin', 'member', 'viewer'] as OrganizationRole[],
+        }
+    const access = {
+        role: clean(viewerRole) || null,
+        canRead: decision.allowed,
+        canManage: decision.allowed && canManage,
+        memberSafe: decision.allowed && !canManage,
+    }
+    const normalizedFilters = {
+        orgId: clean(filters.orgId) || null,
+        destinationId: clean(filters.destinationId) || null,
+        alertId: clean(filters.alertId) || null,
+        casePath: clean(filters.casePath) || null,
+        dedupeKey: clean(filters.dedupeKey) || null,
+        requestId: clean(filters.requestId) || clean(filters.deliveryId) || null,
+    }
+    const deniedBlocker = auditTrailBlocker('permission_denied', 'Webhook delivery audit trail is not visible for this organization membership.', null, true)
+    if (!decision.allowed) {
+        return {
+            schemaVersion: 'dwm.webhook.audit_trail.v1',
+            liveDeliveryEnabled,
+            noNetwork: true,
+            visibility: decision,
+            access,
+            filters: normalizedFilters,
+            counts: {
+                total: 0,
+                destination: 0,
+                delivery: 0,
+                failed: 0,
+                retryable: 0,
+                replay: 0,
+                memberSafe: 0,
+            },
+            blockers: [deniedBlocker],
+            entries: [],
+        }
+    }
+
+    const auditContracts = buildDwmWebhookAuditEventContracts({ auditEvents, deliveries, destinations })
+    const retryWorkOrders = buildDwmWebhookDeliveryRetryWorkOrders({
+        auditEvents,
+        deliveries,
+        destinations,
+        filters,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+        visibility: null,
+    })
+    const retryByDeliveryId = new Map(retryWorkOrders.workOrders.map(order => [order.deliveryId, order]))
+    const entries = auditContracts
+        .filter((audit) => {
+            if (normalizedFilters.orgId && audit.orgId !== normalizedFilters.orgId) return false
+            if (normalizedFilters.destinationId && audit.destinationId !== normalizedFilters.destinationId) return false
+            if (normalizedFilters.requestId && audit.deliveryId !== normalizedFilters.requestId && audit.requestId !== normalizedFilters.requestId) return false
+            if (normalizedFilters.alertId && audit.delivery?.alertId !== normalizedFilters.alertId) return false
+            if (normalizedFilters.casePath && audit.delivery?.casePath !== normalizedFilters.casePath) return false
+            if (normalizedFilters.dedupeKey) {
+                const deliveryDedupeKey = audit.delivery?.idempotencyKey
+                    ? dedupeFromIdempotencyKey(audit.delivery.idempotencyKey)
+                    : null
+                if (audit.delivery?.idempotencyKey !== normalizedFilters.dedupeKey && deliveryDedupeKey !== normalizedFilters.dedupeKey) return false
+            }
+            return true
+        })
+        .map((audit) => {
+            const retryWorkOrder = audit.deliveryId ? retryByDeliveryId.get(audit.deliveryId) || null : null
+            const replay = audit.delivery?.eventType === 'dwm.alert.replayed' || audit.action === 'delivery.replayed'
+            const retryable = Boolean(audit.retry?.retryable || retryWorkOrder?.eligibility.dryRunReady || retryWorkOrder?.eligibility.liveReady)
+            const summary = audit.category === 'destination'
+                ? `${audit.outcome} destination ${audit.destination?.label || audit.destinationId || 'webhook destination'}`
+                : `${audit.outcome} ${audit.delivery?.eventType || 'webhook delivery'} for alert ${audit.delivery?.alertId || 'unknown'}`
+
+            return {
+                schemaVersion: 'dwm.webhook.audit_trail_entry.v1',
+                auditEventId: audit.auditEventId,
+                action: audit.action,
+                category: audit.category,
+                outcome: audit.outcome,
+                severity: audit.severity,
+                orgId: audit.orgId,
+                destinationId: audit.destinationId,
+                deliveryId: audit.deliveryId,
+                requestId: audit.requestId,
+                actorId: access.canManage ? audit.actorId : null,
+                customerSummary: truncate(summary, 180),
+                destination: audit.destination,
+                delivery: audit.delivery
+                    ? {
+                        alertId: audit.delivery.alertId,
+                        eventType: audit.delivery.eventType,
+                        status: audit.delivery.status,
+                        dryRun: audit.delivery.dryRun,
+                        live: audit.delivery.live,
+                        replay,
+                        idempotencyKey: audit.delivery.idempotencyKey,
+                        dedupeKey: audit.delivery.idempotencyKey ? dedupeFromIdempotencyKey(audit.delivery.idempotencyKey) : null,
+                        payloadHash: audit.delivery.payloadHash,
+                        responseStatus: audit.delivery.responseStatus,
+                        error: audit.delivery.error,
+                        watchlistId: audit.delivery.watchlistId,
+                        watchlistName: audit.delivery.watchlistName,
+                        route: audit.delivery.route,
+                        casePath: audit.delivery.casePath,
+                        attemptedAt: audit.delivery.attemptedAt,
+                    }
+                    : null,
+                retry: retryWorkOrder
+                    ? {
+                        state: retryWorkOrder.state,
+                        nextRetryAt: retryWorkOrder.eligibility.nextRetryAt,
+                        attemptCount: retryWorkOrder.eligibility.attemptCount,
+                        lastErrorCategory: retryWorkOrder.eligibility.lastErrorCategory,
+                        canRetry: access.canManage && retryWorkOrder.eligibility.canRetry,
+                        nextAuditAction: retryWorkOrder.audit.nextAction,
+                    }
+                    : audit.retry,
+                metadata: access.canManage ? audit.metadata : null,
+                routes: {
+                    delivery: audit.deliveryId ? `GET /api/dwm/webhook-deliveries?deliveryId=${audit.deliveryId}` : null,
+                    destination: audit.destinationId ? `GET /api/dwm/webhooks?destinationId=${audit.destinationId}` : null,
+                    retry: retryWorkOrder ? 'POST /api/dwm/webhook-deliveries' : null,
+                },
+                memberSafe: access.memberSafe,
+                createdAt: audit.createdAt,
+            }
+        })
+
+    return {
+        schemaVersion: 'dwm.webhook.audit_trail.v1',
+        liveDeliveryEnabled,
+        noNetwork: true,
+        visibility: decision,
+        access,
+        filters: normalizedFilters,
+        counts: {
+            total: entries.length,
+            destination: entries.filter(entry => entry.category === 'destination').length,
+            delivery: entries.filter(entry => entry.category === 'delivery').length,
+            failed: entries.filter(entry => entry.outcome === 'failed').length,
+            retryable: entries.filter(entry => Boolean(entry.retry?.nextRetryAt)).length,
+            replay: entries.filter(entry => entry.delivery?.replay).length,
+            memberSafe: entries.filter(entry => entry.memberSafe).length,
+        },
+        blockers: [],
+        entries,
+    }
+}
+
 export function planDwmWebhookDeliveryRetry({
     status,
     dryRun,
@@ -4243,6 +4418,15 @@ function uniqueRetryQueueBlockers(blockers: ReturnType<typeof retryQueueBlocker>
         unique.push(blocker)
     }
     return unique
+}
+
+function auditTrailBlocker(
+    code: string,
+    message: string,
+    destinationId: string | null = null,
+    blocking = true
+) {
+    return { code, message, destinationId, blocking }
 }
 
 function destinationMatrixBlocker(
