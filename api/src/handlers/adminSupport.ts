@@ -3366,6 +3366,65 @@ export async function getSupportAccessRecoveryApproval(req: FastifyRequest<{ Par
     })
     const timeline = (auditRows.rows as Record<string, unknown>[]).map(toSupportAuditTimelineEvent)
     const approvalTimeline = supportAccessRecoveryApprovalTimeline(auditFilters, [detail])
+    const [availability, memberDetail] = await Promise.all([
+        loadOrganizationAvailability([approval.organization_id]),
+        detail.targetUserId ? loadSupportMemberDetail(approval.organization_id, detail.targetUserId) : Promise.resolve(undefined),
+    ])
+    const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
+    const approvalInvite = {
+        id: approval.invite_id,
+        organization_id: approval.organization_id,
+        organization_name: approval.organization_name,
+        email: approval.email,
+        role: approval.role,
+        status: approval.invite_status,
+        expires_at: approval.expires_at,
+        accepted_at: null,
+    } as Record<string, unknown>
+    const recoveryEligibility = buildRecoveryEligibility({
+        email: approval.email || '',
+        user: detail.targetUserId || '',
+        organizationIds: [approval.organization_id],
+        memberships: memberDetail ? [memberDetail] : [],
+        users: memberDetail ? [memberDetail] : [],
+        availabilityByOrg,
+        invites: [approvalInvite],
+    })
+    const timelineFilter = supportTimelineFilter({
+        q: '',
+        org: approval.organization_id,
+        user: detail.targetUserId || '',
+        email: approval.email || '',
+        request: approval.request_id,
+        entity: approval.invite_id,
+        entityType: 'invite',
+        supportSession: '',
+        action: 'support.organization.access_recovery',
+        severity: '',
+        outcome: approval.outcome,
+        source: 'admin',
+        service: 'hanasand-api',
+        blocker: '',
+        reason: detail.requestedReason || detail.decisionReason || '',
+        context: '',
+        from: '',
+        to: '',
+        limit: 50,
+    })
+    const accessRecoveryPlan = buildSupportAccessRecoveryPlan({
+        org: approval.organization_id,
+        user: detail.targetUserId || '',
+        email: approval.email || '',
+        request: approval.request_id,
+        organizationIds: [approval.organization_id],
+        memberships: memberDetail ? [memberDetail] : [],
+        invites: [approvalInvite],
+        approvalDetails: [detail],
+        recoveryEligibility,
+        availabilityByOrg,
+        timeline,
+        timelineFilter,
+    })
     const authorization = buildSupportInspectionAuthorization({
         actorId: actor.id,
         requestedOrg: approval.organization_id,
@@ -3385,6 +3444,7 @@ export async function getSupportAccessRecoveryApproval(req: FastifyRequest<{ Par
             schemaVersion: 'support.access_recovery.inspection.v1',
             approval: detail,
             authorization,
+            accessRecoveryPlan,
             auditEventIds: timeline.map(event => event.id),
             auditTimeline: {
                 schemaVersion: 'support.access_recovery.inspection_timeline.v1',
