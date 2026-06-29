@@ -20,6 +20,7 @@ import {
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
+    buildDwmWebhookDestinationTestContract,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
@@ -105,6 +106,12 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
                 : null,
         }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries, auditEvents, ...lifecycleAccess }),
+        destinationTests: destinations.map(destination => buildDwmWebhookDestinationTestContract({
+            destination,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+        })),
         destinationAdminProof: buildDwmWebhookDestinationAdminProof({
             destinations,
             deliveries,
@@ -440,6 +447,15 @@ export async function postDwmWebhookDestinationTest(req: FastifyRequest<{ Params
             : null,
         destinationHealth: destination
             ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents })[0]
+            : null,
+        destinationTest: destination
+            ? buildDwmWebhookDestinationTestContract({
+                destination,
+                deliveries,
+                auditEvents,
+                viewerRole: 'admin',
+                canManage: true,
+            })
             : null,
         destinationLifecycle: destination
             ? buildDwmWebhookDestinationLifecycle({ destinations: [destination], deliveries, auditEvents, viewerRole: 'admin', canManage: true })[0]

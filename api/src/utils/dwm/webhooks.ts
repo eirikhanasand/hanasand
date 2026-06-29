@@ -3264,6 +3264,126 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
     }
 }
 
+export function buildDwmWebhookDestinationTestContract({
+    destination,
+    deliveries = [],
+    auditEvents = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+    viewerRole = null,
+    canManage = false,
+}: {
+    destination: DwmWebhookDestinationPublic | null
+    deliveries?: DwmWebhookDeliveryPublic[]
+    auditEvents?: DwmWebhookAuditPublic[]
+    liveDeliveryEnabled?: boolean
+    viewerRole?: string | null
+    canManage?: boolean
+}) {
+    const destinationId = destination?.id || null
+    const scopedDeliveries = destinationId
+        ? deliveries
+            .filter(delivery => delivery.destinationId === destinationId && delivery.eventType === 'dwm.alert.test')
+            .sort((a, b) => String(b.attemptedAt || b.createdAt).localeCompare(String(a.attemptedAt || a.createdAt)))
+        : []
+    const latestTest = scopedDeliveries[0] || null
+    const preview = latestTest ? buildDwmWebhookDeliveryPreview(latestTest) : null
+    const health = destination
+        ? buildDwmWebhookDestinationHealth({ destinations: [destination], deliveries, auditEvents, liveDeliveryEnabled })[0] || null
+        : null
+    const auditContracts = buildDwmWebhookAuditEventContracts({
+        auditEvents,
+        deliveries,
+        destinations: destination ? [destination] : [],
+    })
+    const latestAudit = latestTest
+        ? auditContracts.find(audit => audit.deliveryId === latestTest.id) || null
+        : destinationId
+            ? auditContracts.find(audit => audit.destinationId === destinationId && audit.action === 'delivery.tested') || null
+            : null
+    const blockers: ReturnType<typeof testContractBlocker>[] = []
+    if (!canManage) blockers.push(testContractBlocker('permission_denied', 'Only organization owners and admins can test webhook destinations.', destinationId))
+    if (!destination) blockers.push(testContractBlocker('destination_missing', 'Webhook destination is not available for this organization.', null))
+    if (destination && destination.status !== 'active') blockers.push(testContractBlocker('destination_disabled', 'Destination is disabled and cannot be tested.', destination.id))
+    if (destination && !destination.endpointHash && !destination.endpointHint) blockers.push(testContractBlocker('missing_webhook_url', 'Destination has no configured webhook URL reference.', destination.id))
+    if (!latestTest) blockers.push(testContractBlocker('no_verified_dry_run', 'Destination has not recorded a dry-run test delivery yet.', destinationId, false))
+    if (latestTest?.status === 'failed' || health?.lastTest.status === 'failed') blockers.push(testContractBlocker('test_failed', 'Latest destination test failed.', destinationId))
+    if (!latestAudit) blockers.push(testContractBlocker('audit_missing', 'Destination test has no linked audit event yet.', destinationId, false))
+    if (!liveDeliveryEnabled) blockers.push(testContractBlocker('live_delivery_disabled', 'Live webhook delivery is disabled for this environment; tests default to dry-run.', destinationId, false))
+    const uniqueBlockers = uniqueTestContractBlockers(blockers)
+    const blockingCodes = uniqueBlockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+    const verified = latestTest?.status === 'dry_run' || latestTest?.status === 'delivered'
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_test.v1',
+        orgId: destination?.orgId || latestTest?.orgId || null,
+        destinationId,
+        type: destination?.kind || null,
+        label: destination?.name || null,
+        status: verified ? 'verified' : latestTest?.status === 'failed' || health?.lastTest.status === 'failed' ? 'test_failed' : destination?.status === 'archived' || destination?.status === 'paused' ? 'disabled' : 'pending',
+        noNetwork: true,
+        liveDeliveryEnabled,
+        externalSendEnabled: false,
+        access: {
+            role: clean(viewerRole) || null,
+            canTest: Boolean(canManage && destination && destination.status === 'active' && blockingCodes.length === 0),
+            canReadStatus: Boolean(destination || latestTest),
+            memberSafe: !canManage,
+        },
+        redactedEndpoint: {
+            endpointHint: destination?.endpointHint ? redactDeliveryEvidenceText(destination.endpointHint) : preview?.destination.endpointHint || null,
+            endpointHash: destination?.endpointHash || preview?.destination.endpointHash || null,
+        },
+        latestTest: latestTest
+            ? {
+                requestId: latestTest.id,
+                deliveryId: latestTest.id,
+                status: latestTest.status,
+                dryRun: latestTest.dryRun,
+                live: !latestTest.dryRun && latestTest.status !== 'skipped',
+                responseStatus: latestTest.responseStatus,
+                error: latestTest.error ? redactDeliveryEvidenceText(latestTest.error) : null,
+                attemptedAt: latestTest.attemptedAt,
+                payloadHash: latestTest.payloadHash,
+                idempotencyKey: latestTest.idempotencyKey,
+            }
+            : null,
+        preview: preview
+            ? {
+                discord: {
+                    content: preview.discord.content,
+                    embedCount: Array.isArray(preview.discord.embeds) ? preview.discord.embeds.length : 0,
+                    fieldNames: Array.isArray((preview.discord.embeds as Array<Record<string, unknown>>)[0]?.fields)
+                        ? (((preview.discord.embeds as Array<Record<string, unknown>>)[0]?.fields || []) as Array<Record<string, unknown>>).map(field => clean(field.name)).filter(Boolean)
+                        : [],
+                    allowedMentions: preview.discord.allowedMentions,
+                },
+                context: preview.context,
+                payloadHash: preview.payloadHash,
+            }
+            : null,
+        health: health
+            ? {
+                status: health.health,
+                ready: health.ready,
+                blockers: health.blockers,
+                lastTest: health.lastTest,
+                latestAuditEventId: health.latestAuditEventId,
+            }
+            : null,
+        audit: {
+            latestAuditEventId: latestAudit?.auditEventId || null,
+            auditEventIds: auditContracts.filter(audit => audit.destinationId === destinationId).map(audit => audit.auditEventId),
+            auditEventContracts: canManage ? auditContracts.filter(audit => audit.destinationId === destinationId).slice(0, 10) : [],
+        },
+        blockers: uniqueBlockers,
+        blockingCodes,
+        routes: {
+            test: destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : 'POST /api/dwm/webhook-destinations/:id/test',
+            destination: destinationId ? `GET /api/dwm/webhooks?destinationId=${destinationId}` : 'GET /api/dwm/webhooks',
+        },
+    }
+}
+
 export async function testDwmWebhookDestination(ownerId: string, id: string, input: DwmAlertNotificationInput = {}) {
     const destination = await loadDwmWebhookDestination(ownerId, id)
     if (!destination || destination.status === 'archived') return null
@@ -4484,6 +4604,27 @@ function auditTrailBlocker(
     blocking = true
 ) {
     return { code, message, destinationId, blocking }
+}
+
+function testContractBlocker(
+    code: string,
+    message: string,
+    destinationId: string | null = null,
+    blocking = true
+) {
+    return { code, message, destinationId, blocking }
+}
+
+function uniqueTestContractBlockers(blockers: ReturnType<typeof testContractBlocker>[]) {
+    const seen = new Set<string>()
+    const unique: ReturnType<typeof testContractBlocker>[] = []
+    for (const blocker of blockers) {
+        const key = `${blocker.code}:${blocker.destinationId || ''}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(blocker)
+    }
+    return unique
 }
 
 function destinationMatrixBlocker(
