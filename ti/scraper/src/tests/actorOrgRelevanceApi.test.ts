@@ -262,6 +262,110 @@ describe("actor org relevance API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  test("prepares source collection requests from evidence marked needs collection", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+
+    const missingReview = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      rationale: "Need a fresh capture.",
+      generatedAt: "2026-06-29T10:17:00.000Z"
+    });
+    expect(missingReview.status).toBe(404);
+    expect(await missingReview.json()).toMatchObject({ error: { code: "evidence_review_not_found" } });
+
+    const reviewedResponse = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      status: "reviewed",
+      generatedAt: "2026-06-29T10:18:00.000Z"
+    });
+    const reviewed = await reviewedResponse.json() as any;
+    const wrongStatus = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      evidenceReviewId: reviewed.review.id,
+      rationale: "Need a fresh capture.",
+      generatedAt: "2026-06-29T10:19:00.000Z"
+    });
+    expect(wrongStatus.status).toBe(400);
+    expect(await wrongStatus.json()).toMatchObject({ error: { code: "evidence_not_marked_for_collection" } });
+
+    const needsCollectionResponse = await reviewEvidence(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      status: "needs_collection",
+      rationale: "Need a fresh capture before customer escalation.",
+      generatedAt: "2026-06-29T10:20:00.000Z"
+    });
+    const needsCollection = await needsCollectionResponse.json() as any;
+
+    const requestResponse = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      evidenceReviewId: needsCollection.review.id,
+      priority: "high",
+      generatedAt: "2026-06-29T10:21:00.000Z"
+    });
+    const payload = await requestResponse.json() as any;
+    expect(requestResponse.status).toBe(201);
+    expect(payload.created).toBe(true);
+    expect(payload.receipt).toMatchObject({
+      schemaVersion: "hanasand.actor_org_relevance.source_collection_request_receipt.v1",
+      tenantId: "tenant_microsoft",
+      organizationId: "org_microsoft",
+      reviewId: created.record.id,
+      actorId: "actor:apt29-microsoft",
+      query: "apt29 microsoft",
+      createdBy: "user_ti",
+      evidenceReviewId: needsCollection.review.id,
+      request: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          tenantId: "tenant_microsoft",
+          organizationId: "org_microsoft",
+          requestedByUserId: "user_ti",
+          sourceId: "microsoft",
+          sourceName: "Microsoft",
+          captureId: "capture_microsoft_apt29",
+          provenance: "https://www.microsoft.com/en-us/security/blog/",
+          reason: "Need a fresh capture before customer escalation.",
+          priority: "high",
+          actorOrgRelevanceReviewId: created.record.id,
+          evidenceReviewId: needsCollection.review.id,
+          actorId: "actor:apt29-microsoft",
+          query: "apt29 microsoft"
+        }
+      },
+      provenance: {
+        sourceId: "microsoft",
+        sourceName: "Microsoft",
+        captureId: "capture_microsoft_apt29",
+        provenance: "https://www.microsoft.com/en-us/security/blog/",
+        confidence: 0.84,
+        supportsTerms: ["Microsoft"]
+      }
+    });
+    expect(payload.summary.latestSourceCollectionRequest.id).toBe(payload.receipt.id);
+    expect(payload.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "source_collection_requested", actorId: "user_ti" })
+    ]));
+    expect((store as any).getActorOrgRelevanceReview(created.record.id).sourceCollectionRequests).toHaveLength(1);
+
+    const duplicateResponse = await requestSourceCollection(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      captureId: "capture_microsoft_apt29",
+      priority: "high",
+      generatedAt: "2026-06-29T10:22:00.000Z"
+    });
+    const duplicate = await duplicateResponse.json() as any;
+    expect(duplicateResponse.status).toBe(200);
+    expect(duplicate.created).toBe(false);
+    expect(duplicate.receipt.id).toBe(payload.receipt.id);
+    expect(duplicate.record.sourceCollectionRequests).toHaveLength(1);
+    expect(duplicate.record.timeline.filter((event: any) => event.eventType === "source_collection_requested")).toHaveLength(1);
+
+    const crossOrgResponse = await requestSourceCollection(store, created.record.id, "tenant_other", "org_other", {
+      evidenceReviewId: needsCollection.review.id,
+      rationale: "Cross-org request must not work."
+    });
+    expect(crossOrgResponse.status).toBe(404);
+  });
+
   test("materializes a ready actor relevance review into an org DWM watchlist with provenance", async () => {
     const store = new InMemoryScraperStore();
     const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
@@ -890,6 +994,14 @@ async function cancelPreparedHandoff(store: InMemoryScraperStore | FileBackedScr
 
 async function reviewEvidence(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
   return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/evidence-review?tenantId=${tenantId}&organizationId=${organizationId}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify(body)
+  }), { store, frontier: new FocusedFrontier() });
+}
+
+async function requestSourceCollection(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
+  return await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}/source-collection-request?tenantId=${tenantId}&organizationId=${organizationId}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
     body: JSON.stringify(body)

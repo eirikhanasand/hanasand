@@ -5,6 +5,7 @@ import {
   cancelActorOrgRelevancePreparedHandoff,
   createActorOrgRelevanceAlertGenerationRequest,
   createActorOrgRelevanceCaseHandoffRequest,
+  createActorOrgRelevanceSourceCollectionRequest,
   createActorOrgRelevanceWebhookTriggerRequest,
   materializeActorOrgRelevanceWatchlist,
   summarizeActorOrgRelevanceReview,
@@ -129,6 +130,41 @@ export async function updateActorOrgRelevanceReviewEvidence(request: Request, op
     record: result.record,
     summary: summarizeActorOrgRelevanceReview(result.record)
   });
+}
+
+export async function createActorOrgRelevanceReviewSourceCollectionRequest(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to request source collection.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const result = createActorOrgRelevanceSourceCollectionRequest({
+    record: record!,
+    request: {
+      evidenceReviewId: body.evidenceReviewId,
+      evidenceKey: body.evidenceKey,
+      sourceId: body.sourceId,
+      captureId: body.captureId,
+      provenance: body.provenance,
+      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      rationale: body.rationale,
+      priority: body.priority,
+      generatedAt: body.generatedAt || nowIso()
+    }
+  });
+  if (!result.ok) {
+    const status = result.code === "evidence_review_not_found" ? 404 : 400;
+    return error(result.code, result.message, status);
+  }
+  (options.store as any).saveActorOrgRelevanceReview(result.record);
+  return json({
+    created: result.created,
+    receipt: result.receipt,
+    record: result.record,
+    summary: summarizeActorOrgRelevanceReview(result.record)
+  }, result.created ? 201 : 200);
 }
 
 export async function materializeActorOrgRelevanceReviewWatchlist(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
