@@ -446,6 +446,18 @@ describe("dwm alert repository", () => {
     expect(telegramAlert?.webhookContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.deliveryReadinessContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.alertCreatedEvent.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.orgWatchlistScope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      ownerOrganizationIds: ["org_repo_acme"],
+      visibilityPolicy: "admins",
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      alertGeneratorKeys: []
+    });
+    expect(telegramAlert?.orgWatchlistScope.terms).toEqual([]);
+    expect(telegramAlert?.webhookContext.orgWatchlistScope).toEqual(telegramAlert?.orgWatchlistScope);
     expect(telegramAlert?.sourceProvenanceSummary.schemaVersion).toBe("dwm.alert_source_provenance.v1");
     expect(telegramAlert?.sourceProvenanceSummary.tenantId).toBe("tenant_repo_acme");
     expect(telegramAlert?.sourceProvenanceSummary.organizationId).toBe("org_repo_acme");
@@ -510,6 +522,12 @@ describe("dwm alert repository", () => {
     expect(telegramSql.workflow_context.webhookDestinationIds).toEqual(["webhook_repo_discord", "webhook_repo_backup"]);
     expect(telegramSql.webhook_context.casePath).toContain(telegramSql.id);
     expect(telegramSql.alert_detail_path).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramSql.org_watchlist_scope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      organizationId: "org_repo_acme",
+      ownerOrganizationIds: ["org_repo_acme"],
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"]
+    });
     expect(telegramSql.delivery_readiness_context).toMatchObject({
       schemaVersion: "dwm.alert_delivery_persistence.v1",
       organizationId: "org_repo_acme",
@@ -610,6 +628,8 @@ describe("dwm alert repository", () => {
     expect(preserved?.workflowNote).toBe("Owner suppressed this as a duplicate customer-domain decision.");
     expect(preserved?.workflowEvents).toHaveLength(1);
     expect(preserved?.alertCreatedEvent).toEqual(existing.alertCreatedEvent);
+    expect(preserved?.orgWatchlistScope).toEqual(existing.orgWatchlistScope);
+    expect(preserved?.webhookContext.orgWatchlistScope).toEqual(existing.orgWatchlistScope);
     expect(preserved?.alertEvents).toHaveLength(2);
     expect(preserved?.alertEvents[0]).toEqual(existing.alertCreatedEvent);
     expect(preserved?.alertUpdatedEvent).toMatchObject({
@@ -1401,6 +1421,26 @@ describe("dwm alert repository", () => {
     const betaTelegram = beta.alerts.find((alert) => alert.sourceFamily === "telegram_public");
     expect(alphaTelegram?.id).not.toBe(betaTelegram?.id);
     expect(alphaTelegram?.dedupeKey).not.toBe(betaTelegram?.dedupeKey);
+    expect(alphaTelegram?.orgWatchlistScope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      tenantId: "tenant_repo_shared",
+      organizationId: "org_repo_alpha",
+      ownerOrganizationIds: ["org_repo_alpha"],
+      watchlistIds: ["watch_repo_alpha_overlap"],
+      watchlistItemIds: ["watch_item_alpha_overlap_acme"],
+      alertGeneratorKeys: ["org:org_repo_alpha:watchlist:watch_item_alpha_overlap_acme:domain:acme.com"]
+    });
+    expect(betaTelegram?.orgWatchlistScope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      tenantId: "tenant_repo_shared",
+      organizationId: "org_repo_beta",
+      ownerOrganizationIds: ["org_repo_beta"],
+      watchlistIds: ["watch_repo_beta_overlap"],
+      watchlistItemIds: ["watch_item_beta_overlap_acme"],
+      alertGeneratorKeys: ["org:org_repo_beta:watchlist:watch_item_beta_overlap_acme:domain:acme.com"]
+    });
+    expect(JSON.stringify(alphaTelegram?.orgWatchlistScope)).not.toContain("org_repo_beta");
+    expect(JSON.stringify(betaTelegram?.orgWatchlistScope)).not.toContain("org_repo_alpha");
 
     const alphaHandoff = buildDwmAlertDownstreamHandoff({ alert: alphaTelegram });
     const betaHandoff = buildDwmAlertDownstreamHandoff({ alert: betaTelegram });

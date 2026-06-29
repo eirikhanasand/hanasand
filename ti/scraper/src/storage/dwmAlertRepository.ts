@@ -385,6 +385,36 @@ export type DwmAlertSourceProvenanceSummary = {
   };
 };
 
+export type DwmAlertOrgWatchlistScope = {
+  schemaVersion: "dwm.alert_org_watchlist_scope.v1";
+  tenantId?: string;
+  organizationId?: string;
+  ownerOrganizationIds: string[];
+  visibilityPolicy?: string;
+  entitlementStatus?: string;
+  organizationLifecycleState?: string;
+  allowedViewerRoles: string[];
+  watchlistIds: string[];
+  watchlistItemIds: string[];
+  alertGeneratorKeys: string[];
+  terms: Array<{
+    watchlistId: string;
+    watchlistItemId: string;
+    itemId: string;
+    organizationId: string;
+    tenantId: string;
+    ownerOrganizationId: string;
+    term: string;
+    normalizedTerm: string;
+    category: string;
+    termFamily: string;
+    status: string;
+    alertGeneratorKey: string;
+    lifecycleReason?: string | null;
+    lifecycleRequestId?: string | null;
+  }>;
+};
+
 export type DwmAlertDownstreamHandoff = {
   schemaVersion: "dwm.alert_downstream_handoff.v1";
   handoffId: string;
@@ -1013,6 +1043,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       organizationId: input.organizationId ?? existing?.organizationId,
       workflowContext
     });
+    const orgWatchlistScope = buildDwmAlertOrgWatchlistScope(workflowContext);
     return input.store.saveDwmAlert({
       ...scopedAlert,
       id: alertId,
@@ -1025,6 +1056,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
       deliveryReadinessContext: persistedDeliveryReadinessContext,
       sourceProvenanceSummary,
+      orgWatchlistScope,
       alertCreatedEvent,
       alertUpdatedEvent: alertUpdatedEvent ?? existing?.alertUpdatedEvent,
       alertEvents,
@@ -1574,6 +1606,7 @@ export function dwmAlertToSqlRecord(alert: any) {
     webhook_delivery: alert.webhookDelivery,
     delivery_readiness_context: alert.deliveryReadinessContext,
     source_provenance_summary: alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({ alert }),
+    org_watchlist_scope: alert.orgWatchlistScope ?? buildDwmAlertOrgWatchlistScope(alert.workflowContext) ?? null,
     workflow_context: alert.workflowContext,
     webhook_context: alert.webhookContext,
     case_id_candidate: alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate ?? null,
@@ -2568,6 +2601,62 @@ export function buildDwmAlertSourceProvenanceSummary(input: {
   };
 }
 
+export function buildDwmAlertOrgWatchlistScope(workflowContext: Record<string, any> | undefined): DwmAlertOrgWatchlistScope | undefined {
+  if (!workflowContext) return undefined;
+  const termContexts = Array.isArray(workflowContext.watchlistTermContexts) ? workflowContext.watchlistTermContexts : [];
+  const membershipContext = workflowContext.membershipContext;
+  const watchlistIds = uniqueStrings([
+    ...asStringArray(workflowContext.watchlistIds),
+    ...termContexts.map((term: any) => term.watchlistId).filter(Boolean).map(String)
+  ]);
+  const watchlistItemIds = uniqueStrings([
+    ...asStringArray(workflowContext.watchlistItemIds),
+    ...termContexts.map((term: any) => term.watchlistItemId).filter(Boolean).map(String)
+  ]);
+  const alertGeneratorKeys = uniqueStrings([
+    ...asStringArray(workflowContext.alertGeneratorKeys),
+    ...termContexts.map((term: any) => term.alertGeneratorKey).filter(Boolean).map(String)
+  ]);
+  if (!workflowContext.organizationId && !termContexts.length && !watchlistIds.length && !watchlistItemIds.length && !alertGeneratorKeys.length) return undefined;
+  const terms = termContexts.map((term: any) => {
+    const ref = term.alertGenerationRef ?? {};
+    return {
+      watchlistId: String(term.watchlistId ?? ref.watchlistId),
+      watchlistItemId: String(term.watchlistItemId ?? ref.watchlistItemId),
+      itemId: String(term.itemId ?? ref.itemId ?? term.watchlistItemId ?? ref.watchlistItemId),
+      organizationId: String(term.organizationId ?? ref.organizationId ?? workflowContext.organizationId),
+      tenantId: String(term.tenantId ?? ref.tenantId ?? workflowContext.tenantId),
+      ownerOrganizationId: String(ref.ownerOrganizationId ?? membershipContext?.ownerOrganizationId ?? term.organizationId ?? workflowContext.organizationId),
+      term: String(term.term ?? term.value ?? ref.term ?? ""),
+      normalizedTerm: String(term.normalizedTerm ?? ref.normalizedTerm ?? term.term ?? term.value ?? "").toLowerCase(),
+      category: String(term.category ?? ref.category ?? term.kind ?? "keyword"),
+      termFamily: String(term.termFamily ?? ref.termFamily ?? term.kind ?? "keyword"),
+      status: String(term.status ?? ref.status ?? "active"),
+      alertGeneratorKey: String(term.alertGeneratorKey ?? ref.dedupe?.key ?? ""),
+      lifecycleReason: term.lifecycleReason ?? ref.lifecycle?.reason ?? null,
+      lifecycleRequestId: term.lifecycleRequestId ?? ref.lifecycle?.requestId ?? null
+    };
+  });
+  return {
+    schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+    tenantId: workflowContext.tenantId ? String(workflowContext.tenantId) : membershipContext?.tenantId ? String(membershipContext.tenantId) : undefined,
+    organizationId: workflowContext.organizationId ? String(workflowContext.organizationId) : membershipContext?.organizationId ? String(membershipContext.organizationId) : undefined,
+    ownerOrganizationIds: uniqueStrings([
+      ...terms.map((term) => term.ownerOrganizationId),
+      membershipContext?.ownerOrganizationId ? String(membershipContext.ownerOrganizationId) : undefined,
+      workflowContext.organizationId ? String(workflowContext.organizationId) : undefined
+    ].filter(Boolean).map(String)),
+    visibilityPolicy: workflowContext.visibilityPolicy ? String(workflowContext.visibilityPolicy) : membershipContext?.visibilityPolicy ? String(membershipContext.visibilityPolicy) : undefined,
+    entitlementStatus: membershipContext?.entitlementStatus ? String(membershipContext.entitlementStatus) : undefined,
+    organizationLifecycleState: membershipContext?.organizationLifecycleState ? String(membershipContext.organizationLifecycleState) : undefined,
+    allowedViewerRoles: uniqueStrings(asStringArray(membershipContext?.allowedViewerRoles)),
+    watchlistIds,
+    watchlistItemIds,
+    alertGeneratorKeys,
+    terms
+  };
+}
+
 export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext>) {
   return {
     eventType: alert.eventType,
@@ -2582,6 +2671,7 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     watchlistTermContexts: workflowContext.watchlistTermContexts,
     alertGenerationRefs: workflowContext.alertGenerationRefs,
     alertGeneratorKeys: workflowContext.alertGeneratorKeys,
+    orgWatchlistScope: buildDwmAlertOrgWatchlistScope(workflowContext),
     matchedTermCategory: workflowContext.matchedTermCategory,
     actor: workflowContext.actor,
     entity: workflowContext.entity,
