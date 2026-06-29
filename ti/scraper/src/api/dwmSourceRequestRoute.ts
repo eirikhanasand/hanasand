@@ -69,6 +69,11 @@ type DwmSourceRequestBody = {
   orgId?: string;
   customerId?: string;
   configMode?: "read" | "prepare";
+  configOperation?: "create" | "update" | "disable" | "enable" | "test" | "retry" | "suppress";
+  operatorRole?: "source_operator" | "source_admin" | "policy_admin" | "viewer";
+  ownerLane?: "source_ops" | "policy" | "customer_admin";
+  idempotencyKey?: string;
+  auditReason?: string;
   chunkSize?: number;
   maxAttempts?: number;
   backoffSeconds?: number;
@@ -653,6 +658,12 @@ function buildDwmSourcePackCustomerConfigReadiness(
     scope?: string;
     family?: string;
     mode?: "read" | "prepare";
+    operation?: DwmSourceRequestBody["configOperation"];
+    target?: string;
+    operatorRole?: DwmSourceRequestBody["operatorRole"];
+    ownerLane?: DwmSourceRequestBody["ownerLane"];
+    idempotencyKey?: string;
+    auditReason?: string;
   }
 ) {
   const requestedFamily = input.family?.trim();
@@ -692,7 +703,11 @@ function buildDwmSourcePackCustomerConfigReadiness(
       customerId: input.customerId,
       scope: input.scope,
       requestedFamily,
-      supportedFamily
+      supportedFamily,
+      target: input.target,
+      operation: input.operation,
+      idempotencyKey: input.idempotencyKey,
+      auditReason: input.auditReason
     });
     const activeRow = activeByCandidateId.get(candidate.id);
     const receipt = receiptByCandidateId.get(candidate.id);
@@ -743,6 +758,24 @@ function buildDwmSourcePackCustomerConfigReadiness(
         duplicateOf: candidate.duplicateOf
       },
       auditActionIds: latestActionByCandidateId.get(candidate.id) ? [latestActionByCandidateId.get(candidate.id)] : [],
+      crudWorkflow: sourcePackCustomerCrudWorkflow({
+        pack,
+        candidate,
+        source,
+        operation: input.operation,
+        configBlockers,
+        tenantId: input.tenantId,
+        orgId: input.orgId,
+        customerId: input.customerId,
+        scope: input.scope ?? pack.scope,
+        target: input.target,
+        requestedFamily,
+        operatorRole: input.operatorRole,
+        ownerLane: input.ownerLane,
+        idempotencyKey: input.idempotencyKey,
+        auditReason: input.auditReason,
+        generatedAt: input.generatedAt
+      }),
       allowedOperatorActions: sourcePackCustomerConfigAllowedActions({ pack, candidate, source, configBlockers, retryable, duplicate, policyRejected }),
       typedBlockers: configBlockers
     };
@@ -777,6 +810,7 @@ function buildDwmSourcePackCustomerConfigReadiness(
     customerId: input.customerId,
     scope: input.scope,
     requestedFamily,
+    requestedOperation: input.operation,
     summary,
     readiness: {
       state: globalBlockers.some((blocker) => blocker.severity === "blocking")
@@ -794,7 +828,7 @@ function buildDwmSourcePackCustomerConfigReadiness(
       prepare: {
         method: "POST",
         path: "/v1/dwm/source-requests",
-        body: { action: "pack_customer_config", dryRun: true, tenantId: input.tenantId ?? "<tenant-id>", orgId: input.orgId ?? "<org-id>", sourcePackId: "<source-pack-id>", family: requestedFamily ?? "<source-family>" }
+        body: { action: "pack_customer_config", configOperation: input.operation ?? "create|update|disable|enable|test|retry|suppress", dryRun: true, tenantId: input.tenantId ?? "<tenant-id>", orgId: input.orgId ?? "<org-id>", sourcePackId: "<source-pack-id>", family: requestedFamily ?? "<source-family>", target: input.target ?? "<redacted-source-ref>" }
       },
       applyCandidateAction: {
         status: "use_existing_pack_review_until_customer_config_mutation_exists",
@@ -835,13 +869,22 @@ function sourcePackCustomerConfigBlockers(input: {
   scope?: string;
   requestedFamily?: string;
   supportedFamily: boolean;
+  target?: string;
+  operation?: DwmSourceRequestBody["configOperation"];
+  idempotencyKey?: string;
+  auditReason?: string;
 }) {
   const blockers: Array<Record<string, unknown>> = [];
   if (!input.tenantId && !input.orgId && !input.customerId && !input.scope) blockers.push({ code: "missing_org_scope", severity: "blocking", retryable: true });
   if (!input.supportedFamily) blockers.push({ code: "unsupported_source_family", severity: "blocking", family: input.requestedFamily, retryable: false });
   if (!SOURCE_GROWTH_FAMILIES.includes(input.candidate.declaredFamily)) blockers.push({ code: "unsupported_source_family", severity: "blocking", family: input.candidate.declaredFamily, retryable: false });
+  if (input.target && sourcePackCustomerTargetInvalid(input.target, input.requestedFamily ?? input.candidate.declaredFamily)) blockers.push({ code: "invalid_source_ref", severity: "blocking", family: input.requestedFamily ?? input.candidate.declaredFamily, retryable: false });
   if (input.freshness === "stale") blockers.push({ code: "stale_worker", severity: "blocking", retryable: true });
-  if (isDuplicateSourcePackCandidate(input.candidate)) blockers.push({ code: "duplicate_source", severity: "blocking", duplicateOf: input.candidate.duplicateOf, retryable: false });
+  if (isDuplicateSourcePackCandidate(input.candidate)) {
+    blockers.push({ code: "duplicate_source", severity: "blocking", duplicateOf: input.candidate.duplicateOf, retryable: false });
+    blockers.push({ code: "idempotency_duplicate", severity: "warning", idempotencyKey: stableId("dwm_customer_source_config", `${input.pack.id}:${input.candidate.id}:${input.operation ?? "prepare"}`), retryable: false });
+  }
+  if (input.source?.status === "active" && (input.operation === "create" || input.operation === "enable")) blockers.push({ code: "duplicate_active_source", severity: "blocking", sourceId: input.source.id, retryable: false });
   if (isRejectedPolicySourcePackCandidate(input.candidate)) blockers.push({ code: "rejected_policy", severity: "blocking", reason: input.candidate.reason ?? input.candidate.failure?.message, retryable: false });
   if (input.candidate.failure || String(input.candidate.parserStatus ?? "").includes("failed") || String(input.candidate.parserStatus ?? "").includes("blocked")) {
     blockers.push({ code: "parser_failure", severity: isRetryableSourcePackCandidate(input.candidate) ? "warning" : "blocking", parserStatus: input.candidate.parserStatus, retryable: isRetryableSourcePackCandidate(input.candidate) });
@@ -858,6 +901,8 @@ function sourcePackCustomerConfigBlockers(input: {
   if ((isRetryableSourcePackCandidate(input.candidate) || input.source?.metadata?.lastCollectionOutcome?.retryAfter) && !input.source && input.candidate.status !== "retry_scheduled") {
     blockers.push({ code: "no_retry_eligibility", severity: "blocking", retryable: false });
   }
+  if ((input.operation === "test" || input.operation === "enable" || input.operation === "disable") && !input.source) blockers.push({ code: "activation_disabled", severity: "blocking", message: "operation requires a persisted source row", retryable: false });
+  if (!input.auditReason) blockers.push({ code: "audit_unavailable", severity: "warning", message: "durable customer CRUD will require an audit reason or change ticket", retryable: true });
   const coverage = sourceFamilyCoverage({ sources: sourcesForPack(input.pack.id, input.options), registry: input.pack });
   const familyCoverage = coverage[input.candidate.declaredFamily];
   if (familyCoverage?.total > 0 && familyCoverage.active === 0) blockers.push({ code: "source_family_inactive", severity: "warning", family: input.candidate.declaredFamily, retryable: true });
@@ -865,6 +910,124 @@ function sourcePackCustomerConfigBlockers(input: {
     blockers.push({ code: "cleanup_required", severity: "warning", message: "candidate requires suppression, rejection review, or cleanup before customer config can apply", retryable: true });
   }
   return dedupeBlockers(blockers);
+}
+
+function sourcePackCustomerTargetInvalid(target: string, family: string): boolean {
+  const trimmed = target.trim();
+  if (!trimmed) return true;
+  if (family === "telegram") return !parseTelegramTarget(trimmed).channel;
+  if (family === "darkweb_onion" || family === "darkweb_metadata") return !trimmed.startsWith("metadata://");
+  if (family === "clear_web" || family === "public_advisory" || family === "actor_page") return !/^https?:\/\//i.test(trimmed);
+  return true;
+}
+
+function sourcePackCustomerCrudWorkflow(input: {
+  pack: SourcePackRegistry;
+  candidate: SourcePackRegistryCandidate;
+  source?: SourceRecord;
+  operation?: DwmSourceRequestBody["configOperation"];
+  configBlockers: Array<Record<string, unknown>>;
+  tenantId?: string;
+  orgId?: string;
+  customerId?: string;
+  scope?: string;
+  target?: string;
+  requestedFamily?: string;
+  operatorRole?: DwmSourceRequestBody["operatorRole"];
+  ownerLane?: DwmSourceRequestBody["ownerLane"];
+  idempotencyKey?: string;
+  auditReason?: string;
+  generatedAt: string;
+}) {
+  const operation = input.operation ?? (input.source ? "update" : "create");
+  const proposedIdempotencyKey = stableId("dwm_customer_source_config", [
+    input.tenantId ?? "missing_tenant",
+    input.orgId ?? input.customerId ?? input.scope ?? "missing_org_scope",
+    input.pack.id,
+    input.candidate.id,
+    operation,
+    input.target ? safeTargetRef(input.target, input.requestedFamily ?? input.candidate.declaredFamily).hash : input.candidate.targetRef.hash
+  ].join(":"));
+  const blockers = dedupeBlockers([
+    ...input.configBlockers,
+    ...(input.idempotencyKey && input.idempotencyKey === proposedIdempotencyKey ? [{ code: "idempotency_duplicate", severity: "warning", idempotencyKey: proposedIdempotencyKey, retryable: false }] : []),
+    ...(!input.operatorRole || input.operatorRole === "viewer" ? [{ code: "activation_disabled", severity: "blocking", message: "source customer config changes require source_operator, source_admin, or policy_admin role", retryable: false }] : []),
+    ...((operation === "create" || operation === "enable") && input.ownerLane === "policy" && input.candidate.declaredFamily === "telegram" ? [{ code: "activation_disabled", severity: "warning", message: "public Telegram activation should be owned by source_ops or customer_admin", retryable: true }] : [])
+  ]);
+  const blocking = blockers.some((blocker) => blocker.severity === "blocking");
+  const redactedIdentity = input.candidate.targetRef ?? (input.source ? safeTargetRef(input.source.url, sourceGrowthFamilyForSource(input.source)) : input.target ? safeTargetRef(input.target, input.requestedFamily ?? input.candidate.declaredFamily) : safeTargetRef(input.candidate.id, input.candidate.declaredFamily));
+  return {
+    schemaVersion: "dwm.customer_source_crud_workflow.v1",
+    mode: "dry_run_prepare",
+    operation,
+    executeReady: false,
+    reason: blocking ? "blocked_until_operator_or_policy_cleanup" : "prepare_only_until_durable_customer_crud_storage_exists",
+    proposedStateTransition: sourcePackCustomerCrudTransition(operation, input.source),
+    tenantId: input.tenantId,
+    orgId: input.orgId,
+    customerId: input.customerId,
+    scope: input.scope,
+    ownerLane: input.ownerLane ?? "source_ops",
+    allowedRoles: ["source_operator", "source_admin", "policy_admin"],
+    operatorRole: input.operatorRole,
+    audit: {
+      required: true,
+      available: Boolean(input.auditReason),
+      reason: input.auditReason,
+      proposedAuditId: stableId("dwm_customer_source_config_audit", `${input.pack.id}:${input.candidate.id}:${operation}:${input.generatedAt}`)
+    },
+    idempotency: {
+      providedKey: input.idempotencyKey,
+      proposedKey: proposedIdempotencyKey,
+      duplicate: input.idempotencyKey === proposedIdempotencyKey || input.configBlockers.some((blocker) => blocker.code === "idempotency_duplicate")
+    },
+    redactedIdentity,
+    parserHealth: {
+      status: input.candidate.parserStatus ?? (input.source ? parserStatusForSource(input.source) : "not_scheduled"),
+      healthStatus: input.candidate.healthStatus ?? input.source?.metadata?.healthStatus ?? "not_tested",
+      workerSafe: true
+    },
+    policyBoundary: input.candidate.policyBoundary,
+    routeContract: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action: "pack_customer_config",
+        configOperation: operation,
+        dryRun: true,
+        tenantId: input.tenantId ?? "<tenant-id>",
+        orgId: input.orgId ?? "<org-id>",
+        sourcePackId: input.pack.id,
+        candidateId: input.candidate.id,
+        idempotencyKey: proposedIdempotencyKey,
+        auditReason: input.auditReason ?? "<change-ticket>"
+      }
+    },
+    blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      privateTelegramContentExposed: false,
+      restrictedMetadataLeaked: false,
+      liveNetworkScrapeStarted: false,
+      restrictedPayloadDownloadAllowed: false
+    }
+  };
+}
+
+function sourcePackCustomerCrudTransition(operation: NonNullable<DwmSourceRequestBody["configOperation"]>, source?: SourceRecord) {
+  const currentState = source?.status ?? "candidate";
+  const targetState = operation === "disable"
+    ? "disabled"
+    : operation === "suppress"
+      ? "suppressed"
+      : operation === "enable" || operation === "create"
+        ? "active_or_metadata_only"
+        : operation === "test"
+          ? currentState
+          : operation === "retry"
+            ? "retry_scheduled"
+            : currentState;
+  return { currentState, targetState, collectionQueued: false, liveNetworkFetch: false };
 }
 
 function sourcePackCustomerConfigAllowedActions(input: {
@@ -2236,7 +2399,13 @@ function sourcePackCustomerConfigResponse(body: DwmSourceRequestBody, options: A
       customerId: body.customerId,
       scope: body.scope,
       family: body.family,
-      mode: body.configMode ?? (body.dryRun === true ? "prepare" : "read")
+      mode: body.configMode ?? (body.dryRun === true ? "prepare" : "read"),
+      operation: body.configOperation,
+      target: body.target,
+      operatorRole: body.operatorRole,
+      ownerLane: body.ownerLane,
+      idempotencyKey: body.idempotencyKey,
+      auditReason: body.auditReason ?? body.reason
     })
   };
 }

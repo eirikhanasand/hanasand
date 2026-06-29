@@ -756,7 +756,196 @@ describe("dwm source requests", () => {
       expect.objectContaining({ code: "restricted_source" }),
       expect.objectContaining({ code: "cleanup_required" })
     ]));
+    expect(customerConfigBody.sourceConfigs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        candidateId: activeCandidate.id,
+        crudWorkflow: expect.objectContaining({
+          schemaVersion: "dwm.customer_source_crud_workflow.v1",
+          mode: "dry_run_prepare",
+          operation: "update",
+          executeReady: false,
+          allowedRoles: expect.arrayContaining(["source_operator", "source_admin", "policy_admin"]),
+          audit: expect.objectContaining({ required: true, proposedAuditId: expect.any(String) }),
+          idempotency: expect.objectContaining({ proposedKey: expect.any(String) }),
+          redactedIdentity: expect.objectContaining({ rawStored: false }),
+          safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false, rawTargetsExposed: false })
+        })
+      })
+    ]));
     expect(JSON.stringify(customerConfigBody)).not.toContain("password-dump");
+
+    const disablePreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "disable",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: activeCandidate.id,
+        operatorRole: "source_operator",
+        ownerLane: "source_ops",
+        auditReason: "operator dry-run disable readiness"
+      })
+    }), options);
+    const disablePreviewBody = await disablePreview.json() as any;
+    const disableRow = disablePreviewBody.sourceConfigs.find((row: any) => row.candidateId === activeCandidate.id);
+    expect(disablePreview.status).toBe(200);
+    expect(disablePreviewBody).toMatchObject({ requestedOperation: "disable" });
+    expect(disableRow.crudWorkflow).toMatchObject({
+      operation: "disable",
+      proposedStateTransition: { targetState: "disabled", collectionQueued: false, liveNetworkFetch: false },
+      audit: { available: true },
+      idempotency: { duplicate: false },
+      safeOutput: { liveNetworkScrapeStarted: false }
+    });
+    expect(disableRow.crudWorkflow.blockers).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "audit_unavailable" })
+    ]));
+
+    const testPreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "test",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: activeCandidate.id,
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run parser test"
+      })
+    }), options);
+    const testPreviewBody = await testPreview.json() as any;
+    const testRow = testPreviewBody.sourceConfigs.find((row: any) => row.candidateId === activeCandidate.id);
+    expect(testPreview.status).toBe(200);
+    expect(testRow.crudWorkflow).toMatchObject({
+      operation: "test",
+      parserHealth: { workerSafe: true },
+      routeContract: { method: "POST", path: "/v1/dwm/source-requests" }
+    });
+
+    const retryPreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "retry",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: retryCandidate.id,
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run retry readiness"
+      })
+    }), options);
+    const retryPreviewBody = await retryPreview.json() as any;
+    const retryRow = retryPreviewBody.sourceConfigs.find((row: any) => row.candidateId === retryCandidate.id);
+    expect(retryPreview.status).toBe(200);
+    expect(retryRow.crudWorkflow).toMatchObject({
+      operation: "retry",
+      proposedStateTransition: { targetState: "retry_scheduled" }
+    });
+    expect(retryRow.crudWorkflow.blockers).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "no_retry_eligibility" })
+    ]));
+
+    const suppressPreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "suppress",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: duplicateCandidate.id,
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run duplicate suppression"
+      })
+    }), options);
+    const suppressPreviewBody = await suppressPreview.json() as any;
+    const suppressRow = suppressPreviewBody.sourceConfigs.find((row: any) => row.candidateId === duplicateCandidate.id);
+    expect(suppressPreview.status).toBe(200);
+    expect(suppressRow.crudWorkflow).toMatchObject({
+      operation: "suppress",
+      proposedStateTransition: { targetState: "suppressed" },
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "duplicate_source" }),
+        expect.objectContaining({ code: "idempotency_duplicate" })
+      ])
+    });
+
+    const createDuplicatePreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "create",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: activeCandidate.id,
+        target: "@action_contract_active",
+        family: "telegram",
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run duplicate create"
+      })
+    }), options);
+    const createDuplicateBody = await createDuplicatePreview.json() as any;
+    const createDuplicateRow = createDuplicateBody.sourceConfigs.find((row: any) => row.candidateId === activeCandidate.id);
+    expect(createDuplicatePreview.status).toBe(200);
+    expect(createDuplicateRow.crudWorkflow.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "duplicate_active_source", severity: "blocking" })
+    ]));
+
+    const idempotencyDuplicate = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "disable",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        candidateId: activeCandidate.id,
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run repeated disable",
+        idempotencyKey: disableRow.crudWorkflow.idempotency.proposedKey
+      })
+    }), options);
+    const idempotencyDuplicateBody = await idempotencyDuplicate.json() as any;
+    const idempotencyDuplicateRow = idempotencyDuplicateBody.sourceConfigs.find((row: any) => row.candidateId === activeCandidate.id);
+    expect(idempotencyDuplicate.status).toBe(200);
+    expect(idempotencyDuplicateRow.crudWorkflow).toMatchObject({
+      idempotency: { duplicate: true },
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "idempotency_duplicate" })
+      ])
+    });
+
+    const invalidTargetPreview = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "pack_customer_config",
+        configOperation: "create",
+        sourcePackId: "pack_action_contract",
+        tenantId: "tenant_action",
+        orgId: "org_acme",
+        scope: "APT29",
+        family: "telegram",
+        target: "not-a-telegram-channel",
+        operatorRole: "source_operator",
+        auditReason: "operator dry-run invalid create"
+      })
+    }), options);
+    const invalidTargetBody = await invalidTargetPreview.json() as any;
+    expect(invalidTargetPreview.status).toBe(200);
+    expect(invalidTargetBody.readiness.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "invalid_source_ref", severity: "blocking", family: "telegram" })
+    ]));
 
     const missingOrg = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/source-requests", {
       method: "POST",
