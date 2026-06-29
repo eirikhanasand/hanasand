@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  DWM_ALERT_ANALYST_CASE_LEDGER_ADAPTER_SCHEMA_VERSION,
   DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_ADMIN_AUDIT_SCHEMA_VERSION,
   DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION,
@@ -7,6 +8,7 @@ import {
   DWM_ALERT_WORKFLOW_PRESERVATION_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION,
+  buildAlertAnalystCaseLedgerAdapter,
   buildAlertAnalystWorkflowEvent,
   buildAlertWorkflowAdminAuditAdapter,
   buildAlertWorkflowContract,
@@ -410,6 +412,155 @@ describe("alert workflow preservation contract", () => {
     });
     expect(event.transition.valid).toBe(false);
     expect(event.transition.changedFields).toEqual(expect.arrayContaining(["deliveryState", "caseId", "casePath"]));
+  });
+
+  test("adapts analyst workflow events into case action ledger writes", () => {
+    const before = buildAlertWorkflowContract({ alert: alertFixture() });
+    const after = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        assignedOwner: "analyst-2",
+        workflowEvents: [...alertFixture().workflowEvents, { id: "event_assign_analyst_2" }]
+      },
+      checkedAt: "2026-06-29T13:11:00.000Z"
+    });
+    const event = buildAlertAnalystWorkflowEvent({
+      before,
+      after,
+      action: "assign",
+      actorId: "ir-lead",
+      requestId: "req_assign_analyst_2",
+      expectedWorkflowEventCount: 2
+    });
+    const adapter = buildAlertAnalystCaseLedgerAdapter({
+      event,
+      membership: {
+        memberId: "member_ir_lead",
+        role: "analyst",
+        status: "active",
+        organizationId: "org_acme"
+      },
+      generatedAt: "2026-06-29T13:12:00.000Z"
+    });
+
+    expect(adapter).toMatchObject({
+      schemaVersion: DWM_ALERT_ANALYST_CASE_LEDGER_ADAPTER_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      route: {
+        method: "POST",
+        path: "/v1/dwm/org-alert-case-actions",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          receipt: {
+            schemaVersion: "dwm.alert_analyst_case_action_receipt.v1",
+            workflowEventId: event.id,
+            action: "assign_owner",
+            alertIds: ["alert_acme_lumma"],
+            casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"],
+            execution: "ready",
+            ownerLane: "case",
+            route: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+            method: "GET",
+            analyst: {
+              analystId: "ir-lead"
+            },
+            blockedByCodes: []
+          }
+        },
+        payloadShape: expect.arrayContaining([
+          "receipt.workflowEventId",
+          "receipt.action",
+          "receipt.casePaths",
+          "receipt.idempotencyKey"
+        ]),
+        redacted: true
+      },
+      membership: {
+        memberId: "member_ir_lead",
+        role: "analyst",
+        status: "active",
+        organizationId: "org_acme"
+      },
+      consumers: {
+        caseLedger: {
+          ready: true,
+          ownerLane: "case",
+          route: "/v1/dwm/org-alert-case-actions"
+        },
+        dashboard: {
+          ready: true,
+          ownerLane: "dashboard",
+          route: "/dashboard/dwm/alerts/alert_acme_lumma"
+        },
+        audit: {
+          ready: true,
+          ownerLane: "audit",
+          route: "/api/admin/support/inspect"
+        }
+      },
+      blockers: []
+    });
+    expect(adapter.route.body.receipt.idempotencyKey).toMatch(/^dwm_alert_analyst_case_ledger_receipt_/);
+    expect(JSON.stringify(adapter)).not.toContain("rawEvidence");
+    expect(JSON.stringify(adapter)).not.toContain("payloadBody");
+  });
+
+  test("blocks case ledger adapter for wrong org inactive viewer or blocked workflow event", () => {
+    const before = buildAlertWorkflowContract({ alert: alertFixture() });
+    const after = buildAlertWorkflowContract({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        casePath: undefined,
+        workflowContext: {},
+        evidence: []
+      }
+    });
+    const event = buildAlertAnalystWorkflowEvent({
+      before,
+      after,
+      action: "close",
+      actorId: "viewer_acme",
+      expectedWorkflowEventCount: 0
+    });
+    const adapter = buildAlertAnalystCaseLedgerAdapter({
+      event,
+      membership: {
+        memberId: "member_viewer",
+        role: "viewer",
+        status: "deactivated",
+        organizationId: "org_other"
+      }
+    });
+
+    expect(adapter.ok).toBe(false);
+    expect(adapter.route.body.receipt.execution).toBe("blocked");
+    expect(adapter.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "workflow_event_blocked", ownerLane: "alert", path: "event.ok" }),
+      expect.objectContaining({ code: "wrong_org", ownerLane: "org", path: "membership.organizationId" }),
+      expect.objectContaining({ code: "member_inactive", ownerLane: "org", path: "membership.status" }),
+      expect.objectContaining({ code: "role_not_allowed", ownerLane: "org", path: "membership.role" })
+    ]));
+    expect(adapter.consumers).toMatchObject({
+      caseLedger: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["workflow_event_blocked", "wrong_org", "member_inactive", "role_not_allowed"])
+      },
+      dashboard: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["workflow_event_blocked", "wrong_org"])
+      },
+      audit: {
+        ready: false,
+        blockerCodes: expect.arrayContaining(["wrong_org", "member_inactive", "role_not_allowed"])
+      }
+    });
   });
 
   test("emits redacted admin audit metadata for preserved alert workflow", () => {

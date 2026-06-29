@@ -7,6 +7,7 @@ export const DWM_ALERT_WORKFLOW_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.ale
 export const DWM_ALERT_WORKFLOW_SUPPORT_EVIDENCE_PACKET_SCHEMA_VERSION = "dwm.alert_workflow_support_evidence_packet.v1" as const;
 export const DWM_ALERT_PROVENANCE_CONSUMER_PACKET_SCHEMA_VERSION = "dwm.alert_provenance_consumer_packet.v1" as const;
 export const DWM_ALERT_ANALYST_WORKFLOW_EVENT_SCHEMA_VERSION = "dwm.alert_analyst_workflow_event.v1" as const;
+export const DWM_ALERT_ANALYST_CASE_LEDGER_ADAPTER_SCHEMA_VERSION = "dwm.alert_analyst_case_ledger_adapter.v1" as const;
 
 export type DwmAlertWorkflowContract = {
   schemaVersion: typeof DWM_ALERT_WORKFLOW_CONTRACT_SCHEMA_VERSION;
@@ -381,6 +382,88 @@ export type DwmAlertAnalystWorkflowEventBlocker = {
     | "invalid_transition"
     | "duplicate_workflow_event";
   ownerLane: "alert" | "org" | "case" | "source" | "webhook";
+  path: string;
+  message: string;
+};
+
+export type DwmAlertAnalystCaseLedgerAdapter = {
+  schemaVersion: typeof DWM_ALERT_ANALYST_CASE_LEDGER_ADAPTER_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  route: {
+    method: "POST";
+    path: "/v1/dwm/org-alert-case-actions";
+    body: {
+      tenantId: string;
+      organizationId?: string;
+      receipt: {
+        schemaVersion: "dwm.alert_analyst_case_action_receipt.v1";
+        workflowEventId: string;
+        action: DwmAlertAnalystCaseLedgerAction;
+        alertIds: string[];
+        casePaths: string[];
+        execution: "ready" | "repair_required" | "blocked";
+        ownerLane?: "case" | "alert" | "source" | "webhook";
+        route?: string;
+        method?: "GET" | "POST";
+        analyst?: {
+          analystId?: string;
+          rationale?: string;
+        };
+        blockedByCodes: DwmAlertAnalystCaseLedgerAdapterBlocker["code"][];
+        idempotencyKey: string;
+      };
+    };
+    payloadShape: string[];
+    redacted: true;
+  };
+  membership?: {
+    memberId?: string;
+    role?: "owner" | "admin" | "analyst" | "viewer" | "billing" | string;
+    status?: "active" | "invited" | "removed" | "deactivated" | string;
+    organizationId?: string;
+  };
+  consumers: {
+    caseLedger: DwmAlertAnalystCaseLedgerConsumerReadiness;
+    dashboard: DwmAlertAnalystCaseLedgerConsumerReadiness;
+    audit: DwmAlertAnalystCaseLedgerConsumerReadiness;
+  };
+  blockers: DwmAlertAnalystCaseLedgerAdapterBlocker[];
+};
+
+export type DwmAlertAnalystCaseLedgerAction =
+  | "assign_owner"
+  | "escalate"
+  | "suppress"
+  | "close"
+  | "reopen"
+  | "replay_delivery"
+  | "add_note";
+
+export type DwmAlertAnalystCaseLedgerConsumerReadiness = {
+  ready: boolean;
+  ownerLane: "case" | "dashboard" | "audit";
+  route?: string;
+  requiredFields: string[];
+  blockerCodes: DwmAlertAnalystCaseLedgerAdapterBlocker["code"][];
+};
+
+export type DwmAlertAnalystCaseLedgerAdapterBlocker = {
+  code:
+    | "workflow_event_blocked"
+    | "missing_case_target"
+    | "missing_membership"
+    | "wrong_org"
+    | "member_inactive"
+    | "role_not_allowed"
+    | "unsupported_case_action";
+  ownerLane: "case" | "org" | "alert" | "webhook";
   path: string;
   message: string;
 };
@@ -898,6 +981,81 @@ export function buildAlertAnalystWorkflowEvent(input: {
   };
 }
 
+export function buildAlertAnalystCaseLedgerAdapter(input: {
+  event: DwmAlertAnalystWorkflowEvent;
+  membership?: DwmAlertAnalystCaseLedgerAdapter["membership"];
+  generatedAt?: string;
+  allowedRoles?: string[];
+  routePath?: "/v1/dwm/org-alert-case-actions";
+}): DwmAlertAnalystCaseLedgerAdapter {
+  const event = input.event;
+  const action = caseLedgerActionFor(event.action);
+  const blockers = analystCaseLedgerBlockers(event, input.membership, action, input.allowedRoles ?? ["owner", "admin", "analyst"]);
+  const execution: DwmAlertAnalystCaseLedgerAdapter["route"]["body"]["receipt"]["execution"] = blockers.length === 0 ? "ready" : (event.ok ? "repair_required" : "blocked");
+  const routePath = input.routePath ?? "/v1/dwm/org-alert-case-actions";
+  const consumerBlockers = {
+    caseLedger: caseLedgerConsumerBlockerCodes(blockers, ["workflow_event_blocked", "missing_case_target", "missing_membership", "wrong_org", "member_inactive", "role_not_allowed", "unsupported_case_action"]),
+    dashboard: caseLedgerConsumerBlockerCodes(blockers, ["workflow_event_blocked", "missing_case_target", "wrong_org", "unsupported_case_action"]),
+    audit: caseLedgerConsumerBlockerCodes(blockers, ["missing_membership", "wrong_org", "member_inactive", "role_not_allowed", "unsupported_case_action"])
+  };
+  const receipt = {
+    schemaVersion: "dwm.alert_analyst_case_action_receipt.v1" as const,
+    workflowEventId: event.id,
+    action: action ?? ("add_note" as DwmAlertAnalystCaseLedgerAction),
+    alertIds: event.alertId ? [event.alertId] : [],
+    casePaths: event.casePath ? [event.casePath] : [],
+    execution,
+    ownerLane: caseLedgerOwnerLaneFor(event.action),
+    route: event.casePath,
+    method: event.casePath ? "GET" as const : undefined,
+    analyst: {
+      analystId: event.actorId,
+      rationale: event.rationale
+    },
+    blockedByCodes: blockers.map((blocker) => blocker.code),
+    idempotencyKey: stableId("dwm_alert_analyst_case_ledger_receipt", `${event.id}:${input.membership?.memberId ?? ""}:${routePath}`)
+  };
+
+  return {
+    schemaVersion: DWM_ALERT_ANALYST_CASE_LEDGER_ADAPTER_SCHEMA_VERSION,
+    id: stableId("dwm_alert_analyst_case_ledger_adapter", `${receipt.idempotencyKey}:${input.generatedAt ?? event.generatedAt}`),
+    generatedAt: input.generatedAt ?? event.generatedAt,
+    ok: blockers.length === 0,
+    tenantId: event.tenantId,
+    organizationId: event.organizationId,
+    alertId: event.alertId,
+    caseId: event.caseId,
+    redacted: true,
+    route: {
+      method: "POST",
+      path: routePath,
+      body: {
+        tenantId: event.tenantId,
+        organizationId: event.organizationId,
+        receipt
+      },
+      payloadShape: [
+        "tenantId",
+        "organizationId",
+        "receipt.workflowEventId",
+        "receipt.action",
+        "receipt.alertIds",
+        "receipt.casePaths",
+        "receipt.analyst",
+        "receipt.idempotencyKey"
+      ],
+      redacted: true
+    },
+    membership: input.membership,
+    consumers: {
+      caseLedger: caseLedgerConsumerReadiness("case", routePath, ["tenantId", "organizationId", "receipt.workflowEventId", "receipt.action", "receipt.casePaths"], consumerBlockers.caseLedger),
+      dashboard: caseLedgerConsumerReadiness("dashboard", `/dashboard/dwm/alerts/${encodeURIComponent(event.alertId)}`, ["alertId", "caseId", "action", "execution"], consumerBlockers.dashboard),
+      audit: caseLedgerConsumerReadiness("audit", "/api/admin/support/inspect", ["organizationId", "memberId", "role", "receipt.idempotencyKey"], consumerBlockers.audit)
+    },
+    blockers
+  };
+}
+
 function provenanceScore(contract: DwmAlertWorkflowContract) {
   return contract.provenance.evidenceCount
     + asStringArray(contract.provenance.captureIds).length
@@ -1104,6 +1262,81 @@ function analystWorkflowEventBlocker(
 }
 
 function uniqueAnalystWorkflowEventBlockers(blockers: DwmAlertAnalystWorkflowEventBlocker[]): DwmAlertAnalystWorkflowEventBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function caseLedgerActionFor(action: DwmAlertAnalystWorkflowAction): DwmAlertAnalystCaseLedgerAction | undefined {
+  if (action === "assign") return "assign_owner";
+  if (action === "escalate") return "escalate";
+  if (action === "suppress") return "suppress";
+  if (action === "close") return "close";
+  if (action === "reopen") return "reopen";
+  if (action === "replay_webhook") return "replay_delivery";
+  if (action === "add_note") return "add_note";
+  return undefined;
+}
+
+function caseLedgerOwnerLaneFor(action: DwmAlertAnalystWorkflowAction): "case" | "alert" | "source" | "webhook" {
+  if (action === "replay_webhook") return "webhook";
+  if (action === "escalate" || action === "suppress") return "alert";
+  return "case";
+}
+
+function analystCaseLedgerBlockers(
+  event: DwmAlertAnalystWorkflowEvent,
+  membership: DwmAlertAnalystCaseLedgerAdapter["membership"],
+  action: DwmAlertAnalystCaseLedgerAction | undefined,
+  allowedRoles: string[]
+): DwmAlertAnalystCaseLedgerAdapterBlocker[] {
+  const blockers: DwmAlertAnalystCaseLedgerAdapterBlocker[] = [];
+  if (!event.ok) blockers.push(caseLedgerBlocker("workflow_event_blocked", "alert", "event.ok", "Case action ledger adapter requires a valid analyst workflow event."));
+  if (!event.caseId || !event.casePath) blockers.push(caseLedgerBlocker("missing_case_target", "case", !event.caseId ? "event.caseId" : "event.casePath", "Case action ledger adapter requires case identity and route."));
+  if (!membership?.memberId) blockers.push(caseLedgerBlocker("missing_membership", "org", "membership.memberId", "Case action ledger adapter requires org member identity."));
+  if (membership?.organizationId && event.organizationId && membership.organizationId !== event.organizationId) blockers.push(caseLedgerBlocker("wrong_org", "org", "membership.organizationId", "Case action ledger member belongs to a different organization."));
+  if (membership?.status && membership.status !== "active") blockers.push(caseLedgerBlocker("member_inactive", "org", "membership.status", "Case action ledger member is not active."));
+  if (membership?.role && !allowedRoles.includes(membership.role)) blockers.push(caseLedgerBlocker("role_not_allowed", "org", "membership.role", "Case action ledger member role cannot write analyst actions."));
+  if (!action) blockers.push(caseLedgerBlocker("unsupported_case_action", "case", "event.action", "Analyst workflow action cannot be written to the case action ledger."));
+  return uniqueCaseLedgerBlockers(blockers);
+}
+
+function caseLedgerConsumerReadiness(
+  ownerLane: DwmAlertAnalystCaseLedgerConsumerReadiness["ownerLane"],
+  route: string | undefined,
+  requiredFields: string[],
+  blockerCodes: DwmAlertAnalystCaseLedgerAdapterBlocker["code"][]
+): DwmAlertAnalystCaseLedgerConsumerReadiness {
+  return {
+    ready: blockerCodes.length === 0,
+    ownerLane,
+    route,
+    requiredFields,
+    blockerCodes
+  };
+}
+
+function caseLedgerConsumerBlockerCodes(
+  blockers: DwmAlertAnalystCaseLedgerAdapterBlocker[],
+  codes: DwmAlertAnalystCaseLedgerAdapterBlocker["code"][]
+): DwmAlertAnalystCaseLedgerAdapterBlocker["code"][] {
+  return uniqueStrings(blockers.map((blocker) => blocker.code).filter((code) => codes.includes(code))) as DwmAlertAnalystCaseLedgerAdapterBlocker["code"][];
+}
+
+function caseLedgerBlocker(
+  code: DwmAlertAnalystCaseLedgerAdapterBlocker["code"],
+  ownerLane: DwmAlertAnalystCaseLedgerAdapterBlocker["ownerLane"],
+  path: string,
+  message: string
+): DwmAlertAnalystCaseLedgerAdapterBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function uniqueCaseLedgerBlockers(blockers: DwmAlertAnalystCaseLedgerAdapterBlocker[]): DwmAlertAnalystCaseLedgerAdapterBlocker[] {
   const seen = new Set<string>();
   return blockers.filter((blocker) => {
     const key = `${blocker.code}:${blocker.path}`;
