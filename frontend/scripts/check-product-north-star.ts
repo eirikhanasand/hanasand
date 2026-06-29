@@ -111,6 +111,21 @@ assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dash
 assert.ok(partialScoreboard.deployGate.proofContracts.includes('dashboard.alert_evidence.readiness.v1'))
 assert.ok(partialScoreboard.deployGate.ownerLanes.includes('dashboard'))
 assert.ok(partialScoreboard.deployGate.expectedDashboardRowIds.includes('dashboard_evidence'))
+assert.equal(partialScoreboard.deployGate.blockingProofRows.length, 8)
+assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId), [
+    'organizations',
+    'shared_watchlists',
+    'real_alert_generation',
+    'webhook_delivery',
+    'analyst_workflow',
+    'support_admin_audit',
+    'public_ti_enrichment',
+    'deploy_live_status',
+])
+assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => ['blocked', 'needs_action', 'unavailable'].includes(row.state)))
+assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.ownerLane && row.href && row.blocker && row.proofTimestamp))
+assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.expectedDashboardRowId && row.backendProofContractVersion && row.integrationProbeHint))
+assert.ok(partialScoreboard.deployGate.blockingProofRows.some(row => row.rowId === 'deploy_live_status' && row.ownerLane === 'integration' && row.href === '/status'))
 assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
@@ -157,6 +172,20 @@ assert.equal(parseProductNorthStarScoreboard({
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'deploy_live_status' ? { ...row, integrationProbeHint: '' } : row),
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.slice(1),
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
     rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, expectedDashboardRowId: '' } : row),
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
@@ -187,6 +216,7 @@ assert.equal(readyScoreboard.deployGate.fullChainReady, true)
 assert.equal(readyScoreboard.deployGate.state, 'ready')
 assert.equal(readyScoreboard.deployGate.firstBlocker, '')
 assert.deepEqual(readyScoreboard.deployGate.actionNeededWorkflowLinks, [])
+assert.deepEqual(readyScoreboard.deployGate.blockingProofRows, [])
 assert.ok(readyScoreboard.direction.every(item => item.state === 'ready' && !item.blocker))
 
 for (const token of [

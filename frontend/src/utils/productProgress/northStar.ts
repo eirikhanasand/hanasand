@@ -84,6 +84,20 @@ export type ProductNorthStarDeployGate = {
     ownerLanes: string[]
     expectedDashboardRowIds: string[]
     firstBlocker: string
+    blockingProofRows: ProductNorthStarDeployBlocker[]
+}
+
+export type ProductNorthStarDeployBlocker = {
+    rowId: ProductNorthStarRowId
+    state: Exclude<ReadinessStatus, 'ready'>
+    ownerLane: string
+    href: string
+    blocker: string
+    proofTimestamp: string
+    staleAfterSeconds: number
+    expectedDashboardRowId: string
+    backendProofContractVersion: string
+    integrationProbeHint: string
 }
 
 export type ProductNorthStarScoreboard = {
@@ -181,6 +195,25 @@ function isProductNorthStarDeployGate(input: unknown): input is ProductNorthStar
         && Array.isArray(deployGate.expectedDashboardRowIds)
         && deployGate.expectedDashboardRowIds.every(isFilledString)
         && typeof deployGate.firstBlocker === 'string'
+        && Array.isArray(deployGate.blockingProofRows)
+        && deployGate.blockingProofRows.every(isProductNorthStarDeployBlocker)
+        && deployGate.blockingProofRows.length === deployGate.blockerRows.length + deployGate.needsActionRows.length + deployGate.unavailableRows.length
+}
+
+function isProductNorthStarDeployBlocker(input: unknown): input is ProductNorthStarDeployBlocker {
+    if (!input || typeof input !== 'object') return false
+    const blocker = input as Partial<ProductNorthStarDeployBlocker>
+    return isRowId(blocker.rowId)
+        && (blocker.state === 'blocked' || blocker.state === 'needs_action' || blocker.state === 'unavailable')
+        && isFilledString(blocker.ownerLane)
+        && isFilledString(blocker.href)
+        && isFilledString(blocker.blocker)
+        && isFilledString(blocker.proofTimestamp)
+        && typeof blocker.staleAfterSeconds === 'number'
+        && blocker.staleAfterSeconds > 0
+        && isFilledString(blocker.expectedDashboardRowId)
+        && isFilledString(blocker.backendProofContractVersion)
+        && isFilledString(blocker.integrationProbeHint)
 }
 
 function isRowId(input: unknown): input is ProductNorthStarRowId {
@@ -329,6 +362,18 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
         ownerLanes: uniqueStrings(rows.map(row => row.ownerLane)),
         expectedDashboardRowIds: uniqueStrings(rows.flatMap(row => row.expectedDashboardRowId.split(',').map(id => id.trim()))),
         firstBlocker: summary.firstBlocker || '',
+        blockingProofRows: rowsNeedingAction.map(row => ({
+            rowId: row.id,
+            state: row.state === 'ready' ? 'needs_action' : row.state,
+            ownerLane: row.ownerLane,
+            href: row.href,
+            blocker: row.blocker,
+            proofTimestamp: row.proofTimestamp,
+            staleAfterSeconds: row.staleAfterSeconds,
+            expectedDashboardRowId: row.expectedDashboardRowId,
+            backendProofContractVersion: row.backendProofContractVersion,
+            integrationProbeHint: row.integrationProbeHint,
+        })),
     }
 }
 
