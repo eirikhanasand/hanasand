@@ -6060,6 +6060,7 @@ function auditTimelineSummary(timeline: Array<Record<string, any>>) {
         organizationIds: uniqueTimelineValues(timeline.map(event => event.organization?.id)),
         actorIds: uniqueTimelineValues(timeline.map(event => event.actor?.id)),
         entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
+        entityLinkRollup: supportAuditEntityLinkRollup(timeline),
     }
 }
 
@@ -6073,6 +6074,7 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
         supportedFilters: Array.from(adminAuditFilters),
         redacted: true,
         redactedSummary: supportAuditRedactedSummary(timeline),
+        entityLinkRollup: supportAuditEntityLinkRollup(timeline),
         stableRequestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
         correlationIds: uniqueTimelineValues(timeline.map(event => event.context?.correlationId || event.requestId)),
         idempotencyKeys: uniqueTimelineValues(timeline.map(event => event.context?.idempotencyKey)),
@@ -6237,6 +6239,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             filters,
             requestIds,
             supportSessionIds,
+            entityLinks: supportAuditEntityLinkRollup(timeline),
         },
         exposedFields: [
             'id',
@@ -6261,6 +6264,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             'links.request',
             'links.entity',
             'links.supportSession',
+            'links.entities',
         ],
         supportedFilters: Array.from(adminAuditFilters),
         supportWorkflows: [
@@ -6281,6 +6285,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
         ],
         blockers,
         redactedSummary: summary,
+        entityLinkRollup: supportAuditEntityLinkRollup(timeline),
         copyText: [
             'Support audit export proof',
             `Replay: ${replayQuery}`,
@@ -6316,7 +6321,26 @@ function supportAuditRedactedSummary(timeline: Array<Record<string, any>>) {
         entityIds: uniqueTimelineValues(timeline.map(event => event.entity?.id)),
         requestIds: uniqueTimelineValues(timeline.map(event => event.requestId)),
         reasonsPresent: timeline.filter(event => Boolean(event.reason)).length,
+        entityLinks: supportAuditEntityLinkRollup(timeline),
         contextsRedacted: true,
+    }
+}
+
+function supportAuditEntityLinkRollup(timeline: Array<Record<string, any>>) {
+    const links = timeline.map(event => event.links?.entities || {}).filter(item => item && typeof item === 'object')
+    const valuesFor = (key: string) => uniqueTimelineValues(links.map(item => (item as Record<string, unknown>)[key]))
+    return {
+        schemaVersion: 'support.audit.entity_link_rollup.v1',
+        inspection: valuesFor('inspection'),
+        organization: valuesFor('organization'),
+        user: valuesFor('user'),
+        inviteAction: valuesFor('inviteAction'),
+        accessRecovery: valuesFor('accessRecovery'),
+        memberRoleRecovery: valuesFor('memberRoleRecovery'),
+        impersonation: valuesFor('impersonation'),
+        auditEntity: valuesFor('auditEntity'),
+        supportSession: valuesFor('supportSession'),
+        redacted: true,
     }
 }
 
