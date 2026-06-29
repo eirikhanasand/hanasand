@@ -2133,6 +2133,76 @@ export function organizationAnalystPortalVisibilityAdapter(
     }
 }
 
+export function organizationAlertCaseWorkflowState(
+    proof: OrganizationSharedWatchlistDownstreamProof,
+    downstreamAuthorization: OrganizationDownstreamAuthorizationExport
+) {
+    const analystPortalAdapter = organizationAnalystPortalVisibilityAdapter(proof, downstreamAuthorization)
+    const alertQueue = proof.alertBridge.queueVisibilityContract
+    const caseWorkflow = proof.caseBridge.caseWorkflowContract
+
+    return {
+        schemaVersion: 'organization.alert_case_workflow_state.v1' as const,
+        organizationId: proof.organizationId,
+        tenantId: proof.tenantId,
+        sourceFamily: 'organization_watchlist' as const,
+        member: downstreamAuthorization.member,
+        visibility: downstreamAuthorization.visibility,
+        alertRecord: {
+            route: alertQueue.routes.list,
+            requiredQueryFields: alertQueue.requiredQueryFields,
+            requiredPersistedFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.alertGeneratorKeys',
+                'workflowContext.visibilityDecision',
+                'workflowContext.allowedActions',
+            ],
+            watchlistItemIds: alertQueue.watchlistScope.watchlistItemIds,
+            alertGeneratorKeys: alertQueue.watchlistScope.alertGeneratorKeys,
+            dedupeScope: proof.alertBridge.dedupeScope,
+            crossTenantCollisionAllowed: false,
+        },
+        caseRecord: {
+            route: caseWorkflow.routes.list,
+            casePathTemplate: caseWorkflow.casePathTemplate,
+            requiredQueryFields: caseWorkflow.requiredQueryFields,
+            requiredPersistedFields: [
+                'organizationId',
+                'tenantId',
+                'alertId',
+                'casePath',
+                'watchlistItemIds',
+                'allowedActions',
+                'visibilityDecision',
+            ],
+            watchlistItemIds: caseWorkflow.watchlistScope.watchlistItemIds,
+            alertGeneratorKeys: caseWorkflow.watchlistScope.alertGeneratorKeys,
+            actorActions: caseWorkflow.actorActions,
+        },
+        allowedActions: analystPortalAdapter.allowedActions,
+        actionMatrix: analystPortalAdapter.actionMatrix,
+        lifecycleBlockers: Array.from(new Set([
+            ...proof.alertBridge.blockerCodes,
+            ...proof.caseBridge.blockerCodes,
+            ...downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+        ])),
+        guardrails: {
+            nonmemberEnumeration: false,
+            noLeakFields: [
+                'otherOrg.organizationId',
+                'otherOrg.watchlistItemIds',
+                'otherOrg.alertGeneratorKeys',
+                'case.evidence.rawContent',
+                'destination.secret',
+            ],
+            denialAuditEvent: 'organization_watchlist_alert_visibility_denied' as const,
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts' as const,
+        },
+    }
+}
+
 export function organizationSharedWatchlistDownstreamProof(
     organization: Pick<OrganizationRow, 'id' | 'status' | 'pending_invite_count' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
     items: OrganizationWatchlistRow[],

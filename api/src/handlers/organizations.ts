@@ -17,6 +17,7 @@ import {
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
     organizationAnalystPortalVisibilityAdapter,
+    organizationAlertCaseWorkflowState,
     organizationLifecycleReadiness,
     organizationDownstreamAuthorizationExport,
     organizationMemberAccessContract,
@@ -1298,6 +1299,7 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
 
     const alertQueue = downstreamProof.alertBridge.queueVisibilityContract
     const caseWorkflow = downstreamProof.caseBridge.caseWorkflowContract
+    const alertCaseWorkflowState = organizationAlertCaseWorkflowState(downstreamProof, downstreamAuthorization)
     return res.send({
         organization: toOrganization(organization),
         alertCaseVisibility: {
@@ -1314,6 +1316,7 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
             requiredQueryFields: ['organizationId'],
             allowedActions: downstreamAuthorization.allowedActions,
             analystPortalAdapter: organizationAnalystPortalVisibilityAdapter(downstreamProof, downstreamAuthorization),
+            workflowState: alertCaseWorkflowState,
             alertQueue: {
                 route: alertQueue.routes.list,
                 requiredQueryFields: alertQueue.requiredQueryFields,
