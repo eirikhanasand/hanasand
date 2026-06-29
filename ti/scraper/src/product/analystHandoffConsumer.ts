@@ -66,6 +66,39 @@ export type OrgWatchlistAlertTermsExportContract = {
     termFamily?: string;
     term: string;
     source?: string;
+    alertGenerationRef?: {
+      schemaVersion: "organization.watchlist_alert_generation_ref.v1";
+      source: "organization_shared_watchlist";
+      organizationId: string;
+      tenantId: string;
+      ownerOrganizationId: string;
+      watchlistId: string;
+      watchlistItemId: string;
+      itemId: string;
+      termFamily: string;
+      category?: string;
+      term: string;
+      normalizedTerm: string;
+      status: "active";
+      lifecycle: {
+        status: "active";
+        reason: string | null;
+        requestId: string | null;
+        createdBy: string;
+        updatedBy: string | null;
+      };
+      dedupe: {
+        scope: "organization_watchlist_term";
+        key: string;
+        parts: {
+          organizationId: string;
+          tenantId: string;
+          watchlistItemId: string;
+          termFamily: string;
+          normalizedTerm: string;
+        };
+      };
+    };
     alertGenerationReference?: {
       schemaVersion: "organization.watchlist_item_alert_reference.v1";
       organizationId: string;
@@ -314,10 +347,19 @@ function validateOrgTermsExport(
   if (identity?.normalizedWatchTerm) {
     const normalizedTerm = identity.normalizedWatchTerm.toLowerCase();
     const hasTerm = [...(termsExport.activeTerms || []), ...(termsExport.activeWatchlistTerms || [])]
-      .some((item) => item.term.toLowerCase() === normalizedTerm);
+      .some((item) => item.term.toLowerCase() === normalizedTerm || ("alertGenerationRef" in item && item.alertGenerationRef?.normalizedTerm === normalizedTerm));
     if (!hasTerm) {
       blockers.push(blocker("org_terms_contract_mismatch", "org_terms_export", "orgWatchlist.termsExport.activeTerms", `Org terms export does not include normalized term ${identity.normalizedWatchTerm}.`, true));
     }
+  }
+  const refMismatches = (termsExport.activeTerms || []).filter((item) => item.alertGenerationRef && (
+    item.alertGenerationRef.organizationId !== termsExport.organizationId
+    || item.alertGenerationRef.tenantId !== termsExport.tenantId
+    || item.alertGenerationRef.watchlistItemId !== item.watchlistItemId
+    || item.alertGenerationRef.dedupe.parts.watchlistItemId !== item.watchlistItemId
+  ));
+  if (refMismatches.length) {
+    blockers.push(blocker("org_terms_contract_mismatch", "org_terms_export", "orgWatchlist.termsExport.activeTerms.alertGenerationRef", "Org alert generation refs must match export org, tenant, and watchlist item identity.", false));
   }
   return blockers;
 }

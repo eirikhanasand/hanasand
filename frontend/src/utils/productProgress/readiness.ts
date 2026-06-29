@@ -1,0 +1,188 @@
+import type { DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+
+type AlertProofRow = {
+    id?: string
+    updatedAt?: string
+    createdAt?: string
+}
+
+type DeliveryProofRow = {
+    id?: string
+    alertId?: string
+    status?: string
+    attemptedAt?: string
+    createdAt?: string
+}
+
+export type ProductProgressEndpointInput = {
+    generatedAt: string
+    checkedAt?: string
+    query: string
+    routes: NonNullable<ProductProgressReadinessPayload['routes']>
+    sourceProxy?: DashboardSourceProofProxyPayload
+    alerts?: AlertProofRow[]
+    deliveries?: DeliveryProofRow[]
+    deploy?: Partial<DeployProbeReadiness>
+}
+
+export function buildProductProgressPayload(input: ProductProgressEndpointInput): ProductProgressReadinessPayload {
+    const checkedAt = input.checkedAt || input.generatedAt
+    const alert = chooseDashboardAlert(input.alerts || [], input.deliveries || [])
+    const delivery = alert ? chooseDeliveryForAlert(alert.id, input.deliveries || []) : undefined
+    const sourceProxyReady = sourceProxyHasFreshWorker(input.sourceProxy)
+    const deployProbeFresh = Boolean(input.deploy?.status === 'ready' && input.deploy.latestProbeAt)
+
+    return {
+        schemaVersion: 'product.progress.readiness.v1',
+        generatedAt: input.generatedAt,
+        checkedAt,
+        routes: input.routes,
+        publicTiProvenance: unavailablePublicTi(input.routes.publicTiProvenance || input.routes.productProgress || '/api/product-progress', checkedAt),
+        helpdeskAudit: unavailableHelpdesk(input.routes.helpdeskAudit || input.routes.productProgress || '/api/product-progress', checkedAt),
+        deployProbe: {
+            schemaVersion: 'product.deploy_probe.readiness.v1',
+            status: input.deploy?.status === 'ready' && deployProbeFresh ? 'ready' : 'needs_action',
+            checkedAt,
+            source: input.routes.deployProbe || input.routes.productProgress || '/api/product-progress',
+            href: '/status',
+            deployedCommit: input.deploy?.deployedCommit || currentCommit(),
+            frontendHealthy: input.deploy?.frontendHealthy ?? true,
+            apiHealthy: input.deploy?.apiHealthy ?? false,
+            scraperHealthy: input.deploy?.scraperHealthy ?? sourceProxyHealth(input.sourceProxy),
+            latestProbeAt: input.deploy?.latestProbeAt,
+            dashboardAlertId: alert?.id,
+            deliveryId: delivery?.id,
+            blockers: input.deploy?.status === 'ready' && deployProbeFresh ? [] : ['No external deploy probe has confirmed this product-progress endpoint after deploy.'],
+            detail: input.deploy?.status === 'ready' && deployProbeFresh
+                ? `Deploy probe loaded for ${input.deploy.deployedCommit || 'current build'}.`
+                : 'Deploy proof is available only after a live probe records the deployed commit and service health.',
+        },
+        sourceProxy: input.sourceProxy || {
+            ok: false,
+            generatedAt: checkedAt,
+            query: input.query,
+            baseConfigured: false,
+            error: { code: 'source_proxy_unavailable', message: 'Source proxy response is not loaded.' },
+        },
+        orgAlertExport: unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
+        webhookHealth: webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
+        dashboardEvidence: dashboardEvidenceFromRows({
+            checkedAt,
+            route: input.routes.dashboardAlerts || '/dashboard',
+            alert,
+            delivery,
+            sourceProxyReady,
+            deployProbeFresh,
+        }),
+    }
+}
+
+function chooseDashboardAlert(alerts: AlertProofRow[], deliveries: DeliveryProofRow[]) {
+    const deliveryAlertIds = new Set(deliveries.map(row => row.alertId).filter(Boolean))
+    return alerts.find(row => row.id && deliveryAlertIds.has(row.id)) || alerts.find(row => row.id)
+}
+
+function chooseDeliveryForAlert(alertId: string | undefined, deliveries: DeliveryProofRow[]) {
+    if (!alertId) return undefined
+    return deliveries.find(row => row.alertId === alertId && row.status !== 'failed' && row.status !== 'skipped')
+}
+
+function sourceProxyHealth(input: DashboardSourceProofProxyPayload | undefined) {
+    return Boolean(input?.ok && input.endpoints?.sourceInventory?.ok && input.endpoints?.sourcePacks?.ok)
+}
+
+function sourceProxyHasFreshWorker(input: DashboardSourceProofProxyPayload | undefined) {
+    const worker = input?.sourcePacks?.workerReadiness || input?.sourcePacks?.readiness
+    return Boolean(sourceProxyHealth(input) && worker && (worker.collectionReadyRows || worker.activeSourceRows))
+}
+
+function currentCommit() {
+    return process.env.NEXT_PUBLIC_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || undefined
+}
+
+function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvenanceReadiness {
+    return {
+        schemaVersion: 'ti.public_provenance.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/ti',
+        detail: 'Public TI provenance readiness endpoint is not wired into product progress yet.',
+        blockers: ['Public TI owner must expose source/evidence/freshness readiness before this can become ready.'],
+    }
+}
+
+function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditReadiness {
+    return {
+        schemaVersion: 'support.audit.readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/system/impersonation',
+        detail: 'Helpdesk and structured audit readiness endpoint is not wired into product progress yet.',
+        blockers: ['Helpdesk owner must expose support action and audit readiness before this can become ready.'],
+    }
+}
+
+function unavailableOrgAlertExport(source: string, checkedAt: string): OrganizationAlertExportReadiness {
+    return {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/dashboard/dwm',
+        detail: 'Organization alert-term export readiness is not wired into product progress yet.',
+        blockers: ['Org owner must expose active alert-term export readiness before this can become ready.'],
+    }
+}
+
+function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveries: DeliveryProofRow[]): WebhookHealthReadiness {
+    const deliveryReadyCount = deliveries.filter(row => row.status !== 'failed' && row.status !== 'skipped').length
+    return {
+        schemaVersion: 'dwm.webhook_health.readiness.v1',
+        status: 'needs_action',
+        checkedAt,
+        source,
+        href: '/dashboard/automations?setup=dwm',
+        destinationCount: undefined,
+        activeDestinationCount: undefined,
+        deliveryReadyCount,
+        latestDeliveryAt: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1),
+        detail: 'Delivery rows can be counted, but webhook destination lifecycle health is not wired into product progress yet.',
+        blockers: ['Webhook owner must expose destination lifecycle health before this can become ready.'],
+    }
+}
+
+function dashboardEvidenceFromRows(input: {
+    checkedAt: string
+    route: string
+    alert?: AlertProofRow
+    delivery?: DeliveryProofRow
+    sourceProxyReady: boolean
+    deployProbeFresh: boolean
+}): DashboardAlertEvidenceReadiness {
+    const visibleInDashboard = Boolean(input.alert?.id)
+    const deliveryEvidenceMatched = Boolean(input.alert?.id && input.delivery?.alertId === input.alert.id && input.delivery.id)
+    const blockers = [
+        visibleInDashboard ? '' : 'No dashboard-visible backend alert was loaded.',
+        deliveryEvidenceMatched ? '' : 'No delivery row matched the dashboard-visible alert.',
+        input.sourceProxyReady ? '' : 'Source proxy and worker readiness are not both loaded.',
+        input.deployProbeFresh ? '' : 'Deploy probe recency is not loaded.',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'dashboard.alert_evidence.readiness.v1',
+        status: blockers.length ? 'needs_action' : 'ready',
+        checkedAt: input.checkedAt,
+        source: input.route,
+        href: '/dashboard',
+        alertId: input.alert?.id,
+        deliveryId: input.delivery?.id,
+        visibleInDashboard,
+        deliveryEvidenceMatched,
+        sourceProxyReady: input.sourceProxyReady,
+        deployProbeFresh: input.deployProbeFresh,
+        dashboardPath: input.alert?.id ? `/dashboard?case=${encodeURIComponent(input.alert.id)}` : '/dashboard',
+        blockers,
+        detail: blockers.length ? blockers.join('; ') : `Dashboard alert ${input.alert?.id} matches delivery ${input.delivery?.id}.`,
+    }
+}

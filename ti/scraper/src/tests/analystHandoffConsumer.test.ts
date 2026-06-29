@@ -201,6 +201,39 @@ function orgTermsExport(): OrgWatchlistAlertTermsExportContract {
       termFamily: "domain",
       term: "acme.com",
       source: "organization_shared_watchlist",
+      alertGenerationRef: {
+        schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+        source: "organization_shared_watchlist",
+        organizationId: "org_acme",
+        tenantId: "tenant_acme",
+        ownerOrganizationId: "org_acme",
+        watchlistId: "watch_item_acme_domain",
+        watchlistItemId: "watch_item_acme_domain",
+        itemId: "item_acme_domain",
+        termFamily: "domain",
+        category: "domain",
+        term: "acme.com",
+        normalizedTerm: "acme.com",
+        status: "active",
+        lifecycle: {
+          status: "active",
+          reason: "Consumer contract fixture.",
+          requestId: "req-consumer-watchlist",
+          createdBy: "user_analyst",
+          updatedBy: "user_analyst"
+        },
+        dedupe: {
+          scope: "organization_watchlist_term",
+          key: "org:org_acme:watchlist:watch_item_acme_domain:domain:acme.com",
+          parts: {
+            organizationId: "org_acme",
+            tenantId: "tenant_acme",
+            watchlistItemId: "watch_item_acme_domain",
+            termFamily: "domain",
+            normalizedTerm: "acme.com"
+          }
+        }
+      },
       alertGenerationReference: {
         schemaVersion: "organization.watchlist_item_alert_reference.v1",
         organizationId: "org_acme",
