@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   ANALYST_HANDOFF_SCHEMA_VERSION,
+  ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION,
   AnalystHandoffIdentityMismatchError,
   buildActorOrgRelevanceReadinessReport,
   buildActorWatchlistCandidateHandoff,
   buildAlertCaseHandoff,
   buildAlertWebhookTriggerHandoff,
+  buildOrgScopedAlertWatchlistReadiness,
   buildWatchlistAlertGenerationHandoff,
   orgWatchlistTermsToAlertGenerationRequest,
   persistedAlertToCaseHandoffPayload,
@@ -261,6 +263,127 @@ describe("analyst handoff contract", () => {
       alertId: "dwm_alert_acme",
       caseIdCandidate: "case_acme_lumma"
     });
+  });
+
+  test("builds org-scoped watchlist alert readiness from the alert generation adapter", () => {
+    const watchlist = publicTiArtifactToOrgWatchlistCreate({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      requestedByUserId: "user_analyst",
+      query: "Lumma C2",
+      artifact: {
+        id: "artifact_lumma_acme",
+        kind: "tool",
+        label: "Lumma C2",
+        confidence: 88,
+        freshness: "2026-06-28T16:10:00.000Z",
+        provenance: ["public TI profile", "telegram broker-room capture"],
+        watchlistTerms: [{ kind: "domain", value: "acme.com", notes: "Observed in Lumma C2 broker-room context." }]
+      },
+      generatedAt: "2026-06-28T16:10:00.000Z"
+    });
+    expect(watchlist.ok).toBe(true);
+    if (!watchlist.ok) throw new Error("watchlist adapter failed");
+
+    const generation = orgWatchlistTermsToAlertGenerationRequest({
+      parent: watchlist.value.handoff,
+      watchlistId: "watch_acme",
+      watchlistItemIds: ["watch_item_acme_domain"],
+      webhookDestinationIds: ["webhook_discord"],
+      createdAt: "2026-06-28T16:11:00.000Z"
+    });
+    const readiness = buildOrgScopedAlertWatchlistReadiness({
+      adapter: generation,
+      checkedAt: "2026-06-28T16:12:00.000Z"
+    });
+
+    expect(readiness).toMatchObject({
+      schemaVersion: ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION,
+      ok: true,
+      ownerLane: "alert",
+      capability: "org_scoped_watchlist_alert_generation",
+      checkedAt: "2026-06-28T16:12:00.000Z",
+      route: "POST /v1/dwm/alerts/rebuild",
+      routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+      storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+      proofRowId: "org_scoped_alert_case_workflow",
+      expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+      proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoff.test.ts",
+      payloadShape: ["tenantId", "organizationId", "watchlistId", "watchlistItemIds", "publicTiHandoffId"],
+      blockers: [],
+      request: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          watchlistId: "watch_acme",
+          watchlistItemIds: ["watch_item_acme_domain"],
+          publicTiHandoffId: watchlist.value.handoff.handoffId
+        }
+      },
+      handoff: {
+        parentHandoffId: watchlist.value.handoff.handoffId,
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        watchlistId: "watch_acme",
+        watchlistItemIds: ["watch_item_acme_domain"],
+        webhookDestinationIds: ["webhook_discord"]
+      },
+      downstream: {
+        caseRoute: "/v1/cases",
+        webhookRoute: "/v1/dwm/webhooks/deliver",
+        requiresOrgScopedWatchlist: true,
+        requiresActiveWatchlistItems: true
+      }
+    });
+    const serialized = JSON.stringify(readiness).toLowerCase();
+    for (const phrase of ["control room", "how this feeds", "signal", "named examples", "dashboard slop", "acceptance criteria"]) {
+      expect(serialized).not.toContain(phrase);
+    }
+  });
+
+  test("returns typed org and alert blockers for incomplete watchlist alert readiness", () => {
+    const parent = buildActorWatchlistCandidateHandoff({
+      tenantId: "tenant_acme",
+      query: "Lumma C2",
+      artifact: { id: "artifact_lumma_acme", kind: "tool", label: "Lumma C2", provenance: ["public TI profile"] },
+      terms: [{ kind: "domain", value: "acme.com" }],
+      generatedAt: "2026-06-28T16:10:00.000Z"
+    });
+    const generation = orgWatchlistTermsToAlertGenerationRequest({
+      parent,
+      createdAt: "2026-06-28T16:11:00.000Z"
+    });
+    expect(generation.ok).toBe(false);
+    const readiness = buildOrgScopedAlertWatchlistReadiness({
+      adapter: generation,
+      checkedAt: "2026-06-28T16:12:00.000Z"
+    });
+
+    expect(readiness.ok).toBe(false);
+    expect(readiness.request).toBeUndefined();
+    expect(readiness.handoff).toBeUndefined();
+    expect(readiness.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "missing_org",
+        ownerLane: "org",
+        route: "GET /api/organizations/:id/watchlists/alert-terms",
+        action: "export_shared_watchlist_terms"
+      }),
+      expect.objectContaining({
+        code: "missing_watchlist_id",
+        ownerLane: "alert",
+        route: "POST /v1/dwm/alerts/rebuild",
+        action: "rebuild_org_scoped_dwm_alerts"
+      }),
+      expect.objectContaining({
+        code: "missing_watchlist_item",
+        ownerLane: "alert",
+        route: "POST /v1/dwm/alerts/rebuild",
+        action: "rebuild_org_scoped_dwm_alerts"
+      })
+    ]));
   });
 
   test("adapters return typed blockers for missing org, stale evidence, missing provenance, absent alert id, and unsupported artifacts", () => {

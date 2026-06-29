@@ -2,6 +2,7 @@ import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import type { DwmAlert, DwmRecommendedRoute, DwmWatchTerm } from "./dwmProduct.ts";
 
 export const ANALYST_HANDOFF_SCHEMA_VERSION = "hanasand.analyst_handoff.v1" as const;
+export const ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION = "organization.watchlist_alert_readiness.v1" as const;
 
 export type AnalystHandoffKind =
   | "actor_watchlist_candidate"
@@ -166,6 +167,38 @@ export type ActorWatchlistAdapterValue = {
 export type AlertGenerationAdapterValue = {
   handoff: AnalystHandoffEnvelope<"watchlist_alert_generation_request", AlertGenerationRequestPayload>;
   request: AlertGenerationRequestPayload;
+};
+
+export type OrgScopedAlertWatchlistReadiness = {
+  schemaVersion: typeof ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION;
+  ok: boolean;
+  ownerLane: "alert";
+  capability: "org_scoped_watchlist_alert_generation";
+  checkedAt: string;
+  route: "POST /v1/dwm/alerts/rebuild";
+  routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts";
+  storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts";
+  proofRowId: "org_scoped_alert_case_workflow";
+  expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest";
+  proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoff.test.ts";
+  payloadShape: Array<"tenantId" | "organizationId" | "watchlistId" | "watchlistItemIds" | "publicTiHandoffId">;
+  blockers: Array<AnalystHandoffBlocker & { ownerLane: "org" | "alert"; route: string; action: string }>;
+  request?: AlertGenerationRequestPayload;
+  handoff?: {
+    handoffId: string;
+    parentHandoffId?: string;
+    tenantId: string;
+    organizationId?: string;
+    watchlistId?: string;
+    watchlistItemIds: string[];
+    webhookDestinationIds: string[];
+  };
+  downstream: {
+    caseRoute: "/v1/cases";
+    webhookRoute: "/v1/dwm/webhooks/deliver";
+    requiresOrgScopedWatchlist: true;
+    requiresActiveWatchlistItems: true;
+  };
 };
 
 export type AlertCaseAdapterValue = {
@@ -610,6 +643,75 @@ export function orgWatchlistTermsToAlertGenerationRequest(input: {
     createdAt: input.createdAt
   });
   return { ok: true, blockers: [], value: { handoff, request: handoff.payload } };
+}
+
+export function buildOrgScopedAlertWatchlistReadiness(input: {
+  adapter: AnalystHandoffAdapterResult<AlertGenerationAdapterValue> | AlertGenerationAdapterValue;
+  checkedAt?: string;
+}): OrgScopedAlertWatchlistReadiness {
+  const checkedAt = input.checkedAt || nowIso();
+  const adapter = input.adapter;
+  const value = "request" in adapter && "handoff" in adapter
+    ? adapter
+    : adapter.ok
+      ? adapter.value
+      : undefined;
+  const adapterBlockers = "ok" in adapter && !adapter.ok ? adapter.blockers : [];
+  const request = value?.request;
+  const identity = value?.handoff.identity;
+  const shapeBlockers: AnalystHandoffBlocker[] = value
+    ? [
+        value.request.method !== "POST" || value.request.path !== "/v1/dwm/alerts/rebuild"
+          ? blocker("identity_mismatch", "request.path", "Alert generation readiness must point to POST /v1/dwm/alerts/rebuild.", false)
+          : undefined,
+        !value.request.body.organizationId || !identity?.organizationId
+          ? blocker("missing_org", "organizationId", "Alert generation readiness requires organization identity in the handoff and request body.", true)
+          : undefined,
+        !value.request.body.watchlistId || !identity?.watchlistId
+          ? blocker("missing_watchlist_id", "watchlistId", "Alert generation readiness requires the persisted org watchlist id.", true)
+          : undefined,
+        !value.request.body.watchlistItemIds.length || !identity?.watchlistItemIds?.length
+          ? blocker("missing_watchlist_item", "watchlistItemIds", "Alert generation readiness requires persisted org watchlist item ids.", true)
+          : undefined,
+        !value.request.body.publicTiHandoffId || value.request.body.publicTiHandoffId !== value.handoff.parentHandoffId
+          ? blocker("identity_mismatch", "publicTiHandoffId", "Alert generation readiness must preserve the parent public-TI handoff id.", false)
+          : undefined
+      ].filter((item): item is AnalystHandoffBlocker => Boolean(item))
+    : [];
+  const blockers = [...adapterBlockers, ...shapeBlockers].map(alertWatchlistReadinessBlocker);
+  return {
+    schemaVersion: ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION,
+    ok: blockers.length === 0,
+    ownerLane: "alert",
+    capability: "org_scoped_watchlist_alert_generation",
+    checkedAt,
+    route: "POST /v1/dwm/alerts/rebuild",
+    routeHandler: "ti/scraper/src/api/dwmWorkflowRoutes.ts",
+    storageModule: "ti/scraper/src/storage/dwmAlertRepository.ts",
+    proofRowId: "org_scoped_alert_case_workflow",
+    expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+    proofCommand: "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun test src/tests/analystHandoff.test.ts",
+    payloadShape: ["tenantId", "organizationId", "watchlistId", "watchlistItemIds", "publicTiHandoffId"],
+    blockers,
+    request,
+    handoff: value
+      ? {
+          handoffId: value.handoff.handoffId,
+          parentHandoffId: value.handoff.parentHandoffId,
+          tenantId: value.handoff.identity.tenantId,
+          organizationId: value.handoff.identity.organizationId,
+          watchlistId: value.handoff.identity.watchlistId,
+          watchlistItemIds: value.handoff.identity.watchlistItemIds || [],
+          webhookDestinationIds: value.handoff.identity.webhookDestinationIds || []
+        }
+      : undefined,
+    downstream: {
+      caseRoute: "/v1/cases",
+      webhookRoute: "/v1/dwm/webhooks/deliver",
+      requiresOrgScopedWatchlist: true,
+      requiresActiveWatchlistItems: true
+    }
+  };
 }
 
 export function persistedAlertToCaseHandoffPayload(input: {
@@ -1281,6 +1383,16 @@ function alertAdapterBlockers(alert: AnalystAlertLike, input: { organizationId?:
 
 function webhookTriggerIdempotencyKey(alert: AnalystAlertLike, identity: AnalystHandoffIdentity, dryRun: boolean | undefined): string {
   return stableId("dwm_webhook_trigger", `${identity.tenantId}:${identity.organizationId || ""}:${alert.id}:${identity.alertDedupeKey || alert.dedupeKey}:${(identity.webhookDestinationIds || []).join(",")}:${dryRun ? "dry_run" : "live"}`);
+}
+
+function alertWatchlistReadinessBlocker(blocker: AnalystHandoffBlocker): OrgScopedAlertWatchlistReadiness["blockers"][number] {
+  const ownerLane = blocker.code === "missing_org" ? "org" : "alert";
+  return {
+    ...blocker,
+    ownerLane,
+    route: ownerLane === "org" ? "GET /api/organizations/:id/watchlists/alert-terms" : "POST /v1/dwm/alerts/rebuild",
+    action: ownerLane === "org" ? "export_shared_watchlist_terms" : "rebuild_org_scoped_dwm_alerts"
+  };
 }
 
 function envelope<TKind extends AnalystHandoffKind, TPayload>(input: {
