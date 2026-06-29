@@ -1301,6 +1301,25 @@ assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseCon
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.noLeakFields.includes('activeTerms'))
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.noLeakFields.includes('watchlistScope.alertGeneratorKeys'))
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialResponseContract.auditEventAction, 'organization_watchlist_alert_visibility_denied')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.schemaVersion, 'organization.shared_watchlist_alert_denial_guardrails.v1')
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.ok, true)
+assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.checkedFields.includes('denialResponseContract.noLeakFields'))
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.requiredNoLeakFields, [
+    'activeTerms',
+    'watchlistScope.alertGeneratorKeys',
+    'persistedAlertContract',
+    'member.userId',
+])
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.requiredResponseFields, [
+    'error',
+    'message',
+    'organizationId',
+    'visibilityDecision',
+    'allowedRoles',
+    'requestId',
+])
+assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.requiredAuditEvent, 'organization_watchlist_alert_visibility_denied')
+assert.deepEqual(alertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.blockerCodes, [])
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.allowedActions.includes('acknowledge_alert'))
 assert.ok(alertTermsExport.sharedWatchlistAlertQueueVisibility.allowedActions.includes('assign_case'))
 assert.equal(alertTermsExport.sharedWatchlistAlertQueueVisibility.actionGates.readAlertsAllowed, true)
@@ -1535,6 +1554,8 @@ assert.deepEqual(deniedQueueContract.denialResponseContract.responseShape, [
 assert.ok(deniedQueueContract.denialResponseContract.noLeakFields.includes('persistedAlertContract'))
 assert.ok(deniedQueueContract.denialResponseContract.noLeakFields.includes('member.userId'))
 assert.equal(deniedQueueContract.denialResponseContract.auditEventAction, 'organization_watchlist_alert_visibility_denied')
+assert.equal(deniedQueueContract.denialGuardrails.ok, true)
+assert.deepEqual(deniedQueueContract.denialGuardrails.blockerCodes, [])
 
 const archiveOrganizationResponse = await app.inject({
     method: 'PUT',
@@ -1817,6 +1838,8 @@ assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.suppo
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.support.redactionRequired, true)
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.expectedAdapter, 'organizationSharedWatchlistAlertQueueVisibility')
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.consumerContract.requiredStorageBinding, 'workflowContext.organizationId')
+assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.ok, true)
+assert.deepEqual(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.denialGuardrails.blockerCodes, [])
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.downstreamCorrelationFields.includes('alertBridge.alertGeneratorKeys'))
 assert.equal(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.auditContract.proofLogQuery, 'GET /api/logs?service=api&message=organization_watchlist')
 assert.ok(secondOrgAlertTermsExport.sharedWatchlistAlertQueueVisibility.redactedFields.includes('activeTerms[].term'))
