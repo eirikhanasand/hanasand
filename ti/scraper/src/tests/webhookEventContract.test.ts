@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+  DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
+  buildWebhookDispatchReadiness,
   buildWebhookEventSupportHandoff,
   buildWebhookSupportActionRequest,
   buildWebhookDeliveryEventContract,
@@ -176,6 +178,96 @@ describe("webhook event contract", () => {
     });
     expect(request.adminSupportContract.query.idempotencyKey).toMatch(/^dwm_webhook_support_action_/);
     expect(JSON.stringify(request)).not.toContain("https://discord.com");
+  });
+
+  test("builds webhook dispatch readiness from a persisted alert and active destination", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+
+    expect(readiness).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+      checkedAt: "2026-06-29T12:20:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      dedupeKey: "dedupe_acme_lumma",
+      dispatch: {
+        method: "POST",
+        route: "/v1/dwm/webhooks/deliver",
+        dryRun: false,
+        destinationIds: ["webhook_discord"],
+        destinationKinds: ["discord"],
+        redacted: true
+      },
+      evidence: {
+        redacted: true,
+        evidenceCount: 1,
+        captureIds: ["capture_acme_lumma"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_lumma"]
+      },
+      blockers: [],
+      nextActions: []
+    });
+    expect(readiness.dispatch.payloadShape).toEqual(expect.arrayContaining([
+      "alertId",
+      "organizationId",
+      "caseId",
+      "webhookDestinationIds",
+      "evidence.captureIds",
+      "idempotencyKey"
+    ]));
+    expect(readiness.dispatch.idempotencyKey).toMatch(/^dwm_webhook_dispatch_/);
+    expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
+    expect(JSON.stringify(readiness)).not.toContain("payloadBody");
+  });
+
+  test("blocks webhook dispatch without case provenance active destination or duplicate-safe state", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        status: "suppressed",
+        evidence: [],
+        provenance: { captureIds: [] },
+        workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+      },
+      destinations: [{ ...destinationFixture(), organizationId: "org_other", status: "disabled" }],
+      existingDeliveries: [{ ...deliveryFixture(), status: "delivered" }],
+      checkedAt: "2026-06-29T12:21:00.000Z"
+    });
+
+    expect(readiness).toMatchObject({
+      ok: false,
+      dispatch: {
+        route: "/v1/dwm/webhooks/deliver",
+        destinationIds: ["webhook_discord"],
+        redacted: true
+      }
+    });
+    expect(readiness.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_case_id", ownerLane: "case", path: "alert.caseId" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "alert.evidence" }),
+      expect.objectContaining({ code: "disabled_destination", ownerLane: "webhook", path: "destinations[].status" }),
+      expect.objectContaining({ code: "destination_scope_mismatch", ownerLane: "webhook", path: "destinations[].organizationId" }),
+      expect.objectContaining({ code: "suppressed_alert", ownerLane: "alert", path: "alert.status" }),
+      expect.objectContaining({ code: "duplicate_delivered_dedupe", ownerLane: "webhook", path: "existingDeliveries[].dedupeKey" })
+    ]));
+    expect(readiness.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "link_case", blockerCode: "missing_case_id" }),
+      expect.objectContaining({ action: "restore_provenance", blockerCode: "missing_provenance" }),
+      expect.objectContaining({ action: "enable_destination", blockerCode: "disabled_destination" }),
+      expect.objectContaining({ action: "resolve_destination_scope", blockerCode: "destination_scope_mismatch" }),
+      expect.objectContaining({ action: "review_alert", blockerCode: "suppressed_alert" }),
+      expect.objectContaining({ action: "inspect_existing_delivery", blockerCode: "duplicate_delivered_dedupe" })
+    ]));
+    expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
   });
 
   test("validates checked-in fixture as integration proof", () => {
@@ -371,6 +463,17 @@ function deliveryFixture() {
     dedupeKey: "dedupe_acme_lumma",
     idempotencyKey: "idem_acme_lumma",
     dryRun: false
+  };
+}
+
+function destinationFixture() {
+  return {
+    id: "webhook_discord",
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    status: "active",
+    deliveryKind: "discord",
+    endpointHash: "endpoint_hash_acme"
   };
 }
 

@@ -4,6 +4,7 @@ export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_cont
 export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v1" as const;
 export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
 export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION = "dwm.webhook_dispatch_readiness.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -168,6 +169,58 @@ export type DwmWebhookSupportActionRequest = {
     path: string;
     message: string;
   }[];
+};
+
+export type DwmWebhookDispatchReadiness = {
+  schemaVersion: typeof DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION;
+  id: string;
+  checkedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  dedupeKey?: string;
+  dispatch: {
+    method: "POST";
+    route: "/v1/dwm/webhooks/deliver";
+    dryRun: boolean;
+    idempotencyKey: string;
+    destinationIds: string[];
+    destinationKinds: string[];
+    payloadShape: string[];
+    redacted: true;
+  };
+  evidence: {
+    redacted: true;
+    evidenceCount: number;
+    captureIds: string[];
+    sourceIds: string[];
+    contentHashes: string[];
+  };
+  blockers: DwmWebhookDispatchReadinessBlocker[];
+  nextActions: Array<{
+    ownerLane: DwmWebhookDispatchReadinessBlocker["ownerLane"];
+    action: "link_case" | "restore_provenance" | "configure_destination" | "enable_destination" | "resolve_destination_scope" | "review_alert" | "inspect_existing_delivery";
+    blockerCode: DwmWebhookDispatchReadinessBlocker["code"];
+    path: string;
+  }>;
+};
+
+export type DwmWebhookDispatchReadinessBlocker = {
+  code:
+    | "missing_alert_id"
+    | "missing_org_scope"
+    | "missing_case_id"
+    | "missing_provenance"
+    | "missing_destination"
+    | "disabled_destination"
+    | "destination_scope_mismatch"
+    | "suppressed_alert"
+    | "duplicate_delivered_dedupe";
+  ownerLane: "alert" | "case" | "source" | "webhook";
+  path: string;
+  message: string;
 };
 
 export function buildWebhookDeliveryEventContract(input: {
@@ -424,6 +477,79 @@ export function buildWebhookSupportActionRequest(input: {
   };
 }
 
+export function buildWebhookDispatchReadiness(input: {
+  alert: Record<string, any>;
+  destinations?: Array<Record<string, any>>;
+  existingDeliveries?: Array<Record<string, any>>;
+  dryRun?: boolean;
+  checkedAt?: string;
+}): DwmWebhookDispatchReadiness {
+  const alert = input.alert ?? {};
+  const destinations = input.destinations ?? [];
+  const checkedAt = input.checkedAt ?? new Date(0).toISOString();
+  const alertId = stringValue(alert.id) ?? "";
+  const workflow = alert.workflowContext ?? {};
+  const webhook = alert.webhookContext ?? {};
+  const deliveryReadiness = alert.deliveryReadinessContext ?? {};
+  const tenantId = stringValue(alert.tenantId ?? workflow.tenantId ?? webhook.tenantId ?? deliveryReadiness.tenantId) ?? "";
+  const organizationId = stringValue(alert.organizationId ?? workflow.organizationId ?? webhook.organizationId ?? deliveryReadiness.organizationId);
+  const caseId = stringValue(alert.caseId ?? alert.caseIdCandidate ?? workflow.caseIdCandidate ?? webhook.caseIdCandidate ?? deliveryReadiness.caseIdCandidate);
+  const dedupeKey = stringValue(alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey ?? workflow.dedupeKey ?? webhook.dedupeKey ?? deliveryReadiness.deliveryDedupeKey);
+  const evidence = evidenceFromAlertAndDelivery(alert, {});
+  const destinationIds = uniqueStrings([
+    ...destinations.map((destination) => destination.id ?? destination.destinationId ?? destination.webhookDestinationId),
+    ...asStringArray(webhook.webhookDestinationIds),
+    ...asStringArray(deliveryReadiness.webhookDestinationIds)
+  ].filter(Boolean).map(String));
+  const destinationKinds = uniqueStrings(destinations.map((destination) => destination.deliveryKind ?? destination.kind ?? destination.type).filter(Boolean).map(String));
+  const blockers = webhookDispatchBlockers({
+    alert,
+    alertId,
+    tenantId,
+    organizationId,
+    caseId,
+    dedupeKey,
+    evidence,
+    destinations,
+    destinationIds,
+    dryRun: Boolean(input.dryRun),
+    existingDeliveries: input.existingDeliveries ?? []
+  });
+  const idempotencyKey = stableId("dwm_webhook_dispatch", `${tenantId}:${organizationId ?? ""}:${alertId}:${dedupeKey ?? ""}:${destinationIds.join(",")}:${input.dryRun ? "dry_run" : "live"}`);
+  return {
+    schemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_dispatch_readiness", `${tenantId}:${organizationId ?? ""}:${alertId}:${destinationIds.join(",")}:${checkedAt}`),
+    checkedAt,
+    ok: blockers.length === 0,
+    tenantId,
+    organizationId,
+    alertId,
+    caseId,
+    dedupeKey,
+    dispatch: {
+      method: "POST",
+      route: "/v1/dwm/webhooks/deliver",
+      dryRun: Boolean(input.dryRun),
+      idempotencyKey,
+      destinationIds,
+      destinationKinds,
+      payloadShape: ["alertId", "organizationId", "caseId", "dedupeKey", "webhookDestinationIds", "evidence.captureIds", "idempotencyKey"],
+      redacted: true
+    },
+    evidence: {
+      redacted: true,
+      ...evidence
+    },
+    blockers,
+    nextActions: blockers.map((blocker) => ({
+      ownerLane: blocker.ownerLane,
+      action: webhookDispatchActionFor(blocker.code),
+      blockerCode: blocker.code,
+      path: blocker.path
+    }))
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -483,8 +609,84 @@ function supportRequestBlockers(handoff: DwmWebhookEventSupportHandoff): DwmWebh
   return blockers;
 }
 
+function webhookDispatchBlockers(input: {
+  alert: Record<string, any>;
+  alertId: string;
+  tenantId: string;
+  organizationId?: string;
+  caseId?: string;
+  dedupeKey?: string;
+  evidence: DwmWebhookEventContract["evidence"];
+  destinations: Array<Record<string, any>>;
+  destinationIds: string[];
+  dryRun: boolean;
+  existingDeliveries: Array<Record<string, any>>;
+}): DwmWebhookDispatchReadinessBlocker[] {
+  const blockers: DwmWebhookDispatchReadinessBlocker[] = [];
+  if (!input.alertId) blockers.push(dispatchBlocker("missing_alert_id", "alert", "alert.id", "Webhook dispatch requires a persisted alert id."));
+  if (!input.organizationId) blockers.push(dispatchBlocker("missing_org_scope", "alert", "alert.organizationId", "Webhook dispatch requires organization scope."));
+  if (!input.caseId) blockers.push(dispatchBlocker("missing_case_id", "case", "alert.caseId", "Webhook dispatch requires a linked case."));
+  if (!hasDispatchProvenance(input.evidence)) blockers.push(dispatchBlocker("missing_provenance", "source", "alert.evidence", "Webhook dispatch requires source provenance."));
+  if (!input.destinationIds.length) blockers.push(dispatchBlocker("missing_destination", "webhook", "destinations", "Webhook dispatch requires at least one destination."));
+  for (const destination of input.destinations) {
+    const status = String(destination.status ?? "active").toLowerCase();
+    if (status !== "active" && status !== "verified") blockers.push(dispatchBlocker("disabled_destination", "webhook", "destinations[].status", "Webhook destination is not active."));
+    const destinationOrg = stringValue(destination.organizationId);
+    const destinationTenant = stringValue(destination.tenantId);
+    if ((destinationOrg && input.organizationId && destinationOrg !== input.organizationId) || (destinationTenant && input.tenantId && destinationTenant !== input.tenantId)) {
+      blockers.push(dispatchBlocker("destination_scope_mismatch", "webhook", "destinations[].organizationId", "Webhook destination belongs to a different organization."));
+    }
+  }
+  if (isSuppressedAlert(input.alert)) blockers.push(dispatchBlocker("suppressed_alert", "alert", "alert.status", "Suppressed alerts cannot be dispatched to webhook destinations."));
+  if (!input.dryRun && input.dedupeKey && input.existingDeliveries.some((delivery) => delivery.status === "delivered" && (delivery.dedupeKey === input.dedupeKey || delivery.alertId === input.alertId))) {
+    blockers.push(dispatchBlocker("duplicate_delivered_dedupe", "webhook", "existingDeliveries[].dedupeKey", "A delivered webhook already exists for this alert dedupe key."));
+  }
+  return uniqueDispatchBlockers(blockers);
+}
+
+function dispatchBlocker(
+  code: DwmWebhookDispatchReadinessBlocker["code"],
+  ownerLane: DwmWebhookDispatchReadinessBlocker["ownerLane"],
+  path: string,
+  message: string
+): DwmWebhookDispatchReadinessBlocker {
+  return { code, ownerLane, path, message };
+}
+
+function uniqueDispatchBlockers(blockers: DwmWebhookDispatchReadinessBlocker[]): DwmWebhookDispatchReadinessBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function webhookDispatchActionFor(code: DwmWebhookDispatchReadinessBlocker["code"]): DwmWebhookDispatchReadiness["nextActions"][number]["action"] {
+  if (code === "missing_case_id") return "link_case";
+  if (code === "missing_provenance") return "restore_provenance";
+  if (code === "missing_destination") return "configure_destination";
+  if (code === "disabled_destination") return "enable_destination";
+  if (code === "destination_scope_mismatch") return "resolve_destination_scope";
+  if (code === "duplicate_delivered_dedupe") return "inspect_existing_delivery";
+  return "review_alert";
+}
+
+function hasDispatchProvenance(evidence: DwmWebhookEventContract["evidence"]): boolean {
+  return evidence.evidenceCount > 0 && (evidence.captureIds.length > 0 || evidence.sourceIds.length > 0 || evidence.contentHashes.length > 0);
+}
+
+function isSuppressedAlert(alert: Record<string, any>): boolean {
+  return ["suppressed", "false_positive", "muted"].includes(String(alert.status ?? alert.reviewState ?? alert.deliveryState ?? "").toLowerCase());
+}
+
 function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhookEventChainBlocker["ownerLane"], path: string, message: string): DwmWebhookEventChainBlocker {
   return { code, ownerLane, path, message };
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
 function stringValue(value: unknown): string | undefined {
