@@ -18,6 +18,7 @@ import {
     buildDwmWebhookDeliveryHistory,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
+    buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReadiness,
     buildDwmWebhookDeliveryRequestInput,
     buildDwmWebhookDeliveryRetryContract,
@@ -1711,6 +1712,16 @@ const deliveryHistory = buildDwmWebhookDeliveryHistory({
     auditEvents: operationAuditEvents,
     filters: { orgId: 'org_contract' },
 })
+const deliveryReceipts = buildDwmWebhookDeliveryReceipts({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const duplicateReplayGuardHistory = buildDwmWebhookDeliveryHistory({
     liveDeliveryEnabled: true,
     destinations: [
@@ -2515,6 +2526,9 @@ const dashboardTestFailed = dashboardReadiness.destinations.find(item => item.de
 const deliveryHistoryReplay = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
 const deliveryHistoryRetry = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const deliveryHistoryTerminal = deliveryHistory.entries.find(item => item.deliveryId === 'delivery_live_terminal_contract')
+const deliveryReceiptReplay = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_replay_duplicate_contract')
+const deliveryReceiptRetry = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
+const deliveryReceiptTerminal = deliveryReceipts.receipts.find(item => item.deliveryId === 'delivery_live_terminal_contract')
 const duplicateReplayGuardDelivered = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_delivered_contract')
 const duplicateReplayGuardSkipped = duplicateReplayGuardHistory.entries.find(item => item.deliveryId === 'delivery_duplicate_replay_skipped_contract')
 expect(deliveryHistory.schemaVersion === 'dwm.webhook.delivery_history.v1' && deliveryHistory.total === deliveryOperations.total, 'Delivery history should mirror customer-visible delivery operations.', deliveryHistory)
@@ -2528,6 +2542,13 @@ expect(duplicateReplayGuardHistory.total === 2 && duplicateReplayGuardSkipped?.s
 expect(duplicateReplayGuardSkipped?.deliveryProof.auditEventId === 'audit_duplicate_replay_skipped_contract' && duplicateReplayGuardSkipped.dedupe.alreadyDelivered === true, 'Duplicate replay guard should link skipped audit and prior delivered idempotency proof.', duplicateReplayGuardSkipped)
 expect(duplicateReplayGuardDelivered?.status === 'sent' && duplicateReplayGuardDelivered.dedupe.alreadyDelivered === true, 'Duplicate replay guard should preserve the prior delivered attempt.', duplicateReplayGuardDelivered)
 expect(!JSON.stringify(duplicateReplayGuardHistory).includes(secret), 'Duplicate replay guard history should redact endpoint secrets.', duplicateReplayGuardHistory)
+expect(deliveryReceipts.schemaVersion === 'dwm.webhook.delivery_receipts.v1' && deliveryReceipts.counts.total === deliveryHistory.total, 'Delivery receipts should provide a stable proof contract for delivery attempts.', deliveryReceipts)
+expect(deliveryReceiptReplay?.proof.auditEventId === 'audit_replay_duplicate_contract' && deliveryReceiptReplay.proof.noNetwork === true, 'Delivery receipts should link replay delivery proof and preserve no-network dry-run status.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') && deliveryReceiptReplay.discordPreview.fieldNames.includes('Alert URL') && deliveryReceiptReplay.casePath === replayWorkflowAlert.casePath, 'Delivery receipts should carry Discord preview and case/deep-link context.', deliveryReceiptReplay)
+expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
+expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
+expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
+expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts should redact endpoint, response, and payload secrets.', deliveryReceipts)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
@@ -2653,6 +2674,12 @@ console.log(JSON.stringify({
         'delivery history duplicate replay live-send guard',
         'delivery history duplicate replay skipped audit proof',
         'delivery history secret redaction',
+        'delivery receipts customer-safe proof contract',
+        'delivery receipts Discord preview proof',
+        'delivery receipts retry/backoff blockers',
+        'delivery receipts terminal failure blocker',
+        'delivery receipts audit/no-network linkage',
+        'delivery receipts secret redaction',
         'delivery retry persistence grouped idempotency keys',
         'delivery retry persistence terminal failure state',
         'delivery retry persistence duplicate replay dedupe',
@@ -2758,6 +2785,12 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].retry.terminalFailure',
             'deliveryHistory.entries[].dedupe.alreadyDelivered',
             'deliveryHistory.entries[].status',
+            'deliveryReceipts.schemaVersion',
+            'deliveryReceipts.receipts[].proof.auditEventId',
+            'deliveryReceipts.receipts[].proof.noNetwork',
+            'deliveryReceipts.receipts[].discordPreview.fieldNames',
+            'deliveryReceipts.receipts[].retry.nextRetryAt',
+            'deliveryReceipts.receipts[].blockers[].code',
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
