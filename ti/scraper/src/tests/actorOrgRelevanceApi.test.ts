@@ -104,6 +104,70 @@ describe("actor org relevance API", () => {
     expect(forbidden.status).toBe(404);
   });
 
+  test("updates workflow state with assignment, notes, decisions, and org isolation", async () => {
+    const store = new InMemoryScraperStore();
+    const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+
+    const assigned = await patchWorkflow(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      action: "assign",
+      assignedTo: "analyst_mira",
+      note: "Review Microsoft exposure against active identity watchlist.",
+      generatedAt: "2026-06-29T10:00:00.000Z"
+    });
+    expect(assigned.summary.workflow).toMatchObject({
+      status: "new",
+      assignedTo: "analyst_mira",
+      updatedBy: "user_ti",
+      updatedAt: "2026-06-29T10:00:00.000Z"
+    });
+    expect(assigned.record.notes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ authorId: "user_ti", body: "Review Microsoft exposure against active identity watchlist." })
+    ]));
+    expect(assigned.record.timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({ eventType: "assigned", actorId: "user_ti", summary: "Assigned to analyst_mira." })
+    ]));
+
+    const reviewing = await patchWorkflow(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      action: "review",
+      generatedAt: "2026-06-29T10:03:00.000Z"
+    });
+    expect(reviewing.summary.workflow.status).toBe("reviewing");
+
+    const missingRationale = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}?tenantId=tenant_microsoft&organizationId=org_microsoft`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+      body: JSON.stringify({ action: "close" })
+    }), { store, frontier: new FocusedFrontier() });
+    expect(missingRationale.status).toBe(400);
+    expect(await missingRationale.json()).toMatchObject({ error: { code: "missing_rationale" } });
+
+    const closed = await patchWorkflow(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+      action: "close",
+      decision: "true_positive",
+      rationale: "Related alert and case route are ready for customer review.",
+      generatedAt: "2026-06-29T10:06:00.000Z"
+    });
+    expect(closed.summary.workflow).toMatchObject({
+      status: "closed",
+      assignedTo: "analyst_mira",
+      decision: "true_positive",
+      rationale: "Related alert and case route are ready for customer review."
+    });
+    expect(closed.record.timeline.map((event: any) => event.eventType)).toEqual(expect.arrayContaining(["ready", "assigned", "reviewing", "closed"]));
+
+    const closedQueue = await handleApiRequest(new Request("http://127.0.0.1/v1/ti/actor-org-relevance?tenantId=tenant_microsoft&organizationId=org_microsoft&workflowStatus=closed"), { store, frontier: new FocusedFrontier() });
+    const closedList = await closedQueue.json() as any;
+    expect(closedList.counts).toMatchObject({ total: 1, closed: 1, assigned: 1 });
+    expect(closedList.records[0].workflow).toMatchObject({ status: "closed", assignedTo: "analyst_mira" });
+
+    const forbidden = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}?tenantId=tenant_other&organizationId=org_other`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "assign", assignedTo: "other_analyst" })
+    }), { store, frontier: new FocusedFrontier() });
+    expect(forbidden.status).toBe(404);
+  });
+
   test("turns missing evidence into owner actions instead of a generic teaser state", async () => {
     const store = new InMemoryScraperStore();
     const payload = await submit(store, {
@@ -145,6 +209,12 @@ describe("actor org relevance API", () => {
       const snapshotPath = join(dir, "store.json");
       const store = new FileBackedScraperStore({ snapshotPath });
       const created = await submit(store, readyRelevance(), "tenant_microsoft", "org_microsoft");
+      await patchWorkflow(store, created.record.id, "tenant_microsoft", "org_microsoft", {
+        action: "escalate",
+        assignedTo: "analyst_mira",
+        note: "Escalate to identity response owner.",
+        generatedAt: "2026-06-29T10:10:00.000Z"
+      });
 
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
       const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${created.record.id}?tenantId=tenant_microsoft&organizationId=org_microsoft`), { store: rehydrated, frontier: new FocusedFrontier() });
@@ -153,7 +223,12 @@ describe("actor org relevance API", () => {
       expect(detailResponse.status).toBe(200);
       expect(detail.record.id).toBe(created.record.id);
       expect(detail.record.timeline).toEqual(expect.arrayContaining([
-        expect.objectContaining({ eventType: "ready", blockerCodes: [] })
+        expect.objectContaining({ eventType: "ready", blockerCodes: [] }),
+        expect.objectContaining({ eventType: "escalated", actorId: "user_ti" })
+      ]));
+      expect(detail.summary.workflow).toMatchObject({ status: "escalated", updatedBy: "user_ti" });
+      expect(detail.record.notes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ body: "Escalate to identity response owner." })
       ]));
       expect(detail.summary.routes.case).toBe("/v1/cases/case_microsoft_apt29?alertId=dwm_alert_microsoft");
     } finally {
@@ -175,6 +250,16 @@ async function submit(store: InMemoryScraperStore | FileBackedScraperStore, orgR
     })
   }), { store, frontier: new FocusedFrontier() });
   expect(response.status).toBeLessThan(300);
+  return await response.json() as any;
+}
+
+async function patchWorkflow(store: InMemoryScraperStore | FileBackedScraperStore, id: string, tenantId: string, organizationId: string, body: Record<string, unknown>) {
+  const response = await handleApiRequest(new Request(`http://127.0.0.1/v1/ti/actor-org-relevance/${id}?tenantId=${tenantId}&organizationId=${organizationId}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json", "x-actor-id": "user_ti" },
+    body: JSON.stringify(body)
+  }), { store, frontier: new FocusedFrontier() });
+  expect(response.status).toBe(200);
   return await response.json() as any;
 }
 

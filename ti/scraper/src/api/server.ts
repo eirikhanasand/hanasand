@@ -7,7 +7,7 @@ import { buildDwmProductSnapshot, normalizeWatchlist } from "../product/dwmProdu
 import { buildDwmOperationsSnapshot } from "../product/dwmOperations.ts";
 import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSourceInventory.ts";
 import { nowIso } from "../utils.ts";
-import { getActorOrgRelevanceReview, listActorOrgRelevanceReviews, submitActorOrgRelevanceReview } from "./actorOrgRelevanceRoutes.ts";
+import { getActorOrgRelevanceReview, listActorOrgRelevanceReviews, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { createCase, exportCaseEvidence, getCaseDetail, listCases, updateCase } from "./caseRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
@@ -56,6 +56,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "GET") return listActorOrgRelevanceReviews(url, options, request);
     if (url.pathname === "/v1/ti/actor-org-relevance" && request.method === "POST") return submitActorOrgRelevanceReview(request, options);
     if (/^\/v1\/ti\/actor-org-relevance\/[^/]+$/.test(url.pathname) && request.method === "GET") return getActorOrgRelevanceReview(url, options, url.pathname.split("/").pop(), request);
+    if (/^\/v1\/ti\/actor-org-relevance\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateActorOrgRelevanceReview(request, options, url.pathname.split("/").pop());
     if (url.pathname === "/v1/intel/runs" && request.method === "POST") return createRun(request, options);
     if (/^\/v1\/intel\/runs\/[^/]+$/.test(url.pathname)) return runStatus(options, url.pathname.split("/").pop() ?? "");
     if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname)) return runResults(options, url.pathname.split("/")[4]);

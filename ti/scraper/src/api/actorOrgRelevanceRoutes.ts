@@ -3,6 +3,7 @@ import {
   buildActorOrgRelevanceQueue,
   buildActorOrgRelevanceReviewRecord,
   summarizeActorOrgRelevanceReview,
+  updateActorOrgRelevanceReviewWorkflow,
   type ActorOrgRelevanceReviewRecord
 } from "../product/actorOrgRelevanceQueue.ts";
 import type { PublicTiOrgRelevanceProofLike } from "../product/analystHandoff.ts";
@@ -51,6 +52,7 @@ export function listActorOrgRelevanceReviews(url: URL, options: ApiServerOptions
     records,
     generatedAt: url.searchParams.get("generatedAt") || undefined,
     state: stateParam(url.searchParams.get("state")),
+    workflowStatus: workflowStatusParam(url.searchParams.get("workflowStatus")),
     query: url.searchParams.get("q") || undefined
   });
   return json({ ...queue, records: page(queue.records, url) });
@@ -65,6 +67,31 @@ export function getActorOrgRelevanceReview(url: URL, options: ApiServerOptions, 
   return json({
     record,
     summary: summarizeActorOrgRelevanceReview(record!)
+  });
+}
+
+export async function updateActorOrgRelevanceReview(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to update actor relevance review workflow.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const update = updateActorOrgRelevanceReviewWorkflow(record!, {
+    action: body.action,
+    actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+    assignedTo: body.assignedTo,
+    decision: body.decision,
+    rationale: body.rationale,
+    note: body.note,
+    generatedAt: body.generatedAt || nowIso()
+  });
+  if (!update.ok) return error(update.code, update.message, 400);
+  (options.store as any).saveActorOrgRelevanceReview(update.record);
+  return json({
+    record: update.record,
+    summary: summarizeActorOrgRelevanceReview(update.record)
   });
 }
 
@@ -90,4 +117,8 @@ function actorOrgScope(url: URL, request: Request) {
 
 function stateParam(value: string | null) {
   return value === "ready" || value === "blocked" ? value : undefined;
+}
+
+function workflowStatusParam(value: string | null) {
+  return value === "new" || value === "reviewing" || value === "escalated" || value === "suppressed" || value === "closed" ? value : undefined;
 }
