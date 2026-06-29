@@ -29,6 +29,7 @@ export type ActorOrgRelevanceReviewRecord = {
   partialHandoff?: Partial<ActorOrgRelevanceHandoffValue>;
   workflow: ActorOrgRelevanceWorkflowState;
   notes: ActorOrgRelevanceNote[];
+  alertGenerationReceipts: ActorOrgRelevanceAlertGenerationReceipt[];
   nextActions: ActorOrgRelevanceNextAction[];
   timeline: ActorOrgRelevanceTimelineEvent[];
 };
@@ -53,6 +54,7 @@ export type ActorOrgRelevanceReviewSummary = {
   handoffs: ActorOrgRelevanceReadinessRow["handoffs"];
   blockerCodes: string[];
   workflow: ActorOrgRelevanceWorkflowState;
+  latestAlertGeneration?: ActorOrgRelevanceAlertGenerationReceipt;
   nextActions: ActorOrgRelevanceNextAction[];
   routes: {
     publicTi: string;
@@ -75,7 +77,7 @@ export type ActorOrgRelevanceTimelineEvent = {
   id: string;
   occurredAt: string;
   actorId?: string;
-  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized";
+  eventType: "submitted" | "blocked" | "ready" | "assigned" | "reviewing" | "escalated" | "suppressed" | "closed" | "note_added" | "watchlist_materialized" | "alert_generation_requested";
   summary: string;
   blockerCodes: string[];
 };
@@ -154,6 +156,52 @@ export type ActorOrgRelevanceMaterializeWatchlistResult =
   | { ok: true; record: ActorOrgRelevanceReviewRecord; watchlist: ActorOrgRelevanceMaterializedWatchlist; created: boolean }
   | { ok: false; code: string; message: string };
 
+export type ActorOrgRelevanceAlertGenerationReceipt = {
+  schemaVersion: "hanasand.actor_org_relevance.alert_generation_receipt.v1";
+  id: string;
+  tenantId: string;
+  organizationId: string;
+  reviewId: string;
+  actorId: string;
+  query: string;
+  createdAt: string;
+  createdBy?: string;
+  idempotencyKey: string;
+  request: {
+    method: "POST";
+    path: "/v1/dwm/alerts/rebuild";
+    body: {
+      tenantId: string;
+      organizationId?: string;
+      watchlistId: string;
+      watchlistItemIds: string[];
+      publicTiHandoffId?: string;
+      actorOrgRelevanceReviewId: string;
+    };
+  };
+  watchlist: {
+    id: string;
+    terms: DwmWatchTerm[];
+    provenanceCount: number;
+  };
+  downstream: {
+    casePath?: string;
+    webhookDestinationIds: string[];
+    captureIds: string[];
+    sourceIds: string[];
+  };
+  provenance: ActorOrgRelevanceMaterializedWatchlist["provenance"];
+};
+
+export type ActorOrgRelevanceAlertGenerationRequestInput = {
+  actorId?: string;
+  generatedAt?: string;
+};
+
+export type ActorOrgRelevanceAlertGenerationRequestResult =
+  | { ok: true; record: ActorOrgRelevanceReviewRecord; receipt: ActorOrgRelevanceAlertGenerationReceipt }
+  | { ok: false; code: string; message: string };
+
 export type ActorOrgRelevanceQueue = {
   schemaVersion: typeof ACTOR_ORG_RELEVANCE_QUEUE_SCHEMA_VERSION;
   generatedAt: string;
@@ -228,6 +276,7 @@ export function buildActorOrgRelevanceReviewRecord(input: {
     partialHandoff: handoff.ok ? undefined : partialHandoff(handoff),
     workflow: input.existing?.workflow ?? { status: "new", updatedAt: generatedAt },
     notes: input.existing?.notes ?? [],
+    alertGenerationReceipts: input.existing?.alertGenerationReceipts ?? [],
     nextActions: nextActionsForReadiness(readiness),
     timeline: [...(input.existing?.timeline ?? []), timelineEvent]
   };
@@ -254,6 +303,7 @@ export function summarizeActorOrgRelevanceReview(record: ActorOrgRelevanceReview
     handoffs: record.readiness.handoffs,
     blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code)),
     workflow: record.workflow,
+    latestAlertGeneration: record.alertGenerationReceipts.at(-1),
     nextActions: record.nextActions,
     routes: {
       publicTi: `/ti/${encodeURIComponent(record.query)}`,
@@ -452,6 +502,81 @@ export function materializeActorOrgRelevanceWatchlist(input: {
         updatedAt: generatedAt
       },
       timeline: [...record.timeline, timelineEvent]
+    }
+  };
+}
+
+export function createActorOrgRelevanceAlertGenerationRequest(input: {
+  record: ActorOrgRelevanceReviewRecord;
+  watchlist?: ActorOrgRelevanceMaterializedWatchlist;
+  request?: ActorOrgRelevanceAlertGenerationRequestInput;
+}): ActorOrgRelevanceAlertGenerationRequestResult {
+  const record = input.record;
+  if (record.state !== "ready" || !record.handoff) {
+    return { ok: false, code: "review_not_ready", message: "Actor relevance review must be ready before requesting alert generation." };
+  }
+  const expectedWatchlistId = record.handoff.alertGeneration.request.body.watchlistId;
+  if (!input.watchlist || input.watchlist.id !== expectedWatchlistId) {
+    return { ok: false, code: "missing_watchlist_materialization", message: "Create the actor relevance watchlist before requesting alert generation." };
+  }
+  if (input.watchlist.tenantId !== record.tenantId || input.watchlist.organizationId !== record.organizationId) {
+    return { ok: false, code: "watchlist_scope_mismatch", message: "Materialized watchlist belongs to another organization scope." };
+  }
+  const generatedAt = input.request?.generatedAt || nowIso();
+  const body = {
+    ...record.handoff.alertGeneration.request.body,
+    actorOrgRelevanceReviewId: record.id
+  };
+  const receipt: ActorOrgRelevanceAlertGenerationReceipt = {
+    schemaVersion: "hanasand.actor_org_relevance.alert_generation_receipt.v1",
+    id: stableId("actor_org_relevance_alert_generation", `${record.id}:${expectedWatchlistId}:${generatedAt}`),
+    tenantId: record.tenantId,
+    organizationId: record.organizationId,
+    reviewId: record.id,
+    actorId: record.actorId,
+    query: record.query,
+    createdAt: generatedAt,
+    createdBy: input.request?.actorId,
+    idempotencyKey: stableId("actor_org_relevance_alert_generation_idempotency", `${record.tenantId}:${record.organizationId}:${record.id}:${expectedWatchlistId}`),
+    request: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body
+    },
+    watchlist: {
+      id: input.watchlist.id,
+      terms: input.watchlist.terms,
+      provenanceCount: input.watchlist.provenance.length
+    },
+    downstream: {
+      casePath: record.handoff.caseHandoff.request.body.casePath,
+      webhookDestinationIds: record.handoff.webhookTrigger.request.body.webhookDestinationIds,
+      captureIds: record.handoff.webhookTrigger.request.body.captureIds,
+      sourceIds: uniqueStrings(input.watchlist.provenance.map((row) => row.sourceId).filter((value): value is string => Boolean(value)))
+    },
+    provenance: input.watchlist.provenance
+  };
+  return {
+    ok: true,
+    receipt,
+    record: {
+      ...record,
+      updatedAt: generatedAt,
+      workflow: {
+        ...record.workflow,
+        status: record.workflow.status === "new" ? "reviewing" : record.workflow.status,
+        updatedBy: input.request?.actorId || record.workflow.updatedBy,
+        updatedAt: generatedAt
+      },
+      alertGenerationReceipts: [...record.alertGenerationReceipts, receipt],
+      timeline: [...record.timeline, {
+        id: stableId("actor_org_relevance_timeline", `${record.id}:${generatedAt}:alert_generation_requested:${expectedWatchlistId}`),
+        occurredAt: generatedAt,
+        actorId: input.request?.actorId,
+        eventType: "alert_generation_requested",
+        summary: `Prepared alert rebuild request for watchlist ${expectedWatchlistId}.`,
+        blockerCodes: uniqueStrings(record.readiness.blockers.map((blocker) => blocker.code))
+      }]
     }
   };
 }

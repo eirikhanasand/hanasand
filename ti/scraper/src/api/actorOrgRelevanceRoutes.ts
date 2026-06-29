@@ -2,6 +2,7 @@ import {
   actorOrgRelevanceRecordBelongsTo,
   buildActorOrgRelevanceQueue,
   buildActorOrgRelevanceReviewRecord,
+  createActorOrgRelevanceAlertGenerationRequest,
   materializeActorOrgRelevanceWatchlist,
   summarizeActorOrgRelevanceReview,
   updateActorOrgRelevanceReviewWorkflow,
@@ -128,6 +129,33 @@ export async function materializeActorOrgRelevanceReviewWatchlist(request: Reque
     record: materialized.record,
     summary: summarizeActorOrgRelevanceReview(materialized.record)
   }, materialized.created ? 201 : 200);
+}
+
+export async function createActorOrgRelevanceReviewAlertGenerationRequest(request: Request, options: ApiServerOptions, id: string | undefined): Promise<Response> {
+  if (!id) return error("missing_review_id", "Actor relevance review id is required.", 400);
+  const url = new URL(request.url);
+  const scope = actorOrgScope(url, request);
+  if (!scope.organizationId) return error("missing_org", "organizationId is required to request actor relevance alert generation.", 400);
+  const record = (options.store as any).getActorOrgRelevanceReview?.(id) as ActorOrgRelevanceReviewRecord | undefined;
+  if (!actorOrgRelevanceRecordBelongsTo(record, scope)) return error("not_found", "Actor relevance review not found.", 404);
+  const body = await readJson<any>(request);
+  const watchlistId = body.watchlistId ? String(body.watchlistId) : record!.handoff?.alertGeneration.request.body.watchlistId;
+  const watchlist = watchlistId ? (options.store as any).getDwmWatchlist?.(watchlistId) : undefined;
+  const result = createActorOrgRelevanceAlertGenerationRequest({
+    record: record!,
+    watchlist,
+    request: {
+      actorId: body.actorId || request.headers.get("x-actor-id") || undefined,
+      generatedAt: body.generatedAt || nowIso()
+    }
+  });
+  if (!result.ok) return error(result.code, result.message, result.code === "watchlist_scope_mismatch" ? 409 : 400);
+  (options.store as any).saveActorOrgRelevanceReview(result.record);
+  return json({
+    receipt: result.receipt,
+    record: result.record,
+    summary: summarizeActorOrgRelevanceReview(result.record)
+  }, 201);
 }
 
 function findExistingReview(
