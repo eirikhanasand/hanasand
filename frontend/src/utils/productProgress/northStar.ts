@@ -100,6 +100,17 @@ export type ProductNorthStarDeployBlocker = {
     integrationProbeHint: string
 }
 
+export type ProductNorthStarProgressSource = {
+    schemaVersion: 'product.progress_source.readiness.v1'
+    route: string
+    state: ReadinessStatus
+    status?: number
+    proofTimestamp: string
+    unavailableReason?: string
+    backendProofContractVersion: string
+    integrationProbeHint: string
+}
+
 export type ProductNorthStarScoreboard = {
     schemaVersion: 'product.north_star.readiness.v1'
     generatedAt: string
@@ -108,6 +119,7 @@ export type ProductNorthStarScoreboard = {
     readyRows: number
     totalRows: number
     firstBlocker?: string
+    progressSource: ProductNorthStarProgressSource
     deployGate: ProductNorthStarDeployGate
     direction: ProductNorthStarDirection[]
     rows: ProductNorthStarRow[]
@@ -123,6 +135,7 @@ export function parseProductNorthStarScoreboard(input: unknown): ProductNorthSta
     if (typeof candidate.readyRows !== 'number' || typeof candidate.totalRows !== 'number') return null
     if (!candidate.rows.every(isProductNorthStarRow)) return null
     if (!candidate.direction.every(isProductNorthStarDirection)) return null
+    if (!isProductNorthStarProgressSource(candidate.progressSource)) return null
     if (!isProductNorthStarDeployGate(candidate.deployGate)) return null
     if (candidate.totalRows !== candidate.rows.length) return null
     if (candidate.readyRows !== candidate.rows.filter(row => row.state === 'ready').length) return null
@@ -217,6 +230,20 @@ function isProductNorthStarDeployBlocker(input: unknown): input is ProductNorthS
         && isFilledString(blocker.integrationProbeHint)
 }
 
+function isProductNorthStarProgressSource(input: unknown): input is ProductNorthStarProgressSource {
+    if (!input || typeof input !== 'object') return false
+    const source = input as Partial<ProductNorthStarProgressSource>
+    return source.schemaVersion === 'product.progress_source.readiness.v1'
+        && isFilledString(source.route)
+        && isReadinessStatus(source.state)
+        && (source.status === undefined || (typeof source.status === 'number' && source.status >= 0))
+        && isFilledString(source.proofTimestamp)
+        && (typeof source.unavailableReason === 'string' || source.unavailableReason === undefined)
+        && isFilledString(source.backendProofContractVersion)
+        && isFilledString(source.integrationProbeHint)
+        && (source.state === 'ready' || isFilledString(source.unavailableReason))
+}
+
 function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: ProductNorthStarRow[]) {
     const readyRows = rows.filter(row => row.state === 'ready')
     const nonReadyRows = rows.filter(row => row.state !== 'ready')
@@ -269,6 +296,7 @@ type BuildOptions = {
     generatedAt: string
     query?: string
     external?: ProductReadinessExternalState
+    progressSource?: ProductNorthStarProgressSource
 }
 
 export function buildProductNorthStarScoreboard(payload: ProductProgressReadinessPayload | null | undefined, options: BuildOptions): ProductNorthStarScoreboard {
@@ -369,9 +397,23 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
         readyRows,
         totalRows: rows.length,
         firstBlocker,
+        progressSource: options.progressSource || defaultProgressSource(payload, generatedAt),
         deployGate: buildDeployGate(rows, { fullChainReady, readyRows, firstBlocker }),
         direction: buildProductDirection(rows),
         rows,
+    }
+}
+
+function defaultProgressSource(payload: ProductProgressReadinessPayload | null | undefined, generatedAt: string): ProductNorthStarProgressSource {
+    return {
+        schemaVersion: 'product.progress_source.readiness.v1',
+        route: payload?.routes?.productProgress || '/api/product-progress',
+        state: payload ? 'ready' : 'unavailable',
+        status: payload ? 200 : undefined,
+        proofTimestamp: payload?.checkedAt || payload?.generatedAt || generatedAt,
+        unavailableReason: payload ? undefined : 'product_progress_not_loaded',
+        backendProofContractVersion: payload?.schemaVersion || 'product.progress.readiness.v1',
+        integrationProbeHint: 'GET /api/product-progress must return product.progress.readiness.v1 before the north-star scoreboard can be treated as loaded from real product proof.',
     }
 }
 

@@ -120,6 +120,10 @@ assert.equal(partialScoreboard.deployGate.fullChainReady, false)
 assert.equal(partialScoreboard.deployGate.readyRows, partialScoreboard.readyRows)
 assert.equal(partialScoreboard.deployGate.totalRows, partialScoreboard.totalRows)
 assert.equal(partialScoreboard.deployGate.firstBlocker, partialScoreboard.firstBlocker)
+assert.equal(partialScoreboard.progressSource.schemaVersion, 'product.progress_source.readiness.v1')
+assert.equal(partialScoreboard.progressSource.state, 'ready')
+assert.equal(partialScoreboard.progressSource.route, '/api/product-progress')
+assert.equal(partialScoreboard.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
 assert.deepEqual(partialScoreboard.deployGate.blockerRows, ['organizations'])
 assert.deepEqual(partialScoreboard.deployGate.needsActionRows, ['shared_watchlists', 'real_alert_generation', 'webhook_delivery', 'analyst_workflow', 'deploy_live_status'])
 assert.deepEqual(partialScoreboard.deployGate.unavailableRows, ['support_admin_audit', 'public_ti_enrichment'])
@@ -179,6 +183,11 @@ assert.equal(parseProductNorthStarScoreboard(partialScoreboard)?.schemaVersion, 
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersion: 'wrong' }), null)
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, readyRows: partialScoreboard.readyRows + 1 }), null)
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, deployGate: undefined }), null)
+assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, progressSource: undefined }), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    progressSource: { ...partialScoreboard.progressSource, state: 'unavailable', unavailableReason: undefined },
+}), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     deployGate: { ...partialScoreboard.deployGate, fullChainReady: true },
@@ -255,6 +264,7 @@ assert.equal(readyScoreboard.firstBlocker, undefined)
 assert.equal(readyScoreboard.deployGate.fullChainReady, true)
 assert.equal(readyScoreboard.deployGate.state, 'ready')
 assert.equal(readyScoreboard.deployGate.firstBlocker, '')
+assert.equal(readyScoreboard.progressSource.state, 'ready')
 assert.deepEqual(readyScoreboard.deployGate.actionNeededWorkflowLinks, [])
 assert.deepEqual(readyScoreboard.deployGate.blockingProofRows, [])
 assert.ok(readyScoreboard.direction.every(item => item.state === 'ready' && !item.blocker))
@@ -363,6 +373,8 @@ for (const token of [
     '/api/product-progress',
     'buildProductNorthStarScoreboard',
     'parseProductProgressReadinessPayload',
+    'progressSource: progress.source',
+    'product.progress_source.readiness.v1',
     'cache-control',
     'no-store',
     'x-organization-id',

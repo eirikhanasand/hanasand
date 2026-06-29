@@ -91,6 +91,11 @@ try {
     assert.ok(payload, 'Product readiness route should return a valid north-star scoreboard.')
     assert.equal(response.headers.get('cache-control'), 'no-store')
     assert.equal(payload?.query, 'LockBit')
+    assert.equal(payload?.progressSource.schemaVersion, 'product.progress_source.readiness.v1')
+    assert.equal(payload?.progressSource.state, 'ready')
+    assert.equal(payload?.progressSource.status, 200)
+    assert.equal(payload?.progressSource.route, '/api/product-progress')
+    assert.equal(payload?.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
     assert.equal(payload?.deployGate.fullChainReady, false)
     assert.equal(payload?.deployGate.readyRows, payload?.readyRows)
     assert.equal(payload?.deployGate.totalRows, payload?.totalRows)
@@ -105,6 +110,30 @@ try {
     assert.equal(capturedRequests[0]?.url.searchParams.get('actor'), 'lockbit')
     assert.equal(capturedRequests[0]?.authorization, 'Bearer test-token')
     assert.equal(capturedRequests[0]?.organizationId, 'org_header')
+
+    capturedRequests.length = 0
+    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input))
+        capturedRequests.push({
+            url,
+            authorization: init?.headers instanceof Headers ? init.headers.get('authorization') : null,
+            organizationId: init?.headers instanceof Headers ? init.headers.get('x-organization-id') : null,
+        })
+        if (url.pathname === '/api/product-progress') {
+            return jsonResponse({ schemaVersion: 'product.progress.readiness.v0' })
+        }
+        return jsonResponse({ error: 'unexpected route' }, { status: 404 })
+    }
+    const malformedResponse = await productReadinessGet(request)
+    const malformedPayload = parseProductNorthStarScoreboard(await malformedResponse.json())
+    assert.ok(malformedPayload, 'Malformed product-progress payload should still produce a valid blocked north-star scoreboard.')
+    assert.equal(malformedPayload?.progressSource.state, 'needs_action')
+    assert.equal(malformedPayload?.progressSource.status, 200)
+    assert.equal(malformedPayload?.progressSource.unavailableReason, 'product_progress_schema_invalid')
+    assert.equal(malformedPayload?.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
+    assert.equal(malformedPayload?.fullChainReady, false)
+    assert.ok(malformedPayload?.deployGate.blockingProofRows.length)
+    assert.equal(capturedRequests[0]?.url.searchParams.get('organizationId'), 'org_acme')
 } finally {
     globalThis.fetch = originalFetch
 }

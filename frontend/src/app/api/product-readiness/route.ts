@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseProductProgressReadinessPayload } from '@/app/dashboard/operatorConsoleModel'
-import { buildProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, type ProductNorthStarProgressSource } from '@/utils/productProgress/northStar'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
-    const payload = await loadProductProgress(request, query)
-    const scoreboard = buildProductNorthStarScoreboard(payload, { generatedAt, query })
+    const progress = await loadProductProgress(request, query, generatedAt)
+    const scoreboard = buildProductNorthStarScoreboard(progress.payload, { generatedAt, query, progressSource: progress.source })
 
     return NextResponse.json(scoreboard, { headers: { 'cache-control': 'no-store' } })
 }
 
-async function loadProductProgress(request: NextRequest, query: string) {
+async function loadProductProgress(request: NextRequest, query: string, generatedAt: string): Promise<{
+    payload: ReturnType<typeof parseProductProgressReadinessPayload>
+    source: ProductNorthStarProgressSource
+}> {
     const target = new URL('/api/product-progress', request.nextUrl.origin)
     target.searchParams.set('q', query)
     copyScopedParams(request, target)
@@ -23,10 +26,63 @@ async function loadProductProgress(request: NextRequest, query: string) {
             headers: forwardedHeaders(request),
             signal: AbortSignal.timeout(3500),
         })
-        if (!response.ok) return null
-        return parseProductProgressReadinessPayload(await response.json())
-    } catch {
-        return null
+        if (!response.ok) {
+            return {
+                payload: null,
+                source: progressSource({
+                    generatedAt,
+                    route: target.pathname,
+                    state: 'unavailable',
+                    status: response.status,
+                    unavailableReason: 'product_progress_http_error',
+                }),
+            }
+        }
+        const payload = parseProductProgressReadinessPayload(await response.json())
+        return {
+            payload,
+            source: progressSource({
+                generatedAt,
+                route: target.pathname,
+                state: payload ? 'ready' : 'needs_action',
+                status: response.status,
+                unavailableReason: payload ? undefined : 'product_progress_schema_invalid',
+                proofTimestamp: payload?.checkedAt || payload?.generatedAt,
+                backendProofContractVersion: payload?.schemaVersion,
+            }),
+        }
+    } catch (error) {
+        return {
+            payload: null,
+            source: progressSource({
+                generatedAt,
+                route: target.pathname,
+                state: 'unavailable',
+                status: 0,
+                unavailableReason: error instanceof Error ? `product_progress_fetch_failed:${error.name}` : 'product_progress_fetch_failed',
+            }),
+        }
+    }
+}
+
+function progressSource(input: {
+    generatedAt: string
+    route: string
+    state: ProductNorthStarProgressSource['state']
+    status?: number
+    proofTimestamp?: string
+    unavailableReason?: string
+    backendProofContractVersion?: string
+}): ProductNorthStarProgressSource {
+    return {
+        schemaVersion: 'product.progress_source.readiness.v1',
+        route: input.route,
+        state: input.state,
+        status: input.status,
+        proofTimestamp: input.proofTimestamp || input.generatedAt,
+        unavailableReason: input.unavailableReason,
+        backendProofContractVersion: input.backendProofContractVersion || 'product.progress.readiness.v1',
+        integrationProbeHint: 'GET /api/product-progress must return product.progress.readiness.v1; HTTP, fetch, and schema failures stay explicit on this progressSource object.',
     }
 }
 
