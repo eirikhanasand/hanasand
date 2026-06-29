@@ -16,6 +16,7 @@ import {
     normalizeWatchlistCleanupInput,
     normalizeWatchlistInput,
     normalizeWatchlistRequestId,
+    organizationAnalystPortalVisibilityAdapter,
     organizationLifecycleReadiness,
     organizationDownstreamAuthorizationExport,
     organizationReadinessProof,
@@ -1203,6 +1204,7 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
         alertDetail: 'GET /v1/dwm/alerts/:id',
         caseList: 'GET /v1/cases?organizationId=:organizationId',
         caseDetail: 'GET /v1/cases/:id',
+        webhookDelivery: 'POST /v1/dwm/webhooks/deliver',
         alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
     } as const
 
@@ -1239,6 +1241,31 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
                 ],
                 blockerCodes: [visibility.reason ?? 'role_not_allowed'],
                 nonmemberEnumeration: false,
+                analystPortalAdapter: {
+                    schemaVersion: 'organization.analyst_portal_visibility_denial_adapter.v1',
+                    organizationId: organization.id,
+                    tenantId: organization.id,
+                    memberRole: organization.role ?? 'viewer',
+                    visibility,
+                    routeBindings: routes,
+                    allowedActions: [],
+                    actionMatrix: {
+                        review_alert: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        acknowledge_alert: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        assign_case: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        link_case: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        replay_alert: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        deliver_webhook: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                        open_audit_timeline: { allowed: false, denialReason: visibility.reason ?? 'role_not_allowed' },
+                    },
+                    redactedFields: [
+                        'activeTerms[]',
+                        'watchlistScope.alertGeneratorKeys',
+                        'case.evidence.rawContent',
+                        'destination.secret',
+                    ],
+                    nonmemberEnumeration: false,
+                },
                 proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
             },
         })
@@ -1261,6 +1288,7 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
             routes,
             requiredQueryFields: ['organizationId'],
             allowedActions: downstreamAuthorization.allowedActions,
+            analystPortalAdapter: organizationAnalystPortalVisibilityAdapter(downstreamProof, downstreamAuthorization),
             alertQueue: {
                 route: alertQueue.routes.list,
                 requiredQueryFields: alertQueue.requiredQueryFields,
