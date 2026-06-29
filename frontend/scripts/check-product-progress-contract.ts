@@ -9,6 +9,7 @@ const workbenchSource = readFileSync(new URL('../src/app/dashboard/ti/workbench/
 const dashboardModelSource = readFileSync(new URL('../src/app/dashboard/operatorConsoleModel.ts', here), 'utf8')
 const dashboardPageSource = readFileSync(new URL('../src/app/dashboard/page.tsx', here), 'utf8')
 const readinessPageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
+const productProgressRouteSource = readFileSync(new URL('../src/app/api/product-progress/route.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T08:00:00.000Z'
 const routes = {
@@ -250,6 +251,60 @@ const readyPayload = {
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true },
     deployProbe: { ...partialPayload.deployProbe!, status: 'ready' as const, blockers: [], apiHealthy: true, scraperHealthy: true, latestProbeAt: generatedAt },
 }
+const backedOrgWebhookPayload = buildProductProgressPayload({
+    generatedAt,
+    checkedAt: generatedAt,
+    query: 'watchlist terms',
+    routes,
+    sourceProxy,
+    alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    deliveries: [{ id: 'deliv_acme_1', alertId: 'alert_acme_1', status: 'delivered', attemptedAt: generatedAt }],
+    orgAlertExport: {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/dwm/watchlists',
+        href: '/dashboard/dwm',
+        organizationId: 'org_acme',
+        activeTermCount: 2,
+        pausedCount: 0,
+        archivedCount: 0,
+        canGenerateAlerts: true,
+        exportedAt: generatedAt,
+        blockers: [],
+        ownerLane: 'org',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'org_alert_export',
+        integrationProbeHint: 'GET /api/dwm/watchlists with org scope must return active shared terms that can generate alerts.',
+        backendProofContractVersion: 'organization.watchlist_alert_terms_export.v1',
+    },
+    webhookHealth: {
+        schemaVersion: 'dwm.webhook_health.readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/organizations/org_acme/webhooks',
+        href: '/dashboard/automations?setup=dwm',
+        destinationCount: 1,
+        activeDestinationCount: 1,
+        deliveryReadyCount: 1,
+        latestDeliveryAt: generatedAt,
+        latestAuditEventAt: generatedAt,
+        blockers: [],
+        ownerLane: 'webhook',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'webhook_health',
+        integrationProbeHint: 'GET /api/organizations/:id/webhooks and GET /api/dwm/webhooks/deliveries must return active destinations and delivery evidence.',
+        backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
+    },
+})
+assert.equal(backedOrgWebhookPayload.orgAlertExport?.status, 'ready')
+assert.equal(backedOrgWebhookPayload.orgAlertExport?.source, '/api/dwm/watchlists')
+assert.equal(backedOrgWebhookPayload.webhookHealth?.status, 'ready')
+assert.equal(backedOrgWebhookPayload.webhookHealth?.source, '/api/organizations/org_acme/webhooks')
+assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).orgAlertExport?.status, 'ready')
+assert.equal(buildProductProgressExternalState(backedOrgWebhookPayload, { checkedAt: generatedAt }).webhookHealth?.status, 'ready')
 const readyContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -405,6 +460,20 @@ for (const bannedCopy of ['control room', 'prompt-shaped', 'acceptance criteria'
     assert.equal(dashboardModelSource.toLowerCase().includes(bannedCopy), false, `Dashboard model includes banned copy: ${bannedCopy}`)
     assert.equal(dashboardPageSource.toLowerCase().includes(bannedCopy), false, `Dashboard page includes banned copy: ${bannedCopy}`)
     assert.equal(readinessPageSource.toLowerCase().includes(bannedCopy), false, `Readiness page includes banned copy: ${bannedCopy}`)
+}
+
+for (const scopedProgressToken of [
+    'copyScopedParams(request, target)',
+    '\'organizationId\'',
+    '\'userEmail\'',
+    '\'userId\'',
+    '\'actor\'',
+    'orgAlertExportReadiness',
+    'webhookHealthReadiness',
+    '/api/dwm/watchlists',
+    '/api/organizations/:id/webhooks',
+]) {
+    assert.ok(productProgressRouteSource.includes(scopedProgressToken), `Product-progress route missing scoped readiness token: ${scopedProgressToken}`)
 }
 
 for (const visibleExample of ['APT29', 'LockBit', 'dashboard slop', 'how this feeds', '/ti/<query>']) {

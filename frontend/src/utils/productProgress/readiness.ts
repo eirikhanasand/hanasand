@@ -24,6 +24,10 @@ export type ProductProgressEndpointInput = {
     deliveries?: DeliveryProofRow[]
     deploy?: Partial<DeployProbeReadiness>
     entitlement?: EntitlementReadiness
+    publicTiProvenance?: PublicTiProvenanceReadiness
+    helpdeskAudit?: HelpdeskAuditReadiness
+    orgAlertExport?: OrganizationAlertExportReadiness
+    webhookHealth?: WebhookHealthReadiness
 }
 
 export function buildProductProgressPayload(input: ProductProgressEndpointInput): ProductProgressReadinessPayload {
@@ -38,8 +42,8 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
         generatedAt: input.generatedAt,
         checkedAt,
         routes: input.routes,
-        publicTiProvenance: unavailablePublicTi(input.routes.publicTiProvenance || input.routes.productProgress || '/api/product-progress', checkedAt),
-        helpdeskAudit: unavailableHelpdesk(input.routes.helpdeskAudit || input.routes.productProgress || '/api/product-progress', checkedAt),
+        publicTiProvenance: input.publicTiProvenance || unavailablePublicTi(input.routes.publicTiProvenance || input.routes.productProgress || '/api/product-progress', checkedAt),
+        helpdeskAudit: input.helpdeskAudit || unavailableHelpdesk(input.routes.helpdeskAudit || input.routes.productProgress || '/api/product-progress', checkedAt),
         deployProbe: {
             schemaVersion: 'product.deploy_probe.readiness.v1',
             status: input.deploy?.status === 'ready' && deployProbeFresh ? 'ready' : 'needs_action',
@@ -72,8 +76,8 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             baseConfigured: false,
             error: { code: 'source_proxy_unavailable', message: 'Source proxy response is not loaded.' },
         },
-        orgAlertExport: unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
-        webhookHealth: webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
+        orgAlertExport: input.orgAlertExport || unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
+        webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
         entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
         dashboardEvidence: dashboardEvidenceFromRows({
             checkedAt,

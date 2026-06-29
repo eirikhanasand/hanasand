@@ -293,6 +293,11 @@ export type ProductProgressReadinessPayload = {
         webhookHealth?: string
         dashboardAlerts?: string
         entitlement?: string
+        organizations?: string
+        watchlists?: string
+        operations?: string
+        deliveries?: string
+        organizationWebhooks?: string
     }
     publicTiProvenance?: PublicTiProvenanceReadiness
     helpdeskAudit?: HelpdeskAuditReadiness

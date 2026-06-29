@@ -56,7 +56,7 @@ export default async function Page({
     ])
     const [sourceProofReadiness, productProgressReadiness] = await Promise.all([
         loadDashboardSourceProof(Headers, watchlists),
-        loadProductProgressReadiness(Headers),
+        loadProductProgressReadiness(Headers, scope, viewerIdentity),
     ])
     const liveAlerts = alertLoad.alerts
     const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
@@ -293,8 +293,8 @@ async function loadDashboardSourceProof(Headers: Headers, watchlists: DwmWatchli
     }
 }
 
-async function loadProductProgressReadiness(Headers: Headers) {
-    const route = productProgressRoute(Headers)
+async function loadProductProgressReadiness(Headers: Headers, scope: OperatorScope, identity: DashboardViewerIdentity) {
+    const route = productProgressRoute(Headers, scope, identity)
     if (!route.url) {
         return buildProductProgressExternalState(null, {
             checkedAt: new Date().toISOString(),
@@ -320,12 +320,21 @@ async function loadProductProgressReadiness(Headers: Headers) {
     }
 }
 
-function productProgressRoute(Headers: Headers) {
+function productProgressRoute(Headers: Headers, scope: OperatorScope, identity: DashboardViewerIdentity) {
     const host = Headers.get('x-forwarded-host') || Headers.get('host')
     const proto = Headers.get('x-forwarded-proto') || 'http'
     const label = '/api/product-progress'
     if (!host) return { label }
-    return { url: new URL(label, `${proto}://${host}`), label }
+    const url = new URL(label, `${proto}://${host}`)
+    if (scope.organizationId) {
+        url.searchParams.set('organizationId', scope.organizationId)
+    } else {
+        url.searchParams.set('tenantId', scope.tenantId)
+    }
+    if (identity.userEmail) url.searchParams.set('userEmail', identity.userEmail)
+    if (identity.userId) url.searchParams.set('userId', identity.userId)
+    if (identity.actor) url.searchParams.set('actor', identity.actor)
+    return { url, label }
 }
 
 function sourceProofRoute(Headers: Headers, watchlists: DwmWatchlistSummary[]) {

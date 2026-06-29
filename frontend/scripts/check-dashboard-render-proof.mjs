@@ -32,12 +32,12 @@ const readinessRows = {
     },
     org_alert_export: {
         href: '/dashboard/dwm',
-        backendProbe: 'GET /api/organizations/:id/watchlist-alert-terms',
+        backendProbe: 'GET /api/dwm/watchlists with org scope',
         commits: ['414c72a4', 'd0f53e04'],
     },
     webhook_health: {
         href: '/dashboard/automations?setup=dwm',
-        backendProbe: 'GET /api/dwm/webhooks',
+        backendProbe: 'GET /api/organizations/:id/webhooks + GET /api/dwm/webhooks/deliveries',
         commits: ['b3600c7e'],
     },
     helpdesk_audit: {
