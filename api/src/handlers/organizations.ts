@@ -18,6 +18,7 @@ import {
     organizationSettingsFromRow,
     organizationVisibilityDecision,
     organizationWatchlistAlertGenerationContract,
+    organizationWatchlistAlertTermsExport,
     roleCanManageOrganization,
     roleCanWriteWatchlist,
     toInvite,
@@ -1002,6 +1003,43 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
                 'alertGenerationBridge.blockedReasons',
             ],
         },
+    })
+}
+
+export async function getOrganizationWatchlistAlertTerms(req: FastifyRequest<{ Params: OrganizationParams, Querystring: { requestId?: string, request_id?: string } }>, res: FastifyReply) {
+    const { valid, id: userId } = await tokenWrapper(req, res)
+    if (!valid || !userId) {
+        return res.status(401).send({ error: 'Unauthorized.' })
+    }
+
+    const organization = await loadOrganizationForMember(req.params.id, userId)
+    if (!organization) {
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const result = await run(`
+        SELECT *
+        FROM organization_watchlist_items
+        WHERE organization_id = $1
+        ORDER BY status ASC, kind ASC, value ASC
+    `, [req.params.id])
+    const watchlistItems = result.rows as OrganizationWatchlistRow[]
+    const exportContract = organizationWatchlistAlertTermsExport(organization, watchlistItems, {
+        userId,
+        role: organization.role ?? 'viewer',
+    })
+    const requestId = normalizeWatchlistRequestId(req.query?.requestId ?? req.query?.request_id)
+    logOrganizationEvent(req, 'organization_watchlist_alert_terms_exported', req.params.id, userId, {
+        requestId,
+        activeTermCount: exportContract.activeTerms.length,
+        pausedCount: exportContract.excluded.pausedCount,
+        archivedCount: exportContract.excluded.archivedCount,
+        canGenerateAlerts: exportContract.canGenerateAlerts,
+    })
+
+    return res.send({
+        organization: toOrganization(organization),
+        alertTermsExport: exportContract,
     })
 }
 

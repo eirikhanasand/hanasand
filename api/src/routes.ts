@@ -152,6 +152,7 @@ import {
     getOrganizationMembers,
     getOrganizationSettings,
     getOrganizations,
+    getOrganizationWatchlistAlertTerms,
     getOrganizationWatchlists,
     postOrganization,
     postOrganizationInviteAccept,
@@ -311,6 +312,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/organizations/:id/settings', getOrganizationSettings)
     fastify.put('/organizations/:id/settings', putOrganizationSettings)
     fastify.get('/organizations/:id/alert-readiness', getOrganizationAlertReadiness)
+    fastify.get('/organizations/:id/watchlists/alert-terms', getOrganizationWatchlistAlertTerms)
     fastify.get('/organizations/:id/watchlists', getOrganizationWatchlists)
     fastify.post('/organizations/:id/watchlists', postOrganizationWatchlist)
     fastify.put('/organizations/:organizationId/watchlists/:itemId', putOrganizationWatchlist)

@@ -70,13 +70,17 @@ assert.deepEqual(normalizeWatchlistInput({ kind: 'domain', value: 'https://WWW.E
     kind: 'domain',
     value: 'example.com',
     notes: 'Supplier portal',
+    reason: undefined,
+    requestId: undefined,
 })
 assert.deepEqual(normalizeWatchlistInput({ kind: 'company', value: ' Example Holdings ' }), {
     kind: 'company',
     value: 'Example Holdings',
     notes: '',
+    reason: undefined,
+    requestId: undefined,
 })
-assert.throws(() => normalizeWatchlistInput({ kind: 'user', value: 'local only' }), /company, domain, or vendor/)
+assert.throws(() => normalizeWatchlistInput({ kind: 'user', value: 'local only' }), /company, domain, vendor, actor, or keyword/)
 
 const alertReference = buildOrganizationDwmAlertReference(
     {
@@ -193,7 +197,7 @@ assert.deepEqual(organizationVisibilityDecision({
 assert.equal(roleCanManageOrganization('owner'), true)
 assert.equal(roleCanManageOrganization('admin'), true)
 assert.equal(roleCanManageOrganization('member'), false)
-assert.equal(roleCanWriteWatchlist('member'), true)
+assert.equal(roleCanWriteWatchlist('member'), false)
 assert.equal(roleCanWriteWatchlist('viewer'), false)
 assert.equal(roleCanWriteWatchlist(undefined), false)
 
@@ -207,8 +211,10 @@ assert.match(routes, /fastify\.post\('\/organizations\/:id\/ownership-transfer'/
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/settings'/)
 assert.match(routes, /fastify\.put\('\/organizations\/:id\/settings'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/alert-readiness'/)
+assert.match(routes, /fastify\.get\('\/organizations\/:id\/watchlists\/alert-terms'/)
 assert.match(routes, /fastify\.get\('\/organizations\/:id\/watchlists'/)
 assert.match(routes, /fastify\.post\('\/organizations\/:id\/watchlists'/)
+assert.match(routes, /fastify\.post\('\/organizations\/:organizationId\/watchlists\/:itemId\/actions'/)
 assert.match(routes, /fastify\.delete\('\/organizations\/:organizationId\/watchlists\/:itemId'/)
 
 const ensureSchema = await readFile(new URL('../src/utils/db/ensureSchema.ts', import.meta.url), 'utf8')

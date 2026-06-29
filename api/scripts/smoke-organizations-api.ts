@@ -57,6 +57,7 @@ app.post('/api/organizations/:id/ownership-transfer', handlers.postOrganizationO
 app.get('/api/organizations/:id/settings', handlers.getOrganizationSettings)
 app.put('/api/organizations/:id/settings', handlers.putOrganizationSettings)
 app.get('/api/organizations/:id/alert-readiness', handlers.getOrganizationAlertReadiness)
+app.get('/api/organizations/:id/watchlists/alert-terms', handlers.getOrganizationWatchlistAlertTerms)
 app.get('/api/organizations/:id/watchlists', handlers.getOrganizationWatchlists)
 app.post('/api/organizations/:id/watchlists', handlers.postOrganizationWatchlist)
 app.put('/api/organizations/:organizationId/watchlists/:itemId', handlers.putOrganizationWatchlist)
@@ -575,6 +576,22 @@ assert.equal(readinessWhilePausedResponse.statusCode, 200, readinessWhilePausedR
 assert.equal(parseBody(readinessWhilePausedResponse.body).alertReadiness.sharedWatchlistCount, 1)
 assert.equal(parseBody(readinessWhilePausedResponse.body).alertReadiness.generatedAlertReferences.length, 1)
 
+const alertTermsWhilePausedResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-alert-terms-paused`,
+    headers: authHeaders('org_smoke_member', 'member-token'),
+})
+assert.equal(alertTermsWhilePausedResponse.statusCode, 200, alertTermsWhilePausedResponse.body)
+const alertTermsWhilePaused = parseBody(alertTermsWhilePausedResponse.body).alertTermsExport
+assert.equal(alertTermsWhilePaused.schemaVersion, 'organization.watchlist_alert_terms_export.v1')
+assert.equal(alertTermsWhilePaused.organizationId, organization.id)
+assert.equal(alertTermsWhilePaused.member.userId, 'org_smoke_member')
+assert.equal(alertTermsWhilePaused.member.role, 'member')
+assert.equal(alertTermsWhilePaused.activeTerms.length, 1)
+assert.equal(alertTermsWhilePaused.excluded.pausedCount, 1)
+assert.equal(alertTermsWhilePaused.activeTerms[0].status, 'active')
+assert.equal(alertTermsWhilePaused.activeTerms[0].alertGenerationReference.status, 'active')
+
 const ownerResumesCompanyResponse = await app.inject({
     method: 'POST',
     url: `/api/organizations/${organization.id}/watchlists/${companyWatchlistItem.id}/actions`,
@@ -686,6 +703,33 @@ const adapterContract = orgUtils.organizationWatchlistAlertGenerationContract(
     [...watchlists.values()].filter(item => item.organization_id === organization.id && !item.archived_at)
 )
 assert.deepEqual(adapterContract, readiness.alertGenerationBridge)
+const alertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?request_id=smoke-alert-terms-ready`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(alertTermsResponse.statusCode, 200, alertTermsResponse.body)
+const alertTermsExport = parseBody(alertTermsResponse.body).alertTermsExport
+assert.equal(alertTermsExport.schemaVersion, 'organization.watchlist_alert_terms_export.v1')
+assert.equal(alertTermsExport.organizationId, organization.id)
+assert.equal(alertTermsExport.tenantId, organization.id)
+assert.equal(alertTermsExport.member.userId, 'org_smoke_admin')
+assert.equal(alertTermsExport.member.role, 'admin')
+assert.equal(alertTermsExport.activeTerms.length, 5)
+assert.equal(alertTermsExport.activeWatchlistTerms.length, 5)
+assert.deepEqual(alertTermsExport.termFamilies, ['actor', 'company', 'domain', 'keyword', 'vendor'])
+assert.equal(alertTermsExport.excluded.inactiveCount, 0)
+const keywordExportTerm = alertTermsExport.activeTerms.find((term: Row) => term.term === 'credential reset lures')
+assert.equal(keywordExportTerm.category, 'keyword')
+assert.equal(keywordExportTerm.source, 'organization_shared_watchlist')
+assert.match(keywordExportTerm.alertGeneratorKey, /^org:/)
+assert.equal(keywordExportTerm.lifecycleReason, 'Refine live proof keyword.')
+assert.equal(keywordExportTerm.lifecycleRequestId, 'smoke-keyword-update')
+assert.equal(keywordExportTerm.alertGenerationReference.watchlistItemId, keywordExportTerm.watchlistItemId)
+assert.deepEqual(
+    alertTermsExport.activeWatchlistTerms,
+    readiness.alertGenerationBridge.activeWatchlistTerms
+)
 assert.equal(readiness.generatedAlertReferences.length, 5)
 const domainReference = readiness.generatedAlertReferences.find((reference: Row) => reference.matchedTerm.value === 'acme-shared.example')
 assert.ok(domainReference)
@@ -749,6 +793,17 @@ const archivedWatchlistsResponse = await app.inject({
 })
 assert.equal(archivedWatchlistsResponse.statusCode, 200, archivedWatchlistsResponse.body)
 assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [actorWatchlistItem.id])
+
+const alertTermsAfterArchiveResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-alert-terms-after-archive`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+})
+assert.equal(alertTermsAfterArchiveResponse.statusCode, 200, alertTermsAfterArchiveResponse.body)
+const alertTermsAfterArchive = parseBody(alertTermsAfterArchiveResponse.body).alertTermsExport
+assert.equal(alertTermsAfterArchive.activeTerms.length, 4)
+assert.equal(alertTermsAfterArchive.excluded.archivedCount, 1)
+assert.ok(!alertTermsAfterArchive.activeTerms.some((term: Row) => term.watchlistItemId === actorWatchlistItem.id))
 
 const memberRemoveViewerResponse = await app.inject({
     method: 'DELETE',
@@ -854,6 +909,12 @@ const outsiderReadinessResponse = await app.inject({
     headers: authHeaders('org_smoke_outsider', 'outsider-token'),
 })
 assert.equal(outsiderReadinessResponse.statusCode, 404, outsiderReadinessResponse.body)
+const outsiderAlertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms`,
+    headers: authHeaders('org_smoke_outsider', 'outsider-token'),
+})
+assert.equal(outsiderAlertTermsResponse.statusCode, 404, outsiderAlertTermsResponse.body)
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_upserted'))
@@ -861,6 +922,7 @@ assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_update
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_paused' && log.metadata.requestId === 'smoke-pause-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_resumed' && log.metadata.requestId === 'smoke-resume-company'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_archived' && log.metadata.requestId === 'smoke-disable-actor'))
+assert.ok(serviceLogs.some(log => log.message === 'organization_watchlist_alert_terms_exported' && log.metadata.requestId === 'smoke-alert-terms-ready'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invites_created' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_accepted' && log.metadata.role === 'viewer'))
 assert.ok(serviceLogs.some(log => log.message === 'organization_invite_revoked' && log.metadata.requestId === 'smoke-revoke-pending-ops'))
@@ -1111,6 +1173,13 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('SELECT * FROM organization_watchlist_items')) {
+        if (params.length === 1 && compact.includes('ORDER BY status ASC')) {
+            const [organizationId] = params
+            return rows([...watchlists.values()]
+                .filter(item => item.organization_id === organizationId)
+                .sort((a, b) => `${a.status}:${a.kind}:${a.value}`.localeCompare(`${b.status}:${b.kind}:${b.value}`)))
+        }
+
         if (params.length === 1) {
             const [organizationId] = params
             return rows([...watchlists.values()].filter(item => item.organization_id === organizationId && !item.archived_at && item.status === 'active').sort((a, b) => `${a.kind}:${a.value}`.localeCompare(`${b.kind}:${b.value}`)))

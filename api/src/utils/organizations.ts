@@ -146,6 +146,8 @@ export type OrganizationWatchlistTerm = {
     status: OrganizationWatchlistStatus
     createdBy: string
     updatedBy: string | null
+    lifecycleReason: string | null
+    lifecycleRequestId: string | null
 }
 
 export type OrganizationWatchlistAlertGenerationContract = {
@@ -157,6 +159,44 @@ export type OrganizationWatchlistAlertGenerationContract = {
     allowedViewerRoles: OrganizationRole[]
     activeWatchlistTerms: OrganizationWatchlistTerm[]
     termFamilies: WatchlistKind[]
+    blockedReasons: string[]
+    canGenerateAlerts: boolean
+}
+
+export type OrganizationWatchlistAlertTermsExport = {
+    schemaVersion: 'organization.watchlist_alert_terms_export.v1'
+    organizationId: string
+    tenantId: string
+    ownerOrganizationId: string
+    member: {
+        userId: string
+        role: OrganizationRole
+        status: 'active'
+    }
+    visibilityPolicy: OrganizationAlertVisibilityPolicy
+    allowedViewerRoles: OrganizationRole[]
+    activeTerms: Array<OrganizationWatchlistTerm & {
+        source: 'organization_shared_watchlist'
+        alertGeneratorKey: string
+        alertGenerationReference: {
+            schemaVersion: 'organization.watchlist_item_alert_reference.v1'
+            organizationId: string
+            tenantId: string
+            watchlistItemId: string
+            itemId: string
+            termFamily: WatchlistKind
+            category: WatchlistKind
+            term: string
+            status: 'active'
+        }
+    }>
+    activeWatchlistTerms: OrganizationWatchlistTerm[]
+    termFamilies: WatchlistKind[]
+    excluded: {
+        pausedCount: number
+        archivedCount: number
+        inactiveCount: number
+    }
     blockedReasons: string[]
     canGenerateAlerts: boolean
 }
@@ -704,6 +744,8 @@ export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): O
         status: normalizeWatchlistStatus(item),
         createdBy: item.created_by,
         updatedBy: item.updated_by ?? null,
+        lifecycleReason: item.lifecycle_reason ?? null,
+        lifecycleRequestId: item.lifecycle_request_id ?? null,
     })).sort((a, b) => `${a.termFamily}:${a.term}`.localeCompare(`${b.termFamily}:${b.term}`))
 }
 
@@ -738,6 +780,56 @@ export function organizationWatchlistAlertGenerationContract(
         termFamilies,
         blockedReasons,
         canGenerateAlerts: blockedReasons.length === 0,
+    }
+}
+
+export function organizationWatchlistAlertTermsExport(
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
+    items: OrganizationWatchlistRow[],
+    member: { userId: string, role: OrganizationRole }
+): OrganizationWatchlistAlertTermsExport {
+    const alertGeneration = organizationWatchlistAlertGenerationContract(organization, items)
+    const activeTerms = alertGeneration.activeWatchlistTerms.map(term => ({
+        ...term,
+        source: 'organization_shared_watchlist' as const,
+        alertGeneratorKey: `org:${term.organizationId}:watchlist:${term.watchlistItemId}:${term.termFamily}:${term.term.toLowerCase()}`,
+        alertGenerationReference: {
+            schemaVersion: 'organization.watchlist_item_alert_reference.v1' as const,
+            organizationId: term.organizationId,
+            tenantId: term.tenantId,
+            watchlistItemId: term.watchlistItemId,
+            itemId: term.itemId,
+            termFamily: term.termFamily,
+            category: term.category,
+            term: term.term,
+            status: 'active' as const,
+        },
+    }))
+    const statuses = items.map(normalizeWatchlistStatus)
+    const pausedCount = statuses.filter(status => status === 'paused').length
+    const archivedCount = statuses.filter(status => status === 'archived').length
+    return {
+        schemaVersion: 'organization.watchlist_alert_terms_export.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        member: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        visibilityPolicy: alertGeneration.visibilityPolicy,
+        allowedViewerRoles: alertGeneration.allowedViewerRoles,
+        activeTerms,
+        activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
+        termFamilies: alertGeneration.termFamilies,
+        excluded: {
+            pausedCount,
+            archivedCount,
+            inactiveCount: pausedCount + archivedCount,
+        },
+        blockedReasons: alertGeneration.blockedReasons,
+        canGenerateAlerts: alertGeneration.canGenerateAlerts,
     }
 }
 
