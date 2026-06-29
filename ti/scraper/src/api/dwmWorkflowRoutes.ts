@@ -1258,6 +1258,8 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
       "alert.organizationId",
       "alert.watchlistIds",
       "alert.watchlistItemIds",
+      "alert.sourceProvenanceSummary",
+      "alert.orgWatchlistScope",
       "workflowSummary",
       "analystWorkflowContract",
       "alertEventSummary",
@@ -1282,6 +1284,21 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
       safeToShowCount: evidenceReplay.filter((item: any) => item.safeToShow).length,
       captureIds: uniqueAlertStrings(evidenceReplay.map((item: any) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)),
       contentHashes: uniqueAlertStrings(evidenceReplay.map((item: any) => item.contentHash).filter(Boolean).map(String))
+    },
+    persistedReadModel: {
+      sourceProvenanceSummary: alert.sourceProvenanceSummary?.schemaVersion,
+      orgWatchlistScope: alert.orgWatchlistScope?.schemaVersion,
+      sourceFamilies: uniqueAlertStrings([
+        ...alertStringArray(alert.sourceProvenanceSummary?.sourceFamily).filter(Boolean).map(String),
+        ...alertStringArray(alert.sourceProvenanceSummary?.sourceFamilies).filter(Boolean).map(String),
+        ...sourceFamilies
+      ]),
+      captureIds: uniqueAlertStrings([
+        ...alertStringArray(alert.sourceProvenanceSummary?.captureIds).filter(Boolean).map(String),
+        ...alertStringArray(alert.sourceProvenanceSummary?.generationEvidenceWindow?.captureIds).filter(Boolean).map(String)
+      ]),
+      watchlistIds: uniqueAlertStrings(alertStringArray(alert.orgWatchlistScope?.watchlistIds ?? alert.watchlistIds).filter(Boolean).map(String)),
+      watchlistItemIds: uniqueAlertStrings(alertStringArray(alert.orgWatchlistScope?.watchlistItemIds ?? alert.watchlistItemIds).filter(Boolean).map(String))
     },
     filters: {
       listRoute: "/v1/dwm/alerts",
@@ -1443,6 +1460,8 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].alertDetailPath",
         "alerts[].organizationId",
         "alerts[].sourceFamily",
+        "alerts[].sourceProvenanceSummary",
+        "alerts[].orgWatchlistScope",
         "alerts[].workflowSummary",
         "alerts[].alertEventSummary",
         "alerts[].evidenceFreshness",
@@ -1809,6 +1828,12 @@ function splitFilterValues(value: string) {
 
 function uniqueAlertStrings(values: string[]) {
   return [...new Set(values)];
+}
+
+function alertStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)].filter(Boolean);
 }
 
 function alertDetailPathFor(alert: any) {

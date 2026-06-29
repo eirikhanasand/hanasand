@@ -932,6 +932,23 @@ describe("dwm workflow persistence", () => {
     expect(alphaUpdatedList.alerts[0].alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
     expect(alphaUpdatedList.alerts[0].alertEventSummary.createdEvent.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
     expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
+    expect(alphaUpdatedList.alerts[0].sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      sourceFamily: "darkweb_metadata",
+      sourceFamilies: ["darkweb_metadata"],
+      captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+      generationEvidenceWindow: expect.objectContaining({
+        captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        sourceFamilies: expect.arrayContaining(["telegram_public", "darkweb_metadata"])
+      })
+    });
+    expect(alphaUpdatedList.alerts[0].orgWatchlistScope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      organizationId: alphaOrg.id,
+      ownerOrganizationIds: [alphaOrg.id],
+      watchlistIds: ["watch_workflow_alpha_acme"],
+      watchlistItemIds: ["watch_item_workflow_alpha_acme"]
+    });
     expect(alphaUpdatedList.alertQueueVisibility).toMatchObject({
       consumerContract: {
         schemaVersion: "dwm.alert_queue_consumer_contract.v1",
@@ -969,6 +986,8 @@ describe("dwm workflow persistence", () => {
     });
     expect(alphaUpdatedList.alertQueueVisibility.consumerContract.stableFields).toEqual(expect.arrayContaining([
       "alerts[].alertDetailPath",
+      "alerts[].sourceProvenanceSummary",
+      "alerts[].orgWatchlistScope",
       "alerts[].alertEventSummary",
       "alerts[].evidenceFreshness",
       "alertQueueVisibility.orgAlertWorkflowBridge",
@@ -982,6 +1001,20 @@ describe("dwm workflow persistence", () => {
     const alphaUpdatedDetail = await alphaUpdatedDetailResponse.json() as any;
     expect(alphaUpdatedDetailResponse.status).toBe(200);
     expect(alphaUpdatedDetail.alert.alertDetailPath).toBe(alphaDarkweb.alertDetailPath);
+    expect(alphaUpdatedDetail.alert.sourceProvenanceSummary).toMatchObject({
+      schemaVersion: "dwm.alert_source_provenance.v1",
+      sourceFamily: "darkweb_metadata",
+      sourceFamilies: ["darkweb_metadata"],
+      captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+      contentHashes: expect.arrayContaining(["hash-workflow-onion-acme", "hash-workflow-onion-acme-followup"])
+    });
+    expect(alphaUpdatedDetail.alert.orgWatchlistScope).toMatchObject({
+      schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+      organizationId: alphaOrg.id,
+      ownerOrganizationIds: [alphaOrg.id],
+      watchlistIds: ["watch_workflow_alpha_acme"],
+      watchlistItemIds: ["watch_item_workflow_alpha_acme"]
+    });
     expect(alphaUpdatedDetail.alertEventSummary).toMatchObject({
       schemaVersion: "dwm.alert_event_summary.v1",
       eventTypes: ["dwm.alert.created", "dwm.alert.updated"],
@@ -1015,6 +1048,14 @@ describe("dwm workflow persistence", () => {
         captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
         contentHashes: expect.arrayContaining(["hash-workflow-onion-acme", "hash-workflow-onion-acme-followup"])
       },
+      persistedReadModel: {
+        sourceProvenanceSummary: "dwm.alert_source_provenance.v1",
+        orgWatchlistScope: "dwm.alert_org_watchlist_scope.v1",
+        sourceFamilies: ["darkweb_metadata"],
+        captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        watchlistIds: ["watch_workflow_alpha_acme"],
+        watchlistItemIds: ["watch_item_workflow_alpha_acme"]
+      },
       filters: {
         listRoute: "/v1/dwm/alerts",
         equivalentFilters: expect.arrayContaining(["organizationId", "sourceFamily", "eventType", "hasUpdatedEvent", "captureId"])
@@ -1046,6 +1087,8 @@ describe("dwm workflow persistence", () => {
     });
     expect(alphaUpdatedDetail.consumerContract.stableFields).toEqual(expect.arrayContaining([
       "alert.alertDetailPath",
+      "alert.sourceProvenanceSummary",
+      "alert.orgWatchlistScope",
       "workflowSummary",
       "alertEventSummary",
       "orgAlertWorkflowBridge",
