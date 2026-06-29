@@ -1437,6 +1437,29 @@ describe("dwm source requests", () => {
           activeSourceFamilies: expect.arrayContaining(["telegram", "darkweb_onion", "public_advisory", "actor_page", "clear_web"]),
           matchableFields: expect.arrayContaining(["text", "victimName", "actorName", "cve", "extractedTerms"])
         },
+        captureReadiness: {
+          schemaVersion: "dwm.actor_capture_readiness.v1",
+          proofId: expect.any(String),
+          captureReady: true,
+          latestCaptureAt: expect.any(String),
+          captureRows: expect.arrayContaining([
+            expect.objectContaining({
+              family: "telegram",
+              state: "capture_observed",
+              expectedCapture: expect.objectContaining({
+                type: "telegram_public_message_preview",
+                liveNetworkRequiredForProof: false
+              }),
+              recordCapturePlan: expect.objectContaining({
+                method: "POST",
+                path: "/v1/dwm/source-requests",
+                body: expect.objectContaining({ action: "record_capture" }),
+                liveNetworkFetch: false
+              }),
+              safeOutput: expect.objectContaining({ liveNetworkScrapeStarted: false })
+            })
+          ])
+        },
         alertGenerationReadiness: {
           schemaVersion: "dwm.actor_alert_generation_readiness.v1",
           proofId: expect.any(String),
@@ -1497,6 +1520,10 @@ describe("dwm source requests", () => {
           sourceReadinessLedgerRows: expect.arrayContaining([
             expect.objectContaining({ family: "telegram", freshnessState: "fresh" })
           ]),
+          captureReadiness: expect.objectContaining({
+            schemaVersion: "dwm.actor_capture_readiness.v1",
+            captureReady: true
+          }),
           alertGenerationReadiness: expect.objectContaining({
             schemaVersion: "dwm.actor_alert_generation_readiness.v1",
             alertReady: true
@@ -1516,6 +1543,11 @@ describe("dwm source requests", () => {
           sourceReadinessLedgerRows: expect.arrayContaining([
             expect.objectContaining({ family: "public_advisory", downstreamConsumers: expect.objectContaining({ sharedWatchlistAlerts: true }) })
           ]),
+          captureReadiness: expect.objectContaining({
+            captureRows: expect.arrayContaining([
+              expect.objectContaining({ family: "telegram", state: "capture_observed" })
+            ])
+          }),
           alertGenerationReadiness: expect.objectContaining({
             canRebuildAlerts: true,
             rebuildPlan: expect.objectContaining({ liveNetworkFetch: false })
@@ -1525,6 +1557,7 @@ describe("dwm source requests", () => {
         worker3Assertions: expect.arrayContaining([
           ".actorReadiness.proofId | length > 0",
           ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
+          ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
           ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
           ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
           ".proofArtifacts.dashboardSourceReadiness.alertReady != null"
@@ -1710,6 +1743,24 @@ describe("dwm source requests", () => {
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "capture_required", severity: "blocking" }),
           expect.objectContaining({ code: "missing_actor_section_source", severity: "warning" })
+        ])
+      },
+      captureReadiness: {
+        schemaVersion: "dwm.actor_capture_readiness.v1",
+        captureReady: false,
+        captureRows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            state: "capture_required",
+            recordCapturePlan: expect.objectContaining({
+              body: expect.objectContaining({ action: "record_capture" }),
+              liveNetworkFetch: false
+            })
+          })
+        ]),
+        missingFamilies: expect.arrayContaining(["darkweb_onion", "actor_page"]),
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "capture_required", severity: "blocking" })
         ])
       },
       alertGenerationReadiness: {
@@ -1968,6 +2019,18 @@ describe("dwm source requests", () => {
         blockers: expect.arrayContaining([
           expect.objectContaining({ code: "capture_required" }),
           expect.objectContaining({ code: "retry_required", family: "telegram" })
+        ])
+      },
+      captureReadiness: {
+        captureReady: false,
+        captureRows: expect.arrayContaining([
+          expect.objectContaining({
+            family: "telegram",
+            state: "retry_required",
+            blockers: expect.arrayContaining([
+              expect.objectContaining({ code: "retry_required", family: "telegram" })
+            ])
+          })
         ])
       },
       alertGenerationReadiness: {

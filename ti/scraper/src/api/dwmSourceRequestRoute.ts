@@ -3057,6 +3057,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       freshness: actorReadiness.freshness,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
+      captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       missingDataGaps: actorReadiness.candidateGaps,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
@@ -3069,6 +3070,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       activeSourceFamilies: actorReadiness.alertability.activeSourceFamilies,
       sourceCoverage: actorReadiness.sourceCoverage,
       sourceReadinessLedgerRows: actorReadiness.sourceReadinessLedgerRows,
+      captureReadiness: actorReadiness.captureReadiness,
       alertGenerationReadiness: actorReadiness.alertGenerationReadiness,
       sourcePackActionReadiness: actorReadiness.sourcePackActionReadiness,
       matchableFields: actorReadiness.alertability.matchableFields,
@@ -3090,6 +3092,7 @@ function sourceActorReadinessProofArtifacts(query: string, actorReadiness: Recor
       ".actorReadiness.alertCaseHandoffReadiness.schemaVersion == \"dwm.actor_alert_case_handoff_readiness.v1\"",
       ".actorReadiness.sourcePackActionReadiness.schemaVersion == \"dwm.actor_source_pack_action_readiness.v1\"",
       ".actorReadiness.sourceReadinessLedgerRows | all(has(\"proofId\") and has(\"family\") and has(\"state\") and .safeOutput.liveNetworkScrapeStarted == false)",
+      ".actorReadiness.captureReadiness.schemaVersion == \"dwm.actor_capture_readiness.v1\"",
       ".actorReadiness.alertGenerationReadiness.schemaVersion == \"dwm.actor_alert_generation_readiness.v1\"",
       ".candidateIntakeContract.policyValidation.liveNetworkFetch == false",
       ".proofArtifacts.publicTiActorPage.provenance | all(.safeOutput.liveNetworkScrapeStarted == false)",
@@ -3182,6 +3185,13 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     sourcePackActionReadiness,
     freshness
   });
+  const captureReadiness = sourceActorCaptureReadiness({
+    query,
+    sourceReadinessLedgerRows,
+    freshness,
+    candidateGaps,
+    retryBlockers
+  });
   const alertGenerationReadiness = sourceActorAlertGenerationReadiness({
     query,
     alertability,
@@ -3219,6 +3229,7 @@ function buildActorPageSourceReadiness(query: string, readinessArtifact: Record<
     retryBlockers,
     sourcePackActionReadiness,
     sourceReadinessLedgerRows,
+    captureReadiness,
     alertGenerationReadiness,
     alertability,
     alertCaseHandoffReadiness: sourceActorAlertCaseHandoffReadiness({
@@ -3311,6 +3322,81 @@ function sourceActorDownstreamReadinessRows(input: {
       }
     };
   });
+}
+
+function sourceActorCaptureReadiness(input: {
+  query: string;
+  sourceReadinessLedgerRows: Array<Record<string, any>>;
+  freshness: Record<string, any>;
+  candidateGaps: Array<Record<string, any>>;
+  retryBlockers: Array<Record<string, any>>;
+}) {
+  const captureCapableRows = input.sourceReadinessLedgerRows.filter((row) => row.downstreamConsumers?.sharedWatchlistAlerts === true || row.alertability?.canProduceAlert === true || row.retryBackoff?.retryable === true);
+  const retryFamilies = new Set(input.retryBlockers.map((row) => String(row.family)));
+  const rows = captureCapableRows.map((row) => {
+    const hasCapture = Boolean(row.lastCaptureAt);
+    return {
+      schemaVersion: "dwm.actor_capture_readiness_row.v1",
+      proofId: stableId("dwm_actor_capture_readiness_row", `${input.query}:${row.family}:${row.lastCaptureAt ?? "no_capture"}:${row.state}`),
+      query: input.query,
+      family: row.family,
+      sourceIds: row.sourceIds ?? [],
+      candidateIds: row.candidateIds ?? [],
+      state: hasCapture ? "capture_observed" : retryFamilies.has(String(row.family)) ? "retry_required" : "capture_required",
+      parserStatuses: row.parserStatuses ?? [],
+      lastCaptureAt: row.lastCaptureAt,
+      freshnessState: row.freshnessState,
+      expectedCapture: {
+        type: expectedCaptureTypeForFamily(row.family as SourceGrowthFamily),
+        liveNetworkRequiredForProof: false,
+        restrictedPayloadStored: false
+      },
+      recordCapturePlan: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          action: "record_capture",
+          sourceId: (row.sourceIds ?? [])[0],
+          candidateId: (row.candidateIds ?? [])[0],
+          captureText: `${input.query} ${row.family} metadata capture fixture`,
+          captureUrl: `fixture://dwm/${input.query.toLowerCase()}/${row.family}/capture`
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      },
+      blockers: [
+        ...(hasCapture ? [] : [{ code: "capture_required", severity: "blocking", retryable: true }]),
+        ...(retryFamilies.has(String(row.family)) ? [{ code: "retry_required", severity: "warning", family: row.family, retryable: true }] : [])
+      ],
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    };
+  });
+  const missingFamilies = uniqueSourceReadinessStrings(input.candidateGaps.map((gap) => gap.family));
+  const blockers = dedupeBlockers([
+    ...rows.flatMap((row) => row.blockers),
+    ...input.candidateGaps.map((gap) => ({ code: "candidate_required_before_capture", severity: "warning", family: gap.family, retryable: true }))
+  ]);
+  return {
+    schemaVersion: "dwm.actor_capture_readiness.v1",
+    proofId: stableId("dwm_actor_capture_readiness", `${input.query}:${input.freshness.lastSuccessfulCaptureAt ?? "no_capture"}:${rows.map((row) => `${row.family}:${row.state}`).join(",")}`),
+    query: input.query,
+    captureReady: Boolean(input.freshness.lastSuccessfulCaptureAt),
+    latestCaptureAt: input.freshness.lastSuccessfulCaptureAt,
+    captureRows: rows,
+    missingFamilies,
+    blockers,
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
 }
 
 function sourceActorAlertGenerationReadiness(input: {
