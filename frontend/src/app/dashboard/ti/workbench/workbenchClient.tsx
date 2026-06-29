@@ -264,6 +264,51 @@ export type WorkbenchCase = {
 
 type QueueFilter = 'all' | 'critical' | 'high' | 'persistent' | 'evidence'
 
+type AlertDetailState =
+    | { status: 'loading' }
+    | { status: 'error', error: string }
+    | { status: 'ready', detail: AlertDetailPayload }
+
+type AlertDetailPayload = {
+    generatedAt?: string
+    alert?: {
+        id?: string
+        reviewState?: string
+        deliveryState?: string
+        assignedOwner?: string
+        caseId?: string
+        caseIdCandidate?: string
+        organizationId?: string
+        sourceCount?: number
+        firstSeenAt?: string
+        updatedAt?: string
+        workflowContext?: {
+            organizationId?: string
+            caseIdCandidate?: string
+            watchlistIds?: string[]
+            webhookDestinationIds?: string[]
+        }
+        webhookContext?: {
+            hasWebhookRoute?: boolean
+            webhookDestinationIds?: string[]
+            missingRouteCandidateCount?: number
+        }
+        evidence?: Array<{
+            id?: string
+            sourceName?: string
+            sourceFamily?: string
+            captureMode?: string
+            redactionState?: string
+            contentHash?: string
+            excerpt?: string
+            observedAt?: string
+            firstSeenAt?: string
+            provenance?: { sourceId?: string, captureId?: string, captureMode?: string } | string
+        }>
+    }
+    error?: { message?: string }
+}
+
 export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', orgContext, initialSelectedId }: { initialCases: WorkbenchCase[], chrome?: 'full' | 'compact', orgContext?: WorkbenchOrgContext, initialSelectedId?: string }) {
     const router = useRouter()
     const compact = chrome === 'compact'
@@ -276,6 +321,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const [inviteRole, setInviteRole] = useState('analyst')
     const [localDecisions, setLocalDecisions] = useState<Record<string, LocalDecision>>({})
     const [caseDetails, setCaseDetails] = useState<Record<string, CaseDetailState>>({})
+    const [alertDetails, setAlertDetails] = useState<Record<string, AlertDetailState>>({})
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<WorkbenchActionOutcome | null>(null)
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
@@ -283,6 +329,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const queues = queueSummary(initialCases)
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
+    const selectedAlertDetail = selected ? alertDetails[selected.id] : undefined
 
     const focusQueueIndex = useCallback((nextIndex: number) => {
         const next = cases[nextIndex]
@@ -349,6 +396,27 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             cancelled = true
         }
     }, [selected?.id, selected?.caseDetailHref])
+
+    useEffect(() => {
+        if (!selected || selected.kind !== 'dwm_alert' || !selected.persistent) return
+        const currentDetail = alertDetails[selected.id]
+        if (currentDetail?.status === 'ready' || currentDetail?.status === 'loading') return
+        let cancelled = false
+        const itemId = selected.id
+        setAlertDetails(current => ({ ...current, [itemId]: { status: 'loading' } }))
+        fetch(`/api/dwm/alerts/${encodeURIComponent(itemId)}`, { cache: 'no-store' })
+            .then(async response => {
+                const payload = await readAlertDetailJson(response)
+                if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+                if (!cancelled) setAlertDetails(current => ({ ...current, [itemId]: { status: 'ready', detail: payload } }))
+            })
+            .catch(error => {
+                if (!cancelled) setAlertDetails(current => ({ ...current, [itemId]: { status: 'error', error: error instanceof Error ? error.message : String(error) } }))
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [alertDetails, selected])
 
     async function applyDecision(item: WorkbenchCase, decision: LocalDecision) {
         const nextDecision = {
@@ -653,6 +721,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 busyAction={busyAction}
                                 compact={compact}
                                 caseDetail={selectedCaseDetail}
+                                alertDetail={selectedAlertDetail}
                                 orgContext={orgContext}
                                 actionMessage={message}
                                 onNoteChange={value => setNotes(current => ({ ...current, [selected.id]: value }))}
@@ -1558,28 +1627,41 @@ function EmptyWorkspace() {
     )
 }
 
-function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, compact: boolean }) {
+function BackedInspection({ item, caseDetail, alertDetail, compact }: { item: WorkbenchCase, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, compact: boolean }) {
     const localDeliveries = item.deliveryEvidence || []
     const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
     const deliveries = detailDeliveries.length ? detailDeliveries : localDeliveries
     const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'No backed case ID is available for this selected alert. Use Open case after live alerts load; fallback alerts cannot load /api/cases/:id.' : '')
+    const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
+    const alertEvidence = alertRecord?.evidence || []
 
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-[#171a21]'>Backed inspection</h3>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Case detail, workflow timeline, evidence, delivery attempts, and missing dependencies.</p>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
                 </div>
-                {item.caseDetailHref && (
-                    <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                        Case API
-                        <ExternalLink className='h-3.5 w-3.5' />
-                    </Link>
-                )}
+                <div className='flex flex-wrap gap-2'>
+                    {item.persistent && item.kind === 'dwm_alert' && (
+                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            Alert API
+                            <ExternalLink className='h-3.5 w-3.5' />
+                        </Link>
+                    )}
+                    {item.caseDetailHref && (
+                        <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            Case API
+                            <ExternalLink className='h-3.5 w-3.5' />
+                        </Link>
+                    )}
+                </div>
             </div>
             <div className={`grid gap-3 p-4 ${compact ? 'xl:grid-cols-[0.85fr_1fr]' : 'xl:grid-cols-[0.8fr_1fr]'}`}>
                 <div className='grid gap-3'>
+                    {alertDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading alert detail' body='Fetching /api/dwm/alerts/:id through the dashboard proxy.' />}
+                    {alertDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Alert detail unavailable' body={alertDetail.error} />}
+                    {alertRecord ? <AlertDetailSummary alert={alertRecord} fallback={item} /> : null}
                     {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Fetching /api/cases/:id through the dashboard proxy.' />}
                     {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail unavailable' body={caseDetail.error} />}
                     {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Blocked dependency' body={blockedDependency} />}
@@ -1624,6 +1706,7 @@ function BackedInspection({ item, caseDetail, compact }: { item: WorkbenchCase, 
                             <CaseEvidenceRows evidence={caseDetail.detail.evidence || []} />
                         </>
                     )}
+                    {caseDetail?.status !== 'ready' && alertEvidence.length ? <AlertEvidenceRows evidence={alertEvidence} /> : null}
                     {caseDetail?.status !== 'ready' && !deliveries.length && (
                         <InspectionNotice
                             tone='neutral'
@@ -1699,6 +1782,61 @@ function TimelineRows({ title, rows }: { title: string, rows: CaseTimelineItem[]
                     </div>
                 ))}
                 {!rows.length && <p className='text-xs text-[#667085]'>No case timeline returned.</p>}
+            </div>
+        </div>
+    )
+}
+
+function AlertDetailSummary({ alert, fallback }: { alert: NonNullable<AlertDetailPayload['alert']>, fallback: WorkbenchCase }) {
+    const workflowContext = alert.workflowContext
+    const webhookContext = alert.webhookContext
+    const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseIdCandidate
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <div className='flex flex-wrap items-center gap-2'>
+                <span className='text-sm font-semibold text-[#171a21]'>{alert.id || fallback.id}</span>
+                <span className={workflowStatusClass(alert.deliveryState === 'delivered' ? 'ready' : alert.deliveryState ? 'needs_action' : 'blocked')}>{label(alert.deliveryState || 'delivery pending')}</span>
+                <span className={workflowStatusClass(caseId ? 'ready' : 'needs_action')}>{caseId ? 'case linked' : 'case needed'}</span>
+            </div>
+            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#475467]'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
+                <p><span className='font-semibold text-[#475467]'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Org:</span> {alert.organizationId || workflowContext?.organizationId || 'not returned'}</p>
+                <p><span className='font-semibold text-[#475467]'>Case:</span> {caseId || 'not linked'}</p>
+                <p><span className='font-semibold text-[#475467]'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
+                <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
+                <p className='break-all'><span className='font-semibold text-[#475467]'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'not returned'}</p>
+                <p className='break-all'><span className='font-semibold text-[#475467]'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'route available' : 'not returned')}</p>
+            </div>
+        </div>
+    )
+}
+
+function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<AlertDetailPayload['alert']>['evidence']> }) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+            <h4 className='text-sm font-semibold text-[#171a21]'>Alert API evidence</h4>
+            <div className='mt-3 grid gap-2'>
+                {evidence.map((item, index) => {
+                    const provenance = typeof item.provenance === 'string'
+                        ? item.provenance
+                        : [item.provenance?.sourceId, item.provenance?.captureId, item.provenance?.captureMode].filter(Boolean).join(' · ')
+                    return (
+                        <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
+                                {item.redactionState && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                                {item.captureMode && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
+                            </div>
+                            <p className='mt-2 text-xs leading-5 text-[#596170]'>{item.excerpt || 'No safe excerpt returned.'}</p>
+                            <div className='mt-2 grid gap-1 text-xs text-[#667085]'>
+                                <p><span className='font-semibold text-[#475467]'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'not returned'}</p>
+                                <p className='break-all'><span className='font-semibold text-[#475467]'>Provenance:</span> {provenance || 'not returned'}</p>
+                            </div>
+                            <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash || item.id || 'content hash not returned'}</p>
+                        </div>
+                    )
+                })}
             </div>
         </div>
     )
@@ -1864,7 +2002,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onReplay, onSend, onAction }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -1872,6 +2010,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     busyAction: string | null
     compact: boolean
     caseDetail?: CaseDetailState
+    alertDetail?: AlertDetailState
     orgContext?: WorkbenchOrgContext
     actionMessage: WorkbenchActionOutcome | null
     onNoteChange: (value: string) => void
@@ -2033,7 +2172,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 </section>
             ) : null}
 
-            <BackedInspection item={item} caseDetail={caseDetail} compact={compact} />
+            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} compact={compact} />
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -2393,6 +2532,14 @@ async function readCaseDetailJson(response: Response) {
         return await response.json() as CaseDetailPayload
     } catch {
         return { generatedAt: new Date().toISOString(), error: { message: 'Case detail response was not JSON.' } }
+    }
+}
+
+async function readAlertDetailJson(response: Response) {
+    try {
+        return await response.json() as AlertDetailPayload
+    } catch {
+        return { generatedAt: new Date().toISOString(), error: { message: 'Alert detail response was not JSON.' } }
     }
 }
 

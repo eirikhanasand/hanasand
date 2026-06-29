@@ -1786,6 +1786,8 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
     if (!invite) {
         return res.status(404).send({ error: 'Invite not found for organization.' })
     }
+    const availability = await loadOrganizationAvailability([organization.id])
+    const availabilityByOrg = new Map(availability.map(item => [item.organizationId, item]))
 
     const sessionValidation = await validateSupportSessionForAction({
         actorId: actor.id,
@@ -1831,6 +1833,13 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         idempotencyKey: executorControls.idempotencyKey,
     })
     if (duplicate) {
+        const inviteAccessStatus = buildSupportInviteActionAccessStatus({
+            organizationId: organization.id,
+            invite,
+            requestId: duplicate.request_id,
+            availabilityByOrg,
+            timeline: [],
+        })
         return res.send({
             inviteAction: {
                 schemaVersion: 'support.invite_action.v1',
@@ -1846,6 +1855,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 idempotentReplay: true,
                 blockers: ['duplicate_idempotency_key'],
                 auditEventIds: [Number(duplicate.id)].filter(id => Number.isFinite(id)),
+                accessStatus: inviteAccessStatus,
                 noSilentMembershipMutation: true,
                 controlledExecutor: supportInviteActionExecutorDetail({
                     organizationId: organization.id,
@@ -1882,7 +1892,6 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         })
     }
 
-    const availability = await loadOrganizationAvailability([organization.id])
     if (availability[0]?.hasAvailableAdmin === true) {
         await recordSupportInviteActionExecutorBlock(req, {
             actorId: actor.id,
@@ -1958,6 +1967,13 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             },
         })
         const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
+        const inviteAccessStatus = buildSupportInviteActionAccessStatus({
+            organizationId: organization.id,
+            invite,
+            requestId,
+            availabilityByOrg,
+            timeline: [],
+        })
         return res.status(409).send({
             error: 'Accepted invites cannot be revoked or resent by support action; inspect membership state instead.',
             inviteAction: {
@@ -1971,6 +1987,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 after: inviteSnapshot(invite),
                 outcome: 'failed',
                 auditEventIds,
+                accessStatus: inviteAccessStatus,
                 noSilentMembershipMutation: true,
                 controlledExecutor: supportInviteActionExecutorDetail({
                     organizationId: organization.id,
@@ -2062,6 +2079,17 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
         },
     })
     const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: updatedInvite.id })
+    const inviteAccessStatus = buildSupportInviteActionAccessStatus({
+        organizationId: organization.id,
+        invite: updatedInvite,
+        requestId,
+        availabilityByOrg,
+        timeline: auditEventIds.map(id => ({
+            id,
+            actionType,
+            requestId,
+        })),
+    })
 
     return res.send({
         inviteAction: {
@@ -2078,6 +2106,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             idempotencyKey: executorControls.idempotencyKey,
             correlationId: executorControls.correlationId,
             auditEventIds,
+            accessStatus: inviteAccessStatus,
             noSilentMembershipMutation: true,
             controlledExecutor: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -4094,6 +4123,37 @@ function buildSupportAccessStatus(input: {
             `Audit events: ${input.timeline.map(event => event.id).join(', ') || 'none'}`,
         ].join('\n'),
     }
+}
+
+function buildSupportInviteActionAccessStatus(input: {
+    organizationId: string
+    invite: OrganizationInviteRow
+    requestId: string
+    availabilityByOrg: Map<string, SupportOrganizationAvailability>
+    timeline: Array<Record<string, any>>
+}) {
+    return buildSupportAccessStatus({
+        org: input.organizationId,
+        user: '',
+        email: input.invite.email,
+        request: input.requestId,
+        organizationIds: [input.organizationId],
+        users: [],
+        memberships: [],
+        invites: [input.invite as unknown as Record<string, unknown>],
+        approvalDetails: [],
+        recoveryEligibility: buildRecoveryEligibility({
+            email: input.invite.email,
+            user: '',
+            organizationIds: [input.organizationId],
+            memberships: [],
+            users: [],
+            availabilityByOrg: input.availabilityByOrg,
+            invites: [input.invite as unknown as Record<string, unknown>],
+        }),
+        availabilityByOrg: input.availabilityByOrg,
+        timeline: input.timeline,
+    })
 }
 
 function buildSupportCaseSummary(input: {
