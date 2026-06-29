@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_REBUILD_REQUEST_SCHEMA_VERSION,
@@ -9,6 +10,7 @@ import {
   buildSourceProvenanceAlertabilityBridge,
   buildSourceProvenanceActorProfileContract,
   buildSourceProvenanceActorProfileGapSourcePlan,
+  buildSourceProvenanceActorProfileSourceUpdateWorkflow,
   buildSourceProvenanceAlertRebuildReceipt,
   buildSourceProvenanceAlertRebuildReadiness,
   buildSourceProvenanceAlertRebuildRequest,
@@ -777,6 +779,133 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(plan)).not.toContain("rawText");
     expect(JSON.stringify(plan)).not.toContain("password");
+  });
+
+  test("builds offline source update workflow with parser health retry and policy blockers", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      generatedAt: "2026-06-29T12:10:00.000Z",
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "failed",
+        lastRun: {
+          runId: "run_campaign_parser_1",
+          status: "failed",
+          finishedAt: "2026-06-29T12:07:00.000Z",
+          failureReason: "fixture parser found no campaign timestamp"
+        },
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready",
+        lastRun: {
+          runId: "run_sector_parser_1",
+          status: "passed",
+          finishedAt: "2026-06-29T12:06:00.000Z"
+        }
+      }]
+    });
+
+    expect(workflow).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      sourcePlanId: plan.id,
+      health: {
+        totalCandidates: plan.candidates.length,
+        blocked: 1,
+        failed: 1,
+        families: expect.arrayContaining([
+          expect.objectContaining({ family: "telegram_public", failed: 1 }),
+          expect.objectContaining({ family: "darkweb_metadata", blocked: 1 }),
+          expect.objectContaining({ family: "public_advisory", readyToTest: expect.any(Number) })
+        ])
+      },
+      offlineContract: {
+        canRunOffline: true,
+        liveNetworkFetch: false,
+        fixtureBacked: true,
+        safeUpdatePath: "/v1/dwm/source-requests"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(workflow.tasks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        candidateId: campaignCandidate!.candidateId,
+        family: "telegram_public",
+        parserStatus: "failed",
+        activationState: "failed",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        retryable: true,
+        nextOperatorAction: "retry_parser",
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          liveNetworkFetch: false,
+          body: expect.objectContaining({ action: "retry", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        field: "infrastructure",
+        family: "darkweb_metadata",
+        parserStatus: "blocked",
+        activationState: "blocked",
+        retryable: false,
+        nextOperatorAction: "request_policy_approval",
+        route: expect.objectContaining({
+          body: expect.objectContaining({ action: "request_approval", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        candidateId: sectorCandidate!.candidateId,
+        family: "public_advisory",
+        parserStatus: "ready",
+        activationState: "ready_to_test",
+        retryable: false,
+        nextOperatorAction: "test_parser"
+      })
+    ]));
+    expect(workflow.payloadShape).toEqual(expect.arrayContaining([
+      "tasks[].parserStatus",
+      "tasks[].nextRetryAt",
+      "health.families[]"
+    ]));
+    expect(JSON.stringify(workflow)).not.toContain("rawText");
+    expect(JSON.stringify(workflow)).not.toContain("password");
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {

@@ -8,6 +8,7 @@ export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_READINESS_SCHEMA_VERSION = "ti.s
 export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -500,6 +501,87 @@ export type TiSourceProvenanceActorProfileGapSourceCandidate = {
   };
 };
 
+export type TiSourceProvenanceActorProfileSourceUpdateWorkflow = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  sourcePlanId: string;
+  tasks: TiSourceProvenanceActorProfileSourceUpdateTask[];
+  health: {
+    totalCandidates: number;
+    readyToTest: number;
+    blocked: number;
+    retryScheduled: number;
+    failed: number;
+    families: Array<{
+      family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+      candidates: number;
+      readyToTest: number;
+      blocked: number;
+      retryScheduled: number;
+      failed: number;
+    }>;
+  };
+  offlineContract: {
+    canRunOffline: true;
+    liveNetworkFetch: false;
+    fixtureBacked: true;
+    safeUpdatePath: "/v1/dwm/source-requests";
+    note: "Fixture-backed source update planning records parser, activation, and retry state without starting collection.";
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceActorProfileSourceUpdateTask = {
+  taskId: string;
+  candidateId: string;
+  field: TiSourceProvenanceActorProfileFieldName;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  parserProfile: TiSourceProvenanceActorProfileGapSourceCandidate["parserProfile"];
+  parserStatus: "not_tested" | "ready" | "failed" | "retry_scheduled" | "blocked";
+  activationState: "candidate" | "blocked" | "ready_to_test" | "retry_scheduled" | "failed";
+  lastRun?: {
+    runId: string;
+    status: "passed" | "failed" | "blocked";
+    finishedAt: string;
+    failureReason?: string;
+  };
+  nextRetryAt?: string;
+  failureReason?: string;
+  retryable: boolean;
+  nextOperatorAction: "test_parser" | "retry_parser" | "request_policy_approval" | "review_failure";
+  route: {
+    method: "POST";
+    path: "/v1/dwm/source-requests";
+    body: {
+      action: "test" | "retry" | "request_approval";
+      candidateId: string;
+      dryRun: true;
+    };
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+};
+
+export type TiSourceProvenanceActorProfileSourceUpdateHealthInput = {
+  candidateId: string;
+  parserStatus?: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  lastRun?: TiSourceProvenanceActorProfileSourceUpdateTask["lastRun"];
+  nextRetryAt?: string;
+  failureReason?: string;
+};
+
 export type TiSourceProvenancePageAction = {
   action:
     | "attach_source_identity"
@@ -968,6 +1050,51 @@ export function buildSourceProvenanceActorProfileGapSourcePlan(input: {
   };
 }
 
+export function buildSourceProvenanceActorProfileSourceUpdateWorkflow(input: {
+  plan: TiSourceProvenanceActorProfileGapSourcePlan;
+  health?: TiSourceProvenanceActorProfileSourceUpdateHealthInput[];
+  generatedAt?: string;
+}): TiSourceProvenanceActorProfileSourceUpdateWorkflow {
+  const generatedAt = input.generatedAt ?? input.plan.generatedAt;
+  const healthByCandidate = new Map((input.health ?? []).map((item) => [item.candidateId, item]));
+  const tasks = input.plan.candidates.map((candidate) => actorProfileSourceUpdateTask(candidate, healthByCandidate.get(candidate.candidateId)));
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_profile_source_update_workflow", `${input.plan.id}:${generatedAt}:${tasks.map((task) => `${task.candidateId}:${task.parserStatus}`).join("|")}`),
+    generatedAt,
+    ok: tasks.length > 0 && tasks.every((task) => task.parserStatus !== "failed" && task.activationState !== "failed"),
+    tenantId: input.plan.tenantId,
+    organizationId: input.plan.organizationId,
+    actor: input.plan.actor,
+    publicTiRoute: input.plan.publicTiRoute,
+    sourcePlanId: input.plan.id,
+    tasks,
+    health: actorProfileSourceUpdateHealth(tasks),
+    offlineContract: {
+      canRunOffline: true,
+      liveNetworkFetch: false,
+      fixtureBacked: true,
+      safeUpdatePath: "/v1/dwm/source-requests",
+      note: "Fixture-backed source update planning records parser, activation, and retry state without starting collection."
+    },
+    payloadShape: [
+      "tasks[].candidateId",
+      "tasks[].parserStatus",
+      "tasks[].activationState",
+      "tasks[].lastRun",
+      "tasks[].nextRetryAt",
+      "health.families[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
 function provenancePageRow(input: {
   row: TiSourceProvenanceInputRow;
   tenantId: string;
@@ -1354,6 +1481,99 @@ function actorProfileGapSourceMapping(field: TiSourceProvenanceActorProfileField
     restricted: false,
     metadataOnly: true,
     reason: "Public Telegram metadata can close campaign freshness gaps without auto-joining channels or exposing private content."
+  };
+}
+
+function actorProfileSourceUpdateTask(
+  candidate: TiSourceProvenanceActorProfileGapSourceCandidate,
+  health?: TiSourceProvenanceActorProfileSourceUpdateHealthInput
+): TiSourceProvenanceActorProfileSourceUpdateTask {
+  const parserStatus = sourceUpdateParserStatus(candidate, health);
+  const activationState = sourceUpdateActivationState(candidate, parserStatus);
+  const action = sourceUpdateAction(parserStatus, activationState);
+  return {
+    taskId: stableId("ti_source_provenance_actor_profile_source_update_task", `${candidate.candidateId}:${parserStatus}:${activationState}`),
+    candidateId: candidate.candidateId,
+    field: candidate.field,
+    family: candidate.family,
+    parserProfile: candidate.parserProfile,
+    parserStatus,
+    activationState,
+    lastRun: health?.lastRun,
+    nextRetryAt: health?.nextRetryAt,
+    failureReason: health?.failureReason ?? health?.lastRun?.failureReason,
+    retryable: parserStatus === "failed" || parserStatus === "retry_scheduled",
+    nextOperatorAction: action,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action: action === "retry_parser" ? "retry" : action === "request_policy_approval" ? "request_approval" : "test",
+        candidateId: candidate.candidateId,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourceUpdateParserStatus(
+  candidate: TiSourceProvenanceActorProfileGapSourceCandidate,
+  health?: TiSourceProvenanceActorProfileSourceUpdateHealthInput
+): TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"] {
+  if (candidate.activationState === "blocked") return "blocked";
+  if (health?.parserStatus) return health.parserStatus;
+  return "not_tested";
+}
+
+function sourceUpdateActivationState(
+  candidate: TiSourceProvenanceActorProfileGapSourceCandidate,
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"]
+): TiSourceProvenanceActorProfileSourceUpdateTask["activationState"] {
+  if (candidate.activationState === "blocked" || parserStatus === "blocked") return "blocked";
+  if (parserStatus === "ready") return "ready_to_test";
+  if (parserStatus === "retry_scheduled") return "retry_scheduled";
+  if (parserStatus === "failed") return "failed";
+  return "candidate";
+}
+
+function sourceUpdateAction(
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"],
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"]
+): TiSourceProvenanceActorProfileSourceUpdateTask["nextOperatorAction"] {
+  if (activationState === "blocked") return "request_policy_approval";
+  if (parserStatus === "failed" || parserStatus === "retry_scheduled") return "retry_parser";
+  if (activationState === "failed") return "review_failure";
+  return "test_parser";
+}
+
+function actorProfileSourceUpdateHealth(
+  tasks: TiSourceProvenanceActorProfileSourceUpdateTask[]
+): TiSourceProvenanceActorProfileSourceUpdateWorkflow["health"] {
+  const familyNames = tasks.reduce<Array<TiSourceProvenanceActorProfileGapSourceCandidate["family"]>>((items, task) => {
+    if (!items.includes(task.family)) items.push(task.family);
+    return items;
+  }, []);
+  const families = familyNames.map((family) => {
+    const familyTasks = tasks.filter((task) => task.family === family);
+    return {
+      family,
+      candidates: familyTasks.length,
+      readyToTest: familyTasks.filter((task) => task.activationState === "ready_to_test" || task.activationState === "candidate").length,
+      blocked: familyTasks.filter((task) => task.activationState === "blocked").length,
+      retryScheduled: familyTasks.filter((task) => task.activationState === "retry_scheduled").length,
+      failed: familyTasks.filter((task) => task.activationState === "failed").length
+    };
+  });
+
+  return {
+    totalCandidates: tasks.length,
+    readyToTest: tasks.filter((task) => task.activationState === "ready_to_test" || task.activationState === "candidate").length,
+    blocked: tasks.filter((task) => task.activationState === "blocked").length,
+    retryScheduled: tasks.filter((task) => task.activationState === "retry_scheduled").length,
+    failed: tasks.filter((task) => task.activationState === "failed").length,
+    families
   };
 }
 
