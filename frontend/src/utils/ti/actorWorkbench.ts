@@ -46,6 +46,11 @@ export const PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS = [
     'actionReadiness[].blockerCodes',
     'actionReadiness[].ownerLane',
     'actionReadiness[].sourceRequestCount',
+    'evidenceRefs',
+    'evidenceRefs.captureIds',
+    'evidenceRefs.alertIds',
+    'evidenceRefs.casePaths',
+    'evidenceRefs.watchlistTerms',
     'sourceRequests[].ownerLane',
     'sourceRequests[].route',
     'sourceRequests[].sourceFamily',
@@ -123,6 +128,15 @@ export type PublicTiHandoffPayload = {
         selected: boolean
         sourceRequestCount: number
     }>
+    evidenceRefs?: {
+        sourceNames: string[]
+        provenanceRefs: string[]
+        captureIds: string[]
+        alertIds: string[]
+        casePaths: string[]
+        watchlistTerms: string[]
+        endpoints: string[]
+    }
     sourceRequests: Array<{
         sourceName: string
         provenance: string
@@ -494,6 +508,7 @@ function buildPublicTiHandoffPayload(
         missing: bridgeState.missing,
         blockers: blockersForBridge(artifact, bridgeState),
         actionReadiness: actionReadinessFor(action, actionPayloads, artifact, bridgeState, sourceRequests),
+        evidenceRefs: evidenceRefsFor(artifact, actionPayloads, sourceRequests),
         sourceRequests,
     }
 }
@@ -528,10 +543,14 @@ function normalizePublicTiHandoffPayload(value: unknown, intent?: string | null)
         missing: Array.isArray(value.missing) ? value.missing.filter((item): item is string => typeof item === 'string') : [],
         blockers: Array.isArray(value.blockers) ? value.blockers as PublicTiHandoffPayload['blockers'] : [],
         actionReadiness: Array.isArray(value.actionReadiness) ? value.actionReadiness as PublicTiHandoffPayload['actionReadiness'] : [],
+        evidenceRefs: isRecord(value.evidenceRefs) ? value.evidenceRefs as PublicTiHandoffPayload['evidenceRefs'] : undefined,
         sourceRequests: Array.isArray(value.sourceRequests) ? value.sourceRequests as PublicTiHandoffPayload['sourceRequests'] : [],
     }
     if (!normalized.actionReadiness.length) {
         normalized.actionReadiness = actionReadinessFor(action, normalized.actionPayloads, normalized.artifact, normalized, normalized.sourceRequests)
+    }
+    if (!normalized.evidenceRefs) {
+        normalized.evidenceRefs = evidenceRefsFor(normalized.artifact, normalized.actionPayloads, normalized.sourceRequests)
     }
     return { ok: true, payload: normalized, action, reasonCodes: [] }
 }
@@ -580,6 +599,7 @@ function normalizeLegacyPublicTiHandoffPayload(value: Record<string, unknown>, i
         ...bridgeState,
         blockers: blockersForBridge(artifact, bridgeState),
         actionReadiness: actionReadinessFor(action, actionPayloads as PublicTiHandoffPayload['actionPayloads'], artifact, bridgeState, sourceRequests),
+        evidenceRefs: evidenceRefsFor(artifact, actionPayloads as PublicTiHandoffPayload['actionPayloads'], sourceRequests),
         sourceRequests,
     }
     return { ok: true, payload, action, reasonCodes: [] }
@@ -643,6 +663,57 @@ function actionReadinessFor(
 
 function uniqueBlockerCodes(values: PublicTiHandoffActionBlockerCode[]) {
     return Array.from(new Set(values))
+}
+
+function evidenceRefsFor(artifact: PublicTiHandoffArtifact, payloads: PublicTiHandoffPayload['actionPayloads'], sourceRequests: PublicTiHandoffPayload['sourceRequests']): NonNullable<PublicTiHandoffPayload['evidenceRefs']> {
+    const payloadList = [payloads.watchlist, payloads.alertRebuild, payloads.case, payloads.enrichment]
+    return {
+        sourceNames: unique([
+            ...artifact.provenance,
+            ...payloadList.flatMap(payload => payload.provenance.map(source => source.sourceName)),
+            ...sourceRequests.map(request => request.sourceName),
+        ]).slice(0, 20),
+        provenanceRefs: unique([
+            ...artifact.provenance,
+            ...payloadList.flatMap(payload => payload.provenance.map(source => source.provenance)),
+            ...sourceRequests.map(request => request.provenance),
+        ]).slice(0, 20),
+        captureIds: unique([
+            ...payloadList.flatMap(payload => payload.provenance.map(source => source.captureId).filter((value): value is string => Boolean(value))),
+            ...sourceRequests.map(request => request.captureId).filter((value): value is string => Boolean(value)),
+            ...payloadList.flatMap(payload => collectStringFields(payload.body, ['captureId', 'captureIds'])),
+        ]).slice(0, 20),
+        alertIds: unique(payloadList.flatMap(payload => collectStringFields(payload.body, ['alertId', 'alertIds']))).slice(0, 20),
+        casePaths: unique(payloadList.flatMap(payload => collectStringFields(payload.body, ['casePath', 'casePaths']))).slice(0, 20),
+        watchlistTerms: unique([
+            ...artifact.watchlistTerms.map(term => `${term.kind}:${term.value}`),
+            ...payloadList.flatMap(payload => collectWatchlistTerms(payload.body)),
+        ]).slice(0, 20),
+        endpoints: unique(payloadList.flatMap(payload => [payload.endpoint, payload.backedRoute].filter((value): value is string => Boolean(value)))).slice(0, 20),
+    }
+}
+
+function collectStringFields(value: unknown, keys: string[]): string[] {
+    if (Array.isArray(value)) return value.flatMap(item => collectStringFields(item, keys))
+    if (!isRecord(value)) return []
+    return Object.entries(value).flatMap(([key, entry]) => {
+        const nested = collectStringFields(entry, keys)
+        if (!keys.includes(key)) return nested
+        if (typeof entry === 'string' && entry.trim()) return [entry.trim(), ...nested]
+        if (Array.isArray(entry)) return [...entry.filter((item): item is string => typeof item === 'string' && item.trim().length > 0), ...nested]
+        return nested
+    })
+}
+
+function collectWatchlistTerms(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(collectWatchlistTerms)
+    if (!isRecord(value)) return []
+    const termValue = typeof value.value === 'string' ? value.value.trim() : ''
+    const termKind = typeof value.kind === 'string' ? value.kind.trim() : ''
+    return [
+        ...(termValue && (termKind === 'company' || termKind === 'domain' || termKind === 'vendor') ? [`${termKind}:${termValue}`] : []),
+        ...Object.values(value).flatMap(collectWatchlistTerms),
+    ]
 }
 
 function sourceRequestsFor(payloads: PublicTiHandoffPayload['actionPayloads']): PublicTiHandoffPayload['sourceRequests'] {

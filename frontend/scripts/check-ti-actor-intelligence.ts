@@ -288,11 +288,15 @@ assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.length =
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.watchlist && item.selected && item.ownerLane === 'org' && item.blockerCodes.includes('org_required')), 'Decoded APT29 watchlist readiness should carry selected action, org owner, and blocker code.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.some(item => item.action === PUBLIC_TI_HANDOFF_ACTIONS.case && item.endpoint === '/v1/cases' && item.blockerCodes.includes('stale_evidence')), 'Decoded APT29 case readiness should carry case endpoint and stale-evidence blocker.')
 assert(decodedWatchlist?.ok && decodedWatchlist.payload.actionReadiness.every(item => typeof item.sourceRequestCount === 'number' && item.sourceRequestCount === decodedWatchlist.payload.sourceRequests.length), 'Decoded APT29 action readiness should carry source request counts for dashboard consumers.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.captureIds.length === 0, 'Decoded APT29 payload should not invent capture IDs when source captures are missing.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.watchlistTerms.some(term => term === 'company:Microsoft'), 'Decoded APT29 payload should carry selected watchlist terms as evidence refs.')
+assert(decodedWatchlist?.ok && decodedWatchlist.payload.evidenceRefs?.endpoints.includes('/v1/cases'), 'Decoded APT29 payload should carry case endpoint refs for downstream consumers.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('selectedPayload'), 'Dashboard consumer contract should document selectedPayload.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests'), 'Dashboard consumer contract should document sourceRequests.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('sourceRequests[].requestedFields'), 'Dashboard consumer contract should document source request field metadata.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness'), 'Dashboard consumer contract should document actionReadiness.')
 assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('actionReadiness[].blockerCodes'), 'Dashboard consumer contract should document action readiness blocker codes.')
+assert(PUBLIC_TI_HANDOFF_DASHBOARD_CONSUMER_FIELDS.includes('evidenceRefs.captureIds'), 'Dashboard consumer contract should document evidence capture refs.')
 const legacyDecoded = usHandoffs ? decodePublicTiHandoffPayload(encodeHandoffPayload({
     artifact: usHandoffs.authBridge.payload.artifact,
     watchlist: usHandoffs.watchlist,
@@ -591,6 +595,8 @@ assert(pageClientSource.includes('sourceRequestFamilyLabel'), 'Selected artifact
 assert(pageClientSource.includes('sourceRequestRouteLabel'), 'Selected artifact source requests should show source queue routing in analyst language.')
 assert(pageClientSource.includes('row.payload.actionReadiness.find'), 'Selected artifact workflow rows should consume versioned action readiness metadata.')
 assert(pageClientSource.includes('actionOwnerLabel(row.readiness.ownerLane)'), 'Selected artifact workflow rows should show analyst-native action responsibility.')
+assert(pageClientSource.includes('data-ti-artifact-reference-summary'), 'Selected artifacts should expose a compact backed reference summary.')
+assert(pageClientSource.includes('artifactReferenceChips(bridge.payload.evidenceRefs)'), 'Selected artifact reference summary should come from versioned payload evidence refs.')
 assert(pageClientSource.includes('data-ti-evidence-priority'), 'Selected evidence should expose backed priority proof.')
 assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense intelligence panels should have dark-mode border guardrails.')
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')

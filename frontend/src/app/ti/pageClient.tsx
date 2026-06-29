@@ -983,6 +983,18 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                 {bridge.missing.slice(0, 4).map(item => <li key={item}>{item}</li>)}
                             </ul>
                         ) : null}
+                        {bridge.payload.evidenceRefs ? (
+                            <div data-ti-artifact-reference-summary='true' className='mt-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-2 dark:border-[#273244] dark:bg-[#131c29]'>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Reference summary</p>
+                                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {artifactReferenceChips(bridge.payload.evidenceRefs).map(item => (
+                                        <span key={item.label} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                            {item.value} {item.label}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                     {payloadRows.map(row => (
                         <PayloadHandoffRow key={row.id} label={row.label} detail={row.detail} payload={row.payload} route={row.route} blocked={row.blocked} />
@@ -1974,6 +1986,16 @@ function actionOwnerLabel(value: string) {
     if (value === 'case') return 'casework'
     if (value === 'source') return 'source review'
     return 'review'
+}
+
+function artifactReferenceChips(refs: NonNullable<ActorArtifactHandoffs['authBridge']['payload']['evidenceRefs']>) {
+    return [
+        { label: 'captures', value: refs.captureIds.length },
+        { label: 'alerts', value: refs.alertIds.length },
+        { label: 'cases', value: refs.casePaths.length },
+        { label: 'watch terms', value: refs.watchlistTerms.length },
+        { label: 'sources', value: refs.sourceNames.length },
+    ].filter(item => item.value > 0)
 }
 
 type DecisionStep = {
