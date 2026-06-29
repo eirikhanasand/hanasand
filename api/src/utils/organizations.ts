@@ -15,6 +15,33 @@ export type OrganizationWatchlistAction = 'pause' | 'resume' | 'archive' | 'rest
 export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
 export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
 export type OrganizationLifecycleStatus = 'active' | 'archived' | 'deleted'
+export type OrganizationSharedWatchlistAuditEventAction =
+    | 'organization_invites_created'
+    | 'organization_invite_accepted'
+    | 'organization_invite_revoked'
+    | 'organization_invite_resent'
+    | 'organization_watchlist_upserted'
+    | 'organization_watchlist_updated'
+    | 'organization_watchlist_paused'
+    | 'organization_watchlist_resumed'
+    | 'organization_watchlist_archived'
+    | 'organization_watchlist_restored'
+    | 'organization_watchlist_cleanup_archived'
+    | 'organization_watchlist_alert_terms_exported'
+    | 'organization_watchlist_alert_terms_export_denied'
+    | 'organization_lifecycle_mutation_blocked'
+export type OrganizationSharedWatchlistAuditRouteGroup =
+    | 'invite_lifecycle'
+    | 'watchlist_write'
+    | 'watchlist_lifecycle'
+    | 'alert_terms_export'
+    | 'lifecycle_blocker'
+export type OrganizationSharedWatchlistAuditConsumer =
+    | 'alert_queue'
+    | 'case_workflow'
+    | 'webhook_delivery'
+    | 'support_timeline'
+    | 'dashboard_readiness'
 
 export type OrganizationInput = {
     name?: unknown
@@ -501,28 +528,36 @@ export type OrganizationSharedWatchlistDownstreamProof = {
     audit: {
         schemaVersion: 'organization.shared_watchlist_audit_contract.v1'
         source: 'service_logs'
-        eventActions: Array<
-            | 'organization_invites_created'
-            | 'organization_invite_accepted'
-            | 'organization_invite_revoked'
-            | 'organization_invite_resent'
-            | 'organization_watchlist_upserted'
-            | 'organization_watchlist_updated'
-            | 'organization_watchlist_paused'
-            | 'organization_watchlist_resumed'
-            | 'organization_watchlist_archived'
-            | 'organization_watchlist_restored'
-            | 'organization_watchlist_cleanup_archived'
-            | 'organization_watchlist_alert_terms_exported'
-            | 'organization_watchlist_alert_terms_export_denied'
-            | 'organization_lifecycle_mutation_blocked'
-        >
+        eventActions: OrganizationSharedWatchlistAuditEventAction[]
         requiredMetadataFields: string[]
         requestIdFields: string[]
         actorFields: string[]
         downstreamCorrelationFields: string[]
         idempotentActions: Array<'invite_resend' | 'invite_revoke' | 'watchlist_cleanup' | 'alert_terms_export'>
         proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist'
+        eventBridge: {
+            schemaVersion: 'organization.shared_watchlist_audit_event_bridge.v1'
+            source: 'service_logs'
+            expectedAdapter: 'organizationSharedWatchlistAuditEventBridge'
+            requiredActions: OrganizationSharedWatchlistAuditEventAction[]
+            eventDescriptors: Array<{
+                action: OrganizationSharedWatchlistAuditEventAction
+                routeGroup: OrganizationSharedWatchlistAuditRouteGroup
+                outcome: 'success' | 'denied' | 'blocked'
+                requestIdField: 'metadata.requestId'
+                actorField: 'actor.userId'
+                organizationField: 'organizationId'
+                requiredMetadataFields: string[]
+                redactedMetadataFields: Array<'metadata.value' | 'metadata.email' | 'activeTerms[].term' | 'alertBridge.alertGeneratorKeys'>
+                downstreamConsumers: OrganizationSharedWatchlistAuditConsumer[]
+                idempotent: boolean
+            }>
+            requiredSafeFields: Array<'action' | 'routeGroup' | 'outcome' | 'requestIdField' | 'actorField' | 'organizationField'>
+            requiredRedactedFields: Array<'metadata.value' | 'metadata.email' | 'activeTerms[].term' | 'alertBridge.alertGeneratorKeys'>
+            noRawTermAccess: true
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+            blockerCodes: Array<'missing_required_action' | 'missing_request_id' | 'missing_actor' | 'missing_redaction' | 'raw_term_access_enabled'>
+        }
     }
     alertBridge: {
         route: 'organization_watchlist'
@@ -1715,6 +1750,22 @@ export function organizationSharedWatchlistDownstreamProof(
     const webhookManualDenialReason = webhookDeliveryAllowedByRole
         ? (downstreamAuthorization.downstream.webhook.denialReason ?? (webhookPolicy === 'manual_selection' ? null : null))
         : 'role_not_allowed'
+    const auditEventActions: OrganizationSharedWatchlistAuditEventAction[] = [
+        'organization_invites_created',
+        'organization_invite_accepted',
+        'organization_invite_revoked',
+        'organization_invite_resent',
+        'organization_watchlist_upserted',
+        'organization_watchlist_updated',
+        'organization_watchlist_paused',
+        'organization_watchlist_resumed',
+        'organization_watchlist_archived',
+        'organization_watchlist_restored',
+        'organization_watchlist_cleanup_archived',
+        'organization_watchlist_alert_terms_exported',
+        'organization_watchlist_alert_terms_export_denied',
+        'organization_lifecycle_mutation_blocked',
+    ]
 
     return {
         schemaVersion: 'organization.shared_watchlist_downstream_proof.v1',
@@ -1759,22 +1810,7 @@ export function organizationSharedWatchlistDownstreamProof(
         audit: {
             schemaVersion: 'organization.shared_watchlist_audit_contract.v1',
             source: 'service_logs',
-            eventActions: [
-                'organization_invites_created',
-                'organization_invite_accepted',
-                'organization_invite_revoked',
-                'organization_invite_resent',
-                'organization_watchlist_upserted',
-                'organization_watchlist_updated',
-                'organization_watchlist_paused',
-                'organization_watchlist_resumed',
-                'organization_watchlist_archived',
-                'organization_watchlist_restored',
-                'organization_watchlist_cleanup_archived',
-                'organization_watchlist_alert_terms_exported',
-                'organization_watchlist_alert_terms_export_denied',
-                'organization_lifecycle_mutation_blocked',
-            ],
+            eventActions: auditEventActions,
             requiredMetadataFields: [
                 'requestId',
                 'watchlistItemId',
@@ -1805,6 +1841,7 @@ export function organizationSharedWatchlistDownstreamProof(
             ],
             idempotentActions: ['invite_resend', 'invite_revoke', 'watchlist_cleanup', 'alert_terms_export'],
             proofLogQuery: 'GET /api/logs?service=api&message=organization_watchlist',
+            eventBridge: organizationSharedWatchlistAuditEventBridge(auditEventActions),
         },
         alertBridge: {
             route: 'organization_watchlist',
@@ -2123,6 +2160,7 @@ export function organizationSharedWatchlistDownstreamProof(
                 'webhookBridge.deliveryContract.destinationSelection',
                 'webhookBridge.deliveryContract.idempotency',
                 'audit.eventActions',
+                'audit.eventBridge',
                 'audit.requiredMetadataFields',
                 'inviteLifecycle.pendingInviteCount',
             ],
@@ -2143,6 +2181,133 @@ export function organizationSharedWatchlistDownstreamProof(
     }
 }
 
+function organizationSharedWatchlistAuditEventBridge(
+    eventActions: OrganizationSharedWatchlistAuditEventAction[]
+): OrganizationSharedWatchlistDownstreamProof['audit']['eventBridge'] {
+    const requiredActions: OrganizationSharedWatchlistAuditEventAction[] = [
+        'organization_invites_created',
+        'organization_invite_accepted',
+        'organization_invite_revoked',
+        'organization_invite_resent',
+        'organization_watchlist_upserted',
+        'organization_watchlist_updated',
+        'organization_watchlist_paused',
+        'organization_watchlist_resumed',
+        'organization_watchlist_archived',
+        'organization_watchlist_restored',
+        'organization_watchlist_cleanup_archived',
+        'organization_watchlist_alert_terms_exported',
+        'organization_watchlist_alert_terms_export_denied',
+        'organization_lifecycle_mutation_blocked',
+    ]
+    const requiredSafeFields: OrganizationSharedWatchlistDownstreamProof['audit']['eventBridge']['requiredSafeFields'] = [
+        'action',
+        'routeGroup',
+        'outcome',
+        'requestIdField',
+        'actorField',
+        'organizationField',
+    ]
+    const requiredRedactedFields: OrganizationSharedWatchlistDownstreamProof['audit']['eventBridge']['requiredRedactedFields'] = [
+        'metadata.value',
+        'metadata.email',
+        'activeTerms[].term',
+        'alertBridge.alertGeneratorKeys',
+    ]
+    const eventDescriptors = eventActions.map(action => ({
+        action,
+        routeGroup: organizationSharedWatchlistAuditRouteGroup(action),
+        outcome: organizationSharedWatchlistAuditOutcome(action),
+        requestIdField: 'metadata.requestId' as const,
+        actorField: 'actor.userId' as const,
+        organizationField: 'organizationId' as const,
+        requiredMetadataFields: organizationSharedWatchlistAuditMetadataFields(action),
+        redactedMetadataFields: requiredRedactedFields,
+        downstreamConsumers: organizationSharedWatchlistAuditConsumers(action),
+        idempotent: organizationSharedWatchlistAuditIsIdempotent(action),
+    }))
+    const blockerCodes: OrganizationSharedWatchlistDownstreamProof['audit']['eventBridge']['blockerCodes'] = []
+
+    if (!requiredActions.every(action => eventActions.includes(action))) {
+        blockerCodes.push('missing_required_action')
+    }
+    if (!eventDescriptors.every(descriptor => descriptor.requestIdField === 'metadata.requestId')) {
+        blockerCodes.push('missing_request_id')
+    }
+    if (!eventDescriptors.every(descriptor => descriptor.actorField === 'actor.userId')) {
+        blockerCodes.push('missing_actor')
+    }
+    if (!eventDescriptors.every(descriptor => requiredRedactedFields.every(field => descriptor.redactedMetadataFields.includes(field)))) {
+        blockerCodes.push('missing_redaction')
+    }
+
+    return {
+        schemaVersion: 'organization.shared_watchlist_audit_event_bridge.v1',
+        source: 'service_logs',
+        expectedAdapter: 'organizationSharedWatchlistAuditEventBridge',
+        requiredActions,
+        eventDescriptors,
+        requiredSafeFields,
+        requiredRedactedFields,
+        noRawTermAccess: true,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        blockerCodes,
+    }
+}
+
+function organizationSharedWatchlistAuditRouteGroup(action: OrganizationSharedWatchlistAuditEventAction): OrganizationSharedWatchlistAuditRouteGroup {
+    if (action.startsWith('organization_invite')) return 'invite_lifecycle'
+    if (action === 'organization_watchlist_upserted' || action === 'organization_watchlist_updated') return 'watchlist_write'
+    if (action === 'organization_watchlist_alert_terms_exported' || action === 'organization_watchlist_alert_terms_export_denied') return 'alert_terms_export'
+    if (action === 'organization_lifecycle_mutation_blocked') return 'lifecycle_blocker'
+    return 'watchlist_lifecycle'
+}
+
+function organizationSharedWatchlistAuditOutcome(action: OrganizationSharedWatchlistAuditEventAction): 'success' | 'denied' | 'blocked' {
+    if (action.endsWith('_denied')) return 'denied'
+    if (action.endsWith('_blocked')) return 'blocked'
+    return 'success'
+}
+
+function organizationSharedWatchlistAuditMetadataFields(action: OrganizationSharedWatchlistAuditEventAction): string[] {
+    if (action.startsWith('organization_invite')) {
+        return ['requestId', 'inviteId', 'role', 'reason', 'expiresAt']
+    }
+    if (action === 'organization_watchlist_cleanup_archived') {
+        return ['requestId', 'reason', 'requestedItemIds', 'archivedItemIds', 'skippedItemIds', 'archivedCount']
+    }
+    if (action === 'organization_watchlist_alert_terms_exported') {
+        return ['requestId', 'activeTermCount', 'pausedCount', 'archivedCount', 'canGenerateAlerts']
+    }
+    if (action === 'organization_watchlist_alert_terms_export_denied') {
+        return ['requestId', 'role', 'alertVisibilityPolicy', 'allowedRoles', 'denialReason', 'blockerCodes']
+    }
+    if (action === 'organization_lifecycle_mutation_blocked') {
+        return ['requestId', 'blockerCode', 'blockedAction', 'actorRole']
+    }
+    return ['requestId', 'watchlistItemId', 'kind', 'reason', 'action', 'status']
+}
+
+function organizationSharedWatchlistAuditConsumers(action: OrganizationSharedWatchlistAuditEventAction): OrganizationSharedWatchlistAuditConsumer[] {
+    if (action === 'organization_watchlist_alert_terms_exported') {
+        return ['alert_queue', 'case_workflow', 'webhook_delivery', 'support_timeline', 'dashboard_readiness']
+    }
+    if (action === 'organization_watchlist_alert_terms_export_denied') {
+        return ['alert_queue', 'support_timeline', 'dashboard_readiness']
+    }
+    if (action.startsWith('organization_watchlist')) {
+        return ['alert_queue', 'support_timeline', 'dashboard_readiness']
+    }
+    return ['support_timeline', 'dashboard_readiness']
+}
+
+function organizationSharedWatchlistAuditIsIdempotent(action: OrganizationSharedWatchlistAuditEventAction): boolean {
+    return action === 'organization_invite_resent'
+        || action === 'organization_invite_revoked'
+        || action === 'organization_watchlist_cleanup_archived'
+        || action === 'organization_watchlist_alert_terms_exported'
+}
+
 export function organizationSharedWatchlistIntegrationGuardrails(
     proof: OrganizationSharedWatchlistDownstreamProof
 ): OrganizationSharedWatchlistIntegrationGuardrails {
@@ -2157,6 +2322,7 @@ export function organizationSharedWatchlistIntegrationGuardrails(
         'webhookBridge.deliveryContract.destinationSelection',
         'webhookBridge.deliveryContract.idempotency',
         'audit.eventActions',
+        'audit.eventBridge',
         'audit.requiredMetadataFields',
     ]
     const watchlistIds = [...proof.watchlistOwnership.activeIds].sort()
