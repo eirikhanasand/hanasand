@@ -153,6 +153,7 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
     .filter((row: any) => row.tenantId === tenantId)
+    .filter((row: any) => !scope.organizationId || row.organizationId === scope.organizationId)
     .filter((alert: any) => alertMatchesDwmAlertFilters(alert, url));
   return json({
     organization: scope.organization,
@@ -1240,6 +1241,7 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
     downstreamHandoff,
     alertCreatedDispatch: downstreamHandoff.createdEventDispatch,
+    alertEventSummary: buildDwmAlertEventSummary(alert),
     retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries: alertDeliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
@@ -1561,6 +1563,8 @@ function alertMatchesDwmAlertFilters(alert: any, url: URL) {
   if (!matchesAnyParam(url, ["alertGeneratorKey", "generationRef"], alert.workflowContext?.alertGeneratorKeys ?? alert.webhookContext?.alertGeneratorKeys ?? [])) return false;
   if (!matchesAnyParam(url, ["captureId"], alert.workflowContext?.captureIds ?? alert.webhookContext?.captureIds ?? alert.provenance?.captureIds ?? [])) return false;
   if (!matchesParam(url, ["caseId"], alert.caseId ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate)) return false;
+  if (!matchesAnyParam(url, ["eventType", "alertEvent"], (alert.alertEvents ?? []).map((event: any) => event.eventType))) return false;
+  if (!matchesBooleanParam(url, ["hasUpdatedEvent", "updated"], Boolean(alert.alertUpdatedEvent))) return false;
   const query = String(url.searchParams.get("q") ?? url.searchParams.get("term") ?? "").trim().toLowerCase();
   if (query) {
     const haystack = [
@@ -1591,6 +1595,15 @@ function matchesAnyParam(url: URL, keys: string[], values: unknown[]) {
   if (!raw) return true;
   const allowed = splitFilterValues(raw);
   return values.map((value) => String(value ?? "").trim().toLowerCase()).some((value) => allowed.includes(value));
+}
+
+function matchesBooleanParam(url: URL, keys: string[], value: boolean) {
+  const raw = firstSearchParam(url, keys);
+  if (!raw) return true;
+  const normalized = raw.trim().toLowerCase();
+  if (["true", "1", "yes"].includes(normalized)) return value;
+  if (["false", "0", "no"].includes(normalized)) return !value;
+  return true;
 }
 
 function firstSearchParam(url: URL, keys: string[]) {
@@ -1629,6 +1642,38 @@ function buildDwmAlertCreatedEventSummary(alert: any) {
   };
 }
 
+function buildDwmAlertUpdatedEventSummary(alert: any) {
+  const updatedEvent = alert.alertUpdatedEvent;
+  if (!updatedEvent?.id && !updatedEvent?.at) return undefined;
+  return {
+    schemaVersion: "dwm.alert_updated_event.v1",
+    eventId: updatedEvent.id,
+    eventType: updatedEvent.eventType ?? "dwm.alert.updated",
+    at: updatedEvent.at,
+    sourceFamily: updatedEvent.sourceFamily ?? alert.sourceFamily,
+    captureIds: uniqueAlertStrings((updatedEvent.captureIds ?? alert.workflowContext?.captureIds ?? alert.provenance?.captureIds ?? []).map(String).filter(Boolean)),
+    addedCaptureIds: uniqueAlertStrings((updatedEvent.addedCaptureIds ?? []).map(String).filter(Boolean)),
+    evidenceCount: updatedEvent.evidenceCount ?? alert.workflowContext?.evidenceCount ?? (alert.evidence ?? []).length,
+    previousEvidenceCount: updatedEvent.previousEvidenceCount,
+    dedupeKey: updatedEvent.dedupeKey ?? alert.dedupeKey ?? alert.webhookDelivery?.dedupeKey,
+    recommendedRoute: updatedEvent.recommendedRoute ?? alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute
+  };
+}
+
+function buildDwmAlertEventSummary(alert: any) {
+  const eventTypes = uniqueAlertStrings((alert.alertEvents ?? []).map((event: any) => event.eventType).filter(Boolean).map(String));
+  return {
+    schemaVersion: "dwm.alert_event_summary.v1",
+    eventCount: (alert.alertEvents ?? []).length,
+    eventTypes,
+    createdEvent: buildDwmAlertCreatedEventSummary(alert),
+    updatedEvent: buildDwmAlertUpdatedEventSummary(alert),
+    latestEventType: (alert.alertEvents ?? []).at(-1)?.eventType,
+    latestEventAt: (alert.alertEvents ?? []).at(-1)?.at,
+    hasUpdatedEvent: Boolean(alert.alertUpdatedEvent)
+  };
+}
+
 function buildDwmAlertWorkflowSummary(alert: any) {
   const events = [...(alert.workflowEvents ?? [])].sort((a: any, b: any) => String(a.at ?? "").localeCompare(String(b.at ?? "")));
   const lastEvent = events.at(-1);
@@ -1638,6 +1683,8 @@ function buildDwmAlertWorkflowSummary(alert: any) {
     schemaVersion: "dwm.alert_workflow_summary.v1",
     status,
     createdEvent: buildDwmAlertCreatedEventSummary(alert),
+    updatedEvent: buildDwmAlertUpdatedEventSummary(alert),
+    alertEventSummary: buildDwmAlertEventSummary(alert),
     reviewState: alert.reviewState,
     deliveryState: alert.deliveryState,
     assignedOwner: alert.assignedOwner,

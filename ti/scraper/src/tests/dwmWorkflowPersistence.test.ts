@@ -874,6 +874,38 @@ describe("dwm workflow persistence", () => {
       selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
     });
 
+    const alphaUpdatedListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&eventType=dwm.alert.updated&hasUpdatedEvent=true`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const alphaUpdatedList = await alphaUpdatedListResponse.json() as any;
+    expect(alphaUpdatedList.alerts).toHaveLength(1);
+    expect(alphaUpdatedList.alerts[0]).toMatchObject({
+      id: alphaDarkweb.id,
+      organizationId: alphaOrg.id,
+      sourceFamily: "darkweb_metadata",
+      alertEventSummary: {
+        schemaVersion: "dwm.alert_event_summary.v1",
+        eventTypes: ["dwm.alert.created", "dwm.alert.updated"],
+        hasUpdatedEvent: true,
+        updatedEvent: {
+          eventType: "dwm.alert.updated",
+          addedCaptureIds: ["cap_workflow_onion_acme_followup"],
+          evidenceCount: 2,
+          previousEvidenceCount: 1
+        }
+      },
+      workflowSummary: {
+        status: "investigating",
+        alertEventSummary: {
+          hasUpdatedEvent: true,
+          updatedEvent: {
+            captureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"])
+          }
+        }
+      }
+    });
+    expect(alphaUpdatedList.alerts[0].alertEventSummary.updatedEvent.dedupeKey).toBe(alphaDarkweb.dedupeKey);
+
     const betaListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${betaOrg.id}`, {
       headers: { "x-user-email": "owner-beta@workflow.example" }
     }), options);
@@ -886,6 +918,15 @@ describe("dwm workflow persistence", () => {
     });
     expect(JSON.stringify(betaList)).not.toContain("case_alpha_darkweb");
     expect(JSON.stringify(betaList)).not.toContain("webhook_workflow_alpha");
+
+    const betaUpdatedListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${betaOrg.id}&eventType=dwm.alert.updated&hasUpdatedEvent=true`, {
+      headers: { "x-user-email": "owner-beta@workflow.example" }
+    }), options);
+    const betaUpdatedList = await betaUpdatedListResponse.json() as any;
+    expect(betaUpdatedList.alerts).toHaveLength(0);
+    expect(betaUpdatedList.alertQueueVisibility.counts.visibleAlertCount).toBe(0);
+    expect(JSON.stringify(betaUpdatedList)).not.toContain("cap_workflow_onion_acme_followup");
+    expect(JSON.stringify(betaUpdatedList)).not.toContain("case_alpha_darkweb");
 
     const crossOrgDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${betaOrg.id}`, {
       headers: { "x-user-email": "owner-beta@workflow.example" }
