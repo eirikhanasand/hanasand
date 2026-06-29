@@ -2672,6 +2672,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 decision={decision}
                 caseDetail={caseDetail}
                 actionMessage={actionMessage}
+                orgContext={orgContext}
             />
 
             {(item.workflowPath?.length || item.actions?.length) ? (
@@ -2824,7 +2825,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     )
 }
 
-function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { item: WorkbenchCase, decision?: LocalDecision, caseDetail?: CaseDetailState, actionMessage: WorkbenchActionOutcome | null }) {
+function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgContext }: { item: WorkbenchCase, decision?: LocalDecision, caseDetail?: CaseDetailState, actionMessage: WorkbenchActionOutcome | null, orgContext?: WorkbenchOrgContext }) {
     const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
     const caseRecord = detail?.case
     const workflowEvents = [...(caseRecord?.workflowEvents || []), ...(detail?.alertContext?.workflowEvents || [])]
@@ -2839,6 +2840,17 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { it
     const visibility = detail?.access?.visibilityDecision
     const allowedActions = detail?.nextAllowedActions || []
     const notificationContext = detail?.customerNotificationContext
+    const notificationDelivery = notificationContext?.latest?.webhookDeliveryId ? {
+        id: notificationContext.latest.webhookDeliveryId,
+        alertId: item.id,
+        status: notificationContext.latest.webhookStatus || 'recorded',
+        deliveryKind: notificationContext.latest.deliveryMode,
+        attemptedAt: notificationContext.latest.at,
+        webhookDestinationId: notificationContext.latest.webhookDestinationId,
+        endpointHash: 'receipt_endpoint_hash_not_returned',
+        payloadHash: 'receipt_payload_hash_not_returned',
+    } : undefined
+    const notificationLedgerHref = notificationDelivery ? deliveryLedgerHref(orgContext, item, notificationDelivery) : undefined
     const latestTimeline = (detail?.timeline || [])
         .filter(row => row.rationale || row.toOwner || row.toStatus || row.eventType)
         .slice(-5)
@@ -2909,7 +2921,12 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage }: { it
                                 ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'receipt'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
                                 : detail ? 'No customer notification receipt recorded yet.' : 'Receipt state requires case detail.'}
                         </p>
-                        {notificationContext?.latest?.webhookDeliveryId ? <p className='mt-2 break-all text-xs text-[#667085]'>Delivery: {notificationContext.latest.webhookDeliveryId}</p> : null}
+                        {notificationLedgerHref ? (
+                            <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                                <span className='truncate'>Open receipt delivery</span>
+                                <ExternalLink className='h-3.5 w-3.5 shrink-0' />
+                            </Link>
+                        ) : null}
                     </ContinuityBlock>
                     <ContinuityBlock title='Recent audit'>
                         <div className='grid gap-2'>
