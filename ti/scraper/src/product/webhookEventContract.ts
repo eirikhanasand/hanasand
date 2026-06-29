@@ -5,6 +5,7 @@ export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v
 export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
 export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
 export const DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION = "dwm.webhook_dispatch_readiness.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION = "dwm.webhook_dispatch_support_packet.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -221,6 +222,66 @@ export type DwmWebhookDispatchReadinessBlocker = {
   ownerLane: "alert" | "case" | "source" | "webhook";
   path: string;
   message: string;
+};
+
+export type DwmWebhookDispatchSupportPacket = {
+  schemaVersion: typeof DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  alertId: string;
+  caseId?: string;
+  redacted: true;
+  support: {
+    schemaVersion: "support.action_prepare.v1";
+    method: "GET";
+    route: "/api/admin/support/inspect";
+    probeId: "support.webhook.dispatch_readiness";
+    entityType: "dwm_webhook_dispatch";
+    action: "support.webhook.inspect_dispatch" | "support.webhook.resolve_dispatch_blocker";
+    prepareAction: "inspect_webhook_dispatch" | "resolve_webhook_dispatch_blocker";
+    requestId?: string;
+    idempotencyKey: string;
+    customerVisible: false;
+  };
+  target: {
+    tenantId: string;
+    organizationId?: string;
+    alertId: string;
+    caseId?: string;
+    destinationIds: string[];
+    dedupeKey?: string;
+  };
+  proof: {
+    readinessSchemaVersion: typeof DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION;
+    readinessId: string;
+    checkedAt: string;
+    dispatchRoute: DwmWebhookDispatchReadiness["dispatch"]["route"];
+    dispatchDryRun: boolean;
+    payloadShape: string[];
+    evidenceSummary: {
+      evidenceCount: number;
+      captureCount: number;
+      sourceCount: number;
+      contentHashCount: number;
+    };
+  };
+  auditPreview: {
+    actionType: "support.webhook.inspect_dispatch" | "support.webhook.resolve_dispatch_blocker";
+    source: "dwm.webhook_dispatch_readiness";
+    outcome: "prepared" | "blocked";
+    blockerCodes: DwmWebhookDispatchReadinessBlocker["code"][];
+    ownerLanes: DwmWebhookDispatchReadinessBlocker["ownerLane"][];
+  };
+  blockers: Array<DwmWebhookDispatchReadinessBlocker | {
+    code: "missing_support_target";
+    ownerLane: "webhook" | "alert";
+    path: string;
+    message: string;
+  }>;
+  nextActions: DwmWebhookDispatchReadiness["nextActions"];
 };
 
 export function buildWebhookDeliveryEventContract(input: {
@@ -550,6 +611,75 @@ export function buildWebhookDispatchReadiness(input: {
   };
 }
 
+export function buildWebhookDispatchSupportPacket(input: {
+  readiness: DwmWebhookDispatchReadiness;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmWebhookDispatchSupportPacket {
+  const readiness = input.readiness;
+  const action = readiness.ok ? "support.webhook.inspect_dispatch" : "support.webhook.resolve_dispatch_blocker";
+  const prepareAction = readiness.ok ? "inspect_webhook_dispatch" : "resolve_webhook_dispatch_blocker";
+  const blockerCodes = readiness.blockers.map((blocker) => blocker.code);
+  const ownerLanes = uniqueStrings(readiness.blockers.map((blocker) => blocker.ownerLane)) as DwmWebhookDispatchReadinessBlocker["ownerLane"][];
+  const supportBlockers = dispatchSupportBlockers(readiness);
+  const blockers = [...readiness.blockers, ...supportBlockers];
+  const idempotencyKey = stableId("dwm_webhook_dispatch_support", `${readiness.id}:${action}:${input.requestId ?? ""}`);
+  return {
+    schemaVersion: DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_dispatch_support_packet", `${readiness.id}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? readiness.checkedAt,
+    ok: readiness.ok && supportBlockers.length === 0,
+    tenantId: readiness.tenantId,
+    organizationId: readiness.organizationId,
+    alertId: readiness.alertId,
+    caseId: readiness.caseId,
+    redacted: true,
+    support: {
+      schemaVersion: "support.action_prepare.v1",
+      method: "GET",
+      route: "/api/admin/support/inspect",
+      probeId: "support.webhook.dispatch_readiness",
+      entityType: "dwm_webhook_dispatch",
+      action,
+      prepareAction,
+      requestId: stringValue(input.requestId),
+      idempotencyKey,
+      customerVisible: false
+    },
+    target: {
+      tenantId: readiness.tenantId,
+      organizationId: readiness.organizationId,
+      alertId: readiness.alertId,
+      caseId: readiness.caseId,
+      destinationIds: readiness.dispatch.destinationIds,
+      dedupeKey: readiness.dedupeKey
+    },
+    proof: {
+      readinessSchemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+      readinessId: readiness.id,
+      checkedAt: readiness.checkedAt,
+      dispatchRoute: readiness.dispatch.route,
+      dispatchDryRun: readiness.dispatch.dryRun,
+      payloadShape: readiness.dispatch.payloadShape,
+      evidenceSummary: {
+        evidenceCount: readiness.evidence.evidenceCount,
+        captureCount: readiness.evidence.captureIds.length,
+        sourceCount: readiness.evidence.sourceIds.length,
+        contentHashCount: readiness.evidence.contentHashes.length
+      }
+    },
+    auditPreview: {
+      actionType: action,
+      source: "dwm.webhook_dispatch_readiness",
+      outcome: blockers.length === 0 ? "prepared" : "blocked",
+      blockerCodes,
+      ownerLanes
+    },
+    blockers,
+    nextActions: readiness.nextActions
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -671,6 +801,35 @@ function webhookDispatchActionFor(code: DwmWebhookDispatchReadinessBlocker["code
   if (code === "destination_scope_mismatch") return "resolve_destination_scope";
   if (code === "duplicate_delivered_dedupe") return "inspect_existing_delivery";
   return "review_alert";
+}
+
+function dispatchSupportBlockers(readiness: DwmWebhookDispatchReadiness): DwmWebhookDispatchSupportPacket["blockers"] {
+  const blockers: DwmWebhookDispatchSupportPacket["blockers"] = [];
+  if (!readiness.organizationId) {
+    blockers.push({
+      code: "missing_support_target",
+      ownerLane: "alert",
+      path: "readiness.organizationId",
+      message: "Support dispatch inspection requires organization scope."
+    });
+  }
+  if (!readiness.alertId) {
+    blockers.push({
+      code: "missing_support_target",
+      ownerLane: "alert",
+      path: "readiness.alertId",
+      message: "Support dispatch inspection requires alert identity."
+    });
+  }
+  if (!readiness.dispatch.destinationIds.length) {
+    blockers.push({
+      code: "missing_support_target",
+      ownerLane: "webhook",
+      path: "readiness.dispatch.destinationIds",
+      message: "Support dispatch inspection requires at least one destination identity."
+    });
+  }
+  return blockers;
 }
 
 function hasDispatchProvenance(evidence: DwmWebhookEventContract["evidence"]): boolean {

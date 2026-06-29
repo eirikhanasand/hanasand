@@ -3,10 +3,12 @@ import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
   DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+  DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
   buildWebhookDispatchReadiness,
+  buildWebhookDispatchSupportPacket,
   buildWebhookEventSupportHandoff,
   buildWebhookSupportActionRequest,
   buildWebhookDeliveryEventContract,
@@ -227,6 +229,76 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(readiness)).not.toContain("payloadBody");
   });
 
+  test("packages webhook dispatch readiness for admin support inspection", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: alertFixture(),
+      destinations: [destinationFixture()],
+      checkedAt: "2026-06-29T12:20:00.000Z"
+    });
+    const packet = buildWebhookDispatchSupportPacket({
+      readiness,
+      requestId: "req_webhook_dispatch_support",
+      generatedAt: "2026-06-29T12:22:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
+      generatedAt: "2026-06-29T12:22:00.000Z",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme_lumma",
+      caseId: "case_acme_lumma",
+      redacted: true,
+      support: {
+        schemaVersion: "support.action_prepare.v1",
+        method: "GET",
+        route: "/api/admin/support/inspect",
+        probeId: "support.webhook.dispatch_readiness",
+        entityType: "dwm_webhook_dispatch",
+        action: "support.webhook.inspect_dispatch",
+        prepareAction: "inspect_webhook_dispatch",
+        requestId: "req_webhook_dispatch_support",
+        customerVisible: false
+      },
+      target: {
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme_lumma",
+        caseId: "case_acme_lumma",
+        destinationIds: ["webhook_discord"],
+        dedupeKey: "dedupe_acme_lumma"
+      },
+      proof: {
+        readinessSchemaVersion: DWM_WEBHOOK_DISPATCH_READINESS_SCHEMA_VERSION,
+        readinessId: readiness.id,
+        checkedAt: "2026-06-29T12:20:00.000Z",
+        dispatchRoute: "/v1/dwm/webhooks/deliver",
+        dispatchDryRun: false,
+        evidenceSummary: {
+          evidenceCount: 1,
+          captureCount: 1,
+          sourceCount: 1,
+          contentHashCount: 1
+        }
+      },
+      auditPreview: {
+        actionType: "support.webhook.inspect_dispatch",
+        source: "dwm.webhook_dispatch_readiness",
+        outcome: "prepared",
+        blockerCodes: [],
+        ownerLanes: []
+      },
+      blockers: [],
+      nextActions: []
+    });
+    expect(packet.support.idempotencyKey).toMatch(/^dwm_webhook_dispatch_support_/);
+    expect(packet.proof.payloadShape).toEqual(expect.arrayContaining(["alertId", "organizationId", "webhookDestinationIds", "idempotencyKey"]));
+    expect(JSON.stringify(packet)).not.toContain("https://discord.com");
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_lumma");
+  });
+
   test("blocks webhook dispatch without case provenance active destination or duplicate-safe state", () => {
     const readiness = buildWebhookDispatchReadiness({
       alert: {
@@ -268,6 +340,75 @@ describe("webhook event contract", () => {
       expect.objectContaining({ action: "inspect_existing_delivery", blockerCode: "duplicate_delivered_dedupe" })
     ]));
     expect(JSON.stringify(readiness)).not.toContain("https://discord.com");
+  });
+
+  test("keeps blocked webhook dispatch support packet actionable and redacted", () => {
+    const readiness = buildWebhookDispatchReadiness({
+      alert: {
+        ...alertFixture(),
+        caseId: undefined,
+        caseIdCandidate: undefined,
+        status: "suppressed",
+        evidence: [],
+        provenance: { captureIds: [] },
+        workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+      },
+      destinations: [{ ...destinationFixture(), organizationId: "org_other", status: "disabled" }],
+      existingDeliveries: [{ ...deliveryFixture(), status: "delivered" }],
+      checkedAt: "2026-06-29T12:21:00.000Z"
+    });
+    const packet = buildWebhookDispatchSupportPacket({
+      readiness,
+      requestId: "req_webhook_dispatch_blocked"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_DISPATCH_SUPPORT_PACKET_SCHEMA_VERSION,
+      ok: false,
+      support: {
+        route: "/api/admin/support/inspect",
+        probeId: "support.webhook.dispatch_readiness",
+        action: "support.webhook.resolve_dispatch_blocker",
+        prepareAction: "resolve_webhook_dispatch_blocker",
+        requestId: "req_webhook_dispatch_blocked",
+        customerVisible: false
+      },
+      auditPreview: {
+        outcome: "blocked",
+        actionType: "support.webhook.resolve_dispatch_blocker",
+        blockerCodes: expect.arrayContaining([
+          "missing_case_id",
+          "missing_provenance",
+          "disabled_destination",
+          "destination_scope_mismatch",
+          "suppressed_alert",
+          "duplicate_delivered_dedupe"
+        ]),
+        ownerLanes: expect.arrayContaining(["case", "source", "webhook", "alert"])
+      },
+      proof: {
+        evidenceSummary: {
+          evidenceCount: 0,
+          captureCount: 0,
+          sourceCount: 0,
+          contentHashCount: 0
+        }
+      }
+    });
+    expect(packet.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing_case_id", ownerLane: "case", path: "alert.caseId" }),
+      expect.objectContaining({ code: "missing_provenance", ownerLane: "source", path: "alert.evidence" }),
+      expect.objectContaining({ code: "disabled_destination", ownerLane: "webhook", path: "destinations[].status" }),
+      expect.objectContaining({ code: "suppressed_alert", ownerLane: "alert", path: "alert.status" })
+    ]));
+    expect(packet.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ action: "link_case", blockerCode: "missing_case_id" }),
+      expect.objectContaining({ action: "restore_provenance", blockerCode: "missing_provenance" }),
+      expect.objectContaining({ action: "enable_destination", blockerCode: "disabled_destination" })
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("https://discord.com");
+    expect(JSON.stringify(packet)).not.toContain("payloadBody");
+    expect(JSON.stringify(packet)).not.toContain("hash_acme_lumma");
   });
 
   test("validates checked-in fixture as integration proof", () => {
