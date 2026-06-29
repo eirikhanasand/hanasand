@@ -1,4 +1,6 @@
 import { nowIso, stableId } from "../utils.ts";
+import { buildOrgAlertCaseActionTimeline, type OrgAlertCaseActionTimelineRow } from "../product/orgAlertCaseActionTimeline.ts";
+import { buildOrgAlertCaseActionLedgerApiList } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 import { json, readJson } from "./http.ts";
 import { resolveOrganizationScope } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -317,7 +319,8 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
-  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
+  const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
 
   return {
     schemaVersion: "analyst.case_detail.v1",
@@ -348,6 +351,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
       retryable: deliveries.some((delivery: any) => delivery.status === "failed" || delivery.status === "skipped")
     },
     customerNotificationContext: customerNotificationContext(caseRecord),
+    caseActionLedgerContext: caseActionLedgerContext(caseActionLedger),
     deliveries,
     evidence: alert?.evidence ?? [],
     timeline,
@@ -377,7 +381,8 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
   const alert = findDwmAlert(options, caseRecord.alertId);
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const watchlists = caseWatchlists(options, alert, caseRecord);
-  const timeline = buildCaseTimeline(caseRecord, alert, deliveries);
+  const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
+  const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
   const evidence = (alert?.evidence ?? []).map((item: any) => exportEvidenceItem(item, alert));
   const deliveryEvidence = deliveries.map((delivery: any) => exportDeliveryEvidence(delivery));
   const nextAllowedActions = nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
@@ -452,6 +457,7 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
     })),
     customerNotifications: caseRecord.customerNotifications ?? [],
     customerNotificationContext: customerNotificationContext(caseRecord),
+    caseActionLedgerContext: caseActionLedgerContext(caseActionLedger),
     deliveryEvidence,
     nextAllowedActions,
     copyText: caseExportCopyText(summary, evidence, deliveryEvidence, matchedWatchlistTerms, caseRecord.customerNotifications ?? []),
@@ -685,7 +691,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
   };
 }
 
-function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[]) {
+function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[], caseActionRows: OrgAlertCaseActionTimelineRow[] = []) {
   return [
     caseTimelineEvent({
       id: `${caseRecord.id}:created`,
@@ -739,6 +745,19 @@ function buildCaseTimeline(caseRecord: AnalystCase, alert: any, deliveries: any[
       actor: receipt.actor,
       rationale: receipt.rationale,
       toStatus: caseRecord.status
+    })),
+    ...caseActionRows.map((row) => caseTimelineEvent({
+      id: row.id,
+      timestamp: row.at,
+      eventType: "case.action_recorded",
+      title: row.action.replaceAll("_", " "),
+      source: "case",
+      caseId: caseRecord.id,
+      alert,
+      actor: row.analystId,
+      rationale: row.execution,
+      toStatus: caseRecord.status,
+      caseAction: row
     }))
   ].sort((a, b) => String(a.timestamp ?? "").localeCompare(String(b.timestamp ?? "")));
 }
@@ -753,6 +772,7 @@ function caseTimelineEvent(input: {
   alert?: any;
   webhookDelivery?: any;
   customerNotification?: CaseCustomerNotificationReceipt;
+  caseAction?: OrgAlertCaseActionTimelineRow;
   actor?: string;
   rationale?: string;
   fromStatus?: string;
@@ -777,20 +797,71 @@ function caseTimelineEvent(input: {
     source: input.source,
     related: {
       caseId: input.caseId,
-      alertId: input.alert?.id,
+      alertId: input.caseAction?.related.alertIds[0] ?? input.alert?.id,
       dedupeKey: input.alert?.dedupeKey ?? input.alert?.webhookDelivery?.dedupeKey ?? input.alert?.workflowContext?.dedupeKey,
-      watchlistIds: input.alert?.watchlistIds ?? input.alert?.workflowContext?.watchlistIds ?? [],
-      watchlistItemIds: caseWatchlistItemIds(input.alert),
+      watchlistIds: uniqueCaseStrings([
+        input.caseAction?.related.watchlistId,
+        ...(input.alert?.watchlistIds ?? input.alert?.workflowContext?.watchlistIds ?? [])
+      ]),
+      watchlistItemIds: uniqueCaseStrings([
+        input.caseAction?.related.watchlistItemId,
+        ...caseWatchlistItemIds(input.alert)
+      ]),
       webhookDeliveryId: input.webhookDelivery?.id ?? input.customerNotification?.webhookDeliveryId,
       webhookDestinationId: input.webhookDelivery?.webhookDestinationId ?? input.customerNotification?.webhookDestinationId,
       webhookStatus: input.webhookDelivery?.status ?? input.customerNotification?.webhookStatus,
-      customerNotificationId: input.customerNotification?.id
+      customerNotificationId: input.customerNotification?.id,
+      caseActionReceiptId: input.caseAction?.receiptId,
+      caseActionRecordId: input.caseAction?.provenance.recordId,
+      caseActionAuditEventId: input.caseAction?.provenance.auditEventId
     },
+    provenance: input.caseAction?.provenance,
     fromStatus: input.fromStatus,
     toStatus: input.toStatus,
     fromOwner: input.fromOwner,
     toOwner: input.toOwner,
     detail
+  };
+}
+
+function buildCaseActionLedgerTimeline(caseRecord: AnalystCase, options: ApiServerOptions, alert: any) {
+  const repository = options.orgAlertCaseActionLedgerRepository;
+  const tenantId = caseRecord.tenantId;
+  const organizationId = caseRecord.organizationId;
+  const alertId = caseRecord.alertId ?? alert?.id;
+  const casePath = alert?.casePath ?? alert?.workflowContext?.casePath;
+  if (!repository || !tenantId || !organizationId || !alertId) {
+    return buildOrgAlertCaseActionTimeline({
+      tenantId,
+      organizationId,
+      alertId,
+      casePath,
+      records: []
+    });
+  }
+  const ledger = buildOrgAlertCaseActionLedgerApiList({
+    repository,
+    tenantId,
+    organizationId,
+    alertId
+  });
+  return buildOrgAlertCaseActionTimeline({
+    tenantId,
+    organizationId,
+    alertId,
+    casePath,
+    records: ledger.records
+  });
+}
+
+function caseActionLedgerContext(report: ReturnType<typeof buildCaseActionLedgerTimeline>) {
+  return {
+    schemaVersion: report.schemaVersion,
+    ok: report.ok,
+    eventCount: report.rows.length,
+    blockerCount: report.blockers.length,
+    blockers: report.blockers,
+    route: "/v1/dwm/org-alert-case-actions/timeline"
   };
 }
 
