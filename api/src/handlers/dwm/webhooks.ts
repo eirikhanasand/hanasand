@@ -26,6 +26,7 @@ import {
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryReceipts,
+    buildDwmWebhookDeliveryTimeline,
     buildDwmWebhookDeliveryRetryPersistence,
     buildDwmWebhookDeliveryRetryQueue,
     buildDwmWebhookDeliveryRetryRequestContract,
@@ -574,6 +575,21 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 }
                 : null,
         }),
+        deliveryTimeline: buildDwmWebhookDeliveryTimeline({
+            deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
+            auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
+            destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,
+            filters: deliveryFilters,
+            ...destinationLifecycleAccess(orgId, userId, visibility),
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: visibility?.role,
+                    status: visibility?.status,
+                    userActive: visibility?.user_active,
+                    alertVisibilityPolicy: visibility?.alert_visibility_policy,
+                }
+                : null,
+        }),
         deliveryRetryPersistence: visibilityResult && !visibilityResult.decision.allowed
             ? buildDwmWebhookDeliveryRetryPersistence({
                 deliveries: [],
@@ -843,6 +859,20 @@ export async function postDwmWebhookDelivery(req: FastifyRequest<{ Body: DwmAler
             },
         }),
         deliveryReceipts: buildDwmWebhookDeliveryReceipts({
+            deliveries: ledgerDeliveries,
+            auditEvents,
+            destinations,
+            filters: {
+                orgId,
+                destinationId: clean(input.destinationId) || clean(input.destination_id),
+                alertId: clean(input.alertId) || clean(input.alert?.id),
+                casePath: clean(input.casePath) || clean(input.caseUrl) || clean(input.alert?.casePath),
+                dedupeKey: clean(input.dedupeKey) || clean(input.alert?.dedupeKey),
+            },
+            viewerRole: 'admin',
+            canManage: true,
+        }),
+        deliveryTimeline: buildDwmWebhookDeliveryTimeline({
             deliveries: ledgerDeliveries,
             auditEvents,
             destinations,
