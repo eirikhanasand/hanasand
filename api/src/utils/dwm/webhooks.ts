@@ -5470,7 +5470,7 @@ async function deliverToDwmWebhookDestination({
     const auditAction = markTested
         ? 'delivery.tested'
         : delivery.status === 'failed'
-            ? 'delivery.failed'
+            ? delivery.next_retry_at ? 'delivery.retry_scheduled' : 'delivery.failed'
             : delivery.status === 'skipped'
                 ? 'delivery.skipped'
                 : deliveryAuditActionForEvent(delivery.event_type)
@@ -6313,6 +6313,7 @@ function webhookAuditOutcome(action: string, status?: string | null) {
     if (action === 'delivery.updated') return status || 'updated'
     if (action === 'delivery.tested') return 'tested'
     if (action === 'delivery.replayed') return status || 'replayed'
+    if (action === 'delivery.retry_scheduled') return 'retry_scheduled'
     if (action === 'delivery.failed') return 'failed'
     if (action === 'delivery.delivered') return 'sent'
     if (action === 'delivery.skipped') return 'skipped'

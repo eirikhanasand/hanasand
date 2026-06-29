@@ -1574,7 +1574,7 @@ const auditEventContracts = buildDwmWebhookAuditEventContracts({
             orgId: 'org_contract',
             destinationId: 'destination_live_contract',
             deliveryId: 'delivery_live_failed_retry_contract',
-            action: 'delivery.failed',
+            action: 'delivery.retry_scheduled',
             metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`, error: `token=${secret}` },
             createdAt: '2026-06-28T12:06:01.000Z',
         },
@@ -1641,7 +1641,7 @@ const destinationHealth = buildDwmWebhookDestinationHealth({
             orgId: 'org_contract',
             destinationId: 'destination_live_contract',
             deliveryId: 'delivery_live_failed_retry_contract',
-            action: 'delivery.failed',
+            action: 'delivery.retry_scheduled',
             metadata: { status: 'failed', endpointHint: `https://discord.com/api/webhooks/222222222/${secret}`, error: `token=${secret}` },
             createdAt: '2026-06-28T12:06:01.000Z',
         },
@@ -2989,7 +2989,7 @@ expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'cre
 expect(auditUpdated?.outcome === 'updated' && (auditUpdated.metadata as Record<string, unknown>).token === '[redacted]', 'Audit contract should expose destination update events without secrets.', auditUpdated)
 expect(auditArchived?.outcome === 'disabled' && auditArchived.severity === 'warning' && auditArchived.destination?.enabled === false, 'Audit contract should expose destination disable/archive events.', auditArchived)
 expect(auditTested?.category === 'delivery' && auditTested.outcome === 'tested' && auditTested.delivery?.dryRun === true && auditTested.requestId === 'delivery_test_contract', 'Audit contract should expose dry-run test delivery events.', auditTested)
-expect(auditFailed?.outcome === 'failed' && auditFailed.severity === 'error' && auditFailed.retry?.retryable === true && auditFailed.retry.errorClass === 'upstream_5xx', 'Audit contract should expose failed delivery retry state.', auditFailed)
+expect(auditFailed?.action === 'delivery.retry_scheduled' && auditFailed.outcome === 'retry_scheduled' && auditFailed.severity === 'info' && auditFailed.retry?.retryable === true && auditFailed.retry.errorClass === 'upstream_5xx', 'Audit contract should expose scheduled retry delivery state.', auditFailed)
 expect(!JSON.stringify(auditEventContracts).includes(secret), 'Audit event contracts should redact endpoint, token, and error secrets.', auditEventContracts)
 
 console.log(JSON.stringify({
@@ -3181,6 +3181,7 @@ console.log(JSON.stringify({
         'destination contract audit ids',
         'structured audit contract create/update/disable/test/failure events',
         'structured audit contract retry state',
+        'structured audit contract retry-scheduled action',
         'structured audit contract secret redaction',
         'dry-run Discord payload preview fields',
         'delivery evidence replay/live/dry-run distinction',
