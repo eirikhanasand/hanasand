@@ -2681,6 +2681,8 @@ expect(!JSON.stringify(deliveryReplayGuard).includes(secret), 'Delivery replay g
 expect(orgAlertDeliveryContract.customerSetup.schemaVersion === 'dwm.webhook.customer_setup.v1' && orgAlertDeliveryContract.customerSetup.routes.deliver === 'POST /api/dwm/webhook-deliveries', 'Org alert delivery contract should include customer setup proof for delivery routes.', orgAlertDeliveryContract.customerSetup)
 expect(orgAlertDeliveryProof.schemaVersion === 'dwm.webhook.alert_delivery_proof.v1' && orgAlertDeliveryProof.alertId === 'alert_replay_contract' && orgAlertDeliveryProof.eventType === 'dwm.alert.replayed', 'Alert delivery proof should normalize replay alert context.', orgAlertDeliveryProof)
 expect(orgAlertDeliveryProof.noNetwork === true && orgAlertDeliveryProof.externalSendEnabled === false && orgAlertDeliveryProof.status === 'blocked', 'Alert delivery proof should preserve dry-run/no-network state and blockers.', orgAlertDeliveryProof)
+expect(orgAlertDeliveryProof.alertScopedStatus === 'blocked' && orgAlertDeliveryProof.delivery.recordedDeliveryStatus === 'recorded' && orgAlertDeliveryProof.delivery.recordedDestinationIds.includes('destination_replay_contract'), 'Alert delivery proof should expose recorded destination proof even when other selected destinations are pending.', orgAlertDeliveryProof.delivery)
+expect(!orgAlertDeliveryProof.alertScopedBlockerCodes.includes('terminal_failure') && orgAlertDeliveryProof.blockerGroups.setupBlockerCodes.includes('terminal_failure'), 'Alert delivery proof should separate selected-alert blockers from org-wide setup blockers.', orgAlertDeliveryProof.blockerGroups)
 expect(orgAlertDeliveryProof.destinationSelection.selectedDestinationIds.includes('destination_replay_contract') && orgAlertDeliveryProof.destinationSelection.skippedDestinations.some(item => item.id === 'destination_disabled_contract'), 'Alert delivery proof should expose selected and skipped destinations.', orgAlertDeliveryProof.destinationSelection)
 expect(orgAlertDeliveryProof.setup.summary.destinationCount === auditDestinationRows.length && orgAlertDeliveryProof.setup.stepStatuses.some(item => item.id === 'deliver_org_alert' && item.route === 'POST /api/dwm/webhook-deliveries'), 'Alert delivery proof should expose customer setup progress and routes.', orgAlertDeliveryProof.setup)
 expect(orgAlertDeliveryProof.delivery.outcomeCounts.recorded >= 1 && orgAlertDeliveryProof.retryAndReplay.replayReadyCount >= 1 && orgAlertDeliveryProof.retryAndReplay.duplicateDeliveredCount === 0, 'Alert delivery proof should summarize scoped persisted delivery and replay guard state.', orgAlertDeliveryProof.retryAndReplay)
@@ -3043,13 +3045,19 @@ console.log(JSON.stringify({
             'orgAlertDelivery.customerSetup.schemaVersion',
             'orgAlertDelivery.alertDeliveryProof.schemaVersion',
             'orgAlertDelivery.alertDeliveryProof.status',
+            'orgAlertDelivery.alertDeliveryProof.alertScopedStatus',
             'orgAlertDelivery.alertDeliveryProof.noNetwork',
             'orgAlertDelivery.alertDeliveryProof.destinationSelection.selectedDestinationIds',
             'orgAlertDelivery.alertDeliveryProof.setup.stepStatuses[]',
             'orgAlertDelivery.alertDeliveryProof.delivery.latestAuditEventIds',
+            'orgAlertDelivery.alertDeliveryProof.delivery.recordedDeliveryStatus',
+            'orgAlertDelivery.alertDeliveryProof.delivery.recordedDestinationIds',
+            'orgAlertDelivery.alertDeliveryProof.delivery.pendingDestinationIds',
             'orgAlertDelivery.alertDeliveryProof.retryAndReplay.replayReadyCount',
             'orgAlertDelivery.alertDeliveryProof.dashboardProof.productProgress.status',
             'orgAlertDelivery.alertDeliveryProof.blockerCodes',
+            'orgAlertDelivery.alertDeliveryProof.alertScopedBlockerCodes',
+            'orgAlertDelivery.alertDeliveryProof.blockerGroups.setupBlockerCodes',
         ],
         expectedNoSecretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         expectedNoNetwork: true,

@@ -3985,21 +3985,57 @@ function buildDwmWebhookAlertDeliveryProof({
     destinationAdminProof: ReturnType<typeof buildDwmWebhookDestinationAdminProof>
     auditEventContracts: ReturnType<typeof buildDwmWebhookAuditEventContracts>
 }) {
-    const blockers = uniqueAlertDeliveryProofBlockers([
+    const setupBlockers = [
         ...customerSetup.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
+        ...destinationAdminProof.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, true)),
+    ]
+    const deliveryBlockers = [
         ...alertDestinationReadiness.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
         ...deliveryOutcome.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
         ...deliveryTimeline.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
         ...deliveryActionPlan.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
         ...deliveryReplayGuard.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking)),
-        ...destinationAdminProof.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, true)),
-    ])
+    ]
+    const selectedDestinationIds = new Set(selectedDestinations.map(destination => destination.id))
+    const alertScopedBlockers = uniqueAlertDeliveryProofBlockers(deliveryBlockers.filter((blocker) => {
+        if (!blocker.destinationId) return true
+        if (selectedDestinationIds.size === 0) return true
+        return selectedDestinationIds.has(blocker.destinationId)
+    }))
+    const blockers = uniqueAlertDeliveryProofBlockers([...setupBlockers, ...deliveryBlockers])
     const blockingCodes = blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+    const setupBlockingCodes = uniqueAlertDeliveryProofBlockers(setupBlockers)
+        .filter(blocker => blocker.blocking)
+        .map(blocker => blocker.code)
+    const alertScopedBlockingCodes = alertScopedBlockers
+        .filter(blocker => blocker.blocking)
+        .map(blocker => blocker.code)
     const auditEventIds = [...new Set(auditEventContracts.map(audit => audit.auditEventId).filter(Boolean))]
     const recordedDeliveryCount = deliveryOutcome.counts.recorded
+    const recordedDestinationIds = deliveryOutcome.selectedDestinations
+        .filter(destination => destination.recorded)
+        .map(destination => destination.destinationId)
+    const pendingDestinationIds = deliveryOutcome.selectedDestinations
+        .filter(destination => !destination.recorded)
+        .map(destination => destination.destinationId)
+    const recordedDestinationBlockers = uniqueAlertDeliveryProofBlockers(deliveryOutcome.selectedDestinations
+        .filter(destination => destination.recorded)
+        .flatMap(destination => destination.blockers.map(blocker => alertDeliveryProofBlocker(blocker.code, blocker.message, blocker.destinationId, blocker.blocking))))
+    const recordedDeliveryBlockingCodes = recordedDestinationBlockers
+        .filter(blocker => blocker.blocking)
+        .map(blocker => blocker.code)
     const status = customerSetup.status === 'permission_denied'
         ? 'permission_denied'
         : blockingCodes.length > 0
+            ? 'blocked'
+            : recordedDeliveryCount > 0
+                ? 'recorded'
+                : alertDestinationReadiness.ready
+                    ? 'ready'
+                    : 'needs_setup'
+    const alertScopedStatus = customerSetup.status === 'permission_denied'
+        ? 'permission_denied'
+        : alertScopedBlockingCodes.length > 0
             ? 'blocked'
             : recordedDeliveryCount > 0
                 ? 'recorded'
@@ -4014,6 +4050,7 @@ function buildDwmWebhookAlertDeliveryProof({
         alertId: normalizedAlert.id,
         eventType,
         status,
+        alertScopedStatus,
         dryRun,
         liveRequested,
         liveDeliveryEnabled,
@@ -4037,7 +4074,7 @@ function buildDwmWebhookAlertDeliveryProof({
         destinationSelection: {
             selectedCount: selectedDestinations.length,
             skippedCount: skippedDestinations.length,
-            selectedDestinationIds: selectedDestinations.map(destination => destination.id),
+            selectedDestinationIds: [...selectedDestinationIds],
             skippedDestinations: skippedDestinations.map(destination => ({
                 id: destination.id,
                 orgId: destination.orgId,
@@ -4064,6 +4101,14 @@ function buildDwmWebhookAlertDeliveryProof({
             actionCounts: deliveryActionPlan.counts,
             replayGuardCounts: deliveryReplayGuard.counts,
             latestAuditEventIds: auditEventIds.slice(0, 10),
+            recordedDestinationIds,
+            pendingDestinationIds,
+            recordedDeliveryStatus: recordedDeliveryCount === 0
+                ? 'not_recorded'
+                : recordedDeliveryBlockingCodes.length > 0
+                    ? 'blocked'
+                    : 'recorded',
+            recordedDeliveryBlockerCodes: recordedDeliveryBlockingCodes,
         },
         retryAndReplay: {
             retryScheduledCount: deliveryActionPlan.counts.retryDryRun + deliveryActionPlan.counts.retryLive,
@@ -4080,6 +4125,13 @@ function buildDwmWebhookAlertDeliveryProof({
         },
         blockers,
         blockerCodes: blockingCodes,
+        alertScopedBlockers,
+        alertScopedBlockerCodes: alertScopedBlockingCodes,
+        blockerGroups: {
+            setupBlockerCodes: setupBlockingCodes,
+            alertScopedBlockerCodes: alertScopedBlockingCodes,
+            allBlockerCodes: blockingCodes,
+        },
     }
 }
 
