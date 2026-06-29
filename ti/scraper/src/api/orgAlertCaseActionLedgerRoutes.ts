@@ -3,6 +3,7 @@ import {
   DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
   type OrgAlertCaseActionReceipt
 } from "../product/orgAlertWorkflowBridge.ts";
+import { buildOrgAlertCaseActionTimeline } from "../product/orgAlertCaseActionTimeline.ts";
 import {
   buildOrgAlertCaseActionLedgerApiList,
   type InMemoryOrgAlertCaseActionLedgerRepository,
@@ -10,6 +11,7 @@ import {
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 
 export const ORG_ALERT_CASE_ACTION_LEDGER_ROUTE = "/v1/dwm/org-alert-case-actions" as const;
+export const ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE = "/v1/dwm/org-alert-case-actions/timeline" as const;
 
 export type OrgAlertCaseActionLedgerRouteDeps = {
   repository: InMemoryOrgAlertCaseActionLedgerRepository;
@@ -28,6 +30,11 @@ export async function handleOrgAlertCaseActionLedgerRequest(
   deps: OrgAlertCaseActionLedgerRouteDeps
 ): Promise<Response | undefined> {
   const url = new URL(request.url);
+  if (url.pathname === ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE) {
+    if (request.method === "GET") return listOrgAlertCaseActionTimeline(url, request, deps);
+    return error("method_not_allowed", "Use GET to list case action timeline events.", 405);
+  }
+
   if (url.pathname !== ORG_ALERT_CASE_ACTION_LEDGER_ROUTE) return undefined;
 
   if (request.method === "GET") return listOrgAlertCaseActionLedger(url, request, deps);
@@ -46,6 +53,24 @@ function listOrgAlertCaseActionLedger(url: URL, request: Request, deps: OrgAlert
     casePath: optionalParam(url, "casePath")
   });
   return json(response, response.statusCode);
+}
+
+function listOrgAlertCaseActionTimeline(url: URL, request: Request, deps: OrgAlertCaseActionLedgerRouteDeps): Response {
+  const tenantId = scopedParam(url, request, "tenantId", "x-tenant-id");
+  const organizationId = scopedParam(url, request, "organizationId", "x-organization-id");
+  const ledger = buildOrgAlertCaseActionLedgerApiList({
+    repository: deps.repository,
+    tenantId,
+    organizationId
+  });
+  const timeline = buildOrgAlertCaseActionTimeline({
+    tenantId,
+    organizationId,
+    casePath: optionalParam(url, "casePath"),
+    alertId: optionalParam(url, "alertId"),
+    records: ledger.records
+  });
+  return json(timeline, timeline.ok ? 200 : 400);
 }
 
 async function writeOrgAlertCaseActionLedger(

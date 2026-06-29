@@ -1,4 +1,5 @@
-import { ORG_ALERT_CASE_ACTION_LEDGER_ROUTE } from "./orgAlertCaseActionLedgerRoutes.ts";
+import { ORG_ALERT_CASE_ACTION_LEDGER_ROUTE, ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE } from "./orgAlertCaseActionLedgerRoutes.ts";
+import { DWM_ORG_ALERT_CASE_ACTION_TIMELINE_SCHEMA_VERSION } from "../product/orgAlertCaseActionTimeline.ts";
 import {
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_LIST_SCHEMA_VERSION,
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION
@@ -18,7 +19,8 @@ export function contractIndex() {
     route("GET", "/v1/ops/product-slo"),
     route("GET", "/v1/contracts"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
-    route("POST", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE)
+    route("POST", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
+    route("GET", ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE)
   ];
   return {
     endpoint: "/v1/contracts",
@@ -29,10 +31,12 @@ export function contractIndex() {
         id: "org_alert_case_action_ledger",
         ownerLane: "case",
         route: ORG_ALERT_CASE_ACTION_LEDGER_ROUTE,
+        timelineRoute: ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE,
         methods: ["GET", "POST"],
         schemas: {
           list: DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_LIST_SCHEMA_VERSION,
-          write: DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION
+          write: DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION,
+          timeline: DWM_ORG_ALERT_CASE_ACTION_TIMELINE_SCHEMA_VERSION
         },
         scopeFields: ["tenantId", "organizationId"],
         queryFields: ["receiptId", "alertId", "casePath"],

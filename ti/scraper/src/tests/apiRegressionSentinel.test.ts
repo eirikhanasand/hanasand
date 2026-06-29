@@ -15,7 +15,8 @@ describe("api regression sentinel", () => {
       "/api/ti/search",
       "/v1/darkweb/search",
       "/v1/ops/product-slo",
-      "/v1/dwm/org-alert-case-actions"
+      "/v1/dwm/org-alert-case-actions",
+      "/v1/dwm/org-alert-case-actions/timeline"
     ]));
     expect(contract.semantics.noCredentialCollection).toBe(true);
   });
@@ -31,13 +32,16 @@ describe("api regression sentinel", () => {
     expect(contract.schemaVersion).toBe("ti.api_contract_index.compact.v4");
     expect(contract.routeInventory.routes).toEqual(expect.arrayContaining([
       { method: "GET", path: "/v1/dwm/org-alert-case-actions" },
-      { method: "POST", path: "/v1/dwm/org-alert-case-actions" }
+      { method: "POST", path: "/v1/dwm/org-alert-case-actions" },
+      { method: "GET", path: "/v1/dwm/org-alert-case-actions/timeline" }
     ]));
     expect(ledgerSurface).toMatchObject({
       ownerLane: "case",
+      timelineRoute: "/v1/dwm/org-alert-case-actions/timeline",
       schemas: {
         list: "dwm.org_alert_case_action_ledger_api_list.v1",
-        write: "dwm.org_alert_case_action_ledger_api_write.v1"
+        write: "dwm.org_alert_case_action_ledger_api_write.v1",
+        timeline: "dwm.org_alert_case_action_timeline.v1"
       },
       scopeFields: ["tenantId", "organizationId"],
       queryFields: ["receiptId", "alertId", "casePath"],

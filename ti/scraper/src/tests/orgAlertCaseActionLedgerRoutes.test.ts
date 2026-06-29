@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   handleOrgAlertCaseActionLedgerRequest,
-  ORG_ALERT_CASE_ACTION_LEDGER_ROUTE
+  ORG_ALERT_CASE_ACTION_LEDGER_ROUTE,
+  ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE
 } from "../api/orgAlertCaseActionLedgerRoutes.ts";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
@@ -198,6 +199,78 @@ describe("org alert case action ledger route contract", () => {
       })
     ]);
   });
+
+  test("exposes case action receipts as timeline rows for case consumers", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const receipt = readyActionReceipt();
+    await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", organizationId: "org_acme", receipt })
+    }), repository);
+
+    const response = await route(new Request(timelineUrl("?tenantId=tenant_acme&organizationId=org_acme&casePath=/v1/cases/case_acme_lumma%3FalertId%3Dalert_acme_lumma&alertId=alert_acme_lumma")), repository);
+    const body = await response.json() as any;
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      schemaVersion: "dwm.org_alert_case_action_timeline.v1",
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      casePath: "/v1/cases/case_acme_lumma?alertId=alert_acme_lumma",
+      alertId: "alert_acme_lumma",
+      blockers: []
+    });
+    expect(body.rows).toHaveLength(1);
+    expect(body.rows[0]).toMatchObject({
+      eventType: "case_action_recorded",
+      receiptId: receipt.id,
+      related: {
+        watchlistId: "watch_acme_domains",
+        alertIds: ["alert_acme_lumma"],
+        casePaths: ["/v1/cases/case_acme_lumma?alertId=alert_acme_lumma"]
+      },
+      provenance: {
+        source: "org_alert_case_action_ledger",
+        receiptId: receipt.id
+      }
+    });
+    expect(body.rows[0].provenance.auditEventId).toMatch(/^org_alert_case_action_audit_/);
+    expect(JSON.stringify(body)).not.toContain("https://discord.com");
+  });
+
+  test("timeline route blocks missing scope and mismatched filters", async () => {
+    const repository = new InMemoryOrgAlertCaseActionLedgerRepository();
+    const receipt = readyActionReceipt();
+    await route(new Request(routeUrl(), {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_acme", organizationId: "org_acme", receipt })
+    }), repository);
+
+    const missingScope = await route(new Request(timelineUrl("?tenantId=tenant_acme")), repository);
+    const mismatched = await route(new Request(timelineUrl("?tenantId=tenant_acme&organizationId=org_acme&casePath=/v1/cases/other&alertId=alert_other")), repository);
+
+    expect(missingScope.status).toBe(400);
+    expect(await missingScope.json()).toMatchObject({
+      ok: false,
+      blockers: [expect.objectContaining({ code: "missing_organization_scope", ownerLane: "case" })]
+    });
+    expect(mismatched.status).toBe(400);
+    expect(await mismatched.json()).toMatchObject({
+      ok: false,
+      rows: [],
+      blockers: expect.arrayContaining([
+        expect.objectContaining({ code: "record_case_path_mismatch", ownerLane: "case" }),
+        expect.objectContaining({ code: "record_alert_mismatch", ownerLane: "case" })
+      ])
+    });
+  });
+
+  test("timeline route rejects unsupported methods", async () => {
+    const response = await route(new Request(timelineUrl(), { method: "POST" }), new InMemoryOrgAlertCaseActionLedgerRepository());
+    expect(response.status).toBe(405);
+    expect(await response.json()).toMatchObject({ error: { code: "method_not_allowed" } });
+  });
 });
 
 async function route(request: Request, repository: InMemoryOrgAlertCaseActionLedgerRepository): Promise<Response> {
@@ -208,6 +281,10 @@ async function route(request: Request, repository: InMemoryOrgAlertCaseActionLed
 
 function routeUrl(query = ""): string {
   return `http://127.0.0.1${ORG_ALERT_CASE_ACTION_LEDGER_ROUTE}${query}`;
+}
+
+function timelineUrl(query = ""): string {
+  return `http://127.0.0.1${ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE}${query}`;
 }
 
 function readyActionReceipt() {
