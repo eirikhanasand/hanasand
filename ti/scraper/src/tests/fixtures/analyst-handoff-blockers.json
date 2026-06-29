@@ -13,6 +13,14 @@
     "status": "disabled",
     "allowedRoles": ["owner", "admin", "analyst"]
   },
+  "sourceReadiness": {
+    "schemaVersion": "dwm.source_worker_readiness.v1",
+    "ready": false,
+    "freshProvenance": false,
+    "sourceIds": [],
+    "blockers": ["source_policy_inactive"],
+    "checkedAt": "2026-06-29T00:13:00.000Z"
+  },
   "stages": {
     "publicTi": {
       "handoff": {

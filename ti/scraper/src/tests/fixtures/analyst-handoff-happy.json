@@ -92,6 +92,26 @@
       }
     }]
   },
+  "productSurfaceProof": {
+    "dashboard": {
+      "schemaVersion": "hanasand.ui_quality_proof.v1",
+      "surface": "dashboard",
+      "route": "/dashboard",
+      "checkedAt": "2026-06-29T00:13:30.000Z",
+      "proofArtifactId": "dashboard.render_proof.operator_workspace",
+      "passed": true,
+      "blockers": []
+    },
+    "website": {
+      "schemaVersion": "hanasand.ui_quality_proof.v1",
+      "surface": "website",
+      "route": "/",
+      "checkedAt": "2026-06-29T00:13:40.000Z",
+      "proofArtifactId": "website.render_proof.product_surface",
+      "passed": true,
+      "blockers": []
+    }
+  },
   "stages": {
     "publicTi": {
       "handoff": {

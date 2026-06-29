@@ -10,13 +10,16 @@ import {
   ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
   ANALYST_HANDOFF_CONTRACT_VERSIONS,
   ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
+  PRODUCT_READINESS_FORBIDDEN_LANGUAGE,
   buildAnalystHandoffValidationReport,
   validateAnalystHandoffConsumerBundle,
+  validateProductReadinessAggregateArtifact,
   type AnalystHandoffConsumerBlockerCode,
   type AnalystHandoffConsumerBundle,
   type DwmWebhookDestinationLifecycleContract,
   type DwmWebhookAuditEventContract,
   type OrgWatchlistAlertTermsExportContract,
+  type ProductReadinessAggregate,
 } from "../product/analystHandoffConsumer.ts";
 import { buildDwmProductSnapshot, type DwmAlert } from "../product/dwmProduct.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -546,6 +549,88 @@ describe("analyst handoff consumer validation", () => {
     });
   });
 
+  test("emits a product readiness aggregate for Worker 3 and UI consumers", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:40:00.000Z",
+      results: [{ file: "customer-org.json", bundle: fixture }]
+    });
+    const aggregate = report.productReadinessAggregate;
+
+    expect(aggregate.schemaVersion).toBe("hanasand.product_readiness.v1");
+    expect(aggregate.checkedAt).toBe("2026-06-29T01:40:00.000Z");
+    expect(aggregate.ok).toBe(true);
+    expect(aggregate.rowCount).toBe(9);
+    expect(aggregate.customerVisibleBlockedCount).toBe(0);
+    expect(aggregate.rows.map((row) => row.id).sort()).toEqual([
+      "alert_case_workflow",
+      "dashboard_operator_workspace",
+      "organization_lifecycle",
+      "public_ti_actor_handoff",
+      "shared_watchlists",
+      "source_activation",
+      "support_controls",
+      "webhook_delivery",
+      "website_product_surface"
+    ]);
+    expect(aggregate.rows.find((row) => row.id === "dashboard_operator_workspace")).toMatchObject({
+      ownerLane: "dashboard",
+      customerVisibleState: "ready",
+      uiQualityProofExists: true,
+      proofArtifact: {
+        schemaVersion: "hanasand.ui_quality_proof.v1",
+        artifactId: "dashboard.render_proof.operator_workspace",
+        route: "/dashboard"
+      }
+    });
+    expect(aggregate.rows.find((row) => row.id === "website_product_surface")).toMatchObject({
+      ownerLane: "website",
+      customerVisibleState: "ready",
+      uiQualityProofExists: true,
+      requiredNextAction: "capture_website_product_surface_ui_proof"
+    });
+    expect(aggregate.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
+      ownerLane: "webhook",
+      customerVisibleState: "ready",
+      requiredNextAction: "verify_discord_webhook_destination"
+    });
+    expect(validateProductReadinessAggregateArtifact(aggregate).ok).toBe(true);
+    const serialized = JSON.stringify(aggregate);
+    expect(serialized).not.toContain("\"stages\"");
+    expect(serialized).not.toContain("\"deployGate\"");
+    expect(serialized).not.toContain("\"readinessMatrix\"");
+  });
+
+  test("validates checked-in product readiness fixtures for green-ish and blocked paths", () => {
+    const greenish = loadFixture("product-readiness-greenish.json") as ProductReadinessAggregate;
+    const blocked = loadFixture("product-readiness-blocked.json") as ProductReadinessAggregate;
+
+    expect(validateProductReadinessAggregateArtifact(greenish)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(greenish.ok).toBe(true);
+    expect(greenish.rows.find((row) => row.id === "shared_watchlists")).toMatchObject({
+      ownerLane: "watchlist",
+      customerVisibleState: "ready",
+      proofArtifact: { schemaVersion: "organization.watchlist_alert_terms_export.v1" }
+    });
+    expect(greenish.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
+      ownerLane: "webhook",
+      customerVisibleState: "ready",
+      requiredNextAction: "verify_discord_webhook_destination"
+    });
+
+    expect(validateProductReadinessAggregateArtifact(blocked)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(blocked.ok).toBe(false);
+    expect(blocked.customerVisibleBlockedCount).toBe(4);
+    expect(blocked.rows.find((row) => row.id === "source_activation")?.blockers).toContain("source_policy_inactive");
+    expect(blocked.rows.find((row) => row.id === "webhook_delivery")?.blockers).toContain("missing_webhook_destination");
+    expect(blocked.rows.find((row) => row.id === "dashboard_operator_workspace")?.blockers).toContain("missing_dashboard_ui_quality_proof");
+    expect(blocked.rows.find((row) => row.id === "website_product_surface")?.blockers).toContain("missing_website_ui_quality_proof");
+    const serialized = JSON.stringify(blocked);
+    expect(serialized).not.toContain("\"stages\"");
+    expect(serialized).not.toContain("\"compatibility\"");
+    expect(serialized).not.toContain("\"deployGateEvidence\"");
+  });
+
   test("keeps validator modules free of UI, network, and database imports", () => {
     const consumerSource = readFileSync(new URL("../product/analystHandoffConsumer.ts", import.meta.url), "utf8");
     const validatorSource = readFileSync(new URL("../../scripts/validateAnalystHandoffBundles.ts", import.meta.url), "utf8");
@@ -565,15 +650,6 @@ describe("analyst handoff consumer validation", () => {
       checkedAt: "2026-06-29T01:30:00.000Z",
       results: [{ file: "customer-org.json", bundle: fixture }]
     });
-    const forbidden = [
-      "control room",
-      "how this feeds",
-      "dashboard slop",
-      "named examples",
-      "signal",
-      "acceptance criteria",
-      "acceptance-criteria"
-    ];
     for (const row of report.readinessMatrix.rows) {
       const uiFacing = [
         row.capability,
@@ -583,8 +659,23 @@ describe("analyst handoff consumer validation", () => {
         row.requiredProbe,
         ...row.blockingGaps
       ].filter(Boolean).join(" ").toLowerCase();
-      for (const phrase of forbidden) expect(uiFacing).not.toContain(phrase);
+      for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) expect(uiFacing).not.toContain(phrase);
     }
+    for (const row of report.productReadinessAggregate.rows) {
+      const uiFacing = [
+        row.capabilityLabel,
+        row.requiredNextAction,
+        row.proofArtifact.artifactId,
+        ...row.blockers
+      ].filter(Boolean).join(" ").toLowerCase();
+      for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) expect(uiFacing).not.toContain(phrase);
+    }
+    const badAggregate = clone(report.productReadinessAggregate) as ProductReadinessAggregate;
+    badAggregate.rows[0] = {
+      ...badAggregate.rows[0]!,
+      capabilityLabel: "Dashboard slop control room"
+    };
+    expect(validateProductReadinessAggregateArtifact(badAggregate).blockerCodes).toContain("prompt_shaped_language");
   });
 });
 

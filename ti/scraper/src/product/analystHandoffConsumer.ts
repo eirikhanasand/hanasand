@@ -34,6 +34,8 @@ export const DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION = "dwm.webho
 export const ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION = "organization.lifecycle_readiness.v1" as const;
 export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_executor_readiness.v1" as const;
 export const ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION = "hanasand.analyst_handoff.readiness_matrix.v1" as const;
+export const PRODUCT_READINESS_SCHEMA_VERSION = "hanasand.product_readiness.v1" as const;
+export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -55,8 +57,20 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   webhookDestinationAdminProofRow: DWM_WEBHOOK_DESTINATION_ADMIN_PROOF_ROW_SCHEMA_VERSION,
   organizationLifecycleReadiness: ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION,
   supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION,
-  readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION
+  readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION,
+  productReadiness: PRODUCT_READINESS_SCHEMA_VERSION,
+  uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION
 } as const;
+
+export const PRODUCT_READINESS_FORBIDDEN_LANGUAGE = [
+  "control room",
+  "how this feeds",
+  "dashboard slop",
+  "named examples",
+  "signal",
+  "acceptance criteria",
+  "acceptance-criteria"
+] as const;
 
 export type AnalystHandoffConsumerBlockerCode =
   | AnalystHandoffBlockerCode
@@ -414,6 +428,16 @@ export type DwmWebhookDestinationLifecycleContract = {
   createdAt: string;
 };
 
+export type ProductReadinessUiQualityProof = {
+  schemaVersion: typeof UI_QUALITY_PROOF_SCHEMA_VERSION;
+  surface: "dashboard" | "website";
+  route: string;
+  checkedAt: string;
+  proofArtifactId: string;
+  passed: boolean;
+  blockers: string[];
+};
+
 export type AnalystHandoffConsumerBundle = {
   schemaVersion: typeof ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION;
   generatedAt: string;
@@ -434,6 +458,10 @@ export type AnalystHandoffConsumerBundle = {
     webhookDestinations?: AnalystHandoffWebhookDestinationAdminProofRow[];
     orgLifecycle?: AnalystHandoffOrgLifecycleReadinessRow[];
     supportExecutor?: AnalystHandoffSupportExecutorReadiness[];
+  };
+  productSurfaceProof?: {
+    dashboard?: ProductReadinessUiQualityProof;
+    website?: ProductReadinessUiQualityProof;
   };
   stages: Partial<{
     publicTi: ActorWatchlistAdapterValue;
@@ -487,6 +515,7 @@ export type AnalystHandoffValidationReport = {
   productReadiness: Record<AnalystHandoffOwnerLane, AnalystHandoffLaneReadiness>;
   deployGate: AnalystHandoffDeployGateAssertions;
   readinessMatrix: AnalystHandoffReadinessMatrix;
+  productReadinessAggregate: ProductReadinessAggregate;
   results: Array<{
     file?: string;
     ok: boolean;
@@ -565,6 +594,60 @@ export type AnalystHandoffReadinessMatrix = {
   ok: boolean;
   rowCount: number;
   rows: AnalystHandoffReadinessMatrixRow[];
+};
+
+export type ProductReadinessCapabilityId =
+  | "organization_lifecycle"
+  | "shared_watchlists"
+  | "source_activation"
+  | "alert_case_workflow"
+  | "webhook_delivery"
+  | "support_controls"
+  | "dashboard_operator_workspace"
+  | "public_ti_actor_handoff"
+  | "website_product_surface";
+
+export type ProductReadinessOwnerLane =
+  | "org"
+  | "watchlist"
+  | "source"
+  | "alert"
+  | "webhook"
+  | "support"
+  | "dashboard"
+  | "publicTI"
+  | "website";
+
+export type ProductReadinessState = "ready" | "degraded" | "blocked" | "provisional";
+
+export type ProductReadinessRow = {
+  id: ProductReadinessCapabilityId;
+  ownerLane: ProductReadinessOwnerLane;
+  capabilityLabel: string;
+  proofArtifact: AnalystHandoffReadinessMatrixRow["currentProofArtifact"];
+  lastCheckedAt: string;
+  customerVisible: boolean;
+  customerVisibleState: ProductReadinessState;
+  blockers: string[];
+  requiredNextAction: string;
+  deployRisk: AnalystHandoffReadinessMatrixRow["deployRisk"];
+  uiQualityProofExists: boolean;
+};
+
+export type ProductReadinessAggregate = {
+  schemaVersion: typeof PRODUCT_READINESS_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  rowCount: number;
+  customerVisibleBlockedCount: number;
+  deployRisk: AnalystHandoffReadinessMatrixRow["deployRisk"];
+  rows: ProductReadinessRow[];
+};
+
+export type ProductReadinessAggregateValidation = {
+  ok: boolean;
+  blockerCodes: string[];
+  blockers: Array<{ code: string; rowId?: string; field?: string; detail: string }>;
 };
 
 export function validateAnalystHandoffConsumerBundle(input: unknown): AnalystHandoffConsumerValidation {
@@ -679,6 +762,7 @@ export function buildAnalystHandoffValidationReport(input: {
   checkedAt?: string;
   results: Array<{ file?: string; bundle?: unknown; error?: unknown }>;
 }): AnalystHandoffValidationReport {
+  const checkedAt = input.checkedAt || nowIso();
   const results = input.results.map((item) => {
     if (item.error) {
       const synthetic = blocker("invalid_request", "bundle", "file", item.error instanceof Error ? item.error.message : "Unable to read or parse handoff bundle.", true);
@@ -720,10 +804,15 @@ export function buildAnalystHandoffValidationReport(input: {
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
     result: results[index]
   })), deployGate);
+  const productReadinessAggregate = buildProductReadinessAggregate(input.results.map((item, index) => ({
+    file: item.file,
+    bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
+    result: results[index]
+  })), readinessMatrix, checkedAt);
   return {
     schemaVersion: ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
     contractVersions: ANALYST_HANDOFF_CONTRACT_VERSIONS,
-    checkedAt: input.checkedAt || nowIso(),
+    checkedAt,
     ok: results.every((item) => item.ok),
     bundleCount: results.length,
     passedCount: results.filter((item) => item.ok).length,
@@ -732,6 +821,7 @@ export function buildAnalystHandoffValidationReport(input: {
     productReadiness: productReadinessFor(allBlockers),
     deployGate,
     readinessMatrix,
+    productReadinessAggregate,
     results
   };
 }
@@ -865,6 +955,257 @@ export function buildAnalystHandoffReadinessMatrix(input: Array<{
     rowCount: rows.length,
     rows
   };
+}
+
+export function buildProductReadinessAggregate(input: Array<{
+  file?: string;
+  bundle?: Partial<AnalystHandoffConsumerBundle>;
+  result?: AnalystHandoffValidationReport["results"][number];
+}>, readinessMatrix: AnalystHandoffReadinessMatrix = buildAnalystHandoffReadinessMatrix(input), checkedAt: string = nowIso()): ProductReadinessAggregate {
+  const bundles = input.filter((item) => item.bundle);
+  const matrixRows = new Map(readinessMatrix.rows.map((row) => [row.id, row]));
+  const rows: ProductReadinessRow[] = [
+    productRowFromMatrix({
+      id: "organization_lifecycle",
+      ownerLane: "org",
+      capabilityLabel: "Organization onboarding readiness",
+      matrixRow: matrixRows.get("organization_onboarding_lifecycle"),
+      lastCheckedAt: latestOrgLifecycleCheckedAt(bundles, checkedAt),
+      requiredNextAction: "verify_organization_onboarding"
+    }),
+    productRowFromMatrix({
+      id: "shared_watchlists",
+      ownerLane: "watchlist",
+      capabilityLabel: "Shared watchlist alert terms",
+      matrixRow: matrixRows.get("shared_watchlist_alert_export"),
+      lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
+      requiredNextAction: "export_shared_watchlist_terms"
+    }),
+    productRowFromMatrix({
+      id: "source_activation",
+      ownerLane: "source",
+      capabilityLabel: "Source activation and provenance",
+      matrixRow: matrixRows.get("source_activation_and_provenance"),
+      lastCheckedAt: latestSourceCheckedAt(bundles, checkedAt),
+      requiredNextAction: "activate_source_policy"
+    }),
+    productRowFromMatrix({
+      id: "alert_case_workflow",
+      ownerLane: "alert",
+      capabilityLabel: "Alert and case workflow",
+      matrixRow: matrixRows.get("org_scoped_alert_case_workflow"),
+      lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
+      requiredNextAction: "open_org_alert_case"
+    }),
+    productRowFromMatrix({
+      id: "webhook_delivery",
+      ownerLane: "webhook",
+      capabilityLabel: "Webhook delivery destination",
+      matrixRow: matrixRows.get("discord_webhook_destination_delivery"),
+      lastCheckedAt: latestWebhookCheckedAt(bundles, checkedAt),
+      requiredNextAction: "verify_discord_webhook_destination"
+    }),
+    productRowFromMatrix({
+      id: "support_controls",
+      ownerLane: "support",
+      capabilityLabel: "Support recovery controls",
+      matrixRow: matrixRows.get("support_admin_recovery_controls"),
+      lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
+      requiredNextAction: "verify_support_recovery_action",
+      customerVisible: false
+    }),
+    surfaceProductReadinessRow({
+      id: "dashboard_operator_workspace",
+      ownerLane: "dashboard",
+      capabilityLabel: "Dashboard operator workspace",
+      proof: firstSurfaceProof(bundles, "dashboard"),
+      checkedAt,
+      requiredNextAction: "capture_dashboard_operator_workspace_ui_proof"
+    }),
+    productRowFromMatrix({
+      id: "public_ti_actor_handoff",
+      ownerLane: "publicTI",
+      capabilityLabel: "Threat intelligence actor handoff",
+      matrixRow: matrixRows.get("public_ti_actor_handoff"),
+      lastCheckedAt: latestGeneratedAt(bundles, checkedAt),
+      requiredNextAction: "verify_public_ti_actor_handoff"
+    }),
+    surfaceProductReadinessRow({
+      id: "website_product_surface",
+      ownerLane: "website",
+      capabilityLabel: "Website product surface",
+      proof: firstSurfaceProof(bundles, "website"),
+      checkedAt,
+      requiredNextAction: "capture_website_product_surface_ui_proof"
+    })
+  ];
+  return {
+    schemaVersion: PRODUCT_READINESS_SCHEMA_VERSION,
+    checkedAt,
+    ok: rows.every((row) => row.customerVisibleState === "ready" || row.customerVisibleState === "provisional"),
+    rowCount: rows.length,
+    customerVisibleBlockedCount: rows.filter((row) => row.customerVisible && row.customerVisibleState === "blocked").length,
+    deployRisk: maxDeployRisk(rows.map((row) => row.deployRisk)),
+    rows
+  };
+}
+
+export function validateProductReadinessAggregateArtifact(input: unknown): ProductReadinessAggregateValidation {
+  const artifact = input as Partial<ProductReadinessAggregate>;
+  const blockers: ProductReadinessAggregateValidation["blockers"] = [];
+  if (artifact.schemaVersion !== PRODUCT_READINESS_SCHEMA_VERSION) {
+    blockers.push({ code: "unsupported_schema", field: "schemaVersion", detail: `Expected ${PRODUCT_READINESS_SCHEMA_VERSION}.` });
+  }
+  if (!Array.isArray(artifact.rows)) {
+    blockers.push({ code: "missing_rows", field: "rows", detail: "Product readiness rows are required." });
+  }
+  if (Array.isArray(artifact.rows) && artifact.rowCount !== artifact.rows.length) {
+    blockers.push({ code: "row_count_mismatch", field: "rowCount", detail: "Product readiness rowCount must match rows.length." });
+  }
+  for (const row of artifact.rows || []) {
+    const rowId = (row as Partial<ProductReadinessRow>).id;
+    const typed = row as Partial<ProductReadinessRow>;
+    if (!typed.id) blockers.push({ code: "missing_row_id", field: "rows[].id", detail: "Every readiness row needs a stable id." });
+    if (!typed.ownerLane) blockers.push({ code: "missing_owner_lane", rowId, field: "ownerLane", detail: "Every readiness row needs an owner lane." });
+    if (!typed.capabilityLabel) blockers.push({ code: "missing_capability_label", rowId, field: "capabilityLabel", detail: "Every readiness row needs a domain-native label." });
+    if (!typed.proofArtifact?.schemaVersion || !typed.proofArtifact?.artifactId) blockers.push({ code: "missing_proof_artifact", rowId, field: "proofArtifact", detail: "Every readiness row needs a proof artifact pointer." });
+    if (!typed.lastCheckedAt) blockers.push({ code: "missing_last_checked_at", rowId, field: "lastCheckedAt", detail: "Every readiness row needs a last checked timestamp." });
+    if (!typed.requiredNextAction) blockers.push({ code: "missing_required_next_action", rowId, field: "requiredNextAction", detail: "Every readiness row needs a required next action." });
+    if (!Array.isArray(typed.blockers)) blockers.push({ code: "missing_blockers", rowId, field: "blockers", detail: "Every readiness row needs a blocker array." });
+    const uiFacing = [
+      typed.capabilityLabel,
+      typed.requiredNextAction,
+      typed.proofArtifact?.artifactId,
+      ...(typed.blockers || [])
+    ].filter(Boolean).join(" ").toLowerCase();
+    for (const phrase of PRODUCT_READINESS_FORBIDDEN_LANGUAGE) {
+      if (uiFacing.includes(phrase)) {
+        blockers.push({ code: "prompt_shaped_language", rowId, field: "capabilityLabel", detail: `Readiness rows cannot contain prompt-shaped language: ${phrase}.` });
+      }
+    }
+    if (typed.customerVisible && typed.capabilityLabel && !hasDomainNativeLabel(typed.capabilityLabel)) {
+      blockers.push({ code: "non_domain_native_label", rowId, field: "capabilityLabel", detail: "Customer-visible rows must use domain-native terminology." });
+    }
+  }
+  return {
+    ok: blockers.length === 0,
+    blockerCodes: [...new Set(blockers.map((item) => item.code))].sort(),
+    blockers
+  };
+}
+
+function productRowFromMatrix(input: {
+  id: ProductReadinessCapabilityId;
+  ownerLane: ProductReadinessOwnerLane;
+  capabilityLabel: string;
+  matrixRow?: AnalystHandoffReadinessMatrixRow;
+  lastCheckedAt: string;
+  requiredNextAction: string;
+  customerVisible?: boolean;
+}): ProductReadinessRow {
+  const status = input.matrixRow?.status || "needs_input";
+  const blockers = input.matrixRow
+    ? input.matrixRow.blockingGaps
+    : ["missing_readiness_matrix_row"];
+  return {
+    id: input.id,
+    ownerLane: input.ownerLane,
+    capabilityLabel: input.capabilityLabel,
+    proofArtifact: input.matrixRow?.currentProofArtifact ?? missingProductProof(input.id),
+    lastCheckedAt: input.lastCheckedAt,
+    customerVisible: input.customerVisible ?? true,
+    customerVisibleState: status === "ready" ? "ready" : status === "provisional" ? "provisional" : "blocked",
+    blockers,
+    requiredNextAction: input.requiredNextAction,
+    deployRisk: input.matrixRow?.deployRisk ?? "high",
+    uiQualityProofExists: false
+  };
+}
+
+function surfaceProductReadinessRow(input: {
+  id: ProductReadinessCapabilityId;
+  ownerLane: ProductReadinessOwnerLane;
+  capabilityLabel: string;
+  proof?: ProductReadinessUiQualityProof;
+  checkedAt: string;
+  requiredNextAction: string;
+}): ProductReadinessRow {
+  const blockers = input.proof
+    ? input.proof.passed ? [] : input.proof.blockers.length ? input.proof.blockers : [`${input.proof.surface}_ui_quality_proof_failed`]
+    : [`missing_${input.ownerLane}_ui_quality_proof`];
+  return {
+    id: input.id,
+    ownerLane: input.ownerLane,
+    capabilityLabel: input.capabilityLabel,
+    proofArtifact: input.proof
+      ? {
+          schemaVersion: input.proof.schemaVersion,
+          artifactId: input.proof.proofArtifactId,
+          route: input.proof.route,
+          probeId: `${input.proof.surface}.ui_quality`
+        }
+      : missingProductProof(input.id),
+    lastCheckedAt: input.proof?.checkedAt || input.checkedAt,
+    customerVisible: true,
+    customerVisibleState: blockers.length ? "blocked" : "ready",
+    blockers,
+    requiredNextAction: input.requiredNextAction,
+    deployRisk: blockers.length ? "high" : "none",
+    uiQualityProofExists: Boolean(input.proof?.passed)
+  };
+}
+
+function missingProductProof(id: ProductReadinessCapabilityId): ProductReadinessRow["proofArtifact"] {
+  return {
+    schemaVersion: "missing",
+    artifactId: `${id}.missing_proof`
+  };
+}
+
+function latestGeneratedAt(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>, fallback: string): string {
+  return firstString(bundles.map((item) => item.bundle?.generatedAt)) || fallback;
+}
+
+function latestOrgLifecycleCheckedAt(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>, fallback: string): string {
+  return firstString(bundles.flatMap((item) => item.bundle?.deployGateEvidence?.orgLifecycle?.map(() => item.bundle?.generatedAt) || [])) || latestGeneratedAt(bundles, fallback);
+}
+
+function latestSourceCheckedAt(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>, fallback: string): string {
+  return firstString(bundles.map((item) => item.bundle?.sourceReadiness?.checkedAt)) || fallback;
+}
+
+function latestWebhookCheckedAt(bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>, fallback: string): string {
+  return firstString(bundles.flatMap((item) => item.bundle?.stages?.webhookTrigger?.destinationLifecycle?.map((row) => row.updatedAt) || []))
+    || latestGeneratedAt(bundles, fallback);
+}
+
+function firstSurfaceProof(
+  bundles: Array<{ bundle?: Partial<AnalystHandoffConsumerBundle> }>,
+  surface: ProductReadinessUiQualityProof["surface"]
+): ProductReadinessUiQualityProof | undefined {
+  return bundles.map((item) => item.bundle?.productSurfaceProof?.[surface]).find((proof): proof is ProductReadinessUiQualityProof => Boolean(proof));
+}
+
+function maxDeployRisk(values: ProductReadinessRow["deployRisk"][]): ProductReadinessRow["deployRisk"] {
+  if (values.includes("high")) return "high";
+  if (values.includes("medium")) return "medium";
+  if (values.includes("low")) return "low";
+  return "none";
+}
+
+function hasDomainNativeLabel(label: string): boolean {
+  const normalized = label.toLowerCase();
+  return [
+    "organization",
+    "watchlist",
+    "source",
+    "alert",
+    "webhook",
+    "support",
+    "dashboard",
+    "threat intelligence",
+    "website"
+  ].some((term) => normalized.includes(term));
 }
 
 function readinessRow(input: {
