@@ -502,6 +502,18 @@ const wrongOrgAttemptContract = buildDwmWebhookDeliveryAttemptContract({
         events: ['dwm.alert.created', 'dwm.alert.replayed'],
     }],
 })
+const unsupportedDestinationAttemptContract = buildDwmWebhookDeliveryAttemptContract({
+    ownerId: 'owner_contract',
+    input: apiDeliveryRequestInput,
+    destinations: [{
+        id: 'destination_unsupported_contract',
+        org_id: 'org_contract',
+        name: 'Email destination',
+        kind: 'email',
+        status: 'active',
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+    } as never],
+})
 const replayPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: workflowReplayHandoff.ownerId,
     input: replayTriggerInput,
@@ -555,7 +567,8 @@ expect(deliveryAttemptPersistence.rows[0]?.sanitizedPayloadPreview?.discord.fiel
 expect(deliveryAttemptPersistence.rows[0]?.redactedDestination.endpointExposed === false && deliveryAttemptPersistence.rows[0]?.redactedDestination.endpointHash === 'endpoint_replay_contract', 'Delivery attempt persistence should expose only redacted destination metadata.', deliveryAttemptPersistence.rows[0]?.redactedDestination)
 expect(missingFieldAttemptContract.ok === false && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_alert_title') && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_destination'), 'Delivery attempt contract should block missing required payload fields.', missingFieldAttemptContract)
 expect(wrongOrgAttemptContract.ok === false && wrongOrgAttemptContract.destinationSelection.skippedDestinations.some(item => item.reason === 'org_mismatch') && wrongOrgAttemptContract.attempts.every(item => item.orgId === 'org_contract' && item.destinationId !== 'destination_wrong_org_contract'), 'Delivery attempt contract should not persist wrong-org destination attempts.', wrongOrgAttemptContract)
-expect(!JSON.stringify([deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract]).includes(secret), 'Delivery attempt contract should not leak endpoint secrets.', { deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract })
+expect(unsupportedDestinationAttemptContract.ok === false && unsupportedDestinationAttemptContract.blockers.some(item => item.code === 'unsupported_destination_type') && unsupportedDestinationAttemptContract.attempts[0]?.redactedDestination.endpointExposed === false, 'Delivery attempt contract should block unsupported destination types with redacted metadata.', unsupportedDestinationAttemptContract)
+expect(!JSON.stringify([deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract, unsupportedDestinationAttemptContract]).includes(secret), 'Delivery attempt contract should not leak endpoint secrets.', { deliveryAttemptContract, deliveryAttemptPersistence, missingFieldAttemptContract, wrongOrgAttemptContract, unsupportedDestinationAttemptContract })
 expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
 expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
 expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
@@ -3434,6 +3447,7 @@ console.log(JSON.stringify({
         'delivery attempt typed payload contract',
         'delivery attempt required field blockers',
         'delivery attempt wrong-org isolation',
+        'delivery attempt unsupported destination blocker',
         'secret-free payload',
     ],
     worker3Probe: {

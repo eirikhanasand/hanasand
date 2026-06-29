@@ -6118,6 +6118,11 @@ function deliveryAttemptContractBlockers({
     if (!alert.provenanceSummary) add('missing_provenance', 'alert.provenance', 'Webhook delivery requires source provenance context.')
     if (!alert.eventTimestamp) add('missing_timestamp', 'alert.eventTimestamp', 'Webhook delivery requires an alert event timestamp.')
     if (!alert.alertUrl && !alert.casePath) add('missing_alert_link', 'alert.alertUrl', 'Webhook delivery requires an alert or case link.')
+    for (const destination of plan.selectedDestinations) {
+        if (!WEBHOOK_KINDS.has(destination.kind)) {
+            add('unsupported_destination_type', `destinations.${destination.id}.kind`, 'Webhook delivery only supports discord and webhook destinations.')
+        }
+    }
     if (!plan.selectedDestinations.length && !plan.skippedDestinations.some(destination => destination.reason !== 'org_mismatch')) {
         add('missing_destination', 'destinations', 'Webhook delivery requires an org-scoped destination or a persistable missing-destination attempt.')
     }
