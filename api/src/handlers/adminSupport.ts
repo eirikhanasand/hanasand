@@ -454,6 +454,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             filters,
             summary: auditTimelineSummary(timeline),
             filterContract: supportAuditFilterContract(filters, timeline),
+            exportProof: supportAuditExportProof(filters, timeline),
             timeline,
             copyText: events.slice(0, 20).map(event => event.detail.copyText).join('\n'),
         },
@@ -5102,6 +5103,98 @@ function supportAuditFilterContract(filters: Record<string, unknown>, timeline: 
             correlation: filters.correlation || null,
             idempotency: filters.idempotency || null,
             query: auditFilterQuery(filters),
+        },
+    }
+}
+
+function supportAuditExportProof(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const replayQuery = auditFilterQuery(filters)
+    const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const summary = supportAuditRedactedSummary(timeline)
+    const requestIds = uniqueTimelineValues(timeline.map(event => event.requestId))
+    const supportSessionIds = uniqueTimelineValues(timeline.map(event => {
+        const contextSession = text(event.context?.supportSessionId)
+        const entityId = text(event.entity?.id)
+        return contextSession || (entityId.startsWith('support_session_') ? entityId : '')
+    }))
+    const blockers = [
+        timeline.length ? '' : 'audit_unavailable',
+        eventIds.length === timeline.length ? '' : 'event_id_unavailable',
+    ].filter(Boolean)
+    return {
+        schemaVersion: 'support.audit.export_proof.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        immutableEventIds: eventIds,
+        eventCount: timeline.length,
+        route: '/api/admin/audit-events',
+        dashboardRoute: '/dashboard/system/impersonation',
+        replay: {
+            method: 'GET',
+            query: replayQuery,
+            filters,
+            requestIds,
+            supportSessionIds,
+        },
+        exposedFields: [
+            'id',
+            'timestamp',
+            'actionType',
+            'severity',
+            'source',
+            'service',
+            'actor.id',
+            'target.type',
+            'target.id',
+            'organization.id',
+            'entity.id',
+            'requestId',
+            'outcome',
+            'reason',
+            'before',
+            'after',
+            'scope',
+            'context',
+        ],
+        supportedFilters: Array.from(adminAuditFilters),
+        supportWorkflows: [
+            'support_session',
+            'invite_assistance',
+            'access_recovery',
+            'member_role_recovery',
+            'impersonation',
+            'support_inspection',
+        ],
+        blockerCatalog: [
+            'support_role_required',
+            'unsupported_audit_filter',
+            'invalid_audit_filter',
+            'audit_unavailable',
+            'event_id_unavailable',
+            'redaction_required',
+        ],
+        blockers,
+        redactedSummary: summary,
+        copyText: [
+            'Support audit export proof',
+            `Replay: ${replayQuery}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Requests: ${requestIds.join(', ') || 'none'}`,
+            `Outcomes: ${summary.outcomes.join(', ') || 'none'}`,
+            `Actions: ${summary.actions.join(', ') || 'none'}`,
+            'Redacted: true',
+        ].join('\n'),
+        worker3: {
+            readinessName: 'support-audit-export-proof',
+            route: '/api/admin/audit-events',
+            testCommand: 'cd api && bun run smoke:admin-support-unit',
+            expectedResponsePath: 'detail.exportProof',
+            validation: [
+                'detail.exportProof.schemaVersion = support.audit.export_proof.v1',
+                'detail.exportProof.immutableEventIds contains returned event ids',
+                'detail.exportProof.replay.query is copy-ready',
+                'detail.exportProof.redacted = true',
+            ],
         },
     }
 }
