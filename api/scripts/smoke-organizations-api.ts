@@ -622,6 +622,12 @@ const ownerWatchlistOperation = parseBody(ownerWatchlistResponse.body).operation
 assert.equal(ownerWatchlistOperation.actorId, 'org_smoke_owner')
 assert.equal(ownerWatchlistOperation.requestId, 'smoke-domain-create')
 assert.equal(ownerWatchlistOperation.serviceLogAction, 'organization_watchlist_upserted')
+assert.equal(ownerWatchlistOperation.lifecycleTransition.schemaVersion, 'organization.watchlist_lifecycle_transition.v1')
+assert.equal(ownerWatchlistOperation.lifecycleTransition.statusAfter, 'active')
+assert.equal(ownerWatchlistOperation.lifecycleTransition.enabledAfter, true)
+assert.equal(ownerWatchlistOperation.lifecycleTransition.disabledReasonAfter, null)
+assert.equal(ownerWatchlistOperation.lifecycleTransition.alertGenerationEligibleAfter, true)
+assert.equal(ownerWatchlistOperation.lifecycleTransition.activeTermsExportRoute, 'GET /api/organizations/:id/watchlists/alert-terms')
 
 const memberWatchlistResponse = await app.inject({
     method: 'GET',
@@ -703,6 +709,11 @@ assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.status, 'p
 assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.enabled, false)
 assert.equal(parseBody(ownerPausesCompanyResponse.body).watchlistItem.disabledReason, 'watchlist_paused')
 assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.action, 'pause')
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.lifecycleTransition.statusAfter, 'paused')
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.lifecycleTransition.enabledAfter, false)
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.lifecycleTransition.disabledReasonAfter, 'watchlist_paused')
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.lifecycleTransition.alertGenerationEligibleAfter, false)
+assert.equal(parseBody(ownerPausesCompanyResponse.body).operation.lifecycleTransition.blockerAfter, 'watchlist_paused')
 
 const pausedWatchlistsResponse = await app.inject({
     method: 'GET',
@@ -758,6 +769,9 @@ const ownerResumesCompanyResponse = await app.inject({
 assert.equal(ownerResumesCompanyResponse.statusCode, 200, ownerResumesCompanyResponse.body)
 assert.equal(parseBody(ownerResumesCompanyResponse.body).watchlistItem.status, 'active')
 assert.equal(parseBody(ownerResumesCompanyResponse.body).watchlistItem.lifecycleRequestId, 'smoke-resume-company')
+assert.equal(parseBody(ownerResumesCompanyResponse.body).operation.lifecycleTransition.statusAfter, 'active')
+assert.equal(parseBody(ownerResumesCompanyResponse.body).operation.lifecycleTransition.enabledAfter, true)
+assert.equal(parseBody(ownerResumesCompanyResponse.body).operation.lifecycleTransition.disabledReasonAfter, null)
 
 const adminAddsActorResponse = await app.inject({
     method: 'POST',
@@ -2574,6 +2588,10 @@ const ownerDisablesActorResponse = await app.inject({
 assert.equal(ownerDisablesActorResponse.statusCode, 200, ownerDisablesActorResponse.body)
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.action, 'disabled')
 assert.equal(parseBody(ownerDisablesActorResponse.body).operation.requestId, 'smoke-disable-actor')
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.statusAfter, 'archived')
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.enabledAfter, false)
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.disabledReasonAfter, 'watchlist_archived')
+assert.equal(parseBody(ownerDisablesActorResponse.body).operation.lifecycleTransition.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.status, 'archived')
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.enabled, false)
 assert.equal(parseBody(ownerDisablesActorResponse.body).watchlistItem.disabledReason, 'watchlist_archived')
@@ -2746,6 +2764,10 @@ assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.arch
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.enabled, true)
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).watchlistItem.disabledReason, null)
 assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.action, 'restore')
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.lifecycleTransition.statusAfter, 'active')
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.lifecycleTransition.enabledAfter, true)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.lifecycleTransition.disabledReasonAfter, null)
+assert.equal(parseBody(restoreArchivedWatchlistResponse.body).operation.lifecycleTransition.alertGenerationEligibleAfter, true)
 
 const restoredExportResponse = await app.inject({
     method: 'GET',

@@ -2037,6 +2037,7 @@ function organizationWatchlistOperation(
         userActive: true,
         alertVisibilityPolicy: organization.alert_visibility_policy,
     })
+    const nextLifecycle = organizationWatchlistOperationLifecycle(input.action)
     return {
         schemaVersion: 'organization.watchlist_operation.v1',
         action: input.action,
@@ -2049,5 +2050,38 @@ function organizationWatchlistOperation(
         visibilityPolicy: decision.alertVisibilityPolicy,
         allowedViewerRoles: decision.allowedRoles,
         serviceLogAction: input.serviceLogAction,
+        lifecycleTransition: {
+            schemaVersion: 'organization.watchlist_lifecycle_transition.v1',
+            action: input.action,
+            statusAfter: nextLifecycle.statusAfter,
+            enabledAfter: nextLifecycle.enabledAfter,
+            disabledReasonAfter: nextLifecycle.disabledReasonAfter,
+            alertGenerationEligibleAfter: nextLifecycle.enabledAfter,
+            activeTermsExportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
+            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
+            blockerAfter: nextLifecycle.disabledReasonAfter,
+        },
+    }
+}
+
+function organizationWatchlistOperationLifecycle(action: 'created' | 'updated' | 'disabled' | 'pause' | 'resume' | 'archive' | 'restore') {
+    if (action === 'pause') {
+        return {
+            statusAfter: 'paused' as const,
+            enabledAfter: false,
+            disabledReasonAfter: 'watchlist_paused' as const,
+        }
+    }
+    if (action === 'archive' || action === 'disabled') {
+        return {
+            statusAfter: 'archived' as const,
+            enabledAfter: false,
+            disabledReasonAfter: 'watchlist_archived' as const,
+        }
+    }
+    return {
+        statusAfter: 'active' as const,
+        enabledAfter: true,
+        disabledReasonAfter: null,
     }
 }
