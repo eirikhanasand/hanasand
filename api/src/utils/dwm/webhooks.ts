@@ -5520,6 +5520,223 @@ export function buildDwmWebhookDeliveryRequestInput(input: DwmAlertNotificationI
     }
 }
 
+export function buildDwmWebhookDeliveryAttemptContract({
+    ownerId,
+    input,
+    destinations,
+    deliveries = [],
+    liveDeliveryEnabled = process.env.DWM_WEBHOOK_LIVE_DELIVERY === 'true',
+}: {
+    ownerId: string
+    input: DwmAlertNotificationInput
+    destinations: DwmWebhookDispatchDestination[]
+    deliveries?: DwmWebhookDeliveryPublic[]
+    liveDeliveryEnabled?: boolean
+}) {
+    const normalizedInput = buildDwmWebhookDeliveryRequestInput(input)
+    const dryRun = parseBoolean(normalizedInput.dryRun ?? normalizedInput.dry_run, true)
+    const live = parseBoolean(normalizedInput.live, false)
+    const plan = buildDwmAlertWebhookDispatchPlan({ ownerId, input: normalizedInput, destinations })
+    const alert = normalizeAlert(plan.alert)
+    const watchlist = normalizeWatchlist(plan.alert.watchlist)
+    const requiredBlockers = deliveryAttemptContractBlockers({ input: normalizedInput, plan, alert, watchlist })
+    const existingByIdempotencyKey = new Map<string, DwmWebhookDeliveryPublic[]>()
+    for (const delivery of deliveries) {
+        const idempotencyKey = clean(delivery.idempotencyKey)
+        if (!idempotencyKey) continue
+        const attempts = existingByIdempotencyKey.get(idempotencyKey) || []
+        attempts.push(delivery)
+        existingByIdempotencyKey.set(idempotencyKey, attempts)
+    }
+    const selectedAttempts = plan.selectedDestinations.map((destination) => {
+        const idempotencyKey = buildIdempotencyKey(plan.eventType, destination.org_id, destination.id, alert.dedupeKey || alert.id)
+        const attemptCount = (existingByIdempotencyKey.get(idempotencyKey)?.length || 0) + 1
+        const payload = buildDwmAlertDeliveryPayload({ destination, alert: plan.alert, eventType: plan.eventType, deliveryId: `delivery_contract_${destination.id}` })
+        const preview = buildDwmWebhookDestinationTestPayloadPreview(payload)
+        const retryPlan = planDwmWebhookDeliveryRetry({ status: dryRun ? 'dry_run' : 'skipped', dryRun, error: live && !dryRun && !liveDeliveryEnabled ? 'Live webhook delivery is disabled for this environment.' : null, attemptCount })
+        return {
+            destinationId: destination.id,
+            orgId: destination.org_id,
+            alertId: alert.id,
+            eventType: plan.eventType,
+            status: dryRun ? 'dry_run' : live && liveDeliveryEnabled ? 'delivered' : 'skipped',
+            dryRun,
+            live: live && !dryRun && liveDeliveryEnabled,
+            replay: plan.eventType === 'dwm.alert.replayed',
+            dedupeKey: alert.dedupeKey || idempotencyKey,
+            idempotencyKey,
+            payloadHash: hashValue('payload', JSON.stringify(payload)),
+            sanitizedPayloadPreview: preview,
+            redactedDestination: {
+                id: destination.id,
+                label: destination.name,
+                type: destination.kind,
+                endpointExposed: false,
+            },
+            responseSummary: dryRun ? 'Dry-run delivery payload prepared without external network.' : liveDeliveryEnabled ? 'Live delivery is explicitly enabled.' : 'Live delivery is disabled for this environment.',
+            error: live && !dryRun && !liveDeliveryEnabled ? 'Live webhook delivery is disabled for this environment.' : null,
+            retry: {
+                attemptCount,
+                retryable: retryPlan.retryable,
+                nextRetryAt: retryPlan.nextRetryAt,
+                errorClass: retryPlan.errorClass,
+                reason: retryPlan.reason,
+            },
+            audit: {
+                expectedAction: dryRun ? 'delivery.tested' : plan.eventType === 'dwm.alert.replayed' ? 'delivery.replayed' : 'delivery.created',
+                auditEventId: null,
+            },
+            timestamps: {
+                createdAt: null,
+                updatedAt: null,
+                attemptedAt: null,
+            },
+        }
+    })
+    const skippedAttempts = buildDwmAlertWebhookSkippedDeliveryIntents(plan).map(intent => ({
+        destinationId: intent.destinationId,
+        orgId: intent.orgId,
+        alertId: alert.id,
+        eventType: plan.eventType,
+        status: 'skipped' as const,
+        dryRun,
+        live: false,
+        replay: plan.eventType === 'dwm.alert.replayed',
+        dedupeKey: alert.dedupeKey || intent.idempotencyKey,
+        idempotencyKey: intent.idempotencyKey,
+        payloadHash: null,
+        sanitizedPayloadPreview: null,
+        redactedDestination: {
+            id: intent.destinationId,
+            label: null,
+            type: null,
+            endpointExposed: false,
+        },
+        responseSummary: intent.error,
+        error: intent.error,
+        retry: {
+            attemptCount: (existingByIdempotencyKey.get(intent.idempotencyKey)?.length || 0) + 1,
+            retryable: false,
+            nextRetryAt: null,
+            errorClass: intent.reason,
+            reason: 'selection_blocked',
+        },
+        audit: {
+            expectedAction: 'delivery.skipped',
+            auditEventId: null,
+        },
+        timestamps: {
+            createdAt: null,
+            updatedAt: null,
+            attemptedAt: null,
+        },
+    }))
+    const missingIntent = buildDwmAlertWebhookMissingDeliveryIntent(plan, clean(normalizedInput.destinationId ?? normalizedInput.destination_id) || null)
+    const missingAttempts = missingIntent ? [{
+        destinationId: missingIntent.requestedDestinationId,
+        orgId: missingIntent.orgId,
+        alertId: alert.id,
+        eventType: plan.eventType,
+        status: 'skipped' as const,
+        dryRun,
+        live: false,
+        replay: plan.eventType === 'dwm.alert.replayed',
+        dedupeKey: alert.dedupeKey || missingIntent.idempotencyKey,
+        idempotencyKey: missingIntent.idempotencyKey,
+        payloadHash: null,
+        sanitizedPayloadPreview: null,
+        redactedDestination: {
+            id: missingIntent.requestedDestinationId,
+            label: null,
+            type: null,
+            endpointExposed: false,
+        },
+        responseSummary: missingIntent.error,
+        error: missingIntent.error,
+        retry: {
+            attemptCount: (existingByIdempotencyKey.get(missingIntent.idempotencyKey)?.length || 0) + 1,
+            retryable: false,
+            nextRetryAt: null,
+            errorClass: missingIntent.reason,
+            reason: 'selection_blocked',
+        },
+        audit: {
+            expectedAction: 'delivery.skipped',
+            auditEventId: null,
+        },
+        timestamps: {
+            createdAt: null,
+            updatedAt: null,
+            attemptedAt: null,
+        },
+    }] : []
+    const attempts = [...selectedAttempts, ...skippedAttempts, ...missingAttempts]
+
+    return {
+        schemaVersion: 'dwm.webhook.delivery_attempt_contract.v1',
+        ok: requiredBlockers.length === 0 && attempts.length > 0,
+        ownerId,
+        orgId: plan.orgId,
+        eventType: plan.eventType,
+        dryRun,
+        liveRequested: live,
+        externalSendEnabled: live && !dryRun && liveDeliveryEnabled,
+        noNetwork: !(live && !dryRun && liveDeliveryEnabled),
+        normalizedInput,
+        requiredFields: {
+            orgId: Boolean(firstClean(normalizedInput.orgId, normalizedInput.organizationId, normalizedInput.tenantId, (normalizedInput.alert as Record<string, unknown> | undefined)?.organizationId, (normalizedInput.alert as Record<string, unknown> | undefined)?.orgId, (normalizedInput.alert as Record<string, unknown> | undefined)?.tenantId)),
+            destinationId: Boolean(clean(normalizedInput.destinationId ?? normalizedInput.destination_id)) || plan.selectedDestinations.length > 0,
+            alertId: Boolean(firstClean(normalizedInput.alertId, (normalizedInput.alert as Record<string, unknown> | undefined)?.id)),
+            watchlistId: Boolean(watchlist.id || clean(normalizedInput.watchlistItemId) || clean(normalizedInput.watchlistId)),
+            severity: Boolean(firstClean((normalizedInput.alert as Record<string, unknown> | undefined)?.severity)),
+            title: Boolean(firstClean((normalizedInput.alert as Record<string, unknown> | undefined)?.title)),
+            sourceFamily: Boolean(firstClean(normalizedInput.sourceFamily, (normalizedInput.alert as Record<string, unknown> | undefined)?.sourceFamily)),
+            evidence: alert.evidenceCount > 0 || alert.evidence.length > 0,
+            provenance: Boolean(alert.provenanceSummary),
+            timestamp: Boolean(alert.eventTimestamp),
+            link: Boolean(alert.alertUrl || alert.casePath),
+            dedupeKey: Boolean(firstClean(normalizedInput.dedupeKey, (normalizedInput.alert as Record<string, unknown> | undefined)?.dedupeKey)),
+        },
+        destinationSelection: {
+            selectedDestinationIds: plan.selectedDestinations.map(destination => destination.id),
+            skippedDestinations: plan.skippedDestinations,
+        },
+        attempts,
+        blockers: requiredBlockers,
+    }
+}
+
+function deliveryAttemptContractBlockers({
+    input,
+    plan,
+    alert,
+    watchlist,
+}: {
+    input: DwmAlertNotificationInput
+    plan: DwmAlertWebhookDispatchPlan
+    alert: ReturnType<typeof normalizeAlert>
+    watchlist: ReturnType<typeof normalizeWatchlist>
+}) {
+    const blockers: Array<{ code: string; path: string; message: string; blocking: true }> = []
+    const add = (code: string, path: string, message: string) => blockers.push({ code, path, message, blocking: true })
+    const inputAlert = recordOrEmpty(input.alert)
+    if (!firstClean(input.orgId, input.organizationId, input.tenantId, inputAlert.organizationId, inputAlert.orgId, inputAlert.tenantId)) add('missing_org_id', 'orgId', 'Webhook delivery requires organization scope.')
+    if (!firstClean(input.alertId, inputAlert.id)) add('missing_alert_id', 'alert.id', 'Webhook delivery requires a persisted alert id.')
+    if (!firstClean(inputAlert.title)) add('missing_alert_title', 'alert.title', 'Webhook delivery requires an alert title for Discord rendering.')
+    if (!firstClean(inputAlert.severity)) add('missing_severity', 'alert.severity', 'Webhook delivery requires alert severity.')
+    if (!firstClean(input.sourceFamily, inputAlert.sourceFamily)) add('missing_source_family', 'alert.sourceFamily', 'Webhook delivery requires source family context.')
+    if (!watchlist.id && !firstClean(input.watchlistItemId, input.watchlistId)) add('missing_watchlist_id', 'alert.watchlist.id', 'Webhook delivery requires watchlist identity.')
+    if (!firstClean(input.dedupeKey, inputAlert.dedupeKey)) add('missing_dedupe_key', 'alert.dedupeKey', 'Webhook delivery requires a dedupe key for idempotency.')
+    if (alert.evidenceCount <= 0 && alert.evidence.length === 0) add('missing_evidence', 'alert.evidence', 'Webhook delivery requires at least one evidence item or evidence count.')
+    if (!alert.provenanceSummary) add('missing_provenance', 'alert.provenance', 'Webhook delivery requires source provenance context.')
+    if (!alert.eventTimestamp) add('missing_timestamp', 'alert.eventTimestamp', 'Webhook delivery requires an alert event timestamp.')
+    if (!alert.alertUrl && !alert.casePath) add('missing_alert_link', 'alert.alertUrl', 'Webhook delivery requires an alert or case link.')
+    if (!plan.selectedDestinations.length && !plan.skippedDestinations.some(destination => destination.reason !== 'org_mismatch')) {
+        add('missing_destination', 'destinations', 'Webhook delivery requires an org-scoped destination or a persistable missing-destination attempt.')
+    }
+    return blockers
+}
+
 export async function triggerDwmAlertWebhookNotification(
     ownerId: string,
     alert: Record<string, unknown>,

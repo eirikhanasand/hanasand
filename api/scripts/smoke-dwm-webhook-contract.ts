@@ -23,6 +23,7 @@ import {
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryPersistenceProof,
+    buildDwmWebhookDeliveryAttemptContract,
     buildDwmWebhookDeliveryReceipts,
     buildDwmWebhookDeliveryReplayGuard,
     buildDwmWebhookDeliveryTimeline,
@@ -374,6 +375,62 @@ const apiDeliveryRequestInput = buildDwmWebhookDeliveryRequestInput({
     live: false,
     destinationId: 'destination_replay_contract',
 })
+const deliveryAttemptContract = buildDwmWebhookDeliveryAttemptContract({
+    ownerId: 'owner_contract',
+    input: apiDeliveryRequestInput,
+    destinations: [{
+        id: 'destination_replay_contract',
+        org_id: 'org_contract',
+        name: 'Replay Discord',
+        kind: 'discord',
+        status: 'active',
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+    }],
+    deliveries: [{
+        id: 'prior_attempt_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_replay_contract',
+        alertId: 'alert_replay_contract',
+        eventType: 'dwm.alert.replayed',
+        status: 'dry_run',
+        dryRun: true,
+        idempotencyKey: 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract',
+        attemptedAt: '2026-06-28T12:00:00.000Z',
+    }],
+})
+const missingFieldAttemptContract = buildDwmWebhookDeliveryAttemptContract({
+    ownerId: 'owner_contract',
+    input: {
+        orgId: '',
+        eventType: 'dwm.alert.created',
+        alert: {
+            id: '',
+            title: '',
+            severity: '',
+            sourceFamily: '',
+            evidence: [],
+            provenance: {},
+            watchlist: {},
+            dedupeKey: '',
+            casePath: '',
+        },
+        dryRun: true,
+    },
+    destinations: [],
+})
+const wrongOrgAttemptContract = buildDwmWebhookDeliveryAttemptContract({
+    ownerId: 'owner_contract',
+    input: apiDeliveryRequestInput,
+    destinations: [{
+        id: 'destination_wrong_org_contract',
+        org_id: 'org_wrong',
+        name: 'Wrong org Discord',
+        kind: 'discord',
+        status: 'active',
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+    }],
+})
 const replayPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: workflowReplayHandoff.ownerId,
     input: replayTriggerInput,
@@ -415,6 +472,15 @@ expect(targetedReplayTriggerInput.destinationId === 'destination_replay_contract
 expect(apiDeliveryRequestInput.organizationId === 'org_contract' && apiDeliveryRequestInput.destinationId === 'destination_replay_contract', 'API delivery bridge should normalize persisted alert org and destination context.', apiDeliveryRequestInput)
 expect(apiDeliveryRequestInput.casePath === replayWorkflowAlert.casePath && apiDeliveryRequestInput.sourceFamily === 'telegram_public', 'API delivery bridge should normalize case and source context.', apiDeliveryRequestInput)
 expect(apiDeliveryRequestInput.dryRun === true && apiDeliveryRequestInput.live === false, 'API delivery bridge should preserve dry-run/live gate.', apiDeliveryRequestInput)
+expect(deliveryAttemptContract.schemaVersion === 'dwm.webhook.delivery_attempt_contract.v1' && deliveryAttemptContract.ok === true && deliveryAttemptContract.noNetwork === true, 'Delivery attempt contract should accept typed alert payloads without network.', deliveryAttemptContract)
+expect(deliveryAttemptContract.requiredFields.orgId === true && deliveryAttemptContract.requiredFields.watchlistId === true && deliveryAttemptContract.requiredFields.provenance === true, 'Delivery attempt contract should prove required org/watchlist/provenance fields.', deliveryAttemptContract.requiredFields)
+expect(deliveryAttemptContract.destinationSelection.selectedDestinationIds.join(',') === 'destination_replay_contract' && deliveryAttemptContract.attempts.length === 1, 'Delivery attempt contract should resolve the org-scoped destination.', deliveryAttemptContract)
+expect(deliveryAttemptContract.attempts[0]?.status === 'dry_run' && deliveryAttemptContract.attempts[0]?.replay === true && deliveryAttemptContract.attempts[0]?.retry.attemptCount === 2, 'Delivery attempt contract should produce a persisted dry-run replay attempt with retry count.', deliveryAttemptContract.attempts[0])
+expect(deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract', 'Delivery attempt contract should include Discord-ready payload preview context.', deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview)
+expect(deliveryAttemptContract.attempts[0]?.audit.expectedAction === 'delivery.tested' && deliveryAttemptContract.attempts[0]?.redactedDestination.endpointExposed === false, 'Delivery attempt contract should expose audit proof and redacted destination metadata.', deliveryAttemptContract.attempts[0])
+expect(missingFieldAttemptContract.ok === false && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_alert_title') && missingFieldAttemptContract.blockers.some(item => item.code === 'missing_destination'), 'Delivery attempt contract should block missing required payload fields.', missingFieldAttemptContract)
+expect(wrongOrgAttemptContract.ok === false && wrongOrgAttemptContract.destinationSelection.skippedDestinations.some(item => item.reason === 'org_mismatch') && wrongOrgAttemptContract.attempts.every(item => item.orgId === 'org_contract' && item.destinationId !== 'destination_wrong_org_contract'), 'Delivery attempt contract should not persist wrong-org destination attempts.', wrongOrgAttemptContract)
+expect(!JSON.stringify([deliveryAttemptContract, missingFieldAttemptContract, wrongOrgAttemptContract]).includes(secret), 'Delivery attempt contract should not leak endpoint secrets.', { deliveryAttemptContract, missingFieldAttemptContract, wrongOrgAttemptContract })
 expect(replayPlan.selectedDestinations.length === 1, 'Replay dispatch should select the active org destination.', replayPlan)
 expect(replayPlan.eventType === 'dwm.alert.replayed', 'Replay dispatch should preserve replay event type.', replayPlan)
 expect(replayAlertContext.id === 'alert_replay_contract', 'Replay payload should link to the same alert id.', replayPayload)
@@ -3250,6 +3316,9 @@ console.log(JSON.stringify({
         'structured audit contract secret redaction',
         'dry-run Discord payload preview fields',
         'delivery evidence replay/live/dry-run distinction',
+        'delivery attempt typed payload contract',
+        'delivery attempt required field blockers',
+        'delivery attempt wrong-org isolation',
         'secret-free payload',
     ],
     worker3Probe: {
@@ -3290,6 +3359,10 @@ console.log(JSON.stringify({
             'deliveryPersistenceProof.rows[].actionRequests.dryRunReplay.body',
             'deliveryPersistenceProof.rows[].actionRequests.liveReplay.blockers[].code',
             'deliveryPersistenceProof.blockers[].code',
+            'deliveryAttemptContract.schemaVersion',
+            'deliveryAttemptContract.attempts[].sanitizedPayloadPreview.discord.fieldNames',
+            'deliveryAttemptContract.attempts[].retry.attemptCount',
+            'deliveryAttemptContract.blockers[].code',
             'deliveryReceipts.schemaVersion',
             'deliveryReceipts.receipts[].proof.auditEventId',
             'deliveryReceipts.receipts[].proof.noNetwork',
