@@ -2370,6 +2370,149 @@ export async function getSupportOrganizationInvite(req: FastifyRequest<{ Params:
     })
 }
 
+export async function getSupportOrganizationMember(req: FastifyRequest<{ Params: OrganizationMemberParams }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const inspectionAudit = supportInspectionAuditMetadata(req)
+    const organization = await loadOrganizationSupportDetail(req.params.id)
+    if (!organization) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.organization.member.inspect',
+            actorId: actor.id,
+            targetType: 'member',
+            targetId: req.params.userId,
+            organizationId: req.params.id,
+            entityId: req.params.userId,
+            requestId: inspectionAudit.requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'organization_not_found', userId: req.params.userId }),
+        })
+        return res.status(404).send({ error: 'Organization not found.' })
+    }
+
+    const member = await loadSupportMemberDetail(organization.id, req.params.userId)
+    if (!member) {
+        await recordAdminAuditEvent(req, {
+            actionType: 'support.organization.member.inspect',
+            actorId: actor.id,
+            targetType: 'member',
+            targetId: req.params.userId,
+            organizationId: organization.id,
+            entityId: req.params.userId,
+            requestId: inspectionAudit.requestId,
+            severity: 'notice',
+            outcome: 'failed',
+            reason: inspectionAudit.reason || undefined,
+            context: supportInspectionAuditContext(inspectionAudit, { error: 'member_not_found', userId: req.params.userId }),
+        })
+        return res.status(404).send({ error: 'Organization member not found.' })
+    }
+
+    const auditRows = await run(`
+        SELECT
+            event.id,
+            event.action_type,
+            event.severity,
+            event.source,
+            event.service,
+            event.actor_id,
+            actor.name AS actor_name,
+            event.target_type,
+            event.target_id,
+            target_user.name AS target_name,
+            event.organization_id,
+            organization.name AS organization_name,
+            event.entity_id,
+            event.request_id,
+            event.outcome,
+            event.reason,
+            event.context,
+            event.created_at
+        FROM admin_audit_events event
+        LEFT JOIN users actor ON actor.id = event.actor_id
+        LEFT JOIN users target_user ON target_user.id = event.target_id
+        LEFT JOIN organizations organization ON organization.id = event.organization_id
+        WHERE event.organization_id = $1
+          AND (
+              event.entity_id = $2
+              OR event.target_id = $2
+              OR event.context->>'targetUserId' = $2
+              OR event.context->>'memberId' = $2
+          )
+        ORDER BY event.created_at DESC
+        LIMIT 25
+    `, [organization.id, req.params.userId])
+    await recordAdminAuditEvent(req, {
+        actionType: 'support.organization.member.inspect',
+        actorId: actor.id,
+        targetType: 'member',
+        targetId: req.params.userId,
+        organizationId: organization.id,
+        entityId: req.params.userId,
+        requestId: inspectionAudit.requestId,
+        severity: 'info',
+        outcome: 'success',
+        reason: inspectionAudit.reason || undefined,
+        context: supportInspectionAuditContext(inspectionAudit, {
+            userId: req.params.userId,
+            role: member.role,
+            status: member.status,
+            active: member.active,
+        }),
+    })
+    const recentAuditTimeline = supportRecentAuditTimeline({
+        org: organization.id,
+        target: req.params.userId,
+        entity: req.params.userId,
+        entityType: 'member',
+        request: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        action: 'support.organization.member',
+    }, auditRows.rows as Record<string, unknown>[])
+    const authorization = buildSupportInspectionAuthorization({
+        actorId: actor.id,
+        requestedOrg: req.params.id,
+        requestedUser: req.params.userId,
+        effectiveOrg: organization.id,
+        effectiveUser: req.params.userId,
+        email: '',
+        request: inspectionAudit.requestId,
+        entity: req.params.userId,
+        supportSession: '',
+        sessionState: null,
+        organizationIds: [organization.id],
+    })
+    return res.send({
+        member: toSupportMemberDetail(member),
+        memberInspection: {
+            schemaVersion: 'support.member_inspection.v1',
+            organization: toOrganization(organization),
+            member: toSupportMemberDetail(member),
+            snapshot: membershipSnapshot(member),
+            authorization,
+            auditEventIds: recentAuditTimeline.eventIds,
+            auditTimeline: recentAuditTimeline,
+            links: {
+                roleRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/members/${encodeURIComponent(req.params.userId)}/role-recovery`,
+                audit: auditFilterQuery({ org: organization.id, target: req.params.userId, entity: req.params.userId, entityType: 'member' }),
+                user: `/api/admin/support/users/${encodeURIComponent(req.params.userId)}`,
+            },
+            noMutation: true,
+            redacted: true,
+            copyText: [
+                `Support member inspection ${req.params.userId}`,
+                `Organization: ${organization.name} (${organization.id})`,
+                `Role: ${member.role}`,
+                `Status: ${member.status}`,
+                `Audit events: ${recentAuditTimeline.eventIds.join(', ') || 'none'}`,
+            ].join('\n'),
+        },
+    })
+}
+
 export async function postSupportOrganizationMemberRoleRecovery(req: FastifyRequest<{ Params: OrganizationMemberParams, Body: SupportMemberRoleRecoveryBody }>, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
