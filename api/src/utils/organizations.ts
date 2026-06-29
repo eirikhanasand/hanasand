@@ -14,6 +14,7 @@ export type OrganizationWatchlistStatus = 'active' | 'paused' | 'archived'
 export type OrganizationWatchlistAction = 'pause' | 'resume' | 'archive' | 'restore'
 export type OrganizationDefaultWebhookPolicy = 'active_destinations' | 'manual_selection' | 'disabled'
 export type OrganizationAlertVisibilityPolicy = 'members' | 'admins' | 'owners'
+export type OrganizationLifecycleStatus = 'active' | 'archived' | 'deleted'
 
 export type OrganizationInput = {
     name?: unknown
@@ -26,6 +27,8 @@ export type OrganizationSettingsInput = {
     default_webhook_policy?: unknown
     alertVisibilityPolicy?: unknown
     alert_visibility_policy?: unknown
+    lifecycleStatus?: unknown
+    lifecycle_status?: unknown
     retentionDays?: unknown
     retention_days?: unknown
     auditSafeMetadata?: unknown
@@ -102,6 +105,7 @@ export type OrganizationRow = {
     admin_count?: number
     pending_invite_count?: number
     shared_watchlist_count?: number
+    status?: OrganizationLifecycleStatus
     default_webhook_policy?: OrganizationDefaultWebhookPolicy
     alert_visibility_policy?: OrganizationAlertVisibilityPolicy
     retention_days?: number
@@ -219,6 +223,7 @@ export type OrganizationWatchlistAlertGenerationRef = {
 export type OrganizationWatchlistAlertBridgeBlockerCode =
     | 'no_active_org'
     | 'no_active_admin'
+    | 'org_archived'
     | 'org_deleted'
     | 'invite_expired'
     | 'member_revoked'
@@ -389,7 +394,7 @@ export type OrganizationDownstreamAuthorizationExport = {
     schemaVersion: 'organization.downstream_authorization_export.v1'
     organizationId: string
     tenantId: string
-    organizationLifecycleState: 'active'
+    organizationLifecycleState: OrganizationLifecycleStatus
     member: {
         userId: string
         role: OrganizationRole
@@ -439,7 +444,7 @@ export type OrganizationDownstreamAuthorizationExport = {
     }
     lifecycleDenials: {
         inactiveOrganization: 'no_active_org'
-        archivedOrganization: 'org_deleted'
+        archivedOrganization: 'org_archived'
         removedMember: 'member_revoked'
         revokedMember: 'member_revoked'
         deactivatedMember: 'revoked_member_denied'
@@ -619,7 +624,7 @@ export type OrganizationLifecycleReadiness = {
     schemaVersion: 'organization.lifecycle_readiness.v1'
     organizationId: string
     tenantId: string
-    lifecycleStatus: 'active'
+    lifecycleStatus: OrganizationLifecycleStatus
     actorRole: OrganizationRole
     counts: {
         memberCount: number
@@ -680,6 +685,7 @@ const watchlistKinds = new Set<WatchlistKind>(['company', 'domain', 'vendor', 'a
 const memberRoleTargets = new Set<OrganizationRole>(['admin', 'member', 'viewer'])
 const defaultWebhookPolicies = new Set<OrganizationDefaultWebhookPolicy>(['active_destinations', 'manual_selection', 'disabled'])
 const alertVisibilityPolicies = new Set<OrganizationAlertVisibilityPolicy>(['members', 'admins', 'owners'])
+const organizationLifecycleStatuses = new Set<OrganizationLifecycleStatus>(['active', 'archived', 'deleted'])
 
 export function normalizeOrganizationInput(body: OrganizationInput | undefined) {
     const name = cleanText(body?.name)
@@ -751,6 +757,7 @@ export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInp
     const slug = body?.slug === undefined ? undefined : normalizeSettingsSlug(body.slug)
     const defaultWebhookPolicy = normalizeDefaultWebhookPolicy(body?.defaultWebhookPolicy ?? body?.default_webhook_policy)
     const alertVisibilityPolicy = normalizeAlertVisibilityPolicy(body?.alertVisibilityPolicy ?? body?.alert_visibility_policy)
+    const lifecycleStatus = normalizeOrganizationLifecycleStatus(body?.lifecycleStatus ?? body?.lifecycle_status)
     const retentionDays = normalizeRetentionDays(body?.retentionDays ?? body?.retention_days)
     const auditSafeMetadata = normalizeAuditSafeMetadata(body?.auditSafeMetadata ?? body?.audit_safe_metadata)
 
@@ -759,6 +766,7 @@ export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInp
         && slug === undefined
         && defaultWebhookPolicy === undefined
         && alertVisibilityPolicy === undefined
+        && lifecycleStatus === undefined
         && retentionDays === undefined
         && auditSafeMetadata === undefined
     ) {
@@ -770,6 +778,7 @@ export function normalizeOrganizationSettingsInput(body: OrganizationSettingsInp
         slug,
         defaultWebhookPolicy,
         alertVisibilityPolicy,
+        lifecycleStatus,
         retentionDays,
         auditSafeMetadata,
     }
@@ -934,10 +943,11 @@ export function organizationAlertCaseRoleActionContract(member: { userId: string
 }
 
 export function organizationDownstreamAuthorizationExport(
-    organization: Pick<OrganizationRow, 'id' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
+    organization: Pick<OrganizationRow, 'id' | 'status' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
     items: OrganizationWatchlistRow[],
     member: { userId: string, role: OrganizationRole }
 ): OrganizationDownstreamAuthorizationExport {
+    const organizationStatus = normalizeOrganizationStatus(organization.status)
     const visibility = organizationVisibilityDecision({
         role: member.role,
         status: 'active',
@@ -955,17 +965,18 @@ export function organizationDownstreamAuthorizationExport(
     const allowedActions = organizationAlertCaseRoleActions(member.role)
     const roleContract = organizationAlertCaseRoleActionContract(member)
     const blockerCodes: OrganizationWatchlistAlertBridgeBlockerCode[] = []
+    if (organizationStatus !== 'active') blockerCodes.push(organizationStatus === 'archived' ? 'org_archived' : 'org_deleted')
     if (!activeIds.length) blockerCodes.push('no_active_terms', 'alert_export_unavailable')
     if (pausedIds.length) blockerCodes.push('watchlist_paused')
     if (archivedIds.length) blockerCodes.push('watchlist_archived')
-    const canExportActiveTerms = visibility.allowed && activeIds.length > 0
+    const canExportActiveTerms = organizationStatus === 'active' && visibility.allowed && activeIds.length > 0
     const defaultWebhookPolicy = organization.default_webhook_policy ?? 'active_destinations'
 
     return {
         schemaVersion: 'organization.downstream_authorization_export.v1',
         organizationId: organization.id,
         tenantId: organization.id,
-        organizationLifecycleState: 'active',
+        organizationLifecycleState: organizationStatus,
         member: {
             userId: member.userId,
             role: member.role,
@@ -1016,7 +1027,7 @@ export function organizationDownstreamAuthorizationExport(
         },
         lifecycleDenials: {
             inactiveOrganization: 'no_active_org',
-            archivedOrganization: 'org_deleted',
+            archivedOrganization: 'org_archived',
             removedMember: 'member_revoked',
             revokedMember: 'member_revoked',
             deactivatedMember: 'revoked_member_denied',
@@ -1059,6 +1070,7 @@ export function toOrganization(row: OrganizationRow) {
         id: row.id,
         name: row.name,
         slug: row.slug,
+        lifecycleStatus: normalizeOrganizationStatus(row.status),
         role: row.role,
         memberCount: Number(row.member_count ?? 0),
         ownerCount: Number(row.owner_count ?? 0),
@@ -1079,7 +1091,16 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
     const pendingInviteCount = Number(row.pending_invite_count ?? 0)
     const sharedWatchlistCount = Number(row.shared_watchlist_count ?? 0)
     const actorRole = row.role ?? 'viewer'
+    const lifecycleStatus = normalizeOrganizationStatus(row.status)
     const typedBlockers: OrganizationLifecycleReadinessBlockerCode[] = []
+    if (lifecycleStatus === 'archived') {
+        typedBlockers.push('org_archived')
+    }
+
+    if (lifecycleStatus === 'deleted') {
+        typedBlockers.push('org_deleted')
+    }
+
     if (activeAdminCount < 1) {
         typedBlockers.push('no_active_admin')
     }
@@ -1092,7 +1113,7 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
         schemaVersion: 'organization.lifecycle_readiness.v1',
         organizationId: row.id,
         tenantId: row.id,
-        lifecycleStatus: 'active',
+        lifecycleStatus,
         actorRole,
         counts: {
             memberCount,
@@ -1123,7 +1144,7 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
             setupBlocker: 'watchlist_setup_required',
         },
         alertExportReadiness: {
-            ready: sharedWatchlistCount > 0 && activeAdminCount > 0,
+            ready: lifecycleStatus === 'active' && sharedWatchlistCount > 0 && activeAdminCount > 0,
             route: 'GET /api/organizations/:id/watchlists/alert-terms',
             unavailableBlocker: 'alert_export_unavailable',
         },
@@ -1353,10 +1374,11 @@ export function buildOrganizationBridgeContext(
     }
 }
 
-export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'default_webhook_policy' | 'alert_visibility_policy' | 'retention_days' | 'audit_safe_metadata'>) {
+export function organizationSettingsFromRow(row: Pick<OrganizationRow, 'status' | 'default_webhook_policy' | 'alert_visibility_policy' | 'retention_days' | 'audit_safe_metadata'>) {
     return {
         defaultWebhookPolicy: row.default_webhook_policy ?? 'active_destinations',
         alertVisibilityPolicy: row.alert_visibility_policy ?? 'members',
+        lifecycleStatus: normalizeOrganizationStatus(row.status),
         retentionDays: Number(row.retention_days ?? 365),
         auditSafeMetadata: row.audit_safe_metadata ?? {},
     }
@@ -1384,10 +1406,11 @@ export function organizationWatchlistTerms(items: OrganizationWatchlistRow[]): O
 }
 
 export function organizationWatchlistAlertGenerationContract(
-    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'status' | 'member_count' | 'owner_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy'>,
     items: OrganizationWatchlistRow[]
 ): OrganizationWatchlistAlertGenerationContract {
-    const activeItems = items.filter(item => normalizeWatchlistStatus(item) === 'active')
+    const organizationStatus = normalizeOrganizationStatus(organization.status)
+    const activeItems = organizationStatus === 'active' ? items.filter(item => normalizeWatchlistStatus(item) === 'active') : []
     const bridgeContext = buildOrganizationBridgeContext({
         ...organization,
         shared_watchlist_count: activeItems.length,
@@ -1395,6 +1418,10 @@ export function organizationWatchlistAlertGenerationContract(
     const activeWatchlistTerms = organizationWatchlistTerms(activeItems)
     const termFamilies = [...new Set(activeWatchlistTerms.map(term => term.termFamily))].sort()
     const blockedReasons: string[] = []
+    if (organizationStatus !== 'active') {
+        blockedReasons.push(organizationStatus === 'archived' ? 'org_archived' : 'org_deleted')
+    }
+
     if (!activeItems.length) {
         blockedReasons.push('needs_shared_watchlist_item')
     }
@@ -1418,7 +1445,7 @@ export function organizationWatchlistAlertGenerationContract(
 }
 
 export function organizationWatchlistAlertTermsExport(
-    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'member_count' | 'owner_count' | 'admin_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
+    organization: Pick<OrganizationRow, 'id' | 'name' | 'slug' | 'status' | 'member_count' | 'owner_count' | 'admin_count' | 'pending_invite_count' | 'shared_watchlist_count' | 'default_webhook_policy' | 'alert_visibility_policy' | 'role'>,
     items: OrganizationWatchlistRow[],
     member: { userId: string, role: OrganizationRole }
 ): OrganizationWatchlistAlertTermsExport {
@@ -1448,9 +1475,11 @@ export function organizationWatchlistAlertTermsExport(
     const pausedCount = statuses.filter(status => status === 'paused').length
     const archivedCount = statuses.filter(status => status === 'archived').length
     const activeAdminCount = Number(organization.admin_count ?? organization.owner_count ?? 0)
+    const organizationStatus = normalizeOrganizationStatus(organization.status)
     const typedBlockers = organizationWatchlistAlertBridgeBlockers({
         organizationId: organization.id,
         tenantId: organization.id,
+        organizationStatus,
         activeAdminCount,
         activeTermCount: activeTerms.length,
         pausedCount,
@@ -1659,6 +1688,7 @@ export function organizationWatchlistAlertTermsExport(
             blockerCatalog: [
                 'no_active_org',
                 'no_active_admin',
+                'org_archived',
                 'org_deleted',
                 'invite_expired',
                 'member_revoked',
@@ -1748,6 +1778,7 @@ function organizationWatchlistLifecycleBlockers(input: {
 function organizationWatchlistAlertBridgeBlockers(input: {
     organizationId: string
     tenantId: string
+    organizationStatus: OrganizationLifecycleStatus
     activeAdminCount: number
     activeTermCount: number
     pausedCount: number
@@ -1760,6 +1791,14 @@ function organizationWatchlistAlertBridgeBlockers(input: {
             code: 'missing_org_tenant',
             severity: 'blocker',
             message: 'Organization and tenant ids are required before org watchlist terms can generate alerts.',
+        })
+    }
+
+    if (input.organizationStatus !== 'active') {
+        blockers.push({
+            code: input.organizationStatus === 'archived' ? 'org_archived' : 'org_deleted',
+            severity: 'blocker',
+            message: 'Organization lifecycle is not active, so org watchlist terms must not generate alerts.',
         })
     }
 
@@ -1969,6 +2008,23 @@ function normalizeAlertVisibilityPolicy(value: unknown) {
     }
 
     return policy as OrganizationAlertVisibilityPolicy
+}
+
+function normalizeOrganizationLifecycleStatus(value: unknown) {
+    if (value === undefined) return undefined
+    const status = cleanText(value).toLowerCase()
+    if (!organizationLifecycleStatuses.has(status as OrganizationLifecycleStatus)) {
+        throw new Error('Organization lifecycle status must be active, archived, or deleted.')
+    }
+
+    return status as OrganizationLifecycleStatus
+}
+
+function normalizeOrganizationStatus(value: unknown): OrganizationLifecycleStatus {
+    const status = cleanText(value).toLowerCase()
+    return organizationLifecycleStatuses.has(status as OrganizationLifecycleStatus)
+        ? status as OrganizationLifecycleStatus
+        : 'active'
 }
 
 function normalizeRetentionDays(value: unknown) {

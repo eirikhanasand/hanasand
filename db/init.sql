@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS organizations (
     name TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
     default_webhook_policy TEXT NOT NULL DEFAULT 'active_destinations' CHECK (default_webhook_policy IN ('active_destinations', 'manual_selection', 'disabled')),
     alert_visibility_policy TEXT NOT NULL DEFAULT 'members' CHECK (alert_visibility_policy IN ('members', 'admins', 'owners')),
     retention_days INT NOT NULL DEFAULT 365 CHECK (retention_days BETWEEN 30 AND 2555),

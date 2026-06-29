@@ -46,6 +46,7 @@ assert.deepEqual(normalizeOrganizationSettingsInput({
     slug: 'Smoke Org Settings!',
     defaultWebhookPolicy: 'manual_selection',
     alertVisibilityPolicy: 'admins',
+    lifecycleStatus: 'archived',
     retentionDays: 180,
     auditSafeMetadata: { region: 'EU', customerTier: 'managed' },
 }), {
@@ -53,11 +54,13 @@ assert.deepEqual(normalizeOrganizationSettingsInput({
     slug: 'smoke-org-settings',
     defaultWebhookPolicy: 'manual_selection',
     alertVisibilityPolicy: 'admins',
+    lifecycleStatus: 'archived',
     retentionDays: 180,
     auditSafeMetadata: { region: 'EU', customerTier: 'managed' },
 })
 assert.throws(() => normalizeOrganizationSettingsInput({ defaultWebhookPolicy: 'send_everywhere' }), /Default webhook policy/)
 assert.throws(() => normalizeOrganizationSettingsInput({ alertVisibilityPolicy: 'public' }), /Alert visibility policy/)
+assert.throws(() => normalizeOrganizationSettingsInput({ lifecycleStatus: 'disabled' }), /Organization lifecycle status/)
 assert.throws(() => normalizeOrganizationSettingsInput({ retentionDays: 10 }), /Retention days/)
 assert.throws(() => normalizeOrganizationSettingsInput({ auditSafeMetadata: { callback: 'https://hooks.example.test/secret' } }), /emails, URLs, or secrets/)
 

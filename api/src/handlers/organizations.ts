@@ -264,8 +264,9 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
             slug = COALESCE($3, slug),
             default_webhook_policy = COALESCE($4, default_webhook_policy),
             alert_visibility_policy = COALESCE($5, alert_visibility_policy),
-            retention_days = COALESCE($6, retention_days),
-            audit_safe_metadata = COALESCE($7::jsonb, audit_safe_metadata),
+            status = COALESCE($6, status),
+            retention_days = COALESCE($7, retention_days),
+            audit_safe_metadata = COALESCE($8::jsonb, audit_safe_metadata),
             updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -275,6 +276,7 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
         slug ?? null,
         input.defaultWebhookPolicy ?? null,
         input.alertVisibilityPolicy ?? null,
+        input.lifecycleStatus ?? null,
         input.retentionDays ?? null,
         input.auditSafeMetadata === undefined ? null : JSON.stringify(input.auditSafeMetadata),
     ])
@@ -285,6 +287,7 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
             slug,
             defaultWebhookPolicy: input.defaultWebhookPolicy,
             alertVisibilityPolicy: input.alertVisibilityPolicy,
+            lifecycleStatus: input.lifecycleStatus,
             retentionDays: input.retentionDays,
             auditSafeMetadata: input.auditSafeMetadata === undefined ? undefined : Object.keys(input.auditSafeMetadata),
         }).filter(([, value]) => value !== undefined).map(([key]) => key),
@@ -967,7 +970,7 @@ export async function getOrganizationAlertReadiness(req: FastifyRequest<{ Params
     }
     const generatedAlertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(bridgeOrganization, item))
     const teamOnboardingReadiness = organizationTeamOnboardingReadiness(bridgeContext)
-    const alertGenerationBridge = organizationAlertGenerationBridge(bridgeContext, watchlistItems)
+    const alertGenerationBridge = organizationWatchlistAlertGenerationContract(bridgeOrganization, watchlistItems)
     const downstreamAuthorization = organizationDownstreamAuthorizationExport(bridgeOrganization, watchlistItems, {
         userId,
         role: organization.role ?? 'viewer',
@@ -1672,23 +1675,6 @@ function organizationSharedWatchlistContract(organization: OrganizationRow, item
             canWrite: roleCanWriteWatchlist(organization.role),
         },
     }
-}
-
-function organizationAlertGenerationBridge(
-    organization: ReturnType<typeof buildOrganizationBridgeContext>,
-    items: OrganizationWatchlistRow[]
-) {
-    return organizationWatchlistAlertGenerationContract({
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug ?? '',
-        member_count: organization.memberCount,
-        owner_count: organization.ownerCount,
-        pending_invite_count: organization.pendingInviteCount,
-        shared_watchlist_count: organization.sharedWatchlistCount,
-        default_webhook_policy: organization.defaultWebhookPolicy,
-        alert_visibility_policy: organization.alertVisibilityPolicy,
-    }, items)
 }
 
 function organizationWatchlistOperation(

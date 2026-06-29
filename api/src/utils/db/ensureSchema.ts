@@ -473,6 +473,7 @@ export default async function ensureSchema() {
             name TEXT NOT NULL,
             slug TEXT NOT NULL UNIQUE,
             created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
             default_webhook_policy TEXT NOT NULL DEFAULT 'active_destinations' CHECK (default_webhook_policy IN ('active_destinations', 'manual_selection', 'disabled')),
             alert_visibility_policy TEXT NOT NULL DEFAULT 'members' CHECK (alert_visibility_policy IN ('members', 'admins', 'owners')),
             retention_days INT NOT NULL DEFAULT 365 CHECK (retention_days BETWEEN 30 AND 2555),
@@ -481,11 +482,14 @@ export default async function ensureSchema() {
             updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT \'active\'')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS default_webhook_policy TEXT NOT NULL DEFAULT \'active_destinations\'')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS alert_visibility_policy TEXT NOT NULL DEFAULT \'members\'')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS retention_days INT NOT NULL DEFAULT 365')
     await run('ALTER TABLE organizations ADD COLUMN IF NOT EXISTS audit_safe_metadata JSONB NOT NULL DEFAULT \'{}\'::jsonb')
     await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_default_webhook_policy_check')
+    await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_status_check')
+    await run('ALTER TABLE organizations ADD CONSTRAINT organizations_status_check CHECK (status IN (\'active\', \'archived\', \'deleted\'))')
     await run('ALTER TABLE organizations ADD CONSTRAINT organizations_default_webhook_policy_check CHECK (default_webhook_policy IN (\'active_destinations\', \'manual_selection\', \'disabled\'))')
     await run('ALTER TABLE organizations DROP CONSTRAINT IF EXISTS organizations_alert_visibility_policy_check')
     await run('ALTER TABLE organizations ADD CONSTRAINT organizations_alert_visibility_policy_check CHECK (alert_visibility_policy IN (\'members\', \'admins\', \'owners\'))')

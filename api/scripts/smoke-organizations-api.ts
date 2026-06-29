@@ -82,6 +82,8 @@ assert.equal(organization.ownerCount, 1)
 assert.equal(organization.activeAdminCount, 1)
 assert.equal(organization.settings.defaultWebhookPolicy, 'active_destinations')
 assert.equal(organization.settings.alertVisibilityPolicy, 'members')
+assert.equal(organization.lifecycleStatus, 'active')
+assert.equal(organization.settings.lifecycleStatus, 'active')
 assert.equal(organization.settings.retentionDays, 365)
 const createdLifecycleReadiness = parseBody(organizationResponse.body).lifecycleReadiness
 assert.equal(createdLifecycleReadiness.schemaVersion, 'organization.lifecycle_readiness.v1')
@@ -291,6 +293,7 @@ assert.equal(adminSettings.organization.name, 'Smoke Shared Operations')
 assert.equal(adminSettings.organization.slug, 'shared-ops')
 assert.equal(adminSettings.settings.defaultWebhookPolicy, 'manual_selection')
 assert.equal(adminSettings.settings.alertVisibilityPolicy, 'admins')
+assert.equal(adminSettings.settings.lifecycleStatus, 'active')
 assert.equal(adminSettings.settings.retentionDays, 180)
 assert.deepEqual(adminSettings.settings.auditSafeMetadata, { region: 'EU', plan: 'team' })
 assert.equal(adminSettings.permissions.canEdit, true)
@@ -307,6 +310,7 @@ assert.equal(memberReadUpdatedOrganization.slug, 'shared-ops')
 assert.equal(memberReadUpdatedOrganization.role, 'member')
 assert.equal(memberReadUpdatedOrganization.settings.defaultWebhookPolicy, 'manual_selection')
 assert.equal(memberReadUpdatedOrganization.settings.alertVisibilityPolicy, 'admins')
+assert.equal(memberReadUpdatedOrganization.settings.lifecycleStatus, 'active')
 const memberReadLifecycle = parseBody(memberReadUpdatedOrganizationResponse.body).lifecycleReadiness
 assert.equal(memberReadLifecycle.actorRole, 'member')
 assert.equal(memberReadLifecycle.memberRoleReadiness.ownerCanMutate, false)
@@ -1083,6 +1087,59 @@ assert.deepEqual(memberAlertTermsExport.alertBridgeContract.alertCaseProof.membe
 })
 assert.ok(memberAlertTermsExport.activeTerms.every((term: Row) => term.alertGenerationRef.dedupe.key === term.alertGeneratorKey))
 
+const archiveOrganizationResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+    payload: { lifecycleStatus: 'archived' },
+})
+assert.equal(archiveOrganizationResponse.statusCode, 200, archiveOrganizationResponse.body)
+const archivedOrganizationSettings = parseBody(archiveOrganizationResponse.body)
+assert.equal(archivedOrganizationSettings.organization.lifecycleStatus, 'archived')
+assert.equal(archivedOrganizationSettings.settings.lifecycleStatus, 'archived')
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.lifecycleStatus, 'archived')
+assert.ok(archivedOrganizationSettings.lifecycleReadiness.typedBlockers.includes('org_archived'))
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.alertExportReadiness.ready, false)
+
+const archivedOrgAlertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-archived-org-alert-terms`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(archivedOrgAlertTermsResponse.statusCode, 200, archivedOrgAlertTermsResponse.body)
+const archivedOrgAlertTerms = parseBody(archivedOrgAlertTermsResponse.body).alertTermsExport
+assert.equal(archivedOrgAlertTerms.downstreamAuthorization.organizationLifecycleState, 'archived')
+assert.equal(archivedOrgAlertTerms.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, false)
+assert.ok(archivedOrgAlertTerms.downstreamAuthorization.downstream.alertGeneration.blockerCodes.includes('org_archived'))
+assert.deepEqual(archivedOrgAlertTerms.activeTerms, [])
+assert.ok(archivedOrgAlertTerms.blockedReasons.includes('org_archived'))
+assert.equal(archivedOrgAlertTerms.canGenerateAlerts, false)
+assert.ok(archivedOrgAlertTerms.alertBridgeContract.typedBlockers.some((blocker: Row) => blocker.code === 'org_archived'))
+
+const archivedOrgReadinessResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-readiness`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(archivedOrgReadinessResponse.statusCode, 200, archivedOrgReadinessResponse.body)
+const archivedOrgReadiness = parseBody(archivedOrgReadinessResponse.body).alertReadiness
+assert.equal(archivedOrgReadiness.lifecycleReadiness.lifecycleStatus, 'archived')
+assert.equal(archivedOrgReadiness.alertGenerationBridge.canGenerateAlerts, false)
+assert.deepEqual(archivedOrgReadiness.alertGenerationBridge.activeWatchlistTerms, [])
+assert.equal(archivedOrgReadiness.downstreamAuthorization.organizationLifecycleState, 'archived')
+assert.equal(archivedOrgReadiness.downstreamAuthorization.downstream.alertGeneration.canExportActiveTerms, false)
+
+const reactivateOrganizationResponse = await app.inject({
+    method: 'PUT',
+    url: `/api/organizations/${organization.id}/settings`,
+    headers: authHeaders('org_smoke_owner', 'owner-token'),
+    payload: { lifecycle_status: 'active' },
+})
+assert.equal(reactivateOrganizationResponse.statusCode, 200, reactivateOrganizationResponse.body)
+assert.equal(parseBody(reactivateOrganizationResponse.body).organization.lifecycleStatus, 'active')
+assert.equal(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.lifecycleStatus, 'active')
+assert.deepEqual(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.typedBlockers, [])
+
 const secondOrganizationResponse = await app.inject({
     method: 'POST',
     url: '/api/organizations',
@@ -1564,7 +1621,7 @@ async function fakeRun(query: string, params: any[] = []) {
     }
 
     if (compact.startsWith('UPDATE organizations SET name')) {
-        const [organizationId, name, slug, defaultWebhookPolicy, alertVisibilityPolicy, retentionDays, auditSafeMetadata] = params
+        const [organizationId, name, slug, defaultWebhookPolicy, alertVisibilityPolicy, lifecycleStatus, retentionDays, auditSafeMetadata] = params
         const existing = organizations.get(organizationId)
         if (!existing) return rows([])
         const updated = {
@@ -1573,6 +1630,7 @@ async function fakeRun(query: string, params: any[] = []) {
             slug: slug ?? existing.slug,
             default_webhook_policy: defaultWebhookPolicy ?? existing.default_webhook_policy,
             alert_visibility_policy: alertVisibilityPolicy ?? existing.alert_visibility_policy,
+            status: lifecycleStatus ?? existing.status,
             retention_days: retentionDays ?? existing.retention_days,
             audit_safe_metadata: auditSafeMetadata ? JSON.parse(auditSafeMetadata) : existing.audit_safe_metadata,
             updated_at: iso(),
@@ -1848,6 +1906,7 @@ function organizationSummary(organizationId: string, role: string) {
 
 function organizationRow(row: Row) {
     return nowRow({
+        status: 'active',
         default_webhook_policy: 'active_destinations',
         alert_visibility_policy: 'members',
         retention_days: 365,
