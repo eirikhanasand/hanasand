@@ -1313,6 +1313,25 @@ export type OrganizationDwmAlertReference = {
         route: 'organization_watchlist'
         casePath: string
         dedupeKey: string
+        alertOwnership: OrganizationDwmAlertReference['alertOwnership']
+    }
+    alertOwnership: {
+        schemaVersion: 'organization.alert_ownership.v1'
+        organizationId: string
+        tenantId: string
+        ownerOrganizationId: string
+        watchlistItemId: string
+        watchlistId: string
+        sourceFamily: 'organization_watchlist'
+        route: 'organization_watchlist'
+        dedupeKey: string
+        casePath: string
+        visibilityPolicy: OrganizationAlertVisibilityPolicy
+        allowedViewerRoles: OrganizationRole[]
+        requiredPersistedFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.organizationId' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.visibilityDecision' | 'casePath'>
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'watchlist_archived' | 'watchlist_paused'>
+        noLeakFields: Array<'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'activeTerms[]' | 'destination.secret'>
+        crossTenantCollisionAllowed: false
     }
     webhookContract: {
         orgId: string
@@ -4585,6 +4604,43 @@ export function buildOrganizationDwmAlertReference(
         kind: item.kind,
         termFamily: item.kind,
     }
+    const alertOwnership: OrganizationDwmAlertReference['alertOwnership'] = {
+        schemaVersion: 'organization.alert_ownership.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        ownerOrganizationId: organization.id,
+        watchlistItemId: item.id,
+        watchlistId: item.id,
+        sourceFamily: 'organization_watchlist',
+        route: 'organization_watchlist',
+        dedupeKey,
+        casePath,
+        visibilityPolicy: bridgeContext.alertVisibilityPolicy,
+        allowedViewerRoles: bridgeContext.allowedViewerRoles,
+        requiredPersistedFields: [
+            'organizationId',
+            'tenantId',
+            'watchlistItemIds',
+            'workflowContext.organizationId',
+            'workflowContext.alertGeneratorKeys',
+            'workflowContext.visibilityDecision',
+            'casePath',
+        ],
+        lifecycleBlockers: [
+            'org_archived',
+            'org_deleted',
+            'member_revoked',
+            'watchlist_archived',
+            'watchlist_paused',
+        ],
+        noLeakFields: [
+            'otherOrg.watchlistItemIds',
+            'otherOrg.alertGeneratorKeys',
+            'activeTerms[]',
+            'destination.secret',
+        ],
+        crossTenantCollisionAllowed: false,
+    }
 
     return {
         schemaVersion: 'organization.dwm_alert_bridge.v1',
@@ -4595,6 +4651,7 @@ export function buildOrganizationDwmAlertReference(
         matchedTerm,
         watchlist,
         organization: bridgeContext,
+        alertOwnership,
         alert: {
             id: dedupeKey,
             organizationId: organization.id,
@@ -4620,6 +4677,7 @@ export function buildOrganizationDwmAlertReference(
             route: 'organization_watchlist',
             casePath,
             dedupeKey,
+            alertOwnership,
         },
         webhookContract: {
             orgId: organization.id,
