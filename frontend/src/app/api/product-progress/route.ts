@@ -16,9 +16,10 @@ export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
     const routes = productProgressRoutes(query)
-    const [sourceProxy, dwmProduct, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
+    const [sourceProxy, dwmProduct, publicTi, alerts, alertGeneration, deliveries, organizations, watchlists, supportRecovery, auditEvents] = await Promise.all([
         fetchInternalJson(request, routes.sourceProxy || '/api/ti/scraper/control'),
         fetchInternalJson(request, routes.dwmProduct || '/api/dwm/product?demo=false'),
+        fetchInternalJson(request, routes.publicTiProvenance || '/api/ti/search'),
         fetchInternalJson(request, routes.dashboardAlerts || '/api/dwm/alerts'),
         fetchInternalJson(request, routes.alertGenerationReadiness || '/api/dwm/alerts/generation-readiness'),
         fetchInternalJson(request, routes.deliveries || '/api/dwm/webhooks/deliveries'),
@@ -44,6 +45,12 @@ export async function GET(request: NextRequest) {
         checkedAt: generatedAt,
         query,
         routes,
+        publicTiProvenance: publicTiProvenanceReadiness({
+            generatedAt,
+            query,
+            route: routes.publicTiProvenance || '/api/ti/search',
+            fetch: publicTi,
+        }),
         sourceProxy: normalizeSourceProxy(sourceProxy, query, generatedAt),
         dwmProduct: dwmProductReadiness({
             generatedAt,
@@ -108,7 +115,7 @@ function productProgressRoutes(query: string) {
     const encoded = encodeURIComponent(query)
     return {
         productProgress: '/api/product-progress',
-        publicTiProvenance: '/api/public-ti/provenance/readiness',
+        publicTiProvenance: `/api/ti/search?q=${encoded}&limit=10`,
         helpdeskAudit: '/api/backend/admin/support/access-recovery',
         deployProbe: '/api/product-progress',
         sourceProxy: `/api/ti/scraper/control?q=${encoded}`,
@@ -197,6 +204,76 @@ function selectOrganization(payload: unknown, request: NextRequest): DwmOrganiza
     return organizations.find(item => item.id === requestedId)
         || organizations.find(item => item.status === 'active')
         || organizations[0]
+}
+
+function publicTiProvenanceReadiness(input: {
+    generatedAt: string
+    query: string
+    route: string
+    fetch: FetchResult
+}) {
+    const payload = input.fetch.json as {
+        query?: string
+        rows?: Array<{ id?: string, sourceId?: string, updatedAt?: string, collectedAt?: string, firstSeenAt?: string, lastSeenAt?: string }>
+        results?: Array<{ id?: string, sourceId?: string, updatedAt?: string, collectedAt?: string, firstSeenAt?: string, lastSeenAt?: string }>
+        publicTiAnswer?: {
+            status?: string
+            evidenceLedgerReferences?: Array<{ evidenceId?: string, sourceId?: string }>
+            route?: { canonicalPath?: string }
+        }
+        actorProfile?: {
+            datasets?: { sourceCount?: number }
+            provenance?: Array<{ evidenceId?: string, sourceId?: string }>
+        }
+        quality?: { canPromoteToReady?: boolean, publicWarningCodes?: string[] }
+    } | undefined
+    const evidenceRows = rows(payload?.rows || payload?.results)
+    const ledgerRefs = rows(payload?.publicTiAnswer?.evidenceLedgerReferences || payload?.actorProfile?.provenance)
+    const sourceIds = new Set([
+        ...evidenceRows.map(row => String(row.sourceId || '')).filter(Boolean),
+        ...ledgerRefs.map(row => String(row.sourceId || '')).filter(Boolean),
+    ])
+    const latestArtifactAt = latestTimestamp(evidenceRows.map(row => String(row.lastSeenAt || row.updatedAt || row.collectedAt || row.firstSeenAt || '')))
+    const warningCodes = Array.isArray(payload?.quality?.publicWarningCodes) ? payload.quality.publicWarningCodes.filter(Boolean).map(String) : []
+    const statusReady = input.fetch.ok
+        && payload?.publicTiAnswer?.status === 'ready'
+        && evidenceRows.length > 0
+        && ledgerRefs.length > 0
+        && sourceIds.size > 0
+        && warningCodes.length === 0
+    const blockers = [
+        input.fetch.ok ? '' : input.fetch.error || `Public TI search route returned HTTP ${input.fetch.status}.`,
+        payload?.publicTiAnswer ? '' : 'Public TI search route did not return publicTiAnswer.',
+        evidenceRows.length > 0 ? '' : 'Public TI search route returned no evidence rows.',
+        ledgerRefs.length > 0 ? '' : 'Public TI search route returned no evidence ledger references.',
+        sourceIds.size > 0 ? '' : 'Public TI search route returned no source references.',
+        ...warningCodes.map(code => `Public TI quality warning: ${code}.`),
+    ].filter(Boolean)
+
+    return {
+        schemaVersion: 'ti.public_provenance.readiness.v1',
+        status: statusReady ? 'ready' as const : 'needs_action' as const,
+        checkedAt: input.generatedAt,
+        source: input.route,
+        href: `/ti/${encodeURIComponent(input.query.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || input.query)}`,
+        query: payload?.query || input.query,
+        artifactCount: evidenceRows.length,
+        sourceCount: sourceIds.size || payload?.actorProfile?.datasets?.sourceCount,
+        evidenceCount: ledgerRefs.length,
+        dashboardHandoffCount: 0,
+        latestArtifactAt,
+        blockers,
+        ownerLane: 'public-ti' as const,
+        unavailableReason: blockers.length ? 'missing_public_ti_provenance_readiness_api' : undefined,
+        staleAfterSeconds: 3600,
+        proofTimestamp: latestArtifactAt || input.generatedAt,
+        expectedDashboardRowId: 'public_ti_provenance',
+        integrationProbeHint: 'GET /api/ti/search?q=<query>&limit=10 must return publicTiAnswer.status=ready, rows, source references, and evidenceLedgerReferences.',
+        backendProofContractVersion: 'ti.search.public_answer.v1',
+        detail: blockers.length
+            ? blockers.join('; ')
+            : `${evidenceRows.length} public TI row${evidenceRows.length === 1 ? '' : 's'} from ${sourceIds.size} source${sourceIds.size === 1 ? '' : 's'} with ${ledgerRefs.length} evidence reference${ledgerRefs.length === 1 ? '' : 's'}.`,
+    }
 }
 
 function alertGenerationReadiness(input: {
