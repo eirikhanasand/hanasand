@@ -18,6 +18,10 @@ type StartBody = {
     supportSessionId?: string
     support_session_id?: string
 }
+type StopBody = {
+    reason?: string
+    context?: unknown
+}
 type EventQuery = {
     q?: string
     actor?: string
@@ -364,6 +368,9 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
         return res.status(401).send({ error: actor.error || 'Unauthorized.' })
     }
 
+    const body = req.body as StopBody | undefined
+    const stopReason = cleanText(body?.reason) || 'Support ended impersonation session.'
+    const stopContext = cleanStopContext(body?.context)
     const token = String(req.headers['x-impersonation-token'] || '')
     if (!token) {
         return res.send({ ok: true })
@@ -376,20 +383,42 @@ export async function stopImpersonation(req: FastifyRequest, res: FastifyReply) 
         WHERE token_hash = $1
           AND actor_id = $2
           AND revoked_at IS NULL
-        RETURNING id, actor_id, target_id
+        RETURNING id, actor_id, target_id, reason, created_at, expires_at, revoked_at
     `, [hashToken(token), actor.authenticatedId])
-    const row = result.rows[0] as { id: string, actor_id: string, target_id: string } | undefined
+    const row = result.rows[0] as { id: string, actor_id: string, target_id: string, reason?: string | null, created_at?: string, expires_at?: string, revoked_at?: string } | undefined
     if (row) {
-        const auditTrail = await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop', undefined, {
+        const auditTrail = await audit(req, row.id, row.actor_id, row.target_id, '/api/impersonation/stop', 'impersonation.stop', stopReason, {
             schemaVersion: 'support.impersonation.stop.v1',
             requestId: supportRequestId(req),
             targetUserId: row.target_id,
+            startReason: row.reason || null,
+            stopReason,
+            supportContext: stopContext || null,
+            createdAt: row.created_at || null,
+            expiresAt: row.expires_at || null,
+            revokedAt: row.revoked_at || null,
             outcome: 'success',
+            noSilentImpersonation: true,
         })
         return res.send({
             ok: true,
             requestId: auditTrail.requestId,
             auditEventIds: auditTrail.eventIds,
+            impersonationStop: {
+                schemaVersion: 'support.impersonation.stop.v1',
+                requestId: auditTrail.requestId,
+                sessionId: row.id,
+                actorId: row.actor_id,
+                targetUserId: row.target_id,
+                reason: stopReason,
+                supportContext: stopContext || null,
+                createdAt: row.created_at || null,
+                expiresAt: row.expires_at || null,
+                revokedAt: row.revoked_at || null,
+                outcome: 'success',
+                auditEventIds: auditTrail.eventIds,
+                audit: auditLink('impersonation.stop', auditTrail.requestId, auditTrail.eventIds),
+            },
             audit: auditLink('impersonation.stop', auditTrail.requestId, auditTrail.eventIds),
         })
     }
@@ -535,6 +564,10 @@ function supportRequestId(req: FastifyRequest) {
 
 function cleanText(value: unknown) {
     return typeof value === 'string' ? value.trim() : ''
+}
+
+function cleanStopContext(value: unknown) {
+    return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 1000) : ''
 }
 
 function impersonationError(code: string, message: string, detail: Record<string, unknown> = {}) {
