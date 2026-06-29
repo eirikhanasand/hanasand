@@ -1120,6 +1120,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
 
 function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifact; handoffs: ActorArtifactHandoffs }) {
     const bridge = handoffs.authBridge
+    const selectedArtifactPayload = selectedArtifactPayloadFor(artifact, handoffs)
     const payloadRows = [
         { id: 'watchlist', label: 'Watchlist package', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist], route: bridge.links.watchlist.href, blocked: handoffs.watchlist.blocked, detail: handoffs.watchlist.missing.length ? handoffMissingLabel(handoffs.watchlist.missing) : `${artifact.watchlistTerms.length} artifact term${artifact.watchlistTerms.length === 1 ? '' : 's'}` },
         { id: 'alert', label: 'Alert rebuild', payload: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild], route: bridge.links.alertRebuild.href, blocked: handoffs.alertRebuild.blocked, detail: handoffs.alertRebuild.missing.length ? handoffMissingLabel(handoffs.alertRebuild.missing) : 'Ready to rebuild from this selected artifact.' },
@@ -1141,10 +1142,16 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <h2 className='mt-1 wrap-break-word text-xl font-semibold text-[#171a21]'>{artifact.label}</h2>
                     <p className='mt-1 text-sm leading-6 text-[#596170]'>{formatLabel(artifact.kind)} · {artifact.subtitle}</p>
                 </div>
-                <div className='grid w-full min-w-0 basis-full grid-cols-3 gap-2 text-center text-xs sm:min-w-72 lg:w-auto lg:basis-auto'>
-                    <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
-                    <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
-                    <EvidenceMetric label='Readiness' value={artifact.readiness.label} />
+                <div data-ti-selected-artifact-export='true' className='grid w-full min-w-0 basis-full gap-2 sm:min-w-72 lg:w-auto lg:basis-auto'>
+                    <div className='grid grid-cols-3 gap-2 text-center text-xs'>
+                        <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
+                        <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
+                        <EvidenceMetric label='Readiness' value={artifact.readiness.label} />
+                    </div>
+                    <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
+                        <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{formatLabel(artifact.readiness.state)}</span>
+                        <CopyPayloadButton label='Selected artifact' payload={selectedArtifactPayload} />
+                    </div>
                 </div>
             </div>
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
@@ -1273,6 +1280,40 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             </div>
         </section>
     )
+}
+
+function selectedArtifactPayloadFor(artifact: ActorArtifact, handoffs: ActorArtifactHandoffs) {
+    const bridge = handoffs.authBridge
+    const actionReadiness = Object.values(bridge.payloads).flatMap(payload => payload.actionReadiness.filter(row => row.selected))
+    return {
+        schemaVersion: 'ti.public_actor.selected_artifact.v1',
+        artifact: bridge.payload.artifact,
+        readiness: {
+            state: artifact.readiness.state,
+            label: artifact.readiness.label,
+            blockers: artifact.readiness.blockers,
+            actions: actionReadiness,
+            orgRequired: bridge.orgRequired,
+            sourceRequired: bridge.sourceRequired,
+            stale: bridge.stale,
+            missing: bridge.missing,
+        },
+        evidenceRefs: bridge.payload.evidenceRefs,
+        sourceRequests: bridge.payload.sourceRequests,
+        handoffLinks: bridge.links,
+        handoffRoutes: {
+            watchlist: handoffs.watchlist.backedRoute,
+            alertRebuild: handoffs.alertRebuild.backedRoute,
+            case: handoffs.case.backedRoute,
+            enrichment: handoffs.enrichment.backedRoute,
+        },
+        selectedPayloads: {
+            watchlist: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.watchlist].selectedPayload,
+            alertRebuild: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.alertRebuild].selectedPayload,
+            case: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.case].selectedPayload,
+            enrichment: bridge.payloads[PUBLIC_TI_HANDOFF_ACTIONS.enrichment].selectedPayload,
+        },
+    }
 }
 
 function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWorkItem['priority']> }) {
