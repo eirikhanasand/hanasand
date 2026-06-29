@@ -717,7 +717,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                 </div>
             </div>
 
-            <FreshnessGatePanel actor={actor} actionability={actionability} />
+            <FreshnessGatePanel actor={actor} actionability={actionability} query={result.query} />
 
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
                 <DossierList title='Motivation' values={actor.motivation} />
@@ -742,7 +742,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
     )
 }
 
-function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel }) {
+function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; query: string }) {
     const sourceBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'public-ti')
     const workflowBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'org' || blocker.ownerLane === 'alert' || blocker.ownerLane === 'case' || blocker.ownerLane === 'webhook' || blocker.ownerLane === 'entitlement')
     const sourceState: DecisionStep['status'] = actor.freshness.stale || sourceBlockers.length || actor.sourceCoverage.missing.length ? 'review' : 'ready'
@@ -772,6 +772,9 @@ function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligen
                 <div className='flex flex-wrap items-center gap-1.5'>
                     <span className={decisionStepStatusClass(sourceState)}>sources {decisionStepStatusLabel(sourceState)}</span>
                     <span className={decisionStepStatusClass(handoffState)}>handoff {decisionStepStatusLabel(handoffState)}</span>
+                    <span data-ti-freshness-review-export='true' className='inline-flex'>
+                        <CopyPayloadButton label='Freshness review' payload={freshnessReviewPayloadFor(actor, actionability, query, { sourceState, handoffState })} />
+                    </span>
                 </div>
             </div>
             <div className='mt-3 grid min-w-0 grid-cols-2 gap-2 md:grid-cols-4'>
@@ -807,6 +810,70 @@ function FreshnessGatePanel({ actor, actionability }: { actor: TiActorIntelligen
             </p>
         </div>
     )
+}
+
+function freshnessReviewPayloadFor(
+    actor: TiActorIntelligenceProfile,
+    actionability: TiActionabilityModel,
+    query: string,
+    state: { sourceState: DecisionStep['status']; handoffState: DecisionStep['status'] },
+) {
+    const sourceBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'public-ti')
+    const workflowBlockers = actionability.readiness.blockers.filter(blocker => blocker.ownerLane === 'org' || blocker.ownerLane === 'alert' || blocker.ownerLane === 'case' || blocker.ownerLane === 'webhook' || blocker.ownerLane === 'entitlement')
+    const requestedFields = unique([
+        ...actor.sourceCoverage.missing,
+        ...actionability.sourceHealthQueue.rows.flatMap(row => row.requestedFields),
+        ...actionability.sourceEnrichmentIntake.items.flatMap(item => item.requestedFields),
+    ])
+    return {
+        schemaVersion: 'ti.public_actor.freshness_review.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query,
+        generatedAt: actor.freshness.generatedAt,
+        actor: {
+            actorClass: actor.actorClass,
+            confidence: actor.confidence,
+            firstSeen: actor.firstSeen,
+            lastSeen: actor.lastSeen,
+        },
+        freshness: actor.freshness,
+        state,
+        sourceCoverage: actor.sourceCoverage,
+        provenanceRows: actor.provenanceRows,
+        sourceHealthQueue: {
+            schemaVersion: actionability.sourceHealthQueue.schemaVersion,
+            rows: actionability.sourceHealthQueue.rows,
+        },
+        sourceEnrichmentIntake: {
+            schemaVersion: actionability.sourceEnrichmentIntake.schemaVersion,
+            route: actionability.sourceEnrichmentIntake.route,
+            summary: actionability.sourceEnrichmentIntake.summary,
+            items: actionability.sourceEnrichmentIntake.items,
+        },
+        requestedFields,
+        relatedWorkflow: {
+            watchlist: {
+                state: actionability.watchlistRelevance.state,
+                terms: actionability.watchlistRelevance.terms,
+                matches: actionability.watchlistRelevance.matches,
+                blockers: actionability.watchlistRelevance.blockers,
+            },
+            alerts: actionability.relatedAlerts,
+            cases: actionability.relatedCases,
+            caseReviewIntake: actionability.caseReviewIntake,
+        },
+        blockers: {
+            source: sourceBlockers,
+            workflow: workflowBlockers,
+        },
+        handoffRoutes: {
+            sourceEnrichment: actionability.sourceEnrichmentIntake.route,
+            watchlist: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+            alertRebuild: actionability.createAlertHandoff.backedRoute || actionability.createAlertHandoff.endpoint,
+            caseReview: actionability.caseHandoff.backedRoute || actionability.caseHandoff.endpoint,
+        },
+    }
 }
 
 function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
