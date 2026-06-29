@@ -2952,6 +2952,11 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                                     </div>
                                     <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
                                 </div>
+                                <div data-ti-staged-handoff-readiness='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {stagedReadinessChips(item).map(chip => (
+                                        <span key={chip.label} className={sourceHealthChipClass(chip.ready ? 'ready' : 'blocked')}>{chip.label}: {chip.value}</span>
+                                    ))}
+                                </div>
                                 {item.blockers.length ? (
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(item.blockers.slice(0, 2))}</p>
                                 ) : null}
@@ -2962,6 +2967,15 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
             </div>
         </Panel>
     )
+}
+
+function stagedReadinessChips(item: StagedHandoff) {
+    const sourceMissing = unique(item.sourceDrilldown.rows.flatMap(row => row.missing))
+    return [
+        { label: 'review', value: item.reviewHandoff.blockers.length ? `${item.reviewHandoff.blockers.length} blocker${item.reviewHandoff.blockers.length === 1 ? '' : 's'}` : 'ready', ready: item.reviewHandoff.blockers.length === 0 },
+        { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} row${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
+        { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'route ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
+    ]
 }
 
 function ActionButton({ icon, children, onClick }: { icon: React.ReactNode; children: string; onClick: () => void }) {

@@ -649,6 +649,8 @@ assert(pageClientSource.includes('confidence: row.confidence'), 'Selected case d
 assert(pageClientSource.includes('selectedCaseDraftFor'), 'Selected case draft should be built from selected evidence, relevance, source drilldown, and case readiness.')
 assert(pageClientSource.includes('ti.public_actor.staged_handoff_bundle.v1'), 'Selected evidence should export a session-local staged handoff bundle.')
 assert(pageClientSource.includes('data-ti-staged-handoff-queue'), 'Public TI should render a session-local staged handoff queue.')
+assert(pageClientSource.includes('data-ti-staged-handoff-readiness'), 'Staged handoffs should show review/source/case readiness before bundle copy.')
+assert(pageClientSource.includes('stagedReadinessChips(item)'), 'Staged handoff readiness should come from the staged review, source, and case payloads.')
 assert(pageClientSource.includes('stagedHandoffFor'), 'Staged handoffs should combine review, source drilldown, and case draft payloads.')
 assert(pageClientSource.includes('data-ti-source-health-queue'), 'Public TI should render a source-health queue from source coverage and enrichment gaps.')
 assert(actionabilitySource.includes('ti.public_actor.source_health_queue.v1'), 'Source-health queue should expose a versioned actionability payload.')
