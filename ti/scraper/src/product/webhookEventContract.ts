@@ -3,6 +3,7 @@ import { stableId, uniqueStrings } from "../utils.ts";
 export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
 export const DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION = "dwm.webhook_event_chain.v1" as const;
 export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
+export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
 
 export type DwmWebhookEventKind = "webhook.delivery_recorded" | "case.customer_notification_recorded";
 
@@ -119,6 +120,53 @@ export type DwmWebhookEventSupportHandoff = {
     action: "record_delivery" | "record_customer_notification" | "retry_delivery" | "record_live_delivery" | "attach_case" | "restore_provenance" | "resolve_identity";
     blockerCode: DwmWebhookEventChainBlocker["code"];
     path: string;
+  }[];
+};
+
+export type DwmWebhookSupportActionRequest = {
+  schemaVersion: typeof DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  adminSupportContract: {
+    schemaVersion: "support.action_prepare.v1";
+    method: "GET";
+    route: "/api/admin/support/inspect";
+    query: {
+      org?: string;
+      entity?: string;
+      entityType: "dwm_webhook_delivery";
+      action: "support.webhook.inspect_delivery" | "support.webhook.restore_delivery_chain";
+      prepareAction: "inspect_webhook_delivery" | "restore_webhook_delivery_chain";
+      requestId?: string;
+      idempotencyKey: string;
+    };
+  };
+  target: {
+    tenantId: string;
+    organizationId?: string;
+    alertId: string;
+    caseId?: string;
+    webhookDeliveryId?: string;
+    webhookDestinationId?: string;
+  };
+  redaction: {
+    required: true;
+    attestation: "support_safe_metadata_only";
+    hiddenFields: string[];
+  };
+  auditPreview: {
+    actionType: "support.webhook.inspect_delivery" | "support.webhook.restore_delivery_chain";
+    source: "dwm.webhook_event_support_handoff";
+    outcome: "prepared" | "blocked";
+    blockerCodes: DwmWebhookEventChainBlocker["code"][];
+    supportAction: DwmWebhookEventSupportHandoff["helpdesk"]["supportAction"];
+  };
+  blockers: {
+    code: "handoff_blocked" | "missing_support_target";
+    ownerLane: "webhook" | "case" | "source";
+    path: string;
+    message: string;
   }[];
 };
 
@@ -321,6 +369,61 @@ export function buildWebhookEventSupportHandoff(input: {
   };
 }
 
+export function buildWebhookSupportActionRequest(input: {
+  handoff: DwmWebhookEventSupportHandoff;
+  requestId?: string;
+  generatedAt?: string;
+}): DwmWebhookSupportActionRequest {
+  const handoff = input.handoff;
+  const actionType = handoff.helpdesk.supportAction === "inspect_webhook_delivery"
+    ? "support.webhook.inspect_delivery"
+    : "support.webhook.restore_delivery_chain";
+  const idempotencyKey = stableId("dwm_webhook_support_action", `${handoff.id}:${actionType}:${input.requestId ?? ""}`);
+  const blockers = supportRequestBlockers(handoff);
+
+  return {
+    schemaVersion: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+    id: stableId("dwm_webhook_support_action_request", `${handoff.id}:${input.requestId ?? ""}`),
+    generatedAt: input.generatedAt ?? handoff.checkedAt,
+    ok: blockers.length === 0,
+    adminSupportContract: {
+      schemaVersion: "support.action_prepare.v1",
+      method: "GET",
+      route: "/api/admin/support/inspect",
+      query: {
+        org: handoff.organizationId,
+        entity: handoff.webhookDeliveryId,
+        entityType: "dwm_webhook_delivery",
+        action: actionType,
+        prepareAction: handoff.helpdesk.supportAction,
+        requestId: stringValue(input.requestId),
+        idempotencyKey
+      }
+    },
+    target: {
+      tenantId: handoff.tenantId,
+      organizationId: handoff.organizationId,
+      alertId: handoff.alertId,
+      caseId: handoff.caseId,
+      webhookDeliveryId: handoff.webhookDeliveryId,
+      webhookDestinationId: handoff.webhookDestinationId
+    },
+    redaction: {
+      required: true,
+      attestation: "support_safe_metadata_only",
+      hiddenFields: ["endpointUrl", "payloadBody", "rawEvidence", "customerRationale"]
+    },
+    auditPreview: {
+      actionType,
+      source: "dwm.webhook_event_support_handoff",
+      outcome: blockers.length === 0 ? "prepared" : "blocked",
+      blockerCodes: handoff.audit.blockerCodes,
+      supportAction: handoff.helpdesk.supportAction
+    },
+    blockers
+  };
+}
+
 function evidenceFromAlertAndDelivery(alert: Record<string, any>, delivery: Record<string, any>): DwmWebhookEventContract["evidence"] {
   const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
   return {
@@ -357,6 +460,27 @@ function supportActionFor(code: DwmWebhookEventChainBlocker["code"]): DwmWebhook
   if (code === "missing_case_id") return "attach_case";
   if (code === "missing_provenance") return "restore_provenance";
   return "resolve_identity";
+}
+
+function supportRequestBlockers(handoff: DwmWebhookEventSupportHandoff): DwmWebhookSupportActionRequest["blockers"] {
+  const blockers: DwmWebhookSupportActionRequest["blockers"] = [];
+  if (!handoff.organizationId || !handoff.webhookDeliveryId) {
+    blockers.push({
+      code: "missing_support_target",
+      ownerLane: "webhook",
+      path: !handoff.organizationId ? "handoff.organizationId" : "handoff.webhookDeliveryId",
+      message: "Support action preparation requires organization and webhook delivery identity."
+    });
+  }
+  if (!handoff.ok) {
+    blockers.push(...handoff.nextActions.map((action) => ({
+      code: "handoff_blocked" as const,
+      ownerLane: action.ownerLane,
+      path: action.path,
+      message: "Webhook support handoff has unresolved blockers."
+    })));
+  }
+  return blockers;
 }
 
 function blocker(code: DwmWebhookEventChainBlocker["code"], ownerLane: DwmWebhookEventChainBlocker["ownerLane"], path: string, message: string): DwmWebhookEventChainBlocker {

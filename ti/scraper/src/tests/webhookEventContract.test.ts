@@ -3,8 +3,10 @@ import {
   DWM_WEBHOOK_EVENT_CHAIN_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
   DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+  DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
   buildCaseCustomerNotificationEventContract,
   buildWebhookEventSupportHandoff,
+  buildWebhookSupportActionRequest,
   buildWebhookDeliveryEventContract,
   validateWebhookEventChain
 } from "../product/webhookEventContract.ts";
@@ -124,6 +126,58 @@ describe("webhook event contract", () => {
     expect(JSON.stringify(handoff)).not.toContain("Customer SOC acknowledged");
   });
 
+  test("builds support action preparation request from verified webhook handoff", () => {
+    const chain = validateWebhookEventChain({
+      deliveryEvent: buildWebhookDeliveryEventContract({ delivery: deliveryFixture(), alert: alertFixture(), actor: "analyst_acme" }),
+      customerNotificationEvent: buildCaseCustomerNotificationEventContract({ receipt: notificationReceiptFixture(), caseRecord: caseFixture(), alert: alertFixture() }),
+      checkedAt: "2026-06-29T12:30:00.000Z"
+    });
+    const request = buildWebhookSupportActionRequest({
+      handoff: buildWebhookEventSupportHandoff({ chain }),
+      requestId: "req_support_webhook"
+    });
+
+    expect(request).toMatchObject({
+      schemaVersion: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+      ok: true,
+      adminSupportContract: {
+        schemaVersion: "support.action_prepare.v1",
+        method: "GET",
+        route: "/api/admin/support/inspect",
+        query: {
+          org: "org_acme",
+          entity: "delivery_acme_lumma",
+          entityType: "dwm_webhook_delivery",
+          action: "support.webhook.inspect_delivery",
+          prepareAction: "inspect_webhook_delivery",
+          requestId: "req_support_webhook"
+        }
+      },
+      target: {
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme_lumma",
+        caseId: "case_acme_lumma",
+        webhookDeliveryId: "delivery_acme_lumma",
+        webhookDestinationId: "webhook_discord"
+      },
+      redaction: {
+        required: true,
+        attestation: "support_safe_metadata_only"
+      },
+      auditPreview: {
+        actionType: "support.webhook.inspect_delivery",
+        source: "dwm.webhook_event_support_handoff",
+        outcome: "prepared",
+        blockerCodes: [],
+        supportAction: "inspect_webhook_delivery"
+      },
+      blockers: []
+    });
+    expect(request.adminSupportContract.query.idempotencyKey).toMatch(/^dwm_webhook_support_action_/);
+    expect(JSON.stringify(request)).not.toContain("https://discord.com");
+  });
+
   test("validates checked-in fixture as integration proof", () => {
     const chain = validateWebhookEventChain({
       deliveryEvent: fixture.events[0] as any,
@@ -229,6 +283,50 @@ describe("webhook event contract", () => {
       expect.objectContaining({ ownerLane: "webhook", blockerCode: "dry_run_delivery", action: "record_live_delivery" }),
       expect.objectContaining({ ownerLane: "case", blockerCode: "notification_delivery_mismatch", action: "resolve_identity" }),
       expect.objectContaining({ ownerLane: "source", blockerCode: "missing_provenance", action: "restore_provenance" })
+    ]));
+  });
+
+  test("blocks support action preparation when webhook handoff still has unresolved work", () => {
+    const alert = {
+      ...alertFixture(),
+      evidence: [],
+      provenance: { captureIds: [] },
+      workflowContext: { ...alertFixture().workflowContext, captureIds: [], evidenceCount: 0 }
+    };
+    const chain = validateWebhookEventChain({
+      deliveryEvent: buildWebhookDeliveryEventContract({
+        delivery: { ...deliveryFixture(), status: "failed", dryRun: true },
+        alert
+      }),
+      customerNotificationEvent: buildCaseCustomerNotificationEventContract({
+        receipt: { ...notificationReceiptFixture(), evidence: { evidenceCount: 0, sourceIds: [], contentHashes: [] } },
+        caseRecord: caseFixture(),
+        alert
+      }),
+      checkedAt: "2026-06-29T12:31:00.000Z"
+    });
+    const request = buildWebhookSupportActionRequest({
+      handoff: buildWebhookEventSupportHandoff({ chain }),
+      requestId: "req_support_blocked"
+    });
+
+    expect(request).toMatchObject({
+      ok: false,
+      adminSupportContract: {
+        query: {
+          action: "support.webhook.restore_delivery_chain",
+          prepareAction: "restore_webhook_delivery_chain"
+        }
+      },
+      auditPreview: {
+        outcome: "blocked",
+        supportAction: "restore_webhook_delivery_chain",
+        blockerCodes: expect.arrayContaining(["delivery_not_delivered", "dry_run_delivery", "missing_provenance"])
+      }
+    });
+    expect(request.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "handoff_blocked", ownerLane: "webhook", path: "deliveryEvent.status" }),
+      expect.objectContaining({ code: "handoff_blocked", ownerLane: "source", path: "deliveryEvent.evidence" })
     ]));
   });
 });
