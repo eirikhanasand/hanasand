@@ -103,15 +103,15 @@ export default function Footer() {
             </section>
 
             <section className='mx-auto mt-10 flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 border-t border-[#e1e5ec] pt-6 text-sm text-[#596170] dark:border-[#243044] dark:text-[#a8b3c5]'>
-                <Link href='/status' className='inline-flex items-center gap-2 font-semibold text-[#3d4656] dark:text-[#d9e2f2]'>
+                <Link href='/status' className='inline-flex min-h-9 items-center gap-2 font-semibold text-[#3d4656] dark:text-[#d9e2f2]'>
                     <span className='h-2.5 w-2.5 rounded-full bg-[#19c463] shadow-[0_0_0_6px_rgba(25,196,99,0.10)]' />
                     All systems operational
                 </Link>
                 <div className='flex flex-wrap items-center gap-x-6 gap-y-2'>
-                    <Link href='/terms' className='hover:text-[#171a21] dark:hover:text-white'>Terms of use</Link>
-                    <Link href='/privacy' className='hover:text-[#171a21] dark:hover:text-white'>Privacy policy</Link>
-                    <Link href='/cookies' className='hover:text-[#171a21] dark:hover:text-white'>Cookie policy</Link>
-                    <Link href='/cookie-settings' className='hover:text-[#171a21] dark:hover:text-white'>Cookie settings</Link>
+                    <Link href='/terms' className='inline-flex min-h-9 items-center hover:text-[#171a21] dark:hover:text-white'>Terms of use</Link>
+                    <Link href='/privacy' className='inline-flex min-h-9 items-center hover:text-[#171a21] dark:hover:text-white'>Privacy policy</Link>
+                    <Link href='/cookies' className='inline-flex min-h-9 items-center hover:text-[#171a21] dark:hover:text-white'>Cookie policy</Link>
+                    <Link href='/cookie-settings' className='inline-flex min-h-9 items-center hover:text-[#171a21] dark:hover:text-white'>Cookie settings</Link>
                     <span>© {year} Hanasand</span>
                 </div>
                 <span>v{config.version}</span>
