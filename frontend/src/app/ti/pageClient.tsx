@@ -2309,10 +2309,14 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
         const next = nextActorArtifactId(artifacts, selectedArtifactId, direction)
         if (next) onSelectArtifact(next)
     }
+    const selectedArtifact = artifacts.find(artifact => artifact.id === selectedArtifactId) ?? artifacts[0]
+    const readyCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'ready').length
+    const reviewCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'review').length
+    const blockedCount = artifacts.filter(artifact => artifactStateFor(artifact) === 'blocked').length
 
     return (
         <section
-            data-ti-artifact-nav='true'
+            data-ti-artifact-worklist='true'
             tabIndex={0}
             onKeyDown={(event) => {
                 if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
@@ -2329,27 +2333,100 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                     move('last')
                 }
             }}
-            className='rounded-lg border border-[#dfe5ee] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#131c29]'
+            className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#101722]'
         >
-            <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Artifact queue</p>
-                <p className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>Arrow keys, Home, and End move selection.</p>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Artifact worklist</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>IOCs, techniques, tools, campaigns, and geography with source context.</p>
+                </div>
+                <div className='flex min-w-0 flex-wrap gap-1.5'>
+                    <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
+                    <span className={sourceHealthChipClass('review')}>{reviewCount} review</span>
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} blocked</span>
+                    {selectedArtifact ? <CopyPayloadButton label='Copy artifact' payload={artifactWorklistPayloadFor(selectedArtifact)} /> : null}
+                </div>
             </div>
-            <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3'>
-                {artifacts.map(artifact => {
-                    const active = artifact.id === selectedArtifactId
-                    return (
-                        <button
-                            key={artifact.id}
-                            type='button'
-                            onClick={() => onSelectArtifact(artifact.id)}
-                            className={`min-h-12 min-w-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#9ab3ff] dark:bg-[#172646]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white dark:border-[#314057] dark:bg-[#0f1621] dark:hover:bg-[#172131]'}`}
-                        >
-                            <span className='block wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{artifact.label}</span>
-                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)} · {displayRequirementText(artifact.readiness.label)}</span>
-                        </button>
-                    )
-                })}
+            <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_18rem]'>
+                <div className='min-w-0 overflow-x-auto'>
+                    <table className='min-w-[780px] w-full border-collapse text-left text-xs'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Artifact</th>
+                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Freshness</th>
+                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Handoff</th>
+                                <th className='px-3 py-2 font-semibold'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                            {artifacts.map(artifact => {
+                                const active = artifact.id === selectedArtifact?.id
+                                const state = artifactStateFor(artifact)
+                                return (
+                                    <tr key={artifact.id} className={`${active ? 'bg-[#eef3ff] dark:bg-[#172646]' : 'bg-white dark:bg-[#101722]'} align-top`}>
+                                        <td className='px-3 py-2'>
+                                            <button type='button' onClick={() => onSelectArtifact(artifact.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
+                                                <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{artifact.label}</span>
+                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)}</span>
+                                            </button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{artifact.evidence.length} rows</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{artifact.evidence[0] ? displayRequirementText(artifact.evidence[0]) : artifact.subtitle}</p>
+                                        </td>
+                                        <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{formatDate(artifact.freshness)}</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(artifact.confidence * 100)}%</td>
+                                        <td className='px-3 py-2'>
+                                            <span className={sourceHealthChipClass(state)}>{artifactStateLabel(artifact)}</span>
+                                            <p className='mt-1 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                                {artifact.watchlistTerms.length} watch · {artifact.enrichmentTasks.length} gaps
+                                            </p>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                <button type='button' onClick={() => onSelectArtifact(artifact.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
+                                                <CopyPayloadButton label='Copy' payload={artifactWorklistPayloadFor(artifact)} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
+                    {selectedArtifact ? (
+                        <div className='grid gap-3'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected artifact</p>
+                                <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedArtifact.label}</h3>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{selectedArtifact.subtitle}</p>
+                            </div>
+                            <div className='grid grid-cols-2 gap-2 text-xs'>
+                                <EvidenceMetric label='Type' value={formatLabel(selectedArtifact.kind)} />
+                                <EvidenceMetric label='Confidence' value={`${Math.round(selectedArtifact.confidence * 100)}%`} />
+                                <EvidenceMetric label='Watch' value={String(selectedArtifact.watchlistTerms.length)} />
+                                <EvidenceMetric label='Gaps' value={String(selectedArtifact.enrichmentTasks.length)} />
+                            </div>
+                            <div className='grid grid-cols-2 gap-1.5'>
+                                <button type='button' onClick={() => onSelectArtifact(selectedArtifact.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review</button>
+                                <CopyPayloadButton label='Export' payload={artifactWorklistPayloadFor(selectedArtifact)} showLabel />
+                            </div>
+                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                {selectedArtifact.watchlistTerms.slice(0, 3).map(term => (
+                                    <span key={`${term.kind}-${term.value}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                        {term.kind}: {term.value}
+                                    </span>
+                                ))}
+                                {!selectedArtifact.watchlistTerms.length ? <span className='text-xs text-[#667085] dark:text-[#9aa8bd]'>No watch term attached.</span> : null}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select an artifact to inspect handoff context.</p>
+                    )}
+                </div>
             </div>
         </section>
     )
@@ -7779,6 +7856,41 @@ function sourceConfidenceLabel(values: number[]) {
 
 function uniqueNumbers(values: number[]) {
     return Array.from(new Set(values.map(value => Math.max(0, Math.min(1, value)))))
+}
+
+function artifactStateFor(artifact: ActorArtifact): 'ready' | 'review' | 'blocked' {
+    if (artifact.readiness.state === 'ready_for_org_handoff') return 'ready'
+    if (artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term') return 'blocked'
+    return 'review'
+}
+
+function artifactStateLabel(artifact: ActorArtifact) {
+    if (artifact.readiness.state === 'ready_for_org_handoff') return 'ready'
+    if (artifact.readiness.state === 'needs_source') return 'source gap'
+    if (artifact.readiness.state === 'needs_watchlist_term') return 'watch gap'
+    if (artifact.readiness.state === 'stale') return 'stale'
+    return 'review'
+}
+
+function artifactWorklistPayloadFor(artifact: ActorArtifact) {
+    return {
+        schemaVersion: 'ti.public_actor.artifact_worklist.v1',
+        source: 'public-ti',
+        artifact: {
+            id: artifact.id,
+            kind: artifact.kind,
+            label: artifact.label,
+            subtitle: artifact.subtitle,
+            confidence: artifact.confidence,
+            freshness: artifact.freshness,
+        },
+        evidence: artifact.evidence,
+        provenance: artifact.provenance,
+        watchlistTerms: artifact.watchlistTerms,
+        enrichmentTasks: artifact.enrichmentTasks,
+        state: artifactStateLabel(artifact),
+        blockers: artifact.readiness.blockers,
+    }
 }
 
 function sourceCountsFor(items: AnalystWorkItem[]) {
