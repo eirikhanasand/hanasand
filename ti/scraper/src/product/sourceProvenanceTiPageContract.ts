@@ -31,6 +31,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SC
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_intelligence_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_operator_remediation_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_execution_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_audit_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -2181,6 +2182,67 @@ export type TiSourceProvenanceSourcePackFixtureActionExecutionRow = {
   route: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["route"];
   provenance: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["provenance"] & {
     sourcePackFixtureOperatorRemediationPacketId: string;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAuditPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureActionExecutionPacketId: string;
+  events: TiSourceProvenanceSourcePackFixtureActionAuditEvent[];
+  summary: {
+    eventCount: number;
+    readyEvents: number;
+    blockedEvents: number;
+    parserRetryEvents: number;
+    policyReviewEvents: number;
+    inspectionEvents: number;
+    alertReadyEvents: number;
+    publicTiReadyEvents: number;
+    actors: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    ownerLanes: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"][];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "support" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureActionExecutionPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAuditEvent = {
+  eventId: string;
+  rowId: string;
+  actionId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["action"];
+  eventType: "dry_run_ready" | "retry_waiting" | "policy_review_required" | "inspection_required";
+  ownerLane: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"];
+  priority: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"];
+  occurredAt: string;
+  retry: TiSourceProvenanceSourcePackFixtureActionExecutionRow["retry"];
+  typedFailureReason?: TiSourceProvenanceSourcePackFixtureActionExecutionRow["typedFailureReason"];
+  downstreamReadiness: TiSourceProvenanceSourcePackFixtureActionExecutionRow["downstreamReadiness"];
+  route: TiSourceProvenanceSourcePackFixtureActionExecutionRow["route"];
+  provenance: TiSourceProvenanceSourcePackFixtureActionExecutionRow["provenance"] & {
+    sourcePackFixtureActionExecutionPacketId: string;
   };
 };
 
@@ -5342,6 +5404,57 @@ export function buildSourceProvenanceSourcePackFixtureActionExecutionPacket(inpu
       "summary"
     ],
     safeOutput: input.remediation.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureActionAuditPacket(input: {
+  execution: TiSourceProvenanceSourcePackFixtureActionExecutionPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureActionAuditPacket {
+  const generatedAt = input.generatedAt ?? input.execution.generatedAt;
+  const events = input.execution.rows.map((row) => sourcePackFixtureActionAuditEvent(input.execution, row, generatedAt));
+  const sourceFamilies = uniqueStrings(events.flatMap((event) => event.sourceFamily ? [event.sourceFamily] : [])) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const ownerLanes = uniqueStrings(events.map((event) => event.ownerLane)) as TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"][];
+  const blockedEvents = events.filter((event) => event.eventType !== "dry_run_ready").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_action_audit_packet", `${input.execution.id}:${generatedAt}:${events.map((event) => event.eventId).join(",")}`),
+    generatedAt,
+    ok: events.length > 0,
+    status: events.length === 0 ? "blocked" : blockedEvents > 0 ? "partial" : "ready",
+    tenantId: input.execution.tenantId,
+    organizationId: input.execution.organizationId,
+    sourcePackFixtureActionExecutionPacketId: input.execution.id,
+    events,
+    summary: {
+      eventCount: events.length,
+      readyEvents: events.filter((event) => event.eventType === "dry_run_ready").length,
+      blockedEvents,
+      parserRetryEvents: events.filter((event) => event.eventType === "retry_waiting").length,
+      policyReviewEvents: events.filter((event) => event.eventType === "policy_review_required").length,
+      inspectionEvents: events.filter((event) => event.eventType === "inspection_required").length,
+      alertReadyEvents: events.filter((event) => event.downstreamReadiness.alertGeneration).length,
+      publicTiReadyEvents: events.filter((event) => event.downstreamReadiness.publicTI).length,
+      actors: uniqueStrings(events.map((event) => event.actor)),
+      sourceFamilies,
+      ownerLanes,
+      nextRetryAt: earliestTimestamp(events.map((event) => event.retry.nextRetryAt))
+    },
+    consumers: sourcePackFixtureActionAuditConsumers(events),
+    payloadShape: [
+      "events[].actor",
+      "events[].publicTiRoute",
+      "events[].sourceFamily",
+      "events[].action",
+      "events[].eventType",
+      "events[].typedFailureReason",
+      "events[].downstreamReadiness",
+      "events[].route",
+      "events[].provenance",
+      "summary"
+    ],
+    safeOutput: input.execution.safeOutput
   };
 }
 
@@ -10815,6 +10928,118 @@ function sourcePackFixtureActionExecutionConsumers(
       method: "GET",
       path: "/v1/dwm/source-requests",
       body: { includeFixtureActionExecution: true, consumer: "integration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureActionAuditEvent(
+  packet: TiSourceProvenanceSourcePackFixtureActionExecutionPacket,
+  row: TiSourceProvenanceSourcePackFixtureActionExecutionRow,
+  occurredAt: string
+): TiSourceProvenanceSourcePackFixtureActionAuditEvent {
+  return {
+    eventId: stableId("ti_source_provenance_source_pack_fixture_action_audit_event", `${packet.id}:${row.rowId}:${row.executionState}:${occurredAt}`),
+    rowId: row.rowId,
+    actionId: row.actionId,
+    actor: row.actor,
+    publicTiRoute: row.publicTiRoute,
+    sourceFamily: row.sourceFamily,
+    action: row.action,
+    eventType: sourcePackFixtureActionAuditEventType(row.executionState),
+    ownerLane: row.ownerLane,
+    priority: row.priority,
+    occurredAt,
+    retry: row.retry,
+    typedFailureReason: row.typedFailureReason,
+    downstreamReadiness: row.downstreamReadiness,
+    route: row.route,
+    provenance: {
+      ...row.provenance,
+      sourcePackFixtureActionExecutionPacketId: packet.id
+    }
+  };
+}
+
+function sourcePackFixtureActionAuditEventType(
+  executionState: TiSourceProvenanceSourcePackFixtureActionExecutionRow["executionState"]
+): TiSourceProvenanceSourcePackFixtureActionAuditEvent["eventType"] {
+  if (executionState === "ready") return "dry_run_ready";
+  if (executionState === "retry_waiting") return "retry_waiting";
+  if (executionState === "policy_review_required") return "policy_review_required";
+  return "inspection_required";
+}
+
+function sourcePackFixtureActionAuditConsumers(
+  events: TiSourceProvenanceSourcePackFixtureActionAuditEvent[]
+): TiSourceProvenanceSourcePackFixtureActionAuditPacket["consumers"] {
+  const hasEvents = events.length > 0;
+  const alertReady = events.some((event) => event.downstreamReadiness.alertGeneration);
+  const publicTiReady = events.some((event) => event.downstreamReadiness.publicTI);
+  return [{
+    consumer: "publicTI",
+    ready: publicTiReady,
+    requiredFields: ["events[].actor", "events[].publicTiRoute", "events[].eventType", "events[].typedFailureReason"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "publicTI", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: alertReady,
+    requiredFields: ["events[].actor", "events[].sourceFamily", "events[].downstreamReadiness", "events[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "alertGeneration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasEvents,
+    requiredFields: ["summary", "events[].eventType", "events[].priority", "events[].route"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "dashboard", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasEvents,
+    requiredFields: ["events[].ownerLane", "events[].retry", "events[].typedFailureReason", "events[].route"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "sourceOps", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "support",
+    ready: hasEvents,
+    requiredFields: ["events[].publicTiRoute", "events[].typedFailureReason", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "support", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasEvents,
+    requiredFields: ["schemaVersion", "sourcePackFixtureActionExecutionPacketId", "events[].eventId", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAudit: true, consumer: "integration", dryRun: true },
       dryRunSupported: true,
       liveNetworkFetch: false
     }

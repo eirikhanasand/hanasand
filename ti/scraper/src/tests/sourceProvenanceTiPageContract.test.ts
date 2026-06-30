@@ -20,6 +20,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
@@ -72,6 +73,7 @@ import {
   buildSourceProvenanceSourcePackFixtureIntelligencePacket,
   buildSourceProvenanceSourcePackFixtureOperatorRemediationPacket,
   buildSourceProvenanceSourcePackFixtureActionExecutionPacket,
+  buildSourceProvenanceSourcePackFixtureActionAuditPacket,
   buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
@@ -4610,6 +4612,169 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(execution)).not.toContain("rawText");
     expect(JSON.stringify(execution)).not.toContain("password");
+  });
+
+  test("records source fixture action audit events for alert public TI and support consumers", () => {
+    const aptGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_action_audit",
+      captureId: "cap_actor_page_apt29_action_audit",
+      contentHash: "hash_actor_page_apt29_action_audit",
+      provenance: "Actor page fixture gives APT29 action audit coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_action_audit",
+      captureId: "cap_public_advisory_akira_action_audit",
+      contentHash: "hash_public_advisory_akira_action_audit",
+      provenance: "Public advisory fixture gives Akira action audit coverage.",
+      relationship: "targeting"
+    });
+    const catalog = buildSourceProvenanceSourcePackFixtureCatalogPacket({
+      growthPackets: [aptGrowthPacket, ransomwareGrowthPacket],
+      generatedAt: "2026-06-29T15:10:00.000Z"
+    });
+    const handoff = buildSourceProvenanceSourcePackFixtureAlertReadinessPacket({
+      catalog,
+      generatedAt: "2026-06-29T15:11:00.000Z"
+    });
+    const dedupe = buildSourceProvenanceSourcePackFixtureAlertDedupePacket({
+      alertReadiness: handoff,
+      generatedAt: "2026-06-29T15:12:00.000Z"
+    });
+    const drilldown = buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket({
+      dedupe,
+      generatedAt: "2026-06-29T15:13:00.000Z"
+    });
+    const intelligence = buildSourceProvenanceSourcePackFixtureIntelligencePacket({
+      drilldown,
+      generatedAt: "2026-06-29T15:14:00.000Z"
+    });
+    const remediation = buildSourceProvenanceSourcePackFixtureOperatorRemediationPacket({
+      intelligence,
+      generatedAt: "2026-06-29T15:15:00.000Z"
+    });
+    const execution = buildSourceProvenanceSourcePackFixtureActionExecutionPacket({
+      remediation,
+      generatedAt: "2026-06-29T15:16:00.000Z"
+    });
+    const audit = buildSourceProvenanceSourcePackFixtureActionAuditPacket({
+      execution,
+      generatedAt: "2026-06-29T15:17:00.000Z"
+    });
+
+    expect(audit).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourcePackFixtureActionExecutionPacketId: execution.id,
+      summary: {
+        eventCount: 10,
+        readyEvents: 2,
+        blockedEvents: 8,
+        parserRetryEvents: 2,
+        policyReviewEvents: 2,
+        inspectionEvents: 4,
+        alertReadyEvents: 2,
+        publicTiReadyEvents: 6,
+        actors: expect.arrayContaining(["APT29", "Akira"]),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        ownerLanes: expect.arrayContaining(["parser", "policy", "org", "source"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+
+    const readyEvent = audit.events.find((event) => event.actor === "Akira" && event.eventType === "dry_run_ready");
+    const retryEvent = audit.events.find((event) => event.actor === "APT29" && event.eventType === "retry_waiting");
+    const policyEvent = audit.events.find((event) => event.actor === "Akira" && event.eventType === "policy_review_required");
+    const inspectionEvent = audit.events.find((event) => event.actor === "APT29" && event.eventType === "inspection_required");
+
+    expect(readyEvent).toMatchObject({
+      actor: "Akira",
+      publicTiRoute: "/ti/Akira",
+      sourceFamily: "public_advisory",
+      action: "materialize_watchlist_terms",
+      eventType: "dry_run_ready",
+      downstreamReadiness: expect.objectContaining({ publicTI: true, alertGeneration: true }),
+      route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }),
+      provenance: expect.objectContaining({
+        sourcePackFixtureActionExecutionPacketId: execution.id,
+        sourcePackFixtureOperatorRemediationPacketId: remediation.id,
+        sourcePackFixtureIntelligencePacketId: intelligence.id,
+        fixtureBacked: true
+      })
+    });
+    expect(readyEvent?.typedFailureReason).toBeUndefined();
+    expect(retryEvent).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "telegram_public",
+      eventType: "retry_waiting",
+      typedFailureReason: {
+        code: "retry_window_pending",
+        ownerLane: "parser",
+        field: "retry.nextRetryAt",
+        nextAction: "retry_parser"
+      },
+      retry: {
+        retryable: true,
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      }
+    });
+    expect(policyEvent).toMatchObject({
+      actor: "Akira",
+      sourceFamily: "darkweb_metadata",
+      eventType: "policy_review_required",
+      typedFailureReason: {
+        code: "policy_review_required",
+        ownerLane: "policy",
+        field: "sourceFamily",
+        nextAction: "request_policy_review"
+      }
+    });
+    expect(inspectionEvent).toMatchObject({
+      actor: "APT29",
+      eventType: "inspection_required",
+      typedFailureReason: {
+        code: "source_health_inspection_required",
+        ownerLane: "source",
+        field: "route.body",
+        nextAction: "inspect_source_health"
+      },
+      downstreamReadiness: expect.objectContaining({ publicTI: true, alertGeneration: false })
+    });
+
+    expect(audit.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, requiredFields: expect.arrayContaining(["events[].publicTiRoute", "events[].eventType", "events[].typedFailureReason"]) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, requiredFields: expect.arrayContaining(["events[].downstreamReadiness", "events[].provenance"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["summary", "events[].priority", "events[].route"]) }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["events[].ownerLane", "events[].retry", "events[].typedFailureReason"]) }),
+      expect.objectContaining({ consumer: "support", ready: true, requiredFields: expect.arrayContaining(["events[].publicTiRoute", "events[].typedFailureReason", "safeOutput"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["sourcePackFixtureActionExecutionPacketId", "events[].eventId", "safeOutput"]) })
+    ]));
+    expect(audit.payloadShape).toEqual(expect.arrayContaining([
+      "events[].action",
+      "events[].eventType",
+      "events[].typedFailureReason",
+      "events[].downstreamReadiness",
+      "events[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(audit)).not.toContain("rawText");
+    expect(JSON.stringify(audit)).not.toContain("password");
   });
 
   test("exports source-pack fixture readiness for dashboard integration and alerts", () => {
