@@ -2048,6 +2048,34 @@ export type OrganizationReadinessProof = {
         requiredMetadataFields: Array<'requestId' | 'role' | 'recipientCount' | 'submittedRecipientCount' | 'duplicateRecipientCount' | 'invitedCount' | 'skippedCount' | 'inviteId' | 'action' | 'previousStatus' | 'newStatus'>
         nonmemberEnumeration: false
     }
+    tenMemberWorkspaceProof: {
+        schemaVersion: 'organization.ten_member_workspace_proof.v1'
+        targetMemberCount: 10
+        activeMemberCount: number
+        pendingInviteCount: number
+        acceptedOrInvitedCount: number
+        sharedWatchlistCount: number
+        activeWatchlistTermCount: number
+        canSupportTenMemberSharedWatchlistRollout: boolean
+        readinessRefs: {
+            inviteLifecycle: 'organization.invite_lifecycle_readiness_proof.v1'
+            sharedWatchlistReadiness: 'organization.shared_watchlist_readiness_export.v1'
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
+            alertCasePersistence: 'organization.alert_case_bridge_persistence_receipt.v1'
+            webhookDestinationReadiness: 'organization.webhook_destination_readiness_bridge.v1'
+        }
+        routeRefs: {
+            bulkInvite: 'POST /api/organizations/:id/invites'
+            listMembers: 'GET /api/organizations/:id/members'
+            createWatchlist: 'POST /api/organizations/:id/watchlists'
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+            alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility'
+            webhookDeliver: 'POST /v1/dwm/webhooks/deliver'
+        }
+        lifecycleBlockers: Array<'needs_10_active_members_or_pending_invites' | 'needs_shared_watchlist_item' | 'no_active_terms' | 'org_archived' | 'org_deleted' | 'member_revoked'>
+        noEnumerationFields: Array<'otherOrg.members' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret'>
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     uiProof: {
         safeFields: string[]
         redactedFields: string[]
@@ -4785,6 +4813,15 @@ export function organizationReadinessProof(input: {
         : input.downstreamAuthorization.downstream.webhook.defaultPolicy === 'disabled'
             ? 'webhook_policy_disabled'
             : 'manual_selection_required'
+    const acceptedOrInvitedCount = input.lifecycleReadiness.counts.activeMemberCount + input.lifecycleReadiness.counts.pendingInviteCount
+    const tenMemberWorkspaceBlockers = Array.from(new Set([
+        acceptedOrInvitedCount >= 10 ? undefined : 'needs_10_active_members_or_pending_invites',
+        input.lifecycleReadiness.counts.sharedWatchlistCount > 0 ? undefined : 'needs_shared_watchlist_item',
+        input.alertGenerationBridge.activeWatchlistTerms.length > 0 ? undefined : 'no_active_terms',
+        input.lifecycleReadiness.lifecycleStatus === 'archived' ? 'org_archived' : undefined,
+        input.lifecycleReadiness.lifecycleStatus === 'deleted' ? 'org_deleted' : undefined,
+        input.downstreamAuthorization.member.status === 'active' ? undefined : 'member_revoked',
+    ].filter(Boolean) as Array<'needs_10_active_members_or_pending_invites' | 'needs_shared_watchlist_item' | 'no_active_terms' | 'org_archived' | 'org_deleted' | 'member_revoked'>))
 
     return {
         schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
@@ -5056,6 +5093,39 @@ export function organizationReadinessProof(input: {
                 'newStatus',
             ],
             nonmemberEnumeration: false,
+        },
+        tenMemberWorkspaceProof: {
+            schemaVersion: 'organization.ten_member_workspace_proof.v1',
+            targetMemberCount: 10,
+            activeMemberCount: input.lifecycleReadiness.counts.activeMemberCount,
+            pendingInviteCount: input.lifecycleReadiness.counts.pendingInviteCount,
+            acceptedOrInvitedCount,
+            sharedWatchlistCount: input.lifecycleReadiness.counts.sharedWatchlistCount,
+            activeWatchlistTermCount: input.alertGenerationBridge.activeWatchlistTerms.length,
+            canSupportTenMemberSharedWatchlistRollout: tenMemberWorkspaceBlockers.length === 0,
+            readinessRefs: {
+                inviteLifecycle: 'organization.invite_lifecycle_readiness_proof.v1',
+                sharedWatchlistReadiness: 'organization.shared_watchlist_readiness_export.v1',
+                alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1',
+                alertCasePersistence: 'organization.alert_case_bridge_persistence_receipt.v1',
+                webhookDestinationReadiness: 'organization.webhook_destination_readiness_bridge.v1',
+            },
+            routeRefs: {
+                bulkInvite: 'POST /api/organizations/:id/invites',
+                listMembers: 'GET /api/organizations/:id/members',
+                createWatchlist: 'POST /api/organizations/:id/watchlists',
+                alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+                alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+                webhookDeliver: 'POST /v1/dwm/webhooks/deliver',
+            },
+            lifecycleBlockers: tenMemberWorkspaceBlockers,
+            noEnumerationFields: [
+                'otherOrg.members',
+                'otherOrg.watchlistItemIds',
+                'otherOrg.alertGeneratorKeys',
+                'destination.secret',
+            ],
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         uiProof: {
             safeFields: [
