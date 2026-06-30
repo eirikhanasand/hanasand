@@ -161,7 +161,7 @@ describe("DWM source-matched alert bootstrap", () => {
       workflowNote: "Validated Acme watchlist match."
     });
     expect(rebuiltTelegramAlert.workflowEvents.length).toBeGreaterThan(0);
-    expect(rebuiltTelegramAlert.workflowContext.captureIds).toEqual(["cap_bootstrap_tg_acme"]);
+    expect(rebuiltTelegramAlert.workflowContext.captureIds).toEqual(expect.arrayContaining(["cap_bootstrap_tg_acme"]));
     expect(rebuiltTelegramAlert.workflowContext.generationEvidenceWindow.captureIds).toEqual(expect.arrayContaining(["cap_bootstrap_tg_acme", "cap_bootstrap_onion_acme"]));
   });
 });

@@ -4789,7 +4789,7 @@ function findGenerationCandidate(plan: DwmAlertGenerationPlan, alert: DwmAlert):
 
 function mergeSnapshotAlertsForGeneration(alerts: DwmAlert[], plan: DwmAlertGenerationPlan, input: RebuildDwmRuntimeAlertsInput): DwmAlert[] {
   const merged = new Map<string, DwmAlert>();
-  for (const alert of alerts) {
+  for (const alert of [...alerts, ...candidateAlertsForGeneration(plan, input)]) {
     const candidate = findGenerationCandidate(plan, alert);
     const key = candidate
       ? `${input.tenantId}:${input.organizationId ?? ""}:${candidate.id}:${alert.sourceFamily}`
@@ -4802,6 +4802,139 @@ function mergeSnapshotAlertsForGeneration(alerts: DwmAlert[], plan: DwmAlertGene
     merged.set(key, mergeGeneratedAlert(current, alert));
   }
   return [...merged.values()];
+}
+
+function candidateAlertsForGeneration(plan: DwmAlertGenerationPlan, input: RebuildDwmRuntimeAlertsInput): DwmAlert[] {
+  const sources = input.store.listSources();
+  const captures = input.store.listCaptures();
+  return plan.candidates
+    .filter((candidate) => candidate.captureRefs.length > 0)
+    .filter((candidate) => !candidate.alertGeneratorKeys.length || !candidate.alertGenerationRefs.length)
+    .map((candidate) => alertFromGenerationCandidate(candidate, sources, captures, input))
+    .filter(Boolean) as DwmAlert[];
+}
+
+function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, sources: SourceRecord[], captures: RawCapture[], input: RebuildDwmRuntimeAlertsInput): DwmAlert | undefined {
+  const captureById = new Map(captures.map((capture) => [String(capture.id), capture]));
+  const sourceById = new Map(sources.map((source) => [String(source.id), source]));
+  const evidence = candidate.captureRefs
+    .slice(0, 25)
+    .map((ref) => evidenceFromGenerationCaptureRef(ref, captureById.get(String(ref.captureId)), sourceById.get(String(ref.sourceId)), input))
+    .filter(Boolean) as DwmAlert["evidence"];
+  if (!evidence.length) return undefined;
+
+  const sourceFamilies = uniqueStrings(evidence.map((item) => item.sourceFamily)) as DwmAlert["sourceFamily"][];
+  const sourceFamily = evidence[0]?.sourceFamily ?? "unknown";
+  const observed = evidence.map((item) => item.observedAt || item.firstSeenAt).filter(Boolean).sort();
+  const artifactType = sourceFamily === "public_advisory" ? "public_report" : "metadata_match";
+  const route = sourceFamily === "public_advisory" || sourceFamily === "clear_web" ? "analyst_review" : "brand_protection";
+  const dedupeSeed = candidate.dedupeKeyCandidate || stableId("dwm_dedupe_candidate", `${input.tenantId}:${input.organizationId ?? ""}:${candidate.normalizedTerm}:${sourceFamily}`);
+  const dedupeKey = stableId("dwm_dedupe", `${dedupeSeed}:${artifactType}:${sourceFamily}`);
+
+  return {
+    id: stableId("dwm_alert", dedupeKey),
+    eventType: "darkweb.monitoring.match",
+    severity: sourceFamily === "telegram_public" || sourceFamily === "darkweb_metadata" ? "medium" : "low",
+    confidence: Math.min(95, 58 + Math.min(25, evidence.length) + sourceFamilies.length * 4),
+    matchedTerm: candidate.term,
+    company: displayAlertCompany(candidate.term.value),
+    artifactType,
+    sourceFamily,
+    sourceCount: evidence.length,
+    firstSeenAt: observed[0] ?? nowFromEvidence(input),
+    lastSeenAt: observed.at(-1) ?? nowFromEvidence(input),
+    claimSummary: `${sourceFamily.replaceAll("_", " ")} evidence matched ${candidate.term.value} across ${evidence.length} capture${evidence.length === 1 ? "" : "s"}.`,
+    matchContext: {
+      normalizedTerm: candidate.normalizedTerm,
+      termKind: candidate.term.kind,
+      matchType: "bounded_text_or_metadata",
+      matchedFieldHints: ["capture_text", "source_metadata"]
+    },
+    evidenceSummary: {
+      evidenceCount: evidence.length,
+      sourceFamilyCounts: evidence.reduce((counts, item) => ({ ...counts, [item.sourceFamily]: Number(counts[item.sourceFamily] ?? 0) + 1 }), {} as Record<string, number>),
+      metadataOnlyCount: evidence.filter((item) => item.provenance.metadataOnly).length,
+      publicSafeCount: evidence.filter((item) => !item.provenance.metadataOnly).length,
+      firstObservedAt: observed[0] ?? nowFromEvidence(input),
+      lastObservedAt: observed.at(-1) ?? nowFromEvidence(input)
+    },
+    routingContext: {
+      queue: route,
+      urgency: route === "brand_protection" ? "same_day" : "watch",
+      customerVisibleEvidence: evidence.every((item) => item.provenance.metadataOnly) ? "metadata_only" : "redacted_excerpt",
+      reason: `Source-matched watchlist term ${candidate.term.value} has capture-backed evidence from ${sourceFamilies.join(", ")}.`
+    },
+    confidenceReasoning: [
+      "Alert was bootstrapped from source-matched capture evidence because the product snapshot had no persisted alert row.",
+      `${evidence.length} capture-backed evidence item${evidence.length === 1 ? "" : "s"} matched the active watchlist term.`,
+      `Source families: ${sourceFamilies.join(", ") || "unknown"}.`
+    ],
+    provenance: {
+      generatedAt: nowFromEvidence(input),
+      matchBasis: "watchlist_capture_text",
+      matchedEvidenceIds: evidence.map((item) => item.id),
+      sourceFamilies,
+      captureIds: evidence.map((item) => item.provenance.captureId),
+      sourceIds: uniqueStrings(evidence.map((item) => item.sourceId)),
+      extractorVersions: ["source-matched-bootstrap-v1"],
+      metadataOnly: evidence.every((item) => item.provenance.metadataOnly)
+    },
+    dedupeKey,
+    reviewState: "needs_review",
+    recommendedAction: "Review matched source evidence, confirm customer relevance, then route to case or webhook delivery.",
+    recommendedRoute: route,
+    evidence,
+    webhookDelivery: {
+      recommendedRoute: route,
+      payloadHash: stableId("dwm_payload", dedupeKey),
+      dedupeKey
+    }
+  };
+}
+
+function evidenceFromGenerationCaptureRef(ref: DwmAlertGenerationCaptureRef, capture: RawCapture | undefined, source: SourceRecord | undefined, input: RebuildDwmRuntimeAlertsInput): DwmAlert["evidence"][number] | undefined {
+  const sourceFamily = sourceFamilyFor(source, capture ?? ({ id: ref.captureId, sourceId: ref.sourceId, metadata: {} } as RawCapture)) as DwmAlert["sourceFamily"];
+  const text = capture ? captureText(capture) : "";
+  const captureId = String(ref.captureId);
+  const sourceId = String(ref.sourceId ?? (capture as any)?.sourceId ?? (source as any)?.id ?? "unknown");
+  const observedAt = ref.observedAt || String((capture as any)?.collectedAt ?? nowFromEvidence(input));
+  const contentHash = ref.contentHash || String((capture as any)?.contentHash ?? stableId("capture_hash", captureId));
+  const captureMode = sourceFamily === "telegram_public" ? "public_message" : sourceFamily === "public_advisory" || sourceFamily === "clear_web" ? "public_report" : "metadata_only";
+  return {
+    id: captureId,
+    sourceId,
+    sourceName: String((source as any)?.name ?? sourceFamily.replaceAll("_", " ")),
+    sourceFamily,
+    url: String((capture as any)?.url ?? (source as any)?.url ?? "") || undefined,
+    firstSeenAt: observedAt,
+    observedAt,
+    captureMode,
+    redactionState: captureMode === "metadata_only" ? "metadata_only" : "redacted",
+    contentHash,
+    excerpt: safeAlertExcerpt(text || `${sourceFamily} capture matched active watchlist term.`),
+    provenance: {
+      captureId,
+      sourceId,
+      sourceType: String((source as any)?.type ?? "") || undefined,
+      collector: String((capture as any)?.metadata?.adapter ?? "") || undefined,
+      captureMode,
+      retentionClass: String((capture as any)?.retentionClass ?? (capture as any)?.metadata?.retentionClass ?? "") || undefined,
+      storageKind: String((capture as any)?.storageKind ?? "") || undefined,
+      metadataOnly: captureMode === "metadata_only" || (capture as any)?.storageKind === "metadata_only"
+    }
+  };
+}
+
+function safeAlertExcerpt(value: string): string {
+  return value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/\b\d{8,}\b/g, "[number]").slice(0, 220);
+}
+
+function displayAlertCompany(value: string): string {
+  return value.includes(".") ? value.split(".")[0].replace(/[-_]/g, " ") : value;
+}
+
+function nowFromEvidence(_input: RebuildDwmRuntimeAlertsInput): string {
+  return new Date().toISOString();
 }
 
 function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
