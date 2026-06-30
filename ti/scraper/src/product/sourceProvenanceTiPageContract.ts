@@ -31,6 +31,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_alert_prerequisite_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_source_health_event_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_health_monitoring_filter_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_LIFECYCLE_CLEANUP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_lifecycle_cleanup_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -2117,6 +2118,64 @@ export type TiSourceProvenanceSourceHealthMonitoringFilter = {
       liveNetworkFetch: false;
     };
   };
+};
+
+export type TiSourceProvenanceSourcePackLifecycleCleanupPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_LIFECYCLE_CLEANUP_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourceHealthMonitoringFilterPacketId: string;
+  cleanupRows: TiSourceProvenanceSourcePackLifecycleCleanupRow[];
+  summary: {
+    cleanupCount: number;
+    retryParser: number;
+    policyReview: number;
+    alertRebuild: number;
+    inspectGap: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    affectedActorPages: string[];
+    affectedAlertFamilies: string[];
+    blockedCount: number;
+    retryableCount: number;
+    readyCount: number;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "sourceOps" | "dashboard" | "alertGeneration" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourceHealthMonitoringFilterPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackLifecycleCleanupRow = {
+  cleanupId: string;
+  filterId: string;
+  filterKind: TiSourceProvenanceSourceHealthMonitoringFilter["kind"];
+  filterValue: string;
+  lifecycleState: "retry_ready" | "policy_review_required" | "alert_rebuild_ready" | "gap_review_required" | "inspect_required";
+  priority: "high" | "medium" | "low";
+  eventCount: number;
+  readyCount: number;
+  blockedCount: number;
+  retryableCount: number;
+  affectedActorPages: string[];
+  affectedAlertFamilies: string[];
+  sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  sampleEventIds: string[];
+  remediation: TiSourceProvenanceSourceHealthMonitoringFilter["operatorAction"];
 };
 
 export type TiSourceProvenanceScraperEnrichmentLifecycle = {
@@ -4765,6 +4824,60 @@ export function buildSourceProvenanceSourceHealthMonitoringFilterPacket(input: {
       "summary"
     ],
     safeOutput: input.sourceHealthEventPacket.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackLifecycleCleanupPacket(input: {
+  monitoringFilterPacket: TiSourceProvenanceSourceHealthMonitoringFilterPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackLifecycleCleanupPacket {
+  const generatedAt = input.generatedAt ?? input.monitoringFilterPacket.generatedAt;
+  const cleanupRows = input.monitoringFilterPacket.filters
+    .map(sourcePackLifecycleCleanupRow)
+    .filter((row): row is TiSourceProvenanceSourcePackLifecycleCleanupRow => Boolean(row));
+  const retryParser = cleanupRows.filter((row) => row.lifecycleState === "retry_ready").length;
+  const policyReview = cleanupRows.filter((row) => row.lifecycleState === "policy_review_required").length;
+  const alertRebuild = cleanupRows.filter((row) => row.lifecycleState === "alert_rebuild_ready").length;
+  const inspectGap = cleanupRows.filter((row) => row.lifecycleState === "gap_review_required").length;
+  const status = cleanupRows.length === 0 ? "blocked" : retryParser === 0 && policyReview === 0 && inspectGap === 0 ? "ready" : alertRebuild > 0 ? "partial" : "blocked";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_LIFECYCLE_CLEANUP_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_lifecycle_cleanup_packet", `${generatedAt}:${input.monitoringFilterPacket.id}:${cleanupRows.map((row) => `${row.filterKind}:${row.filterValue}:${row.lifecycleState}`).join(",")}`),
+    generatedAt,
+    ok: cleanupRows.length > 0,
+    status,
+    tenantId: input.monitoringFilterPacket.tenantId,
+    organizationId: input.monitoringFilterPacket.organizationId,
+    sourceHealthMonitoringFilterPacketId: input.monitoringFilterPacket.id,
+    cleanupRows,
+    summary: {
+      cleanupCount: cleanupRows.length,
+      retryParser,
+      policyReview,
+      alertRebuild,
+      inspectGap,
+      sourceFamilies: uniqueStrings(cleanupRows.flatMap((row) => row.sourceFamilies)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][],
+      affectedActorPages: uniqueStrings(cleanupRows.flatMap((row) => row.affectedActorPages)),
+      affectedAlertFamilies: uniqueStrings(cleanupRows.flatMap((row) => row.affectedAlertFamilies)),
+      blockedCount: cleanupRows.reduce((sum, row) => sum + row.blockedCount, 0),
+      retryableCount: cleanupRows.reduce((sum, row) => sum + row.retryableCount, 0),
+      readyCount: cleanupRows.reduce((sum, row) => sum + row.readyCount, 0),
+      nextRetryAt: input.monitoringFilterPacket.summary.nextRetryAt
+    },
+    consumers: sourcePackLifecycleCleanupConsumers(cleanupRows),
+    payloadShape: [
+      "cleanupRows[].filterKind",
+      "cleanupRows[].filterValue",
+      "cleanupRows[].lifecycleState",
+      "cleanupRows[].priority",
+      "cleanupRows[].affectedActorPages",
+      "cleanupRows[].affectedAlertFamilies",
+      "cleanupRows[].sampleEventIds",
+      "cleanupRows[].remediation",
+      "summary"
+    ],
+    safeOutput: input.monitoringFilterPacket.safeOutput
   };
 }
 
@@ -9433,6 +9546,25 @@ function sourceHealthMonitoringFilterAction(
   value: string,
   rows: TiSourceProvenanceActorEnrichmentSourceHealthEvent[]
 ): TiSourceProvenanceSourceHealthMonitoringFilter["operatorAction"] {
+  if (kind === "alert_family" || kind === "affected_actor_page") {
+    return {
+      action: "review_gap",
+      ownerLane: "source",
+      reason: "Review source coverage gaps before routing the affected actor page or alert family.",
+      route: {
+        method: "GET",
+        path: "/v1/dwm/source-requests",
+        body: {
+          filterKind: kind,
+          filterValue: value,
+          includeSourceHealthEvents: true,
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
   const retryRow = rows.find((row) => row.candidateValidation.state === "retry_gated");
   if (retryRow || kind === "retry_window" || value === "retry_gated" || value === "stale") {
     return {
@@ -9482,25 +9614,6 @@ function sourceHealthMonitoringFilterAction(
         path: "/v1/dwm/alerts/rebuild",
         body: {
           eventIds: rows.map((row) => row.eventId),
-          dryRun: true
-        },
-        dryRunSupported: true,
-        liveNetworkFetch: false
-      }
-    };
-  }
-  if (kind === "alert_family" || kind === "affected_actor_page") {
-    return {
-      action: "review_gap",
-      ownerLane: "source",
-      reason: "Review source coverage gaps before routing the affected actor page or alert family.",
-      route: {
-        method: "GET",
-        path: "/v1/dwm/source-requests",
-        body: {
-          filterKind: kind,
-          filterValue: value,
-          includeSourceHealthEvents: true,
           dryRun: true
         },
         dryRunSupported: true,
@@ -9593,6 +9706,135 @@ function sourceHealthMonitoringFilterConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationMonitoringFilters: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackLifecycleCleanupRow(
+  filter: TiSourceProvenanceSourceHealthMonitoringFilter
+): TiSourceProvenanceSourcePackLifecycleCleanupRow | undefined {
+  const lifecycleState = sourcePackLifecycleCleanupState(filter);
+  if (!lifecycleState) return undefined;
+  const sourceFamilies = sourcePackLifecycleCleanupSourceFamilies(filter);
+  return {
+    cleanupId: stableId("ti_source_provenance_source_pack_lifecycle_cleanup", `${filter.filterId}:${lifecycleState}`),
+    filterId: filter.filterId,
+    filterKind: filter.kind,
+    filterValue: filter.value,
+    lifecycleState,
+    priority: sourcePackLifecycleCleanupPriority(filter, lifecycleState),
+    eventCount: filter.count,
+    readyCount: filter.readyCount,
+    blockedCount: filter.blockedCount,
+    retryableCount: filter.retryableCount,
+    affectedActorPages: filter.affectedActorPages,
+    affectedAlertFamilies: filter.affectedAlertFamilies,
+    sourceFamilies,
+    sampleEventIds: filter.sampleEventIds,
+    remediation: filter.operatorAction
+  };
+}
+
+function sourcePackLifecycleCleanupState(
+  filter: TiSourceProvenanceSourceHealthMonitoringFilter
+): TiSourceProvenanceSourcePackLifecycleCleanupRow["lifecycleState"] | undefined {
+  if (filter.operatorAction.action === "retry") return "retry_ready";
+  if (filter.operatorAction.action === "request_policy_review") return "policy_review_required";
+  if (filter.operatorAction.action === "queue_alert_rebuild") return "alert_rebuild_ready";
+  if (filter.operatorAction.action === "review_gap") return "gap_review_required";
+  if (filter.operatorAction.action === "inspect") return "inspect_required";
+  return undefined;
+}
+
+function sourcePackLifecycleCleanupPriority(
+  filter: TiSourceProvenanceSourceHealthMonitoringFilter,
+  lifecycleState: TiSourceProvenanceSourcePackLifecycleCleanupRow["lifecycleState"]
+): TiSourceProvenanceSourcePackLifecycleCleanupRow["priority"] {
+  if (lifecycleState === "policy_review_required" || filter.blockedCount > 0) return "high";
+  if (lifecycleState === "retry_ready" || filter.retryableCount > 0) return "high";
+  if (lifecycleState === "gap_review_required") return "medium";
+  if (lifecycleState === "alert_rebuild_ready") return "medium";
+  return "low";
+}
+
+function sourcePackLifecycleCleanupSourceFamilies(
+  filter: TiSourceProvenanceSourceHealthMonitoringFilter
+): TiSourceProvenanceActorProfileGapSourceCandidate["family"][] {
+  const knownFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][] = [
+    "actor_page",
+    "public_advisory",
+    "telegram_public",
+    "darkweb_metadata"
+  ];
+  if (filter.kind === "source_family" && knownFamilies.includes(filter.value as TiSourceProvenanceActorProfileGapSourceCandidate["family"])) {
+    return [filter.value as TiSourceProvenanceActorProfileGapSourceCandidate["family"]];
+  }
+  if (filter.value === "restricted_metadata") return ["darkweb_metadata"];
+  if (filter.value === "campaign_freshness") return ["telegram_public", "public_advisory"];
+  if (filter.value === "actor_enrichment") return ["actor_page", "public_advisory"];
+  return [];
+}
+
+function sourcePackLifecycleCleanupConsumers(
+  cleanupRows: TiSourceProvenanceSourcePackLifecycleCleanupRow[]
+): TiSourceProvenanceSourcePackLifecycleCleanupPacket["consumers"] {
+  const hasRows = cleanupRows.length > 0;
+  const hasAlertReady = cleanupRows.some((row) => row.lifecycleState === "alert_rebuild_ready");
+  return [{
+    consumer: "sourceOps",
+    ready: hasRows,
+    requiredFields: ["cleanupRows[].lifecycleState", "cleanupRows[].priority", "cleanupRows[].remediation", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeLifecycleCleanup: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRows,
+    requiredFields: ["cleanupRows[].affectedActorPages", "cleanupRows[].affectedAlertFamilies", "cleanupRows[].sampleEventIds", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeSourcePackLifecycleCleanup: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasAlertReady,
+    requiredFields: ["cleanupRows[].lifecycleState", "cleanupRows[].remediation.route", "summary.affectedAlertFamilies"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        includeLifecycleCleanup: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRows,
+    requiredFields: ["schemaVersion", "safeOutput", "cleanupRows[].sampleEventIds", "consumers[]"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeIntegrationLifecycleCleanup: true,
         dryRun: true
       },
       dryRunSupported: true,

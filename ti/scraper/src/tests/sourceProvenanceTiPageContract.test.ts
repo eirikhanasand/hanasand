@@ -20,6 +20,7 @@ import {
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_LIFECYCLE_CLEANUP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -64,6 +65,7 @@ import {
   buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket,
   buildSourceProvenanceActorEnrichmentSourceHealthEventPacket,
   buildSourceProvenanceSourceHealthMonitoringFilterPacket,
+  buildSourceProvenanceSourcePackLifecycleCleanupPacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -4608,6 +4610,144 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(filters)).not.toContain("rawText");
     expect(JSON.stringify(filters)).not.toContain("password");
+  });
+
+  test("builds source pack lifecycle cleanup from monitoring filters without network fetches", () => {
+    const aptReceipt = buildActorValidationReceiptFixture({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_lifecycle_cleanup",
+      captureId: "cap_actor_page_apt29_lifecycle_cleanup",
+      contentHash: "hash_actor_page_apt29_lifecycle_cleanup",
+      provenance: "Actor page fixture gives APT29 source cleanup rows with backed provenance.",
+      relationship: "actor_activity"
+    });
+    const ransomwareReceipt = buildActorValidationReceiptFixture({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_lifecycle_cleanup",
+      captureId: "cap_public_advisory_akira_lifecycle_cleanup",
+      contentHash: "hash_public_advisory_akira_lifecycle_cleanup",
+      provenance: "Public advisory fixture gives Akira source cleanup rows with backed provenance.",
+      relationship: "targeting"
+    });
+    const portfolio = buildSourceProvenanceActorSourceCoveragePortfolio({
+      validationReceipts: [aptReceipt, ransomwareReceipt],
+      generatedAt: "2026-06-29T13:00:00.000Z"
+    });
+    const prerequisites = buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket({
+      portfolio,
+      generatedAt: "2026-06-29T13:01:00.000Z"
+    });
+    const healthEvents = buildSourceProvenanceActorEnrichmentSourceHealthEventPacket({
+      alertPrerequisitePacket: prerequisites,
+      generatedAt: "2026-06-29T13:02:00.000Z"
+    });
+    const filters = buildSourceProvenanceSourceHealthMonitoringFilterPacket({
+      sourceHealthEventPacket: healthEvents,
+      generatedAt: "2026-06-29T13:03:00.000Z"
+    });
+    const cleanup = buildSourceProvenanceSourcePackLifecycleCleanupPacket({
+      monitoringFilterPacket: filters,
+      generatedAt: "2026-06-29T13:04:00.000Z"
+    });
+
+    expect(cleanup).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_LIFECYCLE_CLEANUP_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourceHealthMonitoringFilterPacketId: filters.id,
+      summary: {
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+        affectedAlertFamilies: expect.arrayContaining(["watchlist_terms", "actor_enrichment", "campaign_freshness", "restricted_metadata"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(cleanup.summary.cleanupCount).toBe(cleanup.cleanupRows.length);
+    expect(cleanup.summary.retryParser >= 1).toBe(true);
+    expect(cleanup.summary.policyReview >= 1).toBe(true);
+    expect(cleanup.summary.alertRebuild >= 1).toBe(true);
+    expect(cleanup.summary.inspectGap >= 1).toBe(true);
+
+    const retryRow = cleanup.cleanupRows.find((row) => row.lifecycleState === "retry_ready");
+    const policyRow = cleanup.cleanupRows.find((row) => row.lifecycleState === "policy_review_required");
+    const alertRow = cleanup.cleanupRows.find((row) => row.lifecycleState === "alert_rebuild_ready");
+    const gapRow = cleanup.cleanupRows.find((row) => row.lifecycleState === "gap_review_required" && row.filterKind === "alert_family" && row.filterValue === "watchlist_terms");
+
+    expect(retryRow).toMatchObject({
+      lifecycleState: "retry_ready",
+      priority: "high",
+      affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+      affectedAlertFamilies: expect.arrayContaining(["watchlist_terms"]),
+      remediation: expect.objectContaining({
+        action: "retry",
+        ownerLane: "parser",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })
+    });
+    expect(policyRow).toMatchObject({
+      lifecycleState: "policy_review_required",
+      priority: "high",
+      sourceFamilies: expect.arrayContaining(["darkweb_metadata"]),
+      remediation: expect.objectContaining({
+        action: "request_policy_review",
+        ownerLane: "policy",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })
+    });
+    expect(alertRow).toMatchObject({
+      lifecycleState: "alert_rebuild_ready",
+      priority: "medium",
+      remediation: expect.objectContaining({
+        action: "queue_alert_rebuild",
+        ownerLane: "alert",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false })
+      })
+    });
+    expect((retryRow?.retryableCount ?? 0) >= 1).toBe(true);
+    expect((policyRow?.blockedCount ?? 0) >= 1).toBe(true);
+    expect((alertRow?.readyCount ?? 0) >= 1).toBe(true);
+    expect(gapRow).toMatchObject({
+      lifecycleState: "gap_review_required",
+      priority: "high",
+      affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+      remediation: expect.objectContaining({
+        action: "review_gap",
+        ownerLane: "source",
+        route: expect.objectContaining({ method: "GET", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })
+    });
+    expect((retryRow?.sampleEventIds.length ?? 0) >= 1).toBe(true);
+    expect((policyRow?.sampleEventIds.length ?? 0) >= 1).toBe(true);
+    expect((alertRow?.sampleEventIds.length ?? 0) >= 1).toBe(true);
+    expect((gapRow?.sampleEventIds.length ?? 0) >= 1).toBe(true);
+    expect(cleanup.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["cleanupRows[].lifecycleState", "cleanupRows[].remediation"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["cleanupRows[].affectedActorPages", "cleanupRows[].affectedAlertFamilies"]) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["cleanupRows[].sampleEventIds", "consumers[]"]) })
+    ]));
+    expect(cleanup.payloadShape).toEqual(expect.arrayContaining([
+      "cleanupRows[].lifecycleState",
+      "cleanupRows[].priority",
+      "cleanupRows[].sampleEventIds",
+      "cleanupRows[].remediation",
+      "summary"
+    ]));
+    expect(JSON.stringify(cleanup)).not.toContain("rawText");
+    expect(JSON.stringify(cleanup)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
