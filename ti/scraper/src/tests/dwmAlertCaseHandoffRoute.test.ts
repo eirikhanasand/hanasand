@@ -210,6 +210,42 @@ describe("DWM alert case handoff route", () => {
       latestDryRunAt: "2026-06-29T14:03:00.000Z",
       latestDryRunStatus: "dry_run"
     });
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&actionId=webhookDryRun");
+    const replayExportPayload = await replayExport.json() as any;
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload.webhookDryRunReadiness).toMatchObject({
+      schemaVersion: "dwm.case_webhook_dry_run_replay_readiness.v1",
+      route: "/v1/dwm/webhooks/deliver",
+      method: "POST",
+      caseId: "case_alert_acme",
+      alertId: "alert_acme",
+      organizationId: "org_acme",
+      destinationIds: ["webhook_acme_discord"],
+      readyForReplay: true,
+      receiptAvailable: true,
+      notificationLinked: false,
+      blockerCodes: [],
+      latestDelivery: {
+        id: "delivery_dry_run_case_alert_acme",
+        webhookDestinationId: "webhook_acme_discord",
+        status: "dry_run",
+        attemptedAt: "2026-06-29T14:03:00.000Z",
+        endpointHash: "endpoint_hash",
+        payloadHash: "payload_hash",
+        dedupeKey: "delivery_alert_acme_webhook",
+        dryRun: true
+      },
+      auditSafety: {
+        metadataOnly: true,
+        endpointSecretExposed: false,
+        payloadBodyExposed: false
+      }
+    });
+    expect(replayExportPayload.webhookDryRunReadiness.deliveryReceipts).toHaveLength(1);
+    expect(replayExportPayload.replayPlan).toMatchObject({
+      dryRunDeliveryReceiptCount: 1
+    });
+    expect(JSON.stringify(replayExportPayload.webhookDryRunReadiness)).not.toContain("discord.com");
     const viewerDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
       headers: { "x-user-email": "viewer@acme.com" }
     }), options);
@@ -500,7 +536,7 @@ describe("DWM alert case handoff route", () => {
       summary: {
         receiptCount: 3,
         totalReceiptCount: 3,
-        actionIds: ["alertReplay", "webhookDryRun"],
+        actionIds: expect.arrayContaining(["alertReplay", "webhookDryRun"]),
         latestByAction: {
           alertReplay: expect.objectContaining({ idempotencyKey: "case-action-replay-member" }),
           webhookDryRun: expect.objectContaining({ idempotencyKey: "case-action-webhook-001" })

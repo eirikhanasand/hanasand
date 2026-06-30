@@ -1531,6 +1531,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
   eventAction?: string;
 }) {
   const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const handoffHistory = buildCaseHandoffActionHistory(caseRecord, options, organization, access, {
     actionId: filters.actionId,
     idempotencyKey: filters.idempotencyKey
@@ -1556,6 +1557,13 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       externalReference: receipt.externalReference,
       evidence: receipt.evidence
     }));
+  const webhookDryRunReadiness = caseWebhookDryRunReplayReadiness({
+    alert,
+    caseRecord,
+    deliveries,
+    customerNotifications,
+    handoffActionReadiness: handoffHistory.handoffActionReadiness
+  });
   const blockerCodes = uniqueCaseStrings([
     ...(alert ? [] : ["missing_case_alert"]),
     ...(handoffHistory.handoffActionReadiness?.blockerCodes ?? [])
@@ -1579,10 +1587,12 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     },
     workflowTransitions,
     customerNotifications,
+    webhookDryRunReadiness,
     replayPlan: {
       workflowTransitionCount: workflowTransitions.length,
       handoffReceiptCount: handoffHistory.receipts.length,
       customerNotificationCount: customerNotifications.length,
+      dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       replayable: blockerCodes.length === 0,
       blockerCodes
     },
@@ -1596,6 +1606,86 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       metadataOnly: true,
       rawEvidenceExposed: false,
       webhookSecretExposed: false
+    }
+  };
+}
+
+function caseWebhookDryRunReplayReadiness(input: {
+  alert: any;
+  caseRecord: AnalystCase;
+  deliveries: any[];
+  customerNotifications: Array<{
+    id: string;
+    webhookDeliveryId?: string;
+    webhookDestinationId?: string;
+    webhookStatus?: string;
+    idempotencyKey: string;
+  }>;
+  handoffActionReadiness?: any;
+}) {
+  const action = input.handoffActionReadiness?.actions?.webhookDryRun;
+  const dryRunDeliveries = [...input.deliveries]
+    .filter((delivery: any) => delivery?.dryRun === true || delivery?.status === "dry_run")
+    .sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")));
+  const destinationIds = uniqueCaseStrings([
+    action?.body?.webhookDestinationId,
+    ...(action?.body?.webhookDestinationIds ?? []),
+    ...(input.alert?.deliveryReadinessContext?.webhookDestinationIds ?? []),
+    ...(input.alert?.workflowContext?.webhookDestinationIds ?? []),
+    ...(input.alert?.webhookContext?.webhookDestinationIds ?? []),
+    ...input.deliveries.map((delivery: any) => delivery.webhookDestinationId),
+    ...input.customerNotifications.map((receipt) => receipt.webhookDestinationId)
+  ]);
+  const deliveryReceipts = dryRunDeliveries.map((delivery: any) => ({
+    id: delivery.id,
+    alertId: delivery.alertId,
+    caseId: input.caseRecord.id,
+    organizationId: delivery.organizationId ?? input.caseRecord.organizationId,
+    webhookDestinationId: delivery.webhookDestinationId,
+    status: delivery.status,
+    attemptedAt: delivery.attemptedAt,
+    dryRun: delivery.dryRun === true || delivery.status === "dry_run",
+    deliveryKind: delivery.deliveryKind,
+    httpStatus: delivery.httpStatus,
+    endpointHash: delivery.endpointHash,
+    payloadHash: delivery.payloadHash,
+    dedupeKey: delivery.dedupeKey
+  }));
+  const linkedNotificationReceipts = input.customerNotifications
+    .filter((receipt) => receipt.webhookDeliveryId && dryRunDeliveries.some((delivery: any) => delivery.id === receipt.webhookDeliveryId))
+    .map((receipt) => ({
+      id: receipt.id,
+      webhookDeliveryId: receipt.webhookDeliveryId,
+      webhookDestinationId: receipt.webhookDestinationId,
+      webhookStatus: receipt.webhookStatus,
+      idempotencyKey: receipt.idempotencyKey
+    }));
+  const actionBlockerCodes = action?.blockerCodes ?? [];
+  const receiptBlockers = [
+    ...(!destinationIds.length ? ["missing_webhook_destination"] : []),
+    ...(!dryRunDeliveries.length ? ["missing_webhook_dry_run_receipt"] : [])
+  ];
+  const blockerCodes = uniqueCaseStrings([...actionBlockerCodes, ...receiptBlockers]);
+  return {
+    schemaVersion: "dwm.case_webhook_dry_run_replay_readiness.v1",
+    route: action?.route ?? "/v1/dwm/webhooks/deliver",
+    method: action?.method ?? "POST",
+    caseId: input.caseRecord.id,
+    alertId: input.caseRecord.alertId,
+    organizationId: input.caseRecord.organizationId,
+    destinationIds,
+    readyForReplay: Boolean(action?.ready),
+    receiptAvailable: dryRunDeliveries.length > 0,
+    notificationLinked: linkedNotificationReceipts.length > 0,
+    blockerCodes,
+    deliveryReceipts,
+    latestDelivery: deliveryReceipts[0],
+    linkedNotificationReceipts,
+    requiredRequestFields: ["organizationId", "alertId", "caseId", "casePath", "webhookDestinationId", "dryRun", "limit"],
+    auditSafety: {
+      metadataOnly: true,
+      endpointSecretExposed: false,
+      payloadBodyExposed: false
     }
   };
 }
