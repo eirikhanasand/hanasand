@@ -2043,6 +2043,35 @@ export type OrganizationReadinessProof = {
             nonmemberDestinationEnumeration: false
         }
     }
+    destinationOwnershipProof: {
+        schemaVersion: 'organization.webhook_destination_ownership_readiness.v1'
+        sourceContracts: Array<'organization.webhook_destination_ownership.v1' | 'organization.webhook_destination_access_decision.v1' | 'organization.webhook_destination_readiness_bridge.v1'>
+        route: 'POST /v1/dwm/webhooks/deliver'
+        organizationId: string
+        tenantId: string
+        defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+        requiredDestinationOrgId: string
+        requiredDestinationOrgField: 'destination.org_id'
+        selectedDestinationIdField: 'webhookDestinationIds[]'
+        selectedDestinationSource: 'org_active_destinations' | 'manual_selection_required' | 'webhook_policy_disabled'
+        crossOrgDestinationAllowed: false
+        nonmemberDestinationEnumeration: false
+        ownerAdminConfigureAllowed: boolean
+        memberConfigureAllowed: false
+        manualTriggerAllowedRoles: Array<'owner' | 'admin'>
+        automaticDeliveryAllowed: boolean
+        supportInspection: {
+            route: '/api/admin/support/organizations/:id'
+            mode: 'redacted_destination_summary'
+            requiredSupportContract: 'admin_support'
+            endpointRedacted: true
+            secretRedacted: true
+        }
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'manual_webhook_selection_required'>
+        blockerCodes: string[]
+        noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds'>
+        proofAssertions: Array<'destination_org_matches_alert_org' | 'nonmember_cannot_enumerate_destinations' | 'member_cannot_configure_destination' | 'support_reads_redacted_destination_summary'>
+    }
     memberLifecycleProof: {
         schemaVersion: 'organization.member_lifecycle_visibility_proof.v1'
         activeMembershipRequired: true
@@ -5174,6 +5203,53 @@ export function organizationReadinessProof(input: {
                 blockerCodes: webhookBlockerCodes,
                 nonmemberDestinationEnumeration: false,
             },
+        },
+        destinationOwnershipProof: {
+            schemaVersion: 'organization.webhook_destination_ownership_readiness.v1',
+            sourceContracts: [
+                'organization.webhook_destination_ownership.v1',
+                'organization.webhook_destination_access_decision.v1',
+                'organization.webhook_destination_readiness_bridge.v1',
+            ],
+            route: 'POST /v1/dwm/webhooks/deliver',
+            organizationId: input.downstreamAuthorization.organizationId,
+            tenantId: input.downstreamAuthorization.tenantId,
+            defaultWebhookPolicy: input.downstreamAuthorization.downstream.webhook.defaultPolicy,
+            requiredDestinationOrgId: input.downstreamAuthorization.organizationId,
+            requiredDestinationOrgField: 'destination.org_id',
+            selectedDestinationIdField: 'webhookDestinationIds[]',
+            selectedDestinationSource: webhookSelectedDestinationSource,
+            crossOrgDestinationAllowed: false,
+            nonmemberDestinationEnumeration: false,
+            ownerAdminConfigureAllowed: input.downstreamAuthorization.member.role === 'owner' || input.downstreamAuthorization.member.role === 'admin',
+            memberConfigureAllowed: false,
+            manualTriggerAllowedRoles: ['owner', 'admin'],
+            automaticDeliveryAllowed: input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+            supportInspection: {
+                route: '/api/admin/support/organizations/:id',
+                mode: 'redacted_destination_summary',
+                requiredSupportContract: 'admin_support',
+                endpointRedacted: true,
+                secretRedacted: true,
+            },
+            lifecycleBlockers: [
+                'org_archived',
+                'org_deleted',
+                'member_revoked',
+                'manual_webhook_selection_required',
+            ],
+            blockerCodes: webhookBlockerCodes,
+            noLeakFields: [
+                'destination.secret',
+                'destination.endpoint',
+                'otherOrg.destinationIds',
+            ],
+            proofAssertions: [
+                'destination_org_matches_alert_org',
+                'nonmember_cannot_enumerate_destinations',
+                'member_cannot_configure_destination',
+                'support_reads_redacted_destination_summary',
+            ],
         },
         memberLifecycleProof: {
             schemaVersion: 'organization.member_lifecycle_visibility_proof.v1',
