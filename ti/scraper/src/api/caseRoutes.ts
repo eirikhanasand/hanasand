@@ -1555,10 +1555,13 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       id: receipt.id,
       schemaVersion: receipt.schemaVersion,
       caseId: receipt.caseId,
+      tenantId: receipt.tenantId,
+      organizationId: receipt.organizationId,
       alertId: receipt.alertId,
       at: receipt.at,
       actor: receipt.actor,
       deliveryMode: receipt.deliveryMode,
+      rationale: receipt.rationale,
       idempotencyKey: receipt.idempotencyKey,
       webhookDeliveryId: receipt.webhookDeliveryId,
       webhookDestinationId: receipt.webhookDestinationId,
@@ -1572,6 +1575,12 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     deliveries,
     customerNotifications,
     handoffActionReadiness: handoffHistory.handoffActionReadiness
+  });
+  const customerNotificationReadiness = caseCustomerNotificationReadiness({
+    caseRecord,
+    deliveries,
+    customerNotifications,
+    access
   });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
   const publicTiHandoffReadiness = casePublicTiHandoffReadiness({ alert, caseRecord, sourceHandoffReadiness });
@@ -1600,6 +1609,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     publicTiHandoffReadiness,
     sourceHandoffReadiness,
     webhookDryRunReadiness,
+    customerNotificationReadiness,
     supportRecoveryReadiness,
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
@@ -1626,6 +1636,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     organizationAccessReadiness,
     publicTiHandoffReadiness,
     webhookDryRunReadiness,
+    customerNotificationReadiness,
     sourceHandoffReadiness,
     supportRecoveryReadiness,
     nextAnalystActions,
@@ -1635,6 +1646,8 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       customerNotificationCount: customerNotifications.length,
       auditTimelineRowCount: auditTimeline.summary.rowCount,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
+      deliveredWebhookReceiptCount: customerNotificationReadiness.deliveryReceipts.length,
+      customerNotificationRecorded: customerNotificationReadiness.notificationRecorded,
       organizationAccessReady: organizationAccessReadiness.ready,
       publicTiHandoffReady: publicTiHandoffReadiness.ready,
       sourceHandoffReady: sourceHandoffReadiness.ready,
@@ -2074,6 +2087,7 @@ function caseReplayNextAnalystActions(input: {
   publicTiHandoffReadiness: any;
   sourceHandoffReadiness: any;
   webhookDryRunReadiness: any;
+  customerNotificationReadiness: any;
   supportRecoveryReadiness: any;
   handoffActionReadiness?: any;
 }) {
@@ -2134,14 +2148,11 @@ function caseReplayNextAnalystActions(input: {
     {
       id: "record_customer_notification",
       ownerLane: "case",
-      route: `/v1/cases/${encodeURIComponent(input.caseRecord.id)}/customer-notification`,
-      ready: Boolean(input.webhookDryRunReadiness.receiptAvailable && !readOnly),
-      blocked: readOnly || !input.webhookDryRunReadiness.receiptAvailable,
-      blockerCodes: uniqueCaseStrings([
-        ...(readOnly ? ["case_read_only_member"] : []),
-        ...(!input.webhookDryRunReadiness.receiptAvailable ? ["missing_webhook_dry_run_receipt"] : [])
-      ]),
-      requiredFields: ["organizationId", "webhookDeliveryId", "rationale"]
+      route: input.customerNotificationReadiness.route,
+      ready: Boolean(input.customerNotificationReadiness.readyForRecord),
+      blocked: Boolean(input.customerNotificationReadiness.blocked),
+      blockerCodes: input.customerNotificationReadiness.blockerCodes ?? [],
+      requiredFields: input.customerNotificationReadiness.requiredFields ?? ["organizationId", "webhookDeliveryId", "rationale"]
     },
     {
       id: "verify_support_recovery",
@@ -2156,6 +2167,77 @@ function caseReplayNextAnalystActions(input: {
       requiredFields: input.supportRecoveryReadiness.requiredFields ?? []
     }
   ];
+}
+
+function caseCustomerNotificationReadiness(input: {
+  caseRecord: AnalystCase;
+  deliveries: any[];
+  customerNotifications: Array<{
+    id: string;
+    webhookDeliveryId?: string;
+    webhookDestinationId?: string;
+    webhookStatus?: string;
+    idempotencyKey: string;
+  }>;
+  access: CaseAccessResult;
+}) {
+  const readOnly = input.access.readOnly === true;
+  const delivered = [...input.deliveries]
+    .filter((delivery: any) => delivery?.status === "delivered")
+    .sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")));
+  const deliveryReceipts = delivered.map((delivery: any) => ({
+    id: delivery.id,
+    alertId: delivery.alertId,
+    caseId: input.caseRecord.id,
+    organizationId: delivery.organizationId ?? input.caseRecord.organizationId,
+    webhookDestinationId: delivery.webhookDestinationId,
+    status: delivery.status,
+    attemptedAt: delivery.attemptedAt,
+    deliveryKind: delivery.deliveryKind,
+    httpStatus: delivery.httpStatus,
+    endpointHash: delivery.endpointHash,
+    payloadHash: delivery.payloadHash,
+    dedupeKey: delivery.dedupeKey
+  }));
+  const linkedNotificationReceipts = input.customerNotifications
+    .filter((receipt) => receipt.webhookDeliveryId && delivered.some((delivery: any) => delivery.id === receipt.webhookDeliveryId))
+    .map((receipt) => ({
+      id: receipt.id,
+      webhookDeliveryId: receipt.webhookDeliveryId,
+      webhookDestinationId: receipt.webhookDestinationId,
+      webhookStatus: receipt.webhookStatus,
+      idempotencyKey: receipt.idempotencyKey
+    }));
+  const notificationRecorded = linkedNotificationReceipts.length > 0 || input.customerNotifications.length > 0;
+  const missingDelivered = deliveryReceipts.length === 0;
+  const blockerCodes = uniqueCaseStrings([
+    ...(readOnly ? ["case_read_only_member"] : []),
+    ...(missingDelivered ? ["missing_delivered_webhook"] : [])
+  ]);
+  const readyForRecord = blockerCodes.length === 0 && !notificationRecorded;
+  return {
+    schemaVersion: "dwm.case_customer_notification_readiness.v1",
+    route: `/v1/cases/${encodeURIComponent(input.caseRecord.id)}/customer-notification`,
+    method: "POST",
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    readyForRecord,
+    blocked: blockerCodes.length > 0,
+    notificationRecorded,
+    deliveredWebhookAvailable: deliveryReceipts.length > 0,
+    blockerCodes,
+    deliveryReceipts,
+    latestDelivery: deliveryReceipts[0],
+    linkedNotificationReceipts,
+    requiredFields: ["organizationId", "webhookDeliveryId", "rationale"],
+    auditSafety: {
+      metadataOnly: true,
+      endpointSecretExposed: false,
+      payloadBodyExposed: false
+    }
+  };
 }
 
 function caseWebhookDryRunReplayReadiness(input: {

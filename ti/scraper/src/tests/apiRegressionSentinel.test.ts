@@ -732,6 +732,7 @@ describe("api regression sentinel", () => {
         webhookReplayFixture: "dwm.case_to_webhook_replay_readiness_fixture.v1",
         publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
         webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
+        customerNotificationReadiness: "dwm.case_customer_notification_readiness.v1",
         sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
         supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
         auditTimeline: "dwm.case_replay_audit_timeline.v1",
@@ -741,10 +742,36 @@ describe("api regression sentinel", () => {
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
       queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"]),
-      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "auditTimeline", "nextAnalystActions"]),
-      blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "case_closed"])
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "customerNotificationReadiness", "auditTimeline", "nextAnalystActions"]),
+      blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "case_closed"])
     });
     expect(JSON.stringify(receiptSurface)).not.toContain("https://discord.com");
+  });
+
+  test("publishes the case customer notification contract for webhook and helpdesk consumers", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const notificationSurface = contract.surfaces.find((surface: any) => surface.id === "case_customer_notification");
+
+    expect(notificationSurface).toMatchObject({
+      ownerLane: "case",
+      route: "/v1/cases/:caseId/customer-notification",
+      methods: ["POST"],
+      schemas: {
+        receipt: "analyst.case_customer_notification.v1",
+        readiness: "dwm.case_customer_notification_readiness.v1",
+        replayExport: "dwm.case_action_replay_export.v1",
+        detail: "analyst.case_detail.v1"
+      },
+      scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "webhookDeliveryId", "webhookDestinationId"]),
+      writeFields: expect.arrayContaining(["webhookDeliveryId", "deliveryMode", "externalReference", "rationale"]),
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "deliveryMode", "webhookDeliveryId", "webhookDestinationId", "webhookStatus", "sourceIds", "contentHashes", "idempotencyKey"]),
+      blockerCodes: expect.arrayContaining(["case_not_found", "organization_visibility_denied", "case_read_only_member", "missing_rationale", "missing_delivered_webhook", "missing_external_reference"])
+    });
+    expect(JSON.stringify(notificationSurface)).not.toContain("https://discord.com");
   });
 
   test("publishes the case workflow transition contract for workflow consumers", async () => {

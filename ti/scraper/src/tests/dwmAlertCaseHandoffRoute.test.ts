@@ -443,6 +443,154 @@ describe("DWM alert case handoff route", () => {
     expect((store as any).getCase("case_alert_no_destination").organizationId).toBe("org_acme");
   });
 
+  test("records delivered webhook customer notifications in case replay export", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case before customer notification.",
+      idempotencyKey: "alert-case-handoff-customer-notification"
+    });
+
+    const noDelivery = await postCustomerNotification(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      webhookDeliveryId: "delivery_delivered_case_alert_acme",
+      rationale: "Customer notification should require a delivered webhook."
+    });
+    const noDeliveryPayload = await noDelivery.json() as any;
+    (store as any).saveDwmWebhookDelivery({
+      id: "delivery_delivered_case_alert_acme",
+      organizationId: "org_acme",
+      tenantId: "tenant_acme",
+      alertId: "alert_acme",
+      watchlistId: "watch_acme",
+      webhookDestinationId: "webhook_acme_discord",
+      endpointHash: "endpoint_hash_delivered",
+      dedupeKey: "delivery_alert_acme_webhook_delivered",
+      attemptedAt: "2026-06-29T14:10:00.000Z",
+      dryRun: false,
+      payloadHash: "payload_hash_delivered",
+      deliveryKind: "discord",
+      status: "delivered",
+      httpStatus: 204
+    });
+    const viewerDenied = await postCustomerNotification(options, "case_alert_acme", "viewer@acme.com", {
+      organizationId: "org_acme",
+      webhookDeliveryId: "delivery_delivered_case_alert_acme",
+      rationale: "Viewer should not record customer notification."
+    });
+    const viewerDeniedPayload = await viewerDenied.json() as any;
+    const notification = await postCustomerNotification(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      webhookDeliveryId: "delivery_delivered_case_alert_acme",
+      rationale: "Customer notified from delivered webhook receipt."
+    });
+    const notificationPayload = await notification.json() as any;
+    const duplicate = await postCustomerNotification(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      webhookDeliveryId: "delivery_delivered_case_alert_acme",
+      rationale: "Duplicate should reuse existing notification receipt."
+    });
+    const duplicatePayload = await duplicate.json() as any;
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const replayExportPayload = await replayExport.json() as any;
+
+    expect(noDelivery.status).toBe(400);
+    expect(noDeliveryPayload.error).toMatchObject({ code: "missing_delivered_webhook" });
+    expect(viewerDenied.status).toBe(403);
+    expect(viewerDeniedPayload.error).toMatchObject({ code: "case_read_only_member" });
+    expect(notification.status).toBe(201);
+    expect(notificationPayload).toMatchObject({
+      created: true,
+      receipt: {
+        schemaVersion: "analyst.case_customer_notification.v1",
+        caseId: "case_alert_acme",
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme",
+        actor: "owner@acme.com",
+        deliveryMode: "webhook_delivery",
+        rationale: "Customer notified from delivered webhook receipt.",
+        webhookDeliveryId: "delivery_delivered_case_alert_acme",
+        webhookDestinationId: "webhook_acme_discord",
+        webhookStatus: "delivered",
+        evidence: {
+          evidenceCount: 1,
+          deliveryCount: 1,
+          delivered: true,
+          contentHashes: ["hash_acme_1"],
+          sourceIds: ["src_acme_tg"]
+        }
+      },
+      case: {
+        id: "case_alert_acme",
+        deliveryState: "delivered",
+        lastDecision: "Customer notified from delivered webhook receipt."
+      }
+    });
+    expect(duplicate.status).toBe(200);
+    expect(duplicatePayload).toMatchObject({
+      created: false,
+      receipt: {
+        id: notificationPayload.receipt.id,
+        webhookDeliveryId: "delivery_delivered_case_alert_acme"
+      }
+    });
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload).toMatchObject({
+      replayPlan: {
+        customerNotificationCount: 1,
+        deliveredWebhookReceiptCount: 1,
+        customerNotificationRecorded: true
+      },
+      customerNotificationReadiness: {
+        schemaVersion: "dwm.case_customer_notification_readiness.v1",
+        route: "/v1/cases/case_alert_acme/customer-notification",
+        method: "POST",
+        readyForRecord: false,
+        blocked: false,
+        notificationRecorded: true,
+        deliveredWebhookAvailable: true,
+        blockerCodes: [],
+        latestDelivery: {
+          id: "delivery_delivered_case_alert_acme",
+          webhookDestinationId: "webhook_acme_discord",
+          status: "delivered",
+          endpointHash: "endpoint_hash_delivered",
+          payloadHash: "payload_hash_delivered"
+        },
+        linkedNotificationReceipts: [expect.objectContaining({
+          id: notificationPayload.receipt.id,
+          webhookDeliveryId: "delivery_delivered_case_alert_acme",
+          webhookStatus: "delivered"
+        })]
+      }
+    });
+    expect(replayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "record_customer_notification", ready: false, blocked: false, blockerCodes: [] })
+    ]));
+    expect(replayExportPayload.auditTimeline.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rowType: "customer_notification",
+        action: "customer_notified",
+        rationale: "Customer notified from delivered webhook receipt.",
+        delivery: expect.objectContaining({
+          deliveryMode: "webhook_delivery",
+          webhookDeliveryId: "delivery_delivered_case_alert_acme",
+          webhookDestinationId: "webhook_acme_discord",
+          webhookStatus: "delivered"
+        }),
+        provenance: expect.objectContaining({
+          source: "case_customer_notification",
+          sourceIds: ["src_acme_tg"],
+          contentHashes: ["hash_acme_1"],
+          evidenceCount: 1
+        })
+      })
+    ]));
+    expect(JSON.stringify(replayExportPayload)).not.toContain("discord.com");
+  });
+
   test("records analyst notes without changing case state and includes them in replay export", async () => {
     const { options, store } = fixtureRuntime();
     await postHandoff(options, "alert_acme", {
@@ -1316,7 +1464,7 @@ describe("DWM alert case handoff route", () => {
       expect.objectContaining({ id: "review_public_ti_handoff", ownerLane: "publicTI", ready: true, blocked: false, publicRoute: "/ti/acme.com" }),
       expect.objectContaining({ id: "replay_alert", ownerLane: "alert", ready: true, blocked: false }),
       expect.objectContaining({ id: "test_webhook_delivery", ownerLane: "webhook", ready: true, blocked: false }),
-      expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_webhook_dry_run_receipt"] }),
+      expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_delivered_webhook"] }),
       expect.objectContaining({ id: "verify_support_recovery", ownerLane: "support", ready: true, blocked: false })
     ]));
     expect(JSON.stringify(replayExportPayload)).not.toContain("rawText");
@@ -1618,6 +1766,14 @@ async function postHandoff(options: ReturnType<typeof fixtureRuntime>["options"]
 
 async function postHandoffAction(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/handoff-action`, {
+    method: "POST",
+    headers: { "x-user-email": email },
+    body: JSON.stringify(body)
+  }), options);
+}
+
+async function postCustomerNotification(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/customer-notification`, {
     method: "POST",
     headers: { "x-user-email": email },
     body: JSON.stringify(body)
