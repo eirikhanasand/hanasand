@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { contractIndex } from "../api/contractsRoute.ts";
 import {
   PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION,
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
   PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
   PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION,
   buildProductReadinessConsumerGuidance,
+  buildProductReadinessCustomerWorkflowEnvelope,
   buildProductReadinessEndToEndWorkflowPacket,
-  buildProductReadinessOrgAlertConsumerPacketFixture
+  buildProductReadinessOrgAlertConsumerPacketFixture,
+  validateProductReadinessCustomerWorkflowEnvelope
 } from "../product/productReadinessConsumerGuidance.ts";
 
 describe("product readiness consumer guidance", () => {
@@ -293,5 +297,125 @@ describe("product readiness consumer guidance", () => {
       state: "blocked"
     });
     expect(steps.get("delivery_outcome")?.blockerCodes).toContain("unsafe_org_capability_output");
+  });
+
+  test("builds a customer workflow readiness envelope with consumer notes", () => {
+    const envelope = buildProductReadinessCustomerWorkflowEnvelope(contractIndex(), { lastVerifiedAt: "2026-06-30T13:00:00.000Z" });
+    const notes = new Map(envelope.consumerImplementationNotes.map((note) => [note.consumerLane, note]));
+
+    expect(envelope).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      producer: "buildProductReadinessCustomerWorkflowEnvelope",
+      state: "ready",
+      lastVerifiedAt: "2026-06-30T13:00:00.000Z",
+      workflowPacket: {
+        schemaVersion: PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
+        state: "ready"
+      },
+      consumerGuidance: {
+        schemaVersion: PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION
+      },
+      compatibility: {
+        schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+        ok: true,
+        state: "ready",
+        missingRequiredFields: [],
+        missingStepIds: [],
+        missingConsumerNotes: [],
+        missingProofSteps: [],
+        blockerCodes: []
+      },
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(envelope.workflowPacket.typedFields).toEqual(expect.arrayContaining([
+      "orgId",
+      "memberRef",
+      "inviteRef",
+      "watchlistId",
+      "alertId",
+      "caseId",
+      "sourceCoverageIds",
+      "provenanceHash",
+      "workflowStatus",
+      "destinationDeliveryState",
+      "deliveryStatus",
+      "supportAuditStatus",
+      "blockerReason",
+      "owningLane",
+      "proofLink",
+      "lastVerifiedAt"
+    ]));
+    expect(notes.get("dashboard")).toMatchObject({
+      route: "/dashboard",
+      consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+      requiredFields: expect.arrayContaining(["orgId", "watchlistId", "alertId", "caseId", "workflowStatus", "deliveryStatus", "blockerReason", "proofLink"]),
+      packetPath: "workflowPacket.steps",
+      proofPath: "workflowPacket.steps[].proofLink"
+    });
+    expect(notes.get("publicTI")).toMatchObject({
+      route: "/ti",
+      requiredFields: expect.arrayContaining(["orgId", "sourceCoverageIds", "provenanceHash", "sourceCoverage", "proofLink"])
+    });
+    expect(notes.get("org")).toMatchObject({
+      route: "/v1/organizations",
+      requiredFields: expect.arrayContaining(["memberRef", "inviteRef", "watchlistId"])
+    });
+    expect(notes.get("alert")).toMatchObject({
+      route: "/v1/dwm/alerts/generation-readiness",
+      requiredFields: expect.arrayContaining(["watchlistId", "alertId", "caseId", "provenanceHash", "workflowStatus"])
+    });
+    expect(notes.get("webhook")).toMatchObject({
+      route: "/v1/dwm/webhooks/deliver",
+      requiredFields: expect.arrayContaining(["destinationDeliveryState", "deliveryStatus", "workflowStatus"])
+    });
+    expect(notes.get("helpdesk")).toMatchObject({
+      route: "/api/admin/support/readiness",
+      requiredFields: expect.arrayContaining(["supportAuditStatus", "blockerReason"])
+    });
+    expect(notes.get("website")).toMatchObject({
+      route: "/",
+      requiredFields: expect.arrayContaining(["provenanceHash", "sourceCoverage", "proofLink"])
+    });
+    expect(notes.get("integration")).toMatchObject({
+      route: "/v1/contracts",
+      requiredFields: expect.arrayContaining(["orgId", "lastVerifiedAt", "proofLink"])
+    });
+    expect(JSON.stringify(envelope)).not.toContain("https://discord.com");
+    expect(JSON.stringify(envelope)).not.toContain("rawEvidenceDump");
+  });
+
+  test("validates customer workflow envelope compatibility failures", () => {
+    const envelope = buildProductReadinessCustomerWorkflowEnvelope(contractIndex());
+    const broken = JSON.parse(JSON.stringify(envelope));
+    broken.workflowPacket.typedFields = broken.workflowPacket.typedFields.filter((field: string) => field !== "inviteRef" && field !== "supportAuditStatus");
+    broken.workflowPacket.steps = broken.workflowPacket.steps.filter((step: any) => step.stepId !== "support_audit");
+    broken.consumerImplementationNotes = broken.consumerImplementationNotes.filter((note: any) => note.consumerLane !== "helpdesk");
+    broken.workflowPacket.steps.find((step: any) => step.stepId === "matched_alert").proofLink.contractIds = [];
+    broken.safeOutput.rawEvidenceExposed = true;
+
+    const compatibility = validateProductReadinessCustomerWorkflowEnvelope(broken);
+
+    expect(compatibility).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+      ok: false,
+      state: "blocked",
+      missingRequiredFields: expect.arrayContaining(["inviteRef", "supportAuditStatus"]),
+      missingStepIds: expect.arrayContaining(["support_audit"]),
+      missingConsumerNotes: expect.arrayContaining(["helpdesk"]),
+      missingProofSteps: expect.arrayContaining(["matched_alert"]),
+      blockerCodes: expect.arrayContaining([
+        "missing_customer_workflow_field",
+        "missing_customer_workflow_step",
+        "missing_consumer_implementation_note",
+        "missing_customer_workflow_proof_link",
+        "unsafe_customer_workflow_output"
+      ])
+    });
   });
 });

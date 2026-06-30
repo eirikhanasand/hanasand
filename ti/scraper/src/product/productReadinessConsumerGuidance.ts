@@ -3,6 +3,8 @@ import { uniqueStrings } from "../utils.ts";
 export const PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION = "hanasand.product_readiness.consumer_guidance.v1" as const;
 export const PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION = "hanasand.product_readiness.org_alert_consumer_packet_fixture.v1" as const;
 export const PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION = "hanasand.product_readiness.end_to_end_workflow_packet.v1" as const;
+export const PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION = "hanasand.product_readiness.customer_workflow_envelope.v1" as const;
+export const PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION = "hanasand.product_readiness.customer_workflow_envelope_compatibility.v1" as const;
 
 export type ProductReadinessConsumerState = "ready" | "partial" | "blocked" | "unsupported";
 export type ProductReadinessConsumerLane = "org" | "dashboard" | "publicTI" | "alert" | "webhook" | "case" | "helpdesk" | "website";
@@ -130,6 +132,16 @@ export type ProductReadinessEndToEndWorkflowStep = {
   missingTypedFields: string[];
   blockerCodes: string[];
   proofLink: ProductReadinessConsumerGuidanceRow["proofLink"];
+};
+
+export type ProductReadinessConsumerImplementationNote = {
+  consumerLane: ProductReadinessConsumerLane | "integration";
+  route: string;
+  consumesSchemaVersion: typeof PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION;
+  requiredFields: string[];
+  packetPath: string;
+  proofPath: string;
+  expectedStates: ProductReadinessConsumerState[];
 };
 
 type ProductReadinessConsumerDefinition = {
@@ -399,6 +411,100 @@ const endToEndWorkflowDefinitions: ProductReadinessWorkflowStepDefinition[] = [
   }
 ];
 
+const requiredEnvelopeFieldAliases = [
+  "orgId",
+  "memberRef",
+  "inviteRef",
+  "watchlistId",
+  "alertId",
+  "caseId",
+  "sourceCoverageIds",
+  "provenanceHash",
+  "workflowStatus",
+  "destinationDeliveryState",
+  "deliveryStatus",
+  "supportAuditStatus",
+  "blockerReason",
+  "owningLane",
+  "proofLink",
+  "lastVerifiedAt"
+];
+
+const consumerImplementationNotes: ProductReadinessConsumerImplementationNote[] = [
+  {
+    consumerLane: "dashboard",
+    route: "/dashboard",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "watchlistId", "alertId", "caseId", "workflowStatus", "deliveryStatus", "blockerReason", "proofLink"],
+    packetPath: "workflowPacket.steps",
+    proofPath: "workflowPacket.steps[].proofLink",
+    expectedStates: ["ready", "partial", "blocked", "unsupported"]
+  },
+  {
+    consumerLane: "publicTI",
+    route: "/ti",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "sourceCoverageIds", "provenanceHash", "sourceCoverage", "proofLink"],
+    packetPath: "workflowPacket.steps[source_coverage]",
+    proofPath: "workflowPacket.steps[source_coverage].proofLink",
+    expectedStates: ["ready", "partial", "blocked"]
+  },
+  {
+    consumerLane: "org",
+    route: "/v1/organizations",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "memberRef", "inviteRef", "watchlistId", "blockerReason", "proofLink"],
+    packetPath: "workflowPacket.steps[organization_access|shared_watchlist]",
+    proofPath: "workflowPacket.steps[].proofLink",
+    expectedStates: ["ready", "partial", "blocked", "unsupported"]
+  },
+  {
+    consumerLane: "alert",
+    route: "/v1/dwm/alerts/generation-readiness",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "watchlistId", "alertId", "caseId", "provenanceHash", "sourceCoverage", "workflowStatus", "proofLink"],
+    packetPath: "workflowPacket.steps[matched_alert]",
+    proofPath: "workflowPacket.steps[matched_alert].proofLink",
+    expectedStates: ["ready", "partial", "blocked", "unsupported"]
+  },
+  {
+    consumerLane: "webhook",
+    route: "/v1/dwm/webhooks/deliver",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "alertId", "caseId", "destinationDeliveryState", "deliveryStatus", "workflowStatus", "proofLink"],
+    packetPath: "workflowPacket.steps[webhook_destination|delivery_outcome]",
+    proofPath: "workflowPacket.steps[].proofLink",
+    expectedStates: ["ready", "partial", "blocked"]
+  },
+  {
+    consumerLane: "helpdesk",
+    route: "/api/admin/support/readiness",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "alertId", "caseId", "supportAuditStatus", "blockerReason", "owningLane", "proofLink"],
+    packetPath: "workflowPacket.steps[support_audit]",
+    proofPath: "workflowPacket.steps[support_audit].proofLink",
+    expectedStates: ["ready", "partial", "blocked"]
+  },
+  {
+    consumerLane: "website",
+    route: "/",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: ["orgId", "provenanceHash", "sourceCoverage", "blockerReason", "proofLink"],
+    packetPath: "consumerGuidance.rows[website]",
+    proofPath: "consumerGuidance.rows[website].proofLink",
+    expectedStates: ["ready", "partial", "blocked"]
+  },
+  {
+    consumerLane: "integration",
+    route: "/v1/contracts",
+    consumesSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    requiredFields: requiredEnvelopeFieldAliases,
+    packetPath: "workflowPacket",
+    proofPath: "workflowPacket.steps[].proofLink",
+    expectedStates: ["ready", "partial", "blocked", "unsupported"]
+  }
+];
+
 export function buildProductReadinessConsumerGuidance(input: ProductReadinessConsumerGuidanceInput) {
   const handoffRows = input.productReadinessConsumerHandoffPacket?.rows || [];
   const capabilityRows = input.productReadinessOrgCapabilityPacket?.rows || [];
@@ -478,6 +584,91 @@ export function buildProductReadinessEndToEndWorkflowPacket(
     missingTypedFields: uniqueStrings(steps.flatMap((step) => step.missingTypedFields)),
     blockerCodes,
     consumerGuidanceSchemaVersion: guidance.schemaVersion,
+    safeOutput: safeMetadataOnly
+  };
+}
+
+export function buildProductReadinessCustomerWorkflowEnvelope(
+  input: ProductReadinessConsumerGuidanceInput,
+  options: { lastVerifiedAt?: string } = {}
+) {
+  const consumerGuidance = buildProductReadinessConsumerGuidance(input);
+  const workflowPacket = buildProductReadinessEndToEndWorkflowPacket(consumerGuidance, options);
+  const envelope = {
+    schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    producer: "buildProductReadinessCustomerWorkflowEnvelope",
+    state: workflowPacket.state,
+    lastVerifiedAt: workflowPacket.lastVerifiedAt,
+    sourceSchemas: consumerGuidance.sourceSchemas,
+    workflowPacket,
+    consumerGuidance,
+    consumerImplementationNotes,
+    safeOutput: safeMetadataOnly
+  };
+  return {
+    ...envelope,
+    compatibility: validateProductReadinessCustomerWorkflowEnvelope(envelope)
+  };
+}
+
+export function validateProductReadinessCustomerWorkflowEnvelope(envelope: {
+  schemaVersion: string;
+  workflowPacket?: {
+    schemaVersion?: string;
+    state?: string;
+    lastVerifiedAt?: string;
+    typedFields?: readonly string[];
+    steps?: readonly ProductReadinessEndToEndWorkflowStep[];
+    safeOutput?: SafeOutput;
+  };
+  consumerGuidance?: {
+    schemaVersion?: string;
+    rows?: readonly ProductReadinessConsumerGuidanceRow[];
+    safeOutput?: SafeOutput;
+  };
+  consumerImplementationNotes?: readonly ProductReadinessConsumerImplementationNote[];
+  safeOutput?: SafeOutput;
+}) {
+  const availableFields = new Set(envelope.workflowPacket?.typedFields || []);
+  const missingRequiredFields = requiredEnvelopeFieldAliases.filter((field) => !availableFields.has(field));
+  const requiredStepIds = endToEndWorkflowDefinitions.map((definition) => definition.stepId);
+  const stepIds = new Set((envelope.workflowPacket?.steps || []).map((step) => step.stepId));
+  const missingStepIds = requiredStepIds.filter((stepId) => !stepIds.has(stepId));
+  const noteLanes = new Set((envelope.consumerImplementationNotes || []).map((note) => note.consumerLane));
+  const requiredNoteLanes = consumerImplementationNotes.map((note) => note.consumerLane);
+  const missingConsumerNotes = requiredNoteLanes.filter((lane) => !noteLanes.has(lane));
+  const missingProofSteps = (envelope.workflowPacket?.steps || [])
+    .filter((step) => step.proofLink.contractIds.length === 0 || step.proofLink.schemaIds.length === 0)
+    .map((step) => step.stepId);
+  const unsafeOutputs = [
+    !isSafe(envelope.safeOutput) ? "envelope" : "",
+    !isSafe(envelope.workflowPacket?.safeOutput) ? "workflowPacket" : "",
+    !isSafe(envelope.consumerGuidance?.safeOutput) ? "consumerGuidance" : ""
+  ].filter(Boolean);
+  const blockerCodes = uniqueStrings([
+    ...missingRequiredFields.map(() => "missing_customer_workflow_field"),
+    ...missingStepIds.map(() => "missing_customer_workflow_step"),
+    ...missingConsumerNotes.map(() => "missing_consumer_implementation_note"),
+    ...missingProofSteps.map(() => "missing_customer_workflow_proof_link"),
+    ...unsafeOutputs.map(() => "unsafe_customer_workflow_output")
+  ]);
+  return {
+    schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    ok: blockerCodes.length === 0,
+    state: blockerCodes.length === 0 ? "ready" : "blocked",
+    checkedSchemaVersion: envelope.schemaVersion,
+    workflowPacketSchemaVersion: envelope.workflowPacket?.schemaVersion,
+    consumerGuidanceSchemaVersion: envelope.consumerGuidance?.schemaVersion,
+    requiredFieldAliases: requiredEnvelopeFieldAliases,
+    missingRequiredFields,
+    requiredStepIds,
+    missingStepIds,
+    requiredConsumerNoteLanes: requiredNoteLanes,
+    missingConsumerNotes,
+    missingProofSteps,
+    blockerCodes,
     safeOutput: safeMetadataOnly
   };
 }
