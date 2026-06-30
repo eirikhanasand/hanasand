@@ -616,6 +616,11 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                 targetRoleBeforeRemoval: target.role,
                 currentMemberStatus: 'removed' as const,
                 automaticRegrantAllowed: false,
+                ownerlessRecoveryMutationAllowed: false,
+                directMembershipMutationAllowed: false,
+                requiresOwnerAdminReview: true,
+                requiresAcceptedInvite: true,
+                recoveryActorRoles: ['owner', 'admin'] as const,
                 requiredSteps: [
                     'owner_or_admin_review',
                     'create_new_invite',

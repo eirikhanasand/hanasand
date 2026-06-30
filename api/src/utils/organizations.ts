@@ -1992,6 +1992,11 @@ export type OrganizationReadinessProof = {
             responseSchema: 'organization.member_consumer_access_recovery.v1'
             automaticRegrantAllowed: false
             blockerCode: 'member_revoked'
+            ownerlessRecoveryMutationAllowed: false
+            directMembershipMutationAllowed: false
+            requiresOwnerAdminReview: true
+            requiresAcceptedInvite: true
+            recoveryActorRoles: Array<'owner' | 'admin'>
             recoveryReceipts: Array<'organization.invite_consumer_visibility_receipt.v1' | 'organization.member_role_consumer_visibility_receipt.v1'>
             recoveryRoutes: {
                 createInvite: 'POST /api/organizations/:id/invites'
@@ -5009,6 +5014,11 @@ export function organizationReadinessProof(input: {
                 responseSchema: 'organization.member_consumer_access_recovery.v1',
                 automaticRegrantAllowed: false,
                 blockerCode: 'member_revoked',
+                ownerlessRecoveryMutationAllowed: false,
+                directMembershipMutationAllowed: false,
+                requiresOwnerAdminReview: true,
+                requiresAcceptedInvite: true,
+                recoveryActorRoles: ['owner', 'admin'],
                 recoveryReceipts: [
                     'organization.invite_consumer_visibility_receipt.v1',
                     'organization.member_role_consumer_visibility_receipt.v1',

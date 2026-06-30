@@ -1644,6 +1644,11 @@ assert.equal(readiness.readinessProof.memberLifecycleProof.memberRemovalCleanup.
 assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.responseSchema, 'organization.member_consumer_access_recovery.v1')
 assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.automaticRegrantAllowed, false)
 assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.blockerCode, 'member_revoked')
+assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.ownerlessRecoveryMutationAllowed, false)
+assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.directMembershipMutationAllowed, false)
+assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.requiresOwnerAdminReview, true)
+assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.requiresAcceptedInvite, true)
+assert.deepEqual(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.recoveryActorRoles, ['owner', 'admin'])
 assert.ok(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.recoveryReceipts.includes('organization.invite_consumer_visibility_receipt.v1'))
 assert.ok(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.recoveryReceipts.includes('organization.member_role_consumer_visibility_receipt.v1'))
 assert.equal(readiness.readinessProof.memberLifecycleProof.memberAccessRecovery.recoveryRoutes.createInvite, 'POST /api/organizations/:id/invites')
@@ -4353,6 +4358,11 @@ assert.equal(removeViewerCleanup.consumerAccessRecovery.targetUserId, 'org_smoke
 assert.equal(removeViewerCleanup.consumerAccessRecovery.targetRoleBeforeRemoval, 'viewer')
 assert.equal(removeViewerCleanup.consumerAccessRecovery.currentMemberStatus, 'removed')
 assert.equal(removeViewerCleanup.consumerAccessRecovery.automaticRegrantAllowed, false)
+assert.equal(removeViewerCleanup.consumerAccessRecovery.ownerlessRecoveryMutationAllowed, false)
+assert.equal(removeViewerCleanup.consumerAccessRecovery.directMembershipMutationAllowed, false)
+assert.equal(removeViewerCleanup.consumerAccessRecovery.requiresOwnerAdminReview, true)
+assert.equal(removeViewerCleanup.consumerAccessRecovery.requiresAcceptedInvite, true)
+assert.deepEqual(removeViewerCleanup.consumerAccessRecovery.recoveryActorRoles, ['owner', 'admin'])
 assert.deepEqual(removeViewerCleanup.consumerAccessRecovery.requiredSteps, [
     'owner_or_admin_review',
     'create_new_invite',
