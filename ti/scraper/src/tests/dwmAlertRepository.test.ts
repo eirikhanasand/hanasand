@@ -1898,11 +1898,49 @@ describe("dwm alert repository", () => {
         watchlistItemId: "watch_item_customer",
         organizationId: "org_repo_customer",
         tenantId: "org_repo_customer",
+        createdBy: "owner-customer-proof",
+        updatedBy: "analyst-customer-proof",
+        lifecycleReason: "customer_watchlist_activation",
+        lifecycleRequestId: "req_customer_watchlist_activation",
         kind: "domain",
         termFamily: "domain",
+        category: "domain",
         term: "acme.com",
         status: "active",
-        alertGeneratorKey: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"
+        alertGeneratorKey: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com",
+        alertGenerationRef: {
+          schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+          source: "organization_shared_watchlist",
+          organizationId: "org_repo_customer",
+          tenantId: "org_repo_customer",
+          ownerOrganizationId: "org_repo_customer",
+          watchlistId: "watch_repo_customer",
+          watchlistItemId: "watch_item_customer",
+          itemId: "watch_item_customer",
+          termFamily: "domain",
+          category: "domain",
+          term: "acme.com",
+          normalizedTerm: "acme.com",
+          status: "active",
+          lifecycle: {
+            status: "active",
+            reason: "customer_watchlist_activation",
+            requestId: "req_customer_watchlist_activation",
+            createdBy: "owner-customer-proof",
+            updatedBy: "analyst-customer-proof"
+          },
+          dedupe: {
+            scope: "organization_watchlist_term",
+            key: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com",
+            parts: {
+              organizationId: "org_repo_customer",
+              tenantId: "org_repo_customer",
+              watchlistItemId: "watch_item_customer",
+              termFamily: "domain",
+              normalizedTerm: "acme.com"
+            }
+          }
+        }
       }],
       watchlistTerms: [{
         watchlistId: "watch_repo_customer_paused",
@@ -1932,10 +1970,37 @@ describe("dwm alert repository", () => {
       { watchlistId: "watch_repo_customer_archived", reason: "archived" }
     ]);
     const alert = first.alerts[0];
-    expect(alert).toMatchObject({
+    const alertForAssertions = JSON.parse(JSON.stringify(alert));
+    const alertForWorkflowReplay = JSON.parse(JSON.stringify(alert));
+    expect(alertForAssertions).toMatchObject({
       organizationId: "org_repo_customer",
       sourceFamily: "telegram_public",
       watchlistItemIds: ["watch_item_customer"],
+      orgWatchlistScope: {
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_repo_customer",
+        tenantId: "org_repo_customer",
+        ownerOrganizationIds: ["org_repo_customer"],
+        watchlistIds: ["watch_repo_customer"],
+        watchlistItemIds: ["watch_item_customer"],
+        alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
+        terms: [expect.objectContaining({
+          watchlistId: "watch_repo_customer",
+          watchlistItemId: "watch_item_customer",
+          itemId: "watch_item_customer",
+          organizationId: "org_repo_customer",
+          tenantId: "org_repo_customer",
+          ownerOrganizationId: "org_repo_customer",
+          term: "acme.com",
+          normalizedTerm: "acme.com",
+          category: "domain",
+          termFamily: "domain",
+          status: "active",
+          alertGeneratorKey: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com",
+          lifecycleReason: "customer_watchlist_activation",
+          lifecycleRequestId: "req_customer_watchlist_activation"
+        })]
+      },
       deliveryReadinessContext: {
         selectedCaptureIds: ["cap_repo_tg_acme"],
         generationEvidenceWindow: {
@@ -1948,6 +2013,52 @@ describe("dwm alert repository", () => {
         blockerCodes: []
       }
     });
+    const createdAlertGenerationRef = alertForAssertions.workflowContext.alertGenerationRefs[0];
+    expect(createdAlertGenerationRef.source).toBe("organization_shared_watchlist");
+    expect(createdAlertGenerationRef.ownerOrganizationId).toBe("org_repo_customer");
+    expect(createdAlertGenerationRef.watchlistId).toBe("watch_repo_customer");
+    expect(createdAlertGenerationRef.watchlistItemId).toBe("watch_item_customer");
+    expect(createdAlertGenerationRef.term).toBe("acme.com");
+    expect(createdAlertGenerationRef.normalizedTerm).toBe("acme.com");
+    expect(createdAlertGenerationRef.lifecycle).toMatchObject({
+      reason: "customer_watchlist_activation",
+      requestId: "req_customer_watchlist_activation",
+      createdBy: "owner-customer-proof",
+      updatedBy: "analyst-customer-proof"
+    });
+    expect(createdAlertGenerationRef.dedupe).toMatchObject({
+      scope: "organization_watchlist_term",
+      key: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com",
+      parts: {
+        organizationId: "org_repo_customer",
+        tenantId: "org_repo_customer",
+        watchlistItemId: "watch_item_customer",
+        termFamily: "domain",
+        normalizedTerm: "acme.com"
+      }
+    });
+    expect(alertForAssertions.alertCreatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      organizationId: "org_repo_customer",
+      sourceFamily: "telegram_public",
+      watchlistIds: ["watch_repo_customer"],
+      watchlistItemIds: ["watch_item_customer"],
+      alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
+      selectedCaptureIds: ["cap_repo_tg_acme"],
+      orgWatchlistScope: {
+        terms: [expect.objectContaining({
+          lifecycleReason: "customer_watchlist_activation",
+          lifecycleRequestId: "req_customer_watchlist_activation"
+        })]
+      }
+    });
+    expect(alertForAssertions.alertCreatedEvent.consumerPayload.alertGenerationRefs[0].source).toBe("organization_shared_watchlist");
+    expect(alertForAssertions.alertCreatedEvent.consumerPayload.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(alertForAssertions.alertCreatedEvent.consumerPayload.alertGenerationRefs[0].lifecycle).toMatchObject({
+      reason: "customer_watchlist_activation",
+      requestId: "req_customer_watchlist_activation"
+    });
+    expect(alertForAssertions.alertCreatedEvent.consumerPayload.alertGenerationRefs[0].dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
     const initialHandoff = buildDwmAlertDownstreamHandoff({
       alert,
       organizationId: "org_repo_customer",
@@ -1970,7 +2081,7 @@ describe("dwm alert repository", () => {
     expect(initialHandoff.createdEventDispatch.idempotencyKey).toMatch(/^dwm_alert_created_dispatch_/);
 
     store.saveDwmAlert({
-      ...alert,
+      ...alertForWorkflowReplay,
       workflowStatus: "investigating",
       reviewState: "reviewing",
       deliveryState: "delivered",
@@ -2035,6 +2146,34 @@ describe("dwm alert repository", () => {
     expect(preserved.deliveryReadinessContext.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
     expect(preserved.deliveryReadinessContext.blockerCodes).toContain("replay_already_delivered");
     expect(preserved.deliveryReadinessContext.blockerCodes).toContain("duplicate_delivered_dedupe");
+    expect(preserved.orgWatchlistScope).toMatchObject({
+      organizationId: "org_repo_customer",
+      watchlistIds: ["watch_repo_customer"],
+      watchlistItemIds: ["watch_item_customer"],
+      terms: [expect.objectContaining({
+        alertGeneratorKey: "org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com",
+        lifecycleReason: "customer_watchlist_activation",
+        lifecycleRequestId: "req_customer_watchlist_activation"
+      })]
+    });
+    expect(preserved.webhookContext).toMatchObject({
+      organizationId: "org_repo_customer",
+      watchlistIds: ["watch_repo_customer"],
+      watchlistItemIds: ["watch_item_customer"],
+      alertGeneratorKeys: ["org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com"],
+      orgWatchlistScope: {
+        terms: [expect.objectContaining({
+          lifecycleReason: "customer_watchlist_activation",
+          lifecycleRequestId: "req_customer_watchlist_activation"
+        })]
+      }
+    });
+    expect(preserved.webhookContext.alertGenerationRefs[0].source).toBe("organization_shared_watchlist");
+    expect(preserved.webhookContext.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(preserved.webhookContext.alertGenerationRefs[0].lifecycle).toMatchObject({
+      reason: "customer_watchlist_activation",
+      requestId: "req_customer_watchlist_activation"
+    });
     const preservedHandoff = buildDwmAlertDownstreamHandoff({
       alert: preserved,
       deliveries: [delivery],
@@ -2071,6 +2210,19 @@ describe("dwm alert repository", () => {
     });
     expect(preservedHandoff.evidence.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme");
     expect(preservedHandoff.evidence.generationEvidenceWindow?.captureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preserved.alertUpdatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      eventType: "dwm.alert.updated",
+      addedCaptureIds: ["cap_repo_tg_acme_followup"]
+    });
+    const updatedAlertGenerationRef = preserved.alertUpdatedEvent.consumerPayload.alertGenerationRefs[0];
+    expect(updatedAlertGenerationRef.source).toBe("organization_shared_watchlist");
+    expect(updatedAlertGenerationRef.watchlistItemId).toBe("watch_item_customer");
+    expect(updatedAlertGenerationRef.lifecycle).toMatchObject({
+      reason: "customer_watchlist_activation",
+      requestId: "req_customer_watchlist_activation"
+    });
+    expect(updatedAlertGenerationRef.dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
 
     const proof = buildDwmAlertCustomerProofHandoffRow({
       alert: preserved,

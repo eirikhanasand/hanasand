@@ -3668,6 +3668,7 @@ function buildDwmAlertEventConsumerPayload(input: {
     watchlistIds: input.workflowContext.watchlistIds ?? [],
     watchlistItemIds: input.workflowContext.watchlistItemIds ?? [],
     alertGeneratorKeys: input.workflowContext.alertGeneratorKeys ?? [],
+    alertGenerationRefs: input.workflowContext.alertGenerationRefs ?? [],
     captureIds: input.captureIds,
     selectedCaptureIds: input.selectedCaptureIds,
     addedCaptureIds: input.addedCaptureIds ?? [],
