@@ -1926,6 +1926,28 @@ export type OrganizationLifecycleReadiness = {
         contract: 'admin_support'
         redactionBlocker: 'support_redaction_required'
     }
+    downstreamLifecycleReceipt: {
+        schemaVersion: 'organization.lifecycle_downstream_receipt.v1'
+        organizationId: string
+        tenantId: string
+        lifecycleStatus: OrganizationLifecycleStatus
+        blockerCode: Extract<OrganizationLifecycleReadinessBlockerCode, 'org_archived' | 'org_deleted'> | null
+        activeMembershipRequired: true
+        inviteMutationAllowed: boolean
+        watchlistMutationAllowed: boolean
+        alertExportAllowed: boolean
+        caseVisibilityAllowed: boolean
+        webhookDeliveryAllowed: boolean
+        supportRedactedReadAllowed: true
+        blockedRoutes: string[]
+        downstreamRefs: {
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
+            alertGenerationFixture: 'organization.watchlist_alert_generation_fixture.v1'
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1'
+            webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1'
+        }
+        noLeakFields: Array<'activeTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'destination.secret' | 'case.evidence.rawContent'>
+    }
     dashboardFields: string[]
     typedBlockers: OrganizationLifecycleReadinessBlockerCode[]
     blockerCatalog: OrganizationLifecycleReadinessBlockerCode[]
@@ -4850,6 +4872,13 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
         typedBlockers.push('watchlist_setup_required', 'alert_export_unavailable')
     }
 
+    const lifecycleBlockerCode = lifecycleStatus === 'archived'
+        ? 'org_archived'
+        : lifecycleStatus === 'deleted'
+            ? 'org_deleted'
+            : null
+    const lifecycleAllowsDownstream = lifecycleBlockerCode === null
+
     return {
         schemaVersion: 'organization.lifecycle_readiness.v1',
         organizationId: row.id,
@@ -4900,6 +4929,40 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
             contract: 'admin_support',
             redactionBlocker: 'support_redaction_required',
         },
+        downstreamLifecycleReceipt: {
+            schemaVersion: 'organization.lifecycle_downstream_receipt.v1',
+            organizationId: row.id,
+            tenantId: row.id,
+            lifecycleStatus,
+            blockerCode: lifecycleBlockerCode,
+            activeMembershipRequired: true,
+            inviteMutationAllowed: lifecycleAllowsDownstream,
+            watchlistMutationAllowed: lifecycleAllowsDownstream,
+            alertExportAllowed: lifecycleAllowsDownstream && sharedWatchlistCount > 0 && activeAdminCount > 0,
+            caseVisibilityAllowed: lifecycleAllowsDownstream,
+            webhookDeliveryAllowed: lifecycleAllowsDownstream,
+            supportRedactedReadAllowed: true,
+            blockedRoutes: lifecycleAllowsDownstream ? [] : [
+                'POST /api/organizations/:id/invites',
+                'POST /api/organizations/:id/watchlists',
+                'GET /api/organizations/:id/watchlists/alert-terms',
+                'GET /api/organizations/:id/alert-readiness',
+                'GET /api/organizations/:id/alert-case-visibility',
+                'POST /v1/dwm/webhooks/deliver',
+            ],
+            downstreamRefs: {
+                alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1',
+                alertGenerationFixture: 'organization.watchlist_alert_generation_fixture.v1',
+                caseVisibilityConsumer: 'organization.case_visibility_consumer.v1',
+                webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1',
+            },
+            noLeakFields: [
+                'activeTerms[]',
+                'watchlistScope.alertGeneratorKeys',
+                'destination.secret',
+                'case.evidence.rawContent',
+            ],
+        },
         dashboardFields: [
             'organizationId',
             'tenantId',
@@ -4913,6 +4976,7 @@ export function organizationLifecycleReadiness(row: OrganizationRow): Organizati
             'alertExportReadiness',
             'cleanupReadiness',
             'supportVisibility',
+            'downstreamLifecycleReceipt',
             'typedBlockers',
         ],
         typedBlockers,

@@ -1524,6 +1524,15 @@ assert.equal(readiness.lifecycleReadiness.watchlistReadiness.ready, true)
 assert.equal(readiness.lifecycleReadiness.alertExportReadiness.ready, true)
 assert.equal(readiness.lifecycleReadiness.cleanupReadiness.cleanupIdempotent, true)
 assert.equal(readiness.lifecycleReadiness.supportVisibility.mode, 'redacted_summary_only')
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.schemaVersion, 'organization.lifecycle_downstream_receipt.v1')
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.lifecycleStatus, 'active')
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.blockerCode, null)
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.inviteMutationAllowed, true)
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.watchlistMutationAllowed, true)
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.alertExportAllowed, true)
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.caseVisibilityAllowed, true)
+assert.equal(readiness.lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, true)
+assert.deepEqual(readiness.lifecycleReadiness.downstreamLifecycleReceipt.blockedRoutes, [])
 assert.deepEqual(readiness.lifecycleReadiness.typedBlockers, [])
 assert.equal(readiness.lifecycleReadiness.readyForOnboarding, true)
 assert.equal(readiness.alertGenerationBridge.schemaVersion, 'organization.watchlist_alert_generation.v1')
@@ -3315,6 +3324,18 @@ assert.equal(archivedOrganizationSettings.settings.lifecycleStatus, 'archived')
 assert.equal(archivedOrganizationSettings.lifecycleReadiness.lifecycleStatus, 'archived')
 assert.ok(archivedOrganizationSettings.lifecycleReadiness.typedBlockers.includes('org_archived'))
 assert.equal(archivedOrganizationSettings.lifecycleReadiness.alertExportReadiness.ready, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.lifecycleStatus, 'archived')
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockerCode, 'org_archived')
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.inviteMutationAllowed, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.watchlistMutationAllowed, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.alertExportAllowed, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.caseVisibilityAllowed, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, false)
+assert.ok(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.equal(
+    archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.downstreamRefs.alertGenerationFixture,
+    'organization.watchlist_alert_generation_fixture.v1',
+)
 
 const archivedOrgAlertTermsResponse = await app.inject({
     method: 'GET',
@@ -3431,6 +3452,15 @@ assert.equal(deletedOrganizationSettings.settings.lifecycleStatus, 'deleted')
 assert.equal(deletedOrganizationSettings.lifecycleReadiness.lifecycleStatus, 'deleted')
 assert.ok(deletedOrganizationSettings.lifecycleReadiness.typedBlockers.includes('org_deleted'))
 assert.equal(deletedOrganizationSettings.lifecycleReadiness.alertExportReadiness.ready, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.lifecycleStatus, 'deleted')
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockerCode, 'org_deleted')
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.inviteMutationAllowed, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.watchlistMutationAllowed, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.alertExportAllowed, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.caseVisibilityAllowed, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, false)
+assert.ok(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockedRoutes.includes('POST /v1/dwm/webhooks/deliver'))
+assert.ok(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.noLeakFields.includes('destination.secret'))
 
 const deletedOrgAlertTermsResponse = await app.inject({
     method: 'GET',
@@ -3517,6 +3547,9 @@ assert.equal(reactivateOrganizationResponse.statusCode, 200, reactivateOrganizat
 assert.equal(parseBody(reactivateOrganizationResponse.body).organization.lifecycleStatus, 'active')
 assert.equal(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.lifecycleStatus, 'active')
 assert.deepEqual(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.typedBlockers, [])
+assert.equal(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.downstreamLifecycleReceipt.blockerCode, null)
+assert.equal(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.downstreamLifecycleReceipt.inviteMutationAllowed, true)
+assert.equal(parseBody(reactivateOrganizationResponse.body).lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, true)
 
 const secondOrganizationResponse = await app.inject({
     method: 'POST',
