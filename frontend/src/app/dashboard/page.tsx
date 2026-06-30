@@ -2,13 +2,14 @@ import Link from 'next/link'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { BellRing, Radar } from 'lucide-react'
+import { BellRing, Building2, ListChecks, Radar } from 'lucide-react'
 import { DashboardPage } from '@/components/dashboard/ui'
 import { demoDwmProductSnapshot, type DwmAlert, type DwmAlertAnalystAction, type DwmAlertAnalystActionReadiness, type DwmSeverity } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
 import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import WebhookDeliveryConsole, { type DashboardWebhookAlertOption } from './WebhookDeliveryConsole'
 
 export const dynamic = 'force-dynamic'
 
@@ -104,6 +105,7 @@ export default async function Page({
     const cases = buildWorkbenchCases(overview, alerts, [...handoffCases, ...readinessCases], liveAlerts.length > 0, scope, deliveries)
     const requestedCaseId = firstParam(params?.case)
     const initialSelectedId = cases.find(item => item.id === requestedCaseId)?.id
+    const webhookAlertOptions = alerts.slice(0, 12).map(alert => webhookAlertOption(alert, scope))
     const displayName = impersonatingName || impersonatingId || name
     const firstName = displayName.split(/\s+/)[0] || displayName
     const highPriorityCount = cases.filter(item => item.severity === 'critical' || item.severity === 'high').length
@@ -121,6 +123,19 @@ export default async function Page({
                 caseCount={cases.length}
                 highPriorityCount={highPriorityCount}
                 persistentCount={cases.filter(item => item.persistent).length}
+                orgContext={orgContext}
+            />
+
+            <WebhookDeliveryConsole
+                organization={organizationState.selectedOrganization ? {
+                    id: organizationState.selectedOrganization.id,
+                    tenantId: organizationState.selectedOrganization.tenantId,
+                    name: organizationState.selectedOrganization.name,
+                    status: organizationState.selectedOrganization.status,
+                } : undefined}
+                initialDestinations={organizationState.webhooks}
+                initialDeliveries={deliveries}
+                alertOptions={webhookAlertOptions}
             />
 
             <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} initialSelectedId={initialSelectedId} />
@@ -133,36 +148,66 @@ function firstParam(value: string | string[] | undefined) {
     return value
 }
 
-function OperatorTopBar({ firstName, caseCount, highPriorityCount, persistentCount }: { firstName: string, caseCount: number, highPriorityCount: number, persistentCount: number }) {
+function OperatorTopBar({
+    firstName,
+    caseCount,
+    highPriorityCount,
+    persistentCount,
+    orgContext,
+}: {
+    firstName: string
+    caseCount: number
+    highPriorityCount: number
+    persistentCount: number
+    orgContext: ReturnType<typeof buildOrgOperatingContext>
+}) {
+    const activeOrg = orgContext.organization
+    const orgLabel = activeOrg?.name || activeOrg?.slug || 'Default tenant'
+    const activeWatchlists = orgContext.readiness.activeWatchlistCount
+    const watchedTerms = orgContext.readiness.termCount
+    const activeWebhooks = orgContext.readiness.activeWebhookCount
+    const sourceCoverage = orgContext.readiness.sourceCoverage
+    const latestDelivery = orgContext.readiness.latestDelivery
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 shadow-sm'>
+        <section className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 shadow-sm' data-dashboard-operator-strip='true'>
             <div className='flex items-center justify-between gap-3 sm:hidden'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations</p>
                     <h1 className='truncate text-base font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
+                    <p className='mt-0.5 truncate text-xs font-medium text-[#667085]'>{orgLabel} · {caseCount} cases · {persistentCount} API-backed</p>
                 </div>
                 <span className='shrink-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#9a3412]'>{highPriorityCount} high</span>
             </div>
-            <div className='hidden flex-wrap items-center justify-between gap-2 sm:flex'>
+            <div className='hidden gap-3 sm:grid xl:grid-cols-[minmax(260px,1fr)_minmax(520px,2fr)_auto] xl:items-center'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations workbench</p>
                     <h1 className='truncate text-lg font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
+                    <p className='mt-0.5 truncate text-xs font-medium text-[#667085]'>{orgLabel} · {orgContext.readiness.alertVisibilityPolicy} visibility</p>
                 </div>
-                <div className='flex flex-wrap items-center gap-2'>
+                <div className='grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4'>
                     <CompactStat label='Cases' value={String(caseCount)} />
                     <CompactStat label='High' value={String(highPriorityCount)} tone='warn' />
                     <CompactStat label='API-backed' value={String(persistentCount)} tone='good' />
-                    <span className='rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-2.5 py-1.5 text-xs font-semibold text-[#596170]'>TI owner/notes session-local</span>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
-                        <Radar className='h-4 w-4' />
-                        DWM
-                    </Link>
-                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe]'>
-                        <BellRing className='h-4 w-4' />
-                        Delivery
-                    </Link>
+                    <CompactStat label='Terms' value={String(watchedTerms)} />
+                </div>
+                <div className='flex flex-wrap items-center gap-2 xl:justify-end'>
+                    <OperatorCommand href='/dashboard/dwm' label='Watchlists' value={`${activeWatchlists} active`} icon={ListChecks} />
+                    <OperatorCommand href='/dashboard/ti/sources' label='Sources' value={sourceCoverage ? `${sourceCoverage.activeSourceCount} active` : 'inspect'} icon={Radar} />
+                    <OperatorCommand href='/dashboard/automations?setup=dwm' label='Delivery' value={latestDelivery?.status || `${activeWebhooks} webhooks`} icon={BellRing} primary />
                 </div>
             </div>
+            {activeOrg && (
+                <div className='mt-2 hidden min-w-0 items-center gap-2 border-t border-[#eef1f5] pt-2 text-xs font-medium text-[#596170] md:flex' data-dashboard-active-org={activeOrg.id}>
+                    <Building2 className='h-4 w-4 shrink-0 text-[#3056d3]' />
+                    <span className='truncate'>Org {activeOrg.id}</span>
+                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='truncate'>{orgContext.members.length} members</span>
+                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='truncate'>{orgContext.pendingInvites.length} invites pending</span>
+                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='truncate'>{activeWebhooks} active delivery destinations</span>
+                </div>
+            )}
         </section>
     )
 }
@@ -178,6 +223,31 @@ function CompactStat({ label, value, tone = 'neutral' }: { label: string, value:
             <span className='text-[10px] uppercase opacity-75'>{label}</span>
             <span>{value}</span>
         </span>
+    )
+}
+
+function OperatorCommand({
+    href,
+    label,
+    value,
+    icon: Icon,
+    primary = false,
+}: {
+    href: string
+    label: string
+    value: string
+    icon: typeof BellRing
+    primary?: boolean
+}) {
+    const className = primary
+        ? 'bg-[#171a21] text-white hover:bg-[#2b2f39] focus:ring-[#c7d2fe]'
+        : 'border border-[#d8dee9] bg-white text-[#344054] hover:bg-[#f2f5f9] focus:ring-[#dbe5ff]'
+    return (
+        <Link href={href} className={`inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 ${className}`}>
+            <Icon className='h-4 w-4 shrink-0' />
+            <span>{label}</span>
+            <span className={primary ? 'text-white/70' : 'text-[#667085]'}>{value}</span>
+        </Link>
     )
 }
 
@@ -408,6 +478,31 @@ function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], read
 
     return [...readinessCases, ...alertCases, ...domainCases, ...captureCases]
         .sort((a, b) => b.priority - a.priority || b.updatedAt.localeCompare(a.updatedAt))
+}
+
+function webhookAlertOption(alert: DwmAlert, scope: OperatorScope): DashboardWebhookAlertOption {
+    const workflowAlert = alert as DwmWorkflowAlert
+    const evidenceTimestamp = alert.evidence[0]?.observedAt || alert.evidence[0]?.firstSeenAt || alert.evidenceSummary?.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt
+    const caseId = workflowAlert.caseId || workflowAlert.caseIdCandidate || workflowAlert.workflowContext?.caseIdCandidate
+    const organizationId = workflowAlert.organizationId || workflowAlert.workflowContext?.organizationId || scope.organizationId
+    const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''
+
+    return {
+        id: alert.id,
+        title: alert.company || alert.matchedTerm.value,
+        severity: alert.severity,
+        confidence: alert.confidence,
+        watchlistTerm: alert.matchedTerm.value,
+        sourceFamily: alert.sourceFamily,
+        evidenceCount: alert.evidenceSummary?.evidenceCount || alert.evidence.length,
+        evidenceTimestamp,
+        routeLabel: alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
+        routeUrl: `/api/dwm/alerts/${encodeURIComponent(alert.id)}${query}`,
+        caseId,
+        casePath: caseId ? `/api/cases/${encodeURIComponent(caseId)}${query}` : undefined,
+        summary: alert.claimSummary,
+        dedupeKey: alert.webhookDelivery.dedupeKey,
+    }
 }
 
 function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, deliveries: DwmDeliveryItem[]): WorkbenchCase {

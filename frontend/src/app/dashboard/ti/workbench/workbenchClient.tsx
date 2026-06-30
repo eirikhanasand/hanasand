@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { CheckCircle2, Clock3, ExternalLink, FileText, Filter, Fingerprint, ListChecks, MessageSquareText, Search, ShieldAlert, UserRound } from 'lucide-react'
+import { ExternalLink, Filter, MessageSquareText, Search, UserRound } from 'lucide-react'
 
 export type WorkbenchEvidence = {
     id: string
@@ -110,13 +110,14 @@ export type WorkbenchPublicTiHandoff = {
     actionReadiness?: WorkbenchPublicTiActionReadiness[]
 }
 
-export type WorkbenchCaseMutationAction = 'assign' | 'note' | 'escalate' | 'suppress' | 'close' | 'reopen' | 'false_positive'
+export type WorkbenchCaseMutationAction = 'assign' | 'note' | 'review' | 'escalate' | 'suppress' | 'close' | 'reopen' | 'false_positive'
 
 export type WorkbenchCaseMutationPayload = {
     action: WorkbenchCaseMutationAction
     actor: string
     note?: string
     assignedOwner?: string
+    idempotencyKey?: string
 }
 
 export type WorkbenchInvitePayload = {
@@ -741,6 +742,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 actor: 'dashboard',
                 note: mutation.note || undefined,
                 assignedOwner: mutation.assignedOwner || undefined,
+                idempotencyKey: caseMutationIdempotencyKey(item, mutation),
             }
             const response = await fetch(item.caseDetailHref as string, {
                 method: 'PATCH',
@@ -905,7 +907,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             )}
 
             <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
-                <div className='flex items-center gap-2 overflow-x-auto border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white sm:flex-wrap'>
+                <div className='hidden items-center gap-2 overflow-x-auto border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white sm:flex sm:flex-wrap'>
                     <StatusPill label='Cases' value={String(initialCases.length)} />
                     <StatusPill label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
                     <StatusPill label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
@@ -992,7 +994,6 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 onCustomerNotification={() => recordCustomerNotification(selected, notes[selected.id] ?? '', selectedCaseDetail)}
                                 onReplay={() => replayDwmAlert(selected)}
                                 onSend={() => sendDwmAlert(selected)}
-                                onAction={(action) => runWorkbenchAction(selected, action, notes[selected.id] ?? '')}
                             />
                         ) : (
                             <EmptyWorkspace />
@@ -2683,7 +2684,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     <p className='text-xs font-semibold uppercase text-[#9a3412]'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170]'>
                         {hasBackedAlertWorkflow
-                            ? 'These controls PATCH /api/dwm/alerts/:id, then reload alert detail. Case mutations remain blocked until /api/cases/:id is linked.'
+                            ? 'Updates the persisted alert and refreshes detail. Case actions unlock when a case is linked.'
                             : item.missingDependency || 'Backed mutations require a live /api/cases/:id detail response or persistent /api/dwm/alerts/:id alert. These controls only update this browser session.'}
                     </p>
                 </div>
@@ -2711,9 +2712,9 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
     return (
         <div className='grid gap-2 rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3'>
             <div>
-                <p className='text-xs font-semibold uppercase text-[#147a3b]'>Backed case actions</p>
-                <p className='mt-1 text-xs leading-5 text-[#596170]'>These controls PATCH /api/cases/:id, then reload the case detail pane before reporting success.</p>
-                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#596170]'>Case export uses GET {caseExportHref(item.caseDetailHref)} for audit-safe evidence, timeline, delivery, and next-action payloads.</p>}
+                <p className='text-xs font-semibold uppercase text-[#147a3b]'>Live case actions</p>
+                <p className='mt-1 text-xs leading-5 text-[#596170]'>Updates the selected case and refreshes the detail pane.</p>
+                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#596170]'>Case export includes evidence, timeline, delivery, and next actions.</p>}
             </div>
             <div className='flex flex-wrap gap-2'>
                 <CaseMutationButton
@@ -2738,6 +2739,16 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                 />
                 <CaseMutationButton
                     item={item}
+                    action='review'
+                    label='Start review'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!noteText ? 'Review requires rationale.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'review', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText })}
+                />
+                <CaseMutationButton
+                    item={item}
                     action='escalate'
                     label='Escalate'
                     busy={busy}
@@ -2755,6 +2766,16 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
                     disabledReason={!noteText ? 'Suppression requires rationale.' : undefined}
                     onClick={() => onBackedCaseMutation({ action: 'suppress', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || 'Suppressed as low-value or false positive.' })}
+                />
+                <CaseMutationButton
+                    item={item}
+                    action='false_positive'
+                    label='False positive'
+                    busy={busy}
+                    busyAction={busyAction}
+                    allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
+                    disabledReason={!noteText ? 'False-positive decision requires rationale.' : undefined}
+                    onClick={() => onBackedCaseMutation({ action: 'false_positive', assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText })}
                 />
                 <CaseMutationButton
                     item={item}
@@ -2811,7 +2832,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
     )
 }
 
-function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, actionDeliveries, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend, onAction }: {
+function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, caseDetail, alertDetail, actionDeliveries, orgContext, actionMessage, onNoteChange, onOwnerDraftChange, onDecision, onBackedCaseMutation, onCustomerNotification, onReplay, onSend }: {
     item: WorkbenchCase
     decision?: LocalDecision
     note: string
@@ -2830,7 +2851,6 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     onCustomerNotification: () => void | Promise<void>
     onReplay: () => void | Promise<void>
     onSend: () => void | Promise<void>
-    onAction: (action: WorkbenchAction) => void | Promise<void>
 }) {
     const backedCase = caseDetail?.status === 'ready' ? caseDetail.detail.case : undefined
     const backedStatus = backedCase?.status
@@ -2841,15 +2861,6 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
     const assignableMembers = orgContext?.members.filter(member => member.status === 'active' && member.role !== 'viewer') || []
     const readOnly = caseDetail?.status === 'ready' && caseDetail.detail.access?.readOnly === true
     const sendDisabledReason = sendDeliveryDisabledReason(item, orgContext)
-    const timeline = decision?.status ? [
-        {
-            id: `${item.id}_session_decision`,
-            at: decision.decidedAt || new Date().toISOString(),
-            title: 'Session decision',
-            body: `${label(decision.status)}${decision.owner ? ` by ${decision.owner}` : ''}${decision.reason ? `: ${decision.reason}` : ''}`,
-        },
-        ...item.timeline,
-    ] : item.timeline
     return (
         <div className={`${compact ? 'grid gap-4 p-4' : 'grid gap-5 p-5'}`}>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -2938,158 +2949,15 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 />
             </section>
 
-            <CaseContinuityPanel
-                item={item}
-                decision={decision}
-                caseDetail={caseDetail}
-                actionMessage={actionMessage}
-                orgContext={orgContext}
-            />
-
-            {(item.workflowPath?.length || item.actions?.length) ? (
-                <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                    <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
-                        <div>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Operator path</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Backed path from organization scope to watchlist, alert/case, and delivery evidence.</p>
-                        </div>
-                        {item.actions?.length ? (
-                            <div className='flex flex-wrap gap-2'>
-                                {item.actions.map(action => action.method === 'GET' ? (
-                                    <Link key={action.id} href={action.href} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                                        {action.label}
-                                        <ExternalLink className='h-3.5 w-3.5' />
-                                    </Link>
-                                ) : (
-                                    <DecisionButton key={action.id} busy={busyAction === `action:${item.id}:${action.id}`} onClick={() => onAction(action)}>
-                                        {action.label}
-                                    </DecisionButton>
-                                ))}
-                            </div>
-                        ) : null}
-                    </div>
-                    {item.workflowPath?.length ? (
-                        <div className='grid gap-2 p-3 lg:grid-cols-4'>
-                            {item.workflowPath.map(step => (
-                                <div key={step.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                    <div className='flex items-center justify-between gap-2'>
-                                        <h4 className='text-sm font-semibold text-[#171a21]'>{step.label}</h4>
-                                        <span className={workflowStatusClass(step.status)}>{label(step.status)}</span>
-                                    </div>
-                                    <p className='mt-2 text-xs leading-5 text-[#596170]'>{step.detail}</p>
-                                    <div className='mt-3 grid gap-1 text-[11px] text-[#667085]'>
-                                        <p><span className='font-semibold text-[#475467]'>Owner:</span> {step.owner}</p>
-                                        {step.entityId && <p className='break-all'><span className='font-semibold text-[#475467]'>ID:</span> {step.entityId}</p>}
-                                        <p className='break-all'><span className='font-semibold text-[#475467]'>Source:</span> {step.source}</p>
-                                    </div>
-                                    {step.href && (
-                                        <Link href={step.href} className='mt-3 inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                                            Open
-                                            <ExternalLink className='h-3.5 w-3.5' />
-                                        </Link>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    ) : null}
-                </section>
-            ) : null}
-
-            <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} actionDeliveries={actionDeliveries} orgContext={orgContext} compact={compact} />
-
-            <section className='grid gap-4 lg:grid-cols-[1fr_0.78fr]'>
-                <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                    <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
-                        <div>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Evidence</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Source, timestamp, confidence, provenance, safe excerpt, and content hash.</p>
-                        </div>
-                        <ListChecks className='h-4 w-4 text-[#3056d3]' />
-                    </div>
-                    <div className={`grid gap-3 p-4 ${compact ? 'max-h-[310px] overflow-auto' : ''}`}>
-                        {item.evidence.map(evidence => (
-                            <div key={evidence.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-sm font-semibold text-[#171a21]'>{evidence.sourceName}</span>
-                                    <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{evidence.redactionState}</span>
-                                    <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{evidence.captureMode}</span>
-                                    <span className='text-[11px] text-[#667085]'>{relativeTime(evidence.observedAt || item.updatedAt)}</span>
-                                </div>
-                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{evidence.excerpt}</p>
-                                <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                                    <p><span className='font-semibold text-[#475467]'>Confidence:</span> {evidence.confidence ?? item.confidence}%</p>
-                                    <p><span className='font-semibold text-[#475467]'>Provenance:</span> {evidence.provenance || item.routeLabel}</p>
-                                </div>
-                                <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{evidence.contentHash}</p>
-                                {evidence.metadata?.length ? (
-                                    <div className='mt-3 grid gap-1'>
-                                        {evidence.metadata.slice(0, 4).map(meta => (
-                                            <p key={`${evidence.id}-${meta.label}`} className='text-xs text-[#667085]'><span className='font-semibold text-[#475467]'>{meta.label}:</span> {meta.value}</p>
-                                        ))}
-                                    </div>
-                                ) : null}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className='grid gap-4'>
-                    <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                        <div className='border-b border-[#eef1f5] px-4 py-3'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Timeline</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Case state and source observations.</p>
-                        </div>
-                        <div className={`grid gap-3 p-4 ${compact ? 'max-h-[220px] overflow-auto' : ''}`}>
-                            {timeline.map(event => (
-                                <div key={event.id} className='grid grid-cols-[auto_1fr] gap-3'>
-                                    <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
-                                    <div>
-                                        <p className='text-sm font-semibold text-[#171a21]'>{event.title}</p>
-                                        <p className='mt-1 text-xs leading-5 text-[#667085]'>{event.body}</p>
-                                        <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(event.at)}</p>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className='rounded-lg border border-[#e0e5ed] bg-white p-4'>
-                        <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                            <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
-                            Session decision state
-                        </h3>
-                        <p className='mt-2 text-sm leading-6 text-[#596170]'>
-                            {decision?.status ? `${label(decision.status)}${decision.reason ? `: ${decision.reason}` : ''}` : 'No local decision recorded yet.'}
-                        </p>
-                        <p className='mt-2 text-xs leading-5 text-[#667085]'>DWM alert decisions persist through the DWM API. General TI ownership and notes are session-local.</p>
-                    </div>
-                </div>
-            </section>
-
-            <section className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
-                <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                    <ShieldAlert className='h-4 w-4 text-[#c2410c]' />
-                    Case brief
-                </div>
-                <p className='mt-3 text-sm leading-6 text-[#3d4656]'>{item.subtitle}</p>
-                <p className='mt-3 text-sm font-semibold leading-6 text-[#3056d3]'>{item.recommendedAction}</p>
-                <div className='mt-4 grid gap-3 sm:grid-cols-3'>
-                    <BriefStat icon={<Fingerprint className='h-4 w-4' />} label='Actor' value={item.actor} />
-                    <BriefStat icon={<FileText className='h-4 w-4' />} label='Matched term' value={item.matchedTerm || 'none'} />
-                    <BriefStat icon={<UserRound className='h-4 w-4' />} label='Sources' value={item.sourceLabel} />
-                </div>
-            </section>
-
-            <section className='grid gap-3 lg:grid-cols-3'>
-                {item.nextTasks.map((task, index) => (
-                    <div key={task} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
-                        <div className='flex items-center gap-2'>
-                            {index === 0 ? <Clock3 className='h-4 w-4 text-[#667085]' /> : <CheckCircle2 className='h-4 w-4 text-[#147a3b]' />}
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Task {index + 1}</h3>
-                        </div>
-                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{task}</p>
-                    </div>
-                ))}
+            <section className='grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1.08fr)_minmax(360px,0.92fr)]'>
+                <BackedInspection item={item} caseDetail={caseDetail} alertDetail={alertDetail} actionDeliveries={actionDeliveries} orgContext={orgContext} compact={compact} />
+                <CaseContinuityPanel
+                    item={item}
+                    decision={decision}
+                    caseDetail={caseDetail}
+                    actionMessage={actionMessage}
+                    orgContext={orgContext}
+                />
             </section>
 
         </div>
@@ -3992,12 +3860,19 @@ function caseMutationResultMessage(action: WorkbenchCaseMutationAction, payload:
     const status = payload.case?.status ? ` is ${payload.case.status}` : ' updated'
     if (action === 'assign') return `${caseId} owner saved.`
     if (action === 'note') return `${caseId} rationale saved.`
+    if (action === 'review') return `${caseId}${status}; review started.`
     if (action === 'escalate') return `${caseId}${status} and ready for routing.`
     if (action === 'suppress') return `${caseId}${status}; delivery muted.`
     if (action === 'close') return `${caseId}${status}.`
     if (action === 'reopen') return `${caseId} reopened.`
     if (action === 'false_positive') return `${caseId} marked false positive.`
     return `${caseId}${status}.`
+}
+
+function caseMutationIdempotencyKey(item: WorkbenchCase, mutation: CaseMutationInput) {
+    const owner = mutation.assignedOwner || 'unassigned'
+    const note = (mutation.note || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 96)
+    return `workbench:${item.id}:${mutation.action}:${owner}:${note || 'no-note'}`
 }
 
 function scopeBody(orgContext: WorkbenchOrgContext | undefined) {
@@ -4033,18 +3908,6 @@ function mapDwmDecision(status: string, currentStatus: string) {
     if (status === 'suppressed') return { reviewState: 'false_positive', deliveryState: 'muted' }
     if (status === 'closed') return { reviewState: 'resolved', deliveryState: currentStatus === 'delivered' ? 'delivered' : 'muted' }
     return { reviewState: 'needs_review', deliveryState: 'pending_review' }
-}
-
-function BriefStat({ icon, label: statLabel, value }: { icon: React.ReactNode, label: string, value: string }) {
-    return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
-            <div className='flex items-center gap-2 text-[#667085]'>
-                {icon}
-                <span className='text-[10px] font-semibold uppercase'>{statLabel}</span>
-            </div>
-            <p className='mt-2 truncate text-sm font-semibold text-[#171a21]'>{value}</p>
-        </div>
-    )
 }
 
 function StatusPill({ label: statusLabel, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'good' | 'warn' }) {
