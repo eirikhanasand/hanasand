@@ -1,6 +1,26 @@
 import { ORG_ALERT_CASE_ACTION_LEDGER_ROUTE, ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { DWM_ORG_ALERT_CASE_ACTION_TIMELINE_SCHEMA_VERSION } from "../product/orgAlertCaseActionTimeline.ts";
 import {
+  DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION,
+  DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION
+} from "../product/orgAlertWorkflowBridge.ts";
+import {
+  DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
+  DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+  DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+  DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION
+} from "../product/webhookEventContract.ts";
+import {
+  SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+  SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
+} from "../product/analystHandoffConsumer.ts";
+import {
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION
+} from "../product/sourceProvenanceTiPageContract.ts";
+import {
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_LIST_SCHEMA_VERSION,
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
@@ -138,6 +158,79 @@ export function contractIndex() {
         }
       }
     ],
+    receiptSchemas: [
+      receiptSchema({
+        id: "org_alert_case_action_receipt",
+        ownerLane: "case",
+        schemas: {
+          receipt: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+          auditEvent: DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION,
+          ledgerWrite: DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION,
+          ledgerList: DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_LIST_SCHEMA_VERSION,
+          timeline: DWM_ORG_ALERT_CASE_ACTION_TIMELINE_SCHEMA_VERSION
+        },
+        routes: [ORG_ALERT_CASE_ACTION_LEDGER_ROUTE, ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE, "/v1/cases/:caseId"],
+        scopeFields: ["tenantId", "organizationId", "alertId", "casePath", "receiptId"],
+        requiredFields: ["receiptId", "action", "execution.status", "auditEventId", "idempotencyKey", "dedupeKey"],
+        blockerCodes: ["missing_tenant_scope", "missing_organization_scope", "organization_scope_mismatch", "blocked_receipt"],
+        downstreamConsumers: [
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["receiptId", "action", "execution.status"] },
+          { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["alertIds", "casePaths", "replayState"] }
+        ]
+      }),
+      receiptSchema({
+        id: "webhook_delivery_receipts",
+        ownerLane: "webhook",
+        schemas: {
+          event: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+          supportHandoff: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+          supportActionRequest: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+          retryAudit: DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
+        },
+        routes: ["/v1/dwm/webhooks/deliver", "/api/organizations/:id/webhooks", "/api/admin/support/readiness"],
+        scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId", "webhookDeliveryId"],
+        requiredFields: ["eventKind", "occurredAt", "delivery.status", "delivery.endpointHash", "evidence.evidenceCount"],
+        blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
+        downstreamConsumers: [
+          { ownerLane: "case", route: "/v1/cases/:caseId", requiredFields: ["webhookDeliveryId", "status", "caseId"] },
+          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "webhookDestinationId", "auditEventId"] }
+        ]
+      }),
+      receiptSchema({
+        id: "source_provenance_receipts",
+        ownerLane: "source",
+        schemas: {
+          alertRebuildReceipt: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+          actorEnrichmentGapReceipt: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+          sourcePackIntakeReceipt: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+          sourceActivationDecisionReceipt: TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION
+        },
+        routes: ["/v1/dwm/source-requests/readiness", "/v1/dwm/alerts/rebuild", "/ti"],
+        scopeFields: ["tenantId", "organizationId", "sourceIds", "captureIds", "contentHashes", "actor"],
+        requiredFields: ["sourceIds", "captureIds", "provenance.refs", "freshnessState", "blockers.code"],
+        blockerCodes: ["source_inactive", "source_policy_inactive", "missing_source_provenance", "case_handoff_blocked"],
+        downstreamConsumers: [
+          { ownerLane: "alert", route: "/v1/dwm/alerts/rebuild", requiredFields: ["sourceIds", "captureIds", "contentHashes"] },
+          { ownerLane: "publicTI", route: "/ti", requiredFields: ["actor", "provenance.refs", "sourceFamilies"] }
+        ]
+      }),
+      receiptSchema({
+        id: "support_action_receipts",
+        ownerLane: "support",
+        schemas: {
+          executionHandoff: SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+          executorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
+        },
+        routes: ["/api/admin/support/readiness", "/api/admin/support/organizations/:id/access-recovery", "/api/admin/support/organizations/:id/invites"],
+        scopeFields: ["tenantId", "organizationId", "actorId", "action", "idempotencyKey", "audit.reason"],
+        requiredFields: ["action", "executorContract.path", "executorReadiness.ready", "execution.path", "audit.blockerCode"],
+        blockerCodes: ["support_executor_unavailable", "helpdesk_audit_unavailable", "missing_invite_teammate_executor"],
+        downstreamConsumers: [
+          { ownerLane: "org", route: "GET /api/organizations/:id/members", requiredFields: ["member.status", "invite.status", "auditEventId"] },
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["organizationId", "supportAction.status"] }
+        ]
+      })
+    ],
     semantics: { safeMetadataOnly: true, noCredentialCollection: true, noThreatActorInteraction: true },
     publicCompatibility: { canonicalSearchRoute: "/api/ti/search", unknownQueryCopy: "searching", noDefaultActor: true }
   };
@@ -145,4 +238,25 @@ export function contractIndex() {
 
 function route(method: "GET" | "POST" | "PATCH", path: string) {
   return { method, path };
+}
+
+function receiptSchema(input: {
+  id: string;
+  ownerLane: "case" | "webhook" | "source" | "support";
+  schemas: Record<string, string>;
+  routes: string[];
+  scopeFields: string[];
+  requiredFields: string[];
+  blockerCodes: string[];
+  downstreamConsumers: Array<{ ownerLane: string; route: string; requiredFields: string[] }>;
+}) {
+  return {
+    ...input,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
 }
