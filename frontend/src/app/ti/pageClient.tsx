@@ -185,6 +185,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const reviewHandoff = selected && alertPacket ? selectedReviewHandoffFor(result, selected, watchlist, alertPacket, actionability, selectedDecision, selectedRelevance, selectedNote) : null
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
+    const selectedCaseActionTrail = selected ? selectedCaseActionTrailFor(result, selected, actionability, reviewHandoff, selectedCaseDraft, selectedDecision, selectedRelevance, selectedNote) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -444,6 +445,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 relevance={selectedRelevance}
                                 reviewHandoff={reviewHandoff}
                                 caseDraft={selectedCaseDraft}
+                                caseActionTrail={selectedCaseActionTrail}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                                 onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
@@ -664,6 +666,51 @@ type SelectedCaseDraft = {
     watchTerms: string[]
     sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'confidence' | 'state' | 'missing'>>
     body: Record<string, unknown>
+}
+
+type CaseActionTrailPayload = {
+    schemaVersion: 'ti.public_actor.case_action_trail.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    events: CaseActionTrailEvent[]
+    summary: {
+        total: number
+        ready: number
+        blocked: number
+        sessionLocal: boolean
+        replayable: boolean
+    }
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
+}
+
+type CaseActionTrailEvent = {
+    id: string
+    at: string
+    label: string
+    detail: string
+    state: 'ready' | 'review' | 'blocked' | 'local'
+    route?: string
+    blockers: string[]
+    replayExportRoute?: string
+    evidenceRowId?: string
+    provenance: {
+        sourceIds: string[]
+        captureIds: string[]
+        alertIds: string[]
+        caseId?: string
+        confidence?: number
+        reportDate?: string
+        source?: string
+    }
 }
 
 type StagedHandoff = {
@@ -3378,12 +3425,13 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
     caseDraft: SelectedCaseDraft | null
+    caseActionTrail: CaseActionTrailPayload | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
     onRelevance: (state: LocalRelevanceMark['state']) => void
@@ -3442,6 +3490,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNo
                     </div>
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
                 <button
                     type='button'
                     onClick={onStage}
@@ -3480,6 +3529,49 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, onNo
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
+    return (
+        <div data-ti-case-action-trail='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case action trail</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Metadata-only trail for local decisions, selected evidence, and case replay readiness.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={trail.summary.replayable ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
+                        {trail.summary.replayable ? 'replay ready' : 'replay blocked'}
+                    </span>
+                    <CopyPayloadButton label='Case action trail' payload={trail} />
+                </div>
+            </div>
+            <div className='mt-3 grid gap-2'>
+                {trail.events.slice(0, 4).map(event => (
+                    <div key={event.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{event.label}</p>
+                                <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(event.at)}</p>
+                            </div>
+                            <span className={decisionStepStatusClass(event.state === 'local' ? 'review' : event.state)}>{event.state === 'local' ? 'local' : event.state}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{event.detail}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                            {event.provenance.sourceIds.length ? `Sources ${event.provenance.sourceIds.slice(0, 3).join(', ')}` : 'Source link pending'}
+                            {event.provenance.captureIds.length ? ` · captures ${event.provenance.captureIds.slice(0, 3).join(', ')}` : ''}
+                            {event.provenance.alertIds.length ? ` · alerts ${event.provenance.alertIds.slice(0, 3).join(', ')}` : ''}
+                        </p>
+                        {event.blockers.length ? (
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(event.blockers.slice(0, 3))}</p>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
+        </div>
     )
 }
 
@@ -3937,6 +4029,139 @@ function selectedCaseDraftFor(
         sourceRows,
         body,
     }
+}
+
+function selectedCaseActionTrailFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    reviewHandoff: SelectedReviewHandoff | null,
+    caseDraft: SelectedCaseDraft | null,
+    decision: LocalDecision | undefined,
+    relevance: LocalRelevanceMark | undefined,
+    note: string
+): CaseActionTrailPayload {
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const replayRows = actionability.caseReplayReadiness.rows.filter(row =>
+        row.evidenceRowId === selected.priority?.rowId
+        || row.sourceIds.some(sourceId => selectedSourceIds.includes(sourceId))
+        || row.alertIds.some(alertId => actionability.readiness.backedIds.alertIds.includes(alertId))
+    )
+    const activeReplayRows = replayRows.length ? replayRows : actionability.caseReplayReadiness.rows.slice(0, 2)
+    const caseRoute = caseDraft?.route || reviewHandoff?.caseHandoff.backedRoute
+    const now = new Date().toISOString()
+    const baseProvenance = {
+        sourceIds: selectedSourceIds,
+        captureIds: unique(caseDraft?.sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)) ?? []),
+        alertIds: actionability.readiness.backedIds.alertIds,
+        confidence: selected.confidence,
+        reportDate: selected.timestamp,
+        source: selected.source,
+    }
+    const events: CaseActionTrailEvent[] = [
+        {
+            id: `selected:${selected.id}`,
+            at: selected.timestamp || result.generatedAt,
+            label: 'Selected evidence',
+            detail: selected.subtitle,
+            state: 'review',
+            route: selected.href,
+            blockers: [],
+            evidenceRowId: selected.priority?.rowId,
+            provenance: baseProvenance,
+        },
+        {
+            id: `case-handoff:${selected.id}`,
+            at: result.generatedAt,
+            label: caseDraft?.ready ? 'Case handoff ready' : 'Case handoff blocked',
+            detail: caseDraft?.ready
+                ? 'Selected evidence has the required case route, source context, and watch terms for authenticated review.'
+                : 'Case review needs the missing identifiers or source context listed below before persistence.',
+            state: caseDraft?.ready ? 'ready' : 'blocked',
+            route: caseRoute,
+            blockers: unique([...(caseDraft?.missing ?? []), ...(reviewHandoff?.blockers ?? [])]).slice(0, 8),
+            evidenceRowId: selected.priority?.rowId,
+            provenance: {
+                ...baseProvenance,
+                caseId: caseRoute ? publicTiCaseIdFromPath(caseRoute) : undefined,
+            },
+        },
+        ...(decision ? [{
+            id: `decision:${selected.id}:${decision.decidedAt}`,
+            at: decision.decidedAt,
+            label: decisionLabel(decision.status),
+            detail: `${decision.reason}${note.trim() && note.trim() !== decision.reason ? ` Note: ${note.trim()}` : ''}`,
+            state: 'local' as const,
+            route: caseRoute,
+            blockers: caseDraft?.missing ?? [],
+            evidenceRowId: selected.priority?.rowId,
+            provenance: baseProvenance,
+        }] : []),
+        ...(relevance ? [{
+            id: `relevance:${selected.id}:${relevance.markedAt}`,
+            at: relevance.markedAt,
+            label: relevanceLabel(relevance.state),
+            detail: relevance.rationale,
+            state: relevance.state === 'not_relevant' ? 'blocked' as const : relevance.state === 'needs_source' ? 'review' as const : 'ready' as const,
+            route: caseRoute,
+            blockers: relevance.state === 'needs_source' ? ['Source review required before case handoff.'] : relevance.state === 'not_relevant' ? ['Selected evidence marked not relevant for current customer work.'] : [],
+            evidenceRowId: selected.priority?.rowId,
+            provenance: {
+                ...baseProvenance,
+                caseId: caseRoute ? publicTiCaseIdFromPath(caseRoute) : undefined,
+            },
+        }] : []),
+        ...activeReplayRows.slice(0, 3).map(row => ({
+            id: `replay:${row.id}`,
+            at: result.generatedAt,
+            label: row.ready ? 'Replay export ready' : 'Replay export blocked',
+            detail: row.ready
+                ? 'Replay request has case, alert, capture, and source references.'
+                : `Replay request needs ${displayRequirementList(row.blockerCodes)}.`,
+            state: row.ready ? 'ready' as const : 'blocked' as const,
+            route: row.exportRoute,
+            blockers: row.blockedBy.map(blocker => blocker.detail),
+            replayExportRoute: row.exportRoute,
+            evidenceRowId: row.evidenceRowId,
+            provenance: {
+                sourceIds: row.sourceIds,
+                captureIds: row.captureIds,
+                alertIds: row.alertIds,
+                caseId: row.caseId,
+            },
+        })),
+    ]
+    const ready = events.filter(event => event.state === 'ready').length
+    const blocked = events.filter(event => event.state === 'blocked').length
+    return {
+        schemaVersion: 'ti.public_actor.case_action_trail.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: now,
+        selectedItemId: selected.id,
+        title: selected.title,
+        events,
+        summary: {
+            total: events.length,
+            ready,
+            blocked,
+            sessionLocal: true,
+            replayable: activeReplayRows.some(row => row.ready),
+        },
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function publicTiCaseIdFromPath(path?: string) {
+    if (!path) return undefined
+    const match = path.match(/\/cases\/([^/?#]+)/)
+    return match?.[1]
 }
 
 function stagedHandoffFor(
