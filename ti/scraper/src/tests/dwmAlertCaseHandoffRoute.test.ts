@@ -538,7 +538,6 @@ describe("DWM alert case handoff route", () => {
         totalReceiptCount: 3,
         actionIds: expect.arrayContaining(["alertReplay", "webhookDryRun"]),
         latestByAction: {
-          alertReplay: expect.objectContaining({ idempotencyKey: "case-action-replay-member" }),
           webhookDryRun: expect.objectContaining({ idempotencyKey: "case-action-webhook-001" })
         }
       },
@@ -551,6 +550,7 @@ describe("DWM alert case handoff route", () => {
         webhookSecretExposed: false
       }
     });
+    expect(["case-action-replay-001", "case-action-replay-member"]).toContain(ownerHistoryPayload.summary.latestByAction.alertReplay.idempotencyKey);
     expect(ownerHistoryPayload.receipts).toHaveLength(3);
     expect(JSON.stringify(ownerHistoryPayload)).not.toContain("rawText");
     expect(viewerHistory.status).toBe(200);
@@ -610,8 +610,41 @@ describe("DWM alert case handoff route", () => {
         workflowTransitionCount: 4,
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
+        sourceHandoffReady: true,
         replayable: true,
         blockerCodes: []
+      },
+      sourceHandoffReadiness: {
+        schemaVersion: "dwm.case_source_handoff_replay_readiness.v1",
+        sourceSchemaVersion: "dwm.alert_source_handoff_readiness.v1",
+        available: true,
+        ready: true,
+        state: "ready_for_consumers",
+        sourceFamily: "telegram_public",
+        selectedCaptureIds: ["cap_acme_1"],
+        evidenceCount: 1,
+        provenanceCaptureIds: ["cap_acme_1"],
+        provenanceSourceIds: ["src_acme_tg"],
+        provenanceGapCodes: [],
+        blockerCodes: [],
+        consumers: {
+          case: {
+            ready: true,
+            casePath: "/v1/cases/case_alert_acme?alertId=alert_acme"
+          },
+          webhook: {
+            ready: true,
+            selectedWebhookDestinationId: "webhook_acme_discord",
+            deliveryDedupeKey: "delivery_alert_acme_webhook",
+            blockerCodes: []
+          },
+          publicTi: {
+            ready: true,
+            redacted: true,
+            alertGenerationRefCount: 1,
+            sourceFamily: "telegram_public"
+          }
+        }
       },
       provenance: {
         captureIds: ["cap_acme_1"],
@@ -632,6 +665,12 @@ describe("DWM alert case handoff route", () => {
       "handoff_alert_replay"
     ]);
     expect(replayExportPayload.handoffActionHistory.receipts).toHaveLength(3);
+    expect(replayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "review_source_handoff", ownerLane: "source", ready: true, blocked: false }),
+      expect.objectContaining({ id: "replay_alert", ownerLane: "alert", ready: true, blocked: false }),
+      expect.objectContaining({ id: "test_webhook_delivery", ownerLane: "webhook", ready: true, blocked: false }),
+      expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_webhook_dry_run_receipt"] })
+    ]));
     expect(JSON.stringify(replayExportPayload)).not.toContain("rawText");
     expect(filteredReplayExport.status).toBe(200);
     expect(filteredReplayExportPayload).toMatchObject({
@@ -759,7 +798,14 @@ describe("DWM alert case handoff route", () => {
       schemaVersion: "dwm.case_action_replay_export.v1",
       caseId: "case_missing_alert",
       alertId: "alert_missing",
+      sourceHandoffReadiness: {
+        available: false,
+        ready: false,
+        state: "missing_source_handoff_readiness",
+        blockerCodes: ["missing_alert_source_handoff_readiness"]
+      },
       replayPlan: {
+        sourceHandoffReady: false,
         replayable: false,
         blockerCodes: ["missing_case_alert"]
       },
@@ -891,6 +937,46 @@ function provenancedAlert() {
     deliveryReadinessContext: {
       webhookDestinationIds: ["webhook_acme_discord"],
       deliveryDedupeKey: "delivery_alert_acme_webhook"
+    },
+    sourceHandoffReadiness: {
+      schemaVersion: "dwm.alert_source_handoff_readiness.v1",
+      ready: true,
+      state: "ready_for_consumers",
+      sourceFamily: "telegram_public",
+      selectedCaptureIds: ["cap_acme_1"],
+      evidenceCount: 1,
+      provenanceCaptureIds: ["cap_acme_1"],
+      provenanceSourceIds: ["src_acme_tg"],
+      provenanceGapCodes: [],
+      webhookConsumer: {
+        ready: true,
+        deliveryReady: true,
+        delivered: false,
+        deliveryDedupeKey: "delivery_alert_acme_webhook",
+        selectedWebhookDestinationId: "webhook_acme_discord",
+        webhookDestinationIds: ["webhook_acme_discord"],
+        createdEventDispatchReady: true,
+        deliveryHistoryRefs: [],
+        blockerCodes: []
+      },
+      caseConsumer: {
+        ready: true,
+        caseIdCandidate: "case_alert_acme",
+        caseId: "case_alert_acme",
+        casePath: "/v1/cases/case_alert_acme?alertId=alert_acme",
+        idempotencyKey: "alert-case-handoff-source-ready",
+        blockerCodes: []
+      },
+      publicTiConsumer: {
+        ready: true,
+        redacted: true,
+        alertGenerationRefCount: 1,
+        sourceFamily: "telegram_public",
+        stableFields: ["sourceFamily", "provenanceCaptureIds", "alertGenerationRefCount"],
+        gapFields: ["state", "provenanceGapCodes"]
+      },
+      stableFields: ["sourceFamily", "selectedCaptureIds", "provenanceCaptureIds", "webhookConsumer.selectedWebhookDestinationId", "caseConsumer.casePath"],
+      gapFields: ["state", "provenanceGapCodes", "webhookConsumer.blockerCodes", "caseConsumer.blockerCodes"]
     },
     watchlistIds: ["watch_acme"],
     watchlistItemIds: ["watch_item_acme_domain"],
