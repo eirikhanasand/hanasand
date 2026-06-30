@@ -8,10 +8,19 @@ Default to ship mode:
 1. One main thread owns the website and portal experience end to end.
 2. No more readiness, receipt, proof, or contract-only slices unless they are required to make a visible workflow work in the same prompt.
 3. Prioritize these three surfaces: `/dashboard`, `/ti/<query>`, and organization/watchlist/settings workflows.
-4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, screenshots or render proof, and deploy when appropriate.
+4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, and deploy when appropriate.
 5. Use subagents only for narrow backend blockers that prevent the visible workflow from shipping.
 
 If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
+
+## Functionality-First Sprint Override
+Every agent should ship product code as fast as possible. Spend tokens on usable components, API wiring, real source output, alert workflows, DWM/TI coverage, org/watchlist/settings workflows, and deployable UI. Do not spend tokens on process artifacts, broad test campaigns, strategy essays, readiness/proof receipts, or coordination polish.
+
+The product should feel like Microsoft Defender for Endpoint: compact queues, actionable tables, detail panes, evidence timelines, filters, assignments, source provenance, and workflow actions. Remove essay text sections, marketing copy, explanatory walls, teaser panels, and prompt-shaped labels. Replace them with controls and data the user can act on.
+
+Sellable surfaces are the priority: `/ti`, `/ti/<query>`, DWM/exposure monitoring, actor intelligence, source coverage, alerts/cases, webhooks, and organization/watchlist/settings. Each pass should make one of those surfaces visibly more useful to a buyer or analyst.
+
+Testing overhead is not the work. Run only the smallest fast check needed to avoid shipping obviously broken code, then return to product code. If a check will consume meaningful time or tokens without directly protecting the shipped surface, skip it and state that it was intentionally skipped for ship speed.
 
 ## One-Prompt Product Shipping Bar
 Do not give agents small work-sized packets. Codex can make broad, coherent product changes in one prompt. A ship-mode prompt should ask for a complete visible product surface, not one receipt, one schema, one card, or one copy fix.
@@ -24,7 +33,7 @@ For the three priority surfaces, ship the full workflow shape in one pass:
 - `/ti/<query>`: an actor intelligence workspace with compact actor facts, aliases, TTPs, infrastructure, tools/malware, observed sources, evidence rows, watchlist relevance, enrichment gaps, and alert/case handoff. Ban teaser/example/signal language.
 - Organization/watchlist/settings: a SaaS settings workflow for org creation, invites, member roles, shared watchlists, webhook destinations/test delivery, permissions, and audit trail.
 
-A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, screenshots or render proof, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
+A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
 
 ## Goal
 Make Hanasand production-ready without wasting user time, tokens, or server resources. Prefer small automated checks over broad manual rereads. Do not tail server logs for minutes. Use the API audit, monitor, status, and filtered logs surfaces first.
@@ -37,7 +46,7 @@ For SOC, TI, DWM, XDR, monitoring, source operations, incident response, and ana
 
 ## Token-Saving Workflow
 - Start with `git status --short` and targeted `rg`, not whole-repo reading.
-- For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and browser proof for UI, then commit only the isolated intended diff.
+- For every implementation prompt, write 3-7 acceptance criteria, identify affected routes/files/surfaces, implement the complete presentable slice, verify with focused checks and quick browser check for UI, then commit only the isolated intended diff.
 - Acceptance criteria must include the real user workflow, not only the visible screen components. Ask what a strong competitor would let the user do here and what would make the slice feel genuinely better.
 - Do not stop at 5 percent of the ask. Keep going on the obvious next 20 percent inside the same scope when that is what makes the workflow usable.
 - Final implementation handoffs must include: `BASELINE dirty files:`, `FINAL dirty files:`, `Commit:`, `Checks:`, `Live probes:`, and `Remaining blockers:`.

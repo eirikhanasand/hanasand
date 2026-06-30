@@ -1,8 +1,16 @@
-Status: sellable_data_only
+Status: functionality_first_ship_now
 
 # TI Scraper Coordination
 
 Read this whole file. It is the current operating rule.
+
+## Functionality-First Override
+
+Every scraper agent should ship code as fast as possible. Do not stop at `done_no_worker`. Do not spend passes on readiness, proof, receipt, contract, broad test, or coordination output. Spend tokens on sellable functionality: real `/ti` and DWM source coverage, fresh rows, actor intelligence, useful dark/exposure metadata, alert/case handoff, and buyer-visible API/UI improvements.
+
+The output should feel like Microsoft Defender for Endpoint: compact, actionable, dense, and workflow-first. Remove essay text and vague summaries. Replace them with rows, filters, source provenance, evidence snippets, actor/victim/TTP extraction, freshness, confidence, and actions.
+
+Run only the smallest fast check needed to avoid shipping obviously broken code. If a larger check does not directly protect the shipped surface, skip it and keep coding.
 
 ## Product Target
 

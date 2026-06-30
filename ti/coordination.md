@@ -1,5 +1,12 @@
 # TI Coordination
 
+## Functionality-First Override
+Ship product code now. The TI/DWM work is not allowed to stall on readiness, proof, contract, coordination, or essay output. Every agent pass should directly improve sellable surfaces: `/ti`, `/ti/<query>`, DWM/exposure monitoring, actor intelligence, source coverage, alert/case workflows, webhooks, or org/watchlist settings.
+
+The buyer-facing product should feel like Microsoft Defender for Endpoint: compact queues, actionable tables, detail panes, evidence timelines, filters, assignments, source provenance, and workflow actions. Remove text-bloated sections and replace them with usable components backed by real data.
+
+Run only the smallest fast check needed to avoid shipping obviously broken code. Broad testing, proof generation, and documentation are overhead unless they directly protect the shipped user workflow.
+
 ## Scraper Status
 - Owner: main scraper agent.
 - Runtime decision: Bun + TypeScript. Do not introduce Python for scraper core services.

@@ -8,10 +8,19 @@ Default to ship mode:
 1. One main thread owns the website and portal experience end to end.
 2. No more readiness, receipt, proof, or contract-only slices unless they are required to make a visible workflow work in the same prompt.
 3. Prioritize these three surfaces: `/dashboard`, `/ti/<query>`, and organization/watchlist/settings workflows.
-4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, screenshots or render proof, and deploy when appropriate.
+4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, quick visual check only when it directly helps ship, and deploy when appropriate.
 5. Use subagents only for narrow backend blockers that prevent the visible workflow from shipping.
 
 If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
+
+## Functionality-First Sprint Override
+Every agent should ship product code as fast as possible. Spend tokens on usable components, API wiring, real source output, alert workflows, DWM/TI coverage, org/watchlist/settings workflows, and deployable UI. Do not spend tokens on process artifacts, broad test campaigns, strategy essays, readiness/proof receipts, or coordination polish.
+
+The product should feel like Microsoft Defender for Endpoint: compact queues, actionable tables, detail panes, evidence timelines, filters, assignments, source provenance, and workflow actions. Remove essay text sections, marketing copy, explanatory walls, teaser panels, and prompt-shaped labels. Replace them with controls and data the user can act on.
+
+Sellable surfaces are the priority: `/ti`, `/ti/<query>`, DWM/exposure monitoring, actor intelligence, source coverage, alerts/cases, webhooks, and organization/watchlist/settings. Each pass should make one of those surfaces visibly more useful to a buyer or analyst.
+
+Testing overhead is not the work. Run only the smallest fast check needed to avoid shipping obviously broken code, then return to product code. If a check will consume meaningful time or tokens without directly protecting the shipped surface, skip it and state that it was intentionally skipped for ship speed.
 
 ## One-Prompt Product Shipping Bar
 Do not give agents small work-sized packets. Codex can make broad, coherent product changes in one prompt. A ship-mode prompt should ask for a complete visible product surface, not one receipt, one schema, one card, or one copy fix.
@@ -24,7 +33,7 @@ For the three priority surfaces, ship the full workflow shape in one pass:
 - `/ti/<query>`: an actor intelligence workspace with compact actor facts, aliases, TTPs, infrastructure, tools/malware, observed sources, evidence rows, watchlist relevance, enrichment gaps, and alert/case handoff. Ban teaser/example/signal language.
 - Organization/watchlist/settings: a SaaS settings workflow for org creation, invites, member roles, shared watchlists, webhook destinations/test delivery, permissions, and audit trail.
 
-A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, screenshots or render proof, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
+A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, quick visual check only when it directly helps ship, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
 
 ## Default Bar
 Hanasand work should feel finished, integrated, and product-grade. Do not treat user requests as tiny literal patches when the surrounding product behavior clearly needs more. Expand the ask into the adjacent obvious work that a user would reasonably expect, then ship that complete slice.
@@ -44,7 +53,7 @@ Before final response, a task is not done until all applicable items are true:
 - The feature is wired to real data or an honest fallback with clear product semantics.
 - The implementation is committed only when the intended diff is cleanly isolated from unrelated dirty work.
 - The agent's own work is not left as loose dirty files. Commit, deliberately leave only user-owned pre-existing changes, or explicitly report a blocker.
-- Verification includes focused automated checks and, for UI work, an actual browser/render proof when feasible.
+- Verification includes focused automated checks and, for UI work, an actual browser/visual check when feasible.
 - Production-impacting changes are deployed and probed live when the user asked for deploy or the thread convention expects it.
 - The final answer states exactly what changed, what was verified, what commit/deploy happened, and any real remaining limitation.
 
