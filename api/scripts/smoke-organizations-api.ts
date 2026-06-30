@@ -640,6 +640,13 @@ assert.equal(revokedInviteAcceptDenial.organizationId, organization.id)
 assert.equal(revokedInviteAcceptDenial.inviteId, pendingOpsInvite.id)
 assert.equal(revokedInviteAcceptDenial.inviteStatus, 'revoked')
 assert.equal(revokedInviteAcceptDenial.blockerCode, 'member_revoked')
+assert.ok(revokedInviteAcceptDenial.blockedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.ok(revokedInviteAcceptDenial.blockedRoutes.includes('POST /v1/dwm/webhooks/deliver'))
+assert.ok(revokedInviteAcceptDenial.blockedConsumerContracts.includes('organization.shared_watchlist_readiness_export.v1'))
+assert.equal(revokedInviteAcceptDenial.readinessRefs.inviteLifecycle, 'organization.invite_lifecycle_readiness_proof.v1')
+assert.equal(revokedInviteAcceptDenial.readinessRefs.webhookDestinationReadiness, 'organization.webhook_destination_readiness_bridge.v1')
+assert.equal(revokedInviteAcceptDenial.ownerlessRecoveryMutationAllowed, false)
+assert.equal(revokedInviteAcceptDenial.accessRequiresAcceptedMembership, true)
 assert.equal(revokedInviteAcceptDenial.nonmemberEnumeration, false)
 
 const resendPendingInviteResponse = await app.inject({
@@ -817,6 +824,11 @@ assert.equal(expiredAcceptDenial.organizationId, organization.id)
 assert.equal(expiredAcceptDenial.inviteId, expiredInvite.id)
 assert.equal(expiredAcceptDenial.inviteStatus, 'pending')
 assert.equal(expiredAcceptDenial.blockerCode, 'invite_expired')
+assert.ok(expiredAcceptDenial.blockedRoutes.includes('GET /api/organizations/:id/alert-case-visibility'))
+assert.ok(expiredAcceptDenial.blockedConsumerContracts.includes('organization.watchlist_alert_generation_consumer.v1'))
+assert.equal(expiredAcceptDenial.readinessRefs.sharedWatchlistReadiness, 'organization.shared_watchlist_readiness_export.v1')
+assert.equal(expiredAcceptDenial.ownerlessRecoveryMutationAllowed, false)
+assert.ok(expiredAcceptDenial.noLeakFields.includes('watchlistScope.alertGeneratorKeys'))
 assert.equal(expiredAcceptDenial.nonmemberEnumeration, false)
 
 const membersResponse = await app.inject({
@@ -4431,6 +4443,11 @@ assert.equal(staleRemovedViewerAcceptDenial.removedMemberDenied, true)
 assert.equal(staleRemovedViewerAcceptDenial.nonmemberEnumeration, false)
 assert.ok(staleRemovedViewerAcceptDenial.safeFields.includes('memberStatus'))
 assert.ok(staleRemovedViewerAcceptDenial.noLeakFields.includes('otherOrg.members'))
+assert.ok(staleRemovedViewerAcceptDenial.noLeakFields.includes('destination.secret'))
+assert.ok(staleRemovedViewerAcceptDenial.blockedConsumerContracts.includes('organization.case_visibility_consumer.v1'))
+assert.equal(staleRemovedViewerAcceptDenial.readinessRefs.alertCasePersistence, 'organization.alert_case_bridge_persistence_receipt.v1')
+assert.equal(staleRemovedViewerAcceptDenial.ownerlessRecoveryMutationAllowed, false)
+assert.equal(staleRemovedViewerAcceptDenial.accessRequiresAcceptedMembership, true)
 
 const removedViewerInviteResponse = await app.inject({
     method: 'POST',
