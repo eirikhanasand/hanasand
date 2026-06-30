@@ -1,4 +1,4 @@
-import type { AnalystWorkflowReadiness, DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, DwmProductSnapshotReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
+import type { AnalystWorkflowReadiness, DashboardAlertEvidenceReadiness, DashboardSourceProofProxyPayload, DeployProbeReadiness, DwmAlertGenerationReadiness, DwmProductSnapshotReadiness, EntitlementReadiness, HelpdeskAuditReadiness, OrganizationAlertExportReadiness, ProductProgressReadinessPayload, PublicTiProvenanceReadiness, WebhookHealthReadiness } from '@/app/dashboard/operatorConsoleModel'
 
 type AlertProofRow = {
     id?: string
@@ -40,24 +40,7 @@ export type AnalystCaseDetailProofInput = {
     proofTimestamp?: string
 }
 
-export type DwmAlertGenerationReadinessInput = {
-    schemaVersion?: string
-    status?: 'ready' | 'needs_action' | 'blocked' | 'unavailable' | string
-    readyForCustomerDelivery?: boolean
-    candidateCount?: number
-    captureRefCount?: number
-    matchedCandidateCount?: number
-    missingRouteCandidateCount?: number
-    generationEvidenceWindowReady?: boolean
-    generationEvidenceWindowCaptureCount?: number
-    generationEvidenceWindowSourceFamilies?: string[]
-    latestEvidenceAt?: string
-    blockerCodes?: string[]
-    blockers?: string[]
-    source?: string
-    checkedAt?: string
-    proofTimestamp?: string
-}
+export type DwmAlertGenerationReadinessInput = DwmAlertGenerationReadiness
 
 export type ProductProgressEndpointInput = {
     generatedAt: string
@@ -135,6 +118,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
         webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
         entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
         dwmProduct: input.dwmProduct || unavailableDwmProduct(input.routes.dwmProduct || input.routes.productProgress || '/api/product-progress', checkedAt),
+        alertGeneration: input.alertGeneration,
         dashboardEvidence: dashboardEvidenceFromRows({
             checkedAt,
             route: input.routes.dashboardAlerts || '/dashboard',

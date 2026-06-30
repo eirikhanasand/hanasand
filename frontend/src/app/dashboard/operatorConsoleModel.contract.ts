@@ -245,6 +245,7 @@ const productProgressPayload = {
         orgAlertExport: '/api/organizations/org_acme/watchlist-alert-terms',
         webhookHealth: '/api/dwm/webhooks',
         dashboardAlerts: '/dashboard',
+        alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
     },
     publicTiProvenance: externalReadiness.publicTiProvenance,
     helpdeskAudit: externalReadiness.helpdeskAudit,
@@ -290,6 +291,20 @@ const productProgressPayload = {
         deployProbeFresh: true,
         dashboardPath: '/dashboard?case=alert_acme_1',
         source: '/dashboard',
+    },
+    alertGeneration: {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'ready',
+        readyForCustomerDelivery: true,
+        candidateCount: 3,
+        captureRefCount: 35,
+        matchedCandidateCount: 2,
+        missingRouteCandidateCount: 0,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 35,
+        generationEvidenceWindowSourceFamilies: ['telegram', 'darkweb_onion'],
+        latestEvidenceAt: '2026-06-28T10:17:00.000Z',
+        source: '/api/dwm/alerts/generation-readiness',
     },
     analystWorkflow: {
         schemaVersion: 'analyst.workflow.readiness.v1',
@@ -356,6 +371,23 @@ const missingDashboardProductProgress = buildProductProgressExternalState({
         deliveryEvidenceMatched: false,
         sourceProxyReady: false,
         deployProbeFresh: true,
+    },
+}, {
+    checkedAt: '2026-06-28T10:20:00.000Z',
+    staleAfterMinutes: 120,
+})
+const zeroCandidateAlertGenerationProductProgress = buildProductProgressExternalState({
+    ...productProgressPayload,
+    alertGeneration: {
+        ...productProgressPayload.alertGeneration,
+        status: 'ready',
+        readyForCustomerDelivery: true,
+        candidateCount: 0,
+        matchedCandidateCount: 0,
+        captureRefCount: 35,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 35,
+        blockers: [],
     },
 }, {
     checkedAt: '2026-06-28T10:20:00.000Z',
@@ -436,6 +468,17 @@ const productProgressCases = buildReadinessCases({
     liveAlertCount: 1,
     renderedAlertCount: 1,
     externalReadiness: productProgressExternalReadiness,
+})
+const zeroCandidateAlertGenerationCases = buildReadinessCases({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    operations,
+    deliveries,
+    organizationState,
+    liveAlertCount: 1,
+    renderedAlertCount: 1,
+    externalReadiness: zeroCandidateAlertGenerationProductProgress,
 })
 const liveProofOrganizationState = {
     organizations: [{
@@ -1136,6 +1179,18 @@ if (productProgressSourceWorker.relatedLinks.find(link => link.href === '/dashbo
 }
 if (productProgressSourceWorker.actions?.find(action => action.id === 'open_source_worker_readiness')?.href !== '/dashboard/ti/sources') {
     throw new Error('Expected source worker action to open source operations.')
+}
+const productProgressAlertGeneration = expectWorkbenchCase(productProgressCases, 'alert_generation')
+void (productProgressAlertGeneration.evidence.find(item => item.id === 'ev_alert_generation')?.provenance satisfies string | undefined)
+if (productProgressAlertGeneration.status !== 'ready') {
+    throw new Error('Expected backed alert generation proof to mark the queue item ready.')
+}
+if (productProgressAlertGeneration.actions?.find(action => action.id === 'open_alert_generation_readiness')?.href !== '/api/dwm/alerts/generation-readiness') {
+    throw new Error('Expected alert generation queue item to deep-link to generation readiness.')
+}
+const zeroCandidateAlertGeneration = expectWorkbenchCase(zeroCandidateAlertGenerationCases, 'alert_generation')
+if (zeroCandidateAlertGeneration.status === 'ready' || !zeroCandidateAlertGeneration.missingDependency?.includes('no alert candidates')) {
+    throw new Error('Expected zero-candidate alert generation proof to stay blocked with an explicit reason.')
 }
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)

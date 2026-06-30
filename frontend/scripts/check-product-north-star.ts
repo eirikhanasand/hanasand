@@ -114,6 +114,29 @@ const partialPayload = buildProductProgressPayload({
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    alertGeneration: {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/dwm/alerts/generation-readiness',
+        href: '/api/dwm/alerts/generation-readiness',
+        readyForCustomerDelivery: true,
+        candidateCount: 1,
+        captureRefCount: 2,
+        matchedCandidateCount: 1,
+        missingRouteCandidateCount: 0,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 2,
+        generationEvidenceWindowSourceFamilies: ['telegram', 'darkweb_onion'],
+        latestEvidenceAt: generatedAt,
+        blockers: [],
+        ownerLane: 'dwm',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'alert_generation_readiness',
+        integrationProbeHint: 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        backendProofContractVersion: 'dwm.alert_generation_readiness.v1',
+    },
     cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
     caseDetail: {
         route: '/api/cases/case_acme_1',
@@ -153,7 +176,7 @@ assert.deepEqual(partialScoreboard.deployGate.needsActionRows, ['shared_watchlis
 assert.deepEqual(partialScoreboard.deployGate.unavailableRows, ['support_admin_audit', 'public_ti_enrichment'])
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/ti/workbench'))
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/automations?setup=dwm'))
-assert.ok(partialScoreboard.deployGate.proofContracts.includes('dashboard.alert_evidence.readiness.v1'))
+assert.ok(partialScoreboard.deployGate.proofContracts.some(contract => contract.includes('dashboard.alert_evidence.readiness.v1')))
 assert.ok(partialScoreboard.deployGate.ownerLanes.includes('dashboard'))
 assert.ok(partialScoreboard.deployGate.expectedDashboardRowIds.includes('dashboard_evidence'))
 assert.equal(partialScoreboard.deployGate.blockingProofRows.length, 8)
@@ -173,6 +196,9 @@ assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.expect
 assert.ok(partialScoreboard.deployGate.blockingProofRows.some(row => row.rowId === 'deploy_live_status' && row.ownerLane === 'integration' && row.href === '/status'))
 assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.backendProofContractVersion.includes('dashboard.alert_evidence.readiness.v1')))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.backendProofContractVersion.includes('dwm.alert_generation_readiness.v1')))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.expectedDashboardRowId.includes('alert_generation_readiness')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('ti.api_contract_schema_lookup.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.integrationProbeHint.includes('schemaLookup')))
@@ -199,7 +225,7 @@ assert.deepEqual(rowExpectedDashboardIds(partialScoreboard), {
     organizations: 'entitlement_readiness,org_alert_export',
     shared_watchlists: 'org_alert_export',
     source_coverage: 'source_inventory_probe',
-    real_alert_generation: 'dashboard_evidence',
+    real_alert_generation: 'dashboard_evidence,alert_generation_readiness',
     webhook_delivery: 'webhook_health,dashboard_evidence',
     analyst_workflow: 'analyst_workflow',
     support_admin_audit: 'helpdesk_audit',
@@ -371,6 +397,7 @@ const readyPayload = {
     orgAlertExport: { ...partialPayload.orgAlertExport!, status: 'ready' as const, blockers: [], activeTermCount: 2, canGenerateAlerts: true, unavailableReason: undefined },
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1, unavailableReason: undefined },
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true, unavailableReason: undefined },
+    alertGeneration: { ...partialPayload.alertGeneration!, status: 'ready' as const, blockers: [], readyForCustomerDelivery: true, generationEvidenceWindowReady: true, unavailableReason: undefined },
     analystWorkflow: { ...partialPayload.analystWorkflow!, status: 'ready' as const, blockers: [], unavailableReason: undefined },
 }
 

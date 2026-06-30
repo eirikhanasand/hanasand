@@ -336,19 +336,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackBlocker: 'Source inventory and worker readiness proof is not loaded.',
             readyDetail: 'Source inventory, worker readiness, and schema lookup are current.',
         }),
-        snapshotRow({
-            id: 'real_alert_generation',
-            label: 'Real alert generation',
-            snapshot: external.dashboardEvidence,
-            fallbackHref: '/dashboard/ti/workbench',
-            fallbackOwner: 'dashboard',
-            fallbackExpectedDashboardRowId: 'dashboard_evidence',
-            fallbackContract: 'dashboard.alert_evidence.readiness.v1',
-            fallbackProbe: 'Product progress must include a dashboard-visible alert with matching delivery/source/deploy proof.',
-            fallbackBlocker: 'Dashboard-visible alert proof is not loaded.',
-            readyDetail: 'A backend alert is visible in the dashboard with matched delivery evidence.',
-            hrefOverride: '/dashboard/ti/workbench',
-        }),
+        realAlertGenerationRow(external, generatedAt),
         webhookDeliveryRow(external, generatedAt),
         snapshotRow({
             id: 'analyst_workflow',
@@ -564,6 +552,48 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
         backendProofContractVersion: [entitlement?.backendProofContractVersion || entitlement?.schemaVersion, orgExport?.backendProofContractVersion || orgExport?.schemaVersion].filter(Boolean).join(' + ') || 'organization.readiness.v1',
         blocker: state === 'ready' ? '' : blocker || 'Organization readiness proof is incomplete.',
         integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load entitlement and organization alert-term export readiness.',
+    }
+}
+
+function realAlertGenerationRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
+    const dashboard = external.dashboardEvidence
+    const generation = external.alertGeneration
+    const generationReady = Boolean(
+        generation?.status === 'ready'
+        && generation.readyForCustomerDelivery === true
+        && generation.generationEvidenceWindowReady === true,
+    )
+    const state = dashboard?.status === 'ready' && generationReady
+        ? 'ready'
+        : combineState(dashboard?.status, generation?.status)
+    const blocker = [
+        rowBlocker(dashboard, 'Dashboard-visible alert proof is not loaded.'),
+        generationReady ? '' : rowBlocker(generation, 'Alert generation readiness proof is not loaded.'),
+    ].filter(Boolean).join(' ')
+    const candidateCount = generation?.candidateCount ?? generation?.matchedCandidateCount ?? 0
+    const captureCount = generation?.generationEvidenceWindowCaptureCount ?? generation?.captureRefCount ?? 0
+    const proofContracts = uniqueStrings([
+        'dashboard.alert_evidence.readiness.v1',
+        dashboard?.backendProofContractVersion || dashboard?.schemaVersion,
+        generation?.backendProofContractVersion || generation?.schemaVersion,
+    ])
+
+    return {
+        id: 'real_alert_generation',
+        label: 'Real alert generation',
+        state,
+        ownerLane: dashboard?.ownerLane || generation?.ownerLane || 'dwm',
+        detail: state === 'ready'
+            ? `${candidateCount} alert candidate${candidateCount === 1 ? '' : 's'} backed by ${captureCount} capture reference${captureCount === 1 ? '' : 's'}.`
+            : blocker || 'Alert generation readiness proof is incomplete.',
+        href: '/dashboard/ti/workbench',
+        proofSource: [dashboard?.source, generation?.source].filter(Boolean).join(' + ') || 'Missing alert generation proof',
+        proofTimestamp: latestTimestamp([dashboard?.proofTimestamp, generation?.proofTimestamp, generatedAt]) || generatedAt,
+        staleAfterSeconds: Math.min(dashboard?.staleAfterSeconds || 600, generation?.staleAfterSeconds || 900),
+        expectedDashboardRowId: [dashboard?.expectedDashboardRowId || 'dashboard_evidence', generation?.expectedDashboardRowId || 'alert_generation_readiness'].join(','),
+        backendProofContractVersion: proofContracts.join(' + ') || 'dashboard.alert_evidence.readiness.v1 + dwm.alert_generation_readiness.v1',
+        blocker: state === 'ready' ? '' : blocker || 'Alert generation readiness proof is incomplete.',
+        integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/dwm/alerts/generation-readiness and dashboard alert proof must both be ready.',
     }
 }
 

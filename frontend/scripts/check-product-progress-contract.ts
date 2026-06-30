@@ -36,6 +36,7 @@ const routes = {
     orgAlertExport: '/api/organizations/org_acme/alert-readiness',
     webhookHealth: '/api/dwm/webhooks',
     dashboardAlerts: '/api/dwm/alerts',
+    alertGenerationReadiness: '/api/dwm/alerts/generation-readiness',
     dwmProduct: '/api/dwm/product?demo=false',
 }
 const sourceProxy = {
@@ -127,6 +128,29 @@ const partialPayload = buildProductProgressPayload({
     routes,
     sourceProxy,
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
+    alertGeneration: {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'ready',
+        checkedAt: generatedAt,
+        source: '/api/dwm/alerts/generation-readiness',
+        href: '/api/dwm/alerts/generation-readiness',
+        readyForCustomerDelivery: true,
+        candidateCount: 3,
+        captureRefCount: 35,
+        matchedCandidateCount: 2,
+        missingRouteCandidateCount: 0,
+        generationEvidenceWindowReady: true,
+        generationEvidenceWindowCaptureCount: 35,
+        generationEvidenceWindowSourceFamilies: ['telegram', 'darkweb_onion'],
+        latestEvidenceAt: generatedAt,
+        blockers: [],
+        ownerLane: 'dwm',
+        staleAfterSeconds: 900,
+        proofTimestamp: generatedAt,
+        expectedDashboardRowId: 'alert_generation_readiness',
+        integrationProbeHint: 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        backendProofContractVersion: 'dwm.alert_generation_readiness.v1',
+    },
     cases: [{ id: 'case_acme_1', alertId: 'alert_acme_1', status: 'reviewing', assignedOwner: 'analyst@acme.example', updatedAt: generatedAt }],
     caseDetail: {
         route: '/api/cases/case_acme_1',
@@ -152,15 +176,24 @@ assert.equal(northStar.schemaVersion, 'product.north_star.readiness.v1')
 assert.equal(northStar.fullChainReady, false)
 assert.equal(northStar.totalRows, 9)
 assert.ok(northStar.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint), 'North-star rows require owner, deep link, proof contract, and probe hint.')
+assert.ok(northStar.rows.find(row => row.id === 'real_alert_generation')?.backendProofContractVersion.includes('dwm.alert_generation_readiness.v1'), 'Real alert row must include DWM alert-generation readiness proof.')
+assert.ok(northStar.rows.find(row => row.id === 'real_alert_generation')?.expectedDashboardRowId.includes('alert_generation_readiness'), 'Real alert row must expose the alert-generation dashboard proof id.')
 assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.state !== 'unavailable', 'Webhook delivery row should distinguish lifecycle/action work from missing proof.')
 assert.equal(buildProductNorthStarScoreboard(null, { generatedAt }).firstBlocker?.length ? true : false, true)
 assert.equal(partialPayload.sourceProxy?.sourceInventory?.schemaVersion, 'dwm.source_inventory.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.schemaVersion, 'ti.api_contract_schema_lookup.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.safeOutput?.metadataOnly, true)
+assert.equal(partialPayload.alertGeneration?.schemaVersion, 'dwm.alert_generation_readiness.v1')
+assert.equal(partialPayload.alertGeneration?.candidateCount, 3)
+assert.equal(partialPayload.alertGeneration?.generationEvidenceWindowReady, true)
 assert.equal(partialPayload.dashboardEvidence?.visibleInDashboard, true)
 assert.equal(partialPayload.dashboardEvidence?.deliveryEvidenceMatched, true)
 assert.equal(partialPayload.dashboardEvidence?.sourceProxyReady, true)
 assert.equal(partialPayload.dashboardEvidence?.deployProbeFresh, false)
+assert.equal(partialPayload.alertGeneration?.schemaVersion, 'dwm.alert_generation_readiness.v1')
+assert.equal(partialPayload.alertGeneration?.status, 'ready')
+assert.equal(partialPayload.alertGeneration?.readyForCustomerDelivery, true)
+assert.equal(partialPayload.alertGeneration?.generationEvidenceWindowReady, true)
 assert.equal(partialPayload.analystWorkflow?.caseId, 'case_acme_1')
 assert.equal(partialPayload.analystWorkflow?.alertId, 'alert_acme_1')
 assert.equal(partialPayload.analystWorkflow?.caseDetailReady, true)
@@ -323,6 +356,21 @@ assert.equal(partialExternal.sourceGrowth?.backendProofContractVersion?.includes
 assert.equal(partialExternal.sourceGrowth?.workerStatus, 'ready')
 assert.equal(partialExternal.sourceGrowth?.collectionReadyRows, 349)
 assert.equal(partialExternal.sourceGrowth?.workerLastRunAt, generatedAt)
+assert.equal(partialExternal.alertGeneration?.status, 'ready')
+assert.equal(partialExternal.alertGeneration?.candidateCount, 3)
+assert.equal(partialExternal.alertGeneration?.unavailableReason, undefined)
+const zeroCandidateExternal = buildProductProgressExternalState({
+    ...partialPayload,
+    alertGeneration: {
+        ...partialPayload.alertGeneration!,
+        candidateCount: 0,
+        matchedCandidateCount: 0,
+        blockers: [],
+    },
+}, { checkedAt: generatedAt })
+assert.equal(zeroCandidateExternal.alertGeneration?.status, 'needs_action')
+assert.equal(zeroCandidateExternal.alertGeneration?.unavailableReason, 'missing_alert_generation_readiness')
+assert.ok(zeroCandidateExternal.alertGeneration?.blockers?.some(blocker => blocker.includes('no alert candidates')), 'Zero-candidate alert-generation proof must block readiness.')
 const partialContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -392,6 +440,7 @@ const readyPayload = {
     webhookHealth: { ...partialPayload.webhookHealth!, status: 'ready' as const, blockers: [], destinationCount: 1, activeDestinationCount: 1, deliveryReadyCount: 1 },
     dwmProduct: { ...partialPayload.dwmProduct!, status: 'ready' as const, blockers: [], watchlistTermCount: 1, alertCount: 1, sourceFamilyCount: 2, latestAlertAt: generatedAt, source: routes.dwmProduct, unavailableReason: undefined },
     dashboardEvidence: { ...partialPayload.dashboardEvidence!, status: 'ready' as const, blockers: [], deployProbeFresh: true },
+    alertGeneration: { ...partialPayload.alertGeneration!, status: 'ready' as const, blockers: [], readyForCustomerDelivery: true, generationEvidenceWindowReady: true, unavailableReason: undefined },
     analystWorkflow: { ...partialPayload.analystWorkflow!, status: 'ready' as const, blockers: [], unavailableReason: undefined },
     deployProbe: { ...partialPayload.deployProbe!, status: 'ready' as const, blockers: [], apiHealthy: true, scraperHealthy: true, latestProbeAt: generatedAt },
 }

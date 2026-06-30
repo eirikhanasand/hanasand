@@ -234,6 +234,20 @@ export type DwmProductSnapshotReadiness = ProductReadinessSnapshotBase & {
     readinessDecision?: string
 }
 
+export type DwmAlertGenerationReadiness = ProductReadinessSnapshotBase & {
+    schemaVersion: 'dwm.alert_generation_readiness.v1' | string
+    readyForCustomerDelivery?: boolean
+    candidateCount?: number
+    captureRefCount?: number
+    matchedCandidateCount?: number
+    missingRouteCandidateCount?: number
+    generationEvidenceWindowReady?: boolean
+    generationEvidenceWindowCaptureCount?: number
+    generationEvidenceWindowSourceFamilies?: string[]
+    latestEvidenceAt?: string
+    blockerCodes?: string[]
+}
+
 export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     schemaVersion: 'dwm.source_inventory.v1' | string
     proxyExposed?: boolean
@@ -275,6 +289,7 @@ export type ProductReadinessExternalState = {
     analystWorkflow?: AnalystWorkflowReadiness
     entitlement?: EntitlementReadiness
     dwmProduct?: DwmProductSnapshotReadiness
+    alertGeneration?: DwmAlertGenerationReadiness
 }
 
 export const PRODUCT_PROGRESS_SCHEMA_VERSION = 'product.progress.readiness.v1'
@@ -407,6 +422,7 @@ export type ProductProgressReadinessPayload = {
         cases?: string
         entitlement?: string
         organizationReadiness?: string
+        alertGenerationReadiness?: string
         organizations?: string
         watchlists?: string
         operations?: string
@@ -426,6 +442,7 @@ export type ProductProgressReadinessPayload = {
     analystWorkflow?: AnalystWorkflowReadiness
     entitlement?: EntitlementReadiness
     dwmProduct?: DwmProductSnapshotReadiness
+    alertGeneration?: DwmAlertGenerationReadiness
 }
 
 export function parseProductProgressReadinessPayload(input: unknown): ProductProgressReadinessPayload | null {
@@ -458,6 +475,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
             analystWorkflow: unavailableAnalystWorkflow(route, options.checkedAt),
             entitlement: unavailableEntitlementReadiness(route, options.checkedAt),
             dwmProduct: unavailableDwmProduct(route, options.checkedAt),
+            alertGeneration: unavailableAlertGenerationReadiness(route, options.checkedAt),
         }
     }
 
@@ -492,6 +510,7 @@ export function buildProductProgressExternalState(input: ProductProgressReadines
         }),
         entitlement: normalizeEntitlementReadiness(input.entitlement, input.routes?.entitlement || route, options.checkedAt),
         dwmProduct: normalizeDwmProductReadiness(input.dwmProduct, input.routes?.dwmProduct || route, options.checkedAt),
+        alertGeneration: normalizeAlertGenerationReadiness(input.alertGeneration, input.routes?.alertGenerationReadiness || route, options.checkedAt),
     }
 }
 
@@ -663,6 +682,25 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         expectedDashboardRowId: 'entitlement_readiness',
         integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: 'dwm.entitlement.readiness.v1',
+    }
+}
+
+function unavailableAlertGenerationReadiness(source: string, checkedAt: string): DwmAlertGenerationReadiness {
+    return {
+        schemaVersion: 'dwm.alert_generation_readiness.v1',
+        status: 'unavailable',
+        checkedAt,
+        source,
+        href: '/api/dwm/alerts/generation-readiness',
+        detail: 'DWM alert generation proof is not loaded by product progress.',
+        blockers: ['DWM alert generation proof is not loaded by product progress.'],
+        ownerLane: 'dwm',
+        unavailableReason: 'missing_alert_generation_readiness',
+        staleAfterSeconds: 900,
+        proofTimestamp: checkedAt,
+        expectedDashboardRowId: 'dashboard_evidence',
+        integrationProbeHint: 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        backendProofContractVersion: 'dwm.alert_generation_readiness.v1',
     }
 }
 
@@ -868,6 +906,40 @@ function normalizeDwmProductReadiness(input: DwmProductSnapshotReadiness | undef
         integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
         backendProofContractVersion: input.backendProofContractVersion || 'dwm.product.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : dwmProductDetail(input)),
+    }
+}
+
+function normalizeAlertGenerationReadiness(input: DwmAlertGenerationReadiness | undefined, source: string, checkedAt: string): DwmAlertGenerationReadiness {
+    if (!input) return unavailableAlertGenerationReadiness(source, checkedAt)
+    const candidateCountKnown = typeof input.candidateCount === 'number' || typeof input.matchedCandidateCount === 'number'
+    const candidateCount = input.candidateCount ?? input.matchedCandidateCount ?? 0
+    const captureCount = input.generationEvidenceWindowCaptureCount ?? input.captureRefCount ?? 0
+    const blockers = [
+        input.readyForCustomerDelivery === true ? '' : 'Alert generation proof is not marked ready for customer delivery.',
+        input.generationEvidenceWindowReady === true ? '' : 'Alert generation proof is missing evidence-window timestamps.',
+        candidateCountKnown ? '' : 'Alert generation proof did not return candidate counts.',
+        candidateCount > 0 ? '' : 'Alert generation proof returned no alert candidates.',
+        ...(input.blockers || []),
+    ].filter(Boolean)
+    const status: ReadinessStatus = blockers.length
+        ? input.status === 'blocked' || input.status === 'unavailable' ? input.status : 'needs_action'
+        : 'ready'
+
+    return {
+        ...input,
+        status,
+        checkedAt: input.checkedAt || checkedAt,
+        source: input.source || source,
+        href: input.href || '/api/dwm/alerts/generation-readiness',
+        blockers,
+        ownerLane: input.ownerLane || 'dwm',
+        unavailableReason: blockers.length ? input.unavailableReason || 'missing_alert_generation_readiness' : undefined,
+        staleAfterSeconds: input.staleAfterSeconds ?? 900,
+        proofTimestamp: input.proofTimestamp || input.latestEvidenceAt || input.checkedAt || checkedAt,
+        expectedDashboardRowId: input.expectedDashboardRowId || 'dashboard_evidence',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/alerts/generation-readiness must return dwm.alert_generation_readiness.v1 with candidates and a generation evidence window.',
+        backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.alert_generation_readiness.v1',
+        detail: input.detail || (blockers.length ? blockers.join('; ') : `${candidateCount} alert generation candidate${candidateCount === 1 ? '' : 's'} backed by ${captureCount} capture reference${captureCount === 1 ? '' : 's'}.`),
     }
 }
 
@@ -1916,6 +1988,17 @@ function webhookHealthDetail(input: WebhookHealthReadiness) {
     return counts.length ? counts.join(', ') + '.' : 'Webhook health snapshot loaded.'
 }
 
+function alertGenerationDetail(input: DwmAlertGenerationReadiness) {
+    if (input.blockers?.length) return input.blockers.join('; ')
+    const counts = [
+        typeof input.candidateCount === 'number' ? `${input.candidateCount} candidate${input.candidateCount === 1 ? '' : 's'}` : '',
+        typeof input.captureRefCount === 'number' ? `${input.captureRefCount} capture ref${input.captureRefCount === 1 ? '' : 's'}` : '',
+        typeof input.generationEvidenceWindowCaptureCount === 'number' ? `${input.generationEvidenceWindowCaptureCount} evidence-window capture${input.generationEvidenceWindowCaptureCount === 1 ? '' : 's'}` : '',
+        typeof input.missingRouteCandidateCount === 'number' ? `${input.missingRouteCandidateCount} missing delivery route${input.missingRouteCandidateCount === 1 ? '' : 's'}` : '',
+    ].filter(Boolean)
+    return counts.length ? counts.join(', ') + '.' : 'Alert generation proof snapshot loaded.'
+}
+
 function dashboardEvidenceDetail(input: DashboardAlertEvidenceReadiness) {
     if (input.blockers?.length) return input.blockers.join('; ')
     if (input.alertId && input.deliveryId) return `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`
@@ -2109,6 +2192,10 @@ export function buildReadinessCases(input: {
     const sourceWorkerReady = sourceGrowthReady(sourceGrowth)
     const sourceWorkerCheckedAt = sourceGrowth?.checkedAt || sourceGrowth?.workerLastRunAt || sourceGrowth?.latestInventoryAt || sourceGrowth?.proofTimestamp || now
     const sourceWorkerBlockers = sourceGrowth?.blockers?.filter(Boolean) || []
+    const alertGenerationProof = input.externalReadiness?.alertGeneration
+    const alertGenerationProofReady = alertGenerationProof?.status === 'ready'
+    const alertGenerationProofCheckedAt = alertGenerationProof?.checkedAt || alertGenerationProof?.latestEvidenceAt || alertGenerationProof?.proofTimestamp || now
+    const alertGenerationProofBlockers = alertGenerationProof?.blockers?.filter(Boolean) || []
     const attemptedAlertIdentity = [
         input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
         input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
@@ -2467,36 +2554,44 @@ export function buildReadinessCases(input: {
             id: 'alert_generation',
             kind: 'alert_readiness',
             queue: 'Alert generation',
-            title: alertVisibilityBlocked ? 'DWM alert visibility blocked' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
-            severity: input.liveAlertCount ? 'medium' : 'high',
-            status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty',
-            priority: alertVisibilityBlocked ? 395 : input.liveAlertCount ? 240 : 350,
-            confidence: alertVisibilityBlocked ? 86 : input.liveAlertCount ? 90 : 58,
+            title: alertVisibilityBlocked ? 'DWM alert visibility blocked' : alertGenerationProofReady && input.liveAlertCount ? 'Alert generation proof loaded' : alertGenerationProof ? 'Resolve alert generation proof' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
+            severity: alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
+            status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : alertGenerationProof?.status || (input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty'),
+            priority: alertVisibilityBlocked ? 395 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
+            confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             subtitle: alertVisibilityBlocked
                 ? `${alertAccessMessage}${attemptedAlertIdentity ? ` Attempted identity: ${attemptedAlertIdentity}.` : ''}`
-                : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
+                : alertGenerationProof
+                    ? alertGenerationProof.detail || alertGenerationDetail(alertGenerationProof)
+                    : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
             recommendedAction: alertVisibilityBlocked
                 ? 'Open the dashboard as an active organization member or fix the org membership/session identity before treating the alert queue as empty.'
-                : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
+                : alertGenerationProofReady && input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : alertGenerationProof ? 'Resolve alert-generation blockers before treating the queue as customer-ready.' : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
             evidence: [{
                 id: 'ev_alert_generation',
-                sourceName: 'DWM alerts API',
+                sourceName: alertGenerationProof ? 'DWM alert-generation readiness' : 'DWM alerts API',
                 sourceFamily: 'alert workflow',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
-                contentHash: input.alertAccessState?.code || '/api/dwm/alerts',
-                excerpt: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? 'Alerts came from GET /v1/dwm/alerts for the selected operator scope.' : 'The page is using fallback DWM cases because GET /v1/dwm/alerts returned no saved alerts or backend is absent.',
-                observedAt: now,
-                provenance: 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
-                confidence: alertVisibilityBlocked ? 86 : input.liveAlertCount ? 90 : 58,
+                contentHash: alertGenerationProof?.backendProofContractVersion || input.alertAccessState?.code || '/api/dwm/alerts',
+                excerpt: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof
+                    ? alertGenerationProofReady
+                        ? `${alertGenerationProof.candidateCount ?? 0} candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'}; ${alertGenerationProof.generationEvidenceWindowCaptureCount ?? 0} evidence-window capture${alertGenerationProof.generationEvidenceWindowCaptureCount === 1 ? '' : 's'}.`
+                        : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation proof is blocked.'
+                    : input.liveAlertCount ? 'Alerts came from GET /v1/dwm/alerts for the selected operator scope.' : 'The page is using fallback DWM cases because GET /v1/dwm/alerts returned no saved alerts or backend is absent.',
+                observedAt: alertGenerationProofCheckedAt,
+                provenance: alertGenerationProof?.source || 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
+                confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             }],
-            timeline: [{ id: 'alert_generation_at', at: now, title: alertVisibilityBlocked ? 'Alert visibility denied' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
+            timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Alert visibility denied' : alertGenerationProofReady ? 'Alert generation proven' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation proof is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
             nextTasks: alertVisibilityBlocked
                 ? ['Owner: operator. Verify the dashboard session maps to an active organization member.', 'Retry GET /api/dwm/alerts with userEmail or userId for the selected organization.', 'Do not treat fallback alerts as proof until org visibility succeeds.']
-                : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
+                : alertGenerationProofReady && input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.']
+                    : alertGenerationProof ? ['Owner: DWM owner. Open alert generation readiness.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after proof returns customer-delivery readiness.']
+                        : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
             workflowPath: path,
-            missingDependency: alertVisibilityBlocked ? alertAccessMessage : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
+            missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation readiness is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
             actions: [
                 { id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET', href: '/api/dwm/alerts/generation-readiness' },
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
