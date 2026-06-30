@@ -6152,9 +6152,13 @@ function supportOrganizationCaseHandoff(input: {
     const auditEventIds = input.timeline.map(event => Number(event.id)).filter(id => Number.isFinite(id))
     const actions = uniqueTimelineValues(input.timeline.map(event => event.action || event.actionType))
     const outcomes = uniqueTimelineValues(input.timeline.map(event => event.outcome))
+    const deliveryHistoryDiagnostic = isPlainObject(input.webhookDestinationReadiness.deliveryHistoryDiagnostic)
+        ? input.webhookDestinationReadiness.deliveryHistoryDiagnostic as Record<string, any>
+        : null
     const recoveryBlockers = uniqueTimelineValues([
         ...(Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []),
         ...(Array.isArray(input.webhookDestinationReadiness.caseReadiness?.blockers) ? input.webhookDestinationReadiness.caseReadiness.blockers : []),
+        ...(Array.isArray(deliveryHistoryDiagnostic?.blockers) ? deliveryHistoryDiagnostic.blockers : []),
     ])
     return {
         schemaVersion: 'support.organization.case_handoff.v1',
@@ -6176,6 +6180,7 @@ function supportOrganizationCaseHandoff(input: {
             outcomes,
             caseTimeline: supportCaseTimelineEntries(input.timeline),
             caseAccessReadiness: input.caseAccessReadiness,
+            deliveryHistoryDiagnostic,
         },
         recovery: {
             accessRecoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
@@ -6188,6 +6193,8 @@ function supportOrganizationCaseHandoff(input: {
             alerts: auditFilterQuery({ org: input.organizationId, action: 'alert', source: 'admin', service: 'hanasand-api' }),
             watchlists: auditFilterQuery({ org: input.organizationId, action: 'watchlist', source: 'admin', service: 'hanasand-api' }),
             webhooks: auditFilterQuery({ org: input.organizationId, action: 'webhook', source: 'admin', service: 'hanasand-api' }),
+            webhookDeliveries: Array.isArray(deliveryHistoryDiagnostic?.deliveryHistoryLinks) ? deliveryHistoryDiagnostic.deliveryHistoryLinks : [],
+            webhookDeliveryAudit: deliveryHistoryDiagnostic?.auditFilters || null,
             recovery: auditFilterQuery({ org: input.organizationId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
             denied: auditFilterQuery({ org: input.organizationId, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
         },
@@ -6196,6 +6203,7 @@ function supportOrganizationCaseHandoff(input: {
             auditTimeline: `/api/admin/audit-events?org=${encodeURIComponent(input.organizationId)}`,
             accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(input.organizationId)}/access-recovery`,
             inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(input.organizationId)}/invites`,
+            webhookDeliveryHistory: `/api/dwm/webhook-deliveries?orgId=${encodeURIComponent(input.organizationId)}`,
         },
         forbiddenFields: ['endpoint_encrypted', 'endpointUrl', 'webhookUrl', 'secret', 'token', 'authorization', 'cookie'],
         safeHandoff: {
@@ -6211,6 +6219,7 @@ function supportOrganizationCaseHandoff(input: {
             'missing_support_reason',
             'wrong_org_scope',
             'missing_case_evidence',
+            'missing_webhook_delivery_history',
             'webhook_destination_test_failed',
             'denied_recovery_approval',
             'redaction_required',
@@ -6224,6 +6233,7 @@ function supportOrganizationCaseHandoff(input: {
             `Support case handoff org=${input.organizationId}`,
             `Request: ${input.requestId}`,
             `Evidence: watchlists=${input.watchlistItems.length} alerts=${input.alertReferences.length} webhooks=${input.webhookDestinations.length}`,
+            `Webhook deliveries observed: ${deliveryHistoryDiagnostic?.deliveryObservedCount ?? 0}`,
             `Audit events: ${auditEventIds.join(', ') || 'none'}`,
             `Replay: ${auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' })}`,
         ].join('\n'),
