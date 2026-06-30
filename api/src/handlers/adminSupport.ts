@@ -535,6 +535,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
             compliancePacket: supportAuditCompliancePacket(filters, timeline),
             bridgeAdapter: supportAuditBridgeAdapterContract(filters),
             timelineReplayContract: supportAuditTimelineReplayContract(filters, timeline),
+            caseReplayExport: supportAuditCaseReplayExport(filters, timeline),
             supportWorkflowPacket: supportAuditSupportWorkflowPacket(filters, timeline),
             workflowRollup: supportAuditWorkflowRollup(filters, timeline),
             actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
@@ -11800,6 +11801,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
         decisionPacket: supportAuditEventDecisionPacket({ detail, timelineEvent, relatedTimeline, filters }),
         integrationFixture: supportAuditEventIntegrationFixture({ detail, timelineEvent, relatedTimeline, filters }),
         timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
+        caseReplayExport: supportAuditCaseReplayExport(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         supportWorkflowPacket: supportAuditSupportWorkflowPacket(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline.length ? relatedTimeline : [timelineEvent]),
         relatedTimeline: {
@@ -11811,6 +11813,7 @@ function supportAuditEventDetailResponse(event: Record<string, any>, relatedTime
             exportProof: supportAuditExportProof(filters, relatedTimeline),
             compliancePacket: supportAuditCompliancePacket(filters, relatedTimeline),
             timelineReplayContract: supportAuditTimelineReplayContract(filters, relatedTimeline),
+            caseReplayExport: supportAuditCaseReplayExport(filters, relatedTimeline),
             supportWorkflowPacket: supportAuditSupportWorkflowPacket(filters, relatedTimeline),
             workflowRollup: supportAuditWorkflowRollup(filters, relatedTimeline),
             timeline: relatedTimeline,
@@ -11868,7 +11871,7 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
         },
         timelineShape: {
             requiredFields: ['id', 'timestamp', 'actionType', 'severity', 'outcome', 'actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason', 'actionEvidence'],
-            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract', 'supportWorkflowPacket', 'actionEvidenceRollup'],
+            detailPayloads: ['filterContract', 'exportProof', 'compliancePacket', 'workflowProof', 'integrationFixture', 'timelineReplayContract', 'caseReplayExport', 'supportWorkflowPacket', 'actionEvidenceRollup'],
             redactionRequired: true,
         },
         exampleQueries: {
@@ -11918,6 +11921,148 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             'Support audit timeline replay',
             `Replay: ${replayQuery}`,
             `Events: ${timeline.map(event => event.id).filter(Boolean).join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
+function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline: Array<Record<string, any>>) {
+    const events = timeline.filter(Boolean)
+    const supportEvents = events.filter(event => {
+        const actionType = text(event.actionType || event.action)
+        return actionType.startsWith('support.')
+            || actionType.startsWith('impersonation.')
+            || /invite|access_recovery|member_role_recovery|recovery/.test(actionType)
+    })
+    const eventIds = supportEvents.map(event => Number(event.id)).filter(id => Number.isFinite(id))
+    const actionTypes = uniqueTimelineValues(supportEvents.map(event => event.actionType || event.action))
+    const outcomes = uniqueTimelineValues(supportEvents.map(event => event.outcome))
+    const severities = uniqueTimelineValues(supportEvents.map(event => event.severity))
+    const organizationIds = uniqueTimelineValues(supportEvents.map(event => event.organization?.id || event.organizationId || filters.org))
+    const actorIds = uniqueTimelineValues(supportEvents.map(event => event.actor?.id || event.actorId || filters.actor))
+    const targetIds = uniqueTimelineValues(supportEvents.map(event => event.target?.id || event.targetId || filters.target))
+    const entityIds = uniqueTimelineValues(supportEvents.map(event => event.entity?.id || event.entityId || filters.entity))
+    const requestIds = uniqueTimelineValues(supportEvents.map(event => event.requestId || filters.request))
+    const supportSessionIds = uniqueTimelineValues(supportEvents.map(event => event.actionEvidence?.supportSessionId || event.context?.supportSessionId || filters.supportSession))
+    const reasons = uniqueTimelineValues(supportEvents.map(event => event.reason || event.actionEvidence?.reason || filters.reason))
+    const blockerCodes = uniqueTimelineValues(supportEvents.flatMap(event => [
+        event.actionEvidence?.blockerCode,
+        event.actionEvidence?.blockers,
+        event.context?.blockerCode,
+        event.context?.blocker,
+    ].flat()))
+    const replayFilter = {
+        org: text(filters.org || organizationIds[0]),
+        actor: text(filters.actor || actorIds[0]),
+        target: text(filters.target || targetIds[0]),
+        action: text(filters.action || actionTypes[0]),
+        severity: text(filters.severity || severities[0]),
+        entity: text(filters.entity || entityIds[0]),
+        request: text(filters.request || requestIds[0]),
+        outcome: text(filters.outcome || outcomes[0]),
+        supportSession: text(filters.supportSession || supportSessionIds[0]),
+        reason: text(filters.reason || reasons[0]),
+        source: text(filters.source) || 'admin',
+        service: text(filters.service) || 'hanasand-api',
+    }
+    const replayQuery = auditFilterQuery(replayFilter)
+    return {
+        schemaVersion: 'support.audit.case_replay_export.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        source: {
+            route: '/api/admin/audit-events',
+            detailRouteTemplate: '/api/admin/audit-events/:id',
+            filters,
+        },
+        caseReplay: {
+            expectedConsumer: 'case.replay',
+            route: '/api/admin/support/receipt-replay',
+            replay: {
+                current: replayQuery,
+                byRequest: requestIds.map(request => auditFilterQuery({ request, source: 'admin', service: 'hanasand-api' })),
+                byOrganization: organizationIds.map(org => auditFilterQuery({ org, source: 'admin', service: 'hanasand-api' })),
+                byTarget: targetIds.map(target => auditFilterQuery({ target, source: 'admin', service: 'hanasand-api' })),
+                byEntity: entityIds.map(entity => auditFilterQuery({ entity, source: 'admin', service: 'hanasand-api' })),
+                bySupportSession: supportSessionIds.map(supportSession => auditFilterQuery({ supportSession, source: 'admin', service: 'hanasand-api' })),
+                denied: auditFilterQuery({ ...replayFilter, outcome: 'denied' }),
+            },
+        },
+        supportActionEvidence: {
+            eventIds,
+            actionTypes,
+            outcomes,
+            severities,
+            organizationIds,
+            actorIds,
+            targetIds,
+            entityIds,
+            requestIds,
+            supportSessionIds,
+            reasonsPresent: reasons.length > 0,
+            reasonValues: reasons,
+            blockerCodes,
+        },
+        requiredAuditFields: [
+            'actor.id',
+            'target.id',
+            'organization.id',
+            'entity.id',
+            'actionType',
+            'severity',
+            'outcome',
+            'requestId',
+            'reason',
+            'timestamp',
+            'actionEvidence.supportSessionId',
+        ],
+        nextRoutes: {
+            supportInspection: auditFilterQuery({
+                org: replayFilter.org,
+                target: replayFilter.target,
+                request: replayFilter.request,
+                entity: replayFilter.entity,
+                supportSession: replayFilter.supportSession,
+            }).replace('/api/admin/audit-events', '/api/admin/support/inspect'),
+            auditReplay: replayQuery,
+            auditDetails: eventIds.map(id => `/api/admin/audit-events/${encodeURIComponent(String(id))}`),
+            supportReadiness: '/api/admin/support/readiness',
+            receiptReplay: '/api/admin/support/receipt-replay',
+        },
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noSilentMembershipMutation: true,
+            noSilentImpersonation: true,
+            noCrossOrgLeakage: true,
+            reasonRequiredBeforeExecution: true,
+            scopedSessionRequiredForImpersonation: true,
+            redactionRequired: true,
+        },
+        readinessConsumers: ['dashboard', 'integration', 'case.replay'],
+        denialStates: [
+            'support_role_required',
+            'missing_support_reason',
+            'wrong_org_scope',
+            'support_session_expired',
+            'support_session_revoked',
+            'support_session_scope_denied',
+            'denied_recovery_approval',
+            'duplicate_invite_or_idempotency_key',
+            'audit_unavailable',
+            'redaction_required',
+        ],
+        blockers: [
+            supportEvents.length ? '' : 'missing_support_action_events',
+            replayQuery.includes('?') ? '' : 'missing_replay_filter',
+            reasons.length ? '' : 'missing_support_reason',
+        ].filter(Boolean),
+        copyText: [
+            'Support audit case replay export',
+            `Replay: ${replayQuery}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Actions: ${actionTypes.join(', ') || 'none'}`,
+            `Blockers: ${blockerCodes.join(', ') || 'none'}`,
         ].join('\n'),
     }
 }
