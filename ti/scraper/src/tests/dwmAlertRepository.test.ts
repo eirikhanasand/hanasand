@@ -517,6 +517,7 @@ describe("dwm alert repository", () => {
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.recommendedRoute).toBe("identity_response");
     expect(first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.provenance.metadataOnly).toBe(true);
     const publicAdvisoryAlert = first.alerts.find((alert) => alert.sourceFamily === "public_advisory");
+    const publicAdvisoryHandoff = buildDwmAlertDownstreamHandoff({ alert: publicAdvisoryAlert });
     expect(publicAdvisoryAlert).toMatchObject({
       tenantId: "tenant_repo_acme",
       organizationId: "org_repo_acme",
@@ -549,6 +550,22 @@ describe("dwm alert repository", () => {
         evidenceCount: 1,
         recommendedRoute: "identity_response"
       }),
+      matchReason: expect.objectContaining({
+        schemaVersion: "dwm.alert_match_reason.v1",
+        tenantId: "tenant_repo_acme",
+        organizationId: "org_repo_acme",
+        sourceFamily: "public_advisory",
+        matchedTerm: expect.objectContaining({ value: "acme.com", kind: "domain", normalized: "acme.com" }),
+        matchBasis: "watchlist_capture_text",
+        matchType: "bounded_text_or_metadata",
+        matchedFieldHints: expect.arrayContaining(["body", "metadata.title"]),
+        captureIds: ["cap_repo_public_ti_acme"],
+        sourceIds: ["src_repo_public_ti"],
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      }),
       orgWatchlistScope: expect.objectContaining({
         schemaVersion: "dwm.alert_org_watchlist_scope.v1",
         organizationId: "org_repo_acme",
@@ -573,13 +590,19 @@ describe("dwm alert repository", () => {
         excerpt: expect.stringContaining("acme.com")
       })],
       recommendedRoute: "identity_response",
+      matchReason: expect.objectContaining({
+        schemaVersion: "dwm.alert_match_reason.v1",
+        sourceFamily: "public_advisory",
+        captureIds: ["cap_repo_public_ti_acme"],
+        reason: expect.stringContaining("acme.com")
+      }),
       provenance: {
         matchBasis: "watchlist_capture_text",
         captureIds: ["cap_repo_public_ti_acme"],
         sourceIds: ["src_repo_public_ti"]
       }
     });
-    expect(buildDwmAlertDownstreamHandoff({ alert: publicAdvisoryAlert })).toMatchObject({
+    expect(publicAdvisoryHandoff).toMatchObject({
       schemaVersion: "dwm.alert_downstream_handoff.v1",
       ready: true,
       organizationId: "org_repo_acme",
@@ -594,6 +617,13 @@ describe("dwm alert repository", () => {
         sourceIds: ["src_repo_public_ti"],
         evidenceCount: 1
       },
+      matchReason: expect.objectContaining({
+        schemaVersion: "dwm.alert_match_reason.v1",
+        sourceFamily: "public_advisory",
+        matchedTerm: expect.objectContaining({ value: "acme.com" }),
+        captureIds: ["cap_repo_public_ti_acme"],
+        recommendedRoute: "identity_response"
+      }),
       deliverySelection: {
         ready: false,
         blockerCodes: ["missing_org_ref"],
@@ -629,6 +659,13 @@ describe("dwm alert repository", () => {
       sourceFamily: "telegram_public",
       primaryCaptureId: "cap_repo_tg_acme",
       evidenceCount: 1,
+      matchReason: expect.objectContaining({
+        schemaVersion: "dwm.alert_match_reason.v1",
+        sourceFamily: "telegram_public",
+        matchedTerm: expect.objectContaining({ value: "acme.com", kind: "domain" }),
+        captureIds: ["cap_repo_tg_acme"],
+        recommendedRoute: "identity_response"
+      }),
       generationEvidenceWindow: {
         firstObservedAt: "2026-06-28T13:04:00.000Z",
         lastObservedAt: "2026-06-28T13:11:00.000Z",
@@ -684,6 +721,13 @@ describe("dwm alert repository", () => {
         dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         deliveryDedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         recommendedRoute: "identity_response",
+        matchReason: expect.objectContaining({
+          schemaVersion: "dwm.alert_match_reason.v1",
+          sourceFamily: "telegram_public",
+          captureIds: ["cap_repo_tg_acme"],
+          evidenceCount: 1,
+          recommendedRoute: "identity_response"
+        }),
         duplicateEvidenceSuppression: {
           schemaVersion: "dwm.duplicate_evidence_suppression.v1",
           suppressedCount: 1,
@@ -755,6 +799,24 @@ describe("dwm alert repository", () => {
     expect(telegramAlert?.webhookContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.deliveryReadinessContext.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
     expect(telegramAlert?.alertCreatedEvent.alertDetailPath).toBe(telegramAlert?.alertDetailPath);
+    expect(telegramAlert?.matchReason).toMatchObject({
+      schemaVersion: "dwm.alert_match_reason.v1",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      sourceFamily: "telegram_public",
+      matchedTerm: { value: "acme.com", kind: "domain", normalized: "acme.com" },
+      matchBasis: "watchlist_capture_text",
+      matchType: "bounded_text_or_metadata",
+      matchedFieldHints: ["body"],
+      captureIds: ["cap_repo_tg_acme"],
+      sourceIds: ["src_repo_tg"],
+      watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+      watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"],
+      evidenceCount: 1,
+      recommendedRoute: "identity_response",
+      reason: "Watchlist term acme.com; matched by watchlist_capture_text; from telegram_public; across 1 capture; route identity_response"
+    });
+    expect(telegramAlert?.webhookContext.matchReason).toEqual(telegramAlert?.matchReason);
     expect(telegramAlert?.orgWatchlistScope).toMatchObject({
       schemaVersion: "dwm.alert_org_watchlist_scope.v1",
       tenantId: "tenant_repo_acme",
@@ -1026,6 +1088,18 @@ describe("dwm alert repository", () => {
     expect(preserved?.webhookContext.orgWatchlistScope).toEqual(existing.orgWatchlistScope);
     expect(preserved?.alertEvents).toHaveLength(2);
     expect(preserved?.alertEvents[0]).toEqual(existing.alertCreatedEvent);
+    expect(preserved?.matchReason).toMatchObject({
+      schemaVersion: "dwm.alert_match_reason.v1",
+      sourceFamily: "telegram_public",
+      matchedTerm: expect.objectContaining({ value: "acme.com", kind: "domain" }),
+      captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      sourceIds: ["src_repo_tg"],
+      evidenceCount: 2,
+      recommendedRoute: "identity_response",
+      reason: expect.stringContaining("across 2 captures")
+    });
+    expect(preserved?.workflowContext.matchReason).toEqual(preserved?.matchReason);
+    expect(preserved?.webhookContext.matchReason).toEqual(preserved?.matchReason);
     expect(preserved?.alertUpdatedEvent).toMatchObject({
       schemaVersion: "dwm.alert_updated_event.v1",
       eventType: "dwm.alert.updated",
@@ -1075,6 +1149,13 @@ describe("dwm alert repository", () => {
         dedupeKey: existing.dedupeKey,
         deliveryDedupeKey: existing.dedupeKey,
         recommendedRoute: "identity_response",
+        matchReason: expect.objectContaining({
+          schemaVersion: "dwm.alert_match_reason.v1",
+          sourceFamily: "telegram_public",
+          captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+          evidenceCount: 2,
+          recommendedRoute: "identity_response"
+        }),
         alertDetailPath: existing.alertDetailPath,
         caseIdCandidate: existing.caseIdCandidate,
         casePath: existing.casePath,
@@ -1119,6 +1200,12 @@ describe("dwm alert repository", () => {
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).evidence.generationEvidenceWindow).toMatchObject({
       captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
       lastObservedAt: "2026-06-28T13:16:00.000Z"
+    });
+    expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).matchReason).toMatchObject({
+      schemaVersion: "dwm.alert_match_reason.v1",
+      sourceFamily: "telegram_public",
+      captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      evidenceCount: 2
     });
     expect(buildDwmAlertDownstreamHandoff({ alert: preserved }).workflowDecision).toMatchObject({
       value: "false_positive",

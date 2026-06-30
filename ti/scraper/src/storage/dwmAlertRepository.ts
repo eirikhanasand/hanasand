@@ -455,6 +455,32 @@ export type DwmAlertSourceProvenanceSummary = {
   };
 };
 
+export type DwmAlertMatchReason = {
+  schemaVersion: "dwm.alert_match_reason.v1";
+  alertId?: string;
+  tenantId?: string;
+  organizationId?: string;
+  sourceFamily?: string;
+  matchedTerm?: {
+    value?: string;
+    kind?: string;
+    normalized?: string;
+    category?: string;
+  };
+  matchBasis?: string;
+  matchType?: string;
+  matchedFieldHints: string[];
+  captureIds: string[];
+  sourceIds: string[];
+  watchlistIds: string[];
+  watchlistItemIds: string[];
+  evidenceCount: number;
+  confidence?: number;
+  confidenceReasoning: string[];
+  recommendedRoute?: string;
+  reason: string;
+};
+
 export type DwmAlertOrgWatchlistScope = {
   schemaVersion: "dwm.alert_org_watchlist_scope.v1";
   tenantId?: string;
@@ -516,6 +542,7 @@ export type DwmAlertDownstreamHandoff = {
       lastObservedAt?: string;
     };
   };
+  matchReason?: DwmAlertMatchReason;
   dedupe: {
     alertDedupeKey?: string;
     deliveryDedupeKey?: string;
@@ -1474,10 +1501,20 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       organizationId: input.organizationId ?? existing?.organizationId,
       generationCandidate
     });
-    const workflowContext = {
+    const baseWorkflowContext = {
       ...generatedWorkflowContext,
       caseId: existing?.caseId,
       casePath: existing?.casePath ?? generatedWorkflowContext.casePath
+    };
+    const matchReason = buildDwmAlertMatchReason({
+      alert: { ...scopedAlert, id: alertId },
+      tenantId: input.tenantId,
+      organizationId: input.organizationId ?? existing?.organizationId,
+      workflowContext: baseWorkflowContext
+    });
+    const workflowContext = {
+      ...baseWorkflowContext,
+      matchReason
     };
     const deliveryReadinessContext = buildDwmPersistedDeliveryReadinessContext({
       alert: { ...scopedAlert, id: alertId },
@@ -1525,8 +1562,9 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       alertDetailPath: workflowContext.alertDetailPath,
       watchlistIds: workflowContext.watchlistIds,
       watchlistItemIds: workflowContext.watchlistItemIds,
+      matchReason,
       workflowContext,
-      webhookContext: buildDwmAlertWebhookContext(alert, workflowContext),
+      webhookContext: buildDwmAlertWebhookContext({ ...scopedAlert, id: alertId, matchReason } as DwmAlert & Record<string, any>, workflowContext),
       deliveryReadinessContext: persistedDeliveryReadinessContext,
       sourceProvenanceSummary,
       orgWatchlistScope,
@@ -2889,6 +2927,7 @@ export function dwmAlertToSqlRecord(alert: any) {
     webhook_delivery: alert.webhookDelivery,
     delivery_readiness_context: alert.deliveryReadinessContext,
     source_provenance_summary: alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({ alert }),
+    match_reason: alert.matchReason ?? buildDwmAlertMatchReason({ alert, workflowContext: alert.workflowContext }),
     org_watchlist_scope: alert.orgWatchlistScope ?? buildDwmAlertOrgWatchlistScope(alert.workflowContext) ?? null,
     workflow_context: alert.workflowContext,
     webhook_context: alert.webhookContext,
@@ -3255,6 +3294,12 @@ export function buildDwmAlertDownstreamHandoff(input: {
     ...(alert?.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId).filter(Boolean).map(String)
   ]));
   const generationEvidenceWindow = normalizeGenerationEvidenceWindow(context.generationEvidenceWindow ?? workflow.generationEvidenceWindow ?? webhook.generationEvidenceWindow);
+  const matchReason = alert?.matchReason ?? workflow.matchReason ?? webhook.matchReason ?? (alert ? buildDwmAlertMatchReason({
+    alert,
+    tenantId: alert.tenantId ?? workflow.tenantId ?? webhook.tenantId,
+    organizationId: input.organizationId ?? alert.organizationId ?? workflow.organizationId ?? webhook.organizationId,
+    workflowContext: workflow
+  }) : undefined);
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert?.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert?.watchlistItemIds));
   const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
@@ -3384,6 +3429,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       matchBasis: alert?.provenance?.matchBasis,
       generationEvidenceWindow
     },
+    matchReason,
     dedupe: {
       alertDedupeKey: alert?.dedupeKey ?? alert?.webhookDelivery?.dedupeKey,
       deliveryDedupeKey,
@@ -4081,6 +4127,69 @@ export function buildDwmAlertSourceProvenanceSummary(input: {
   };
 }
 
+export function buildDwmAlertMatchReason(input: {
+  alert: Record<string, any>;
+  tenantId?: string;
+  organizationId?: string;
+  workflowContext?: Record<string, any>;
+}): DwmAlertMatchReason {
+  const alert = input.alert ?? {};
+  const workflowContext = input.workflowContext ?? {};
+  const evidence = Array.isArray(alert.evidence) ? alert.evidence : [];
+  const captureIds = uniqueStrings([
+    ...asStringArray(workflowContext.captureIds),
+    ...asStringArray(alert.provenance?.captureIds),
+    ...evidence.map((item: any) => item.provenance?.captureId ?? item.id).filter(Boolean).map(String)
+  ]);
+  const sourceIds = uniqueStrings([
+    ...asStringArray(alert.provenance?.sourceIds),
+    ...evidence.map((item: any) => item.provenance?.sourceId ?? item.sourceId).filter(Boolean).map(String)
+  ]);
+  const matchedTerm = alert.matchedTerm ?? workflowContext.matchedTerm;
+  const matchedValue = matchedTerm?.value ? String(matchedTerm.value) : undefined;
+  const sourceFamily = alert.sourceFamily ?? workflowContext.sourceFamily;
+  const matchBasis = alert.provenance?.matchBasis;
+  const matchType = alert.matchContext?.matchType;
+  const matchedFieldHints = uniqueStrings(asStringArray(alert.matchContext?.matchedFieldHints));
+  const watchlistIds = uniqueStrings(asStringArray(workflowContext.watchlistIds ?? alert.watchlistIds));
+  const watchlistItemIds = uniqueStrings(asStringArray(workflowContext.watchlistItemIds ?? alert.watchlistItemIds));
+  const recommendedRoute = alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute ?? workflowContext.recommendedRoute;
+  const evidenceCount = Number(workflowContext.evidenceCount ?? evidence.length ?? 0);
+  const confidenceReasoning = uniqueStrings(asStringArray(alert.confidenceReasoning));
+  const reasonParts = [
+    matchedValue ? `Watchlist term ${matchedValue}` : "Watchlist term",
+    matchBasis ? `matched by ${matchBasis}` : "matched capture evidence",
+    sourceFamily ? `from ${sourceFamily}` : undefined,
+    captureIds.length ? `across ${captureIds.length} capture${captureIds.length === 1 ? "" : "s"}` : undefined,
+    recommendedRoute ? `route ${recommendedRoute}` : undefined
+  ].filter(Boolean);
+  return {
+    schemaVersion: "dwm.alert_match_reason.v1",
+    alertId: alert.id ? String(alert.id) : undefined,
+    tenantId: input.tenantId ?? alert.tenantId ?? workflowContext.tenantId,
+    organizationId: input.organizationId ?? alert.organizationId ?? workflowContext.organizationId,
+    sourceFamily: sourceFamily ? String(sourceFamily) : undefined,
+    matchedTerm: matchedTerm ? {
+      value: matchedValue,
+      kind: matchedTerm.kind ? String(matchedTerm.kind) : undefined,
+      normalized: matchedValue?.toLowerCase(),
+      category: workflowContext.matchedTermCategory ? String(workflowContext.matchedTermCategory) : undefined
+    } : undefined,
+    matchBasis,
+    matchType,
+    matchedFieldHints,
+    captureIds,
+    sourceIds,
+    watchlistIds,
+    watchlistItemIds,
+    evidenceCount,
+    confidence: alert.confidence !== undefined ? Number(alert.confidence) : undefined,
+    confidenceReasoning,
+    recommendedRoute,
+    reason: reasonParts.join("; ")
+  };
+}
+
 export function buildDwmAlertOrgWatchlistScope(workflowContext: Record<string, any> | undefined): DwmAlertOrgWatchlistScope | undefined {
   if (!workflowContext) return undefined;
   const termContexts = Array.isArray(workflowContext.watchlistTermContexts) ? workflowContext.watchlistTermContexts : [];
@@ -4137,7 +4246,7 @@ export function buildDwmAlertOrgWatchlistScope(workflowContext: Record<string, a
   };
 }
 
-export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext>) {
+export function buildDwmAlertWebhookContext(alert: DwmAlert & Record<string, any>, workflowContext: ReturnType<typeof buildDwmAlertWorkflowContext> & Record<string, any>) {
   return {
     eventType: alert.eventType,
     alertId: alert.id,
@@ -4152,6 +4261,7 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     alertGenerationRefs: workflowContext.alertGenerationRefs,
     alertGeneratorKeys: workflowContext.alertGeneratorKeys,
     orgWatchlistScope: buildDwmAlertOrgWatchlistScope(workflowContext),
+    matchReason: workflowContext.matchReason ?? buildDwmAlertMatchReason({ alert, workflowContext }),
     matchedTermCategory: workflowContext.matchedTermCategory,
     actor: workflowContext.actor,
     entity: workflowContext.entity,
@@ -4204,6 +4314,12 @@ function buildDwmAlertCreatedEvent(input: {
     deliveryDedupeKey,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
     alertDetailPath: input.workflowContext.alertDetailPath,
+    matchReason: input.workflowContext.matchReason ?? buildDwmAlertMatchReason({
+      alert: input.alert,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      workflowContext: input.workflowContext
+    }),
     confidence: input.alert.confidence,
     confidenceReasoning: input.alert.confidenceReasoning ?? [],
     provenance: {
@@ -4275,6 +4391,12 @@ function buildDwmAlertUpdatedEvent(input: {
     alertDetailPath: input.workflowContext.alertDetailPath,
     generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
     duplicateEvidenceSuppression: input.workflowContext.duplicateEvidenceSuppression,
+    matchReason: input.workflowContext.matchReason ?? buildDwmAlertMatchReason({
+      alert: input.alert,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      workflowContext: input.workflowContext
+    }),
     provenance: {
       matchBasis: input.alert.provenance?.matchBasis,
       captureIds: input.alert.provenance?.captureIds ?? captureIds,
@@ -4347,6 +4469,12 @@ function buildDwmAlertEventConsumerPayload(input: {
     workflowEventCount: input.workflowEventCount ?? 0,
     confidence: input.alert.confidence,
     confidenceReasoning: input.alert.confidenceReasoning ?? [],
+    matchReason: input.alert.matchReason ?? input.workflowContext.matchReason ?? buildDwmAlertMatchReason({
+      alert: input.alert,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId,
+      workflowContext: input.workflowContext
+    }),
     sourceProvenanceSummary: input.alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({
       alert: input.alert,
       tenantId: input.tenantId,
