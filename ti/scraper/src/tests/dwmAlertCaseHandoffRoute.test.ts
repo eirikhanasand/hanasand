@@ -596,6 +596,13 @@ describe("DWM alert case handoff route", () => {
     const filteredReplayExportPayload = await filteredReplayExport.json() as any;
     const viewerReplayExport = await getActionReplayExport(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme&actionId=webhookDryRun");
     const viewerReplayExportPayload = await viewerReplayExport.json() as any;
+    store.saveCase({
+      ...(store as any).getCase("case_alert_acme"),
+      id: "case_alert_unassigned",
+      assignedOwner: undefined
+    });
+    const unassignedReplayExport = await getActionReplayExport(options, "case_alert_unassigned", "owner@acme.com", "organizationId=org_acme");
+    const unassignedReplayExportPayload = await unassignedReplayExport.json() as any;
     const wrongOrgReplayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
     const wrongOrgReplayExportPayload = await wrongOrgReplayExport.json() as any;
 
@@ -611,6 +618,7 @@ describe("DWM alert case handoff route", () => {
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
         sourceHandoffReady: true,
+        supportRecoveryReady: true,
         replayable: true,
         blockerCodes: []
       },
@@ -646,6 +654,35 @@ describe("DWM alert case handoff route", () => {
           }
         }
       },
+      supportRecoveryReadiness: {
+        schemaVersion: "dwm.case_support_recovery_readiness.v1",
+        route: "/api/admin/support/readiness",
+        recoveryRoute: "/api/admin/support/organizations/org_acme/access-recovery",
+        method: "POST",
+        available: true,
+        ready: true,
+        state: "ready_for_support_review",
+        caseId: "case_alert_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme",
+        assignedOwner: "owner@acme.com",
+        workflowStatus: "open",
+        source: {
+          sourceFamily: "telegram_public",
+          selectedCaptureIds: ["cap_acme_1"],
+          provenanceCaptureIds: ["cap_acme_1"],
+          provenanceSourceIds: ["src_acme_tg"],
+          contentHashes: ["hash_acme_1"],
+          evidenceCount: 1
+        },
+        webhook: {
+          readyForReplay: true,
+          receiptAvailable: false,
+          destinationIds: ["webhook_acme_discord"]
+        },
+        requiredFields: ["organizationId", "caseId", "alertId", "assignedOwner", "audit.reason", "idempotencyKey"],
+        blockerCodes: []
+      },
       provenance: {
         captureIds: ["cap_acme_1"],
         sourceIds: ["src_acme_tg"],
@@ -669,7 +706,8 @@ describe("DWM alert case handoff route", () => {
       expect.objectContaining({ id: "review_source_handoff", ownerLane: "source", ready: true, blocked: false }),
       expect.objectContaining({ id: "replay_alert", ownerLane: "alert", ready: true, blocked: false }),
       expect.objectContaining({ id: "test_webhook_delivery", ownerLane: "webhook", ready: true, blocked: false }),
-      expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_webhook_dry_run_receipt"] })
+      expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_webhook_dry_run_receipt"] }),
+      expect.objectContaining({ id: "verify_support_recovery", ownerLane: "support", ready: true, blocked: false })
     ]));
     expect(JSON.stringify(replayExportPayload)).not.toContain("rawText");
     expect(filteredReplayExport.status).toBe(200);
@@ -710,6 +748,31 @@ describe("DWM alert case handoff route", () => {
             blockerCodes: ["case_read_only_member"]
           }
         }
+      },
+      supportRecoveryReadiness: {
+        ready: false,
+        blockerCodes: ["case_read_only_member"]
+      }
+    });
+    expect(viewerReplayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "verify_support_recovery", ownerLane: "support", ready: false, blocked: true, blockerCodes: ["case_read_only_member"] })
+    ]));
+    expect(unassignedReplayExport.status).toBe(200);
+    expect(unassignedReplayExportPayload.workflowTransitions.map((transition: any) => transition.action)).toEqual([
+      "open",
+      "handoff_alert_replay",
+      "handoff_webhook_dry_run",
+      "handoff_alert_replay"
+    ]);
+    expect(unassignedReplayExportPayload).toMatchObject({
+      caseId: "case_alert_unassigned",
+      replayPlan: {
+        supportRecoveryReady: false,
+        workflowTransitionCount: 4
+      },
+      supportRecoveryReadiness: {
+        ready: false,
+        blockerCodes: ["missing_case_owner"]
       }
     });
     expect(wrongOrgReplayExport.status).toBe(404);
@@ -806,8 +869,14 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         sourceHandoffReady: false,
+        supportRecoveryReady: false,
         replayable: false,
         blockerCodes: ["missing_case_alert"]
+      },
+      supportRecoveryReadiness: {
+        ready: false,
+        state: "blocked",
+        blockerCodes: ["missing_case_alert", "missing_alert_source_handoff_readiness"]
       },
       provenance: {
         captureIds: [],

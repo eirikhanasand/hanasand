@@ -1565,6 +1565,13 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
+  const supportRecoveryReadiness = caseSupportRecoveryReadiness({
+    alert,
+    caseRecord,
+    access,
+    sourceHandoffReadiness,
+    webhookDryRunReadiness
+  });
   const blockerCodes = uniqueCaseStrings([
     ...(alert ? [] : ["missing_case_alert"]),
     ...(handoffHistory.handoffActionReadiness?.blockerCodes ?? [])
@@ -1574,6 +1581,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     access,
     sourceHandoffReadiness,
     webhookDryRunReadiness,
+    supportRecoveryReadiness,
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
   return {
@@ -1597,6 +1605,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     customerNotifications,
     webhookDryRunReadiness,
     sourceHandoffReadiness,
+    supportRecoveryReadiness,
     nextAnalystActions,
     replayPlan: {
       workflowTransitionCount: workflowTransitions.length,
@@ -1604,6 +1613,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       customerNotificationCount: customerNotifications.length,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       sourceHandoffReady: sourceHandoffReadiness.ready,
+      supportRecoveryReady: supportRecoveryReadiness.ready,
       nextActionCount: nextAnalystActions.length,
       replayable: blockerCodes.length === 0,
       blockerCodes
@@ -1618,6 +1628,71 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       metadataOnly: true,
       rawEvidenceExposed: false,
       webhookSecretExposed: false
+    }
+  };
+}
+
+function caseSupportRecoveryReadiness(input: {
+  alert: any;
+  caseRecord: AnalystCase;
+  access: CaseAccessResult;
+  sourceHandoffReadiness: any;
+  webhookDryRunReadiness: any;
+}) {
+  const readOnly = input.access.readOnly === true;
+  const route = "/api/admin/support/readiness";
+  const recoveryRoute = input.caseRecord.organizationId
+    ? `/api/admin/support/organizations/${encodeURIComponent(input.caseRecord.organizationId)}/access-recovery`
+    : "/api/admin/support/organizations/:id/access-recovery";
+  const blockerCodes = uniqueCaseStrings([
+    ...(readOnly ? ["case_read_only_member"] : []),
+    ...(!input.caseRecord.organizationId ? ["missing_organization_scope"] : []),
+    ...(!input.caseRecord.alertId || !input.alert ? ["missing_case_alert"] : []),
+    ...(!input.caseRecord.assignedOwner ? ["missing_case_owner"] : []),
+    ...(input.caseRecord.status === "closed" ? ["case_closed"] : []),
+    ...(input.sourceHandoffReadiness.ready ? [] : input.sourceHandoffReadiness.blockerCodes ?? ["missing_alert_source_handoff_readiness"])
+  ]);
+  return {
+    schemaVersion: "dwm.case_support_recovery_readiness.v1",
+    route,
+    recoveryRoute,
+    method: "POST",
+    available: true,
+    ready: blockerCodes.length === 0,
+    state: blockerCodes.length === 0 ? "ready_for_support_review" : "blocked",
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    assignedOwner: input.caseRecord.assignedOwner,
+    workflowStatus: input.caseRecord.status,
+    member: input.access.member ? {
+      memberId: input.access.member.id,
+      role: input.access.member.role,
+      readOnly
+    } : undefined,
+    source: {
+      sourceFamily: input.sourceHandoffReadiness.sourceFamily ?? input.alert?.sourceFamily,
+      selectedCaptureIds: input.sourceHandoffReadiness.selectedCaptureIds ?? [],
+      provenanceCaptureIds: input.sourceHandoffReadiness.provenanceCaptureIds ?? [],
+      provenanceSourceIds: input.sourceHandoffReadiness.provenanceSourceIds ?? [],
+      contentHashes: alertCaseHandoffProvenance(input.alert).contentHashes,
+      evidenceCount: input.sourceHandoffReadiness.evidenceCount ?? 0
+    },
+    webhook: {
+      readyForReplay: Boolean(input.webhookDryRunReadiness.readyForReplay),
+      receiptAvailable: Boolean(input.webhookDryRunReadiness.receiptAvailable),
+      destinationIds: input.webhookDryRunReadiness.destinationIds ?? [],
+      latestDeliveryId: input.webhookDryRunReadiness.latestDelivery?.id,
+      latestDeliveryStatus: input.webhookDryRunReadiness.latestDelivery?.status
+    },
+    requiredFields: ["organizationId", "caseId", "alertId", "assignedOwner", "audit.reason", "idempotencyKey"],
+    blockerCodes,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
     }
   };
 }
@@ -1719,6 +1794,7 @@ function caseReplayNextAnalystActions(input: {
   access: CaseAccessResult;
   sourceHandoffReadiness: any;
   webhookDryRunReadiness: any;
+  supportRecoveryReadiness: any;
   handoffActionReadiness?: any;
 }) {
   const readOnly = input.access.readOnly === true;
@@ -1767,6 +1843,18 @@ function caseReplayNextAnalystActions(input: {
         ...(!input.webhookDryRunReadiness.receiptAvailable ? ["missing_webhook_dry_run_receipt"] : [])
       ]),
       requiredFields: ["organizationId", "webhookDeliveryId", "rationale"]
+    },
+    {
+      id: "verify_support_recovery",
+      ownerLane: "support",
+      route: input.supportRecoveryReadiness.route,
+      ready: Boolean(input.supportRecoveryReadiness.ready && !readOnly),
+      blocked: readOnly || !input.supportRecoveryReadiness.ready,
+      blockerCodes: uniqueCaseStrings([
+        ...(readOnly ? ["case_read_only_member"] : []),
+        ...(input.supportRecoveryReadiness.blockerCodes ?? [])
+      ]),
+      requiredFields: input.supportRecoveryReadiness.requiredFields ?? []
     }
   ];
 }
