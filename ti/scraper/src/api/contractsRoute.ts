@@ -55,6 +55,7 @@ export function contractIndex() {
     route("GET", "/v1/cases/:caseId/action-replay-export"),
     route("GET", "/v1/cases/:caseId/handoff-actions"),
     route("GET", "/v1/cases/:caseId/workflow-transitions"),
+    route("GET", "/v1/cases/:caseId/webhook-replay-readiness"),
     route("POST", "/v1/cases/:caseId/handoff-action"),
     route("PATCH", "/v1/cases/:caseId"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
@@ -123,6 +124,7 @@ export function contractIndex() {
         route: "/v1/cases/:caseId/handoff-action",
         historyRoute: "/v1/cases/:caseId/handoff-actions",
         replayExportRoute: "/v1/cases/:caseId/action-replay-export",
+        webhookReplayReadinessRoute: "/v1/cases/:caseId/webhook-replay-readiness",
         methods: ["GET", "POST"],
         schemas: {
           receipt: "dwm.case_handoff_action_receipt.v1",
@@ -134,6 +136,7 @@ export function contractIndex() {
           publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
           webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
           webhookDeliveryReplayContext: "dwm.case_webhook_delivery_replay_context.v1",
+          webhookReplayReadinessResponse: "dwm.case_webhook_replay_readiness_response.v1",
           customerNotificationReadiness: "dwm.case_customer_notification_readiness.v1",
           sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
           supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
@@ -146,7 +149,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
         queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"],
-        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "webhookReplayReadinessResponse", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions", "nextWebhookActions"],
         blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "missing_organization_scope", "case_closed"],
         safeOutput: {
           metadataOnly: true,

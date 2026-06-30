@@ -239,6 +239,8 @@ describe("DWM alert case handoff route", () => {
     });
     const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&actionId=webhookDryRun");
     const replayExportPayload = await replayExport.json() as any;
+    const ownerWebhookReadiness = await getWebhookReplayReadiness(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const ownerWebhookReadinessPayload = await ownerWebhookReadiness.json() as any;
     expect(replayExport.status).toBe(200);
     expect(replayExportPayload.webhookDryRunReadiness).toMatchObject({
       schemaVersion: "dwm.case_webhook_dry_run_replay_readiness.v1",
@@ -340,10 +342,98 @@ describe("DWM alert case handoff route", () => {
     });
     expect(JSON.stringify(replayExportPayload.webhookDryRunReadiness)).not.toContain("discord.com");
     expect(JSON.stringify(replayExportPayload.webhookDeliveryReplayContext)).not.toContain("discord.com");
+    expect(ownerWebhookReadiness.status).toBe(200);
+    expect(ownerWebhookReadinessPayload).toMatchObject({
+      schemaVersion: "dwm.case_webhook_replay_readiness_response.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      access: {
+        role: "owner",
+        readOnly: false
+      },
+      workflowState: {
+        status: "open",
+        assignedOwner: "owner@acme.com"
+      },
+      workflowTransitionHistory: {
+        summary: {
+          transitionCount: 1,
+          actions: ["open"]
+        }
+      },
+      webhookDryRunReadiness: {
+        readyForReplay: true,
+        receiptAvailable: true,
+        latestDelivery: {
+          id: "delivery_dry_run_case_alert_acme",
+          status: "dry_run"
+        }
+      },
+      webhookDeliveryReplayContext: {
+        summary: {
+          deliveryAttemptCount: 2,
+          retryableDeliveryCount: 1,
+          deliveryIds: ["delivery_retry_case_alert_acme", "delivery_dry_run_case_alert_acme"]
+        },
+        retryState: {
+          retryable: true,
+          retryDeliveryIds: ["delivery_retry_case_alert_acme"],
+          auditEventIds: ["audit_retry_case_alert_acme"]
+        }
+      },
+      customerNotificationReadiness: {
+        readyForRecord: false,
+        blocked: true,
+        blockerCodes: ["missing_delivered_webhook"]
+      },
+      summary: {
+        deliveryAttemptCount: 2,
+        retryableDeliveryCount: 1,
+        dryRunReceiptAvailable: true,
+        customerNotificationReadyForRecord: false,
+        customerNotificationRecorded: false,
+        readOnly: false,
+        blockerCodes: expect.arrayContaining(["missing_delivered_webhook"])
+      },
+      nextWebhookActions: expect.arrayContaining([
+        expect.objectContaining({
+          id: "run_webhook_dry_run",
+          ready: true,
+          blocked: false,
+          deliveryRefs: ["delivery_dry_run_case_alert_acme"]
+        }),
+        expect.objectContaining({
+          id: "retry_webhook_delivery",
+          ready: true,
+          blocked: false,
+          deliveryRefs: ["delivery_retry_case_alert_acme"],
+          auditEventIds: ["audit_retry_case_alert_acme"]
+        }),
+        expect.objectContaining({
+          id: "record_customer_notification",
+          ready: false,
+          blocked: true,
+          blockerCodes: ["missing_delivered_webhook"]
+        })
+      ]),
+      auditSafety: {
+        metadataOnly: true,
+        endpointSecretExposed: false,
+        payloadBodyExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(JSON.stringify(ownerWebhookReadinessPayload)).not.toContain("discord.com");
     const viewerDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
       headers: { "x-user-email": "viewer@acme.com" }
     }), options);
     const viewerDetailPayload = await viewerDetail.json() as any;
+    const viewerWebhookReadiness = await getWebhookReplayReadiness(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme");
+    const viewerWebhookReadinessPayload = await viewerWebhookReadiness.json() as any;
+    const wrongOrgWebhookReadiness = await getWebhookReplayReadiness(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
+    const wrongOrgWebhookReadinessPayload = await wrongOrgWebhookReadiness.json() as any;
     expect(viewerDetail.status).toBe(200);
     expect(viewerDetailPayload.handoffActionReadiness).toMatchObject({
       readyActionIds: [],
@@ -359,6 +449,35 @@ describe("DWM alert case handoff route", () => {
       },
       blockerCodes: ["case_read_only_member"]
     });
+    expect(viewerWebhookReadiness.status).toBe(200);
+    expect(viewerWebhookReadinessPayload).toMatchObject({
+      access: {
+        role: "viewer",
+        readOnly: true
+      },
+      summary: {
+        deliveryAttemptCount: 2,
+        retryableDeliveryCount: 1,
+        readOnly: true,
+        blockerCodes: expect.arrayContaining(["case_read_only_member", "missing_delivered_webhook"])
+      },
+      nextWebhookActions: expect.arrayContaining([
+        expect.objectContaining({
+          id: "run_webhook_dry_run",
+          ready: false,
+          blocked: true,
+          blockerCodes: ["case_read_only_member"]
+        }),
+        expect.objectContaining({
+          id: "retry_webhook_delivery",
+          ready: false,
+          blocked: true,
+          blockerCodes: ["case_read_only_member"]
+        })
+      ])
+    });
+    expect(wrongOrgWebhookReadiness.status).toBe(404);
+    expect(wrongOrgWebhookReadinessPayload.error).toMatchObject({ code: "case_not_found" });
     expect(duplicate.status).toBe(200);
     expect(duplicatePayload.alertCaseHandoff).toMatchObject({
       caseId: "case_alert_acme",
@@ -2224,6 +2343,12 @@ async function getActionReplayExport(options: ReturnType<typeof fixtureRuntime>[
 
 async function getWorkflowTransitions(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/workflow-transitions?${query}`, {
+    headers: { "x-user-email": email }
+  }), options);
+}
+
+async function getWebhookReplayReadiness(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/webhook-replay-readiness?${query}`, {
     headers: { "x-user-email": email }
   }), options);
 }

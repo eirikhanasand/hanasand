@@ -23,6 +23,7 @@ describe("api regression sentinel", () => {
       "/v1/cases/:caseId/action-replay-export",
       "/v1/cases/:caseId/handoff-actions",
       "/v1/cases/:caseId/workflow-transitions",
+      "/v1/cases/:caseId/webhook-replay-readiness",
       "/v1/cases/:caseId/handoff-action",
       "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
@@ -1080,6 +1081,7 @@ describe("api regression sentinel", () => {
       { method: "GET", path: "/v1/cases/:caseId/action-replay-export" },
       { method: "GET", path: "/v1/cases/:caseId/handoff-actions" },
       { method: "GET", path: "/v1/cases/:caseId/workflow-transitions" },
+      { method: "GET", path: "/v1/cases/:caseId/webhook-replay-readiness" },
       { method: "POST", path: "/v1/cases/:caseId/handoff-action" }
     ]));
     expect(receiptSurface).toMatchObject({
@@ -1087,6 +1089,7 @@ describe("api regression sentinel", () => {
       route: "/v1/cases/:caseId/handoff-action",
       historyRoute: "/v1/cases/:caseId/handoff-actions",
       replayExportRoute: "/v1/cases/:caseId/action-replay-export",
+      webhookReplayReadinessRoute: "/v1/cases/:caseId/webhook-replay-readiness",
       methods: ["GET", "POST"],
       schemas: {
         receipt: "dwm.case_handoff_action_receipt.v1",
@@ -1098,6 +1101,7 @@ describe("api regression sentinel", () => {
         publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
         webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
         webhookDeliveryReplayContext: "dwm.case_webhook_delivery_replay_context.v1",
+        webhookReplayReadinessResponse: "dwm.case_webhook_replay_readiness_response.v1",
         customerNotificationReadiness: "dwm.case_customer_notification_readiness.v1",
         sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
         supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
@@ -1110,7 +1114,7 @@ describe("api regression sentinel", () => {
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
       queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"]),
-      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions"]),
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "webhookReplayReadinessResponse", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions", "nextWebhookActions"]),
       blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "case_closed"])
     });
     expect(JSON.stringify(receiptSurface)).not.toContain("https://discord.com");

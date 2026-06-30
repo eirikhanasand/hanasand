@@ -291,6 +291,16 @@ export function listCaseWorkflowTransitions(url: URL, options: ApiServerOptions,
   }));
 }
 
+export function getCaseWebhookReplayReadiness(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const caseRecord = findCase(options, caseId);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  return json(buildCaseWebhookReplayReadinessResponse(caseRecord, options, scope.organization, access));
+}
+
 export function exportCaseActionReplay(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
@@ -1796,6 +1806,154 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       webhookSecretExposed: false
     }
   };
+}
+
+function buildCaseWebhookReplayReadinessResponse(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const customerNotifications = (caseRecord.customerNotifications ?? []).map((receipt: any) => ({
+    id: receipt.id,
+    webhookDeliveryId: receipt.webhookDeliveryId,
+    webhookDestinationId: receipt.webhookDestinationId,
+    webhookStatus: receipt.webhookStatus,
+    idempotencyKey: receipt.idempotencyKey
+  }));
+  const alertCaseHandoffContext = alert ? buildAlertCaseHandoff({
+    caseRecord,
+    alert,
+    route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
+    replayState: "reused",
+    provenance: alertCaseHandoffProvenance(alert)
+  }) : undefined;
+  const handoffActionReadiness = alertCaseHandoffContext ? buildCaseHandoffActionReadiness({
+    caseRecord,
+    handoff: alertCaseHandoffContext,
+    deliveries,
+    access
+  }) : undefined;
+  const webhookDryRunReadiness = caseWebhookDryRunReplayReadiness({
+    alert,
+    caseRecord,
+    deliveries,
+    customerNotifications,
+    handoffActionReadiness
+  });
+  const customerNotificationReadiness = caseCustomerNotificationReadiness({
+    caseRecord,
+    deliveries,
+    customerNotifications,
+    access
+  });
+  const webhookDeliveryReplayContext = caseWebhookDeliveryReplayContext({
+    caseRecord,
+    deliveries,
+    webhookDryRunReadiness,
+    customerNotificationReadiness,
+    customerNotifications
+  });
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
+  const workflowTransitions = (caseRecord.workflowEvents ?? []).map((event) => caseWorkflowTransition(caseRecord, event));
+  const workflowTransitionHistory = caseWorkflowTransitionHistory(caseRecord, workflowTransitions, {});
+  const nextWebhookActions = caseWebhookReplayNextActions({
+    access,
+    caseRecord,
+    webhookDryRunReadiness,
+    webhookDeliveryReplayContext,
+    customerNotificationReadiness
+  });
+  return {
+    schemaVersion: "dwm.case_webhook_replay_readiness_response.v1",
+    generatedAt: nowIso(),
+    organization,
+    access: caseAccessSummary(access),
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    workflowState: caseWorkflowSummary(caseRecord),
+    workflowTransitionHistory,
+    workflowActionPolicy,
+    handoffActionReadiness,
+    webhookDryRunReadiness,
+    webhookDeliveryReplayContext,
+    customerNotificationReadiness,
+    nextWebhookActions,
+    summary: {
+      deliveryAttemptCount: webhookDeliveryReplayContext.summary.deliveryAttemptCount,
+      retryableDeliveryCount: webhookDeliveryReplayContext.summary.retryableDeliveryCount,
+      dryRunReceiptAvailable: webhookDryRunReadiness.receiptAvailable,
+      customerNotificationReadyForRecord: customerNotificationReadiness.readyForRecord,
+      customerNotificationRecorded: customerNotificationReadiness.notificationRecorded,
+      readOnly: access.readOnly === true,
+      blockerCodes: uniqueCaseStrings([
+        ...(webhookDryRunReadiness.blockerCodes ?? []),
+        ...(webhookDeliveryReplayContext.retryState?.blockerCodes ?? []),
+        ...(customerNotificationReadiness.blockerCodes ?? [])
+      ])
+    },
+    auditSafety: {
+      metadataOnly: true,
+      endpointSecretExposed: false,
+      payloadBodyExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseWebhookReplayNextActions(input: {
+  access: CaseAccessResult;
+  caseRecord: AnalystCase;
+  webhookDryRunReadiness: any;
+  webhookDeliveryReplayContext: any;
+  customerNotificationReadiness: any;
+}) {
+  const readOnly = input.access.readOnly === true;
+  return [
+    {
+      id: "run_webhook_dry_run",
+      ownerLane: "webhook",
+      route: input.webhookDryRunReadiness.route,
+      method: input.webhookDryRunReadiness.method,
+      ready: Boolean(input.webhookDryRunReadiness.readyForReplay && !readOnly),
+      blocked: readOnly || !input.webhookDryRunReadiness.readyForReplay,
+      deliveryRefs: input.webhookDryRunReadiness.deliveryReceipts.map((delivery: any) => delivery.id),
+      requiredFields: input.webhookDryRunReadiness.requiredRequestFields ?? [],
+      blockerCodes: uniqueCaseStrings([
+        ...(readOnly ? ["case_read_only_member"] : []),
+        ...(input.webhookDryRunReadiness.blockerCodes ?? [])
+      ])
+    },
+    {
+      id: "retry_webhook_delivery",
+      ownerLane: "webhook",
+      route: input.webhookDeliveryReplayContext.route,
+      method: "POST",
+      ready: Boolean(input.webhookDeliveryReplayContext.retryState.retryable && !readOnly),
+      blocked: readOnly || !input.webhookDeliveryReplayContext.retryState.retryable,
+      deliveryRefs: input.webhookDeliveryReplayContext.retryState.retryDeliveryIds ?? [],
+      auditEventIds: input.webhookDeliveryReplayContext.retryState.auditEventIds ?? [],
+      nextRetryAt: input.webhookDeliveryReplayContext.retryState.nextRetryAt,
+      requiredFields: ["organizationId", "alertId", "caseId", "webhookDestinationId", "idempotencyKey"],
+      blockerCodes: uniqueCaseStrings([
+        ...(readOnly ? ["case_read_only_member"] : []),
+        ...(input.webhookDeliveryReplayContext.retryState.blockerCodes ?? [])
+      ])
+    },
+    {
+      id: "record_customer_notification",
+      ownerLane: "case",
+      route: input.customerNotificationReadiness.route,
+      method: input.customerNotificationReadiness.method,
+      ready: Boolean(input.customerNotificationReadiness.readyForRecord && !readOnly),
+      blocked: readOnly || !input.customerNotificationReadiness.readyForRecord,
+      deliveryRefs: input.customerNotificationReadiness.deliveryReceipts.map((delivery: any) => delivery.id),
+      requiredFields: input.customerNotificationReadiness.requiredFields ?? [],
+      blockerCodes: uniqueCaseStrings([
+        ...(readOnly ? ["case_read_only_member"] : []),
+        ...(input.customerNotificationReadiness.blockerCodes ?? [])
+      ])
+    }
+  ];
 }
 
 function buildCaseWorkflowTransitionHistoryResponse(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult, filters: {
