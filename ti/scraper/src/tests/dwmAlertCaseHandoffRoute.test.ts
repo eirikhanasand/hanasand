@@ -443,6 +443,142 @@ describe("DWM alert case handoff route", () => {
     expect((store as any).getCase("case_alert_no_destination").organizationId).toBe("org_acme");
   });
 
+  test("records analyst notes without changing case state and includes them in replay export", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case before analyst note.",
+      idempotencyKey: "alert-case-handoff-note"
+    });
+
+    const note = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "note",
+      note: "Validated source evidence and waiting for customer delivery.",
+      idempotencyKey: "case-note-001"
+    });
+    const notePayload = await note.json() as any;
+    const duplicate = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "note",
+      note: "Duplicate note should replay the existing event.",
+      idempotencyKey: "case-note-001"
+    });
+    const duplicatePayload = await duplicate.json() as any;
+    const missingNote = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "note",
+      idempotencyKey: "case-note-missing"
+    });
+    const missingNotePayload = await missingNote.json() as any;
+    const viewerNote = await patchCase(options, "case_alert_acme", "viewer@acme.com", {
+      organizationId: "org_acme",
+      action: "note",
+      note: "Viewer should not mutate a case.",
+      idempotencyKey: "case-note-viewer"
+    });
+    const viewerNotePayload = await viewerNote.json() as any;
+    const detail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const detailPayload = await detail.json() as any;
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&eventAction=note");
+    const replayExportPayload = await replayExport.json() as any;
+
+    expect(note.status).toBe(200);
+    expect(notePayload).toMatchObject({
+      replayed: false,
+      duplicate: false,
+      case: {
+        id: "case_alert_acme",
+        status: "open",
+        assignedOwner: "owner@acme.com",
+        lastDecision: "Validated source evidence and waiting for customer delivery."
+      },
+      workflowTransition: {
+        action: "note",
+        fromStatus: "open",
+        toStatus: "open",
+        fromOwner: "owner@acme.com",
+        toOwner: "owner@acme.com",
+        workflowState: {
+          status: "open",
+          assignedOwner: "owner@acme.com",
+          idempotencyKey: "case-note-001"
+        }
+      }
+    });
+    expect(duplicate.status).toBe(200);
+    expect(duplicatePayload).toMatchObject({
+      replayed: true,
+      duplicate: true,
+      event: {
+        action: "note",
+        idempotencyKey: "case-note-001",
+        note: "Validated source evidence and waiting for customer delivery."
+      },
+      case: {
+        status: "open",
+        assignedOwner: "owner@acme.com"
+      }
+    });
+    expect(missingNote.status).toBe(400);
+    expect(missingNotePayload.error).toMatchObject({ code: "missing_note" });
+    expect(viewerNote.status).toBe(403);
+    expect(viewerNotePayload.error).toMatchObject({ code: "case_read_only_member" });
+    expect(detail.status).toBe(200);
+    expect(detailPayload.nextAllowedActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "note", method: "PATCH", requiresRationale: true, enabled: true }),
+      expect.objectContaining({ id: "escalate", method: "PATCH", requiresRationale: true, enabled: true })
+    ]));
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload).toMatchObject({
+      filters: {
+        eventAction: "note"
+      },
+      replayPlan: {
+        workflowTransitionCount: 1,
+        handoffReceiptCount: 0,
+        customerNotificationCount: 0,
+        auditTimelineRowCount: 1
+      },
+      auditTimeline: {
+        summary: {
+          rowCount: 1,
+          workflowTransitionCount: 1,
+          handoffReceiptCount: 0,
+          customerNotificationCount: 0,
+          actions: ["note"]
+        },
+        rows: [expect.objectContaining({
+          rowType: "workflow_transition",
+          action: "note",
+          actor: "case-api",
+          rationale: "Validated source evidence and waiting for customer delivery.",
+          workflow: expect.objectContaining({
+            fromStatus: "open",
+            toStatus: "open",
+            fromOwner: "owner@acme.com",
+            toOwner: "owner@acme.com",
+            currentStatus: "open",
+            currentOwner: "owner@acme.com"
+          }),
+          replay: expect.objectContaining({
+            idempotencyKey: "case-note-001",
+            replayState: "recorded",
+            auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+            workflowEventId: expect.stringMatching(/^case_event_/)
+          })
+        })]
+      }
+    });
+    expect((store as any).getCase("case_alert_acme").workflowEvents.map((event: any) => event.action)).toEqual([
+      "open",
+      "note"
+    ]);
+  });
+
   test("records idempotent case handoff action receipts with org access gates", async () => {
     const { options, store } = fixtureRuntime();
     await postHandoff(options, "alert_acme", {

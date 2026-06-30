@@ -542,6 +542,9 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const transitionError = validateCaseTransition(existing, action, nextStatus);
   if (transitionError) return transitionError;
   const note = normalizeNote(body.note);
+  if (action === "note" && !note) {
+    return json({ error: { code: "missing_note", message: "Recording a case note requires analyst text." } }, 400);
+  }
   if ((action === "close" || nextStatus === "closed" || action === "false_positive" || action === "suppress") && !note) {
     return json({ error: { code: "missing_decision_rationale", message: "Closing, suppressing, or marking false positive requires an analyst note." } }, 400);
   }
@@ -1200,6 +1203,7 @@ function caseActionLedgerContext(report: ReturnType<typeof buildCaseActionLedger
 function nextAllowedActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[], access?: CaseAccessResult) {
   const readOnly = access?.readOnly === true;
   const base = [
+    { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, enabled: !readOnly },
     { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
     { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" && caseRecord.status !== "suppressed" },
     { id: "close", label: "Close", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" },
