@@ -629,6 +629,7 @@ export type DwmAlertDownstreamHandoff = {
     retiredWatchlistIds: string[];
     disabledDestinationIds: string[];
     alertStatus: string;
+    assignedOwner?: string;
     actorAllowed?: boolean;
     activeSourceMatch: boolean;
   };
@@ -1175,6 +1176,18 @@ export type DwmOrgAlertPipelineProof = {
         sourceFamily?: string;
         stableFields: string[];
         gapFields: string[];
+      };
+      analystWorkflowConsumer: {
+        ready: boolean;
+        workflowStatus: string;
+        assignedOwner?: string;
+        workflowEventCount: number;
+        transitionActions: Array<DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"][number]["action"]>;
+        lastWorkflowEventAt?: string;
+        caseLinked: boolean;
+        suppressed: boolean;
+        closed: boolean;
+        blockerCodes: string[];
       };
       stableFields: string[];
       gapFields: string[];
@@ -2046,7 +2059,7 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
     receiptSchemaIds: ["dwm.alert_replay_receipt.v1"],
     blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.caseConsumer.blockerCodes)),
-    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.caseConsumer.casePath"],
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer"],
     downstreamOwners: ["case", "analyst_portal"],
     missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.caseConsumer.ready),
     safeOutput: metadataOnlyAlertReceiptSafeOutput()
@@ -2090,6 +2103,13 @@ function buildDwmAlertSourceHandoffReadiness(input: {
   const downstreamBlockerCodes = uniqueStrings(input.handoff.blockerCodes.map(String));
   const deliveryBlockerCodes = downstreamBlockerCodes.filter((code) => code.includes("webhook") || code.includes("delivery") || code.includes("destination"));
   const caseBlockerCodes = downstreamBlockerCodes.filter((code) => code.startsWith("case_") || code === "missing_org_ref");
+  const analystWorkflowBlockerCodes = uniqueStrings([
+    ...downstreamBlockerCodes.filter((code) => ["stale_workflow", "revoked_actor", "org_mismatch"].includes(code)),
+    input.handoff.workflowVersion.expectedEventCount !== undefined
+      && input.handoff.workflowVersion.expectedEventCount !== input.handoff.workflowVersion.eventCount
+      ? "stale_workflow"
+      : undefined
+  ].filter(Boolean).map(String));
   const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered"
     || input.handoff.deliveryReadiness.deliveryHistoryRefs.length > 0;
   const webhookReady = input.handoff.deliveryReadiness.ready || delivered;
@@ -2153,6 +2173,18 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       ],
       gapFields: ["state", "provenanceGapCodes"]
     },
+    analystWorkflowConsumer: {
+      ready: analystWorkflowBlockerCodes.length === 0,
+      workflowStatus: input.handoff.lifecycle.alertStatus,
+      assignedOwner: input.handoff.lifecycle.assignedOwner,
+      workflowEventCount: input.handoff.workflowVersion.eventCount,
+      transitionActions: input.handoff.workflowTransitions.actions,
+      lastWorkflowEventAt: input.handoff.workflowTransitions.lastEventAt,
+      caseLinked: input.handoff.workflowTransitions.caseLinked,
+      suppressed: input.handoff.workflowTransitions.suppressed,
+      closed: input.handoff.workflowTransitions.closed,
+      blockerCodes: analystWorkflowBlockerCodes
+    },
     stableFields: [
       "sourceFamily",
       "selectedCaptureIds",
@@ -2163,13 +2195,17 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "webhookConsumer.deliveryDedupeKey",
       "webhookConsumer.selectedWebhookDestinationId",
       "webhookConsumer.createdEventDispatchReady",
-      "caseConsumer.casePath"
+      "caseConsumer.casePath",
+      "analystWorkflowConsumer.workflowStatus",
+      "analystWorkflowConsumer.transitionActions",
+      "analystWorkflowConsumer.caseLinked"
     ],
     gapFields: [
       "state",
       "provenanceGapCodes",
       "webhookConsumer.blockerCodes",
-      "caseConsumer.blockerCodes"
+      "caseConsumer.blockerCodes",
+      "analystWorkflowConsumer.blockerCodes"
     ]
   };
 }
@@ -2499,18 +2535,19 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
     "readiness.sourceFamilyGaps",
     "candidates.watchlistIds",
     "candidates.watchlistItemIds",
-        "alerts.alertId",
-        "alerts.dedupeKey",
-        "alerts.sourceFamily",
-        "alerts.selectedCaptureIds",
-        "alerts.evidenceCount",
-        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
-        "alerts.provenanceGapCodes",
-        "alerts.workflowStatus",
-        "alerts.workflowTransitionActions",
-        "alerts.casePath",
-        "gaps.blockerCodes"
-      ];
+    "alerts.alertId",
+    "alerts.dedupeKey",
+    "alerts.sourceFamily",
+    "alerts.selectedCaptureIds",
+    "alerts.evidenceCount",
+    "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
+    "alerts.provenanceGapCodes",
+    "alerts.workflowStatus",
+    "alerts.workflowTransitionActions",
+    "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
+    "alerts.casePath",
+    "gaps.blockerCodes"
+  ];
   const gapFields = [
     "readiness.zeroAlertProof.state",
     "readiness.zeroAlertProof.nextAction",
@@ -2532,6 +2569,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.deliveryReady",
         "alerts.sourceHandoffReadiness",
         "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
+        "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
         "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
       ],
@@ -2586,6 +2624,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.delivered",
         "alerts.sourceHandoffReadiness",
         "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
+        "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
         "alerts.workflowStatus",
         "alerts.workflowTransitionActions",
         "alerts.workflowEventCount",
@@ -3356,6 +3395,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       retiredWatchlistIds,
       disabledDestinationIds,
       alertStatus,
+      assignedOwner: alert?.assignedOwner ? String(alert.assignedOwner) : undefined,
       actorAllowed,
       activeSourceMatch
     },

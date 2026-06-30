@@ -3147,6 +3147,18 @@ describe("dwm alert repository", () => {
       casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
       blockerCodes: []
     });
+    expect(telegramProof?.sourceHandoffReadiness.analystWorkflowConsumer).toMatchObject({
+      ready: true,
+      workflowStatus: "investigating",
+      assignedOwner: "delta-analyst",
+      workflowEventCount: 1,
+      transitionActions: ["escalated"],
+      lastWorkflowEventAt: "2026-06-28T13:24:00.000Z",
+      caseLinked: true,
+      suppressed: false,
+      closed: false,
+      blockerCodes: []
+    });
     expect(telegramProof?.sourceHandoffReadiness.publicTiConsumer).toMatchObject({
       ready: true,
       redacted: true,
@@ -3156,7 +3168,9 @@ describe("dwm alert repository", () => {
       gapFields: expect.arrayContaining(["provenanceGapCodes"])
     });
     expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "duplicateEvidenceSuppression", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["analystWorkflowConsumer.workflowStatus", "analystWorkflowConsumer.transitionActions", "analystWorkflowConsumer.caseLinked"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "webhookConsumer.blockerCodes"]));
+    expect(telegramProof?.sourceHandoffReadiness.gapFields).toContain("analystWorkflowConsumer.blockerCodes");
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
     expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
       schemaVersion: "dwm.alert_source_handoff_readiness.v1",
@@ -3195,12 +3209,14 @@ describe("dwm alert repository", () => {
     });
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.webhookConsumer");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
+    expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
     expect(proof.consumerReceiptMatrix).toMatchObject({
       schemaVersion: "dwm.org_alert_consumer_receipt_matrix.v1",
       checkedAt: "2026-06-28T13:40:00.000Z",
@@ -3226,7 +3242,7 @@ describe("dwm alert repository", () => {
     expect(receiptRows.get("case_workflow")).toMatchObject({
       readinessRoute: "/v1/cases",
       receiptSchemaIds: expect.arrayContaining(["dwm.alert_replay_receipt.v1"]),
-      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.caseConsumer.casePath"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer"]),
       downstreamOwners: expect.arrayContaining(["case", "analyst_portal"]),
       missingContract: false
     });
