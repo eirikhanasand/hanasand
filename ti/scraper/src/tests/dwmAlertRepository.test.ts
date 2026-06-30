@@ -2907,7 +2907,53 @@ describe("dwm alert repository", () => {
       caseId: "case_delta_acme",
       selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
     });
+    expect(telegramProof?.sourceHandoffReadiness.schemaVersion).toBe("dwm.alert_source_handoff_readiness.v1");
+    expect(telegramProof?.sourceHandoffReadiness.ready).toBe(true);
+    expect(telegramProof?.sourceHandoffReadiness.state).toBe("ready_for_consumers");
+    expect(telegramProof?.sourceHandoffReadiness.sourceFamily).toBe("telegram_public");
+    expect(telegramProof?.sourceHandoffReadiness.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(telegramProof?.sourceHandoffReadiness.evidenceCount).toBe(2);
+    expect(telegramProof?.sourceHandoffReadiness.provenanceCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(telegramProof?.sourceHandoffReadiness.provenanceSourceIds).toEqual(["src_repo_tg"]);
+    expect(telegramProof?.sourceHandoffReadiness.provenanceGapCodes).toEqual([]);
+    expect(telegramProof?.sourceHandoffReadiness.webhookConsumer).toMatchObject({
+      ready: true,
+      deliveryReady: true,
+      delivered: false,
+      deliveryHistoryRefs: [],
+      blockerCodes: []
+    });
+    expect(telegramProof?.sourceHandoffReadiness.caseConsumer).toMatchObject({
+      ready: true,
+      caseId: "case_delta_acme",
+      casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
+      blockerCodes: []
+    });
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "webhookConsumer.deliveryDedupeKey", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "webhookConsumer.blockerCodes"]));
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
+    expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_source_handoff_readiness.v1",
+      ready: true,
+      state: "ready_for_consumers",
+      sourceFamily: "darkweb_metadata",
+      selectedCaptureIds: ["cap_repo_darkweb_acme"],
+      evidenceCount: 1,
+      provenanceCaptureIds: ["cap_repo_darkweb_acme"],
+      provenanceSourceIds: ["src_repo_darkweb"],
+      provenanceGapCodes: [],
+      webhookConsumer: {
+        ready: true,
+        deliveryReady: true,
+        delivered: false,
+        deliveryHistoryRefs: [],
+        blockerCodes: []
+      }
+    });
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.webhookConsumer");
+    expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(JSON.stringify(proof)).not.toContain("org_repo_other");
   });
 

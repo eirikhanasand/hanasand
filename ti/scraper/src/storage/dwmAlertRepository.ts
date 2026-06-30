@@ -1086,6 +1086,39 @@ export type DwmOrgAlertPipelineProof = {
     delivered: boolean;
     downstreamBlockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
     deliveryHistoryRefs: string[];
+    sourceHandoffReadiness: {
+      schemaVersion: "dwm.alert_source_handoff_readiness.v1";
+      ready: boolean;
+      state:
+        | "ready_for_consumers"
+        | "source_provenance_gap"
+        | "case_handoff_gap"
+        | "delivery_handoff_gap";
+      sourceFamily?: string;
+      selectedCaptureIds: string[];
+      evidenceCount: number;
+      provenanceCaptureIds: string[];
+      provenanceSourceIds: string[];
+      provenanceGapCodes: string[];
+      webhookConsumer: {
+        ready: boolean;
+        deliveryReady: boolean;
+        delivered: boolean;
+        deliveryDedupeKey?: string;
+        deliveryHistoryRefs: string[];
+        blockerCodes: string[];
+      };
+      caseConsumer: {
+        ready: boolean;
+        caseIdCandidate?: string;
+        caseId?: string;
+        casePath?: string;
+        idempotencyKey?: string;
+        blockerCodes: string[];
+      };
+      stableFields: string[];
+      gapFields: string[];
+    };
     alertGenerationRefs: Array<Record<string, any>>;
     updateReceipt?: {
       schemaVersion: "dwm.alert_update_receipt.v1";
@@ -1778,6 +1811,10 @@ export function buildDwmOrgAlertPipelineProof(input: {
       organizationId: input.organizationId
     });
     const transitionEvents = buildDwmAlertCustomerProofWorkflowTransitionEvents(alert);
+    const sourceHandoffReadiness = buildDwmAlertSourceHandoffReadiness({
+      handoff,
+      sourceProvenanceSummary
+    });
     return {
       alertId: String(alert.id),
       dedupeKey: handoff.dedupe.alertDedupeKey,
@@ -1803,6 +1840,7 @@ export function buildDwmOrgAlertPipelineProof(input: {
       delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
       downstreamBlockerCodes: handoff.blockerCodes,
       deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs,
+      sourceHandoffReadiness,
       alertGenerationRefs: handoff.watchlist.alertGenerationRefs,
       updateReceipt: handoff.updateReceipt ? {
         schemaVersion: handoff.updateReceipt.schemaVersion,
@@ -1868,6 +1906,73 @@ export function buildDwmOrgAlertPipelineProof(input: {
     proofCommands: [
       "bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmOrgAlertPipelineProof.test.ts",
       "bun test src/tests/dwmWorkflowPersistence.test.ts"
+    ]
+  };
+}
+
+function buildDwmAlertSourceHandoffReadiness(input: {
+  handoff: DwmAlertDownstreamHandoff;
+  sourceProvenanceSummary: DwmAlertSourceProvenanceSummary;
+}): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"] {
+  const provenanceGapCodes = uniqueStrings(input.sourceProvenanceSummary.provenanceGaps.map((gap) => gap.code));
+  const downstreamBlockerCodes = uniqueStrings(input.handoff.blockerCodes.map(String));
+  const deliveryBlockerCodes = downstreamBlockerCodes.filter((code) => code.includes("webhook") || code.includes("delivery") || code.includes("destination"));
+  const caseBlockerCodes = downstreamBlockerCodes.filter((code) => code.startsWith("case_") || code === "missing_org_ref");
+  const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered"
+    || input.handoff.deliveryReadiness.deliveryHistoryRefs.length > 0;
+  const webhookReady = input.handoff.deliveryReadiness.ready || delivered;
+  const sourceReady = input.handoff.evidence.evidenceCount > 0
+    && input.handoff.evidence.selectedCaptureIds.length > 0
+    && provenanceGapCodes.length === 0;
+  const ready = sourceReady && input.handoff.caseReadiness.ready && webhookReady;
+  const state: DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["state"] = ready
+    ? "ready_for_consumers"
+    : !sourceReady
+      ? "source_provenance_gap"
+      : !input.handoff.caseReadiness.ready
+        ? "case_handoff_gap"
+        : "delivery_handoff_gap";
+
+  return {
+    schemaVersion: "dwm.alert_source_handoff_readiness.v1",
+    ready,
+    state,
+    sourceFamily: input.handoff.sourceFamily,
+    selectedCaptureIds: input.handoff.evidence.selectedCaptureIds,
+    evidenceCount: input.handoff.evidence.evidenceCount,
+    provenanceCaptureIds: input.sourceProvenanceSummary.captureIds,
+    provenanceSourceIds: input.sourceProvenanceSummary.sourceIds,
+    provenanceGapCodes,
+    webhookConsumer: {
+      ready: webhookReady,
+      deliveryReady: input.handoff.deliveryReadiness.ready,
+      delivered,
+      deliveryDedupeKey: input.handoff.updateReceipt?.deliveryDedupeKey ?? input.handoff.replayReceipt.deliveryDedupeKey,
+      deliveryHistoryRefs: input.handoff.deliveryReadiness.deliveryHistoryRefs,
+      blockerCodes: deliveryBlockerCodes
+    },
+    caseConsumer: {
+      ready: input.handoff.caseReadiness.ready,
+      caseIdCandidate: input.handoff.caseReadiness.caseIdCandidate,
+      caseId: input.handoff.caseReadiness.caseId,
+      casePath: input.handoff.caseReadiness.casePath,
+      idempotencyKey: input.handoff.caseReadiness.idempotencyKey,
+      blockerCodes: caseBlockerCodes
+    },
+    stableFields: [
+      "sourceFamily",
+      "selectedCaptureIds",
+      "evidenceCount",
+      "provenanceCaptureIds",
+      "provenanceSourceIds",
+      "webhookConsumer.deliveryDedupeKey",
+      "caseConsumer.casePath"
+    ],
+    gapFields: [
+      "state",
+      "provenanceGapCodes",
+      "webhookConsumer.blockerCodes",
+      "caseConsumer.blockerCodes"
     ]
   };
 }
@@ -2204,6 +2309,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.caseIdCandidate",
         "alerts.caseHandoffIdempotencyKey",
         "alerts.deliveryReady",
+        "alerts.sourceHandoffReadiness",
         "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
       ],
@@ -2220,6 +2326,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.dedupeKey",
         "alerts.deliveryReady",
         "alerts.deliveryHistoryRefs",
+        "alerts.sourceHandoffReadiness.webhookConsumer",
         "alerts.selectedCaptureIds",
         "alerts.provenanceGapCodes",
         "candidates.webhookDestinationIds",
@@ -2237,6 +2344,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "readiness.zeroAlertProof",
         "readiness.sourceFamilyGaps",
         "alerts.sourceFamily",
+        "alerts.sourceHandoffReadiness",
         "alerts.provenanceGapCodes",
         "gaps.detail"
       ],
@@ -2252,6 +2360,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.caseHandoffIdempotencyKey",
         "alerts.deliveryReady",
         "alerts.delivered",
+        "alerts.sourceHandoffReadiness",
         "alerts.workflowStatus",
         "alerts.workflowTransitionActions",
         "alerts.workflowEventCount",
