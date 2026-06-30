@@ -2047,6 +2047,10 @@ export function buildReadinessCases(input: {
         : typeof helpdeskAudit?.openRecoveryRequests === 'number'
             ? helpdeskAudit.openRecoveryRequests
             : 0
+    const analystWorkflow = input.externalReadiness?.analystWorkflow
+    const analystWorkflowReady = analystWorkflow?.status === 'ready'
+    const analystWorkflowCheckedAt = analystWorkflow?.checkedAt || analystWorkflow?.latestCaseAt || analystWorkflow?.proofTimestamp || now
+    const analystWorkflowBlockers = analystWorkflow?.blockers?.filter(Boolean) || []
     const attemptedAlertIdentity = [
         input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
         input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
@@ -2228,6 +2232,59 @@ export function buildReadinessCases(input: {
             missingDependency: helpdeskReady ? undefined : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Missing support audit readiness proof.',
             actions: [{ id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' }],
         }),
+        ...(analystWorkflow ? [readinessCase({
+            id: 'case_workflow_readiness',
+            kind: 'alert_readiness',
+            queue: 'Case workflow',
+            title: analystWorkflowReady ? 'Backed case workflow loaded' : 'Connect case workflow',
+            severity: analystWorkflowReady ? 'medium' : 'high',
+            status: analystWorkflow.status,
+            priority: analystWorkflowReady ? 246 : 356,
+            confidence: analystWorkflowReady ? 90 : 66,
+            subtitle: analystWorkflow.detail || analystWorkflowDetail(analystWorkflow),
+            recommendedAction: analystWorkflowReady
+                ? 'Open the backed case, review timeline and evidence, then mutate case state from the selected detail.'
+                : 'Link a readable analyst case to the dashboard-visible alert before treating workflow state as ready.',
+            evidence: [{
+                id: 'ev_analyst_workflow_readiness',
+                sourceName: 'Analyst workflow readiness',
+                sourceFamily: 'case workflow',
+                captureMode: 'api snapshot',
+                redactionState: 'customer safe',
+                contentHash: analystWorkflow.caseId || analystWorkflow.backendProofContractVersion || analystWorkflow.schemaVersion,
+                excerpt: analystWorkflowReady
+                    ? `Case ${analystWorkflow.caseId || 'unknown'} links to alert ${analystWorkflow.alertId || 'unknown'} with ${analystWorkflow.caseDetailTimelineCount ?? 0} timeline event${analystWorkflow.caseDetailTimelineCount === 1 ? '' : 's'}.`
+                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Analyst case workflow readiness is not backed by product progress.',
+                observedAt: analystWorkflowCheckedAt,
+                provenance: analystWorkflow.source || 'GET /api/cases + GET /api/cases/:id',
+                confidence: analystWorkflowReady ? 90 : 66,
+            }],
+            timeline: [{
+                id: 'analyst_workflow_readiness_at',
+                at: analystWorkflowCheckedAt,
+                title: analystWorkflowReady ? 'Case workflow proven' : 'Case workflow blocked',
+                body: analystWorkflowReady
+                    ? `Case ${analystWorkflow.caseId || 'unknown'} is linked to dashboard alert ${analystWorkflow.alertId || 'unknown'} and detail readiness is ${analystWorkflow.caseDetailReady ? 'ready' : 'not ready'}.`
+                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Product progress did not prove readable case detail for the dashboard alert.',
+            }],
+            nextTasks: analystWorkflowReady
+                ? [`Owner: analyst. Case ID: ${analystWorkflow.caseId || 'not returned'}.`, 'Open the selected case detail and review timeline evidence.', 'Use backed assign/note/escalate/suppress/close actions from the detail panel.']
+                : ['Owner: SOC analyst. Create or link a case for the dashboard-visible alert.', 'Verify GET /api/cases/:id returns timeline and allowed actions.', 'Return after product-progress marks analyst workflow ready.'],
+            relatedLinks: [
+                { href: analystWorkflow.href || '/dashboard/ti/workbench', label: 'Analyst workbench' },
+                { href: analystWorkflow.caseDetailRoute || (analystWorkflow.caseId ? `/api/cases/${encodeURIComponent(analystWorkflow.caseId)}` : '/api/cases'), label: 'Case API' },
+                { href: '/dashboard', label: 'Dashboard evidence' },
+            ],
+            workflowPath: path,
+            caseDetailHref: analystWorkflow.caseDetailRoute,
+            missingDependency: analystWorkflowReady ? undefined : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Missing analyst workflow readiness proof.',
+            actions: [{
+                id: 'open_analyst_case_workflow',
+                label: 'Open case workflow',
+                method: 'GET',
+                href: analystWorkflow.href || '/dashboard/ti/workbench',
+            }],
+        })] : []),
         readinessCase({
             id: 'source_coverage',
             kind: 'source_readiness',
@@ -2362,6 +2419,7 @@ function readinessCase(input: {
     workflowPath?: WorkbenchWorkflowStep[]
     actions?: WorkbenchAction[]
     deliveryEvidence?: WorkbenchCase['deliveryEvidence']
+    caseDetailHref?: WorkbenchCase['caseDetailHref']
     missingDependency?: string
 }): WorkbenchCase {
     const updatedAt = input.evidence[0]?.observedAt || new Date().toISOString()
@@ -2393,6 +2451,7 @@ function readinessCase(input: {
         workflowPath: input.workflowPath,
         actions: input.actions,
         deliveryEvidence: input.deliveryEvidence,
+        caseDetailHref: input.caseDetailHref,
         missingDependency: input.missingDependency,
     }
 }

@@ -426,6 +426,17 @@ const cases = buildReadinessCases({
     liveAlertCount: 1,
     renderedAlertCount: 1,
 })
+const productProgressCases = buildReadinessCases({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    operations,
+    deliveries,
+    organizationState,
+    liveAlertCount: 1,
+    renderedAlertCount: 1,
+    externalReadiness: productProgressExternalReadiness,
+})
 const liveProofOrganizationState = {
     organizations: [{
         id: 'hanasand-live-proof-20260628',
@@ -1008,6 +1019,12 @@ function expectProductReadinessLink(context: WorkbenchOrgContext, id: string, hr
     return item
 }
 
+function expectWorkbenchCase(items: WorkbenchCase[], id: string) {
+    const item = items.find(row => row.id === id)
+    if (!item) throw new Error(`Expected ${id} workbench case to be present.`)
+    return item
+}
+
 const blockedFallbackAlert = {
     ...selectedLiveAlert,
     id: 'fallback_alert_acme',
@@ -1096,6 +1113,18 @@ const readOnlyCaseDetail = {
 }
 
 void _contract
+if (cases.some(item => item.id === 'case_workflow_readiness')) {
+    throw new Error('Case workflow queue item must be backed by product-progress analystWorkflow readiness.')
+}
+const productProgressCaseWorkflow = expectWorkbenchCase(productProgressCases, 'case_workflow_readiness')
+void (productProgressCaseWorkflow.status satisfies string)
+if (productProgressCaseWorkflow.caseDetailHref !== '/api/cases/case_acme_1') {
+    throw new Error(`Expected case workflow detail href to use /api/cases/case_acme_1, got ${productProgressCaseWorkflow.caseDetailHref || 'missing'}.`)
+}
+void (productProgressCaseWorkflow.relatedLinks.find(link => link.href === '/api/cases/case_acme_1')?.label satisfies string | undefined)
+if (productProgressCaseWorkflow.actions?.find(action => action.id === 'open_analyst_case_workflow')?.href !== '/dashboard/ti/workbench?case=case_acme_1') {
+    throw new Error('Expected case workflow action to open the backed analyst workbench route.')
+}
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
 void (liveProofAlertsUrl.searchParams.get('organizationId') satisfies string | null)
