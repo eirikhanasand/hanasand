@@ -2198,6 +2198,27 @@ describe("dwm alert repository", () => {
       reason: "customer_watchlist_activation",
       requestId: "req_customer_watchlist_activation"
     });
+    expect(preservedHandoff.updateReceipt).toMatchObject({
+      schemaVersion: "dwm.alert_update_receipt.v1",
+      ready: true,
+      eventId: preserved.alertUpdatedEvent.id,
+      eventType: "dwm.alert.updated",
+      alertId: alert.id,
+      tenantId: "org_repo_customer",
+      organizationId: "org_repo_customer",
+      addedCaptureIds: ["cap_repo_tg_acme_followup"],
+      removedCaptureIds: [],
+      evidenceCount: 2,
+      previousEvidenceCount: 1,
+      workflowEventCount: 1,
+      caseId: "case_customer_proof",
+      casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+      deliveryDedupeKey: alert.dedupeKey,
+      blockerCodes: []
+    });
+    expect(preservedHandoff.updateReceipt?.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(preservedHandoff.updateReceipt?.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(preservedHandoff.updateReceipt?.alertGenerationRefs[0].dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
     expect(preservedHandoff.workflowTransitions).toMatchObject({
       schemaVersion: "dwm.alert_workflow_transition_summary.v1",
       actions: ["escalated"],

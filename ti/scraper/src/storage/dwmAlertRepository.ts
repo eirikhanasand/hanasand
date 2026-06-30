@@ -533,6 +533,26 @@ export type DwmAlertDownstreamHandoff = {
     alertDetailPath?: string;
     consumerPayload?: Record<string, any>;
   };
+  updateReceipt?: {
+    schemaVersion: "dwm.alert_update_receipt.v1";
+    ready: boolean;
+    eventId?: string;
+    eventType: "dwm.alert.updated";
+    alertId?: string;
+    tenantId?: string;
+    organizationId?: string;
+    addedCaptureIds: string[];
+    removedCaptureIds: string[];
+    selectedCaptureIds: string[];
+    evidenceCount?: number;
+    previousEvidenceCount?: number;
+    workflowEventCount: number;
+    caseId?: string;
+    casePath?: string;
+    deliveryDedupeKey?: string;
+    alertGenerationRefs: Array<Record<string, any>>;
+    blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+  };
   workflowVersion: {
     eventCount: number;
     updatedAt?: string;
@@ -2735,6 +2755,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const caseIdCandidate = context.caseIdCandidate ?? alert?.caseIdCandidate ?? workflow.caseIdCandidate;
   const deliveryDedupeKey = String(context.deliveryDedupeKey ?? alert?.webhookDelivery?.dedupeKey ?? alert?.dedupeKey ?? "");
   const createdEvent = normalizeDwmAlertCreatedEvent(alert, context, selectedCaptureIds);
+  const updatedEvent = normalizeDwmAlertUpdatedEvent(alert, context, selectedCaptureIds);
   const delivered = Boolean(alert?.deliveredAt) || alert?.deliveryState === "delivered" || context.state === "delivered" || deliveries.some((delivery) => delivery.status === "delivered");
   const duplicateReplay = delivered && Number(alert?.replayCount ?? 0) > 0 && input.currentReplayAttempt !== true;
   const organizationStatus = input.organizationStatus ?? alert?.organizationStatus ?? workflow.organizationStatus;
@@ -2842,6 +2863,29 @@ export function buildDwmAlertDownstreamHandoff(input: {
       replayMarker: context.replayMarker
     },
     createdEvent,
+    updateReceipt: updatedEvent ? {
+      schemaVersion: "dwm.alert_update_receipt.v1",
+      ready: updatedEvent.addedCaptureIds.length > 0 && selectedCaptureIds.length > 0,
+      eventId: updatedEvent.eventId,
+      eventType: "dwm.alert.updated",
+      alertId,
+      tenantId,
+      organizationId: orgId,
+      addedCaptureIds: updatedEvent.addedCaptureIds,
+      removedCaptureIds: updatedEvent.removedCaptureIds,
+      selectedCaptureIds,
+      evidenceCount: updatedEvent.evidenceCount,
+      previousEvidenceCount: updatedEvent.previousEvidenceCount,
+      workflowEventCount: eventCount,
+      caseId: context.caseId ?? alert?.caseId,
+      casePath,
+      deliveryDedupeKey: updatedEvent.deliveryDedupeKey ?? deliveryDedupeKey,
+      alertGenerationRefs,
+      blockerCodes: uniqueStrings([
+        ...(!updatedEvent.addedCaptureIds.length ? ["missing_capture_evidence"] : []),
+        ...(!selectedCaptureIds.length ? ["missing_capture_evidence"] : [])
+      ]) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>
+    } : undefined,
     workflowVersion: {
       eventCount,
       updatedAt: alert?.updatedAt,
