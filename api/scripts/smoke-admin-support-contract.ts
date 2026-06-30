@@ -93,7 +93,7 @@ assert.match(ensureSchema, /idx_admin_access_recovery_approved_by/)
 assert.match(ensureSchema, /idx_admin_access_recovery_denied_by/)
 
 const adminSupport = await readFile(new URL('../src/handlers/adminSupport.ts', import.meta.url), 'utf8')
-for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'outcome', 'from', 'to']) {
+for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'sourceWorkflow', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'outcome', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing audit filter ${expected}.`)
 }
 assert.match(adminSupport, /const org = text\(query\.org \|\| query\.orgId \|\| query\.organizationId\)/)
@@ -101,7 +101,7 @@ assert.match(adminSupport, /const actorFilter = text\(query\.actor \|\| query\.a
 assert.match(adminSupport, /const target = text\(query\.target \|\| query\.targetId \|\| query\.user \|\| query\.userId \|\| query\.targetUserId\)/)
 assert.match(adminSupport, /const action = text\(query\.action \|\| query\.actionType\)/)
 assert.match(adminSupport, /const entity = text\(query\.entity \|\| query\.entityId\)/)
-assert.match(adminSupport, /const workflow = text\(query\.workflow \|\| query\.bridgeWorkflow\)/)
+assert.match(adminSupport, /const workflow = text\(query\.workflow \|\| query\.bridgeWorkflow \|\| query\.sourceWorkflow\)/)
 assert.match(adminSupport, /e\.context->>'workflow' ILIKE/)
 assert.match(adminSupport, /const blocker = text\(query\.blocker \|\| query\.blockerCode\)/)
 assert.match(adminSupport, /e\.context->>\\'blockerCode\\' ILIKE/)
@@ -115,11 +115,11 @@ assert.match(adminSupport, /e\.context::text ILIKE/)
 for (const expected of ['requestId', 'status', 'requester', 'approver']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing approval search filter ${expected}.`)
 }
-for (const expected of ['q', 'orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'action', 'severity', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'from', 'to']) {
+for (const expected of ['q', 'orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'sourceWorkflow', 'action', 'severity', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing support inspection filter ${expected}.`)
 }
 assert.match(adminSupport, /const q = text\(query\.q\)/)
-assert.match(adminSupport, /const workflow = text\(query\.workflow \|\| query\.bridgeWorkflow\)/)
+assert.match(adminSupport, /const workflow = text\(query\.workflow \|\| query\.bridgeWorkflow \|\| query\.sourceWorkflow\)/)
 assert.match(adminSupport, /const reason = text\(query\.reason \|\| query\.supportReason\)/)
 assert.match(adminSupport, /const contextFilter = text\(query\.context \|\| query\.supportContext\)/)
 assert.match(adminSupport, /loadInspectionOrganizations\(\{ q, org, user, email, request, limit \}\)/)
@@ -150,7 +150,7 @@ assert.match(adminSupport, /actionEvidenceRollup: supportAuditActionEvidenceRoll
 assert.match(adminSupport, /decisionPackets: events\.slice\(0, 50\)\.map/)
 assert.match(adminSupport, /supportAuditTimelineReplayContract/)
 assert.match(adminSupport, /support\.audit\.timeline_replay_contract\.v1/)
-assert.match(adminSupport, /workflow: \['workflow', 'bridgeWorkflow'\]/)
+assert.match(adminSupport, /workflow: \['workflow', 'bridgeWorkflow', 'sourceWorkflow'\]/)
 assert.match(adminSupport, /supportAuditCaseReplayExport/)
 assert.match(adminSupport, /support\.audit\.case_replay_export\.v1/)
 assert.match(adminSupport, /supportCaseReplayAccessReview/)
@@ -457,6 +457,11 @@ assert.match(adminSupport, /Support approval decisions total=/)
 assert.match(adminSupport, /receiptReplayPacket/)
 assert.match(adminSupport, /supportInspectionReceiptReplayPacket/)
 assert.match(adminSupport, /support\.inspection\.receipt_replay_packet\.v1/)
+assert.match(adminSupport, /const sourceWorkflows = uniqueTimelineValues\(input\.timeline\.map\(event => supportAuditWorkflowName\(event\)\)\)/)
+assert.match(adminSupport, /bySourceWorkflow: sourceWorkflows\.map\(workflow => auditFilterQuery/)
+assert.match(adminSupport, /workflowHandoff: \{/)
+assert.match(adminSupport, /alias: 'sourceWorkflow'/)
+assert.match(adminSupport, /safeForCaseReplay: true/)
 assert.match(adminSupport, /sessionReplayReceipt/)
 assert.match(adminSupport, /supportSessionReplayReceipt/)
 assert.match(adminSupport, /support\.scoped_session\.replay_receipt\.v1/)

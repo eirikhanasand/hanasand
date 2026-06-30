@@ -51,6 +51,7 @@ type AuditQuery = {
     supportSessionId?: string
     workflow?: string
     bridgeWorkflow?: string
+    sourceWorkflow?: string
     blocker?: string
     blockerCode?: string
     reason?: string
@@ -98,6 +99,7 @@ type SupportInspectionQuery = {
     supportSessionId?: string
     workflow?: string
     bridgeWorkflow?: string
+    sourceWorkflow?: string
     action?: string
     severity?: string
     outcome?: string
@@ -329,6 +331,7 @@ const supportInspectionFilters = new Set([
     'supportSessionId',
     'workflow',
     'bridgeWorkflow',
+    'sourceWorkflow',
     'action',
     'severity',
     'outcome',
@@ -388,6 +391,7 @@ const adminAuditFilters = new Set([
     'supportSessionId',
     'workflow',
     'bridgeWorkflow',
+    'sourceWorkflow',
     'blocker',
     'blockerCode',
     'reason',
@@ -428,7 +432,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const correlation = text(query.correlation || query.correlationId)
     const idempotency = text(query.idempotency || query.idempotencyKey || query.idempotency_key)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
-    const workflow = text(query.workflow || query.bridgeWorkflow)
+    const workflow = text(query.workflow || query.bridgeWorkflow || query.sourceWorkflow)
     const blocker = text(query.blocker || query.blockerCode)
     const reason = text(query.reason || query.supportReason)
     const scope = text(query.scope || query.supportScope)
@@ -1605,7 +1609,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const requestedEntity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
-    const workflow = text(query.workflow || query.bridgeWorkflow)
+    const workflow = text(query.workflow || query.bridgeWorkflow || query.sourceWorkflow)
     const action = text(query.action)
     const source = text(query.source)
     const service = text(query.service)
@@ -2115,7 +2119,7 @@ export async function getSupportReadiness(req: FastifyRequest<{ Querystring: Sup
     const entity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
-    const workflow = text(query.workflow || query.bridgeWorkflow)
+    const workflow = text(query.workflow || query.bridgeWorkflow || query.sourceWorkflow)
     const action = text(query.action || 'support')
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
@@ -9070,6 +9074,7 @@ function supportInspectionReceiptReplayPacket(input: {
         ...input.approvalDetails.map(approval => approval.requestId),
         input.request,
     ])
+    const sourceWorkflows = uniqueTimelineValues(input.timeline.map(event => supportAuditWorkflowName(event)))
     const replayEntries = receiptContracts.map(contract => {
         const eventIds = eventIdsForActions(contract.actions)
         const actionReplay = contract.actions.map(action => auditFilterQuery({
@@ -9121,6 +9126,15 @@ function supportInspectionReceiptReplayPacket(input: {
                 .slice(0, 25)
                 .map(entity => auditFilterQuery({ entity, request: input.request })),
             bySupportSession: input.supportSession ? auditFilterQuery({ supportSession: input.supportSession, source: 'admin', service: 'hanasand-api' }) : null,
+            bySourceWorkflow: sourceWorkflows.map(workflow => auditFilterQuery({ ...input.timelineFilter, workflow, source: 'admin', service: 'hanasand-api' })),
+        },
+        workflowHandoff: {
+            sourceWorkflows,
+            alias: 'sourceWorkflow',
+            replayFilter: 'workflow',
+            safeForCaseReplay: true,
+            noLiveAccessGrant: true,
+            redacted: true,
         },
         receiptEventIds: allEventIds.map(id => Number(id)).filter(id => Number.isFinite(id)),
         denialCases: [
@@ -9146,6 +9160,7 @@ function supportInspectionReceiptReplayPacket(input: {
         ]),
         copyText: [
             `Support receipt replay request=${input.request || '*'} session=${input.supportSession || '*'}`,
+            `Source workflows: ${sourceWorkflows.join(', ') || 'none'}`,
             `Receipt events: ${allEventIds.join(', ') || 'none'}`,
             `Denied replay: ${auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' })}`,
         ].join('\n'),
@@ -12502,7 +12517,7 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             action: ['action', 'actionType'],
-            workflow: ['workflow', 'bridgeWorkflow'],
+            workflow: ['workflow', 'bridgeWorkflow', 'sourceWorkflow'],
             severity: ['severity'],
             time: ['from', 'to'],
             entity: ['entity', 'entityId', 'entityType'],
@@ -13316,7 +13331,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
             actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             action: ['action', 'actionType'],
-            workflow: ['workflow', 'bridgeWorkflow'],
+            workflow: ['workflow', 'bridgeWorkflow', 'sourceWorkflow'],
             entity: ['entity', 'entityId', 'entityType'],
             request: ['request', 'requestId', 'correlation', 'correlationId'],
             blocker: ['blocker', 'blockerCode'],
@@ -13368,7 +13383,7 @@ function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             request: ['request', 'requestId', 'correlation', 'correlationId'],
             entity: ['entity', 'entityId', 'entityType'],
-            workflow: ['workflow', 'bridgeWorkflow'],
+            workflow: ['workflow', 'bridgeWorkflow', 'sourceWorkflow'],
             supportSession: ['session', 'supportSession', 'supportSessionId'],
             blocker: ['blocker', 'blockerCode'],
             reason: ['reason', 'supportReason'],
