@@ -46,6 +46,8 @@ export type ProductNorthStarRow = {
     proofSource: string
     proofTimestamp: string
     staleAfterSeconds: number
+    proofAgeSeconds: number
+    proofStale: boolean
     expectedDashboardRowId: string
     backendProofContractVersion: string
     blocker: string
@@ -96,6 +98,8 @@ export type ProductNorthStarDeployBlocker = {
     blocker: string
     proofTimestamp: string
     staleAfterSeconds: number
+    proofAgeSeconds: number
+    proofStale: boolean
     expectedDashboardRowId: string
     backendProofContractVersion: string
     integrationProbeHint: string
@@ -164,6 +168,9 @@ function isProductNorthStarRow(input: unknown): input is ProductNorthStarRow {
         && isFilledString(row.proofTimestamp)
         && typeof row.staleAfterSeconds === 'number'
         && row.staleAfterSeconds > 0
+        && typeof row.proofAgeSeconds === 'number'
+        && row.proofAgeSeconds >= 0
+        && typeof row.proofStale === 'boolean'
         && isFilledString(row.expectedDashboardRowId)
         && isFilledString(row.backendProofContractVersion)
         && typeof row.blocker === 'string'
@@ -228,6 +235,9 @@ function isProductNorthStarDeployBlocker(input: unknown): input is ProductNorthS
         && isFilledString(blocker.proofTimestamp)
         && typeof blocker.staleAfterSeconds === 'number'
         && blocker.staleAfterSeconds > 0
+        && typeof blocker.proofAgeSeconds === 'number'
+        && blocker.proofAgeSeconds >= 0
+        && typeof blocker.proofStale === 'boolean'
         && isFilledString(blocker.expectedDashboardRowId)
         && isFilledString(blocker.backendProofContractVersion)
         && isFilledString(blocker.integrationProbeHint)
@@ -264,6 +274,8 @@ function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: Pro
             && row.blocker === blocker.blocker
             && row.proofTimestamp === blocker.proofTimestamp
             && row.staleAfterSeconds === blocker.staleAfterSeconds
+            && row.proofAgeSeconds === blocker.proofAgeSeconds
+            && row.proofStale === blocker.proofStale
             && row.expectedDashboardRowId === blocker.expectedDashboardRowId
             && row.backendProofContractVersion === blocker.backendProofContractVersion
             && row.integrationProbeHint === blocker.integrationProbeHint
@@ -438,6 +450,8 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
             blocker: row.blocker,
             proofTimestamp: row.proofTimestamp,
             staleAfterSeconds: row.staleAfterSeconds,
+            proofAgeSeconds: row.proofAgeSeconds,
+            proofStale: row.proofStale,
             expectedDashboardRowId: row.expectedDashboardRowId,
             backendProofContractVersion: row.backendProofContractVersion,
             integrationProbeHint: row.integrationProbeHint,
@@ -538,7 +552,7 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
         rowBlocker(entitlement, 'DWM entitlement proof is not loaded.'),
         rowBlocker(orgExport, 'Organization alert-term export proof is not loaded.'),
     ].filter(Boolean).join(' ')
-    return {
+    return withProofFreshness({
         id: 'organizations',
         label: 'Organizations',
         state,
@@ -552,7 +566,7 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
         backendProofContractVersion: [entitlement?.backendProofContractVersion || entitlement?.schemaVersion, orgExport?.backendProofContractVersion || orgExport?.schemaVersion].filter(Boolean).join(' + ') || 'organization.readiness.v1',
         blocker: state === 'ready' ? '' : blocker || 'Organization readiness proof is incomplete.',
         integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load entitlement and organization alert-term export readiness.',
-    }
+    })
 }
 
 function realAlertGenerationRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
@@ -578,7 +592,7 @@ function realAlertGenerationRow(external: ProductReadinessExternalState, generat
         generation?.backendProofContractVersion || generation?.schemaVersion,
     ])
 
-    return {
+    return withProofFreshness({
         id: 'real_alert_generation',
         label: 'Real alert generation',
         state,
@@ -594,7 +608,7 @@ function realAlertGenerationRow(external: ProductReadinessExternalState, generat
         backendProofContractVersion: proofContracts.join(' + ') || 'dashboard.alert_evidence.readiness.v1 + dwm.alert_generation_readiness.v1',
         blocker: state === 'ready' ? '' : blocker || 'Alert generation readiness proof is incomplete.',
         integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/dwm/alerts/generation-readiness and dashboard alert proof must both be ready.',
-    }
+    })
 }
 
 function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
@@ -602,7 +616,7 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
     const dashboard = external.dashboardEvidence
     const hasMatchedDelivery = dashboard?.deliveryEvidenceMatched === true && Boolean(dashboard.deliveryId)
     const state = health?.status === 'ready' && hasMatchedDelivery ? 'ready' : health?.status === 'blocked' ? 'blocked' : 'needs_action'
-    return {
+    return withProofFreshness({
         id: 'webhook_delivery',
         label: 'Webhook delivery',
         state,
@@ -616,7 +630,7 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
         backendProofContractVersion: [health?.backendProofContractVersion || health?.schemaVersion, dashboard?.backendProofContractVersion || dashboard?.schemaVersion].filter(Boolean).join(' + ') || 'dwm.webhook.readiness.v1',
         blocker: state === 'ready' ? '' : [rowBlocker(health, 'Webhook lifecycle proof is not loaded.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
         integrationProbeHint: health?.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health.',
-    }
+    })
 }
 
 function snapshotRow(input: {
@@ -634,7 +648,7 @@ function snapshotRow(input: {
 }): ProductNorthStarRow {
     const snapshot = input.snapshot
     const state = snapshot?.status || 'unavailable'
-    return {
+    return withProofFreshness({
         id: input.id,
         label: input.label,
         state,
@@ -648,7 +662,7 @@ function snapshotRow(input: {
         backendProofContractVersion: snapshot?.backendProofContractVersion || snapshot?.schemaVersion || input.fallbackContract,
         blocker: state === 'ready' ? '' : rowBlocker(snapshot, input.fallbackBlocker),
         integrationProbeHint: snapshot?.integrationProbeHint || input.fallbackProbe,
-    }
+    })
 }
 
 function publicTiEnrichmentRow(external: ProductReadinessExternalState, query: string): ProductNorthStarRow {
@@ -697,4 +711,19 @@ function latestTimestamp(values: Array<string | undefined>) {
 
 function uniqueStrings(values: Array<string | undefined>) {
     return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim()))))
+}
+
+function withProofFreshness(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | 'proofStale'>): ProductNorthStarRow {
+    const proofAgeSeconds = ageSecondsSince(row.proofTimestamp)
+    return {
+        ...row,
+        proofAgeSeconds,
+        proofStale: proofAgeSeconds > row.staleAfterSeconds,
+    }
+}
+
+function ageSecondsSince(value: string) {
+    const timestamp = new Date(value).getTime()
+    if (!value || Number.isNaN(timestamp)) return 0
+    return Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
 }

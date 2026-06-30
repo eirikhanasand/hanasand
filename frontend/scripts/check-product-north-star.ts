@@ -212,6 +212,7 @@ assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.r
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => ['blocked', 'needs_action', 'unavailable'].includes(row.state)))
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.ownerLane && row.href && row.blocker && row.proofTimestamp))
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.expectedDashboardRowId && row.backendProofContractVersion && row.integrationProbeHint))
+assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.proofAgeSeconds >= 0 && typeof row.proofStale === 'boolean'))
 assert.ok(partialScoreboard.deployGate.blockingProofRows.some(row => row.rowId === 'deploy_live_status' && row.ownerLane === 'integration' && row.href === '/status'))
 assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
@@ -226,6 +227,7 @@ assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
 assert.ok(partialScoreboard.rows.every(row => row.proofSource && row.detail))
 assert.ok(partialScoreboard.rows.every(row => row.expectedDashboardRowId && row.staleAfterSeconds > 0 && row.proofTimestamp))
+assert.ok(partialScoreboard.rows.every(row => row.proofAgeSeconds >= 0 && typeof row.proofStale === 'boolean'))
 assert.ok(partialScoreboard.rows.every(row => row.state === 'ready' || row.blocker))
 assert.ok(partialScoreboard.direction.every(item => item.ownerLanes.length && item.backedRowIds.length && item.proofSummary && item.href))
 assert.ok(partialScoreboard.direction.every(item => item.state === 'ready' || item.blocker))
@@ -314,6 +316,14 @@ assert.equal(parseProductNorthStarScoreboard({
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, expectedDashboardRowId: '' } : row),
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, proofAgeSeconds: -1 } : row),
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    rows: partialScoreboard.rows.map(row => row.id === 'source_coverage' ? { ...row, proofStale: undefined } : row),
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
@@ -561,6 +571,8 @@ for (const token of [
     'data-north-star-proof-timestamp',
     'data-north-star-backend-proof-contract-version',
     'data-north-star-stale-after-seconds',
+    'data-north-star-proof-age-seconds',
+    'data-north-star-proof-stale',
     'data-north-star-expected-dashboard-row-id',
     'data-north-star-proof-source',
     'data-north-star-blocker',
@@ -618,11 +630,15 @@ for (const token of [
     'data-north-star-blocker-owner-lane',
     'data-north-star-blocker-proof-timestamp',
     'data-north-star-blocker-stale-after-seconds',
+    'data-north-star-blocker-proof-age-seconds',
+    'data-north-star-blocker-proof-stale',
     'data-north-star-blocker-contract',
     'data-north-star-blocker-dashboard-row-id',
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
     'expectedDashboardRowId',
+    'proofAgeSeconds',
+    'proofStale',
     'Operational evidence',
     'Readiness source',
     'Release blockers',

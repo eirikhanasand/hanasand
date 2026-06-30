@@ -291,6 +291,8 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
             data-north-star-blocker-owner-lane={row.ownerLane}
             data-north-star-blocker-proof-timestamp={row.proofTimestamp}
             data-north-star-blocker-stale-after-seconds={row.staleAfterSeconds}
+            data-north-star-blocker-proof-age-seconds={row.proofAgeSeconds}
+            data-north-star-blocker-proof-stale={row.proofStale ? 'true' : 'false'}
             data-north-star-blocker-contract={row.backendProofContractVersion}
             data-north-star-blocker-dashboard-row-id={row.expectedDashboardRowId}
         >
@@ -310,6 +312,8 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
             <dl className='mt-4 grid gap-2 text-xs'>
                 <Fact label='Contract' value={row.backendProofContractVersion} />
                 <Fact label='Checked' value={formatChecked(row.proofTimestamp)} />
+                <Fact label='Age' value={formatDuration(row.proofAgeSeconds)} />
+                <Fact label='Stale' value={row.proofStale ? 'yes' : 'no'} />
                 <Fact label='Stale after' value={formatDuration(row.staleAfterSeconds)} />
                 <Fact label='Row id' value={row.expectedDashboardRowId} />
             </dl>
@@ -394,6 +398,8 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             data-north-star-proof-timestamp={row.proofTimestamp}
             data-north-star-backend-proof-contract-version={row.backendProofContractVersion}
             data-north-star-stale-after-seconds={row.staleAfterSeconds}
+            data-north-star-proof-age-seconds={row.proofAgeSeconds}
+            data-north-star-proof-stale={row.proofStale ? 'true' : 'false'}
             data-north-star-expected-dashboard-row-id={row.expectedDashboardRowId}
             data-north-star-proof-source={row.proofSource}
             data-north-star-blocker={row.blocker}
@@ -415,6 +421,8 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
                 <Fact label='Owner' value={row.ownerLane} />
                 <Fact label='Contract' value={row.backendProofContractVersion} />
                 <Fact label='Checked' value={formatChecked(row.proofTimestamp)} />
+                <Fact label='Age' value={formatDuration(row.proofAgeSeconds)} />
+                <Fact label='Stale' value={row.proofStale ? 'yes' : 'no'} />
                 <Fact label='Stale after' value={formatDuration(row.staleAfterSeconds)} />
                 <Fact label='Row id' value={row.expectedDashboardRowId} />
                 <Fact label='Source' value={row.proofSource} />
