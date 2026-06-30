@@ -1209,7 +1209,7 @@ export type OrganizationWatchlistAlertTermsExport = {
             sourceFamily: 'organization_watchlist'
             matchingRoute: 'organization_watchlist'
             termCount: number
-            requiredMatcherFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm' | 'watchedEntity' | 'matchReason' | 'actorRef' | 'sourceRefs' | 'provenance' | 'alertGeneratorKey' | 'alertGenerationRef'>
+            requiredMatcherFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm' | 'watchedEntity' | 'matchReason' | 'actorRef' | 'sourceRefs' | 'provenanceHash' | 'provenance' | 'workflowReadiness' | 'destinationReadiness' | 'alertGeneratorKey' | 'alertGenerationRef'>
             dedupeKeyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
             terms: Array<{
                 organizationId: string
@@ -1239,7 +1239,31 @@ export type OrganizationWatchlistAlertTermsExport = {
                 }
                 normalizedTerm: string
                 alertGeneratorKey: string
+                provenanceHash: string
                 status: 'active'
+                workflowReadiness: {
+                    schemaVersion: 'organization.watchlist_match_workflow_readiness.v1'
+                    alertGenerationReady: boolean
+                    caseReplayReady: boolean
+                    destinationDeliveryReady: boolean
+                    route: 'organization_watchlist'
+                    caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility'
+                    blockerCodes: string[]
+                }
+                destinationReadiness: {
+                    schemaVersion: 'organization.watchlist_match_destination_readiness.v1'
+                    webhookDestinationOwnership: 'organization.webhook_destination_ownership.v1'
+                    webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1'
+                    selectedDestinationOrgField: 'destination.org_id'
+                    selectedDestinationIdField: 'webhookDestinationIds[]'
+                    dryRunVisibility: {
+                        allowed: boolean
+                        allowedRoles: Array<'owner' | 'admin'>
+                        deniedRoles: Array<'member' | 'viewer'>
+                        redactedFields: Array<'destination.secret' | 'destination.endpoint'>
+                    }
+                    blockerCodes: string[]
+                }
                 provenance: {
                     schemaVersion: 'organization.watchlist_match_provenance.v1'
                     organizationId: string
@@ -1247,11 +1271,12 @@ export type OrganizationWatchlistAlertTermsExport = {
                     watchlistId: string
                     watchlistItemId: string
                     alertGeneratorKey: string
+                    provenanceHash: string
                     createdBy: string
                     updatedBy: string | null
                     lifecycleRequestId: string | null
                     matchBasis: 'normalized_watchlist_term'
-                    caseReplayFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'watchedEntity' | 'matchReason' | 'alertGeneratorKey' | 'provenance'>
+                    caseReplayFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'watchedEntity' | 'matchReason' | 'alertGeneratorKey' | 'provenanceHash' | 'provenance' | 'workflowReadiness' | 'destinationReadiness'>
                 }
                 alertGenerationRef: OrganizationWatchlistAlertGenerationRef
             }>
@@ -7297,64 +7322,104 @@ export function organizationWatchlistAlertTermsExport(
                 'matchReason',
                 'actorRef',
                 'sourceRefs',
+                'provenanceHash',
                 'provenance',
+                'workflowReadiness',
+                'destinationReadiness',
                 'alertGeneratorKey',
                 'alertGenerationRef',
             ],
             dedupeKeyFields: ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'],
-            terms: activeTerms.map(term => ({
-                organizationId: term.organizationId,
-                tenantId: term.tenantId,
-                watchlistId: term.watchlistItemId,
-                watchlistItemId: term.watchlistItemId,
-                termFamily: term.termFamily,
-                watchedEntity: {
-                    type: term.termFamily,
-                    value: term.term,
-                    normalizedValue: term.alertGenerationRef.normalizedTerm,
-                },
-                matchReason: {
-                    kind: 'shared_watchlist_term',
-                    code: 'organization_watchlist_term_match',
-                    field: 'watchedEntity.normalizedValue',
-                },
-                actorRef: {
-                    userId: member.userId,
-                    role: member.role,
-                    source: 'organization_member',
-                },
-                sourceRefs: {
-                    sourceFamily: 'organization_watchlist',
-                    exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
-                    caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility',
-                },
-                normalizedTerm: term.alertGenerationRef.normalizedTerm,
-                alertGeneratorKey: term.alertGeneratorKey,
-                status: 'active',
-                provenance: {
-                    schemaVersion: 'organization.watchlist_match_provenance.v1',
+            terms: activeTerms.map(term => {
+                const provenanceHash = organizationWatchlistMatchProvenanceHash(term)
+                const workflowBlockerCodes = Array.from(new Set([
+                    ...alertGeneration.blockedReasons,
+                    ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+                    ...webhookDestinationAccessDecision.blockerCodes,
+                ].map(String)))
+
+                return {
                     organizationId: term.organizationId,
                     tenantId: term.tenantId,
                     watchlistId: term.watchlistItemId,
                     watchlistItemId: term.watchlistItemId,
+                    termFamily: term.termFamily,
+                    watchedEntity: {
+                        type: term.termFamily,
+                        value: term.term,
+                        normalizedValue: term.alertGenerationRef.normalizedTerm,
+                    },
+                    matchReason: {
+                        kind: 'shared_watchlist_term',
+                        code: 'organization_watchlist_term_match',
+                        field: 'watchedEntity.normalizedValue',
+                    },
+                    actorRef: {
+                        userId: member.userId,
+                        role: member.role,
+                        source: 'organization_member',
+                    },
+                    sourceRefs: {
+                        sourceFamily: 'organization_watchlist',
+                        exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
+                        caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility',
+                    },
+                    normalizedTerm: term.alertGenerationRef.normalizedTerm,
                     alertGeneratorKey: term.alertGeneratorKey,
-                    createdBy: term.createdBy,
-                    updatedBy: term.updatedBy,
-                    lifecycleRequestId: term.lifecycleRequestId,
-                    matchBasis: 'normalized_watchlist_term',
-                    caseReplayFields: [
-                        'organizationId',
-                        'tenantId',
-                        'watchlistId',
-                        'watchlistItemId',
-                        'watchedEntity',
-                        'matchReason',
-                        'alertGeneratorKey',
-                        'provenance',
-                    ],
-                },
-                alertGenerationRef: term.alertGenerationRef,
-            })),
+                    provenanceHash,
+                    status: 'active',
+                    workflowReadiness: {
+                        schemaVersion: 'organization.watchlist_match_workflow_readiness.v1',
+                        alertGenerationReady: alertGeneration.canGenerateAlerts,
+                        caseReplayReady: sharedWatchlistIntegrationGuardrails.caseSafety.ok,
+                        destinationDeliveryReady: webhookDestinationAccessDecision.blockerCodes.length === 0,
+                        route: 'organization_watchlist',
+                        caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility',
+                        blockerCodes: workflowBlockerCodes,
+                    },
+                    destinationReadiness: {
+                        schemaVersion: 'organization.watchlist_match_destination_readiness.v1',
+                        webhookDestinationOwnership: webhookDestinationOwnership.schemaVersion,
+                        webhookDestinationAccessDecision: webhookDestinationAccessDecision.schemaVersion,
+                        selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+                        selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+                        dryRunVisibility: {
+                            allowed: canManageWebhookDestinations,
+                            allowedRoles: ['owner', 'admin'],
+                            deniedRoles: ['member', 'viewer'],
+                            redactedFields: ['destination.secret', 'destination.endpoint'],
+                        },
+                        blockerCodes: webhookDestinationAccessDecision.blockerCodes,
+                    },
+                    provenance: {
+                        schemaVersion: 'organization.watchlist_match_provenance.v1',
+                        organizationId: term.organizationId,
+                        tenantId: term.tenantId,
+                        watchlistId: term.watchlistItemId,
+                        watchlistItemId: term.watchlistItemId,
+                        alertGeneratorKey: term.alertGeneratorKey,
+                        provenanceHash,
+                        createdBy: term.createdBy,
+                        updatedBy: term.updatedBy,
+                        lifecycleRequestId: term.lifecycleRequestId,
+                        matchBasis: 'normalized_watchlist_term',
+                        caseReplayFields: [
+                            'organizationId',
+                            'tenantId',
+                            'watchlistId',
+                            'watchlistItemId',
+                            'watchedEntity',
+                            'matchReason',
+                            'alertGeneratorKey',
+                            'provenanceHash',
+                            'provenance',
+                            'workflowReadiness',
+                            'destinationReadiness',
+                        ],
+                    },
+                    alertGenerationRef: term.alertGenerationRef,
+                }
+            }),
             lifecycleExclusions: {
                 pausedItemIds: termLifecycle.pausedItemIds,
                 archivedItemIds: termLifecycle.archivedItemIds,
@@ -8010,6 +8075,24 @@ function organizationWatchlistAlertGenerationRef(term: OrganizationWatchlistTerm
             },
         },
     }
+}
+
+function organizationWatchlistMatchProvenanceHash(term: OrganizationWatchlistTerm): string {
+    const input = [
+        term.organizationId,
+        term.tenantId,
+        term.watchlistItemId,
+        term.termFamily,
+        cleanText(term.term).toLowerCase(),
+        term.createdBy,
+        term.lifecycleRequestId ?? '',
+    ].join('|')
+    let hash = 2166136261
+    for (let index = 0; index < input.length; index += 1) {
+        hash ^= input.charCodeAt(index)
+        hash = Math.imul(hash, 16777619)
+    }
+    return `orgprov_${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
 export function slugForOrganization(value: string) {
