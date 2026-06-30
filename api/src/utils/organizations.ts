@@ -1558,6 +1558,22 @@ export type OrganizationWebhookDestinationAccessDecision = {
     blockerCodes: string[]
     requiredAlertFields: string[]
     requiredDeliveryFields: string[]
+    deliveryInputReceipt: {
+        schemaVersion: 'organization.webhook_destination_delivery_input.v1'
+        organizationId: string
+        tenantId: string
+        route: 'POST /v1/dwm/webhooks/deliver'
+        eventType: 'dwm.alert'
+        requiredAlertFields: Array<'alert.organizationId' | 'alert.tenantId' | 'alert.watchlistItemIds' | 'alert.workflowContext.alertGeneratorKeys' | 'alert.dedupeKey'>
+        requiredDestinationFields: Array<'destination.id' | 'destination.org_id' | 'destination.enabled' | 'destination.eventSubscriptions'>
+        selectedDestinationOrgField: 'destination.org_id'
+        selectedDestinationIdField: 'webhookDestinationIds[]'
+        idempotencyKeyFields: Array<'eventType' | 'organizationId' | 'destinationId' | 'alert.dedupeKey'>
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'manual_webhook_selection_required'>
+        crossOrgDestinationAllowed: false
+        nonmemberDestinationEnumeration: false
+        noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds'>
+    }
     proofAssertions: Array<
         | 'destination_org_matches_alert_org'
         | 'idempotency_scoped_to_org_destination_alert'
@@ -6322,6 +6338,42 @@ export function organizationWatchlistAlertTermsExport(
         ])),
         requiredAlertFields: webhookDestinationOwnership.requiredAlertFields,
         requiredDeliveryFields: webhookDestinationOwnership.requiredDeliveryFields,
+        deliveryInputReceipt: {
+            schemaVersion: 'organization.webhook_destination_delivery_input.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            route: webhookDestinationOwnership.route,
+            eventType: webhookDestinationOwnership.eventType,
+            requiredAlertFields: [
+                'alert.organizationId',
+                'alert.tenantId',
+                'alert.watchlistItemIds',
+                'alert.workflowContext.alertGeneratorKeys',
+                'alert.dedupeKey',
+            ],
+            requiredDestinationFields: [
+                'destination.id',
+                'destination.org_id',
+                'destination.enabled',
+                'destination.eventSubscriptions',
+            ],
+            selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+            selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+            idempotencyKeyFields: webhookDestinationOwnership.idempotency.keyFields,
+            lifecycleBlockers: Array.from(new Set([
+                'org_archived',
+                'org_deleted',
+                'member_revoked',
+                'manual_webhook_selection_required',
+            ])),
+            crossOrgDestinationAllowed: false,
+            nonmemberDestinationEnumeration: webhookDestinationOwnership.nonmemberDestinationEnumeration,
+            noLeakFields: [
+                'destination.secret',
+                'destination.endpoint',
+                'otherOrg.destinationIds',
+            ],
+        },
         proofAssertions: [
             'destination_org_matches_alert_org',
             'idempotency_scoped_to_org_destination_alert',
