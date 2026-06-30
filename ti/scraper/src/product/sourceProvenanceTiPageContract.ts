@@ -27,6 +27,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSI
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_CATALOG_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_catalog_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_alert_readiness_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_DEDUPE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_alert_dedupe_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_health_drilldown_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -1842,6 +1843,109 @@ export type TiSourceProvenanceSourcePackFixtureAlertDedupeRow = {
   };
   downstreamRoutes: TiSourceProvenanceSourcePackFixtureAlertReadinessRow["downstreamRoutes"];
   provenance: TiSourceProvenanceSourcePackFixtureAlertReadinessRow["provenance"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureAlertDedupePacketId: string;
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[];
+  filters: TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter[];
+  summary: {
+    rowCount: number;
+    activeRows: number;
+    retryableRows: number;
+    policyBlockedRows: number;
+    duplicateRows: number;
+    alertReadyRows: number;
+    actors: string[];
+    publicTiRoutes: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+    healthStates: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+    activationStates: TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState[];
+    failureCodes: TiSourceProvenanceSourcePackFixtureHealthDrilldownFailureCode[];
+    newestObservedAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureAlertDedupePacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState =
+  | "active"
+  | "retry_scheduled"
+  | "policy_blocked"
+  | "suppressed_duplicate"
+  | "pending_watchlist"
+  | "inspect_required";
+
+export type TiSourceProvenanceSourcePackFixtureHealthDrilldownFailureCode =
+  | TiSourceProvenanceSourcePackFixtureAlertDedupeBlockerCode
+  | "none";
+
+export type TiSourceProvenanceSourcePackFixtureHealthDrilldownRow = {
+  drilldownRowId: string;
+  dedupeRowId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  healthState: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"];
+  activationState: TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState;
+  alertEligibility: TiSourceProvenanceSourcePackFixtureAlertDedupeRow["alertEligibility"];
+  confidence: number;
+  observedAt?: string;
+  retry: {
+    retryable: boolean;
+    nextRetryAt?: string;
+    backoffReason?: string;
+  };
+  failure: {
+    code: TiSourceProvenanceSourcePackFixtureHealthDrilldownFailureCode;
+    ownerLane: "alert" | "source" | "parser" | "policy" | "org";
+    reason: string;
+    nextAction: "queue_alert_rebuild" | "suppress_duplicate" | "retry_parser" | "request_policy_review" | "materialize_watchlist_terms" | "inspect_source_health";
+  };
+  downstreamRoutes: TiSourceProvenanceSourcePackFixtureAlertDedupeRow["downstreamRoutes"];
+  provenance: TiSourceProvenanceSourcePackFixtureAlertDedupeRow["provenance"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter = {
+  filterId: string;
+  kind: "actor" | "source_family" | "parser_status" | "health_state" | "activation_state" | "failure_code" | "retry_window" | "alert_eligibility";
+  value: string;
+  count: number;
+  readyCount: number;
+  heldCount: number;
+  operatorAction: {
+    action: "inspect" | "retry_parser" | "request_policy_review" | "suppress_duplicate" | "queue_alert_rebuild";
+    ownerLane: "sourceOps" | "parser" | "policy" | "source" | "alert";
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  };
 };
 
 export type TiSourceProvenanceSourcePackFixtureReadinessExport = {
@@ -4781,6 +4885,72 @@ export function buildSourceProvenanceSourcePackFixtureAlertDedupePacket(input: {
       "summary"
     ],
     safeOutput: input.alertReadiness.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket(input: {
+  dedupe: TiSourceProvenanceSourcePackFixtureAlertDedupePacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket {
+  const generatedAt = input.generatedAt ?? input.dedupe.generatedAt;
+  const rows = input.dedupe.rows.map(sourcePackFixtureHealthDrilldownRow);
+  const filters = sourcePackFixtureHealthDrilldownFilters(rows);
+  const activeRows = rows.filter((row) => row.activationState === "active").length;
+  const retryableRows = rows.filter((row) => row.retry.retryable).length;
+  const policyBlockedRows = rows.filter((row) => row.activationState === "policy_blocked").length;
+  const duplicateRows = rows.filter((row) => row.activationState === "suppressed_duplicate").length;
+  const alertReadyRows = rows.filter((row) => row.alertEligibility === "ready").length;
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const parserStatuses = uniqueStrings(rows.map((row) => row.parserStatus)) as TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+  const healthStates = uniqueStrings(rows.map((row) => row.healthState)) as TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+  const activationStates = uniqueStrings(rows.map((row) => row.activationState)) as TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState[];
+  const failureCodes = uniqueStrings(rows.map((row) => row.failure.code)) as TiSourceProvenanceSourcePackFixtureHealthDrilldownFailureCode[];
+  const status = rows.length === 0 || activeRows === 0 ? "blocked" : rows.some((row) => row.activationState !== "active") ? "partial" : "ready";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_health_drilldown_packet", `${input.dedupe.id}:${generatedAt}:${rows.map((row) => row.drilldownRowId).join(",")}`),
+    generatedAt,
+    ok: activeRows > 0,
+    status,
+    tenantId: input.dedupe.tenantId,
+    organizationId: input.dedupe.organizationId,
+    sourcePackFixtureAlertDedupePacketId: input.dedupe.id,
+    rows,
+    filters,
+    summary: {
+      rowCount: rows.length,
+      activeRows,
+      retryableRows,
+      policyBlockedRows,
+      duplicateRows,
+      alertReadyRows,
+      actors: uniqueStrings(rows.map((row) => row.actor)),
+      publicTiRoutes: uniqueStrings(rows.map((row) => row.publicTiRoute)),
+      sourceFamilies,
+      parserStatuses,
+      healthStates,
+      activationStates,
+      failureCodes,
+      newestObservedAt: newestTimestamp(rows.map((row) => row.observedAt)),
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.retry.nextRetryAt))
+    },
+    consumers: sourcePackFixtureHealthDrilldownConsumers(rows),
+    payloadShape: [
+      "rows[].actor",
+      "rows[].publicTiRoute",
+      "rows[].sourceFamily",
+      "rows[].parserStatus",
+      "rows[].healthState",
+      "rows[].activationState",
+      "rows[].retry",
+      "rows[].failure",
+      "rows[].downstreamRoutes",
+      "rows[].provenance",
+      "filters[]",
+      "summary"
+    ],
+    safeOutput: input.dedupe.safeOutput
   };
 }
 
@@ -9418,6 +9588,302 @@ function sourcePackFixtureAlertDedupeConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationFixtureAlertDedupe: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureHealthDrilldownRow(
+  row: TiSourceProvenanceSourcePackFixtureAlertDedupeRow
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownRow {
+  const activationState = sourcePackFixtureHealthDrilldownActivationState(row);
+  const failure = sourcePackFixtureHealthDrilldownFailure(row, activationState);
+  return {
+    drilldownRowId: stableId("ti_source_provenance_source_pack_fixture_health_drilldown_row", `${row.dedupeRowId}:${activationState}:${failure.code}`),
+    dedupeRowId: row.dedupeRowId,
+    actor: row.actor,
+    publicTiRoute: row.publicTiRoute,
+    sourceFamily: row.sourceFamily,
+    parserStatus: row.parserStatus,
+    healthState: row.healthState,
+    activationState,
+    alertEligibility: row.alertEligibility,
+    confidence: row.confidence,
+    observedAt: row.observedAt,
+    retry: {
+      retryable: activationState === "retry_scheduled",
+      nextRetryAt: activationState === "retry_scheduled" ? row.nextRetryAt : undefined,
+      backoffReason: activationState === "retry_scheduled" ? "parser_retry_required" : undefined
+    },
+    failure,
+    downstreamRoutes: row.downstreamRoutes,
+    provenance: row.provenance
+  };
+}
+
+function sourcePackFixtureHealthDrilldownActivationState(
+  row: TiSourceProvenanceSourcePackFixtureAlertDedupeRow
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState {
+  if (row.alertEligibility === "ready" && row.dedupeState === "canonical") return "active";
+  if (row.blockerCodes.includes("duplicate_fixture_capture")) return "suppressed_duplicate";
+  if (row.blockerCodes.includes("parser_retry_required")) return "retry_scheduled";
+  if (row.blockerCodes.includes("policy_review_required")) return "policy_blocked";
+  if (row.blockerCodes.includes("watchlist_materialization_required")) return "pending_watchlist";
+  return "inspect_required";
+}
+
+function sourcePackFixtureHealthDrilldownFailure(
+  row: TiSourceProvenanceSourcePackFixtureAlertDedupeRow,
+  activationState: TiSourceProvenanceSourcePackFixtureHealthDrilldownActivationState
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownRow["failure"] {
+  const code = row.blockerCodes.find((blockerCode) => blockerCode !== "not_alert_ready") ?? row.blockerCodes[0] ?? "none";
+  if (activationState === "active") {
+    return {
+      code: "none",
+      ownerLane: "alert",
+      reason: "Source fixture is canonical, alert-ready, and backed by provenance IDs.",
+      nextAction: "queue_alert_rebuild"
+    };
+  }
+  if (activationState === "suppressed_duplicate") {
+    return {
+      code,
+      ownerLane: "source",
+      reason: "Duplicate fixture capture is held so alert rebuilds only consume the canonical row.",
+      nextAction: "suppress_duplicate"
+    };
+  }
+  if (activationState === "retry_scheduled") {
+    return {
+      code,
+      ownerLane: "parser",
+      reason: "Parser retry/backoff must complete before this source can produce alert-ready evidence.",
+      nextAction: "retry_parser"
+    };
+  }
+  if (activationState === "policy_blocked") {
+    return {
+      code,
+      ownerLane: "policy",
+      reason: "Policy review is required before this source can move beyond safe metadata.",
+      nextAction: "request_policy_review"
+    };
+  }
+  if (activationState === "pending_watchlist") {
+    return {
+      code,
+      ownerLane: "org",
+      reason: "Watchlist terms or alertable fields are not yet materialized for this enrichment row.",
+      nextAction: "materialize_watchlist_terms"
+    };
+  }
+  return {
+    code,
+    ownerLane: "source",
+    reason: "Source health or provenance needs inspection before activation changes.",
+    nextAction: "inspect_source_health"
+  };
+}
+
+function sourcePackFixtureHealthDrilldownFilters(
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter[] {
+  return [
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "actor", (row) => [row.actor]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "source_family", (row) => [row.sourceFamily]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "parser_status", (row) => [row.parserStatus]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "health_state", (row) => [row.healthState]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "activation_state", (row) => [row.activationState]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "failure_code", (row) => [row.failure.code]),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "retry_window", (row) => row.retry.nextRetryAt ? ["retry_scheduled"] : []),
+    ...sourcePackFixtureHealthDrilldownFiltersForKind(rows, "alert_eligibility", (row) => [row.alertEligibility])
+  ];
+}
+
+function sourcePackFixtureHealthDrilldownFiltersForKind(
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[],
+  kind: TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter["kind"],
+  valueForRow: (row: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow) => string[]
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter[] {
+  const grouped = new Map<string, TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]>();
+  for (const row of rows) {
+    for (const value of valueForRow(row)) {
+      const current = grouped.get(value) ?? [];
+      current.push(row);
+      grouped.set(value, current);
+    }
+  }
+  return [...grouped.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([value, groupedRows]) => sourcePackFixtureHealthDrilldownFilter(kind, value, groupedRows));
+}
+
+function sourcePackFixtureHealthDrilldownFilter(
+  kind: TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter["kind"],
+  value: string,
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter {
+  return {
+    filterId: stableId("ti_source_provenance_source_pack_fixture_health_drilldown_filter", `${kind}:${value}:${rows.map((row) => row.drilldownRowId).join(",")}`),
+    kind,
+    value,
+    count: rows.length,
+    readyCount: rows.filter((row) => row.alertEligibility === "ready").length,
+    heldCount: rows.filter((row) => row.alertEligibility === "held").length,
+    operatorAction: sourcePackFixtureHealthDrilldownFilterAction(kind, value, rows)
+  };
+}
+
+function sourcePackFixtureHealthDrilldownFilterAction(
+  kind: TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter["kind"],
+  value: string,
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter["operatorAction"] {
+  const hasRetry = rows.some((row) => row.activationState === "retry_scheduled");
+  const hasPolicy = rows.some((row) => row.activationState === "policy_blocked");
+  const hasDuplicate = rows.some((row) => row.activationState === "suppressed_duplicate");
+  const allReady = rows.every((row) => row.alertEligibility === "ready");
+  const baseBody = {
+    filterKind: kind,
+    filterValue: value,
+    dryRun: true
+  };
+  if (hasRetry) {
+    return {
+      action: "retry_parser",
+      ownerLane: "parser",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { ...baseBody, action: "retry_parser" },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (hasPolicy) {
+    return {
+      action: "request_policy_review",
+      ownerLane: "policy",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { ...baseBody, action: "request_policy_review" },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (hasDuplicate) {
+    return {
+      action: "suppress_duplicate",
+      ownerLane: "source",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: { ...baseBody, action: "suppress_duplicate" },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (allReady) {
+    return {
+      action: "queue_alert_rebuild",
+      ownerLane: "alert",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: { ...baseBody, canonicalOnly: true },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  return {
+    action: "inspect",
+    ownerLane: "sourceOps",
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { ...baseBody, includeFixtureHealthDrilldown: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourcePackFixtureHealthDrilldownConsumers(
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]
+): TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket["consumers"] {
+  const hasRows = rows.length > 0;
+  const hasReadyRows = rows.some((row) => row.alertEligibility === "ready");
+  const hasActions = rows.some((row) => row.activationState !== "active");
+  return [{
+    consumer: "publicTI",
+    ready: hasRows,
+    requiredFields: ["rows[].actor", "rows[].publicTiRoute", "rows[].sourceFamily", "rows[].failure", "summary"],
+    route: {
+      method: "GET",
+      path: "/ti/:query",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasReadyRows,
+    requiredFields: ["rows[].alertEligibility", "rows[].provenance", "rows[].downstreamRoutes", "summary.alertReadyRows"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        includeFixtureHealthDrilldown: true,
+        canonicalOnly: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRows,
+    requiredFields: ["rows[].activationState", "rows[].retry", "rows[].failure", "filters[]"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeFixtureHealthDrilldown: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasActions,
+    requiredFields: ["rows[].activationState", "rows[].retry", "rows[].failure.nextAction", "filters[].operatorAction"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeOperatorFilters: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRows,
+    requiredFields: ["schemaVersion", "sourcePackFixtureAlertDedupePacketId", "safeOutput", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeIntegrationFixtureHealthDrilldown: true,
         dryRun: true
       },
       dryRunSupported: true,

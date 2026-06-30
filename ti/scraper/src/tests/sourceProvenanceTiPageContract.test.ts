@@ -16,6 +16,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_CATALOG_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_DEDUPE_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
@@ -64,6 +65,7 @@ import {
   buildSourceProvenanceSourcePackFixtureCatalogPacket,
   buildSourceProvenanceSourcePackFixtureAlertReadinessPacket,
   buildSourceProvenanceSourcePackFixtureAlertDedupePacket,
+  buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket,
   buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
@@ -3936,6 +3938,198 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(packet)).not.toContain("rawText");
     expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("builds source-pack fixture health drilldown filters for operators and downstream consumers", () => {
+    const aptGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_drilldown",
+      captureId: "cap_actor_page_apt29_drilldown",
+      contentHash: "hash_actor_page_apt29_drilldown",
+      provenance: "Actor page fixture gives APT29 source health drilldown coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_drilldown",
+      captureId: "cap_public_advisory_akira_drilldown",
+      contentHash: "hash_public_advisory_akira_drilldown",
+      provenance: "Public advisory fixture gives Akira source health drilldown coverage.",
+      relationship: "targeting"
+    });
+    const catalog = buildSourceProvenanceSourcePackFixtureCatalogPacket({
+      growthPackets: [aptGrowthPacket, ransomwareGrowthPacket],
+      generatedAt: "2026-06-29T13:40:00.000Z"
+    });
+    const handoff = buildSourceProvenanceSourcePackFixtureAlertReadinessPacket({
+      catalog,
+      generatedAt: "2026-06-29T13:41:00.000Z"
+    });
+    const readyAptRow = handoff.rows.find((row) => row.actor === "APT29" && row.alertReadiness === "ready");
+    expect(readyAptRow).toBeDefined();
+    const dedupe = buildSourceProvenanceSourcePackFixtureAlertDedupePacket({
+      alertReadiness: {
+        ...handoff,
+        rows: [...handoff.rows, {
+          ...readyAptRow!,
+          readinessRowId: `${readyAptRow!.readinessRowId}_duplicate`
+        }]
+      },
+      generatedAt: "2026-06-29T13:42:00.000Z"
+    });
+    const drilldown = buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket({
+      dedupe,
+      generatedAt: "2026-06-29T13:43:00.000Z"
+    });
+
+    expect(drilldown).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourcePackFixtureAlertDedupePacketId: dedupe.id,
+      summary: {
+        rowCount: dedupe.rows.length,
+        activeRows: 2,
+        retryableRows: 2,
+        policyBlockedRows: 2,
+        duplicateRows: 1,
+        alertReadyRows: 2,
+        actors: expect.arrayContaining(["APT29", "Akira"]),
+        publicTiRoutes: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        activationStates: expect.arrayContaining(["active", "retry_scheduled", "policy_blocked", "suppressed_duplicate", "pending_watchlist", "inspect_required"]),
+        failureCodes: expect.arrayContaining(["none", "duplicate_fixture_capture", "parser_retry_required", "policy_review_required", "watchlist_materialization_required", "parser_health_inspection_required"]),
+        newestObservedAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+
+    const activeAptRow = drilldown.rows.find((row) => row.actor === "APT29" && row.activationState === "active");
+    const retryTelegramRow = drilldown.rows.find((row) => row.actor === "APT29" && row.sourceFamily === "telegram_public");
+    const policyMetadataRow = drilldown.rows.find((row) => row.actor === "Akira" && row.sourceFamily === "darkweb_metadata");
+    const duplicateRow = drilldown.rows.find((row) => row.activationState === "suppressed_duplicate");
+    const watchlistRow = drilldown.rows.find((row) => row.actor === "APT29" && row.activationState === "pending_watchlist");
+
+    expect(activeAptRow).toMatchObject({
+      actor: "APT29",
+      activationState: "active",
+      alertEligibility: "ready",
+      retry: { retryable: false },
+      failure: {
+        code: "none",
+        ownerLane: "alert",
+        nextAction: "queue_alert_rebuild"
+      },
+      provenance: expect.objectContaining({
+        fixtureBacked: true,
+        captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+        contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/)
+      })
+    });
+    expect(retryTelegramRow).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "telegram_public",
+      activationState: "retry_scheduled",
+      retry: {
+        retryable: true,
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        backoffReason: "parser_retry_required"
+      },
+      failure: {
+        code: "parser_retry_required",
+        ownerLane: "parser",
+        nextAction: "retry_parser"
+      }
+    });
+    expect(policyMetadataRow).toMatchObject({
+      actor: "Akira",
+      sourceFamily: "darkweb_metadata",
+      activationState: "policy_blocked",
+      failure: {
+        code: "policy_review_required",
+        ownerLane: "policy",
+        nextAction: "request_policy_review"
+      }
+    });
+    expect(duplicateRow).toMatchObject({
+      activationState: "suppressed_duplicate",
+      alertEligibility: "held",
+      failure: {
+        code: "duplicate_fixture_capture",
+        ownerLane: "source",
+        nextAction: "suppress_duplicate"
+      }
+    });
+    expect(watchlistRow).toMatchObject({
+      activationState: "pending_watchlist",
+      failure: {
+        code: "watchlist_materialization_required",
+        ownerLane: "org",
+        nextAction: "materialize_watchlist_terms"
+      }
+    });
+
+    expect(drilldown.filters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "activation_state",
+        value: "retry_scheduled",
+        count: 2,
+        operatorAction: expect.objectContaining({
+          action: "retry_parser",
+          ownerLane: "parser",
+          route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+        })
+      }),
+      expect.objectContaining({
+        kind: "activation_state",
+        value: "policy_blocked",
+        count: 2,
+        operatorAction: expect.objectContaining({ action: "request_policy_review", ownerLane: "policy" })
+      }),
+      expect.objectContaining({
+        kind: "activation_state",
+        value: "suppressed_duplicate",
+        count: 1,
+        operatorAction: expect.objectContaining({ action: "suppress_duplicate", ownerLane: "source" })
+      }),
+      expect.objectContaining({
+        kind: "alert_eligibility",
+        value: "ready",
+        count: 2,
+        operatorAction: expect.objectContaining({ action: "queue_alert_rebuild", ownerLane: "alert" })
+      })
+    ]));
+    expect(drilldown.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/:query", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, requiredFields: expect.arrayContaining(["rows[].alertEligibility", "rows[].provenance"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["rows[].activationState", "rows[].retry", "rows[].failure", "filters[]"]) }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["filters[].operatorAction"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["sourcePackFixtureAlertDedupePacketId", "safeOutput"]) })
+    ]));
+    expect(drilldown.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].activationState",
+      "rows[].retry",
+      "rows[].failure",
+      "filters[]",
+      "summary"
+    ]));
+    expect(JSON.stringify(drilldown)).not.toContain("rawText");
+    expect(JSON.stringify(drilldown)).not.toContain("password");
   });
 
   test("exports source-pack fixture readiness for dashboard integration and alerts", () => {
