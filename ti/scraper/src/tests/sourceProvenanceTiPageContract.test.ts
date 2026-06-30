@@ -18,6 +18,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
@@ -39,6 +40,7 @@ import {
   buildSourceProvenanceSourceOpsActionQueue,
   buildSourceProvenanceSourceOpsFixtureBundle,
   buildSourceProvenancePublicTiSourceOpsProjection,
+  buildSourceProvenanceProjectionWatchlistRelevance,
   buildSourceProvenanceWatchlistAlertBridgePacket,
   buildSourceProvenanceOrgWatchlistCandidate,
   buildSourceProvenanceTiPageContract
@@ -2924,6 +2926,230 @@ describe("source provenance TI page contract", () => {
         liveNetworkScrapeStarted: false
       }
     });
+  });
+
+  test("blocks projection watchlist relevance on parser source and actor validation gaps", () => {
+    const { lifecycle } = buildBlockedSourceLifecycle();
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const actionQueue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const bundle = buildSourceProvenanceSourceOpsFixtureBundle({
+      freshnessPacket,
+      parserHealthPacket,
+      actionQueue,
+      expectedActor: "LockBit",
+      validationIssues: [{
+        code: "duplicate_candidate",
+        sourceFamily: "telegram_public",
+        duplicateOf: "src_existing_public_telegram"
+      }, {
+        code: "unsupported_source_family",
+        sourceFamily: "pastebin_dump"
+      }],
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const projection = buildSourceProvenancePublicTiSourceOpsProjection({
+      bundle,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+    const relevance = buildSourceProvenanceProjectionWatchlistRelevance({
+      projection,
+      generatedAt: "2026-06-29T12:50:00.000Z"
+    });
+
+    expect(relevance).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      publicTiSourceOpsProjectionId: projection.id,
+      canCreateWatchlistTerms: false,
+      canRequestAlertGeneration: false,
+      watchlistTerms: [],
+      alertRequestPreview: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          actor: "APT28",
+          watchlistItemIds: [],
+          alertGeneratorKeys: [],
+          sourceProjectionId: projection.id,
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(relevance.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "projection_not_ready",
+        ownerLane: "publicTI",
+        path: "pageReadiness.state"
+      }),
+      expect.objectContaining({
+        code: "parser_gap_blocking",
+        ownerLane: "parser",
+        reasonCode: "parser_retry_scheduled",
+        nextAction: "retry_parser"
+      }),
+      expect.objectContaining({
+        code: "source_validation_blocking",
+        ownerLane: "publicTI",
+        reasonCode: "wrong_actor_query",
+        nextAction: "retry_query",
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        code: "source_validation_blocking",
+        ownerLane: "source",
+        reasonCode: "unsupported_source_family",
+        sourceFamily: "pastebin_dump",
+        nextAction: "review_source_family"
+      })
+    ]));
+    expect(relevance.nextActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        action: "repair_source_ops",
+        ownerLane: "publicTI",
+        reasonCode: "projection_not_ready"
+      }),
+      expect.objectContaining({
+        action: "retry_parser",
+        ownerLane: "parser",
+        reasonCode: "parser_retry_scheduled"
+      }),
+      expect.objectContaining({
+        action: "review_validation_issue",
+        ownerLane: "source",
+        reasonCode: "unsupported_source_family",
+        route: expect.objectContaining({ liveNetworkFetch: false })
+      })
+    ]));
+    expect(relevance.payloadShape).toEqual(expect.arrayContaining([
+      "watchlistTerms[].alertGenerationRef",
+      "blockers[].code",
+      "alertRequestPreview.body.alertGeneratorKeys"
+    ]));
+    expect(JSON.stringify(relevance)).not.toContain("rawText");
+    expect(JSON.stringify(relevance)).not.toContain("password");
+  });
+
+  test("creates projection watchlist relevance for ready ransomware source coverage", () => {
+    const { lifecycle } = buildFreshSourceLifecycle({ actor: "LockBit" });
+    const freshnessPacket = buildSourceProvenanceSourceFreshnessGapPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:45:00.000Z",
+      maxAgeDays: 7
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const actionQueue = buildSourceProvenanceSourceOpsActionQueue({
+      freshnessPacket,
+      parserHealthPacket,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const bundle = buildSourceProvenanceSourceOpsFixtureBundle({
+      freshnessPacket,
+      parserHealthPacket,
+      actionQueue,
+      expectedActor: "LockBit",
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const projection = buildSourceProvenancePublicTiSourceOpsProjection({
+      bundle,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+    const relevance = buildSourceProvenanceProjectionWatchlistRelevance({
+      projection,
+      generatedAt: "2026-06-29T12:50:00.000Z"
+    });
+
+    expect(relevance).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "LockBit",
+      publicTiRoute: "/ti/LockBit",
+      publicTiSourceOpsProjectionId: projection.id,
+      canCreateWatchlistTerms: true,
+      canRequestAlertGeneration: true,
+      blockers: [],
+      alertRequestPreview: {
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          tenantId: "tenant_acme",
+          organizationId: "org_acme",
+          actor: "LockBit",
+          sourceProjectionId: projection.id,
+          dryRun: true
+        },
+        liveNetworkFetch: false
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(relevance.watchlistTerms).toEqual([
+      expect.objectContaining({
+        kind: "actor",
+        term: "LockBit",
+        sourceFamilies: [],
+        confidence: 0.91,
+        provenance: expect.objectContaining({
+          publicTiSourceOpsProjectionId: projection.id,
+          sourceOpsFixtureBundleId: bundle.id,
+          fixtureBacked: true
+        }),
+        alertGenerationRef: expect.objectContaining({
+          schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+          source: "public_ti_source_ops_projection",
+          organizationId: "org_acme",
+          term: "LockBit"
+        })
+      })
+    ]);
+    expect(relevance.alertRequestPreview.body.watchlistItemIds).toEqual([
+      relevance.watchlistTerms[0].watchlistItemId
+    ]);
+    expect(relevance.alertRequestPreview.body.alertGeneratorKeys).toEqual([
+      relevance.watchlistTerms[0].alertGeneratorKey
+    ]);
+    expect(relevance.nextActions).toEqual([
+      expect.objectContaining({
+        action: "request_alert_rebuild",
+        ownerLane: "alert",
+        reasonCode: "watchlist_terms_ready",
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true }),
+          liveNetworkFetch: false
+        })
+      })
+    ]);
   });
 
   test("blocks alert rebuild receipt when response loses provenance or case handoff", () => {

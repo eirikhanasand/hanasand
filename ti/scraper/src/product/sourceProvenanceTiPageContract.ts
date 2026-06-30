@@ -22,6 +22,7 @@ export const TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION = "ti.sourc
 export const TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION = "ti.source_provenance_source_ops_action_queue.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_OPS_FIXTURE_BUNDLE_SCHEMA_VERSION = "ti.source_provenance_source_ops_fixture_bundle.v1" as const;
 export const TI_SOURCE_PROVENANCE_PUBLIC_TI_SOURCE_OPS_PROJECTION_SCHEMA_VERSION = "ti.source_provenance_public_ti_source_ops_projection.v1" as const;
+export const TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION = "ti.source_provenance_projection_watchlist_relevance.v1" as const;
 
 export type TiSourceProvenanceInputRow = {
   tenantId: string;
@@ -1426,6 +1427,96 @@ export type TiSourceProvenancePublicTiSourceOpsProjectionGap = {
   route: TiSourceProvenancePublicTiSourceOpsProjectionRow["route"];
 };
 
+export type TiSourceProvenanceProjectionWatchlistRelevance = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  publicTiSourceOpsProjectionId: string;
+  canCreateWatchlistTerms: boolean;
+  canRequestAlertGeneration: boolean;
+  watchlistTerms: TiSourceProvenanceProjectionWatchlistTerm[];
+  blockers: TiSourceProvenanceProjectionWatchlistBlocker[];
+  nextActions: Array<{
+    action: "repair_source_ops" | "retry_parser" | "review_validation_issue" | "materialize_watchlist_terms" | "request_alert_rebuild";
+    ownerLane: "source" | "parser" | "publicTI" | "org" | "alert";
+    reasonCode: string;
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  alertRequestPreview: {
+    method: "POST";
+    path: "/v1/dwm/alerts/rebuild";
+    body: {
+      tenantId: string;
+      organizationId?: string;
+      actor: string;
+      watchlistItemIds: string[];
+      alertGeneratorKeys: string[];
+      sourceProjectionId: string;
+      dryRun: true;
+    };
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceProjectionWatchlistTerm = {
+  termId: string;
+  watchlistItemId: string;
+  alertGeneratorKey: string;
+  kind: "actor" | "source_family";
+  term: string;
+  sourceFamilies: string[];
+  confidence: number;
+  provenance: {
+    publicTiSourceOpsProjectionId: string;
+    sourceOpsFixtureBundleId: string;
+    sourceFreshnessGapPacketId: string;
+    parserHealthAlertPacketId: string;
+    sourceOpsActionQueueId: string;
+    fixtureBacked: true;
+  };
+  alertGenerationRef: {
+    schemaVersion: "organization.watchlist_alert_generation_ref.v1";
+    source: "public_ti_source_ops_projection";
+    organizationId?: string;
+    term: string;
+    key: string;
+  };
+};
+
+export type TiSourceProvenanceProjectionWatchlistBlocker = {
+  code:
+    | "projection_not_ready"
+    | "missing_organization_scope"
+    | "parser_gap_blocking"
+    | "source_validation_blocking"
+    | "no_watchlist_terms";
+  ownerLane: "source" | "parser" | "publicTI" | "org";
+  path: string;
+  reasonCode?: string;
+  sourceFamily?: string;
+  nextAction: string;
+  route: TiSourceProvenancePublicTiSourceOpsProjectionGap["route"];
+};
+
 export type TiSourceProvenanceAlertHandoffState = {
   schemaVersion: typeof TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION;
   id: string;
@@ -2810,6 +2901,63 @@ export function buildSourceProvenancePublicTiSourceOpsProjection(input: {
       "provenanceRows[].route",
       "enrichmentGaps[].code",
       "consumerContracts[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceProjectionWatchlistRelevance(input: {
+  projection: TiSourceProvenancePublicTiSourceOpsProjection;
+  generatedAt?: string;
+}): TiSourceProvenanceProjectionWatchlistRelevance {
+  const generatedAt = input.generatedAt ?? input.projection.generatedAt;
+  const watchlistTerms = input.projection.ok ? projectionWatchlistTerms(input.projection) : [];
+  const blockers = projectionWatchlistBlockers(input.projection, watchlistTerms);
+  const watchlistItemIds = watchlistTerms.map((term) => term.watchlistItemId);
+  const alertGeneratorKeys = watchlistTerms.map((term) => term.alertGeneratorKey);
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_projection_watchlist_relevance", `${input.projection.id}:${generatedAt}:${watchlistTerms.map((term) => term.termId).join(",")}:${blockers.map((blocker) => blocker.code).join(",")}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: input.projection.tenantId,
+    organizationId: input.projection.organizationId,
+    actor: input.projection.actor,
+    publicTiRoute: input.projection.publicTiRoute,
+    publicTiSourceOpsProjectionId: input.projection.id,
+    canCreateWatchlistTerms: blockers.length === 0 && watchlistTerms.length > 0,
+    canRequestAlertGeneration: blockers.length === 0 && watchlistTerms.length > 0,
+    watchlistTerms,
+    blockers,
+    nextActions: projectionWatchlistNextActions(input.projection, blockers, watchlistTerms),
+    alertRequestPreview: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: input.projection.tenantId,
+        organizationId: input.projection.organizationId,
+        actor: input.projection.actor,
+        watchlistItemIds,
+        alertGeneratorKeys,
+        sourceProjectionId: input.projection.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    payloadShape: [
+      "watchlistTerms[].alertGenerationRef",
+      "watchlistTerms[].provenance",
+      "blockers[].code",
+      "nextActions[].route",
+      "alertRequestPreview.body.watchlistItemIds",
+      "alertRequestPreview.body.alertGeneratorKeys"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -4304,6 +4452,185 @@ function publicTiProjectionGapFromValidationIssue(
     nextAction: issue.nextAction,
     route: issue.route
   };
+}
+
+function projectionWatchlistTerms(
+  projection: TiSourceProvenancePublicTiSourceOpsProjection
+): TiSourceProvenanceProjectionWatchlistTerm[] {
+  const sourceFamilies = projection.sourceCoverage.families;
+  const actorTerm = projectionWatchlistTerm(projection, "actor", projection.actor, sourceFamilies);
+  const familyTerms = sourceFamilies.map((family) => projectionWatchlistTerm(projection, "source_family", family, [family]));
+  return [actorTerm, ...familyTerms].filter((term): term is TiSourceProvenanceProjectionWatchlistTerm => Boolean(term));
+}
+
+function projectionWatchlistTerm(
+  projection: TiSourceProvenancePublicTiSourceOpsProjection,
+  kind: TiSourceProvenanceProjectionWatchlistTerm["kind"],
+  term: string | undefined,
+  sourceFamilies: string[]
+): TiSourceProvenanceProjectionWatchlistTerm | undefined {
+  if (!term) return undefined;
+  const normalizedTerm = term.trim();
+  if (!normalizedTerm) return undefined;
+  const termId = stableId("ti_source_provenance_projection_watchlist_term", `${projection.id}:${kind}:${normalizedTerm}`);
+  const watchlistItemId = stableId("org_watchlist_item", `${projection.organizationId ?? ""}:${kind}:${normalizedTerm}`);
+  const alertGeneratorKey = `org:${projection.organizationId ?? "unknown"}:source_projection:${watchlistItemId}:${kind}:${normalizedTerm.toLowerCase()}`;
+  return {
+    termId,
+    watchlistItemId,
+    alertGeneratorKey,
+    kind,
+    term: normalizedTerm,
+    sourceFamilies,
+    confidence: projection.pageReadiness.state === "ready" ? 0.91 : 0.5,
+    provenance: {
+      publicTiSourceOpsProjectionId: projection.id,
+      sourceOpsFixtureBundleId: projection.sourceOpsFixtureBundleId,
+      sourceFreshnessGapPacketId: projection.provenanceRows[0]?.provenance.sourceFreshnessGapPacketId ?? projection.sourceOpsFixtureBundleId,
+      parserHealthAlertPacketId: projection.provenanceRows[0]?.provenance.parserHealthAlertPacketId ?? projection.sourceOpsFixtureBundleId,
+      sourceOpsActionQueueId: projection.provenanceRows[0]?.provenance.sourceOpsActionQueueId ?? projection.sourceOpsFixtureBundleId,
+      fixtureBacked: true
+    },
+    alertGenerationRef: {
+      schemaVersion: "organization.watchlist_alert_generation_ref.v1",
+      source: "public_ti_source_ops_projection",
+      organizationId: projection.organizationId,
+      term: normalizedTerm,
+      key: alertGeneratorKey
+    }
+  };
+}
+
+function projectionWatchlistBlockers(
+  projection: TiSourceProvenancePublicTiSourceOpsProjection,
+  watchlistTerms: TiSourceProvenanceProjectionWatchlistTerm[]
+): TiSourceProvenanceProjectionWatchlistBlocker[] {
+  return uniqueProjectionWatchlistBlockers([
+    !projection.organizationId
+      ? projectionWatchlistBlocker("missing_organization_scope", "org", "organizationId", "materialize_watchlist_terms", projection.publicTiRoute)
+      : undefined,
+    !projection.ok
+      ? projectionWatchlistBlocker("projection_not_ready", "publicTI", "pageReadiness.state", "repair_source_ops", projection.publicTiRoute)
+      : undefined,
+    ...projection.enrichmentGaps.map((gap) => projectionWatchlistBlockerForGap(gap)),
+    watchlistTerms.length === 0
+      ? projectionWatchlistBlocker("no_watchlist_terms", "publicTI", "watchlistTerms", "materialize_watchlist_terms", projection.publicTiRoute)
+      : undefined
+  ].filter(Boolean) as TiSourceProvenanceProjectionWatchlistBlocker[]);
+}
+
+function projectionWatchlistBlockerForGap(
+  gap: TiSourceProvenancePublicTiSourceOpsProjectionGap
+): TiSourceProvenanceProjectionWatchlistBlocker {
+  const code = gap.code === "parser_retry_scheduled"
+    ? "parser_gap_blocking"
+    : (gap.code === "wrong_actor_query" || gap.code === "unsupported_source_family" || gap.code === "duplicate_candidate"
+      ? "source_validation_blocking"
+      : "projection_not_ready");
+  return {
+    code,
+    ownerLane: gap.ownerLane === "parser" ? "parser" : gap.ownerLane === "publicTI" ? "publicTI" : "source",
+    path: "enrichmentGaps[]",
+    reasonCode: gap.code,
+    sourceFamily: gap.sourceFamily,
+    nextAction: gap.nextAction,
+    route: gap.route
+  };
+}
+
+function projectionWatchlistBlocker(
+  code: TiSourceProvenanceProjectionWatchlistBlocker["code"],
+  ownerLane: TiSourceProvenanceProjectionWatchlistBlocker["ownerLane"],
+  path: string,
+  nextAction: string,
+  publicTiRoute: string
+): TiSourceProvenanceProjectionWatchlistBlocker {
+  return {
+    code,
+    ownerLane,
+    path,
+    nextAction,
+    route: {
+      method: "GET",
+      path: publicTiRoute,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function projectionWatchlistNextActions(
+  projection: TiSourceProvenancePublicTiSourceOpsProjection,
+  blockers: TiSourceProvenanceProjectionWatchlistBlocker[],
+  watchlistTerms: TiSourceProvenanceProjectionWatchlistTerm[]
+): TiSourceProvenanceProjectionWatchlistRelevance["nextActions"] {
+  if (blockers.length === 0 && watchlistTerms.length > 0) {
+    return [{
+      action: "request_alert_rebuild",
+      ownerLane: "alert",
+      reasonCode: "watchlist_terms_ready",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          actor: projection.actor,
+          organizationId: projection.organizationId,
+          sourceProjectionId: projection.id,
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    }];
+  }
+  return uniqueProjectionWatchlistActions(blockers.map((blocker) => ({
+    action: projectionWatchlistAction(blocker),
+    ownerLane: projectionWatchlistActionOwner(blocker),
+    reasonCode: blocker.reasonCode ?? blocker.code,
+    route: blocker.route
+  })));
+}
+
+function projectionWatchlistAction(
+  blocker: TiSourceProvenanceProjectionWatchlistBlocker
+): TiSourceProvenanceProjectionWatchlistRelevance["nextActions"][number]["action"] {
+  if (blocker.reasonCode === "parser_retry_scheduled") return "retry_parser";
+  if (blocker.code === "source_validation_blocking") return "review_validation_issue";
+  if (blocker.code === "no_watchlist_terms" || blocker.code === "missing_organization_scope") return "materialize_watchlist_terms";
+  return "repair_source_ops";
+}
+
+function projectionWatchlistActionOwner(
+  blocker: TiSourceProvenanceProjectionWatchlistBlocker
+): TiSourceProvenanceProjectionWatchlistRelevance["nextActions"][number]["ownerLane"] {
+  if (blocker.ownerLane === "org") return "org";
+  if (blocker.ownerLane === "parser") return "parser";
+  if (blocker.ownerLane === "publicTI") return "publicTI";
+  return "source";
+}
+
+function uniqueProjectionWatchlistBlockers(
+  blockers: TiSourceProvenanceProjectionWatchlistBlocker[]
+): TiSourceProvenanceProjectionWatchlistBlocker[] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.path}:${blocker.reasonCode ?? ""}:${blocker.sourceFamily ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueProjectionWatchlistActions(
+  actions: TiSourceProvenanceProjectionWatchlistRelevance["nextActions"]
+): TiSourceProvenanceProjectionWatchlistRelevance["nextActions"] {
+  const seen = new Set<string>();
+  return actions.filter((action) => {
+    const key = `${action.action}:${action.ownerLane}:${action.reasonCode}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function uniqueSourceFreshnessGaps(
