@@ -2011,6 +2011,34 @@ export type OrganizationReadinessProof = {
         blockerCodes: string[]
         nonmemberEnumeration: false
     }
+    caseAssignmentProof: {
+        schemaVersion: 'organization.case_assignment_readiness.v1'
+        sourceContracts: Array<'organization.case_visibility_consumer.v1' | 'organization.alert_case_bridge_persistence_receipt.v1' | 'organization.shared_watchlist_alert_queue_visibility.v1'>
+        route: 'POST /v1/cases/:caseId/assignment'
+        organizationId: string
+        tenantId: string
+        actor: {
+            role: OrganizationRole
+            canAssignCase: boolean
+            allowedActions: OrganizationAlertCaseAction[]
+        }
+        roleGates: {
+            assignCase: Array<'owner' | 'admin' | 'analyst'>
+            linkCase: Array<'owner' | 'admin' | 'analyst'>
+            acknowledgeAlert: Array<'owner' | 'admin' | 'analyst' | 'member'>
+            memberReadOnly: true
+            viewerReadOnly: true
+        }
+        requiredCaseFields: Array<'organizationId' | 'tenantId' | 'caseId' | 'assigneeId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'visibilityDecision' | 'assignmentAudit.requestId'>
+        requiredAlertFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.allowedActions'>
+        visibilityInputs: Array<'member.role' | 'member.status' | 'organization.lifecycleStatus' | 'watchlist.status' | 'alertVisibilityPolicy'>
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'watchlist_paused' | 'watchlist_archived' | 'role_not_allowed'>
+        blockerCodes: string[]
+        nonmemberEnumeration: false
+        crossOrgCaseAssignmentAllowed: false
+        noLeakFields: Array<'otherOrg.caseIds' | 'otherOrg.alertGeneratorKeys' | 'case.evidence.rawContent'>
+        proofAssertions: Array<'case_org_matches_alert_org' | 'assignee_membership_is_active' | 'member_cannot_assign_case' | 'nonmember_cannot_enumerate_cases'>
+    }
     webhookDeliveryProof: {
         schemaVersion: 'organization.webhook_delivery_visibility_proof.v1'
         deliveryContractSchema: 'dwm.webhook.org_alert_delivery.v1'
@@ -5061,6 +5089,14 @@ export function organizationReadinessProof(input: {
         input.lifecycleReadiness.lifecycleStatus === 'deleted' ? 'org_deleted' : undefined,
         input.downstreamAuthorization.member.status === 'active' ? undefined : 'member_revoked',
     ].filter(Boolean) as Array<'needs_10_active_members_or_pending_invites' | 'needs_shared_watchlist_item' | 'no_active_terms' | 'org_archived' | 'org_deleted' | 'member_revoked'>))
+    const actorCaseActions = organizationAlertCaseRoleActions(input.downstreamAuthorization.member.role)
+    const canAssignCase = actorCaseActions.includes('assign_case')
+    const caseAssignmentBlockerCodes = Array.from(new Set([
+        ...input.lifecycleReadiness.typedBlockers,
+        ...input.alertGenerationBridge.blockedReasons,
+        ...input.downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+        canAssignCase ? undefined : 'role_not_allowed',
+    ].filter(Boolean).map(String))).sort()
 
     return {
         schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
@@ -5134,6 +5170,75 @@ export function organizationReadinessProof(input: {
             allowedActions: input.downstreamAuthorization.allowedActions,
             blockerCodes: blockers,
             nonmemberEnumeration: false,
+        },
+        caseAssignmentProof: {
+            schemaVersion: 'organization.case_assignment_readiness.v1',
+            sourceContracts: [
+                'organization.case_visibility_consumer.v1',
+                'organization.alert_case_bridge_persistence_receipt.v1',
+                'organization.shared_watchlist_alert_queue_visibility.v1',
+            ],
+            route: 'POST /v1/cases/:caseId/assignment',
+            organizationId: input.downstreamAuthorization.organizationId,
+            tenantId: input.downstreamAuthorization.tenantId,
+            actor: {
+                role: input.downstreamAuthorization.member.role,
+                canAssignCase,
+                allowedActions: actorCaseActions,
+            },
+            roleGates: {
+                assignCase: ['owner', 'admin', 'analyst'],
+                linkCase: ['owner', 'admin', 'analyst'],
+                acknowledgeAlert: ['owner', 'admin', 'analyst', 'member'],
+                memberReadOnly: true,
+                viewerReadOnly: true,
+            },
+            requiredCaseFields: [
+                'organizationId',
+                'tenantId',
+                'caseId',
+                'assigneeId',
+                'watchlistItemIds',
+                'alertGeneratorKeys',
+                'visibilityDecision',
+                'assignmentAudit.requestId',
+            ],
+            requiredAlertFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'workflowContext.alertGeneratorKeys',
+                'workflowContext.allowedActions',
+            ],
+            visibilityInputs: [
+                'member.role',
+                'member.status',
+                'organization.lifecycleStatus',
+                'watchlist.status',
+                'alertVisibilityPolicy',
+            ],
+            lifecycleBlockers: [
+                'org_archived',
+                'org_deleted',
+                'member_revoked',
+                'watchlist_paused',
+                'watchlist_archived',
+                'role_not_allowed',
+            ],
+            blockerCodes: caseAssignmentBlockerCodes,
+            nonmemberEnumeration: false,
+            crossOrgCaseAssignmentAllowed: false,
+            noLeakFields: [
+                'otherOrg.caseIds',
+                'otherOrg.alertGeneratorKeys',
+                'case.evidence.rawContent',
+            ],
+            proofAssertions: [
+                'case_org_matches_alert_org',
+                'assignee_membership_is_active',
+                'member_cannot_assign_case',
+                'nonmember_cannot_enumerate_cases',
+            ],
         },
         webhookDeliveryProof: {
             schemaVersion: 'organization.webhook_delivery_visibility_proof.v1',
