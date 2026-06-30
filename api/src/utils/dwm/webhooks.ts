@@ -4307,6 +4307,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
                     secretRotated: 0,
                     testRequired: 0,
                 },
+                lifecycleActions: [],
             },
             blockers: policyBlockers,
             destinations: [],
@@ -4446,6 +4447,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
                 secretRotated: rows.filter(row => row.lifecycleState.secretRotated).length,
                 testRequired: rows.filter(row => row.lifecycleState.testRequired).length,
             },
+            lifecycleActions: dashboardLifecycleActionSummary(rows),
         },
         blockers: uniqueDashboardReadinessBlockers([
             ...policyBlockers,
@@ -10032,6 +10034,69 @@ function dashboardPrimaryHealthStatus(states: string[]) {
         if (states.includes(status)) return status
     }
     return 'unverified'
+}
+
+function dashboardLifecycleActionSummary(rows: Array<{
+    destinationId: string
+    lifecycleState: ReturnType<typeof destinationLifecycleState>
+}>) {
+    const dryRunRows = rows.filter(row => row.lifecycleState.requiredActions.dryRunTest)
+    const enableRows = rows.filter(row => row.lifecycleState.requiredActions.enableDestination)
+    const updateRows = rows.filter(row => row.lifecycleState.requiredActions.updateDestination)
+    const ownerReviewRows = rows.filter(row => row.lifecycleState.revokedOwner)
+    const actions = [
+        dryRunRows.length
+            ? {
+                action: 'dry_run_test',
+                count: dryRunRows.length,
+                destinationIds: dryRunRows.map(row => row.destinationId),
+                routeTemplate: 'POST /api/dwm/webhook-destinations/{destinationId}/test',
+                noNetworkDefault: true,
+                liveSendAllowed: false,
+            }
+            : null,
+        enableRows.length
+            ? {
+                action: 'enable_destination',
+                count: enableRows.length,
+                destinationIds: enableRows.map(row => row.destinationId),
+                routeTemplate: 'PATCH /api/dwm/webhook-destinations/{destinationId}',
+                bodyPreview: { status: 'active' },
+                noNetworkDefault: true,
+                liveSendAllowed: false,
+            }
+            : null,
+        updateRows.length
+            ? {
+                action: 'review_destination_owner_or_secret',
+                count: updateRows.length,
+                destinationIds: updateRows.map(row => row.destinationId),
+                routeTemplate: 'PATCH /api/dwm/webhook-destinations/{destinationId}',
+                noNetworkDefault: true,
+                liveSendAllowed: false,
+            }
+            : null,
+        ownerReviewRows.length
+            ? {
+                action: 'review_revoked_owner',
+                count: ownerReviewRows.length,
+                destinationIds: ownerReviewRows.map(row => row.destinationId),
+                routeTemplate: 'PATCH /api/dwm/webhook-destinations/{destinationId}',
+                noNetworkDefault: true,
+                liveSendAllowed: false,
+            }
+            : null,
+    ].filter(Boolean) as Array<Record<string, unknown>>
+
+    return actions.map(action => ({
+        ...action,
+        redaction: {
+            endpointExposed: false,
+            webhookSecretExposed: false,
+            actorExposed: false,
+            safeForCustomerDisplay: true,
+        },
+    }))
 }
 
 function destinationHealthStates(health: ReturnType<typeof buildDwmWebhookDestinationHealth>[number]) {
