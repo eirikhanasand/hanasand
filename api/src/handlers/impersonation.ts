@@ -602,6 +602,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             decisionPacket: impersonationTimelineDecisionPacket(filters, timeline),
             lifecycleReceipt: impersonationLifecycleReceipt(filters, timeline),
             guardrailReplay: supportImpersonationGuardrailAuditReplay(filters, guardrailAudit),
+            caseReview: impersonationCaseReviewPacket(filters, timeline, guardrailAudit),
             events: timeline,
             redacted: true,
             links: {
@@ -981,6 +982,167 @@ function impersonationTimelineDecisionPacket(filters: Record<string, unknown>, t
             `Events: ${timeline.map(event => event.id).join(', ') || 'none'}`,
             `Active sessions: ${activeSessionIds.join(', ') || 'none'}`,
             `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
+function impersonationCaseReviewPacket(filters: Record<string, unknown>, timeline: Array<Record<string, any>>, guardrailRows: Array<Record<string, any>>) {
+    const sessionIds = uniqueImpersonationValues(timeline.map(event => event.entity?.id))
+    const actorIds = uniqueImpersonationValues(timeline.map(event => event.actor?.id))
+    const targetIds = uniqueImpersonationValues(timeline.map(event => event.target?.id))
+    const startEvents = timeline.filter(event => event.actionType === 'impersonation.start')
+    const stopEvents = timeline.filter(event => event.actionType === 'impersonation.stop' || event.scope?.revokedAt)
+    const stoppedSessionIds = new Set(stopEvents.map(event => cleanText(event.entity?.id)).filter(Boolean))
+    const activeSessionIds = startEvents
+        .map(event => cleanText(event.entity?.id))
+        .filter(sessionId => sessionId && !stoppedSessionIds.has(sessionId))
+    const missingReasonEventIds = timeline
+        .filter(event => !cleanText(event.reason))
+        .map(event => Number(event.id))
+        .filter(id => Number.isFinite(id))
+    const missingDurationEventIds = startEvents
+        .filter(event => !event.scope?.durationMinutes)
+        .map(event => Number(event.id))
+        .filter(id => Number.isFinite(id))
+    const expiredSessionIds = startEvents
+        .filter(event => {
+            const expires = Date.parse(String(event.scope?.expiresAt || ''))
+            return !Number.isNaN(expires) && expires <= Date.now() && !stoppedSessionIds.has(cleanText(event.entity?.id))
+        })
+        .map(event => cleanText(event.entity?.id))
+        .filter(Boolean)
+    const guardrailEvents = guardrailRows.map(row => {
+        const context = row.context && typeof row.context === 'object' ? row.context as Record<string, unknown> : {}
+        return {
+            id: Number(row.id),
+            actionType: cleanText(row.action_type),
+            outcome: cleanText(row.outcome),
+            severity: cleanText(row.severity),
+            actorId: cleanText(row.actor_id),
+            targetId: cleanText(row.target_id),
+            entityId: cleanText(row.entity_id),
+            requestId: cleanText(row.request_id),
+            reason: cleanText(row.reason),
+            supportSessionId: cleanText(context.supportSessionId || context.sessionId),
+            blockerCode: cleanText(context.blockerCode || context.errorCode),
+            durationMinutes: context.durationMinutes ?? null,
+            scope: Array.isArray(context.scope) ? context.scope.map(item => cleanText(item)).filter(Boolean) : [],
+            createdAt: row.created_at || null,
+        }
+    })
+    const guardrailBlockers = uniqueImpersonationValues(guardrailEvents.map(event => event.blockerCode))
+    const deniedGuardrailIds = guardrailEvents
+        .filter(event => event.outcome === 'denied' || event.blockerCode)
+        .map(event => event.id)
+        .filter(id => Number.isFinite(id))
+    return {
+        schemaVersion: 'support.impersonation.case_review.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noMutation: true,
+        noSilentImpersonation: true,
+        supportRoleRequired: true,
+        expectedConsumers: ['support', 'case.replay', 'integration'],
+        filters,
+        summary: {
+            lifecycleEventIds: timeline.map(event => Number(event.id)).filter(id => Number.isFinite(id)),
+            guardrailEventIds: guardrailEvents.map(event => event.id).filter(id => Number.isFinite(id)),
+            deniedGuardrailIds,
+            actorIds,
+            targetIds,
+            sessionIds,
+            activeSessionIds,
+            stoppedSessionIds: Array.from(stoppedSessionIds),
+            expiredSessionIds,
+            missingReasonEventIds,
+            missingDurationEventIds,
+            guardrailBlockers,
+            operatorReviewRequired: Boolean(activeSessionIds.length || expiredSessionIds.length || missingReasonEventIds.length || missingDurationEventIds.length || deniedGuardrailIds.length),
+        },
+        operatorNotes: {
+            reasonRequired: true,
+            scopeRequired: true,
+            durationRequired: true,
+            requesterIdentityRequired: true,
+            targetIdentityRequired: true,
+            reviewFields: ['reason', 'scope', 'durationMinutes', 'supportSessionId', 'targetUserId', 'organizationId', 'auditEventIds'],
+            denialReasonCodes: uniqueImpersonationValues([
+                ...guardrailBlockers,
+                missingReasonEventIds.length ? 'missing_reason_on_impersonation_event' : '',
+                missingDurationEventIds.length ? 'missing_duration_on_impersonation_start' : '',
+                expiredSessionIds.length ? 'expired_impersonation_session' : '',
+            ]),
+        },
+        timelineEntries: timeline.map(event => ({
+            schemaVersion: 'support.impersonation.case_timeline_entry.v1',
+            auditEventId: Number(event.id),
+            timestamp: event.timestamp || null,
+            actionType: event.actionType,
+            outcome: event.outcome,
+            severity: event.severity,
+            actorId: event.actor?.id || null,
+            targetId: event.target?.id || null,
+            supportSessionId: event.entity?.id || null,
+            reason: event.reason || null,
+            durationMinutes: event.scope?.durationMinutes ?? null,
+            expiresAt: event.scope?.expiresAt || null,
+            revokedAt: event.scope?.revokedAt || null,
+            reviewRequired: !cleanText(event.reason) || !event.scope?.durationMinutes || Boolean(event.scope?.revokedAt),
+            links: event.links,
+            redacted: true,
+        })),
+        guardrailEvents,
+        replayFilters: {
+            lifecycle: impersonationEventsQuery(filters),
+            starts: impersonationEventsQuery({ ...filters, action: 'impersonation.start' }),
+            stops: impersonationEventsQuery({ ...filters, action: 'impersonation.stop' }),
+            denied: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+            guardrails: '/api/admin/audit-events?action=impersonation.start&source=admin&service=hanasand-api',
+            bySession: sessionIds.map(session => impersonationEventsQuery({ ...filters, session })),
+            byTarget: targetIds.map(target => impersonationEventsQuery({ ...filters, target })),
+            byReason: filters.reason ? impersonationEventsQuery({ ...filters, reason: filters.reason }) : null,
+        },
+        nextRoutes: {
+            timeline: impersonationEventsQuery(filters),
+            start: '/api/impersonation/start',
+            auditReplay: '/api/admin/audit-events?action=impersonation&source=admin&service=hanasand-api',
+            deniedAudit: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
+            supportSessions: sessionIds.map(session => `/api/admin/support/sessions/${encodeURIComponent(session)}`),
+        },
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noSilentMembershipMutation: true,
+            noSilentImpersonation: true,
+            noCrossOrgLeakage: true,
+            redactionRequired: true,
+        },
+        denialStates: [
+            'missing_support_reason',
+            'invalid_duration',
+            'invalid_scope',
+            'support_session_not_found',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_actor_mismatch',
+            'support_session_org_mismatch',
+            'support_session_user_mismatch',
+            'support_session_scope_denied',
+            'support_session_duration_exceeds_scope',
+            'expired_impersonation_session',
+            'redaction_required',
+        ],
+        blockers: [
+            timeline.length ? '' : 'lifecycle_events_unavailable',
+            missingReasonEventIds.length ? 'missing_reason_on_impersonation_event' : '',
+            missingDurationEventIds.length ? 'missing_duration_on_impersonation_start' : '',
+            expiredSessionIds.length ? 'expired_impersonation_session' : '',
+            deniedGuardrailIds.length ? 'denied_guardrail_audit_events_present' : '',
+        ].filter(Boolean),
+        copyText: [
+            'Support impersonation case review',
+            `Lifecycle replay: ${impersonationEventsQuery(filters)}`,
+            `Sessions: ${sessionIds.join(', ') || 'none'}`,
+            `Denied guardrails: ${deniedGuardrailIds.join(', ') || 'none'}`,
         ].join('\n'),
     }
 }
