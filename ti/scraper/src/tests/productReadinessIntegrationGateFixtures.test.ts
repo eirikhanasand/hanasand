@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
   PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_INTEGRATION_GATE_FIXTURE_SCHEMA_VERSION,
+  PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
   buildProductReadinessIntegrationGateFixture,
   buildProductReadinessIntegrationGateFixtures,
-  productReadinessConsumerProofMetadataGuard
+  productReadinessConsumerProofMetadataGuard,
+  productReadinessSchemaLookupMetadataGuard
 } from "../product/productReadinessIntegrationGateFixtures.ts";
 import { contractIndex } from "../api/contractsRoute.ts";
 
@@ -32,6 +34,11 @@ describe("product readiness integration gate fixtures", () => {
     expect(fixture.copyGuard.violationCount).toBe(0);
     expect(fixture.consumerProofMetadata).toMatchObject({
       schemaVersion: PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION,
+      ok: true,
+      blockerCodes: []
+    });
+    expect(fixture.schemaLookupMetadata).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
       ok: true,
       blockerCodes: []
     });
@@ -135,6 +142,36 @@ describe("product readiness integration gate fixtures", () => {
         ])
       }
     });
+    expect(byKind.get("malformed_schema_lookup_metadata")).toMatchObject({
+      passed: true,
+      gate: { ok: true, decision: "pass" },
+      expectedBlockerCodes: [
+        "missing_schema_lookup_route",
+        "missing_schema_lookup_scope_fields",
+        "missing_schema_lookup_blocker_codes",
+        "missing_schema_lookup_consumer_route",
+        "missing_schema_lookup_consumer_required_fields",
+        "unsafe_schema_lookup_row"
+      ],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_schema_lookup_route",
+        "missing_schema_lookup_scope_fields",
+        "missing_schema_lookup_blocker_codes",
+        "missing_schema_lookup_consumer_route",
+        "missing_schema_lookup_consumer_required_fields",
+        "unsafe_schema_lookup_row"
+      ]),
+      schemaLookupMetadata: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            contractId: "product_readiness_receipt_matrix",
+            ok: false,
+            unsafeFields: ["safeOutput.rawEvidenceExposed"]
+          })
+        ])
+      }
+    });
   });
 
   test("keeps fixture output metadata-only for integration logs", () => {
@@ -191,6 +228,54 @@ describe("product readiness integration gate fixtures", () => {
             "downstream_owner_mismatch"
           ])
         })
+      ])
+    });
+  });
+
+  test("validates schema lookup metadata for contract consumers", () => {
+    const contract = JSON.parse(JSON.stringify(contractIndex())) as ReturnType<typeof contractIndex>;
+    const guard = productReadinessSchemaLookupMetadataGuard(contract);
+
+    expect(guard).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      ok: true,
+      blockerCodes: [],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+
+    const broken = JSON.parse(JSON.stringify(contract)) as ReturnType<typeof contractIndex>;
+    const row = broken.schemaLookup.rows.find((item) => item.contractId === "source_provenance_receipts");
+    if (!row) throw new Error("source provenance schema lookup row missing from readiness fixture");
+    row.schemaId = "";
+    row.contractId = "";
+    row.ownerLane = "" as any;
+    row.route = "source/no-leading-slash";
+    row.scopeFields = [];
+    row.blockerCodes = [];
+    row.downstreamConsumers = [{ ownerLane: "", route: "", requiredFields: [] }];
+    row.safeOutput = { ...row.safeOutput, crossOrgDataExposed: true };
+
+    const brokenGuard = productReadinessSchemaLookupMetadataGuard(broken);
+
+    expect(brokenGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_schema_lookup_schema_id",
+        "missing_schema_lookup_contract_id",
+        "missing_schema_lookup_owner_lane",
+        "missing_schema_lookup_route",
+        "missing_schema_lookup_scope_fields",
+        "missing_schema_lookup_blocker_codes",
+        "missing_schema_lookup_consumer_owner",
+        "missing_schema_lookup_consumer_route",
+        "missing_schema_lookup_consumer_required_fields",
+        "unsafe_schema_lookup_row"
       ])
     });
   });
