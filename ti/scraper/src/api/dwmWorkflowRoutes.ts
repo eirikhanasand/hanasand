@@ -1215,6 +1215,18 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     handling: item.redactionState === "metadata_only" ? "Only metadata is retained for this source." : "Public-safe excerpt retained for review."
   }));
   const downstreamHandoff = buildDwmAlertDownstreamHandoff({ alert, deliveries, ...downstreamLifecycleForAlert(options, alert) });
+  const workflowExecutionReadiness = buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId });
+  const deliveryReadiness = buildDwmAlertDeliveryReadiness(alert, deliveries);
+  const evidenceFreshness = buildDwmAlertEvidenceFreshness(alert);
+  const provenanceFreshness = buildDwmAlertProvenanceFreshness(alert);
+  const customerReadiness = buildDwmAlertCustomerReadiness({
+    alert,
+    downstreamHandoff,
+    workflowExecutionReadiness,
+    deliveryReadiness,
+    evidenceFreshness,
+    provenanceFreshness
+  });
 
   return {
     schemaVersion: "dwm.alert_detail.v1",
@@ -1223,7 +1235,7 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     alert: buildDwmAlertListItem(alert, options, deliveries),
     workflowSummary: buildDwmAlertWorkflowSummary(alert),
     alertEventSummary: buildDwmAlertEventSummary(alert),
-    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
+    workflowExecutionReadiness,
     analystWorkflowContract: buildDwmAlertAnalystWorkflowContract(alert),
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries }),
     downstreamHandoff,
@@ -1232,9 +1244,10 @@ function buildDwmAlertDetail(alert: any, options: ApiServerOptions, access?: Dwm
     retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, deliveries),
-    deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, deliveries),
-    evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
-    provenanceFreshness: buildDwmAlertProvenanceFreshness(alert),
+    deliveryReadiness,
+    evidenceFreshness,
+    provenanceFreshness,
+    customerReadiness,
     deliveries,
     timeline,
     evidenceReplay,
@@ -1272,6 +1285,7 @@ function buildDwmAlertDetailConsumerContract(alert: any, evidenceReplay: any[]) 
       "deliveryReadiness",
       "evidenceFreshness",
       "provenanceFreshness",
+      "customerReadiness",
       "evidenceReplay",
       "sourceExplanations"
     ],
@@ -1347,11 +1361,15 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
   const alertDeliveries = deliveries ?? ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
   const workflowSummary = buildDwmAlertWorkflowSummary(alert);
   const downstreamHandoff = buildDwmAlertDownstreamHandoff({ alert, deliveries: alertDeliveries, ...downstreamLifecycleForAlert(options, alert) });
+  const workflowExecutionReadiness = buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId });
+  const deliveryReadiness = buildDwmAlertDeliveryReadiness(alert, alertDeliveries);
+  const evidenceFreshness = buildDwmAlertEvidenceFreshness(alert);
+  const provenanceFreshness = buildDwmAlertProvenanceFreshness(alert);
   return {
     ...alert,
     alertDetailPath: alertDetailPathFor(alert),
     workflowSummary,
-    workflowExecutionReadiness: buildDwmAlertWorkflowExecutionReadiness({ alert, organizationId: alert.organizationId }),
+    workflowExecutionReadiness,
     customerProofHandoff: buildDwmAlertCustomerProofHandoffRow({ alert, deliveries: alertDeliveries }),
     downstreamHandoff,
     alertCreatedDispatch: downstreamHandoff.createdEventDispatch,
@@ -1359,9 +1377,194 @@ function buildDwmAlertListItem(alert: any, options: ApiServerOptions, deliveries
     retentionAudit: buildDwmAlertRetentionAudit({ alert, deliveries: alertDeliveries, downstreamHandoff }),
     caseHandoff: buildDwmAlertCaseHandoff(alert),
     nextBestAction: buildDwmAlertNextBestAction(alert, alertDeliveries),
-    deliveryReadiness: buildDwmAlertDeliveryReadiness(alert, alertDeliveries),
-    evidenceFreshness: buildDwmAlertEvidenceFreshness(alert),
-    provenanceFreshness: buildDwmAlertProvenanceFreshness(alert)
+    deliveryReadiness,
+    evidenceFreshness,
+    provenanceFreshness,
+    customerReadiness: buildDwmAlertCustomerReadiness({
+      alert,
+      downstreamHandoff,
+      workflowExecutionReadiness,
+      deliveryReadiness,
+      evidenceFreshness,
+      provenanceFreshness
+    })
+  };
+}
+
+function buildDwmAlertCustomerReadiness(input: {
+  alert: any;
+  downstreamHandoff: ReturnType<typeof buildDwmAlertDownstreamHandoff>;
+  workflowExecutionReadiness: ReturnType<typeof buildDwmAlertWorkflowExecutionReadiness>;
+  deliveryReadiness: ReturnType<typeof buildDwmAlertDeliveryReadiness>;
+  evidenceFreshness: ReturnType<typeof buildDwmAlertEvidenceFreshness>;
+  provenanceFreshness: ReturnType<typeof buildDwmAlertProvenanceFreshness>;
+}) {
+  const alert = input.alert;
+  const evidenceCount = Number(input.evidenceFreshness.evidenceCount ?? input.downstreamHandoff.evidence.evidenceCount ?? 0);
+  const selectedCaptureIds = uniqueAlertStrings([
+    ...alertStringArray(input.downstreamHandoff.evidence.selectedCaptureIds),
+    ...alertStringArray(input.deliveryReadiness.selectedCaptureIds)
+  ]);
+  const captureIds = uniqueAlertStrings([
+    ...alertStringArray(input.downstreamHandoff.evidence.captureIds),
+    ...alertStringArray(input.evidenceFreshness.captureIds),
+    ...alertStringArray(input.provenanceFreshness.captureIds)
+  ]);
+  const sourceIds = uniqueAlertStrings([
+    ...alertStringArray(input.downstreamHandoff.evidence.sourceIds),
+    ...alertStringArray(input.provenanceFreshness.sourceIds)
+  ]);
+  const watchlistIds = uniqueAlertStrings([
+    ...alertStringArray(input.downstreamHandoff.watchlist.watchlistIds),
+    ...alertStringArray(alert.watchlistIds ?? alert.workflowContext?.watchlistIds)
+  ]);
+  const watchlistItemIds = uniqueAlertStrings([
+    ...alertStringArray(input.downstreamHandoff.watchlist.watchlistItemIds),
+    ...alertStringArray(alert.watchlistItemIds ?? alert.workflowContext?.watchlistItemIds)
+  ]);
+  const actionRows = (["assign", "note", "transition", "case_link", "replay", "close", "reopen", "suppress", "deliver"] as const).map((action) => {
+    const readiness = buildDwmAlertWorkflowExecutionReadiness({
+      alert,
+      organizationId: input.downstreamHandoff.organizationId ?? alert.organizationId,
+      action,
+      caseAvailable: action === "case_link" ? input.downstreamHandoff.caseReadiness.ready : undefined,
+      deliveryAvailable: action === "deliver" ? input.downstreamHandoff.deliverySelection.ready : undefined
+    });
+    return {
+      action,
+      ready: readiness.ready,
+      blockerCodes: readiness.blockerCodes,
+      idempotencyKey: readiness.idempotencyKey
+    };
+  });
+  const alertBlockerCodes = uniqueAlertStrings([
+    evidenceCount <= 0 ? "missing_capture_evidence" : undefined,
+    !selectedCaptureIds.length ? "missing_capture_evidence" : undefined,
+    !watchlistIds.length ? "missing_watchlist_ref" : undefined,
+    !input.downstreamHandoff.dedupe.alertDedupeKey ? "missing_dedupe_key" : undefined
+  ].filter(Boolean).map(String));
+  const blockerCodes = uniqueAlertStrings([
+    ...alertBlockerCodes,
+    ...input.downstreamHandoff.blockerCodes.map(String),
+    ...input.downstreamHandoff.deliverySelection.blockerCodes.map(String),
+    ...input.workflowExecutionReadiness.blockerCodes.map(String),
+    ...alertStringArray(input.deliveryReadiness.blockerCodes)
+  ]);
+  const readyForQueue = alertBlockerCodes.length === 0;
+  const readyForCase = Boolean(input.downstreamHandoff.caseReadiness.ready);
+  const readyForDelivery = Boolean(input.downstreamHandoff.deliverySelection.ready);
+  const workflowReady = actionRows.some((row) => row.ready);
+  return {
+    schemaVersion: "dwm.alert_customer_readiness.v1",
+    alertId: String(alert.id ?? input.downstreamHandoff.alertId ?? ""),
+    tenantId: input.downstreamHandoff.tenantId ?? alert.tenantId,
+    organizationId: input.downstreamHandoff.organizationId ?? alert.organizationId,
+    ready: readyForQueue && readyForCase && readyForDelivery && workflowReady && blockerCodes.length === 0,
+    state: !readyForQueue
+      ? "missing_alert_inputs"
+      : !readyForCase
+        ? "case_handoff_blocked"
+        : !readyForDelivery
+          ? "delivery_handoff_blocked"
+          : !workflowReady
+            ? "workflow_blocked"
+            : blockerCodes.length
+              ? "blocked"
+              : "ready",
+    alertReadiness: {
+      ready: readyForQueue,
+      sourceFamily: input.downstreamHandoff.sourceFamily ?? alert.sourceFamily,
+      matchReason: input.downstreamHandoff.matchReason,
+      evidenceCount,
+      selectedCaptureIds,
+      captureIds,
+      sourceIds,
+      watchlistIds,
+      watchlistItemIds,
+      alertGenerationRefs: input.downstreamHandoff.watchlist.alertGenerationRefs,
+      dedupeKey: input.downstreamHandoff.dedupe.alertDedupeKey,
+      deliveryDedupeKey: input.downstreamHandoff.dedupe.deliveryDedupeKey,
+      recommendedRoute: alert.recommendedRoute ?? alert.webhookDelivery?.recommendedRoute,
+      firstSeenAt: input.evidenceFreshness.firstSeenAt,
+      lastSeenAt: input.evidenceFreshness.lastSeenAt,
+      newestEvidenceAt: input.evidenceFreshness.newestEvidenceAt,
+      provenanceGeneratedAt: input.downstreamHandoff.evidence.provenanceGeneratedAt,
+      blockerCodes: alertBlockerCodes
+    },
+    caseHandoff: {
+      ready: readyForCase,
+      route: input.downstreamHandoff.caseReadiness.route,
+      caseIdCandidate: input.downstreamHandoff.caseReadiness.caseIdCandidate,
+      caseId: input.downstreamHandoff.caseReadiness.caseId,
+      casePath: input.downstreamHandoff.caseReadiness.casePath,
+      idempotencyKey: input.downstreamHandoff.caseReadiness.idempotencyKey
+    },
+    deliveryReadiness: {
+      ready: readyForDelivery,
+      selectedWebhookDestinationId: input.downstreamHandoff.deliverySelection.selectedWebhookDestinationId,
+      webhookDestinationIds: input.downstreamHandoff.deliverySelection.webhookDestinationIds,
+      enabledWebhookDestinationIds: input.downstreamHandoff.deliverySelection.enabledWebhookDestinationIds,
+      deliveryHistoryRefs: input.downstreamHandoff.deliveryReadiness.deliveryHistoryRefs,
+      deliveryDedupeKey: input.downstreamHandoff.deliverySelection.deliveryDedupeKey,
+      idempotencyKey: input.downstreamHandoff.deliverySelection.idempotencyKey,
+      blockerCodes: input.downstreamHandoff.deliverySelection.blockerCodes
+    },
+    workflowReadiness: {
+      ready: workflowReady,
+      status: alert.workflowStatus ?? "new",
+      assignedOwner: alert.assignedOwner,
+      eventCount: input.downstreamHandoff.workflowVersion.eventCount,
+      transitionActions: input.downstreamHandoff.workflowTransitions.actions,
+      readyActions: actionRows.filter((row) => row.ready).map((row) => row.action),
+      blockedActions: actionRows.filter((row) => !row.ready).map((row) => ({
+        action: row.action,
+        blockerCodes: row.blockerCodes
+      })),
+      actionReadiness: {
+        schemaVersion: "dwm.alert_action_readiness_summary.v1",
+        actions: actionRows
+      }
+    },
+    sourceCoverage: {
+      sourceFamily: input.downstreamHandoff.sourceFamily ?? alert.sourceFamily,
+      evidenceCount,
+      selectedCaptureIds,
+      captureIds,
+      sourceIds,
+      contentHashes: input.evidenceFreshness.contentHashes,
+      freshnessState: input.evidenceFreshness.newestEvidenceAt ? "has_recent_evidence" : "missing_evidence_timestamp",
+      provenanceReady: sourceIds.length > 0 && captureIds.length > 0,
+      blockerCodes: uniqueAlertStrings([
+        evidenceCount <= 0 ? "missing_capture_evidence" : undefined,
+        !sourceIds.length ? "missing_provenance" : undefined,
+        !captureIds.length ? "missing_capture_evidence" : undefined
+      ].filter(Boolean).map(String))
+    },
+    blockerCodes,
+    blockerReasons: [
+      ...input.downstreamHandoff.blockers.map((blocker) => ({
+        code: blocker.code,
+        field: blocker.field,
+        detail: blocker.detail,
+        recoverable: blocker.recoverable
+      })),
+      ...alertBlockerCodes.map((code) => ({
+        code,
+        field: code === "missing_watchlist_ref" ? "watchlistIds" : code === "missing_dedupe_key" ? "dedupeKey" : "evidence",
+        detail: code === "missing_watchlist_ref"
+          ? "Alert is missing the org/shared watchlist reference needed for customer scoped queues."
+          : code === "missing_dedupe_key"
+            ? "Alert is missing a stable dedupe key for workflow-preserving updates."
+            : "Alert is missing selected capture evidence for customer review.",
+        recoverable: true
+      }))
+    ],
+    consumerFields: {
+      dashboard: ["id", "alertDetailPath", "customerReadiness.alertReadiness", "customerReadiness.workflowReadiness", "customerReadiness.blockerCodes"],
+      webhook: ["customerReadiness.deliveryReadiness", "alertCreatedDispatch", "downstreamHandoff.createdEventDispatch"],
+      publicTI: ["customerReadiness.sourceCoverage", "customerReadiness.alertReadiness.matchReason", "sourceProvenanceSummary"],
+      analystPortal: ["customerReadiness.workflowReadiness", "caseHandoff", "nextBestAction"]
+    }
   };
 }
 
@@ -1469,6 +1672,12 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].alertEventSummary",
         "alerts[].evidenceFreshness",
         "alerts[].provenanceFreshness",
+        "alerts[].customerReadiness",
+        "alerts[].customerReadiness.alertReadiness.matchReason",
+        "alerts[].customerReadiness.sourceCoverage",
+        "alerts[].customerReadiness.workflowReadiness",
+        "alerts[].customerReadiness.deliveryReadiness",
+        "alerts[].customerReadiness.caseHandoff",
         "alertQueueVisibility.orgAlertWorkflowBridge",
         "alertQueueVisibility.zeroAlertProof",
         "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",

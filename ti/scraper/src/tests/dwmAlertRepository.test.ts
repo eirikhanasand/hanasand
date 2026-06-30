@@ -3757,6 +3757,66 @@ describe("dwm alert repository", () => {
     expect(list.alerts[0].workflowContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
     expect(list.alerts[0].webhookContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
     expect(list.alerts[0].webhookContext.dedupeKey).toBe(list.alerts[0].dedupeKey);
+    expect(list.alerts[0].customerReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_customer_readiness.v1",
+      alertId: rebuild.alerts[0].id,
+      tenantId: "tenant_api_acme",
+      ready: false,
+      state: "delivery_handoff_blocked",
+      alertReadiness: {
+        ready: true,
+        sourceFamily: "telegram_public",
+        evidenceCount: 2,
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        dedupeKey: list.alerts[0].dedupeKey,
+        deliveryDedupeKey: list.alerts[0].dedupeKey,
+        recommendedRoute: "identity_response",
+        blockerCodes: []
+      },
+      caseHandoff: {
+        ready: true,
+        caseIdCandidate: list.alerts[0].caseIdCandidate,
+        casePath: list.alerts[0].casePath
+      },
+      deliveryReadiness: {
+        ready: false,
+        webhookDestinationIds: []
+      },
+      workflowReadiness: {
+        ready: true,
+        status: "triaged",
+        assignedOwner: "api-analyst-1",
+        eventCount: 1,
+        readyActions: ["assign", "note", "transition", "case_link", "replay", "close", "reopen", "suppress"]
+      },
+      sourceCoverage: {
+        sourceFamily: "telegram_public",
+        evidenceCount: 2,
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        sourceIds: ["src_repo_tg"],
+        provenanceReady: true,
+        blockerCodes: []
+      }
+    });
+    expect(list.alerts[0].customerReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(list.alerts[0].customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(list.alerts[0].customerReadiness.alertReadiness.matchReason).toMatchObject({
+      schemaVersion: "dwm.alert_match_reason.v1",
+      matchedTerm: {
+        value: "acme.com",
+        normalized: "acme.com",
+        kind: "domain"
+      },
+      evidenceCount: 2
+    });
+    const actionReadinessRows = new Map<string, any>(list.alerts[0].customerReadiness.workflowReadiness.actionReadiness.actions.map((row: any) => [row.action, row]));
+    expect(actionReadinessRows.get("deliver")).toMatchObject({ action: "deliver", ready: false });
+    expect(actionReadinessRows.get("deliver").blockerCodes).toContain("delivery_unavailable");
+    expect(list.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.deliveryReadiness");
+    expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness");
+    expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.alertReadiness.matchReason");
+    expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.deliveryReadiness");
 
     const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1${list.alerts[0].alertDetailPath}`), options);
     const detail = await detailResponse.json() as any;
@@ -3768,6 +3828,30 @@ describe("dwm alert repository", () => {
     expect(detail.downstreamHandoff.evidence.generationEvidenceWindow.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
     expect(detail.consumerContract.evidence.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
     expect(detail.consumerContract.persistedReadModel.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
+    expect(detail.customerReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_customer_readiness.v1",
+      alertId: rebuild.alerts[0].id,
+      alertReadiness: {
+        ready: true,
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        blockerCodes: []
+      },
+      caseHandoff: {
+        ready: true,
+        casePath: list.alerts[0].casePath
+      },
+      deliveryReadiness: {
+        ready: false
+      },
+      workflowReadiness: {
+        status: "triaged",
+        assignedOwner: "api-analyst-1",
+        eventCount: 1
+      }
+    });
+    expect(detail.customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(detail.alert.customerReadiness.alertReadiness.matchReason.matchedTerm.normalized).toBe("acme.com");
+    expect(detail.consumerContract.stableFields).toContain("customerReadiness");
   });
 
   test("API readiness explains zero alerts when captures do not match watchlist terms", async () => {
