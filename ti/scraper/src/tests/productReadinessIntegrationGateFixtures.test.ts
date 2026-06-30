@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_INTEGRATION_GATE_FIXTURE_SCHEMA_VERSION,
   buildProductReadinessIntegrationGateFixture,
-  buildProductReadinessIntegrationGateFixtures
+  buildProductReadinessIntegrationGateFixtures,
+  productReadinessConsumerProofMetadataGuard
 } from "../product/productReadinessIntegrationGateFixtures.ts";
+import { contractIndex } from "../api/contractsRoute.ts";
 
 describe("product readiness integration gate fixtures", () => {
   test("keeps the valid readiness contract passing", () => {
@@ -27,6 +30,11 @@ describe("product readiness integration gate fixtures", () => {
     });
     expect(fixture.coverage.failingRows).toEqual([]);
     expect(fixture.copyGuard.violationCount).toBe(0);
+    expect(fixture.consumerProofMetadata).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION,
+      ok: true,
+      blockerCodes: []
+    });
   });
 
   test("fails clear canaries for missing, stale, malformed, unsafe, and prompt-literal readiness", () => {
@@ -97,6 +105,36 @@ describe("product readiness integration gate fixtures", () => {
         ])
       }
     });
+    expect(byKind.get("malformed_consumer_proof_metadata")).toMatchObject({
+      passed: true,
+      gate: { ok: true, decision: "pass" },
+      expectedBlockerCodes: ["missing_consumer_route", "missing_consumer_required_fields", "downstream_owner_mismatch"],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_consumer_route",
+        "missing_consumer_required_fields",
+        "downstream_owner_mismatch"
+      ]),
+      consumerProofMetadata: {
+        ok: false,
+        blockerCodes: expect.arrayContaining([
+          "missing_consumer_route",
+          "missing_consumer_required_fields",
+          "downstream_owner_mismatch"
+        ]),
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            capabilityId: "shared_watchlists",
+            ok: false,
+            downstreamConsumerCount: 1,
+            consumerProofs: [expect.objectContaining({
+              ownerLane: "alert",
+              route: "",
+              requiredFieldCount: 0
+            })]
+          })
+        ])
+      }
+    });
   });
 
   test("keeps fixture output metadata-only for integration logs", () => {
@@ -107,5 +145,53 @@ describe("product readiness integration gate fixtures", () => {
     expect(serialized).not.toContain("webhookUrl");
     expect(serialized).not.toContain("rawText");
     expect(serialized).not.toContain("password");
+  });
+
+  test("validates downstream consumer proof metadata without route internals", () => {
+    const contract = JSON.parse(JSON.stringify(contractIndex())) as ReturnType<typeof contractIndex>;
+    const guard = productReadinessConsumerProofMetadataGuard(contract);
+
+    expect(guard).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      ok: true,
+      blockerCodes: [],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+
+    const broken = JSON.parse(JSON.stringify(contract)) as ReturnType<typeof contractIndex>;
+    const row = broken.productReadinessReceiptMatrix.rows.find((item) => item.capabilityId === "dashboard_operator_workspace");
+    if (!row) throw new Error("dashboard_operator_workspace row missing from readiness fixture");
+    row.downstreamConsumers = [{ ownerLane: "", route: "dashboard/no-leading-slash", requiredFields: [] }];
+    row.downstreamOwners = ["dashboard", "case"];
+
+    const brokenGuard = productReadinessConsumerProofMetadataGuard(broken);
+
+    expect(brokenGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_consumer_owner",
+        "missing_consumer_route",
+        "missing_consumer_required_fields",
+        "downstream_owner_mismatch"
+      ]),
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          capabilityId: "dashboard_operator_workspace",
+          ok: false,
+          blockerCodes: expect.arrayContaining([
+            "missing_consumer_owner",
+            "missing_consumer_route",
+            "missing_consumer_required_fields",
+            "downstream_owner_mismatch"
+          ])
+        })
+      ])
+    });
   });
 });

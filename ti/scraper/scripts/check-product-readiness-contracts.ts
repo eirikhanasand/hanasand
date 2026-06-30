@@ -1,18 +1,39 @@
 import { contractIndex } from "../src/api/contractsRoute.ts";
-import { buildProductReadinessIntegrationGateFixtures } from "../src/product/productReadinessIntegrationGateFixtures.ts";
+import {
+  buildProductReadinessIntegrationGateFixtures,
+  productReadinessConsumerProofMetadataGuard
+} from "../src/product/productReadinessIntegrationGateFixtures.ts";
 
 const contract = contractIndex();
 const gate = contract.productReadinessIntegrationGate;
+const consumerProofMetadata = productReadinessConsumerProofMetadataGuard(contract);
+const consumerProofMetadataSummary = {
+  schemaVersion: consumerProofMetadata.schemaVersion,
+  route: consumerProofMetadata.route,
+  ok: consumerProofMetadata.ok,
+  rowCount: consumerProofMetadata.rowCount,
+  blockerCodes: consumerProofMetadata.blockerCodes,
+  failingRows: consumerProofMetadata.rows.filter((row) => !row.ok).map((row) => ({
+    capabilityId: row.capabilityId,
+    ownerLane: row.ownerLane,
+    blockerCodes: row.blockerCodes,
+    downstreamConsumerCount: row.downstreamConsumerCount,
+    declaredDownstreamOwners: row.declaredDownstreamOwners,
+    expectedDownstreamOwners: row.expectedDownstreamOwners
+  })),
+  safeOutput: consumerProofMetadata.safeOutput
+};
 const fixtures = buildProductReadinessIntegrationGateFixtures();
 const fixtureChecks = fixtures.map((fixture) => ({
   kind: fixture.kind,
   passed: fixture.passed,
   expectedBlockerCodes: fixture.expectedBlockerCodes,
   actualBlockerCodes: fixture.actualBlockerCodes,
-  gateDecision: fixture.gate.decision
+  gateDecision: fixture.gate.decision,
+  consumerProofMetadataOk: fixture.consumerProofMetadata.ok
 }));
 const fixturesOk = fixtureChecks.every((fixture) => fixture.passed);
-const ok = gate.ok && fixturesOk;
+const ok = gate.ok && consumerProofMetadata.ok && fixturesOk;
 
 console.log(JSON.stringify({
   ok,
@@ -30,6 +51,7 @@ console.log(JSON.stringify({
     blockerCodes: check.blockerCodes,
     evidence: check.evidence
   })),
+  consumerProofMetadata: consumerProofMetadataSummary,
   fixtureSchemaVersion: fixtures[0]?.schemaVersion,
   fixtureChecks,
   safeOutput: gate.safeOutput
