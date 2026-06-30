@@ -473,6 +473,20 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     onReview={() => applyDecision('reviewing')}
                                 />
 
+                                <SourceCoverageWorkbench
+                                    actor={actorIntel}
+                                    actionability={actionability}
+                                    sources={sources}
+                                    sourcePosture={collectionSources}
+                                    workItems={workItems}
+                                    selectedId={selected?.id}
+                                    sourceOptions={queueSourceOptions}
+                                    onSelectEvidence={setSelectedId}
+                                    onFilterSource={setQueueSourceFilter}
+                                    onEscalate={() => applyDecision('escalated')}
+                                    onReview={() => applyDecision('reviewing')}
+                                />
+
                                 <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                             </div>
                         ) : (
@@ -560,10 +574,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                 </Panel>
             </section>
 
-            <section className='grid gap-4 lg:grid-cols-[1fr_1fr]'>
-                <CoverageStrategyPanel sources={collectionSources} />
-                <SourceLinksPanel sources={sources} />
-            </section>
         </div>
     )
 }
@@ -1372,6 +1382,27 @@ type ActorOperationsRow = {
     payload: Record<string, unknown>
 }
 
+type SourceCoverageWorkbenchRow = {
+    id: string
+    sourceName: string
+    family: string
+    provenance: string
+    href?: string
+    newestAt?: string
+    parserStatus: string
+    state: 'ready' | 'review' | 'blocked'
+    confidenceValues: number[]
+    artifactTypes: string[]
+    evidenceItems: AnalystWorkItem[]
+    captureId?: string
+    sourceRequestId?: string
+    sourceId?: string
+    missing: string[]
+    nextAction: string
+    queueFilter?: string
+    payload: Record<string, unknown>
+}
+
 function ActorActionStrip({
     actor,
     actionability,
@@ -1573,6 +1604,159 @@ function ActorOperationsMatrix({
                         </div>
                     ) : (
                         <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a row to inspect details.</p>
+                    )}
+                </div>
+            </div>
+        </section>
+    )
+}
+
+function SourceCoverageWorkbench({
+    actor,
+    actionability,
+    sources,
+    sourcePosture,
+    workItems,
+    selectedId,
+    sourceOptions,
+    onSelectEvidence,
+    onFilterSource,
+    onEscalate,
+    onReview,
+}: {
+    actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    sources: TiSearchResponse['sources']
+    sourcePosture: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture']
+    workItems: AnalystWorkItem[]
+    selectedId?: string
+    sourceOptions: string[]
+    onSelectEvidence: (id: string) => void
+    onFilterSource: (source: string) => void
+    onEscalate: () => void
+    onReview: () => void
+}) {
+    const rows = useMemo(() => sourceCoverageWorkbenchRowsFor({ actor, actionability, sources, sourcePosture, workItems, sourceOptions }), [actor, actionability, sources, sourcePosture, workItems, sourceOptions])
+    const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id ?? '')
+    useEffect(() => {
+        if (!rows.length) return
+        if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
+    }, [rows, selectedRowId])
+    const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
+    const readyCount = rows.filter(row => row.state === 'ready').length
+    const reviewCount = rows.filter(row => row.state === 'review').length
+    const blockedCount = rows.filter(row => row.state === 'blocked').length
+
+    return (
+        <section data-ti-source-coverage-workbench='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source workbench</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Coverage, provenance, capture state, and evidence linkage by source family.</p>
+                </div>
+                <div className='flex min-w-0 flex-wrap gap-1.5'>
+                    <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
+                    <span className={sourceHealthChipClass('review')}>{reviewCount} review</span>
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'ready')}>{blockedCount} blocked</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy source row' payload={selectedRow.payload} /> : null}
+                </div>
+            </div>
+            <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
+                <div className='min-w-0 overflow-x-auto'>
+                    <table className='min-w-[860px] w-full border-collapse text-left text-xs'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Source</th>
+                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Newest</th>
+                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Artifacts</th>
+                                <th className='px-3 py-2 font-semibold'>State</th>
+                                <th className='px-3 py-2 font-semibold'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                            {rows.map(row => {
+                                const active = selectedRow?.id === row.id
+                                const linkedSelected = row.evidenceItems.some(item => item.id === selectedId)
+                                return (
+                                    <tr key={row.id} className={`${active || linkedSelected ? 'bg-[#eef3ff] dark:bg-[#172646]' : 'bg-white dark:bg-[#101722]'} align-top`}>
+                                        <td className='px-3 py-2'>
+                                            <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
+                                                <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</span>
+                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.family)}</span>
+                                            </button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} rows</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? displayRequirementText(row.parserStatus)}</p>
+                                        </td>
+                                        <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                {row.artifactTypes.length ? row.artifactTypes.slice(0, 4).map(type => (
+                                                    <span key={`${row.id}-${type}`} className='rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{type}</span>
+                                                )) : <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>Source only</span>}
+                                            </div>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.nextAction)}</p>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
+                                                {row.evidenceItems[0] ? (
+                                                    <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button>
+                                                ) : null}
+                                                {row.queueFilter ? (
+                                                    <button type='button' onClick={() => onFilterSource(row.queueFilter!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Filter</button>
+                                                ) : null}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No source rows returned.</p> : null}
+                </div>
+                <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
+                    {selectedRow ? (
+                        <div className='grid gap-3'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected source</p>
+                                <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.sourceName}</h3>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.provenance)}</p>
+                            </div>
+                            <div className='grid grid-cols-2 gap-2 text-xs'>
+                                <EvidenceMetric label='Family' value={formatLabel(selectedRow.family)} />
+                                <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
+                                <EvidenceMetric label='Capture' value={selectedRow.captureId ? 'Attached' : 'Missing'} />
+                                <EvidenceMetric label='Request' value={selectedRow.sourceRequestId ? 'Queued' : 'None'} />
+                            </div>
+                            {selectedRow.missing.length ? (
+                                <div className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                                    {selectedRow.missing.slice(0, 3).map(sourceHealthFieldLabel).join(', ')}
+                                </div>
+                            ) : null}
+                            <div className='grid grid-cols-2 gap-1.5'>
+                                <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
+                                <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
+                            </div>
+                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                {selectedRow.href ? (
+                                    <a href={selectedRow.href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                        <ExternalLink className='h-3.5 w-3.5' />
+                                        Open source
+                                    </a>
+                                ) : null}
+                                <CopyPayloadButton label='Copy source' payload={selectedRow.payload} showLabel />
+                            </div>
+                        </div>
+                    ) : (
+                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a source row to inspect evidence and gaps.</p>
                     )}
                 </div>
             </div>
@@ -7357,6 +7541,246 @@ function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntellig
         .slice(0, 16)
 }
 
+function sourceCoverageWorkbenchRowsFor({
+    actor,
+    actionability,
+    sources,
+    sourcePosture,
+    workItems,
+    sourceOptions,
+}: {
+    actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    sources: TiSearchResponse['sources']
+    sourcePosture: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture']
+    workItems: AnalystWorkItem[]
+    sourceOptions: string[]
+}): SourceCoverageWorkbenchRow[] {
+    const sourceById = new Map(sources.map(source => [source.id, source]))
+    const rows: SourceCoverageWorkbenchRow[] = []
+
+    for (const row of actionability.sourceHealthQueue.rows) {
+        const source = row.sourceId ? sourceById.get(row.sourceId) : undefined
+        rows.push(sourceCoverageWorkbenchRow({
+            id: row.id,
+            sourceName: row.sourceName,
+            family: row.sourceFamily,
+            provenance: row.provenance,
+            href: source?.url || linkFromText(row.provenance),
+            newestAt: row.timestamp,
+            parserStatus: row.parserStatus,
+            state: row.state,
+            confidenceValues: [row.confidence].filter((value): value is number => typeof value === 'number'),
+            captureId: row.captureId,
+            sourceRequestId: row.sourceRequestId,
+            sourceId: row.sourceId,
+            missing: row.requestedFields,
+            nextAction: row.nextAction,
+            actor,
+            workItems,
+            sourceOptions,
+            extraPayload: {
+                sourceHealthRow: row,
+            },
+        }))
+    }
+
+    for (const row of actor.provenanceRows) {
+        rows.push(sourceCoverageWorkbenchRow({
+            id: `source-coverage:${row.sourceId ?? row.sourceName}:${row.provenance}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: row.sourceName,
+            family: row.sourceFamily || 'public_report',
+            provenance: row.provenance,
+            href: linkFromText(row.provenance),
+            newestAt: row.lastCollectedAt || row.reportDate,
+            parserStatus: row.parserStatus || (row.captureId ? 'capture linked' : 'public reference'),
+            state: row.captureId ? 'ready' : actor.sourceCoverage.stale ? 'review' : 'review',
+            confidenceValues: [row.confidence].filter((value): value is number => typeof value === 'number'),
+            captureId: row.captureId,
+            sourceRequestId: row.sourceRequestId,
+            sourceId: row.sourceId,
+            missing: [
+                row.captureId ? '' : 'sourceProvenance[].captureId',
+                row.reportDate || row.lastCollectedAt ? '' : 'actorIntelligence.structuredProvenance[].reportDate',
+            ].filter(Boolean),
+            nextAction: row.shownBecause,
+            actor,
+            workItems,
+            sourceOptions,
+            extraPayload: {
+                provenanceRow: row,
+            },
+        }))
+    }
+
+    for (const source of sources) {
+        const href = source.url || linkFromText(source.provenance)
+        rows.push(sourceCoverageWorkbenchRow({
+            id: `source-link:${source.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            sourceName: source.name,
+            family: source.type,
+            provenance: source.url || source.provenance || source.name,
+            href,
+            newestAt: actor.sourceCoverage.latestReportDate || actor.lastSeen,
+            parserStatus: href ? 'source link attached' : 'source reference only',
+            state: href ? (actor.sourceCoverage.stale ? 'review' : 'ready') : 'review',
+            confidenceValues: [],
+            sourceId: source.id,
+            missing: source.url || source.provenance ? [] : ['sourceProvenance[].provenance'],
+            nextAction: href ? 'Open source and attach matching evidence row when routing to case work.' : 'Attach source URL or provenance reference before routing.',
+            actor,
+            workItems,
+            sourceOptions,
+            extraPayload: {
+                sourceRecord: source,
+            },
+        }))
+    }
+
+    if (!rows.length) {
+        for (const posture of sourcePosture.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4)) {
+            rows.push(sourceCoverageWorkbenchRow({
+                id: `source-posture:${posture.source}:${posture.role}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+                sourceName: posture.source,
+                family: posture.role,
+                provenance: posture.source,
+                newestAt: actor.sourceCoverage.latestReportDate || actor.lastSeen,
+                parserStatus: sourceRoleLabel(posture.role),
+                state: 'review',
+                confidenceValues: [],
+                missing: actor.sourceCoverage.missing,
+                nextAction: posture.summary,
+                actor,
+                workItems,
+                sourceOptions,
+                extraPayload: {
+                    sourcePosture: posture,
+                },
+            }))
+        }
+    }
+
+    return uniqueBy(rows, row => row.sourceId ? `id:${row.sourceId}` : `${row.sourceName}:${row.provenance}`)
+        .sort((a, b) => sourceCoverageStateRank(a.state) - sourceCoverageStateRank(b.state)
+            || Date.parse(b.newestAt || '') - Date.parse(a.newestAt || '')
+            || b.evidenceItems.length - a.evidenceItems.length
+            || a.sourceName.localeCompare(b.sourceName))
+        .slice(0, 12)
+}
+
+function sourceCoverageWorkbenchRow(input: {
+    id: string
+    sourceName: string
+    family: string
+    provenance: string
+    href?: string
+    newestAt?: string
+    parserStatus: string
+    state: 'ready' | 'review' | 'blocked'
+    confidenceValues: number[]
+    captureId?: string
+    sourceRequestId?: string
+    sourceId?: string
+    missing: string[]
+    nextAction: string
+    actor: TiActorIntelligenceProfile
+    workItems: AnalystWorkItem[]
+    sourceOptions: string[]
+    extraPayload: Record<string, unknown>
+}): SourceCoverageWorkbenchRow {
+    const evidenceItems = workItemsForSource(input.workItems, input.sourceName, input.provenance, input.sourceId)
+    const confidenceValues = uniqueNumbers([...input.confidenceValues, ...evidenceItems.map(item => item.confidence)])
+    const artifactTypes = sourceArtifactTypesFor(input.actor, input.sourceName, input.provenance, input.sourceId, evidenceItems)
+    const queueFilter = input.sourceOptions.find(option => option.toLowerCase() === input.sourceName.toLowerCase())
+        ?? input.sourceOptions.find(option => evidenceItems.some(item => item.source === option))
+    const missing = unique(input.missing.map(displayRequirementText))
+    const payload = {
+        schemaVersion: 'ti.public_actor.source_coverage_workbench.v1',
+        source: 'public-ti',
+        sourceName: input.sourceName,
+        sourceId: input.sourceId,
+        sourceFamily: input.family,
+        provenance: input.provenance,
+        href: input.href,
+        newestAt: input.newestAt,
+        parserStatus: displayRequirementText(input.parserStatus),
+        state: input.state,
+        confidenceValues,
+        artifactTypes,
+        captureId: input.captureId,
+        sourceRequestId: input.sourceRequestId,
+        missing,
+        evidenceRows: evidenceItems.map(item => ({
+            id: item.id,
+            kind: item.kind,
+            title: item.title,
+            timestamp: item.timestamp,
+            confidence: item.confidence,
+            provenance: item.provenance,
+        })),
+        nextAction: displayRequirementText(input.nextAction),
+        ...input.extraPayload,
+    }
+    return {
+        id: input.id,
+        sourceName: input.sourceName,
+        family: input.family,
+        provenance: input.provenance,
+        href: input.href,
+        newestAt: input.newestAt,
+        parserStatus: input.parserStatus,
+        state: input.state,
+        confidenceValues,
+        artifactTypes,
+        evidenceItems,
+        captureId: input.captureId,
+        sourceRequestId: input.sourceRequestId,
+        sourceId: input.sourceId,
+        missing,
+        nextAction: input.nextAction,
+        queueFilter,
+        payload,
+    }
+}
+
+function workItemsForSource(items: AnalystWorkItem[], sourceName: string, provenance: string, sourceId?: string) {
+    const tokens = unique([sourceName, provenance, sourceId ?? ''])
+        .map(token => token.toLowerCase())
+        .filter(token => token.length > 2)
+    return items.filter(item => {
+        const body = `${item.source} ${item.provenance} ${item.evidence.join(' ')}`.toLowerCase()
+        return tokens.some(token => body.includes(token))
+    }).slice(0, 6)
+}
+
+function sourceArtifactTypesFor(actor: TiActorIntelligenceProfile, sourceName: string, provenance: string, sourceId: string | undefined, evidenceItems: AnalystWorkItem[]) {
+    const tokens = unique([sourceName, provenance, sourceId ?? '']).map(token => token.toLowerCase()).filter(token => token.length > 2)
+    const types = [
+        actor.techniqueCoverage.some(item => item.sourceIds.some(id => sourceId && id === sourceId) || item.provenanceRefs.some(ref => tokens.some(token => ref.toLowerCase().includes(token)))) ? 'TTP' : '',
+        actor.campaignTimeline.some(item => item.sourceIds.some(id => sourceId && id === sourceId) || item.provenanceRefs.some(ref => tokens.some(token => ref.toLowerCase().includes(token)))) ? 'Campaign' : '',
+        ...evidenceItems.map(item => formatLabel(item.kind)),
+    ]
+    return unique(types.filter(Boolean)).slice(0, 5)
+}
+
+function sourceCoverageStateRank(state: SourceCoverageWorkbenchRow['state']) {
+    if (state === 'blocked') return 0
+    if (state === 'review') return 1
+    return 2
+}
+
+function sourceConfidenceLabel(values: number[]) {
+    if (!values.length) return 'Not scored'
+    const sorted = values.slice().sort((a, b) => a - b)
+    const low = Math.round(sorted[0]! * 100)
+    const high = Math.round(sorted[sorted.length - 1]! * 100)
+    return low === high ? `${high}%` : `${low}-${high}%`
+}
+
+function uniqueNumbers(values: number[]) {
+    return Array.from(new Set(values.map(value => Math.max(0, Math.min(1, value)))))
+}
+
 function sourceCountsFor(items: AnalystWorkItem[]) {
     const counts = new Map<string, number>()
     for (const item of items) {
@@ -7765,51 +8189,6 @@ function Panel({ title, description, icon, children }: { title: string; descript
             </div>
             {children}
         </section>
-    )
-}
-
-function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchResponse['collectionStrategy']>['sourcePosture'] }) {
-    return (
-        <Panel title='Source Coverage' description='How the result is assembled: public indexes can seed coverage, direct monitored pages provide freshness, and advisories add vulnerability context.' icon={<Database className='h-4 w-4' />}>
-            <div className='grid gap-3'>
-                {sources.filter(source => source.role !== 'rejected_paid_rows').slice(0, 4).map(source => (
-                    <div key={`${source.source}-${source.role}`} className='rounded-lg border border-[#eef1f5] bg-[#f8fafc] p-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>{source.source}</h3>
-                            <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{sourceRoleLabel(source.role)}</span>
-                        </div>
-                        <p className='mt-2 text-sm leading-6 text-[#596170]'>{displayRequirementText(source.summary)}</p>
-                        <p className='mt-2 text-xs leading-5 text-[#667085]'>{displayRequirementText(source.buyerValue)}</p>
-                    </div>
-                ))}
-            </div>
-        </Panel>
-    )
-}
-
-function SourceLinksPanel({ sources }: { sources: TiSearchResponse['sources'] }) {
-    const visibleSources = sources.slice(0, 5)
-    const hiddenCount = Math.max(0, sources.length - visibleSources.length)
-    return (
-        <Panel title='Source Records' description='Named sources used for this result. Public visitors see a limited set; customer console access can show additional source links and internal capture details.' icon={<ExternalLink className='h-4 w-4' />}>
-            <div className='grid gap-1'>
-                {visibleSources.map(source => {
-                    const href = source.url || linkFromText(source.provenance)
-                    return (
-                        <EvidenceBox key={source.id} href={href}>
-                            <h2 className='inline-flex items-center gap-1 text-sm font-semibold text-[#171a21]'>{source.name}{href ? <ExternalLink className='h-3 w-3 text-[#3056d3]' /> : null}</h2>
-                            <p className='text-xs text-[#667085]'>{sourceTypeLabel(source.type)}</p>
-                            <p className='text-sm leading-6 text-[#596170]'>{sourceDisplayText(source)}</p>
-                        </EvidenceBox>
-                    )
-                })}
-                {hiddenCount > 0 ? (
-                    <div className='mt-2 rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 text-sm leading-6 text-[#596170]'>
-                        {hiddenCount} additional source{hiddenCount === 1 ? '' : 's'} available in the customer console.
-                    </div>
-                ) : null}
-            </div>
-        </Panel>
     )
 }
 
@@ -8321,28 +8700,6 @@ function sourceActivationExecutionClass(value: NonNullable<TiSearchResponse['ana
     return decisionStepStatusClass('blocked')
 }
 
-function sourceTypeLabel(value: string) {
-    if (/news/i.test(value)) return 'Recent reporting'
-    if (/victim|claim|ransom/i.test(value)) return 'Victim claims'
-    if (/vulnerab|cve|kev/i.test(value)) return 'Vulnerability context'
-    if (/darknet|darkweb|actor/i.test(value)) return 'Actor-page records'
-    return 'Source'
-}
-
-function sourceDisplayText(source: TiSearchResponse['sources'][number]) {
-    const href = source.url || linkFromText(source.provenance)
-    if (href) {
-        try {
-            const url = new URL(href)
-            if (/news\.google\.com$/i.test(url.hostname)) return 'Linked report via Google News'
-            return url.hostname.replace(/^www\./, '')
-        } catch {
-            return 'Open source'
-        }
-    }
-    return readableSourceText(source.provenance)
-}
-
 function linkFromText(value?: string) {
     if (!value) return undefined
     const match = value.match(/\bhttps?:\/\/[^\s<>"']+/i)
@@ -8354,16 +8711,4 @@ function linkFromText(value?: string) {
         return undefined
     }
     return undefined
-}
-
-function readableSourceText(value?: string) {
-    if (!value) return 'Source details available in the console'
-    if (/^https?:\/\//i.test(value)) {
-        try {
-            return new URL(value).hostname.replace(/^www\./, '')
-        } catch {
-            return 'Open source'
-        }
-    }
-    return value.replace(/^Scraper run [^;]+;\s*/i, '').replace(/^Live query text;\s*/i, '')
 }
