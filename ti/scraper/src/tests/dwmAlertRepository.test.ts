@@ -3854,6 +3854,24 @@ describe("dwm alert repository", () => {
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.transitionHandoff");
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.transitionHandoff.replayReceipt");
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.deliveryReadiness");
+    expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alertQueueVisibility.customerReadinessSummary");
+    expect(list.alertQueueVisibility.customerReadinessSummary).toMatchObject({
+      schemaVersion: "dwm.alert_queue_customer_readiness_summary.v1",
+      alertCount: 1,
+      readyCount: 0,
+      blockedCount: 1,
+      caseReadyCount: 1,
+      deliveryReadyCount: 0,
+      replayReadyCount: 0,
+      workflowReadyCount: 1,
+      deliveryHistoryCount: 0,
+      sourceFamilies: ["telegram_public"],
+      selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      watchlistItemIds: [list.alerts[0].watchlistItemIds[0]],
+      blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]),
+      states: ["delivery_handoff_blocked"],
+      filters: expect.arrayContaining(["customerReadinessState", "deliveryReady", "replayReady", "readinessBlocker"])
+    });
     expect(list.alertQueueVisibility.consumerContract.filters).toEqual(expect.arrayContaining(["customerReadinessState", "caseReady", "deliveryReady", "readinessBlocker", "readyAction", "blockedAction", "transitionAction"]));
 
     const readinessFilteredResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme&customerReadinessState=delivery_handoff_blocked&caseReady=true&deliveryReady=false&readinessBlocker=missing_org_ref&readyAction=replay&blockedAction=deliver&transitionAction=assigned"), options);
@@ -3875,6 +3893,14 @@ describe("dwm alert repository", () => {
     expect(deliveryReadyResponse.status).toBe(200);
     expect(deliveryReadyList.alerts).toHaveLength(0);
     expect(deliveryReadyList.alertQueueVisibility.counts.visibleAlertCount).toBe(0);
+    expect(deliveryReadyList.alertQueueVisibility.customerReadinessSummary).toMatchObject({
+      alertCount: 0,
+      readyCount: 0,
+      deliveryReadyCount: 0,
+      replayReadyCount: 0,
+      sourceFamilies: [],
+      blockerCodes: []
+    });
 
     const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1${list.alerts[0].alertDetailPath}`), options);
     const detail = await detailResponse.json() as any;

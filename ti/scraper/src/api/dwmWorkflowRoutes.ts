@@ -1686,6 +1686,7 @@ function buildDwmAlertQueueVisibility(input: {
     alerts: input.alerts,
     checkedAt: nowIso()
   });
+  const customerReadinessSummary = buildDwmAlertQueueCustomerReadinessSummary(input.alerts);
   return {
     schemaVersion: "dwm.org_alert_queue_visibility.v1",
     organizationId: input.organizationId,
@@ -1728,6 +1729,7 @@ function buildDwmAlertQueueVisibility(input: {
       zeroAlertProof: generationReadiness.zeroAlertProof
     },
     zeroAlertProof: generationReadiness.zeroAlertProof,
+    customerReadinessSummary,
     orgAlertWorkflowBridge,
     consumerContract: {
       schemaVersion: "dwm.alert_queue_consumer_contract.v1",
@@ -1752,6 +1754,9 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].customerReadiness.webhookReplayReadiness",
         "alerts[].customerReadiness.deliveryReadiness",
         "alerts[].customerReadiness.caseHandoff",
+        "alertQueueVisibility.customerReadinessSummary",
+        "alertQueueVisibility.customerReadinessSummary.blockerCodes",
+        "alertQueueVisibility.customerReadinessSummary.sourceFamilies",
         "alertQueueVisibility.orgAlertWorkflowBridge",
         "alertQueueVisibility.zeroAlertProof",
         "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
@@ -1799,6 +1804,47 @@ function buildDwmAlertQueueVisibility(input: {
     },
     safeForDashboard: true,
     nonmemberEnumeration: false
+  };
+}
+
+function buildDwmAlertQueueCustomerReadinessSummary(alerts: any[]) {
+  const readinessRows = alerts
+    .map((alert: any) => alert.customerReadiness)
+    .filter(Boolean);
+  const sourceFamilies = uniqueAlertStrings(readinessRows
+    .map((row: any) => row.alertReadiness?.sourceFamily ?? row.sourceCoverage?.sourceFamily)
+    .filter(Boolean).map(String));
+  const blockerCodes = uniqueAlertStrings(readinessRows
+    .flatMap((row: any) => [
+      ...(row.blockerCodes ?? []),
+      ...(row.deliveryReadiness?.blockerCodes ?? []),
+      ...(row.webhookReplayReadiness?.blockerCodes ?? []),
+      ...(row.sourceCoverage?.blockerCodes ?? [])
+    ])
+    .filter(Boolean).map(String));
+  const selectedCaptureIds = uniqueAlertStrings(readinessRows
+    .flatMap((row: any) => row.alertReadiness?.selectedCaptureIds ?? row.webhookReplayReadiness?.selectedCaptureIds ?? [])
+    .filter(Boolean).map(String));
+  const watchlistItemIds = uniqueAlertStrings(readinessRows
+    .flatMap((row: any) => row.alertReadiness?.watchlistItemIds ?? row.webhookReplayReadiness?.watchlistItemIds ?? [])
+    .filter(Boolean).map(String));
+  return {
+    schemaVersion: "dwm.alert_queue_customer_readiness_summary.v1",
+    alertCount: readinessRows.length,
+    readyCount: readinessRows.filter((row: any) => row.ready).length,
+    blockedCount: readinessRows.filter((row: any) => !row.ready).length,
+    caseReadyCount: readinessRows.filter((row: any) => row.caseHandoff?.ready).length,
+    deliveryReadyCount: readinessRows.filter((row: any) => row.deliveryReadiness?.ready).length,
+    replayReadyCount: readinessRows.filter((row: any) => row.webhookReplayReadiness?.ready).length,
+    workflowReadyCount: readinessRows.filter((row: any) => row.workflowReadiness?.ready).length,
+    deliveryHistoryCount: readinessRows.filter((row: any) => row.webhookReplayReadiness?.hasDeliveryHistory).length,
+    sourceFamilies,
+    selectedCaptureIds,
+    watchlistItemIds,
+    blockerCodes,
+    states: uniqueAlertStrings(readinessRows.map((row: any) => row.state).filter(Boolean).map(String)),
+    route: "/v1/dwm/alerts",
+    filters: ["customerReadinessState", "customerReady", "caseReady", "deliveryReady", "replayReady", "hasDeliveryHistory", "readinessBlocker"]
   };
 }
 
