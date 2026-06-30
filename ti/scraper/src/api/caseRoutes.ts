@@ -999,6 +999,7 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
   const latestEvent = timeline[timeline.length - 1];
   const latestCaseAction = [...timeline].reverse().find((event) => event.eventType === "case.action_recorded");
   return {
@@ -1027,7 +1028,21 @@ function caseListItem(caseRecord: AnalystCase, options: ApiServerOptions, access
     latestCaseAction,
     caseActionLedgerContext: caseActionLedgerContext(caseActionLedger),
     timeline,
-    nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
+    workflowActionPolicySummary: {
+      schemaVersion: workflowActionPolicy.schemaVersion,
+      enabledActionIds: workflowActionPolicy.summary.enabledActionIds,
+      blockedActionIds: workflowActionPolicy.summary.blockedActionIds,
+      blockerCodes: workflowActionPolicy.summary.blockerCodes,
+      readOnly: workflowActionPolicy.readOnly
+    },
+    nextAllowedActions: workflowActionPolicy.actions.map((action: any) => ({
+      id: action.id,
+      label: action.label,
+      method: action.method,
+      requiresRationale: action.requiresRationale,
+      enabled: action.enabled,
+      disabledReason: action.disabledReason
+    }))
   };
 }
 

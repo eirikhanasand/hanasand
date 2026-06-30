@@ -19,6 +19,7 @@ describe("api regression sentinel", () => {
       "/v1/dwm/watchlists",
       "/v1/dwm/alerts/generation-readiness",
       "/v1/dwm/alerts/:alertId/case-handoff",
+      "/v1/cases",
       "/v1/cases/:caseId/action-replay-export",
       "/v1/cases/:caseId/handoff-actions",
       "/v1/cases/:caseId/handoff-action",
@@ -1150,6 +1151,7 @@ describe("api regression sentinel", () => {
     expect(transitionSurface).toMatchObject({
       ownerLane: "case",
       route: "/v1/cases/:caseId",
+      listRoute: "/v1/cases",
       methods: ["PATCH"],
       schemas: {
         transition: "analyst.case_workflow_transition.v1",
@@ -1159,7 +1161,7 @@ describe("api regression sentinel", () => {
       },
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId"]),
       writeFields: expect.arrayContaining(["action", "assignedOwner", "note", "idempotencyKey"]),
-      recordFields: expect.arrayContaining(["caseId", "alertId", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy"]),
+      recordFields: expect.arrayContaining(["caseId", "alertId", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy", "workflowActionPolicySummary"]),
       workflowActions: expect.arrayContaining(["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]),
       blockerCodes: expect.arrayContaining(["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "missing_note", "missing_assigned_owner"])
     });

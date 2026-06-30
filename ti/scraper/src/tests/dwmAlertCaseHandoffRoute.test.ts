@@ -25,6 +25,14 @@ describe("DWM alert case handoff route", () => {
       headers: { "x-user-email": "owner@acme.com" }
     }), options);
     const detailPayload = await detail.json() as any;
+    const caseList = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const caseListPayload = await caseList.json() as any;
+    const viewerCaseList = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme", {
+      headers: { "x-user-email": "viewer@acme.com" }
+    }), options);
+    const viewerCaseListPayload = await viewerCaseList.json() as any;
 
     expect(created.status).toBe(201);
     expect(createdPayload.case).toMatchObject({
@@ -717,6 +725,14 @@ describe("DWM alert case handoff route", () => {
       headers: { "x-user-email": "owner@acme.com" }
     }), options);
     const detailPayload = await detail.json() as any;
+    const caseList = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const caseListPayload = await caseList.json() as any;
+    const viewerCaseList = await handleApiRequest(new Request("http://127.0.0.1/v1/cases?organizationId=org_acme", {
+      headers: { "x-user-email": "viewer@acme.com" }
+    }), options);
+    const viewerCaseListPayload = await viewerCaseList.json() as any;
     const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&eventAction=note");
     const replayExportPayload = await replayExport.json() as any;
 
@@ -795,6 +811,28 @@ describe("DWM alert case handoff route", () => {
         })
       })
     ]));
+    expect(caseList.status).toBe(200);
+    expect(caseListPayload).toMatchObject({
+      schemaVersion: "analyst.case_list.v1",
+      total: 1,
+      items: [expect.objectContaining({
+        caseId: "case_alert_acme",
+        workflowActionPolicySummary: {
+          schemaVersion: "analyst.case_workflow_action_policy.v1",
+          enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+          blockedActionIds: ["reopen"],
+          blockerCodes: ["not_applicable_for_status"],
+          readOnly: false
+        }
+      })]
+    });
+    expect(viewerCaseList.status).toBe(200);
+    expect(viewerCaseListPayload.items[0].workflowActionPolicySummary).toMatchObject({
+      enabledActionIds: [],
+      blockedActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive", "reopen"]),
+      blockerCodes: expect.arrayContaining(["case_read_only_member"]),
+      readOnly: true
+    });
     expect(replayExport.status).toBe(200);
     expect(replayExportPayload).toMatchObject({
       filters: {

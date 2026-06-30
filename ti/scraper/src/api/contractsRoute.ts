@@ -51,6 +51,7 @@ export function contractIndex() {
     route("POST", "/v1/dwm/watchlists"),
     route("GET", "/v1/dwm/alerts/generation-readiness"),
     route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
+    route("GET", "/v1/cases"),
     route("GET", "/v1/cases/:caseId/action-replay-export"),
     route("GET", "/v1/cases/:caseId/handoff-actions"),
     route("POST", "/v1/cases/:caseId/handoff-action"),
@@ -177,6 +178,7 @@ export function contractIndex() {
         id: "case_workflow_transition",
         ownerLane: "case",
         route: "/v1/cases/:caseId",
+        listRoute: "/v1/cases",
         methods: ["PATCH"],
         schemas: {
           transition: "analyst.case_workflow_transition.v1",
@@ -186,7 +188,7 @@ export function contractIndex() {
         },
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId"],
         writeFields: ["organizationId", "action", "status", "assignedOwner", "note", "idempotencyKey"],
-        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy"],
+        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy", "workflowActionPolicySummary"],
         workflowActions: ["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"],
         blockerCodes: ["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "invalid_case_owner_role", "missing_note", "missing_assigned_owner"],
         safeOutput: {
