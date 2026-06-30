@@ -617,9 +617,37 @@ describe("DWM alert case handoff route", () => {
         workflowTransitionCount: 4,
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
+        organizationAccessReady: true,
         sourceHandoffReady: true,
         supportRecoveryReady: true,
         replayable: true,
+        blockerCodes: []
+      },
+      organizationAccessReadiness: {
+        schemaVersion: "dwm.case_org_access_replay_readiness.v1",
+        route: "/v1/cases/case_alert_acme",
+        organizationRoute: "/api/organizations/org_acme/members",
+        available: true,
+        ready: true,
+        readyForReview: true,
+        readyForMutation: true,
+        state: "ready_for_case_actions",
+        caseId: "case_alert_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme",
+        member: {
+          memberId: "member_owner",
+          role: "owner",
+          status: "active",
+          readOnly: false
+        },
+        visibility: {
+          allowed: true,
+          reason: null,
+          alertVisibilityPolicy: "members",
+          allowedRoles: ["owner", "admin", "analyst", "member", "viewer"]
+        },
+        noEnumeration: true,
         blockerCodes: []
       },
       sourceHandoffReadiness: {
@@ -703,6 +731,7 @@ describe("DWM alert case handoff route", () => {
     ]);
     expect(replayExportPayload.handoffActionHistory.receipts).toHaveLength(3);
     expect(replayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "review_org_access", ownerLane: "org", ready: true, blocked: false }),
       expect.objectContaining({ id: "review_source_handoff", ownerLane: "source", ready: true, blocked: false }),
       expect.objectContaining({ id: "replay_alert", ownerLane: "alert", ready: true, blocked: false }),
       expect.objectContaining({ id: "test_webhook_delivery", ownerLane: "webhook", ready: true, blocked: false }),
@@ -740,6 +769,19 @@ describe("DWM alert case handoff route", () => {
         replayable: false,
         blockerCodes: ["case_read_only_member"]
       },
+      organizationAccessReadiness: {
+        ready: false,
+        readyForReview: true,
+        readyForMutation: false,
+        state: "read_only",
+        member: {
+          memberId: "member_viewer",
+          role: "viewer",
+          status: "active",
+          readOnly: true
+        },
+        blockerCodes: ["case_read_only_member"]
+      },
       handoffActionReadiness: {
         readyActionIds: [],
         actions: {
@@ -755,6 +797,7 @@ describe("DWM alert case handoff route", () => {
       }
     });
     expect(viewerReplayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "review_org_access", ownerLane: "org", ready: false, blocked: true, blockerCodes: ["case_read_only_member"] }),
       expect.objectContaining({ id: "verify_support_recovery", ownerLane: "support", ready: false, blocked: true, blockerCodes: ["case_read_only_member"] })
     ]));
     expect(unassignedReplayExport.status).toBe(200);
@@ -854,8 +897,36 @@ describe("DWM alert case handoff route", () => {
     expect(unsupported.status).toBe(400);
     expect(unsupportedPayload.error).toMatchObject({ code: "unsupported_handoff_action" });
     expect((store as any).getCase("case_alert_no_destination").handoffActionReceipts ?? []).toEqual([]);
+    store.saveCase({
+      ...(store as any).getCase("case_alert_acme"),
+      id: "case_no_org_scope",
+      tenantId: "default",
+      organizationId: undefined,
+      alertId: "alert_missing",
+      sourceId: "alert_missing",
+      assignedOwner: "owner@acme.com",
+      workflowEvents: []
+    });
+    const noOrgReplayExport = await getActionReplayExport(options, "case_no_org_scope", "owner@acme.com", "tenantId=default");
+    const noOrgReplayExportPayload = await noOrgReplayExport.json() as any;
     const missingAlertReplayExport = await getActionReplayExport(options, "case_missing_alert", "owner@acme.com", "organizationId=org_acme");
     const missingAlertReplayExportPayload = await missingAlertReplayExport.json() as any;
+    expect(noOrgReplayExport.status).toBe(200);
+    expect(noOrgReplayExportPayload).toMatchObject({
+      caseId: "case_no_org_scope",
+      organizationAccessReadiness: {
+        available: false,
+        ready: false,
+        readyForReview: true,
+        readyForMutation: false,
+        state: "missing_organization_scope",
+        blockerCodes: ["missing_organization_scope"]
+      },
+      replayPlan: {
+        organizationAccessReady: false,
+        workflowTransitionCount: 0
+      }
+    });
     expect(missingAlertReplayExport.status).toBe(200);
     expect(missingAlertReplayExportPayload).toMatchObject({
       schemaVersion: "dwm.case_action_replay_export.v1",
@@ -868,6 +939,7 @@ describe("DWM alert case handoff route", () => {
         blockerCodes: ["missing_alert_source_handoff_readiness"]
       },
       replayPlan: {
+        organizationAccessReady: true,
         sourceHandoffReady: false,
         supportRecoveryReady: false,
         replayable: false,

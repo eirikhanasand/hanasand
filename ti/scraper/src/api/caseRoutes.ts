@@ -1565,6 +1565,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
+  const organizationAccessReadiness = caseOrganizationAccessReadiness({ caseRecord, access });
   const supportRecoveryReadiness = caseSupportRecoveryReadiness({
     alert,
     caseRecord,
@@ -1579,6 +1580,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
   const nextAnalystActions = caseReplayNextAnalystActions({
     caseRecord,
     access,
+    organizationAccessReadiness,
     sourceHandoffReadiness,
     webhookDryRunReadiness,
     supportRecoveryReadiness,
@@ -1603,6 +1605,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     },
     workflowTransitions,
     customerNotifications,
+    organizationAccessReadiness,
     webhookDryRunReadiness,
     sourceHandoffReadiness,
     supportRecoveryReadiness,
@@ -1612,6 +1615,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       handoffReceiptCount: handoffHistory.receipts.length,
       customerNotificationCount: customerNotifications.length,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
+      organizationAccessReady: organizationAccessReadiness.ready,
       sourceHandoffReady: sourceHandoffReadiness.ready,
       supportRecoveryReady: supportRecoveryReadiness.ready,
       nextActionCount: nextAnalystActions.length,
@@ -1628,6 +1632,56 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       metadataOnly: true,
       rawEvidenceExposed: false,
       webhookSecretExposed: false
+    }
+  };
+}
+
+function caseOrganizationAccessReadiness(input: {
+  caseRecord: AnalystCase;
+  access: CaseAccessResult;
+}) {
+  const readOnly = input.access.readOnly === true;
+  const missingOrg = !input.caseRecord.organizationId;
+  const allowed = input.access.visibilityDecision.allowed !== false;
+  const blockerCodes = uniqueCaseStrings([
+    ...(!allowed ? ["organization_visibility_denied"] : []),
+    ...(missingOrg ? ["missing_organization_scope"] : []),
+    ...(readOnly ? ["case_read_only_member"] : [])
+  ]);
+  return {
+    schemaVersion: "dwm.case_org_access_replay_readiness.v1",
+    route: `/v1/cases/${encodeURIComponent(input.caseRecord.id)}`,
+    organizationRoute: input.caseRecord.organizationId
+      ? `/api/organizations/${encodeURIComponent(input.caseRecord.organizationId)}/members`
+      : "/api/organizations/:id/members",
+    available: !missingOrg,
+    ready: blockerCodes.length === 0,
+    readyForReview: allowed,
+    readyForMutation: allowed && !readOnly && !missingOrg,
+    state: !allowed ? "blocked" : missingOrg ? "missing_organization_scope" : readOnly ? "read_only" : "ready_for_case_actions",
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    member: input.access.member ? {
+      memberId: input.access.member.id,
+      role: input.access.member.role,
+      status: input.access.member.status,
+      readOnly
+    } : undefined,
+    visibility: {
+      allowed,
+      reason: input.access.visibilityDecision.reason,
+      alertVisibilityPolicy: input.access.visibilityDecision.alertVisibilityPolicy,
+      allowedRoles: input.access.visibilityDecision.allowedRoles
+    },
+    noEnumeration: true,
+    requiredFields: ["organizationId", "memberId", "role", "caseId"],
+    blockerCodes,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      crossOrgDataExposed: false
     }
   };
 }
@@ -1792,6 +1846,7 @@ function caseSourceHandoffReplayReadiness(input: {
 function caseReplayNextAnalystActions(input: {
   caseRecord: AnalystCase;
   access: CaseAccessResult;
+  organizationAccessReadiness: any;
   sourceHandoffReadiness: any;
   webhookDryRunReadiness: any;
   supportRecoveryReadiness: any;
@@ -1799,6 +1854,15 @@ function caseReplayNextAnalystActions(input: {
 }) {
   const readOnly = input.access.readOnly === true;
   return [
+    {
+      id: "review_org_access",
+      ownerLane: "org",
+      route: input.organizationAccessReadiness.organizationRoute,
+      ready: Boolean(input.organizationAccessReadiness.ready),
+      blocked: !input.organizationAccessReadiness.ready,
+      blockerCodes: input.organizationAccessReadiness.blockerCodes ?? [],
+      requiredFields: input.organizationAccessReadiness.requiredFields ?? []
+    },
     {
       id: "review_source_handoff",
       ownerLane: "source",
