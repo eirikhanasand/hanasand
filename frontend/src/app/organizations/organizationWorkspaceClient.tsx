@@ -179,6 +179,11 @@ type ActivityItem = {
     ok: boolean
 }
 
+type RowMessage = {
+    ok: boolean
+    text: string
+}
+
 type ApiError = Error & { status?: number }
 
 const initialBundle: OrgBundle = {
@@ -219,6 +224,7 @@ export default function OrganizationWorkspaceClient() {
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
     const [destinationDrafts, setDestinationDrafts] = useState<Record<string, DestinationDraft>>({})
     const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
+    const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
 
     const selectedOrganization = useMemo(
@@ -328,13 +334,23 @@ export default function OrganizationWorkspaceClient() {
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
-    async function runAction(label: string, action: () => Promise<string | void>) {
+    async function runAction(label: string, action: () => Promise<string | void>, rowKey?: string) {
         setBusy(label)
         setError('')
         setMessage('')
+        if (rowKey) {
+            setRowMessages(current => {
+                const next = { ...current }
+                delete next[rowKey]
+                return next
+            })
+        }
         try {
             const nextMessage = await action()
             setMessage(nextMessage || 'Saved.')
+            if (rowKey) {
+                setRowMessages(current => ({ ...current, [rowKey]: { ok: true, text: nextMessage || 'Saved.' } }))
+            }
             setActivity(current => [{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
@@ -351,6 +367,9 @@ export default function OrganizationWorkspaceClient() {
         } catch (err) {
             const detail = errorMessage(err)
             setError(detail)
+            if (rowKey) {
+                setRowMessages(current => ({ ...current, [rowKey]: { ok: false, text: detail } }))
+            }
             setActivity(current => [{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
@@ -405,14 +424,14 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         return action === 'revoke' ? 'Invite revoked.' : 'Invite resent.'
-    })
+    }, `invite-${invite.id}`)
 
     const copyInvite = (invite: OrganizationInvite) => runAction('copy-invite', async () => {
         const value = invite.acceptanceUrl || invite.acceptancePath || invite.token
         if (!value) throw new Error('Invite link is not available.')
         await navigator.clipboard.writeText(value)
         return 'Invite link copied.'
-    })
+    }, `invite-${invite.id}`)
 
     const changeMemberRole = (member: OrganizationMember, role: OrganizationRole) => selectedOrganization && runAction('change-role', async () => {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/members/${encodeURIComponent(member.userId)}/role`, {
@@ -424,7 +443,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         return 'Member role updated.'
-    })
+    }, `member-${member.userId}`)
 
     const removeMember = (member: OrganizationMember) => selectedOrganization && runAction('remove-member', async () => {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/members/${encodeURIComponent(member.userId)}`, {
@@ -435,7 +454,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         return 'Member removed.'
-    })
+    }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists`, {
@@ -468,7 +487,7 @@ export default function OrganizationWorkspaceClient() {
             return next
         })
         return 'Watchlist term updated.'
-    })
+    }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}/actions`, {
@@ -480,7 +499,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         return `Watchlist ${action}d.`
-    })
+    }, `watchlist-${item.id}`)
 
     const deleteWatchlist = (item: WatchlistItem) => selectedOrganization && runAction('delete-watchlist', async () => {
         await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
@@ -491,7 +510,7 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         return 'Watchlist term archived.'
-    })
+    }, `watchlist-${item.id}`)
 
     const cleanupWatchlists = () => selectedOrganization && runAction('cleanup-watchlists', async () => {
         const payload = await requestJson<{ archivedCount?: number, cleanupCount?: number, disabledCount?: number }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/cleanup`, {
@@ -503,7 +522,7 @@ export default function OrganizationWorkspaceClient() {
         })
         const count = payload.archivedCount ?? payload.cleanupCount ?? payload.disabledCount
         return count === undefined ? 'Archived watchlists cleaned up.' : `${count} archived watchlist${count === 1 ? '' : 's'} cleaned up.`
-    })
+    }, 'watchlists-cleanup')
 
     const testWatchlistDestination = (item: WatchlistItem, mode: 'save' | 'replay') => selectedOrganization && runAction(mode === 'save' ? 'save-destination' : 'replay-destination', async () => {
         const draft = destinationDrafts[item.id] || { kind: 'discord', url: '' }
@@ -538,7 +557,7 @@ export default function OrganizationWorkspaceClient() {
             setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
         }
         return withUrl ? 'Destination tested and saved.' : 'Saved route tested.'
-    })
+    }, `watchlist-${item.id}`)
 
     return (
         <section className='min-h-full bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
@@ -662,11 +681,12 @@ export default function OrganizationWorkspaceClient() {
                                             setDestinationDrafts={setDestinationDrafts}
                                             onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
                                             onCleanup={() => void cleanupWatchlists()}
+                                            rowMessages={rowMessages}
                                         />
                                     </div>
                                     <div className='grid gap-5 content-start'>
-                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
-                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
+                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
+                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
                                     </div>
                                 </section>
 
@@ -773,7 +793,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, canManage, busy, onSav
     )
 }
 
-function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, busy, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], canManage: boolean, busy: string, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
+function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, busy, rowMessages, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
     return (
         <section id='invites' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
@@ -805,7 +825,12 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                                 <tr key={invite.id} className='align-middle'>
                                     <td className='max-w-44 truncate border-b border-[#eef2f7] py-2 pr-3 font-semibold text-[#171a21] dark:border-[#1d2a3d] dark:text-white'>{invite.email}</td>
                                     <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'><RoleBadge role={invite.role} /></td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'><StatusPill status={invite.status} /></td>
+                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <div className='grid gap-1'>
+                                            <StatusPill status={invite.status} />
+                                            <RowStatus message={rowMessages[`invite-${invite.id}`]} />
+                                        </div>
+                                    </td>
                                     <td className='border-b border-[#eef2f7] py-2 pl-3 dark:border-[#1d2a3d]'>
                                         <div className='flex justify-end gap-1'>
                                             <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={Boolean(busy) || !inviteLink(invite)} onClick={() => onCopyInvite(invite)}><Copy className='h-4 w-4' /></button>
@@ -823,7 +848,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
     )
 }
 
-function MemberPanel({ members, canManage, busy, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
+function MemberPanel({ members, canManage, busy, rowMessages, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     return (
         <section id='members' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, removal.' />
@@ -853,7 +878,12 @@ function MemberPanel({ members, canManage, busy, onRoleChange, onRemove }: { mem
                                             </select>
                                         ) : <RoleBadge role={member.role} />}
                                     </td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'><StatusPill status={member.status} /></td>
+                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <div className='grid gap-1'>
+                                            <StatusPill status={member.status} />
+                                            <RowStatus message={rowMessages[`member-${member.userId}`]} />
+                                        </div>
+                                    </td>
                                     <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
                                         <button type='button' className={iconDangerButtonClass} disabled={!canManage || member.role === 'owner' || Boolean(busy)} onClick={() => onRemove(member)} aria-label='Remove member'>
                                             <Trash2 className='h-4 w-4' />
@@ -869,7 +899,7 @@ function MemberPanel({ members, canManage, busy, onRoleChange, onRemove }: { mem
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage> }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     return (
         <section id='watchlists' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
@@ -880,6 +910,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                     Cleanup archived
                 </button>
             </div>
+            <div className='mt-2'><RowStatus message={rowMessages['watchlists-cleanup']} /></div>
             <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522] md:grid-cols-[9rem_1fr]'>
                 <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
                 <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='example.com, vendor name, company, actor' />
@@ -962,6 +993,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                         onDraftChange={next => setDestinationDrafts(current => ({ ...current, [item.id]: next }))}
                                         onTest={mode => onTestDestination(item, mode)}
                                     />
+                                    <RowStatus message={rowMessages[`watchlist-${item.id}`]} />
                                 </div>
                             )}
                         </div>
@@ -1181,6 +1213,14 @@ function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', t
             <span>{text}</span>
         </div>
     )
+}
+
+function RowStatus({ message }: { message?: RowMessage }) {
+    if (!message) return null
+    const tone = message.ok
+        ? 'bg-[#ecfdf3] text-[#067647] dark:bg-[#102b1a] dark:text-[#86efac]'
+        : 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
+    return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{message.text}</span>
 }
 
 function EmptyLine({ text }: { text: string }) {
