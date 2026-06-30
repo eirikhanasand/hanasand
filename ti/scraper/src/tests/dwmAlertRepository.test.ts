@@ -2052,6 +2052,18 @@ describe("dwm alert repository", () => {
     expect(preservedHandoff.createdEventDispatch.blockerCodes).toContain("duplicate_delivered_dedupe");
     expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme");
     expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preservedHandoff.workflowTransitions).toMatchObject({
+      schemaVersion: "dwm.alert_workflow_transition_summary.v1",
+      actions: ["escalated"],
+      lastEventAt: "2026-06-28T13:20:00.000Z",
+      caseLinked: true,
+      closed: false,
+      suppressed: false
+    });
+    expect(preservedHandoff.workflowVersion).toMatchObject({
+      eventCount: 1,
+      replayCount: 3
+    });
     expect(preservedHandoff.evidence.generationEvidenceWindow).toMatchObject({
       sourceFamilies: ["telegram_public"],
       firstObservedAt: "2026-06-28T13:04:00.000Z",

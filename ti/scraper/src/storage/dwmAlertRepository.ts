@@ -536,6 +536,14 @@ export type DwmAlertDownstreamHandoff = {
     replayCount: number;
     lastReplayedAt?: string;
   };
+  workflowTransitions: {
+    schemaVersion: "dwm.alert_workflow_transition_summary.v1";
+    actions: Array<DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"][number]["action"]>;
+    lastEventAt?: string;
+    caseLinked: boolean;
+    closed: boolean;
+    suppressed: boolean;
+  };
   workflowDecision: {
     value?: string;
     rationale?: string;
@@ -2679,6 +2687,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
     .sort((a, b) => String(a.attemptedAt ?? "").localeCompare(String(b.attemptedAt ?? "")))
     .at(-1);
   const eventCount = (alert?.workflowEvents ?? []).length;
+  const transitionEvents = alert ? buildDwmAlertCustomerProofWorkflowTransitionEvents(alert) : [];
   const orgId = input.organizationId ?? alert?.organizationId ?? workflow.organizationId ?? webhook.organizationId;
   const casePath = context.casePath ?? alert?.casePath ?? workflow.casePath;
   const alertDetailPath = context.alertDetailPath ?? alert?.alertDetailPath ?? workflow.alertDetailPath ?? webhook.alertDetailPath;
@@ -2795,6 +2804,14 @@ export function buildDwmAlertDownstreamHandoff(input: {
       expectedEventCount: input.expectedWorkflowEventCount,
       replayCount: Number(alert?.replayCount ?? 0),
       lastReplayedAt: alert?.lastReplayedAt
+    },
+    workflowTransitions: {
+      schemaVersion: "dwm.alert_workflow_transition_summary.v1",
+      actions: uniqueStrings(transitionEvents.map((event) => event.action)) as DwmAlertDownstreamHandoff["workflowTransitions"]["actions"],
+      lastEventAt: transitionEvents.at(-1)?.at,
+      caseLinked: transitionEvents.some((event) => Boolean(event.caseId || event.casePath)) || Boolean(caseIdCandidate || alert?.caseId),
+      closed: transitionEvents.some((event) => event.action === "closed") || closedAlert,
+      suppressed: transitionEvents.some((event) => event.action === "suppressed") || suppressedAlert
     },
     workflowDecision: {
       value: alert?.workflowDecision,
