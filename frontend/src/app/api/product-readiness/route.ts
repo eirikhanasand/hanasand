@@ -1,14 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseProductProgressReadinessPayload } from '@/app/dashboard/operatorConsoleModel'
 import { buildProductNorthStarScoreboard, type ProductNorthStarProgressSource } from '@/utils/productProgress/northStar'
+import { loadProductReadinessAggregate } from '@/utils/productProgress/productReadinessAggregate'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
     const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
-    const progress = await loadProductProgress(request, query, generatedAt)
-    const scoreboard = buildProductNorthStarScoreboard(progress.payload, { generatedAt, query, progressSource: progress.source })
+    const [progress, productReadinessAggregate] = await Promise.all([
+        loadProductProgress(request, query, generatedAt),
+        loadProductReadinessAggregate(),
+    ])
+    const scoreboard = buildProductNorthStarScoreboard(progress.payload, {
+        generatedAt,
+        query,
+        progressSource: progress.source,
+        productReadinessAggregate,
+    })
 
     return NextResponse.json(scoreboard, { headers: { 'cache-control': 'no-store' } })
 }

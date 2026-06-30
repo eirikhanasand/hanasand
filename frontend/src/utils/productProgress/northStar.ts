@@ -1,4 +1,5 @@
 import { buildProductProgressExternalState, type ProductProgressReadinessPayload, type ProductReadinessExternalState, type ProductReadinessSnapshotBase } from '@/app/dashboard/operatorConsoleModel'
+import { isProductReadinessAggregateSource, missingProductReadinessAggregateSource, type ProductReadinessAggregateSource } from './productReadinessAggregate'
 
 type ReadinessStatus = 'ready' | 'needs_action' | 'blocked' | 'unavailable'
 
@@ -120,6 +121,7 @@ export type ProductNorthStarScoreboard = {
     totalRows: number
     firstBlocker?: string
     progressSource: ProductNorthStarProgressSource
+    productReadinessAggregate: ProductReadinessAggregateSource
     deployGate: ProductNorthStarDeployGate
     direction: ProductNorthStarDirection[]
     rows: ProductNorthStarRow[]
@@ -136,6 +138,7 @@ export function parseProductNorthStarScoreboard(input: unknown): ProductNorthSta
     if (!candidate.rows.every(isProductNorthStarRow)) return null
     if (!candidate.direction.every(isProductNorthStarDirection)) return null
     if (!isProductNorthStarProgressSource(candidate.progressSource)) return null
+    if (!isProductReadinessAggregateSource(candidate.productReadinessAggregate)) return null
     if (!isProductNorthStarDeployGate(candidate.deployGate)) return null
     if (candidate.totalRows !== candidate.rows.length) return null
     if (candidate.readyRows !== candidate.rows.filter(row => row.state === 'ready').length) return null
@@ -297,6 +300,7 @@ type BuildOptions = {
     query?: string
     external?: ProductReadinessExternalState
     progressSource?: ProductNorthStarProgressSource
+    productReadinessAggregate?: ProductReadinessAggregateSource
 }
 
 export function buildProductNorthStarScoreboard(payload: ProductProgressReadinessPayload | null | undefined, options: BuildOptions): ProductNorthStarScoreboard {
@@ -398,6 +402,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
         totalRows: rows.length,
         firstBlocker,
         progressSource: options.progressSource || defaultProgressSource(payload, generatedAt),
+        productReadinessAggregate: options.productReadinessAggregate || missingProductReadinessAggregateSource('product_readiness_aggregate_not_configured'),
         deployGate: buildDeployGate(rows, { fullChainReady, readyRows, firstBlocker }),
         direction: buildProductDirection(rows),
         rows,

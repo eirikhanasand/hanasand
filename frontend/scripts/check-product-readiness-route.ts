@@ -64,7 +64,55 @@ const productProgressPayload = buildProductProgressPayload({
 })
 
 const originalFetch = globalThis.fetch
+const originalAggregateJson = process.env.PRODUCT_READINESS_AGGREGATE_JSON
 const capturedRequests: Array<{ url: URL, authorization: string | null, organizationId: string | null }> = []
+
+process.env.PRODUCT_READINESS_AGGREGATE_JSON = JSON.stringify({
+    schemaVersion: 'hanasand.product_readiness.v1',
+    checkedAt: generatedAt,
+    ok: false,
+    rowCount: 2,
+    customerVisibleBlockedCount: 1,
+    deployRisk: 'high',
+    rows: [
+        {
+            id: 'source_activation',
+            ownerLane: 'source',
+            capabilityLabel: 'Source activation and provenance',
+            proofArtifact: {
+                schemaVersion: 'dwm.source_worker_readiness.v1',
+                artifactId: 'dwm.source_worker_readiness',
+                route: 'GET /v1/dwm/source-requests/readiness',
+                probeId: 'dwm.source_worker_readiness',
+            },
+            lastCheckedAt: generatedAt,
+            customerVisible: true,
+            customerVisibleState: 'blocked',
+            blockers: ['source_policy_inactive'],
+            requiredNextAction: 'activate_source_policy',
+            deployRisk: 'high',
+            uiQualityProofExists: true,
+        },
+        {
+            id: 'support_controls',
+            ownerLane: 'support',
+            capabilityLabel: 'Support recovery controls',
+            proofArtifact: {
+                schemaVersion: 'support.action_executor_readiness.v1',
+                artifactId: 'deploy_gate.support_executor',
+                route: '/api/admin/support/readiness',
+                probeId: 'support.action_executor_readiness',
+            },
+            lastCheckedAt: generatedAt,
+            customerVisible: false,
+            customerVisibleState: 'ready',
+            blockers: [],
+            requiredNextAction: 'verify_support_recovery_action',
+            deployRisk: 'none',
+            uiQualityProofExists: true,
+        },
+    ],
+})
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input))
@@ -96,6 +144,12 @@ try {
     assert.equal(payload?.progressSource.status, 200)
     assert.equal(payload?.progressSource.route, '/api/product-progress')
     assert.equal(payload?.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
+    assert.equal(payload?.productReadinessAggregate.schemaVersion, 'product.readiness_aggregate_source.v1')
+    assert.equal(payload?.productReadinessAggregate.state, 'blocked')
+    assert.equal(payload?.productReadinessAggregate.source, 'env:PRODUCT_READINESS_AGGREGATE_JSON')
+    assert.equal(payload?.productReadinessAggregate.customerVisibleBlockedCount, 1)
+    assert.equal(payload?.productReadinessAggregate.blockingRows[0]?.id, 'source_activation')
+    assert.equal(payload?.productReadinessAggregate.blockingRows[0]?.requiredNextAction, 'activate_source_policy')
     assert.equal(payload?.deployGate.fullChainReady, false)
     assert.equal(payload?.deployGate.readyRows, payload?.readyRows)
     assert.equal(payload?.deployGate.totalRows, payload?.totalRows)
@@ -131,11 +185,17 @@ try {
     assert.equal(malformedPayload?.progressSource.status, 200)
     assert.equal(malformedPayload?.progressSource.unavailableReason, 'product_progress_schema_invalid')
     assert.equal(malformedPayload?.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
+    assert.equal(malformedPayload?.productReadinessAggregate.state, 'blocked')
     assert.equal(malformedPayload?.fullChainReady, false)
     assert.ok(malformedPayload?.deployGate.blockingProofRows.length)
     assert.equal(capturedRequests[0]?.url.searchParams.get('organizationId'), 'org_acme')
 } finally {
     globalThis.fetch = originalFetch
+    if (originalAggregateJson === undefined) {
+        delete process.env.PRODUCT_READINESS_AGGREGATE_JSON
+    } else {
+        process.env.PRODUCT_READINESS_AGGREGATE_JSON = originalAggregateJson
+    }
 }
 
 console.log('product-readiness route contract ok')

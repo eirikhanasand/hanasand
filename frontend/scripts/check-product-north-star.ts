@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
 import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
+import { parseProductReadinessAggregate } from '../src/utils/productProgress/productReadinessAggregate'
 
 const here = new URL('.', import.meta.url)
 const homeSource = readFileSync(new URL('../src/app/page.tsx', here), 'utf8')
@@ -10,6 +11,7 @@ const headerSource = readFileSync(new URL('../src/components/header/header.tsx',
 const themeSwitchSource = readFileSync(new URL('../src/components/theme/themeSwitch.tsx', here), 'utf8')
 const modelSource = readFileSync(new URL('../src/utils/productProgress/northStar.ts', here), 'utf8')
 const routeSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
+const productReadinessAggregateSource = readFileSync(new URL('../src/utils/productProgress/productReadinessAggregate.ts', here), 'utf8')
 
 const generatedAt = '2026-06-29T10:00:00.000Z'
 const routes = {
@@ -126,6 +128,9 @@ assert.equal(partialScoreboard.progressSource.schemaVersion, 'product.progress_s
 assert.equal(partialScoreboard.progressSource.state, 'ready')
 assert.equal(partialScoreboard.progressSource.route, '/api/product-progress')
 assert.equal(partialScoreboard.progressSource.backendProofContractVersion, 'product.progress.readiness.v1')
+assert.equal(partialScoreboard.productReadinessAggregate.schemaVersion, 'product.readiness_aggregate_source.v1')
+assert.equal(partialScoreboard.productReadinessAggregate.state, 'unavailable')
+assert.equal(partialScoreboard.productReadinessAggregate.unavailableReason, 'product_readiness_aggregate_not_configured')
 assert.deepEqual(partialScoreboard.deployGate.blockerRows, ['organizations'])
 assert.deepEqual(partialScoreboard.deployGate.needsActionRows, ['shared_watchlists', 'real_alert_generation', 'webhook_delivery', 'analyst_workflow', 'deploy_live_status'])
 assert.deepEqual(partialScoreboard.deployGate.unavailableRows, ['support_admin_audit', 'public_ti_enrichment'])
@@ -187,9 +192,14 @@ assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, schemaVersi
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, readyRows: partialScoreboard.readyRows + 1 }), null)
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, deployGate: undefined }), null)
 assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, progressSource: undefined }), null)
+assert.equal(parseProductNorthStarScoreboard({ ...partialScoreboard, productReadinessAggregate: undefined }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     progressSource: { ...partialScoreboard.progressSource, state: 'unavailable', unavailableReason: undefined },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    productReadinessAggregate: { ...partialScoreboard.productReadinessAggregate, state: 'blocked', unavailableReason: '', blockingRows: [] },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
@@ -247,6 +257,91 @@ assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     direction: partialScoreboard.direction.map(item => item.id === 'source_backed_intelligence' ? { ...item, backedRowIds: ['unknown_row'] } : item),
 }), null)
+
+const aggregate = parseProductReadinessAggregate({
+    schemaVersion: 'hanasand.product_readiness.v1',
+    checkedAt: generatedAt,
+    ok: false,
+    rowCount: 2,
+    customerVisibleBlockedCount: 1,
+    deployRisk: 'high',
+    rows: [
+        {
+            id: 'source_activation',
+            ownerLane: 'source',
+            capabilityLabel: 'Source activation and provenance',
+            proofArtifact: {
+                schemaVersion: 'dwm.source_worker_readiness.v1',
+                artifactId: 'dwm.source_worker_readiness',
+                route: 'GET /v1/dwm/source-requests/readiness',
+                probeId: 'dwm.source_worker_readiness',
+            },
+            lastCheckedAt: generatedAt,
+            customerVisible: true,
+            customerVisibleState: 'blocked',
+            blockers: ['source_policy_inactive'],
+            requiredNextAction: 'activate_source_policy',
+            deployRisk: 'high',
+            uiQualityProofExists: true,
+            workflowContract: {
+                route: 'GET /v1/dwm/source-requests/readiness',
+                proofRowId: 'source_activation_and_provenance',
+                testName: 'dwmSourceRequest.test.ts',
+                expectedAdapter: 'buildDwmSourceReadinessArtifact',
+            },
+        },
+        {
+            id: 'support_controls',
+            ownerLane: 'support',
+            capabilityLabel: 'Support recovery controls',
+            proofArtifact: {
+                schemaVersion: 'support.action_executor_readiness.v1',
+                artifactId: 'deploy_gate.support_executor',
+                route: '/api/admin/support/readiness',
+                probeId: 'support.action_executor_readiness',
+            },
+            lastCheckedAt: generatedAt,
+            customerVisible: false,
+            customerVisibleState: 'ready',
+            blockers: [],
+            requiredNextAction: 'verify_support_recovery_action',
+            deployRisk: 'none',
+            uiQualityProofExists: true,
+        },
+    ],
+})
+assert.ok(aggregate, 'hanasand.product_readiness.v1 aggregate fixture should parse.')
+const aggregateScoreboard = buildProductNorthStarScoreboard(partialPayload, {
+    generatedAt,
+    query: 'LockBit',
+    productReadinessAggregate: {
+        schemaVersion: 'product.readiness_aggregate_source.v1',
+        state: 'blocked',
+        source: 'inline-test',
+        checkedAt: generatedAt,
+        ok: false,
+        rowCount: aggregate!.rowCount,
+        customerVisibleBlockedCount: aggregate!.customerVisibleBlockedCount,
+        deployRisk: aggregate!.deployRisk,
+        unavailableReason: 'product_readiness_aggregate_blocked',
+        blockingRows: [{
+            id: aggregate!.rows[0]!.id,
+            label: aggregate!.rows[0]!.capabilityLabel,
+            ownerLane: aggregate!.rows[0]!.ownerLane,
+            state: aggregate!.rows[0]!.customerVisibleState,
+            blockers: aggregate!.rows[0]!.blockers,
+            proofArtifactSchemaVersion: aggregate!.rows[0]!.proofArtifact.schemaVersion,
+            proofArtifactId: aggregate!.rows[0]!.proofArtifact.artifactId,
+            route: aggregate!.rows[0]!.proofArtifact.route || '',
+            probeId: aggregate!.rows[0]!.proofArtifact.probeId || '',
+            requiredNextAction: aggregate!.rows[0]!.requiredNextAction,
+            deployRisk: aggregate!.rows[0]!.deployRisk,
+        }],
+    },
+})
+assert.equal(aggregateScoreboard.productReadinessAggregate.state, 'blocked')
+assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.id, 'source_activation')
+assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.requiredNextAction, 'activate_source_policy')
 
 const readyPayload = {
     ...partialPayload,
@@ -363,6 +458,21 @@ for (const token of [
     'data-north-star-progress-source-reason',
     'data-north-star-progress-source-contract',
     'data-north-star-progress-source-timestamp',
+    'data-north-star-readiness-ledger',
+    'data-north-star-readiness-ledger-state',
+    'data-north-star-readiness-ledger-source',
+    'data-north-star-readiness-ledger-schema-version',
+    'data-north-star-readiness-ledger-checked-at',
+    'data-north-star-readiness-ledger-row-count',
+    'data-north-star-readiness-ledger-customer-visible-blocked-count',
+    'data-north-star-readiness-ledger-deploy-risk',
+    'data-north-star-readiness-ledger-unavailable-reason',
+    'data-north-star-readiness-ledger-blocker-id',
+    'data-north-star-readiness-ledger-blocker-owner-lane',
+    'data-north-star-readiness-ledger-blocker-state',
+    'data-north-star-readiness-ledger-blocker-proof-artifact-id',
+    'data-north-star-readiness-ledger-blocker-route',
+    'data-north-star-readiness-ledger-blocker-action',
     'data-north-star-blocker-row-id',
     'data-north-star-blocker-state',
     'data-north-star-blocker-owner-lane',
@@ -377,6 +487,8 @@ for (const token of [
     'Readiness source',
     'Release blockers',
     'What still needs proof',
+    'Product readiness ledger',
+    'hanasand.product_readiness.v1',
     'Open workflow',
     'Stale after',
     'scoreboard.deployGate.blockingProofRows',
@@ -404,15 +516,30 @@ for (const token of ['w-14', 'shrink-0', 'data-testid=\'theme-switch\'', 'aria-l
 
 for (const token of [
     '/api/product-progress',
+    'loadProductReadinessAggregate',
     'buildProductNorthStarScoreboard',
     'parseProductProgressReadinessPayload',
     'progressSource: progress.source',
+    'productReadinessAggregate',
     'product.progress_source.readiness.v1',
     'cache-control',
     'no-store',
     'x-organization-id',
 ]) {
     assert.ok(routeSource.includes(token), `Product readiness API route missing ${token}.`)
+}
+
+for (const token of [
+    'PRODUCT_READINESS_AGGREGATE_JSON',
+    'PRODUCT_READINESS_AGGREGATE_PATH',
+    'hanasand.product_readiness.v1',
+    'product.readiness_aggregate_source.v1',
+    'parseProductReadinessAggregate',
+    'missingProductReadinessAggregateSource',
+    'blockingRows',
+    'customerVisibleBlockedCount',
+]) {
+    assert.ok(productReadinessAggregateSource.includes(token), `Product readiness aggregate source missing ${token}.`)
 }
 
 for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'named examples', 'dashboard slop', 'how this feeds', 'acceptance criteria', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
