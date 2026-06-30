@@ -1244,6 +1244,37 @@ export type OrganizationWatchlistAlertTermsExport = {
         nonmemberEnumeration: false
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    alertCasePersistenceReceipt: {
+        schemaVersion: 'organization.alert_case_bridge_persistence_receipt.v1'
+        organizationId: string
+        tenantId: string
+        sourceFamily: 'organization_watchlist'
+        alertPersistenceContract: 'organization.watchlist_alert_persistence_contract.v1'
+        caseWorkflowContract: 'organization.watchlist_case_workflow_contract.v1'
+        storageModule: 'ti/scraper/src/storage/dwmAlertRepository.ts'
+        alertUpsertFunction: 'upsertDwmAlert'
+        alertRoute: 'organization_watchlist'
+        caseRoute: 'POST /v1/cases'
+        casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        watchlistScope: {
+            watchlistItemIds: string[]
+            alertGeneratorKeys: string[]
+            crossTenantCollisionAllowed: false
+        }
+        requiredAlertFields: string[]
+        requiredCaseFields: string[]
+        workflowContextFields: string[]
+        dedupe: {
+            scope: 'organization_watchlist_term'
+            keyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
+            crossTenantCollisionAllowed: false
+        }
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'watchlist_paused' | 'watchlist_archived' | 'member_revoked' | 'nonmember_denied'>
+        actorActions: OrganizationAlertCaseAction[]
+        blockerCodes: Array<OrganizationWatchlistAlertBridgeBlockerCode | OrganizationVisibilityDenyReason>
+        noEnumeration: false
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -6000,6 +6031,36 @@ export function organizationWatchlistAlertTermsExport(
         nonmemberEnumeration: false,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
+    const alertCasePersistenceReceipt: OrganizationWatchlistAlertTermsExport['alertCasePersistenceReceipt'] = {
+        schemaVersion: 'organization.alert_case_bridge_persistence_receipt.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        sourceFamily: 'organization_watchlist',
+        alertPersistenceContract: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.schemaVersion,
+        caseWorkflowContract: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.schemaVersion,
+        storageModule: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.storageModule,
+        alertUpsertFunction: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.upsertFunction,
+        alertRoute: sharedWatchlistDownstreamProof.alertBridge.route,
+        caseRoute: sharedWatchlistDownstreamProof.caseBridge.route,
+        casePathTemplate: sharedWatchlistDownstreamProof.caseBridge.casePathTemplate,
+        watchlistScope: {
+            watchlistItemIds: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.watchlistScope.watchlistItemIds,
+            alertGeneratorKeys: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.watchlistScope.alertGeneratorKeys,
+            crossTenantCollisionAllowed: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.dedupe.crossTenantCollisionAllowed,
+        },
+        requiredAlertFields: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.persistedAlertFields,
+        requiredCaseFields: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.requiredCaseFields,
+        workflowContextFields: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.workflowContextFields,
+        dedupe: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.dedupe,
+        lifecycleBlockers: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.lifecycleBlockers,
+        actorActions: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.actorActions.allowedActions,
+        blockerCodes: Array.from(new Set([
+            ...sharedWatchlistDownstreamProof.alertBridge.persistenceContract.blockerCodes,
+            ...sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.blockerCodes,
+        ])),
+        noEnumeration: false,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -6185,6 +6246,7 @@ export function organizationWatchlistAlertTermsExport(
         consumerReadiness,
         alertGenerationConsumer,
         termExportDeltaReceipt,
+        alertCasePersistenceReceipt,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
