@@ -6078,7 +6078,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
     const fields = Array.isArray(firstEmbed.fields) ? firstEmbed.fields.map(recordOrEmpty) : []
     const content = redactDeliveryEvidenceText(truncate(clean(payload.content), DISCORD_CONTENT_LIMIT))
     const description = redactDeliveryEvidenceText(truncate(clean(firstEmbed.description), DISCORD_EMBED_DESCRIPTION_LIMIT))
-    const fieldSummaries = fields.slice(0, 16).map(field => ({
+    const fieldSummaries = fields.slice(0, DISCORD_EMBED_FIELD_LIMIT).map(field => ({
         name: truncate(redactDeliveryEvidenceText(clean(field.name) || 'Field'), 80),
         valuePreview: truncate(redactDeliveryEvidenceText(clean(field.value)), 180),
         inline: field.inline === true,
@@ -6112,6 +6112,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
             alertId: clean(alert.id) || delivery.alertId,
             alertTitle: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
             severity: clean(alert.severity),
+            deliveryState: clean(alert.deliveryState) || clean(deliveryContext.deliveryState),
             sourceFamily: clean(alert.sourceFamily),
             eventTimestamp: clean(alert.eventTimestamp) || clean(deliveryContext.eventTimestamp) || clean(context.occurredAt),
             evidenceCount: parseCount(alert.evidenceCount),
@@ -6170,6 +6171,7 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
             alertId: clean(alert.id),
             title: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
             severity: clean(alert.severity),
+            deliveryState: clean(alert.deliveryState) || clean(delivery.deliveryState),
             sourceFamily: clean(alert.sourceFamily) || clean(source.family),
             evidenceCount: parseCount(alert.evidenceCount),
             watchlistId: clean(watchlist.id),
@@ -7570,6 +7572,7 @@ export function buildDwmAlertDeliveryPayload({
             casePath: normalizedAlert.casePath,
             alertUrl: normalizedAlert.alertUrl,
             analystLink,
+            deliveryState: normalizedAlert.deliveryState,
             dedupeKey: displayDedupeKey,
             replayCount: normalizedAlert.replayCount,
             workflowState: normalizedAlert.workflowState,
@@ -7607,6 +7610,7 @@ export function buildDwmAlertDeliveryPayload({
                     normalizedAlert.evidenceSummary ? discordField('Evidence summary', normalizedAlert.evidenceSummary, false) : null,
                     discordField('Route', normalizedAlert.route, true),
                     discordField('Workflow', workflowSummary(normalizedAlert, eventType), false),
+                    discordField('Delivery state', normalizedAlert.deliveryState, true),
                     discordField('Dedupe key', displayDedupeKey, false),
                     normalizedAlert.caseId ? discordField('Case ID', normalizedAlert.caseId, true) : null,
                     normalizedAlert.casePath ? discordField('Case', normalizedAlert.casePath, false) : null,
@@ -7666,6 +7670,7 @@ function buildDwmDiscordPayloadTemplateProof({
         'Source family',
         'Evidence count',
         'Workflow',
+        'Delivery state',
         'Dedupe key',
     ]
     const requiredPresence = {
@@ -7678,6 +7683,7 @@ function buildDwmDiscordPayloadTemplateProof({
         sourceFamily: Boolean(normalizedAlert.sourceFamily),
         evidence: normalizedAlert.evidenceCount > 0,
         workflow: Boolean(eventType),
+        deliveryState: Boolean(normalizedAlert.deliveryState),
         dedupeKey: Boolean(normalizedAlert.dedupeKey || idempotencyKey),
         analystLink: Boolean(analystLink),
     }
@@ -7703,6 +7709,7 @@ function buildDwmDiscordPayloadTemplateProof({
             'Evidence summary',
             'Route',
             'Workflow',
+            'Delivery state',
             'Dedupe key',
             'Case ID',
             'Case',

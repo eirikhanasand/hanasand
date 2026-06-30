@@ -103,6 +103,7 @@ const payload = buildDwmAlertDeliveryPayload({
         tenantId: 'tenant_contract',
         confidenceScore: 0.91,
         confidenceReason: 'Domain and company matched across two independent captures.',
+        deliveryState: 'retry_scheduled',
         createdAt: '2026-06-28T09:15:00.000Z',
         matchedTerm: { value: 'acme-security.com', kind: 'domain' },
         evidence: [
@@ -133,6 +134,7 @@ expect(serialized.includes('Critical Acme domain exposure'), 'Payload should inc
 expect(serialized.includes('CRITICAL'), 'Payload should include severity.', payload)
 expect(payloadContext.occurredAt === '2026-06-28T09:15:00.000Z' && payloadEmbed.timestamp === '2026-06-28T09:15:00.000Z', 'Payload should preserve real alert event timestamp.', payload)
 expect(payloadFields.some(field => field.name === 'Observed at' && field.value === '2026-06-28T09:15:00.000Z'), 'Discord payload should include an operator-readable observed timestamp field.', payloadFields)
+expect(payloadFields.some(field => field.name === 'Delivery state' && field.value === 'retry_scheduled'), 'Discord payload should expose the next delivery state.', payloadFields)
 expect(serialized.includes('Acme Security'), 'Payload should include company context.', payload)
 expect(serialized.includes('acme-security.com'), 'Payload should include domain/matched term.', payload)
 expect(serialized.includes('ransomware_leak_site'), 'Payload should include source family.', payload)
@@ -149,7 +151,7 @@ expect(serialized.includes('Analyst link') && ((payloadContext.delivery as Recor
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(serialized.includes('Workflow') && serialized.includes('replayed') && serialized.includes('tenant_contract'), 'Payload should include workflow and tenant routing context.', payload)
 expect(payloadTemplate.schemaVersion === 'dwm.webhook.discord_payload_template.v1' && payloadTemplate.templateId === 'dwm.discord.alert_replay.v1' && payloadTemplate.ready === true, 'Discord payload should include a ready replay template contract.', payloadTemplate)
-expect(Array.isArray(payloadTemplate.requiredFields) && payloadTemplate.requiredFields.includes('Watchlist') && payloadTemplate.requiredFields.includes('Dedupe key'), 'Discord template should declare customer-useful required fields.', payloadTemplate)
+expect(Array.isArray(payloadTemplate.requiredFields) && payloadTemplate.requiredFields.includes('Watchlist') && payloadTemplate.requiredFields.includes('Dedupe key') && payloadTemplate.requiredFields.includes('Delivery state'), 'Discord template should declare customer-useful required fields.', payloadTemplate)
 expect((payloadTemplate.redaction as Record<string, unknown>)?.webhookSecretExposed === false && payloadTemplate.noNetworkDefault === true, 'Discord template should prove no-network redaction defaults.', payloadTemplate)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
 
@@ -612,7 +614,7 @@ expect(deliveryAttemptContract.payloadContract.schemaVersion === 'dwm.webhook.de
 expect(deliveryAttemptContract.payloadContract.required.some(item => item.key === 'dedupeKey' && item.paths.includes('alert.dedupeKey')) && deliveryAttemptContract.payloadContract.optional.some(item => item.key === 'replayState' && item.present), 'Delivery attempt payload contract should document dedupe and replay fields.', deliveryAttemptContract.payloadContract)
 expect(deliveryAttemptContract.destinationSelection.selectedDestinationIds.join(',') === 'destination_replay_contract' && deliveryAttemptContract.attempts.length === 1, 'Delivery attempt contract should resolve the org-scoped destination.', deliveryAttemptContract)
 expect(deliveryAttemptContract.attempts[0]?.status === 'dry_run' && deliveryAttemptContract.attempts[0]?.replay === true && deliveryAttemptContract.attempts[0]?.retry.attemptCount === 2, 'Delivery attempt contract should produce a persisted dry-run replay attempt with retry count.', deliveryAttemptContract.attempts[0])
-expect(deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract', 'Delivery attempt contract should include Discord-ready payload preview context.', deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview)
+expect(deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.discord.fieldNames.includes('Delivery state') && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract' && deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview?.context.deliveryState === 'ready_to_send', 'Delivery attempt contract should include Discord-ready payload preview context and delivery state.', deliveryAttemptContract.attempts[0]?.sanitizedPayloadPreview)
 expect(deliveryAttemptContract.attempts[0]?.audit.expectedAction === 'delivery.tested' && deliveryAttemptContract.attempts[0]?.redactedDestination.endpointExposed === false, 'Delivery attempt contract should expose audit proof and redacted destination metadata.', deliveryAttemptContract.attempts[0])
 expect(deliveryAttemptContract.attempts[0]?.redactedDestination.endpointHash === 'endpoint_replay_contract' && deliveryAttemptContract.attempts[0]?.redactedDestination.endpointHint === 'https://discord.com/api/webhooks/1234567890/...', 'Delivery attempt contract should expose safe endpoint refs before persistence.', deliveryAttemptContract.attempts[0]?.redactedDestination)
 expect(deliveryAttemptPersistence.schemaVersion === 'dwm.webhook.delivery_attempt_persistence.v1' && deliveryAttemptPersistence.ok === true && deliveryAttemptPersistence.totals.persistedAttempts === 1, 'Delivery attempt persistence should match typed contract attempts to persisted rows.', deliveryAttemptPersistence)
