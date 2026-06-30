@@ -1236,6 +1236,9 @@ void (productProgressCaseWorkflow.relatedLinks.find(link => link.href === '/api/
 if (productProgressCaseWorkflow.actions?.find(action => action.id === 'open_analyst_case_workflow')?.href !== '/dashboard/ti/workbench?case=case_acme_1') {
     throw new Error('Expected case workflow action to open the backed analyst workbench route.')
 }
+if (productProgressCaseWorkflow.actions?.find(action => action.id === 'open_case_detail')?.href !== '/api/cases/case_acme_1') {
+    throw new Error('Expected case workflow action to expose the backed case detail route.')
+}
 const productProgressSourceWorker = expectWorkbenchCase(productProgressCases, 'source_worker_readiness')
 void (productProgressSourceWorker.status satisfies string)
 void (productProgressSourceWorker.evidence.find(item => item.id === 'ev_source_worker_readiness')?.provenance satisfies string | undefined)
@@ -1252,6 +1255,13 @@ if (productProgressAlertGeneration.status !== 'ready') {
 }
 if (productProgressAlertGeneration.actions?.find(action => action.id === 'open_alert_generation_readiness')?.href !== '/api/dwm/alerts/generation-readiness') {
     throw new Error('Expected alert generation queue item to deep-link to generation readiness.')
+}
+const scopedAlertQueueHref = '/api/dwm/alerts?organizationId=org_acme'
+if (productProgressAlertGeneration.actions?.find(action => action.id === 'open_alert_queue')?.href !== scopedAlertQueueHref) {
+    throw new Error('Expected alert generation queue item to expose the scoped alert queue.')
+}
+if (productProgressAlertGeneration.relatedLinks.find(link => link.href === scopedAlertQueueHref)?.label !== 'Alerts API') {
+    throw new Error('Expected alert generation links to include the scoped alerts API.')
 }
 const zeroCandidateAlertGeneration = expectWorkbenchCase(zeroCandidateAlertGenerationCases, 'alert_generation')
 if (zeroCandidateAlertGeneration.status === 'ready' || !zeroCandidateAlertGeneration.missingDependency?.includes('no alert candidates')) {

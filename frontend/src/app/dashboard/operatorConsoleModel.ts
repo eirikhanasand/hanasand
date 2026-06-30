@@ -2521,12 +2521,20 @@ export function buildReadinessCases(input: {
             workflowPath: path,
             caseDetailHref: analystWorkflow.caseDetailRoute,
             missingDependency: analystWorkflowReady ? undefined : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Missing analyst workflow readiness proof.',
-            actions: [{
-                id: 'open_analyst_case_workflow',
-                label: 'Open case workflow',
-                method: 'GET',
-                href: analystWorkflow.href || '/dashboard/ti/workbench',
-            }],
+            actions: [
+                {
+                    id: 'open_analyst_case_workflow',
+                    label: 'Open case workflow',
+                    method: 'GET',
+                    href: analystWorkflow.href || '/dashboard/ti/workbench',
+                },
+                ...(analystWorkflow.caseDetailRoute || analystWorkflow.caseId ? [{
+                    id: 'open_case_detail',
+                    label: 'Open case detail',
+                    method: 'GET' as const,
+                    href: analystWorkflow.caseDetailRoute || `/api/cases/${encodeURIComponent(analystWorkflow.caseId || '')}`,
+                }] : []),
+            ],
         })] : []),
         ...(sourceGrowth ? [readinessCase({
             id: 'source_worker_readiness',
@@ -2693,10 +2701,11 @@ export function buildReadinessCases(input: {
                 : alertGenerationProofReady && input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.']
                     : alertGenerationProof ? ['Owner: DWM owner. Open alert generation readiness.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after proof returns customer-delivery readiness.']
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: '/api/dwm/alerts', label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
+            relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
             workflowPath: path,
             missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation readiness is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
             actions: [
+                { id: 'open_alert_queue', label: 'Open alert queue', method: 'GET', href: alertsHref(input.scope) },
                 { id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET', href: '/api/dwm/alerts/generation-readiness' },
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
                     id: 'rebuild_alerts',
@@ -2889,6 +2898,16 @@ function watchlistsHref(scope: OperatorScope) {
         params.set('tenantId', scope.tenantId)
     }
     return `/api/dwm/watchlists?${params.toString()}`
+}
+
+function alertsHref(scope: OperatorScope) {
+    const params = new URLSearchParams()
+    if (scope.organizationId) {
+        params.set('organizationId', scope.organizationId)
+    } else {
+        params.set('tenantId', scope.tenantId)
+    }
+    return `/api/dwm/alerts?${params.toString()}`
 }
 
 function actionScope(scope: OperatorScope) {
