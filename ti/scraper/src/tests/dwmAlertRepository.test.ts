@@ -2683,6 +2683,7 @@ describe("dwm alert repository", () => {
 
     const alphaTelegram = alpha.alerts.find((alert) => alert.sourceFamily === "telegram_public");
     const betaTelegram = beta.alerts.find((alert) => alert.sourceFamily === "telegram_public");
+    const betaActor = beta.alerts.find((alert) => alert.sourceFamily === "actor_page");
     expect(alphaTelegram?.id).not.toBe(betaTelegram?.id);
     expect(alphaTelegram?.dedupeKey).not.toBe(betaTelegram?.dedupeKey);
     expect(alphaTelegram?.orgWatchlistScope).toMatchObject({
@@ -2705,9 +2706,56 @@ describe("dwm alert repository", () => {
     });
     expect(JSON.stringify(alphaTelegram?.orgWatchlistScope)).not.toContain("org_repo_beta");
     expect(JSON.stringify(betaTelegram?.orgWatchlistScope)).not.toContain("org_repo_alpha");
+    expect(betaActor).toMatchObject({
+      tenantId: "tenant_repo_shared",
+      organizationId: "org_repo_beta",
+      sourceFamily: "actor_page",
+      recommendedRoute: "analyst_review",
+      matchedTerm: { value: "beta-payments.example", kind: "domain" },
+      evidence: [expect.objectContaining({
+        id: "cap_repo_actor_beta",
+        sourceFamily: "actor_page",
+        observedAt: "2026-06-28T13:22:00.000Z",
+        contentHash: "hash-repo-actor-beta",
+        provenance: expect.objectContaining({
+          captureId: "cap_repo_actor_beta",
+          sourceId: "src_repo_actor"
+        })
+      })],
+      sourceProvenanceSummary: expect.objectContaining({
+        schemaVersion: "dwm.alert_source_provenance.v1",
+        tenantId: "tenant_repo_shared",
+        organizationId: "org_repo_beta",
+        sourceFamily: "actor_page",
+        captureIds: ["cap_repo_actor_beta"],
+        sourceIds: ["src_repo_actor"],
+        contentHashes: ["hash-repo-actor-beta"],
+        evidenceCount: 1,
+        recommendedRoute: "analyst_review"
+      }),
+      orgWatchlistScope: expect.objectContaining({
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_repo_beta",
+        watchlistIds: ["watch_repo_beta_unique"],
+        watchlistItemIds: ["watch_item_beta_unique"],
+        alertGeneratorKeys: ["org:org_repo_beta:watchlist:watch_item_beta_unique:domain:beta-payments.example"]
+      })
+    });
+    expect(betaActor?.confidenceReasoning.join(" ")).toContain("Watchlist term matched");
+    expect(betaActor?.alertCreatedEvent.consumerPayload).toMatchObject({
+      evidenceExcerpts: [expect.objectContaining({
+        evidenceId: "cap_repo_actor_beta",
+        captureId: "cap_repo_actor_beta",
+        sourceFamily: "actor_page",
+        observedAt: "2026-06-28T13:22:00.000Z",
+        contentHash: "hash-repo-actor-beta"
+      })]
+    });
+    expect(JSON.stringify(betaActor)).not.toContain("org_repo_alpha");
 
     const alphaHandoff = buildDwmAlertDownstreamHandoff({ alert: alphaTelegram });
     const betaHandoff = buildDwmAlertDownstreamHandoff({ alert: betaTelegram });
+    const betaActorHandoff = buildDwmAlertDownstreamHandoff({ alert: betaActor });
     expect(alphaHandoff).toMatchObject({
       schemaVersion: "dwm.alert_downstream_handoff.v1",
       ready: true,
@@ -2757,6 +2805,33 @@ describe("dwm alert repository", () => {
     });
     expect(JSON.stringify(alphaHandoff)).not.toContain("webhook_beta_ops");
     expect(JSON.stringify(betaHandoff)).not.toContain("webhook_alpha_ops");
+    expect(betaActorHandoff).toMatchObject({
+      schemaVersion: "dwm.alert_downstream_handoff.v1",
+      ready: true,
+      organizationId: "org_repo_beta",
+      sourceFamily: "actor_page",
+      watchlist: {
+        watchlistIds: ["watch_repo_beta_unique"],
+        watchlistItemIds: ["watch_item_beta_unique"],
+        alertGeneratorKeys: ["org:org_repo_beta:watchlist:watch_item_beta_unique:domain:beta-payments.example"]
+      },
+      evidence: {
+        selectedCaptureIds: ["cap_repo_actor_beta"],
+        captureIds: ["cap_repo_actor_beta"],
+        sourceIds: ["src_repo_actor"],
+        evidenceCount: 1
+      },
+      deliverySelection: {
+        ready: true,
+        selectedWebhookDestinationId: "webhook_beta_ops",
+        selectedCaptureIds: ["cap_repo_actor_beta"],
+        sourceFamily: "actor_page"
+      },
+      caseReadiness: {
+        ready: true
+      }
+    });
+    expect(JSON.stringify(betaActorHandoff)).not.toContain("webhook_alpha_ops");
     expect(alphaHandoff.evidence.selectedCaptureIds).toEqual(["cap_repo_overlap_acme"]);
     expect(betaHandoff.evidence.selectedCaptureIds).toEqual(["cap_repo_overlap_acme"]);
     expect(alpha.alerts.flatMap((alert) => alert.deliveryReadinessContext.selectedCaptureIds)).not.toContain("cap_repo_actor_beta");
