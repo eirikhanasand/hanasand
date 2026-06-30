@@ -278,6 +278,74 @@ describe("DWM alert case handoff route", () => {
       }
     });
     expect((store as any).getCase("case_alert_acme").workflowEvents).toHaveLength(1);
+    const escalated = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "escalate",
+      assignedOwner: "admin@acme.com",
+      note: "Escalate after confirming matched watchlist evidence.",
+      idempotencyKey: "case-transition-escalate-001"
+    });
+    const escalatedPayload = await escalated.json() as any;
+    const reusedAfterTransition = await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Attempt to reopen an already escalated case.",
+      idempotencyKey: "alert-case-handoff-after-escalate"
+    });
+    const reusedAfterTransitionPayload = await reusedAfterTransition.json() as any;
+    expect(escalated.status).toBe(200);
+    expect(escalatedPayload).toMatchObject({
+      replayed: false,
+      duplicate: false,
+      case: {
+        id: "case_alert_acme",
+        status: "escalated",
+        assignedOwner: "admin@acme.com",
+        lastDecision: "Escalate after confirming matched watchlist evidence."
+      },
+      workflowTransition: {
+        action: "escalate",
+        fromStatus: "open",
+        toStatus: "escalated",
+        fromOwner: "owner@acme.com",
+        toOwner: "admin@acme.com",
+        workflowState: {
+          idempotencyKey: "case-transition-escalate-001"
+        }
+      },
+      alert: {
+        id: "alert_acme",
+        caseId: "case_alert_acme",
+        reviewState: "route_to_customer",
+        assignedOwner: "admin@acme.com"
+      }
+    });
+    expect(reusedAfterTransition.status).toBe(200);
+    expect(reusedAfterTransitionPayload).toMatchObject({
+      case: {
+        id: "case_alert_acme",
+        status: "escalated",
+        assignedOwner: "admin@acme.com",
+        lastDecision: "Escalate after confirming matched watchlist evidence."
+      },
+      alertCaseHandoff: {
+        caseId: "case_alert_acme",
+        workflowState: {
+          caseStatus: "escalated",
+          replayState: "reused",
+          idempotencyKey: "alert-case-handoff-after-escalate"
+        },
+        provenance: {
+          captureIds: ["cap_acme_1"],
+          sourceIds: ["src_acme_tg"],
+          contentHashes: ["hash_acme_1"]
+        }
+      }
+    });
+    expect((store as any).getCase("case_alert_acme").workflowEvents.map((event: any) => event.action)).toEqual([
+      "open",
+      "escalate"
+    ]);
     expect((store as any).getDwmAlert("alert_acme").caseId).toBe("case_alert_acme");
     expect(JSON.stringify({ createdPayload, duplicatePayload })).not.toContain("https://discord.com");
   });
@@ -1131,6 +1199,14 @@ async function postHandoff(options: ReturnType<typeof fixtureRuntime>["options"]
 async function postHandoffAction(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/handoff-action`, {
     method: "POST",
+    headers: { "x-user-email": email },
+    body: JSON.stringify(body)
+  }), options);
+}
+
+async function patchCase(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}`, {
+    method: "PATCH",
     headers: { "x-user-email": email },
     body: JSON.stringify(body)
   }), options);
