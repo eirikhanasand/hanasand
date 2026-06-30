@@ -1564,7 +1564,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                                     ) : null}
                                 </div>
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                             <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
                         </div>
                     )
@@ -1990,7 +1990,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                             {request.captureId ? 'capture attached' : 'capture needed'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.captureId ?? request.provenance}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                             {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing].filter(Boolean).join(' · ')}
@@ -2183,7 +2183,7 @@ function SelectedSourceDrilldownPanel({ drilldown }: { drilldown: SelectedSource
                                 {row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'capture needed' : 'source needed'}
                             </span>
                         </div>
-                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : row.provenance}</p>
+                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.captureId ? `capture ${row.captureId}` : displayRequirementText(row.provenance)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.handoff)}</p>
                         <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                             <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#131c29] dark:text-[#d8e2f2]'>
@@ -2738,7 +2738,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.sourceName}</p>
                                     <span className={item.captureId ? 'shrink-0 text-[11px] text-[#147a3b]' : 'shrink-0 text-[11px] text-[#8a5a00]'}>{item.captureId ? 'capture attached' : 'capture needed'}</span>
                                 </div>
-                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.provenance}</p>
+                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(item.provenance)}</p>
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
@@ -3037,7 +3037,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                         {formatLabel(source.sourceFamily)} · {formatLabel(source.status)}{source.lastCollectedAt ? ` · ${formatDate(source.lastCollectedAt)}` : ''}
                                     </p>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{source.captureId ? `capture ${source.captureId}` : source.provenance}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{source.captureId ? `capture ${source.captureId}` : displayRequirementText(source.provenance)}</p>
                                 </div>
                                 {typeof source.confidence === 'number' ? <span className='shrink-0 text-[11px] font-semibold text-[#667085] dark:text-[#9aa8bd]'>{Math.round(source.confidence * 100)}%</span> : null}
                             </div>
@@ -4319,7 +4319,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
                             </div>
@@ -4455,7 +4455,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                                 </div>
                                                 <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? `capture ${source.captureId}` : 'capture needed'}</span>
                                             </div>
-                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{source.provenance}</p>
+                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(source.provenance)}</p>
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{source.shownBecause}</p>
                                         </div>
                                     ))}
@@ -4757,7 +4757,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
-                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </div>
                                 <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'needs_capture' ? 'blocked' : 'review')}>
                                     {row.captureId ? `capture ${row.captureId}` : 'capture needed'}
