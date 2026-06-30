@@ -14,6 +14,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -52,6 +53,7 @@ import {
   buildSourceProvenanceSourceActivationDecisionReceipt,
   buildSourceProvenanceSourcePackFixtureGrowthPacket,
   buildSourceProvenanceSourcePackFixtureReadinessExport,
+  buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -3658,6 +3660,192 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(readinessExport)).not.toContain("rawText");
     expect(JSON.stringify(readinessExport)).not.toContain("password");
+  });
+
+  test("builds source-pack retry policy from fixture readiness for source ops and alerts", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+    const receipt = buildSourceProvenanceSourcePackIntakeReceipt({ request });
+    const activationReadiness = buildSourceProvenanceSourcePackActivationReadiness({ receipt });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({ activationReadiness });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:27:00.000Z"
+    });
+    const growthPacket = buildSourceProvenanceSourcePackFixtureGrowthPacket({
+      decisionReceipt,
+      generatedAt: "2026-06-29T12:28:00.000Z"
+    });
+    const readinessExport = buildSourceProvenanceSourcePackFixtureReadinessExport({
+      packet: growthPacket,
+      generatedAt: "2026-06-29T12:29:00.000Z"
+    });
+    const policyPacket = buildSourceProvenanceSourcePackRetryPolicyPacket({
+      readinessExport,
+      generatedAt: "2026-06-29T12:30:00.000Z"
+    });
+
+    expect(policyPacket).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      sourcePackFixtureReadinessExportId: readinessExport.id,
+      summary: {
+        rowCount: 6,
+        retryNow: 0,
+        retryLater: 1,
+        policyReviewRequired: 1,
+        inspectOnly: 3,
+        alertReady: 1,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        newestFreshnessAt: "2026-06-29T12:28:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(policyPacket.retryRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceFamily: "public_advisory",
+        parserStatus: "ready",
+        healthState: "healthy",
+        freshnessState: "fresh",
+        retryState: "alert_ready",
+        downstreamConsumerRoutes: {
+          publicTI: "/ti/APT28",
+          alertGeneration: "/v1/dwm/alerts/rebuild",
+          sourceOps: "/v1/dwm/source-requests"
+        },
+        provenance: expect.objectContaining({
+          captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+          contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/)
+        }),
+        action: expect.objectContaining({
+          action: "queue_alert_rebuild",
+          ownerLane: "alert",
+          route: expect.objectContaining({
+            path: "/v1/dwm/alerts/rebuild",
+            liveNetworkFetch: false,
+            body: expect.objectContaining({ dryRun: true })
+          })
+        })
+      }),
+      expect.objectContaining({
+        sourceFamily: "telegram_public",
+        parserStatus: "retry_scheduled",
+        healthState: "stale",
+        retryState: "retry_later",
+        blockerCode: "parser_retry_scheduled",
+        blockerReason: "fixture parser found no campaign timestamp",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        action: expect.objectContaining({
+          action: "retry_parser",
+          ownerLane: "parser",
+          route: expect.objectContaining({
+            path: "/v1/dwm/source-requests",
+            body: expect.objectContaining({ action: "retry", dryRun: true })
+          })
+        })
+      }),
+      expect.objectContaining({
+        sourceFamily: "darkweb_metadata",
+        parserStatus: "blocked",
+        healthState: "blocked",
+        retryState: "policy_review_required",
+        blockerCode: "policy_review_required",
+        action: expect.objectContaining({
+          action: "request_policy_approval",
+          ownerLane: "policy"
+        })
+      }),
+      expect.objectContaining({
+        parserStatus: "not_tested",
+        healthState: "degraded",
+        retryState: "inspect_only",
+        blockerCode: "degraded_parser",
+        action: expect.objectContaining({
+          action: "inspect_source_health",
+          ownerLane: "source"
+        })
+      })
+    ]));
+    expect(policyPacket.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        requiredFields: expect.arrayContaining(["retryRows[].retryState", "retryRows[].action", "retryRows[].blockerCode"])
+      }),
+      expect.objectContaining({
+        consumer: "dashboard",
+        ready: true,
+        requiredFields: expect.arrayContaining(["summary", "retryRows[].healthState", "retryRows[].downstreamConsumerRoutes"])
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: true,
+        route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        consumer: "integration",
+        ready: true,
+        requiredFields: expect.arrayContaining(["schemaVersion", "safeOutput", "summary", "consumers[]"])
+      })
+    ]));
+    expect(policyPacket.payloadShape).toEqual(expect.arrayContaining([
+      "retryRows[].retryState",
+      "retryRows[].downstreamConsumerRoutes",
+      "retryRows[].provenance",
+      "retryRows[].action",
+      "summary"
+    ]));
+    expect(JSON.stringify(policyPacket)).not.toContain("rawText");
+    expect(JSON.stringify(policyPacket)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
