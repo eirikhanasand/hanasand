@@ -420,6 +420,8 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
     const webhookDestinationIds = workflowAlert.webhookContext?.webhookDestinationIds || workflowAlert.workflowContext?.webhookDestinationIds || []
     const organizationId = workflowAlert.organizationId || workflowAlert.workflowContext?.organizationId || scope.organizationId
     const alertDeliveries = deliveries.filter(delivery => delivery.alertId === alert.id)
+    const latestDelivery = latestDeliveryAttempt(alertDeliveries)
+    const deliveryHistoryHref = alertDeliveryHistoryHref(alert.id, scope, latestDelivery)
     const workflowPath = [
         {
             id: `${alert.id}_path_org`,
@@ -458,8 +460,10 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             owner: 'operator',
             source: 'POST /api/dwm/webhooks/deliver',
             entityId: webhookDestinationIds.join(', ') || workflowAlert.webhookDelivery.dedupeKey,
-            href: '/api/dwm/webhooks/deliveries',
-            detail: `Delivery state: ${deliveryState}.`,
+            href: deliveryHistoryHref,
+            detail: latestDelivery
+                ? `Latest ${latestDelivery.status} delivery ${latestDelivery.id}; ${alertDeliveries.length} attempt${alertDeliveries.length === 1 ? '' : 's'} in the delivery ledger.`
+                : `Delivery state: ${deliveryState}. No delivery ledger row matched this alert.`,
         },
     ] satisfies WorkbenchCase['workflowPath']
     const timeline: WorkbenchTimelineItem[] = [
@@ -475,6 +479,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             title: 'Recommended route',
             body: alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
         },
+        ...deliveryTimelineItems(alertDeliveries),
     ]
 
     return {
@@ -513,11 +518,14 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         nextTasks: [
             liveAlert ? `Owner: analyst. Alert ID: ${alert.id}.` : `Owner: analyst. ${alert.id} is fallback-only until live alerts load.`,
             caseId ? `Case ID: ${caseId}. Update the backed case before closing.` : 'Open a backed analyst case before customer delivery.',
-            webhookDestinationIds.length ? `Webhook destination IDs: ${webhookDestinationIds.join(', ')}.` : 'Configure/test webhook destination before sending.',
+            latestDelivery
+                ? `Latest delivery ${latestDelivery.id} is ${latestDelivery.status}; open the ledger before notifying the customer.`
+                : webhookDestinationIds.length ? `Webhook destination IDs: ${webhookDestinationIds.join(', ')}.` : 'Configure/test webhook destination before sending.',
         ],
         relatedLinks: [
             { href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}`, label: 'Alert API' },
             ...(casePath ? [{ href: casePath, label: 'Case API' }] : []),
+            { href: deliveryHistoryHref, label: 'Delivery history' },
             { href: '/dashboard/dwm', label: 'Open DWM console' },
             { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
         ],
@@ -567,6 +575,37 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             },
         ] : [],
     }
+}
+
+function latestDeliveryAttempt(deliveries: DwmDeliveryItem[]) {
+    return [...deliveries].sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))[0]
+}
+
+function deliveryTimelineItems(deliveries: DwmDeliveryItem[]): WorkbenchTimelineItem[] {
+    return [...deliveries]
+        .sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
+        .slice(0, 3)
+        .map(delivery => ({
+            id: `${delivery.id}_delivery_attempt`,
+            at: delivery.attemptedAt,
+            title: 'Webhook delivery attempt',
+            body: [
+                `${delivery.status}${delivery.httpStatus ? ` HTTP ${delivery.httpStatus}` : ''}`,
+                delivery.webhookDestinationId ? `destination ${delivery.webhookDestinationId}` : undefined,
+                delivery.deliveryKind ? `kind ${delivery.deliveryKind}` : undefined,
+                delivery.error ? `error ${delivery.error}` : undefined,
+            ].filter(Boolean).join(' · '),
+        }))
+}
+
+function alertDeliveryHistoryHref(alertId: string, scope: OperatorScope, delivery?: DwmDeliveryItem) {
+    const params = new URLSearchParams()
+    if (scope.organizationId) params.set('organizationId', scope.organizationId)
+    else params.set('tenantId', scope.tenantId)
+    params.set('alertId', alertId)
+    if (delivery?.id) params.set('deliveryId', delivery.id)
+    if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
+    return `/api/dwm/webhooks/deliveries?${params.toString()}`
 }
 
 function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {
