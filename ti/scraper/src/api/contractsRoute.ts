@@ -155,7 +155,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId"],
         writeFields: ["organizationId", "action", "status", "assignedOwner", "note", "idempotencyKey"],
         recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState"],
-        blockerCodes: ["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "invalid_case_owner_role", "missing_note"],
+        blockerCodes: ["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "invalid_case_owner_role", "missing_note", "missing_assigned_owner"],
         safeOutput: {
           metadataOnly: true,
           rawEvidenceExposed: false,

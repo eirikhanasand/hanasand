@@ -548,7 +548,11 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   if ((action === "close" || nextStatus === "closed" || action === "false_positive" || action === "suppress") && !note) {
     return json({ error: { code: "missing_decision_rationale", message: "Closing, suppressing, or marking false positive requires an analyst note." } }, 400);
   }
-  const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
+  const assignmentProvided = body.assignedOwner !== undefined || body.owner !== undefined;
+  const assignedOwner = assignmentProvided ? normalizeOwner(body.assignedOwner ?? body.owner) : existing.assignedOwner;
+  if (action === "assign" && (!assignmentProvided || !assignedOwner)) {
+    return json({ error: { code: "missing_assigned_owner", message: "Assigning a case requires an active organization member." } }, 400);
+  }
   const ownerValidation = validateAssignedOwner(options, scope.organizationId, assignedOwner);
   if (ownerValidation) return ownerValidation;
   const idempotencyKey = normalizeNote(body.idempotencyKey ?? request.headers.get("idempotency-key") ?? request.headers.get("x-idempotency-key"));

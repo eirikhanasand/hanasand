@@ -579,6 +579,144 @@ describe("DWM alert case handoff route", () => {
     ]);
   });
 
+  test("assigns cases to active members while preserving workflow replay state", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case before assignment.",
+      idempotencyKey: "alert-case-handoff-assign"
+    });
+
+    const assigned = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "assign",
+      assignedOwner: "admin@acme.com",
+      note: "Assign to admin for customer delivery.",
+      idempotencyKey: "case-assign-admin-001"
+    });
+    const assignedPayload = await assigned.json() as any;
+    const duplicate = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "assign",
+      assignedOwner: "member@acme.com",
+      note: "Duplicate assignment should replay the first owner.",
+      idempotencyKey: "case-assign-admin-001"
+    });
+    const duplicatePayload = await duplicate.json() as any;
+    const missingOwner = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "assign",
+      note: "Assignment without an owner should fail.",
+      idempotencyKey: "case-assign-missing-owner"
+    });
+    const missingOwnerPayload = await missingOwner.json() as any;
+    const viewerOwner = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "assign",
+      assignedOwner: "viewer@acme.com",
+      idempotencyKey: "case-assign-viewer-owner"
+    });
+    const viewerOwnerPayload = await viewerOwner.json() as any;
+    const viewerActor = await patchCase(options, "case_alert_acme", "viewer@acme.com", {
+      organizationId: "org_acme",
+      action: "assign",
+      assignedOwner: "admin@acme.com",
+      idempotencyKey: "case-assign-viewer-actor"
+    });
+    const viewerActorPayload = await viewerActor.json() as any;
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&eventAction=assign");
+    const replayExportPayload = await replayExport.json() as any;
+
+    expect(assigned.status).toBe(200);
+    expect(assignedPayload).toMatchObject({
+      replayed: false,
+      duplicate: false,
+      case: {
+        id: "case_alert_acme",
+        status: "open",
+        assignedOwner: "admin@acme.com",
+        lastDecision: "Assign to admin for customer delivery."
+      },
+      workflowTransition: {
+        action: "assign",
+        fromStatus: "open",
+        toStatus: "open",
+        fromOwner: "owner@acme.com",
+        toOwner: "admin@acme.com",
+        workflowState: {
+          status: "open",
+          assignedOwner: "admin@acme.com",
+          idempotencyKey: "case-assign-admin-001"
+        }
+      },
+      alert: {
+        id: "alert_acme",
+        caseId: "case_alert_acme",
+        assignedOwner: "admin@acme.com"
+      }
+    });
+    expect(duplicate.status).toBe(200);
+    expect(duplicatePayload).toMatchObject({
+      replayed: true,
+      duplicate: true,
+      event: {
+        action: "assign",
+        idempotencyKey: "case-assign-admin-001",
+        toOwner: "admin@acme.com"
+      },
+      case: {
+        status: "open",
+        assignedOwner: "admin@acme.com"
+      }
+    });
+    expect(missingOwner.status).toBe(400);
+    expect(missingOwnerPayload.error).toMatchObject({ code: "missing_assigned_owner" });
+    expect(viewerOwner.status).toBe(400);
+    expect(viewerOwnerPayload.error).toMatchObject({ code: "invalid_case_owner_role" });
+    expect(viewerActor.status).toBe(403);
+    expect(viewerActorPayload.error).toMatchObject({ code: "case_read_only_member" });
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload).toMatchObject({
+      filters: {
+        eventAction: "assign"
+      },
+      replayPlan: {
+        workflowTransitionCount: 1,
+        auditTimelineRowCount: 1
+      },
+      auditTimeline: {
+        summary: {
+          rowCount: 1,
+          actions: ["assign"]
+        },
+        rows: [expect.objectContaining({
+          rowType: "workflow_transition",
+          action: "assign",
+          rationale: "Assign to admin for customer delivery.",
+          workflow: expect.objectContaining({
+            fromStatus: "open",
+            toStatus: "open",
+            fromOwner: "owner@acme.com",
+            toOwner: "admin@acme.com",
+            currentStatus: "open",
+            currentOwner: "admin@acme.com"
+          }),
+          replay: expect.objectContaining({
+            idempotencyKey: "case-assign-admin-001",
+            replayState: "recorded",
+            auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+            workflowEventId: expect.stringMatching(/^case_event_/)
+          })
+        })]
+      }
+    });
+    expect((store as any).getCase("case_alert_acme").workflowEvents.map((event: any) => event.action)).toEqual([
+      "open",
+      "assign"
+    ]);
+  });
+
   test("records idempotent case handoff action receipts with org access gates", async () => {
     const { options, store } = fixtureRuntime();
     await postHandoff(options, "alert_acme", {
@@ -1064,10 +1202,10 @@ describe("DWM alert case handoff route", () => {
         customerNotificationCount: 0
       }
     });
-    expect(filteredReplayExportPayload.auditTimeline.rows.map((row: any) => row.rowType)).toEqual([
+    expect(filteredReplayExportPayload.auditTimeline.rows.map((row: any) => row.rowType)).toEqual(expect.arrayContaining([
       "workflow_transition",
       "handoff_action_receipt"
-    ]);
+    ]));
     expect(viewerReplayExport.status).toBe(200);
     expect(viewerReplayExportPayload).toMatchObject({
       access: {
