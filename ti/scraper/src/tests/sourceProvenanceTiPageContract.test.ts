@@ -1689,7 +1689,7 @@ describe("source provenance TI page contract", () => {
       actor: "APT28",
       sourcePackActivationReadinessId: readiness.id,
       summary: {
-        readyToTest: 1,
+        readyToTest: 4,
         retryScheduled: 1,
         policyBlocked: 1,
         parserReady: 1,
