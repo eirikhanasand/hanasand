@@ -1445,6 +1445,12 @@ void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'entitlement_readiness', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready')
+if (expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready').activeTermCount !== 1) {
+    throw new Error('Expected org alert export readiness to expose active watchlist term count.')
+}
+if (expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready').canGenerateAlerts !== true) {
+    throw new Error('Expected org alert export readiness to expose alert-generation permission.')
+}
 void expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready')
 void (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').candidateCount satisfies number | undefined)
 if (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').candidateCount !== 3) {

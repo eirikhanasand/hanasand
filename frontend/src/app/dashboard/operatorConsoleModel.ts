@@ -1680,6 +1680,12 @@ function buildProductReadiness(input: {
             expectedDashboardRowId: orgAlertExport?.expectedDashboardRowId,
             integrationProbeHint: orgAlertExport?.integrationProbeHint,
             backendProofContractVersion: orgAlertExport?.backendProofContractVersion || orgAlertExport?.schemaVersion,
+            organizationId: orgAlertExport?.organizationId,
+            activeTermCount: orgAlertExport?.activeTermCount,
+            pausedCount: orgAlertExport?.pausedCount,
+            archivedCount: orgAlertExport?.archivedCount,
+            canGenerateAlerts: orgAlertExport?.canGenerateAlerts,
+            exportedAt: orgAlertExport?.exportedAt,
         },
         {
             id: 'webhook_health',

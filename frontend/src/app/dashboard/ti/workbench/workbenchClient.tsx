@@ -206,6 +206,12 @@ export type WorkbenchProductReadinessItem = {
     generationEvidenceWindowCaptureCount?: number
     generationEvidenceWindowSourceFamilies?: string[]
     latestEvidenceAt?: string
+    organizationId?: string
+    activeTermCount?: number
+    pausedCount?: number
+    archivedCount?: number
+    canGenerateAlerts?: boolean
+    exportedAt?: string
     destinationCount?: number
     activeDestinationCount?: number
     deliveryReadyCount?: number
@@ -2123,6 +2129,16 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             item.generationEvidenceWindowSourceFamilies?.length
                 ? { label: 'Source families', value: item.generationEvidenceWindowSourceFamilies.join(', ') }
                 : undefined,
+        ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
+    }
+    if (item.id === 'org_alert_export') {
+        return [
+            typeof item.activeTermCount === 'number' ? { label: 'Active terms', value: String(item.activeTermCount) } : undefined,
+            typeof item.pausedCount === 'number' ? { label: 'Paused', value: String(item.pausedCount) } : undefined,
+            typeof item.archivedCount === 'number' ? { label: 'Archived', value: String(item.archivedCount) } : undefined,
+            typeof item.canGenerateAlerts === 'boolean' ? { label: 'Alert export', value: item.canGenerateAlerts ? 'ready' : 'blocked' } : undefined,
+            item.exportedAt ? { label: 'Exported', value: relativeTime(item.exportedAt) } : undefined,
+            item.organizationId ? { label: 'Organization', value: item.organizationId } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
     }
     return []
