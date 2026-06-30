@@ -3407,6 +3407,7 @@ expect(deliveryHistoryConsumer.schemaVersion === 'dwm.webhook.delivery_history_c
 expect(deliveryHistoryConsumer.routeContract.detail.requiredQuery.join(',') === 'orgId,deliveryId' && deliveryHistoryConsumer.routeContract.retryDryRun.noNetworkDefault === true, 'Delivery history consumer proof should define list/detail/retry route contracts.', deliveryHistoryConsumer.routeContract)
 expect(deliveryHistoryConsumerReplay?.redactedDestination.endpointExposed === false && deliveryHistoryConsumerReplay.redactedDestination.endpointHash === 'endpoint_replay_hash', 'Delivery history consumer proof should expose redacted destination metadata.', deliveryHistoryConsumerReplay?.redactedDestination)
 expect(deliveryHistoryConsumerReplay?.discord.fieldNames.includes('Alert URL') && deliveryHistoryConsumerReplay.discord.safeForCustomerDisplay === true, 'Delivery history consumer proof should expose Discord-safe preview fields.', deliveryHistoryConsumerReplay?.discord)
+expect(deliveryHistoryConsumerReplay?.discord.template?.templateId === 'dwm.discord.alert_replay.v1' && deliveryHistoryConsumerReplay.discord.template.redaction.webhookSecretExposed === false, 'Delivery history consumer proof should expose redacted Discord template summaries.', deliveryHistoryConsumerReplay?.discord.template)
 expect(deliveryHistoryConsumerReplay?.audit.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryConsumerReplay.idempotency.duplicateAttemptCount === 2 && deliveryHistoryConsumerReplay.replayHistory.duplicateReplay === true, 'Delivery history consumer proof should expose audit and replay idempotency proof.', deliveryHistoryConsumerReplay)
 expect(deliveryHistoryConsumerReplay?.routes.deliveryDetail?.includes('delivery_replay_duplicate_contract') && deliveryHistoryConsumerReplay.routes.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery history consumer proof should expose customer operation routes.', deliveryHistoryConsumerReplay?.routes)
 expect(deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('action') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('timeFrom') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('retryState') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('actorId') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('idempotencyKey'), 'Delivery history consumer proof should advertise operational filters.', deliveryHistoryConsumer.routeContract.list.optionalQuery)
@@ -3739,6 +3740,7 @@ console.log(JSON.stringify({
         'delivery history Discord template proof',
         'delivery preview retry/audit proof',
         'delivery history consumer proof',
+        'delivery history consumer Discord template proof',
         'delivery history retry/terminal failure proof',
         'delivery history duplicate replay live-send guard',
         'delivery history duplicate replay skipped audit proof',
@@ -3972,6 +3974,7 @@ console.log(JSON.stringify({
             'deliveryHistoryConsumer.routeContract.retryDryRun.noNetworkDefault',
             'deliveryHistoryConsumer.rows[].redactedDestination.endpointHash',
             'deliveryHistoryConsumer.rows[].discord.fieldNames',
+            'deliveryHistoryConsumer.rows[].discord.template.templateId',
             'deliveryHistoryConsumer.rows[].idempotency.duplicateAttemptCount',
             'deliveryHistoryConsumer.rows[].replayHistory.duplicateReplay',
             'deliveryHistoryConsumer.rows[].routes.deliveryDetail',

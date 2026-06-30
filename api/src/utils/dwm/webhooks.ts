@@ -1024,6 +1024,7 @@ export function buildDwmWebhookDeliveryHistoryConsumerProof({
                 fieldNames: entry.discordPreview?.fieldNames || [],
                 content: entry.discordPreview?.content || null,
                 alertLink: entry.alert.alertUrl || entry.alert.casePath || null,
+                template: entry.sanitizedPayloadPreview?.discordTemplate || null,
                 safeForCustomerDisplay: entry.sanitizedPayloadPreview?.redaction.safeForCustomerDisplay === true,
             },
             alert: {
