@@ -2587,6 +2587,8 @@ function actionPayloadSummaryLines(
     if (payload.kind === 'analyst_handoff_bundle') {
         return [
             `${actionability.consumerReadiness.stages.length} workflow stage${actionability.consumerReadiness.stages.length === 1 ? '' : 's'}`,
+            `${actionability.alertGenerationReadiness.candidateCount} alert candidate${actionability.alertGenerationReadiness.candidateCount === 1 ? '' : 's'}`,
+            actionability.alertGenerationReadiness.generationEvidenceWindowReady ? 'evidence window ready' : 'evidence window pending',
             `${actionability.readiness.backedIds.alertIds.length} alert${actionability.readiness.backedIds.alertIds.length === 1 ? '' : 's'}`,
             `${payload.blockedBy.length} blocker${payload.blockedBy.length === 1 ? '' : 's'}`,
         ]
