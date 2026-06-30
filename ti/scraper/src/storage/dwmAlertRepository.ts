@@ -1086,6 +1086,32 @@ export type DwmOrgAlertPipelineProof = {
     delivered: boolean;
     downstreamBlockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
     deliveryHistoryRefs: string[];
+    alertGenerationRefs: Array<Record<string, any>>;
+    updateReceipt?: {
+      schemaVersion: "dwm.alert_update_receipt.v1";
+      ready: boolean;
+      eventId?: string;
+      addedCaptureIds: string[];
+      selectedCaptureIds: string[];
+      workflowEventCount: number;
+      caseId?: string;
+      casePath?: string;
+      deliveryDedupeKey?: string;
+      alertGenerationRefs: Array<Record<string, any>>;
+      blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+    };
+    replayReceipt: {
+      schemaVersion: "dwm.alert_replay_receipt.v1";
+      ready: boolean;
+      replayCount: number;
+      workflowEventCount: number;
+      caseId?: string;
+      casePath?: string;
+      deliveryDedupeKey?: string;
+      selectedCaptureIds: string[];
+      alertGenerationRefs: Array<Record<string, any>>;
+      blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+    };
   }>;
   gaps: Array<{
     code:
@@ -1776,7 +1802,33 @@ export function buildDwmOrgAlertPipelineProof(input: {
       deliveryReady: handoff.deliveryReadiness.ready,
       delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
       downstreamBlockerCodes: handoff.blockerCodes,
-      deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs
+      deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs,
+      alertGenerationRefs: handoff.watchlist.alertGenerationRefs,
+      updateReceipt: handoff.updateReceipt ? {
+        schemaVersion: handoff.updateReceipt.schemaVersion,
+        ready: handoff.updateReceipt.ready,
+        eventId: handoff.updateReceipt.eventId,
+        addedCaptureIds: handoff.updateReceipt.addedCaptureIds,
+        selectedCaptureIds: handoff.updateReceipt.selectedCaptureIds,
+        workflowEventCount: handoff.updateReceipt.workflowEventCount,
+        caseId: handoff.updateReceipt.caseId,
+        casePath: handoff.updateReceipt.casePath,
+        deliveryDedupeKey: handoff.updateReceipt.deliveryDedupeKey,
+        alertGenerationRefs: handoff.updateReceipt.alertGenerationRefs,
+        blockerCodes: handoff.updateReceipt.blockerCodes
+      } : undefined,
+      replayReceipt: {
+        schemaVersion: handoff.replayReceipt.schemaVersion,
+        ready: handoff.replayReceipt.ready,
+        replayCount: handoff.replayReceipt.replayCount,
+        workflowEventCount: handoff.replayReceipt.workflowEventCount,
+        caseId: handoff.replayReceipt.caseId,
+        casePath: handoff.replayReceipt.casePath,
+        deliveryDedupeKey: handoff.replayReceipt.deliveryDedupeKey,
+        selectedCaptureIds: handoff.replayReceipt.selectedCaptureIds,
+        alertGenerationRefs: handoff.replayReceipt.alertGenerationRefs,
+        blockerCodes: handoff.replayReceipt.blockerCodes
+      }
     };
   });
   const gaps = buildOrgAlertPipelineGaps({ readiness, candidates, alertRows });

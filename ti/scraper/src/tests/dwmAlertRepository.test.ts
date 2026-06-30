@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
-import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmOrgAlertCaseRoleGate, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationPlan, buildDwmAlertGenerationReadiness, buildDwmAlertWorkflowExecutionReadiness, buildDwmOrgAlertCaseRoleGate, buildDwmOrgAlertPipelineProof, rebuildDwmRuntimeAlerts, dwmAlertToSqlRecord } from "../storage/dwmAlertRepository.ts";
 import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -2767,6 +2767,148 @@ describe("dwm alert repository", () => {
     expect(betaTelegramAfterAlphaWorkflow?.deliveryReadinessContext.deliveryHistoryRefs).toEqual([]);
     expect(JSON.stringify(betaTelegramAfterAlphaWorkflow)).not.toContain("case_alpha_overlap");
     expect(JSON.stringify(betaTelegramAfterAlphaWorkflow)).not.toContain("delivery_alpha_overlap");
+  });
+
+  test("consumes org watchlist export delta terms into persisted alerts without wiping workflow receipts", () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(telegramCapture);
+
+    const initialWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_delta",
+      tenantId: "tenant_repo_delta",
+      ownerOrganizationId: "org_repo_delta",
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_repo_delta_initial",
+        watchlistItemId: "watch_item_delta_acme_initial",
+        organizationId: "org_repo_delta",
+        tenantId: "tenant_repo_delta",
+        kind: "domain",
+        termFamily: "domain",
+        category: "domain",
+        term: "acme.com",
+        status: "active",
+        lifecycleReason: "initial_export",
+        lifecycleRequestId: "req_delta_initial",
+        alertGeneratorKey: "org:org_repo_delta:watchlist:watch_item_delta_acme_initial:domain:acme.com"
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_delta_ops" }));
+    for (const watchlist of initialWatchlists) (store as any).saveDwmWatchlist(watchlist);
+
+    const initial = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_delta", organizationId: "org_repo_delta" });
+    expect(initial.savedAlertCount).toBe(1);
+    const initialTelegramAlert = initial.alerts[0];
+    store.saveDwmAlert({
+      ...initialTelegramAlert,
+      workflowStatus: "investigating",
+      assignedOwner: "delta-analyst",
+      severityOverride: "high",
+      workflowNote: "Delta export proof keeps analyst ownership.",
+      caseId: "case_delta_acme",
+      casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
+      workflowEvents: [{
+        id: "evt_delta_case",
+        at: "2026-06-28T13:24:00.000Z",
+        actor: "delta-analyst",
+        eventType: "workflow.transition",
+        fromWorkflowStatus: "new",
+        toWorkflowStatus: "investigating",
+        toCaseId: "case_delta_acme",
+        toCasePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
+        note: "Delta export proof keeps analyst ownership."
+      }]
+    });
+
+    store.saveSource(darkwebSource);
+    store.saveCapture(telegramFollowupCapture);
+    store.saveCapture(darkwebCapture);
+    const deltaWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_repo_delta",
+      tenantId: "tenant_repo_delta",
+      ownerOrganizationId: "org_repo_delta",
+      visibilityPolicy: "members",
+      entitlementStatus: "active",
+      canGenerateAlerts: true,
+      activeTerms: [{
+        watchlistId: "watch_repo_delta_added",
+        watchlistItemId: "watch_item_delta_acme_added",
+        organizationId: "org_repo_delta",
+        tenantId: "tenant_repo_delta",
+        kind: "domain",
+        termFamily: "domain",
+        category: "domain",
+        term: "acme.com",
+        status: "active",
+        lifecycleReason: "org_watchlist_export_delta_added",
+        lifecycleRequestId: "req_delta_added",
+        alertGeneratorKey: "org:org_repo_delta:watchlist:watch_item_delta_acme_added:domain:acme.com"
+      }]
+    }).map((watchlist) => ({ ...watchlist, webhookDestinationId: "webhook_delta_ops" }));
+    for (const watchlist of deltaWatchlists) (store as any).saveDwmWatchlist(watchlist);
+
+    const rebuilt = rebuildDwmRuntimeAlerts({ store: store as any, tenantId: "tenant_repo_delta", organizationId: "org_repo_delta" });
+    expect(rebuilt.savedAlertCount).toBe(2);
+    const alerts = (store as any).listDwmAlerts().filter((alert: any) => alert.organizationId === "org_repo_delta");
+    const telegramAlert = alerts.find((alert: any) => alert.sourceFamily === "telegram_public");
+    const darkwebAlert = alerts.find((alert: any) => alert.sourceFamily === "darkweb_metadata");
+    expect(telegramAlert).toMatchObject({
+      workflowStatus: "investigating",
+      assignedOwner: "delta-analyst",
+      severityOverride: "high",
+      workflowNote: "Delta export proof keeps analyst ownership.",
+      caseId: "case_delta_acme",
+      casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`
+    });
+    expect(telegramAlert.workflowEvents).toHaveLength(1);
+    expect(telegramAlert.watchlistItemIds.sort()).toEqual(["watch_item_delta_acme_added", "watch_item_delta_acme_initial"].sort());
+    expect(telegramAlert.deliveryReadinessContext.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(telegramAlert.alertUpdatedEvent.consumerPayload.addedCaptureIds).toEqual(["cap_repo_tg_acme_followup"]);
+    expect(telegramAlert.alertUpdatedEvent.consumerPayload.alertGenerationRefs.map((ref: any) => ref.watchlistItemId).sort()).toEqual(["watch_item_delta_acme_added", "watch_item_delta_acme_initial"].sort());
+    expect(darkwebAlert).toMatchObject({
+      organizationId: "org_repo_delta",
+      sourceFamily: "darkweb_metadata",
+      watchlistItemIds: expect.arrayContaining(["watch_item_delta_acme_initial", "watch_item_delta_acme_added"]),
+      deliveryReadinessContext: {
+        selectedCaptureIds: ["cap_repo_darkweb_acme"],
+        sourceFamily: "darkweb_metadata"
+      }
+    });
+    expect(darkwebAlert.orgWatchlistScope.terms.map((term: any) => term.lifecycleRequestId).sort()).toEqual(["req_delta_added", "req_delta_initial"].sort());
+
+    const proof = buildDwmOrgAlertPipelineProof({
+      watchlists: (store as any).listDwmWatchlists(),
+      alerts,
+      tenantId: "tenant_repo_delta",
+      organizationId: "org_repo_delta",
+      sources: store.listSources(),
+      captures: store.listCaptures(),
+      generatedAt: "2026-06-28T13:40:00.000Z"
+    });
+    expect(proof.state).toBe("ready_for_operator_workflow");
+    expect(proof.readiness.counts.candidateCount).toBe(1);
+    expect(proof.readiness.sourceFamilyCoverage.map((row) => row.sourceFamily).sort()).toEqual(["darkweb_metadata", "telegram_public"]);
+    const telegramProof = proof.alerts.find((alert) => alert.sourceFamily === "telegram_public");
+    const darkwebProof = proof.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata");
+    expect(telegramProof?.updateReceipt).toMatchObject({
+      schemaVersion: "dwm.alert_update_receipt.v1",
+      ready: true,
+      addedCaptureIds: ["cap_repo_tg_acme_followup"],
+      caseId: "case_delta_acme",
+      workflowEventCount: 1
+    });
+    expect(telegramProof?.updateReceipt?.alertGenerationRefs.map((ref: any) => ref.watchlistItemId).sort()).toEqual(["watch_item_delta_acme_added", "watch_item_delta_acme_initial"].sort());
+    expect(telegramProof?.replayReceipt).toMatchObject({
+      schemaVersion: "dwm.alert_replay_receipt.v1",
+      caseId: "case_delta_acme",
+      selectedCaptureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"])
+    });
+    expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
+    expect(JSON.stringify(proof)).not.toContain("org_repo_other");
   });
 
   test("API rebuild and list expose generated alerts in product-ready shape", async () => {
