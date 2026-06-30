@@ -151,6 +151,7 @@ assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
+assert.ok(partialScoreboard.rows.every(row => row.proofSource && row.detail))
 assert.ok(partialScoreboard.rows.every(row => row.expectedDashboardRowId && row.staleAfterSeconds > 0 && row.proofTimestamp))
 assert.ok(partialScoreboard.rows.every(row => row.state === 'ready' || row.blocker))
 assert.ok(partialScoreboard.direction.every(item => item.ownerLanes.length && item.backedRowIds.length && item.proofSummary && item.href))
@@ -339,6 +340,11 @@ for (const token of [
     'data-north-star-backend-proof-contract-version',
     'data-north-star-stale-after-seconds',
     'data-north-star-expected-dashboard-row-id',
+    'data-north-star-proof-source',
+    'data-north-star-blocker',
+    'data-north-star-href',
+    'data-north-star-integration-probe-hint',
+    'data-north-star-detail',
     'data-north-star-direction-id',
     'data-north-star-direction-state',
     'data-north-star-direction-backed-rows',

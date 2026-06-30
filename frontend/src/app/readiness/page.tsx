@@ -284,6 +284,11 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             data-north-star-backend-proof-contract-version={row.backendProofContractVersion}
             data-north-star-stale-after-seconds={row.staleAfterSeconds}
             data-north-star-expected-dashboard-row-id={row.expectedDashboardRowId}
+            data-north-star-proof-source={row.proofSource}
+            data-north-star-blocker={row.blocker}
+            data-north-star-href={row.href}
+            data-north-star-integration-probe-hint={row.integrationProbeHint}
+            data-north-star-detail={row.detail}
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
