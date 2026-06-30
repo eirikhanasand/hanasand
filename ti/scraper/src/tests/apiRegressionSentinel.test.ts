@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
-import { contractIndex, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
+import { contractIndex, productReadinessContractCopyGuard, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
@@ -248,6 +248,7 @@ describe("api regression sentinel", () => {
     const matrixSurface = contract.surfaces.find((surface: any) => surface.id === "product_readiness_receipt_matrix");
     const matrix = contract.productReadinessReceiptMatrix;
     const coverage = contract.productReadinessReceiptMatrixCoverage;
+    const copyGuard = contract.productReadinessContractCopyGuard;
     const matrixRows = JSON.parse(JSON.stringify(matrix.rows));
     const rows = new Map(matrixRows.map((row: any) => [row.capabilityId, row]));
     const knownSchemaIds = new Set<string>([
@@ -310,6 +311,20 @@ describe("api regression sentinel", () => {
       }
     });
     expect(coverage.diffRows.every((row: any) => row.ok)).toBe(true);
+    expect(copyGuard).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.contract_copy_guard.v1",
+      route: "/v1/contracts",
+      ok: true,
+      violationCount: 0,
+      violations: [],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(copyGuard.scannedFieldCount).toBeGreaterThan(0);
     expect(matrixRows.map((row: any) => row.capabilityId).sort()).toEqual([
       "alert_case_workflow",
       "dashboard_operator_workspace",
@@ -382,6 +397,60 @@ describe("api regression sentinel", () => {
     expect(serialized).not.toContain("webhookUrl");
     expect(serialized).not.toContain("rawText");
     expect(serialized).not.toContain("password");
+    expect(serialized).not.toContain("dashboard slop");
+    expect(serialized).not.toContain("control room");
+    expect(serialized).not.toContain("how this feeds");
+    expect(serialized).not.toContain("named examples");
+  });
+
+  test("rejects prompt-shaped product readiness contract labels before UI adoption", () => {
+    const contract = contractIndex() as any;
+    const broken = JSON.parse(JSON.stringify({
+      surfaces: contract.surfaces,
+      schemaLookup: contract.schemaLookup,
+      productReadinessReceiptMatrix: contract.productReadinessReceiptMatrix
+    }));
+    broken.productReadinessReceiptMatrix.rows[0].blockerCodes.push("dashboard slop");
+    broken.productReadinessReceiptMatrix.rows[1].downstreamConsumers[0].requiredFields.push("how this feeds");
+    broken.surfaces.find((surface: any) => surface.id === "product_readiness_receipt_matrix").recordFields.push("named examples");
+    broken.schemaLookup.rows[0].blockerCodes.push("control room");
+
+    const guard = productReadinessContractCopyGuard(broken);
+
+    expect(guard).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.contract_copy_guard.v1",
+      route: "/v1/contracts",
+      ok: false,
+      violationCount: 4,
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(guard.violations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        source: "productReadinessReceiptMatrix",
+        capabilityId: "organization_lifecycle",
+        term: "dashboard slop"
+      }),
+      expect.objectContaining({
+        source: "productReadinessReceiptMatrix",
+        capabilityId: "shared_watchlists",
+        term: "how this feeds"
+      }),
+      expect.objectContaining({
+        source: "surface",
+        path: expect.stringContaining("recordFields"),
+        term: "named examples"
+      }),
+      expect.objectContaining({
+        source: "schemaLookup",
+        path: expect.stringContaining("blockerCodes"),
+        term: "control room"
+      })
+    ]));
   });
 
   test("reports stale or unsafe product readiness matrix references", () => {

@@ -522,7 +522,8 @@ export function contractIndex() {
       index.productReadinessReceiptMatrix,
       index.receiptSchemas,
       index.schemaLookup.rows
-    )
+    ),
+    productReadinessContractCopyGuard: productReadinessContractCopyGuard(index)
   };
 }
 
@@ -701,6 +702,81 @@ export function productReadinessReceiptMatrixCoverage(
     matrixSchemaLookupPresent,
     blockerCodes: [...new Set(blockerCodes)].sort(),
     diffRows,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+export function productReadinessContractCopyGuard(index: {
+  surfaces: Array<Record<string, unknown>>;
+  schemaLookup: { rows: Array<Record<string, unknown>> };
+  productReadinessReceiptMatrix: { rows: Array<Record<string, unknown>> };
+}) {
+  const forbiddenTerms = [
+    "control room",
+    "how this feeds",
+    "dashboard slop",
+    "named examples",
+    "signal",
+    "acceptance criteria",
+    "acceptance-criteria",
+    "acceptance criterion",
+    "coordinator"
+  ];
+  const violations: Array<{
+    source: "surface" | "schemaLookup" | "productReadinessReceiptMatrix";
+    path: string;
+    term: string;
+    ownerLane?: string;
+    capabilityId?: string;
+  }> = [];
+  let scannedFieldCount = 0;
+  const scanValue = (
+    source: "surface" | "schemaLookup" | "productReadinessReceiptMatrix",
+    path: string,
+    value: unknown,
+    context: { ownerLane?: string; capabilityId?: string } = {}
+  ) => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => scanValue(source, `${path}[${index}]`, item, context));
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const [key, item] of Object.entries(value)) scanValue(source, `${path}.${key}`, item, context);
+      return;
+    }
+    if (typeof value !== "string") return;
+    scannedFieldCount += 1;
+    const normalized = value.toLowerCase();
+    for (const term of forbiddenTerms) {
+      if (normalized.includes(term)) {
+        violations.push({ source, path, term, ...context });
+      }
+    }
+  };
+  for (const [indexPosition, surface] of index.surfaces.entries()) {
+    scanValue("surface", `surfaces[${indexPosition}]`, surface, { ownerLane: String(surface.ownerLane || "") || undefined });
+  }
+  for (const [indexPosition, row] of index.schemaLookup.rows.entries()) {
+    scanValue("schemaLookup", `schemaLookup.rows[${indexPosition}]`, row, { ownerLane: String(row.ownerLane || "") || undefined });
+  }
+  for (const [indexPosition, row] of index.productReadinessReceiptMatrix.rows.entries()) {
+    scanValue("productReadinessReceiptMatrix", `productReadinessReceiptMatrix.rows[${indexPosition}]`, row, {
+      ownerLane: String(row.ownerLane || "") || undefined,
+      capabilityId: String(row.capabilityId || "") || undefined
+    });
+  }
+  return {
+    schemaVersion: "hanasand.product_readiness.contract_copy_guard.v1",
+    route: "/v1/contracts",
+    ok: violations.length === 0,
+    scannedFieldCount,
+    violationCount: violations.length,
+    violations,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,
