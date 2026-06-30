@@ -255,8 +255,8 @@ function Results({ result }: { result: TiSearchResponse }) {
     }
 
     function stageSelectedHandoff() {
-        if (!selected || !reviewHandoff || !selectedSourceDrilldown || !selectedCaseDraft || !selectedCaseCreateRequest) return
-        const staged = stagedHandoffFor(result, selected, reviewHandoff, selectedSourceDrilldown, selectedCaseDraft, selectedCaseCreateRequest, selectedRelevance)
+        if (!selected || !reviewHandoff || !selectedSourceDrilldown || !selectedCaseDraft || !selectedCaseOwnership || !selectedCaseCreateRequest || !selectedCaseActionTrail) return
+        const staged = stagedHandoffFor(result, selected, reviewHandoff, selectedSourceDrilldown, selectedCaseDraft, selectedCaseOwnership, selectedCaseCreateRequest, selectedCaseActionTrail, selectedRelevance)
         setStagedHandoffs(current => ({ ...current, [staged.id]: staged }))
     }
 
@@ -1290,7 +1290,9 @@ type StagedHandoff = {
     reviewHandoff: SelectedReviewHandoff
     sourceDrilldown: SelectedSourceDrilldown
     caseDraft: SelectedCaseDraft
+    caseOwnership: SelectedCaseOwnershipPlan
     caseCreateRequest: SelectedCaseCreateRequest
+    caseActionTrail: CaseActionTrailPayload
 }
 
 type EnrichmentTask = {
@@ -4068,7 +4070,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 <button
                     type='button'
                     onClick={onStage}
-                    disabled={!reviewHandoff || !caseDraft || !caseCreateRequest}
+                    disabled={!reviewHandoff || !caseDraft || !caseOwnership || !caseCreateRequest || !caseActionTrail}
                     className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131] dark:disabled:bg-[#172131] dark:disabled:text-[#77869a]'
                 >
                     <ClipboardList className='h-3.5 w-3.5' />
@@ -4779,7 +4781,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} TTP{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}
+                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} TTP{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'} · {item.caseActionTrail.summary.total} trail event{item.caseActionTrail.summary.total === 1 ? '' : 's'}
                                         </p>
                                     </div>
                                     <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
@@ -4805,13 +4807,17 @@ function stagedReadinessChips(item: StagedHandoff) {
     const sourceMissing = unique(item.sourceDrilldown.rows.flatMap(row => row.missing))
     const actorReady = item.caseCreateRequest.actorContext.sourceCoverage.totalRows > 0 && item.caseCreateRequest.actorContext.techniques.length > 0
     const replayReady = item.caseCreateRequest.actionReplay.rows.some(row => row.ready)
+    const ownershipReady = item.caseOwnership.state === 'ready' && item.caseOwnership.blockers.length === 0
+    const trailReady = item.caseActionTrail.summary.replayable && item.caseActionTrail.summary.blocked === 0
     return [
         { label: 'review', value: item.reviewHandoff.blockers.length ? `${item.reviewHandoff.blockers.length} blocker${item.reviewHandoff.blockers.length === 1 ? '' : 's'}` : 'ready', ready: item.reviewHandoff.blockers.length === 0 },
         { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} row${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
         { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'route ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
+        { label: 'owner', value: ownershipReady ? item.caseOwnership.owner.label : item.caseOwnership.blockers.length ? `${item.caseOwnership.blockers.length} blocker${item.caseOwnership.blockers.length === 1 ? '' : 's'}` : 'review', ready: ownershipReady },
         { label: 'actor', value: actorReady ? `${item.caseCreateRequest.actorContext.techniques.length} TTP${item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}` : 'needs context', ready: actorReady },
         { label: 'watchlist', value: item.caseCreateRequest.watchlistBasis.ready ? 'matched' : item.caseCreateRequest.watchlistBasis.blockers.length ? `${item.caseCreateRequest.watchlistBasis.blockers.length} blocker${item.caseCreateRequest.watchlistBasis.blockers.length === 1 ? '' : 's'}` : 'review', ready: item.caseCreateRequest.watchlistBasis.ready },
         { label: 'replay', value: replayReady ? `${item.caseCreateRequest.actionReplay.rows.filter(row => row.ready).length} ready` : 'blocked', ready: replayReady },
+        { label: 'trail', value: trailReady ? `${item.caseActionTrail.summary.total} events` : item.caseActionTrail.summary.blocked ? `${item.caseActionTrail.summary.blocked} blocked` : 'review', ready: trailReady },
     ]
 }
 
@@ -6422,15 +6428,19 @@ function stagedHandoffFor(
     reviewHandoff: SelectedReviewHandoff,
     sourceDrilldown: SelectedSourceDrilldown,
     caseDraft: SelectedCaseDraft,
+    caseOwnership: SelectedCaseOwnershipPlan,
     caseCreateRequest: SelectedCaseCreateRequest,
+    caseActionTrail: CaseActionTrailPayload,
     relevance: LocalRelevanceMark | undefined
 ): StagedHandoff {
     const blockers = unique([
         ...reviewHandoff.blockers,
         ...sourceDrilldown.blockers,
         ...caseDraft.missing,
+        ...caseOwnership.blockers,
         ...caseCreateRequest.blockers,
         ...caseCreateRequest.watchlistBasis.blockers,
+        ...caseActionTrail.events.flatMap(event => event.blockers),
     ]).slice(0, 10)
     return {
         schemaVersion: 'ti.public_actor.staged_handoff.v1',
@@ -6448,7 +6458,9 @@ function stagedHandoffFor(
         reviewHandoff,
         sourceDrilldown,
         caseDraft,
+        caseOwnership,
         caseCreateRequest,
+        caseActionTrail,
     }
 }
 
