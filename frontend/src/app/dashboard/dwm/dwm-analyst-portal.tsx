@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
@@ -117,6 +117,7 @@ type DataHealthItem = {
 
 type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
+type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 
 export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth }: PortalProps) {
     const router = useRouter()
@@ -379,6 +380,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     const [selectedEvidenceId, setSelectedEvidenceId] = useState(alert.evidence[0]?.id ?? '')
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
+    const evidenceDispositions = localState?.evidenceDispositions ?? {}
     const timeline = buildTimeline(alert, deliveries, {
         localState,
         selectedEvidence,
@@ -513,20 +515,44 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
             <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
 
             {investigationTab === 'evidence' && (
-                <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
-                    <SourceProvenancePanel
+                <section className='grid gap-4'>
+                    <EvidenceDispositionQueue
                         alert={alert}
-                        sourceFamilies={sourceFamilies}
-                        sourceFilter={sourceFilter}
+                        visibleEvidence={visibleEvidence}
                         selectedEvidence={selectedEvidence}
                         selectedEntity={selectedEntity}
-                        visibleEvidence={visibleEvidence}
+                        workflowContext={workflowContext}
+                        dispositions={evidenceDispositions}
                         copiedHash={copiedHash}
-                        onSourceFilter={setSourceFilter}
                         onSelectEvidence={setSelectedEvidenceId}
                         onCopyHash={copyHash}
+                        onDisposition={(evidenceId, state) => {
+                            onLocalStateChange({
+                                evidenceDispositions: {
+                                    ...evidenceDispositions,
+                                    [evidenceId]: { state, at: new Date().toISOString() },
+                                },
+                            })
+                        }}
                     />
-                    <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
+                    <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
+                        <SourceProvenancePanel
+                            alert={alert}
+                            sourceFamilies={sourceFamilies}
+                            sourceFilter={sourceFilter}
+                            selectedEvidence={selectedEvidence}
+                            selectedEntity={selectedEntity}
+                            visibleEvidence={visibleEvidence}
+                            copiedHash={copiedHash}
+                            onSourceFilter={setSourceFilter}
+                            onSelectEvidence={setSelectedEvidenceId}
+                            onCopyHash={copyHash}
+                        />
+                        <div className='grid gap-4'>
+                            <RouteWatchlistImpactRail alert={alert} selectedEvidence={selectedEvidence} selectedEntity={selectedEntity} workflowContext={workflowContext} dispositions={evidenceDispositions} />
+                            <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
+                        </div>
+                    </section>
                 </section>
             )}
 
@@ -838,6 +864,136 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                 {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>No evidence rows for this source family.</p>}
             </div>
         </div>
+    )
+}
+
+function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, selectedEntity, workflowContext, dispositions, copiedHash, onSelectEvidence, onCopyHash, onDisposition }: {
+    alert: PortalAlert
+    visibleEvidence: PortalAlert['evidence']
+    selectedEvidence?: PortalAlert['evidence'][number]
+    selectedEntity?: ReturnType<typeof buildExposureEntities>[number]
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+    dispositions: NonNullable<LocalCaseState['evidenceDispositions']>
+    copiedHash: string
+    onSelectEvidence: (value: string) => void
+    onCopyHash: (value: string) => void
+    onDisposition: (evidenceId: string, state: EvidenceDispositionState) => void
+}) {
+    const route = stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)
+    const watchlist = workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlists` : stateLabel(alert.matchedTerm.kind)
+    return (
+        <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Evidence disposition</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>{visibleEvidence.length} row{visibleEvidence.length === 1 ? '' : 's'} · {route} · {watchlist}</p>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    <ImpactChip label='Entity' value={selectedEntity?.name || alert.matchedTerm.value} />
+                    <ImpactChip label='Route' value={route} />
+                    <ImpactChip label='Case' value={workflowContext.caseId || 'candidate'} />
+                </div>
+            </div>
+            <div className='overflow-x-auto'>
+                <table className='w-full min-w-[980px] text-left text-xs'>
+                    <thead className='bg-[#f8fafc] text-[10px] uppercase text-[#667085]'>
+                        <tr>
+                            <th className='px-3 py-2 font-semibold'>Evidence</th>
+                            <th className='px-3 py-2 font-semibold'>Source</th>
+                            <th className='px-3 py-2 font-semibold'>Impact</th>
+                            <th className='px-3 py-2 font-semibold'>Status</th>
+                            <th className='px-3 py-2 font-semibold'>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className='divide-y divide-[#eef1f5]'>
+                        {visibleEvidence.map(item => {
+                            const disposition = dispositions[item.id]
+                            return (
+                                <tr key={item.id} onClick={() => onSelectEvidence(item.id)} className={`cursor-pointer align-top transition hover:bg-[#f8fbff] ${selectedEvidence?.id === item.id ? 'bg-[#f8fbff]' : 'bg-white'}`}>
+                                    <td className='px-3 py-3'>
+                                        <p className='line-clamp-2 max-w-[320px] text-sm leading-5 text-[#171a21]'>{item.excerpt}</p>
+                                        <p className='mt-1 font-mono text-[11px] text-[#667085]'>{item.contentHash}</p>
+                                    </td>
+                                    <td className='px-3 py-3'>
+                                        <p className='max-w-[180px] truncate font-semibold text-[#171a21]' title={item.sourceName}>{item.sourceName}</p>
+                                        <p className='mt-1 text-[11px] text-[#667085]'>{stateLabel(item.sourceFamily)} · {relativeTimeLabel(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</p>
+                                    </td>
+                                    <td className='px-3 py-3'>
+                                        <div className='grid gap-1.5'>
+                                            <ImpactChip label='Watchlist' value={alert.matchedTerm.value} />
+                                            <ImpactChip label='Delivery' value={workflowContext.lastDelivery ? stateLabel(workflowContext.lastDelivery.status) : alert.deliveryState || 'pending_review'} />
+                                        </div>
+                                    </td>
+                                    <td className='px-3 py-3'>
+                                        <span className={dispositionClass(disposition?.state)}>{disposition ? stateLabel(disposition.state) : 'Unworked'}</span>
+                                        {disposition?.at && <p className='mt-1 text-[11px] font-semibold text-[#667085]'>{relativeTimeLabel(disposition.at)}</p>}
+                                    </td>
+                                    <td className='px-3 py-3'>
+                                        <div className='flex flex-wrap gap-1.5'>
+                                            <DispositionButton onClick={(event) => { event.stopPropagation(); onDisposition(item.id, 'reviewed') }}>Reviewed</DispositionButton>
+                                            <DispositionButton onClick={(event) => { event.stopPropagation(); onDisposition(item.id, 'escalated') }}>Escalate</DispositionButton>
+                                            <DispositionButton onClick={(event) => { event.stopPropagation(); onDisposition(item.id, 'suppressed') }}>Suppress</DispositionButton>
+                                            <DispositionButton onClick={(event) => { event.stopPropagation(); onDisposition(item.id, 'false_positive') }}>False</DispositionButton>
+                                            <DispositionButton onClick={(event) => { event.stopPropagation(); onCopyHash(item.contentHash) }}>{copiedHash === item.contentHash ? 'Copied' : 'Copy'}</DispositionButton>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+            {!visibleEvidence.length && <p className='p-4 text-sm text-[#667085]'>No evidence rows match the current filters.</p>}
+        </section>
+    )
+}
+
+function RouteWatchlistImpactRail({ alert, selectedEvidence, selectedEntity, workflowContext, dispositions }: {
+    alert: PortalAlert
+    selectedEvidence?: PortalAlert['evidence'][number]
+    selectedEntity?: ReturnType<typeof buildExposureEntities>[number]
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+    dispositions: NonNullable<LocalCaseState['evidenceDispositions']>
+}) {
+    const workedCount = Object.keys(dispositions).length
+    const selectedDisposition = selectedEvidence ? dispositions[selectedEvidence.id] : undefined
+    return (
+        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Route and watchlist impact</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>{workedCount}/{alert.evidence.length} evidence rows worked</p>
+                </div>
+                <ShieldCheck className='h-4 w-4 text-[#3056d3]' />
+            </div>
+            <div className='grid gap-2 p-4 sm:grid-cols-2'>
+                <ActionStatus label='Customer term' value={alert.matchedTerm.value} />
+                <ActionStatus label='Term kind' value={stateLabel(alert.matchedTerm.kind)} />
+                <ActionStatus label='Current entity' value={selectedEntity?.name || alert.company} />
+                <ActionStatus label='Evidence status' value={selectedDisposition ? stateLabel(selectedDisposition.state) : 'unworked'} tone={selectedDisposition?.state === 'false_positive' || selectedDisposition?.state === 'suppressed' ? 'warn' : 'neutral'} />
+                <ActionStatus label='Route' value={stateLabel(alert.routingContext?.queue || alert.webhookDelivery.recommendedRoute)} />
+                <ActionStatus label='Urgency' value={stateLabel(alert.routingContext?.urgency || (alert.severity === 'critical' ? 'immediate' : 'same_day'))} tone={alert.severity === 'critical' ? 'warn' : 'neutral'} />
+                <ActionStatus label='Watchlists' value={workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : 'default scope'} />
+                <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} configured` : workflowContext.hasWebhookRoute ? 'route available' : 'route unavailable'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
+            </div>
+        </section>
+    )
+}
+
+function ImpactChip({ label, value }: { label: string, value: string }) {
+    return (
+        <span className='inline-flex min-h-7 max-w-full items-center gap-1 rounded-lg border border-[#d8e2f0] bg-white px-2 text-[11px] font-semibold text-[#475467]'>
+            <span className='text-[#667085]'>{label}:</span>
+            <span className='truncate text-[#171a21]' title={value}>{value}</span>
+        </span>
+    )
+}
+
+function DispositionButton({ onClick, children }: { onClick: (event: MouseEvent<HTMLButtonElement>) => void, children: string }) {
+    return (
+        <button type='button' onClick={onClick} className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+            {children}
+        </button>
     )
 }
 
@@ -1386,6 +1542,7 @@ function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy:
 type LocalCaseState = {
     assignee?: string
     note?: string
+    evidenceDispositions?: Record<string, { state: EvidenceDispositionState, at: string }>
 }
 
 function useLocalCaseState() {
@@ -1498,6 +1655,12 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?:
 }) {
     const events = alert.workflowEvents ?? []
     const localRows = [
+        ...Object.entries(context?.localState?.evidenceDispositions ?? {}).map(([evidenceId, disposition]) => ({
+            id: `${alert.id}:disposition:${evidenceId}`,
+            at: disposition.at,
+            title: 'Evidence disposition',
+            detail: `${stateLabel(disposition.state)} · ${evidenceId}`,
+        })),
         context?.localState?.assignee ? {
             id: `${alert.id}:local-owner`,
             at: new Date().toISOString(),
@@ -1579,6 +1742,13 @@ function severityClass(severity: string) {
 function deliveryClass(status: string) {
     if (status === 'delivered') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'
     if (status === 'failed') return 'rounded-full bg-[#fff7f3] px-2 py-0.5 text-xs font-semibold text-[#9a3412]'
+    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'
+}
+
+function dispositionClass(state?: EvidenceDispositionState) {
+    if (state === 'escalated') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-xs font-semibold text-[#b45309]'
+    if (state === 'suppressed' || state === 'false_positive') return 'rounded-full bg-[#fff7f3] px-2 py-0.5 text-xs font-semibold text-[#9a3412]'
+    if (state === 'reviewed') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'
     return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'
 }
 
