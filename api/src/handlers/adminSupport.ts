@@ -1144,6 +1144,28 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/invites`,
         },
     })
+    const actionHistoryExport = supportOrgUserActionHistoryExportReceipt({
+        kind: 'organization',
+        actorId: actor.id,
+        targetId: organization.id,
+        organizationIds: [organization.id],
+        requestId: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        supportContext: inspectionAudit.supportContext,
+        timelineFilter: organizationTimelineFilter,
+        timeline: recentAuditTimeline.events,
+        inspectionReceipt,
+        actionHistoryReceipt,
+        accessRecoveryPlan,
+        supportActivityRollup,
+        nextRoutes: {
+            self: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}`,
+            audit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}`,
+            accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
+            inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/invites`,
+            impersonation: `/api/impersonation/events?org=${encodeURIComponent(organization.id)}`,
+        },
+    })
     return res.send({
         organization: toOrganization(organization),
         authorization,
@@ -1151,6 +1173,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         accessRecoveryPlan,
         inspectionReceipt,
         actionHistoryReceipt,
+        actionHistoryExport,
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
@@ -1406,6 +1429,27 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
             accessRecovery: organizationIds[0] ? `/api/admin/support/organizations/${encodeURIComponent(organizationIds[0])}/access-recovery` : null,
         },
     })
+    const actionHistoryExport = supportOrgUserActionHistoryExportReceipt({
+        kind: 'user',
+        actorId: actor.id,
+        targetId: req.params.id,
+        organizationIds,
+        requestId: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        supportContext: inspectionAudit.supportContext,
+        timelineFilter: userTimelineFilter,
+        timeline: recentAuditTimeline.events,
+        inspectionReceipt,
+        actionHistoryReceipt,
+        accessRecoveryPlan,
+        supportActivityRollup,
+        nextRoutes: {
+            self: `/api/admin/support/users/${encodeURIComponent(req.params.id)}`,
+            audit: `/api/admin/audit-events?target=${encodeURIComponent(req.params.id)}`,
+            impersonation: `/api/impersonation/events?target=${encodeURIComponent(req.params.id)}`,
+            accessRecovery: organizationIds[0] ? `/api/admin/support/organizations/${encodeURIComponent(organizationIds[0])}/access-recovery` : null,
+        },
+    })
     return res.send({
         user: toSupportUser(userRow),
         authorization,
@@ -1413,6 +1457,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         accessRecoveryPlan,
         inspectionReceipt,
         actionHistoryReceipt,
+        actionHistoryExport,
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
         approvalRequests: approvalDetails,
@@ -7356,6 +7401,121 @@ function supportOrgUserActionHistoryReceipt(input: {
             `Request: ${input.requestId}`,
             `Actions: ${actionValues.join(', ') || 'none'}`,
             `Outcomes: ${outcomeValues.join(', ') || 'none'}`,
+            `Replay: ${auditFilterQuery(input.timelineFilter)}`,
+        ].join('\n'),
+    }
+}
+
+function supportOrgUserActionHistoryExportReceipt(input: {
+    kind: 'organization' | 'user'
+    actorId: string
+    targetId: string
+    organizationIds: string[]
+    requestId: string
+    reason: string
+    supportContext: string
+    timelineFilter: SupportTimelineFilter
+    timeline: Array<Record<string, any>>
+    inspectionReceipt: Record<string, any>
+    actionHistoryReceipt: Record<string, any>
+    accessRecoveryPlan: Record<string, any>
+    supportActivityRollup: Record<string, any>
+    nextRoutes: Record<string, string | null>
+}) {
+    const eventIds = input.timeline.map(event => Number(event.id)).filter(id => Number.isFinite(id))
+    const actionTypes = uniqueTimelineValues(input.timeline.map(event => event.action || event.actionType))
+    const outcomes = uniqueTimelineValues(input.timeline.map(event => event.outcome))
+    const requestIds = uniqueTimelineValues([
+        input.requestId,
+        ...input.timeline.map(event => event.requestId),
+    ])
+    const entityIds = uniqueTimelineValues([
+        input.targetId,
+        ...input.timeline.map(event => event.entity?.id || event.entityId),
+    ])
+    const recoveryBlockers = Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []
+    const historyBlockers = Array.isArray(input.actionHistoryReceipt.blockers) ? input.actionHistoryReceipt.blockers : []
+    const activityBlockers = Array.isArray(input.supportActivityRollup.blockerCodes) ? input.supportActivityRollup.blockerCodes : []
+    return {
+        schemaVersion: `support.${input.kind}.action_history_export.v1`,
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        reasonRecommended: true,
+        targetType: input.kind === 'organization' ? 'organization' : 'user',
+        targetId: input.targetId,
+        organizationIds: input.organizationIds,
+        organizationId: input.kind === 'organization' ? input.targetId : input.organizationIds[0] || null,
+        actorId: input.actorId,
+        requestId: input.requestId,
+        reason: input.reason || null,
+        reasonPresent: Boolean(input.reason),
+        supportContextPresent: Boolean(input.supportContext),
+        scope: input.kind === 'organization' ? ['read_org', 'audit:read', 'recovery:review'] : ['read_profile', 'read_org', 'audit:read', 'impersonation:review'],
+        auditEventIds: eventIds,
+        requestIds,
+        entityIds,
+        actions: actionTypes,
+        outcomes,
+        replayFilters: {
+            current: auditFilterQuery(input.timelineFilter),
+            byRequest: requestIds.map(request => auditFilterQuery({ ...input.timelineFilter, request })),
+            byEntity: entityIds.map(entity => auditFilterQuery({ entity, target: input.targetId, source: 'admin', service: 'hanasand-api' })),
+            byAction: actionTypes.map(action => auditFilterQuery({ ...input.timelineFilter, action })),
+            byOutcome: outcomes.map(outcome => auditFilterQuery({ ...input.timelineFilter, outcome })),
+            recovery: auditFilterQuery({ org: input.organizationIds[0] || input.targetId, target: input.targetId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
+            impersonation: auditFilterQuery({ target: input.kind === 'user' ? input.targetId : '', org: input.kind === 'organization' ? input.targetId : '', action: 'impersonation', source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' }),
+        },
+        bundledReceipts: {
+            inspection: input.inspectionReceipt.schemaVersion || null,
+            actionHistory: input.actionHistoryReceipt.schemaVersion || null,
+            accessRecoveryPlan: input.accessRecoveryPlan.schemaVersion || null,
+            activityRollup: input.supportActivityRollup.schemaVersion || null,
+        },
+        receiptSchemas: [
+            `support.${input.kind}.action_history_export.v1`,
+            `support.${input.kind}.action_history_receipt.v1`,
+            `support.${input.kind}.inspection_receipt.v1`,
+            'support.access_recovery.decision_receipt.v1',
+            'support.impersonation.lifecycle_receipt.v1',
+            'support.audit.support_workflow_packet.v1',
+        ],
+        nextRoutes: {
+            ...input.nextRoutes,
+            replay: auditFilterQuery(input.timelineFilter),
+            details: eventIds.map(id => `/api/admin/audit-events/${encodeURIComponent(String(id))}`),
+            filteredInspection: `/api/admin/support/inspect?${new URLSearchParams({
+                entity: input.targetId,
+                request: input.requestId,
+                action: input.kind === 'organization' ? 'support.organization' : 'support.user',
+            }).toString()}`,
+        },
+        denialCases: [
+            'support_role_required',
+            'support_auth_required',
+            'missing_operator_reason',
+            'missing_action_history_events',
+            'pending_approval_requires_decision',
+            'denied_recovery_approval',
+            'support_session_expired',
+            'support_session_revoked',
+            'cross_org_match_requires_explicit_scope',
+            'redaction_required',
+        ],
+        blockers: uniqueTimelineValues([
+            eventIds.length ? '' : 'missing_action_history_events',
+            input.reason ? '' : 'missing_operator_reason',
+            ...recoveryBlockers,
+            ...historyBlockers,
+            ...activityBlockers,
+        ]),
+        copyText: [
+            `Support ${input.kind} action history export ${input.targetId}`,
+            `Request: ${input.requestId}`,
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Actions: ${actionTypes.join(', ') || 'none'}`,
             `Replay: ${auditFilterQuery(input.timelineFilter)}`,
         ].join('\n'),
     }
