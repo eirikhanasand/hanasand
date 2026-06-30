@@ -123,7 +123,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
     const evidence = buildWorkbenchEvidence(alert, selectedCaptureIds)
     const actionBlockers = alert.customerReadiness?.blockerCodes ?? []
     const alertHref = `/api/dwm/alerts/${encodeURIComponent(alert.id)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`
-    const caseDetailHref = caseId ? `/api/cases/${encodeURIComponent(caseId)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}` : undefined
+    const caseDetailHref = casePath || (caseId ? `/api/cases/${encodeURIComponent(caseId)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}` : undefined)
     const deliveryEvidence = (alert.deliveries ?? []).map(row => ({
         id: String(row.id ?? ''),
         alertId: String(row.alertId ?? alert.id),
