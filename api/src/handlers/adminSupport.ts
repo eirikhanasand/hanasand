@@ -2160,6 +2160,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: controls.value,
             supportContext: cleanContext(req.body?.context),
         })
+        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: req.params.inviteId })
         return res.status(controls.error.status).send(supportError(controls.error.code, controls.error.message, {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2172,6 +2173,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 before: null,
                 after: null,
                 outcome: 'denied',
+                blockers: [controls.error.code],
+            }),
+            executionReceipt: supportInviteActionExecutionReceipt({
+                actorId: actor.id,
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: controls.value,
+                invite: null,
+                before: null,
+                after: null,
+                outcome: 'denied',
+                auditEventIds,
                 blockers: [controls.error.code],
             }),
         }))
@@ -2210,6 +2226,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: executorControls,
             supportContext: cleanContext(req.body?.context),
         })
+        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
         return res.status(sessionValidation.error.status).send(supportError(sessionValidation.error.code, sessionValidation.error.message, {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2222,6 +2239,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 before: inviteSnapshot(invite),
                 after: inviteSnapshot(invite),
                 outcome: 'denied',
+                blockers: [sessionValidation.error.code],
+            }),
+            executionReceipt: supportInviteActionExecutionReceipt({
+                actorId: actor.id,
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite,
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                outcome: 'denied',
+                auditEventIds,
                 blockers: [sessionValidation.error.code],
             }),
         }))
@@ -2314,6 +2346,7 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
             controls: executorControls,
             supportContext: cleanContext(req.body?.context),
         })
+        const auditEventIds = await loadAdminAuditEventIds({ requestId, actionType, entityId: invite.id })
         return res.status(409).send(supportError('active_admin_available', 'An active organization admin is available; support invite action requires unavailable org administration.', {
             executorBlocker: supportInviteActionExecutorDetail({
                 organizationId: organization.id,
@@ -2326,6 +2359,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                 before: inviteSnapshot(invite),
                 after: inviteSnapshot(invite),
                 outcome: 'denied',
+                blockers: ['active_admin_available'],
+            }),
+            executionReceipt: supportInviteActionExecutionReceipt({
+                actorId: actor.id,
+                organizationId: organization.id,
+                requestId,
+                action: action as 'revoke' | 'resend',
+                actionType,
+                reason,
+                controls: executorControls,
+                invite,
+                before: inviteSnapshot(invite),
+                after: inviteSnapshot(invite),
+                outcome: 'denied',
+                auditEventIds,
                 blockers: ['active_admin_available'],
             }),
         }))
@@ -2401,6 +2449,21 @@ export async function postSupportOrganizationInviteAction(req: FastifyRequest<{ 
                     before: inviteSnapshot(invite),
                     after: inviteSnapshot(invite),
                     outcome: 'failed',
+                    blockers: ['accepted_invite_not_mutable_by_support_action'],
+                }),
+                executionReceipt: supportInviteActionExecutionReceipt({
+                    actorId: actor.id,
+                    organizationId: organization.id,
+                    requestId,
+                    action: action as 'revoke' | 'resend',
+                    actionType,
+                    reason,
+                    controls: executorControls,
+                    invite,
+                    before: inviteSnapshot(invite),
+                    after: inviteSnapshot(invite),
+                    outcome: 'failed',
+                    auditEventIds,
                     blockers: ['accepted_invite_not_mutable_by_support_action'],
                 }),
             },
@@ -8120,13 +8183,15 @@ function supportInviteActionExecutionReceipt(input: {
     actionType: string
     reason: string
     controls: ReturnType<typeof supportInviteActionExecutorControls>['value']
-    invite: OrganizationInviteRow
-    before: Record<string, unknown>
-    after: Record<string, unknown>
+    invite: OrganizationInviteRow | null
+    before: Record<string, unknown> | null
+    after: Record<string, unknown> | null
     outcome: 'success' | 'denied' | 'failed'
     auditEventIds: number[]
     blockers: string[]
 }) {
+    const inviteId = input.invite?.id || ''
+    const inviteTarget = input.invite?.email || inviteId || input.organizationId
     return {
         schemaVersion: 'support.invite_action.execution_receipt.v1',
         generatedAt: new Date().toISOString(),
@@ -8143,9 +8208,9 @@ function supportInviteActionExecutionReceipt(input: {
         actorId: input.actorId,
         organizationId: input.organizationId,
         targetType: 'invite',
-        targetId: input.invite.email,
-        entityId: input.invite.id,
-        inviteId: input.invite.id,
+        targetId: inviteTarget,
+        entityId: inviteId || input.organizationId,
+        inviteId: inviteId || null,
         requestId: input.requestId,
         reason: input.reason,
         scope: input.controls.scope,
@@ -8161,22 +8226,22 @@ function supportInviteActionExecutionReceipt(input: {
             replay: supportInviteActionAuditQuery({
                 requestId: input.requestId,
                 organizationId: input.organizationId,
-                inviteId: input.invite.id,
+                inviteId,
                 correlationId: input.controls.correlationId,
                 idempotencyKey: input.controls.idempotencyKey,
                 reason: input.reason,
                 actionType: input.actionType,
                 outcome: input.outcome,
             }),
-            byTargetType: auditFilterQuery({ targetType: 'invite', entity: input.invite.id, request: input.requestId }),
-            deniedReplay: auditFilterQuery({ targetType: 'invite', entity: input.invite.id, action: input.actionType, outcome: 'denied' }),
+            byTargetType: auditFilterQuery({ targetType: 'invite', entity: inviteId, request: input.requestId }),
+            deniedReplay: auditFilterQuery({ targetType: 'invite', entity: inviteId, action: input.actionType, outcome: 'denied' }),
         },
         blockers: input.blockers,
         copyText: [
-            `Support invite ${input.action} receipt ${input.invite.id}`,
+            `Support invite ${input.action} receipt ${inviteId || 'unresolved invite'}`,
             `Request: ${input.requestId}`,
             `Audit events: ${input.auditEventIds.join(', ') || 'pending index refresh'}`,
-            `Replay: ${auditFilterQuery({ targetType: 'invite', entity: input.invite.id, request: input.requestId })}`,
+            `Replay: ${auditFilterQuery({ targetType: 'invite', entity: inviteId, request: input.requestId })}`,
         ].join('\n'),
     }
 }
