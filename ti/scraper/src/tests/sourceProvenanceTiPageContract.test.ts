@@ -14,6 +14,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_CATALOG_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
@@ -60,6 +61,7 @@ import {
   buildSourceProvenanceSourceActivationDecisionReceipt,
   buildSourceProvenanceSourcePackFixtureGrowthPacket,
   buildSourceProvenanceSourcePackFixtureCatalogPacket,
+  buildSourceProvenanceSourcePackFixtureAlertReadinessPacket,
   buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
@@ -3614,6 +3616,167 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(catalog)).not.toContain("rawText");
     expect(JSON.stringify(catalog)).not.toContain("password");
+  });
+
+  test("bridges source-pack fixture catalog into alert readiness handoff", () => {
+    const aptGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_alert_bridge",
+      captureId: "cap_actor_page_apt29_alert_bridge",
+      contentHash: "hash_actor_page_apt29_alert_bridge",
+      provenance: "Actor page fixture gives APT29 alert readiness bridge coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_alert_bridge",
+      captureId: "cap_public_advisory_akira_alert_bridge",
+      contentHash: "hash_public_advisory_akira_alert_bridge",
+      provenance: "Public advisory fixture gives Akira alert readiness bridge coverage.",
+      relationship: "targeting"
+    });
+    const catalog = buildSourceProvenanceSourcePackFixtureCatalogPacket({
+      growthPackets: [aptGrowthPacket, ransomwareGrowthPacket],
+      generatedAt: "2026-06-29T13:20:00.000Z"
+    });
+    const handoff = buildSourceProvenanceSourcePackFixtureAlertReadinessPacket({
+      catalog,
+      generatedAt: "2026-06-29T13:21:00.000Z"
+    });
+
+    expect(handoff).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourcePackFixtureCatalogPacketId: catalog.id,
+      summary: {
+        rowCount: catalog.rows.length,
+        readyRows: 2,
+        actors: expect.arrayContaining(["APT29", "Akira"]),
+        publicTiRoutes: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        coverageTags: expect.arrayContaining(["alertable_fields", "watchlist_terms", "retry_backoff", "policy_blocked", "metadata_only"]),
+        prerequisiteCodes: expect.arrayContaining([
+          "watchlist_materialization_required",
+          "parser_health_inspection_required",
+          "parser_retry_required",
+          "policy_review_required"
+        ]),
+        newestObservedAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(handoff.summary.partialRows >= 2).toBe(true);
+    expect(handoff.summary.blockedRows >= 2).toBe(true);
+    expect(handoff.summary.averageConfidence > 0.5).toBe(true);
+
+    const readyAptRow = handoff.rows.find((row) => row.actor === "APT29" && row.alertReadiness === "ready");
+    const staleTelegramRow = handoff.rows.find((row) => row.actor === "APT29" && row.sourceFamily === "telegram_public" && row.healthState === "stale");
+    const blockedMetadataRow = handoff.rows.find((row) => row.actor === "Akira" && row.sourceFamily === "darkweb_metadata");
+    const profileRow = handoff.rows.find((row) => row.actor === "APT29" && row.rowType === "actor_enrichment_update" && row.healthState === "healthy");
+
+    expect(readyAptRow).toMatchObject({
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      rowType: "alert_ready_capture",
+      parserStatus: "ready",
+      healthState: "healthy",
+      alertReadiness: "ready",
+      confidence: 0.9,
+      coverageTags: expect.arrayContaining(["alertable_fields", "watchlist_terms"]),
+      prerequisites: [],
+      remediation: expect.objectContaining({
+        action: "queue_alert_rebuild",
+        ownerLane: "alert",
+        route: expect.objectContaining({
+          method: "POST",
+          path: "/v1/dwm/alerts/rebuild",
+          liveNetworkFetch: false
+        })
+      }),
+      provenance: expect.objectContaining({
+        captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+        contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/),
+        fixtureBacked: true
+      })
+    });
+    expect(staleTelegramRow).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "telegram_public",
+      alertReadiness: "blocked",
+      nextRetryAt: "2026-06-29T12:37:00.000Z",
+      prerequisites: [expect.objectContaining({
+        code: "parser_retry_required",
+        ownerLane: "parser",
+        nextAction: "retry_parser",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })],
+      remediation: expect.objectContaining({
+        action: "retry_parser",
+        ownerLane: "parser"
+      })
+    });
+    expect(blockedMetadataRow).toMatchObject({
+      actor: "Akira",
+      sourceFamily: "darkweb_metadata",
+      alertReadiness: "blocked",
+      coverageTags: expect.arrayContaining(["metadata_only", "policy_blocked"]),
+      prerequisites: [expect.objectContaining({
+        code: "policy_review_required",
+        ownerLane: "policy",
+        nextAction: "request_policy_review",
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          body: expect.objectContaining({ metadataOnly: true, dryRun: true }),
+          liveNetworkFetch: false
+        })
+      })],
+      remediation: expect.objectContaining({
+        action: "request_policy_review",
+        ownerLane: "policy"
+      })
+    });
+    expect(profileRow).toMatchObject({
+      actor: "APT29",
+      alertReadiness: "partial",
+      prerequisites: [expect.objectContaining({
+        code: "watchlist_materialization_required",
+        ownerLane: "org",
+        nextAction: "materialize_watchlist_terms",
+        route: expect.objectContaining({ path: "/v1/organizations/watchlists/terms", liveNetworkFetch: false })
+      })]
+    });
+    expect(handoff.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/:query", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["rows[].prerequisites", "summary.prerequisiteCodes"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["sourcePackFixtureCatalogPacketId", "rows[].remediation", "safeOutput"]) })
+    ]));
+    expect(handoff.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].alertReadiness",
+      "rows[].prerequisites",
+      "rows[].remediation",
+      "rows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(handoff)).not.toContain("rawText");
+    expect(JSON.stringify(handoff)).not.toContain("password");
   });
 
   test("exports source-pack fixture readiness for dashboard integration and alerts", () => {
