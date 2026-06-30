@@ -367,6 +367,11 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
         matchType: 'case_insensitive_substring' as const,
         matchedFieldHints: [],
     }
+    const sourceFamilies = Array.from(new Set(alert.evidence.map(item => item.sourceFamily)))
+    const [sourceFilter, setSourceFilter] = useState('all')
+    const visibleEvidence = sourceFilter === 'all' ? alert.evidence : alert.evidence.filter(item => item.sourceFamily === sourceFilter)
+    const [selectedEvidenceId, setSelectedEvidenceId] = useState(alert.evidence[0]?.id ?? '')
+    const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -430,6 +435,13 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                 </div>
             </section>
 
+            <ExposureEntitiesPanel
+                alert={alert}
+                evidenceSummary={evidenceSummary}
+                workflowContext={workflowContext}
+                routingContext={routingContext}
+            />
+
             <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -473,34 +485,15 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
-                <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                    <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
-                        <div>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Evidence replay</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>Safe excerpts, hashes, source families, provenance, and retention state.</p>
-                        </div>
-                        <RotateCcw className='h-4 w-4 text-[#3056d3]' />
-                    </div>
-                    <div className='grid gap-3 p-4'>
-                        {alert.evidence.map(item => (
-                            <div key={item.id} className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName}</span>
-                                    <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{stateLabel(item.redactionState)}</span>
-                                    <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{stateLabel(item.captureMode)}</span>
-                                </div>
-                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{item.excerpt}</p>
-                                <div className='mt-3 grid gap-2 rounded-lg border border-[#eef1f5] bg-white p-3 text-xs text-[#667085] sm:grid-cols-2'>
-                                    <p><span className='font-semibold text-[#475467]'>Observed:</span> {item.observedAt ? shortTime(item.observedAt) : 'unknown'}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Capture:</span> {item.provenance?.captureId ?? item.id}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Source:</span> {item.provenance?.sourceId ?? item.sourceName}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Collector:</span> {item.provenance?.collector || item.provenance?.sourceType || 'unknown'}</p>
-                                </div>
-                                <p className='mt-3 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                <SourceProvenancePanel
+                    alert={alert}
+                    sourceFamilies={sourceFamilies}
+                    sourceFilter={sourceFilter}
+                    selectedEvidence={selectedEvidence}
+                    visibleEvidence={visibleEvidence}
+                    onSourceFilter={setSourceFilter}
+                    onSelectEvidence={setSelectedEvidenceId}
+                />
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-white'>
                     <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
@@ -525,6 +518,151 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                 </div>
             </section>
         </div>
+    )
+}
+
+function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routingContext }: {
+    alert: PortalAlert
+    evidenceSummary: NonNullable<PortalAlert['evidenceSummary']>
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+    routingContext: NonNullable<PortalAlert['routingContext']>
+}) {
+    const entities = buildExposureEntities(alert, evidenceSummary, workflowContext, routingContext)
+    return (
+        <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Exposure entities</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>{entities.length} watched item{entities.length === 1 ? '' : 's'} tied to this case.</p>
+                </div>
+                <a href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                    Open organization
+                </a>
+            </div>
+            <div className='overflow-x-auto'>
+                <table className='w-full min-w-[760px] text-left text-xs'>
+                    <thead className='bg-[#f8fafc] text-[10px] uppercase text-[#667085]'>
+                        <tr>
+                            <th className='px-4 py-2 font-semibold'>Entity</th>
+                            <th className='px-4 py-2 font-semibold'>Kind</th>
+                            <th className='px-4 py-2 font-semibold'>Evidence</th>
+                            <th className='px-4 py-2 font-semibold'>Sources</th>
+                            <th className='px-4 py-2 font-semibold'>Newest</th>
+                            <th className='px-4 py-2 font-semibold'>Confidence</th>
+                            <th className='px-4 py-2 font-semibold'>Next</th>
+                        </tr>
+                    </thead>
+                    <tbody className='divide-y divide-[#eef1f5]'>
+                        {entities.map(entity => (
+                            <tr key={`${entity.kind}:${entity.name}`} className='align-top'>
+                                <td className='px-4 py-3'>
+                                    <p className='font-semibold text-[#171a21]'>{entity.name}</p>
+                                    <p className='mt-0.5 text-[11px] text-[#667085]'>{entity.scope}</p>
+                                </td>
+                                <td className='px-4 py-3 font-semibold text-[#475467]'>{stateLabel(entity.kind)}</td>
+                                <td className='px-4 py-3 font-semibold text-[#475467]'>{entity.evidenceCount}</td>
+                                <td className='px-4 py-3'>
+                                    <div className='flex flex-wrap gap-1.5'>
+                                        {entity.sourceFamilies.map(family => <span key={family} className='rounded-full bg-[#eef3ff] px-2 py-0.5 font-semibold text-[#3056d3]'>{stateLabel(family)}</span>)}
+                                    </div>
+                                </td>
+                                <td className='px-4 py-3 font-semibold text-[#475467]'>{relativeTimeLabel(entity.newestAt)}</td>
+                                <td className='px-4 py-3 font-semibold text-[#475467]'>{entity.confidence}%</td>
+                                <td className='px-4 py-3 text-[#475467]'>{entity.nextAction}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    )
+}
+
+function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, visibleEvidence, onSourceFilter, onSelectEvidence }: {
+    alert: PortalAlert
+    sourceFamilies: string[]
+    sourceFilter: string
+    selectedEvidence?: PortalAlert['evidence'][number]
+    visibleEvidence: PortalAlert['evidence']
+    onSourceFilter: (value: string) => void
+    onSelectEvidence: (value: string) => void
+}) {
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Source provenance</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Timeline, source family, capture state, and customer-safe excerpts.</p>
+                </div>
+                <RotateCcw className='h-4 w-4 text-[#3056d3]' />
+            </div>
+            <div className='border-b border-[#eef1f5] px-4 py-3'>
+                <div className='flex gap-2 overflow-x-auto pb-1'>
+                    <SourceFilterChip label='All' active={sourceFilter === 'all'} onClick={() => onSourceFilter('all')} />
+                    {sourceFamilies.map(family => (
+                        <SourceFilterChip key={family} label={stateLabel(family)} active={sourceFilter === family} onClick={() => onSourceFilter(family)} />
+                    ))}
+                </div>
+            </div>
+            <div className='grid gap-3 p-4'>
+                {selectedEvidence && (
+                    <div className='rounded-lg border border-[#d8e2f0] bg-[#f8fbff] p-3'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <span className='text-sm font-semibold text-[#171a21]'>{selectedEvidence.sourceName}</span>
+                            <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{stateLabel(selectedEvidence.sourceFamily)}</span>
+                            <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{selectedEvidence.observedAt ? relativeTimeLabel(selectedEvidence.observedAt) : relativeTimeLabel(selectedEvidence.firstSeenAt || alert.firstSeenAt)}</span>
+                        </div>
+                        <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{selectedEvidence.excerpt}</p>
+                        <div className='mt-3 grid gap-2 text-[11px] text-[#667085] sm:grid-cols-2'>
+                            <p><span className='font-semibold text-[#475467]'>Capture:</span> {selectedEvidence.provenance?.captureId ?? selectedEvidence.id}</p>
+                            <p><span className='font-semibold text-[#475467]'>Source:</span> {selectedEvidence.provenance?.sourceId ?? selectedEvidence.sourceName}</p>
+                            <p><span className='font-semibold text-[#475467]'>State:</span> {stateLabel(selectedEvidence.redactionState)}</p>
+                            <p><span className='font-semibold text-[#475467]'>Hash:</span> <span className='font-mono'>{selectedEvidence.contentHash}</span></p>
+                        </div>
+                    </div>
+                )}
+                <div className='overflow-x-auto rounded-lg border border-[#eef1f5]'>
+                    <table className='w-full min-w-[720px] text-left text-xs'>
+                        <thead className='bg-[#f8fafc] text-[10px] uppercase text-[#667085]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Time</th>
+                                <th className='px-3 py-2 font-semibold'>Source</th>
+                                <th className='px-3 py-2 font-semibold'>Family</th>
+                                <th className='px-3 py-2 font-semibold'>State</th>
+                                <th className='px-3 py-2 font-semibold'>Snippet</th>
+                                <th className='px-3 py-2 font-semibold'>Hash</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5]'>
+                            {visibleEvidence.map(item => (
+                                <tr key={item.id} className={`cursor-pointer align-top transition hover:bg-[#f8fbff] ${selectedEvidence?.id === item.id ? 'bg-[#f8fbff]' : 'bg-white'}`} onClick={() => onSelectEvidence(item.id)}>
+                                    <td className='px-3 py-2 font-semibold text-[#475467]'>{shortTime(item.observedAt || item.firstSeenAt || alert.firstSeenAt)}</td>
+                                    <td className='px-3 py-2'>
+                                        <p className='max-w-[180px] truncate font-semibold text-[#171a21]' title={item.sourceName}>{item.sourceName}</p>
+                                        <p className='mt-0.5 text-[11px] text-[#667085]'>{item.provenance?.sourceId ?? item.provenance?.captureId ?? item.id}</p>
+                                    </td>
+                                    <td className='px-3 py-2 font-semibold text-[#475467]'>{stateLabel(item.sourceFamily)}</td>
+                                    <td className='px-3 py-2'>
+                                        <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 font-semibold text-[#3056d3]'>{stateLabel(item.redactionState)}</span>
+                                    </td>
+                                    <td className='px-3 py-2 text-[#475467]'><p className='line-clamp-2 max-w-[280px]'>{item.excerpt}</p></td>
+                                    <td className='px-3 py-2 font-mono text-[11px] text-[#667085]'>{item.contentHash}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>No evidence rows for this source family.</p>}
+            </div>
+        </div>
+    )
+}
+
+function SourceFilterChip({ label, active, onClick }: { label: string, active: boolean, onClick: () => void }) {
+    return (
+        <button type='button' onClick={onClick} className={`h-8 min-w-12 shrink-0 rounded-lg border px-3 text-xs font-semibold transition ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}>
+            {label}
+        </button>
     )
 }
 
@@ -812,6 +950,52 @@ function ContextChip({ label, value, href }: { label: string, value: string, hre
         )
     }
     return <div className='min-w-0 rounded-lg border border-[#e0e5ed] bg-white px-3 py-2'>{content}</div>
+}
+
+function buildExposureEntities(
+    alert: PortalAlert,
+    evidenceSummary: NonNullable<PortalAlert['evidenceSummary']>,
+    workflowContext: ReturnType<typeof selectedWorkflowContext>,
+    routingContext: NonNullable<PortalAlert['routingContext']>,
+) {
+    const newestAt = evidenceSummary.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt
+    const sourceFamilies = Object.keys(evidenceSummary.sourceFamilyCounts)
+    const baseScope = workflowContext.organizationId || 'tenant default'
+    const rows = [
+        {
+            name: alert.company,
+            kind: 'company',
+            scope: baseScope,
+            evidenceCount: evidenceSummary.evidenceCount,
+            sourceFamilies,
+            newestAt,
+            confidence: alert.confidence,
+            nextAction: stateLabel(routingContext.queue),
+        },
+        {
+            name: alert.matchedTerm.value,
+            kind: alert.matchedTerm.kind,
+            scope: workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlist scopes` : 'watchlist match',
+            evidenceCount: evidenceSummary.evidenceCount,
+            sourceFamilies,
+            newestAt,
+            confidence: alert.confidence,
+            nextAction: stateLabel(alert.reviewState),
+        },
+    ]
+    if (alert.actor) {
+        rows.push({
+            name: alert.actor,
+            kind: 'actor',
+            scope: stateLabel(alert.sourceFamily),
+            evidenceCount: evidenceSummary.evidenceCount,
+            sourceFamilies,
+            newestAt,
+            confidence: alert.confidence,
+            nextAction: workflowContext.hasWebhookRoute ? 'test delivery' : 'review route',
+        })
+    }
+    return rows
 }
 
 function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['evidenceSummary']> {
