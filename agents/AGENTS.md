@@ -1,5 +1,18 @@
 # Hanasand Agent Notes
 
+## Ship Mode Override
+The product is improving too slowly. Stop spending prompts on readiness/receipt/proof/contract work unless it directly unlocks a visible user workflow in the same change. The user wants fast, obvious product improvement across the website, not long chains of tiny implementation receipts.
+
+Default to ship mode:
+
+1. One main thread owns the website and portal experience end to end.
+2. No more readiness, receipt, proof, or contract-only slices unless they are required to make a visible workflow work in the same prompt.
+3. Prioritize these three surfaces: `/dashboard`, `/ti/<query>`, and organization/watchlist/settings workflows.
+4. In one prompt, make the chosen surface visibly better with real APIs, useful UI states, screenshots or render proof, and deploy when appropriate.
+5. Use subagents only for narrow backend blockers that prevent the visible workflow from shipping.
+
+If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
+
 ## Goal
 Make Hanasand production-ready without wasting user time, tokens, or server resources. Prefer small automated checks over broad manual rereads. Do not tail server logs for minutes. Use the API audit, monitor, status, and filtered logs surfaces first.
 
