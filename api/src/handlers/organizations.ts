@@ -3093,6 +3093,46 @@ function organizationWatchlistOperation(
                 ? 'watchlist_not_found_or_cross_org' as const
                 : null,
         },
+        mutationReceipt: {
+            schemaVersion: 'organization.watchlist_mutation_receipt.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            ownerOrganizationId: organization.id,
+            watchlistItemId: input.watchlistItemId,
+            watchlistId: input.watchlistItemId,
+            action: input.action,
+            actorId: input.actorId,
+            actorRole: organization.role ?? 'viewer',
+            requestId: input.requestId ?? null,
+            reason: input.reason ?? null,
+            serviceLogAction: input.serviceLogAction,
+            statusAfter: nextLifecycle.statusAfter,
+            enabledAfter: nextLifecycle.enabledAfter,
+            disabledReasonAfter: nextLifecycle.disabledReasonAfter,
+            roleGates: {
+                mutateWatchlists: ['owner', 'admin'],
+                readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+                exportAlertTerms: decision.allowedRoles,
+                assignCases: ['owner', 'admin'],
+            },
+            downstreamRoutes: {
+                sharedWatchlists: 'GET /api/organizations/:id/watchlists',
+                alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+                alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+                webhookOwnership: 'organization.shared_watchlist_webhook_ownership_hint.v1',
+            },
+            downstreamRefs: {
+                alertGeneration: 'organization.watchlist_alert_generation_consumer.v1',
+                caseVisibility: 'organization.case_visibility_consumer.v1',
+                webhookOwnership: 'organization.shared_watchlist_webhook_ownership_hint.v1',
+            },
+            lifecycleBlockerAfter: nextLifecycle.disabledReasonAfter,
+            activeTermsIncludedInExport: nextLifecycle.enabledAfter,
+            archivedMutationDeniedByLookup: nextLifecycle.statusAfter === 'archived',
+            duplicateTermMatched: Boolean(input.duplicateTermMatched),
+            existingItemId: input.existingItemId ?? null,
+            noEnumeration: true,
+        },
     }
 }
 
