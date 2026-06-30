@@ -3154,10 +3154,12 @@ expect(memberDeliveryRetryWorkOrders.workOrders.some(item => item.state === 'per
 expect(nonmemberDeliveryRetryWorkOrders.workOrders.length === 0 && nonmemberDeliveryRetryWorkOrders.blockers.some(item => item.code === 'permission_denied'), 'Delivery retry work orders should deny nonmembers without leaking work orders.', nonmemberDeliveryRetryWorkOrders)
 expect(!JSON.stringify(deliveryRetryWorkOrders).includes(secret), 'Delivery retry work orders should redact endpoint, response, and error secrets.', deliveryRetryWorkOrders)
 expect(deliveryReadinessConsumer.schemaVersion === 'dwm.webhook.delivery_readiness_consumer.v1' && deliveryReadinessConsumer.noNetwork === true && deliveryReadinessConsumer.counts.total === auditDeliveryRows.filter(item => item.orgId === 'org_contract').length, 'Delivery readiness consumer should expose org-scoped no-network readiness rows.', deliveryReadinessConsumer)
+expect(deliveryReadinessConsumer.routeContract.detail.requiredQuery.join(',') === 'orgId,deliveryId' && deliveryReadinessConsumer.routeContract.retryDryRun.noNetworkDefault === true && deliveryReadinessConsumer.access.canRetry === true, 'Delivery readiness consumer should expose stable delivery detail and dry-run retry contracts.', deliveryReadinessConsumer.routeContract)
 expect(readinessRetryable?.readiness.retryableFailure === true && readinessRetryable.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && readinessRetryable.readiness.retryEligible === true, 'Delivery readiness consumer should expose retryable failure/backoff state.', readinessRetryable)
 expect(readinessTerminal?.readiness.nonRetryableFailure === true && readinessTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery readiness consumer should expose non-retryable terminal failure state.', readinessTerminal)
 expect(readinessDelivered?.readiness.success === true && readinessDelivered.idempotency.alreadyDelivered === true, 'Delivery readiness consumer should expose delivered success and idempotency guard.', readinessDelivered)
 expect(readinessReplay?.readiness.idempotentReplay === true && readinessReplay.replayHistory.duplicateReplay === true && readinessReplay.audit.linked === true, 'Delivery readiness consumer should expose idempotent replay history and audit linkage.', readinessReplay)
+expect(readinessReplay?.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_duplicate_contract' && readinessReplay.operationLinks.retryDryRun === 'POST /api/dwm/webhook-deliveries', 'Delivery readiness consumer should expose support-safe delivery and retry operation links.', readinessReplay?.operationLinks)
 expect(readinessDryRun?.readiness.redactedDryRun === true && readinessDryRun.redaction.webhookSecretExposed === false && readinessDryRun.destination.endpointExposed === false, 'Delivery readiness consumer should expose redacted dry-run proof without endpoint leakage.', readinessDryRun)
 expect(nonmemberDeliveryReadinessConsumer.rows.length === 0 && nonmemberDeliveryReadinessConsumer.counts.crossOrgDenied === 1 && nonmemberDeliveryReadinessConsumer.blockers.some(item => item.code === 'permission_denied'), 'Delivery readiness consumer should deny nonmembers without leaking delivery rows.', nonmemberDeliveryReadinessConsumer)
 expect(foreignDeliveryReadinessConsumer.rows.length === 1 && foreignDeliveryReadinessConsumer.rows.every(item => item.orgId === 'org_foreign'), 'Delivery readiness consumer org filters should not leak other tenant rows.', foreignDeliveryReadinessConsumer)
@@ -3928,10 +3930,15 @@ console.log(JSON.stringify({
             'deliveryRetryWorkOrders.workOrders[].audit.nextAction',
             'deliveryRetryWorkOrders.workOrders[].worker3Proof.expectedDryRunStatus',
             'deliveryReadinessConsumer.schemaVersion',
+            'deliveryReadinessConsumer.routeContract.detail.requiredQuery',
+            'deliveryReadinessConsumer.routeContract.retryDryRun.noNetworkDefault',
+            'deliveryReadinessConsumer.access.canRetry',
             'deliveryReadinessConsumer.rows[].readiness.retryableFailure',
             'deliveryReadinessConsumer.rows[].readiness.nonRetryableFailure',
             'deliveryReadinessConsumer.rows[].readiness.idempotentReplay',
             'deliveryReadinessConsumer.rows[].readiness.redactedDryRun',
+            'deliveryReadinessConsumer.rows[].operationLinks.deliveryDetail',
+            'deliveryReadinessConsumer.rows[].operationLinks.retryDryRun',
             'deliveryReadinessConsumer.rows[].redaction.webhookSecretExposed',
             'deliveryReadinessConsumer.counts.crossOrgDenied',
             'deliveryAuditTrail.schemaVersion',
