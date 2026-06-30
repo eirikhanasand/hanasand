@@ -96,6 +96,8 @@ type SupportInspectionQuery = {
     session?: string
     supportSession?: string
     supportSessionId?: string
+    workflow?: string
+    bridgeWorkflow?: string
     action?: string
     severity?: string
     outcome?: string
@@ -283,6 +285,7 @@ type SupportTimelineFilter = {
     entity: string
     entityType: string
     supportSession: string
+    workflow?: string
     action: string
     severity: string
     outcome: string
@@ -324,6 +327,8 @@ const supportInspectionFilters = new Set([
     'session',
     'supportSession',
     'supportSessionId',
+    'workflow',
+    'bridgeWorkflow',
     'action',
     'severity',
     'outcome',
@@ -1600,6 +1605,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const requestedEntity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
+    const workflow = text(query.workflow || query.bridgeWorkflow)
     const action = text(query.action)
     const source = text(query.source)
     const service = text(query.service)
@@ -1661,7 +1667,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const user = sessionState?.targetUserId || requestedUser || ''
     const request = requestedRequest || sessionState?.requestId || ''
     const entity = requestedEntity || supportSession
-    const filterError = supportInspectionFilterError(query, { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
+    const filterError = supportInspectionFilterError(query, { q, org, user, email, request, entity, entityType, supportSession, workflow, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
     }
@@ -1670,8 +1676,8 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         return res.status(400).send(preparationInput.error)
     }
 
-    if (!q && !org && !user && !email && !request && !entity && !entityType && !supportSession && !action && !blocker && !reason && !scope && !contextFilter) {
-        return res.status(400).send(supportError('missing_support_target', 'Add q, org, user, email, request, entity, entityType, supportSession, action, blocker, reason, scope, or context to inspect support state.'))
+    if (!q && !org && !user && !email && !request && !entity && !entityType && !supportSession && !workflow && !action && !blocker && !reason && !scope && !contextFilter) {
+        return res.status(400).send(supportError('missing_support_target', 'Add q, org, user, email, request, entity, entityType, supportSession, workflow, action, blocker, reason, scope, or context to inspect support state.'))
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
@@ -1680,9 +1686,9 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionMemberships({ q, org, user, request, limit }),
         loadInspectionInvites({ q, org, email, request, limit }),
         loadInspectionApprovals({ q, org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit }),
+        loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, workflow, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit }),
     ])
-    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, workflow, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const auditTimelineFilters = {
         q,
         org,
@@ -1691,6 +1697,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         entity,
         entityType,
         supportSession,
+        workflow,
         action,
         severity,
         outcome,
@@ -2108,6 +2115,7 @@ export async function getSupportReadiness(req: FastifyRequest<{ Querystring: Sup
     const entity = text(query.entity || query.entityId)
     const entityType = text(query.entityType)
     const supportSession = text(query.session || query.supportSession || query.supportSessionId)
+    const workflow = text(query.workflow || query.bridgeWorkflow)
     const action = text(query.action || 'support')
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
@@ -2121,13 +2129,13 @@ export async function getSupportReadiness(req: FastifyRequest<{ Querystring: Sup
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 25)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 50) : 25
-    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, workflow, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const filterError = supportInspectionFilterError(query, timelineFilter)
     if (filterError && filterError.detail?.code !== 'overbroad_support_timeline_filter') {
         return res.status(400).send(filterError)
     }
 
-    const audit = await loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
+    const audit = await loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, workflow, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const timeline = audit.map(toSupportAuditTimelineEvent)
     const readiness = supportReadinessExport({
         actorId: actor.id,
@@ -4909,7 +4917,7 @@ async function loadInspectionApprovals(input: { q?: string, org: string, user: s
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { q: string, org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, blocker: string, reason: string, scope?: string, context: string, from: string, to: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { q: string, org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, workflow?: string, action: string, severity: string, outcome: string, source: string, service: string, blocker: string, reason: string, scope?: string, context: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -4954,6 +4962,7 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
         const placeholder = add(`%${input.supportSession}%`)
         where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ')')
     }
+    if (input.workflow) where.push(`event.context->>'workflow' ILIKE ${add(`%${input.workflow}%`)}`)
     if (input.entityType) where.push(`event.target_type ILIKE ${add(`%${input.entityType}%`)}`)
     if (input.action) where.push(`event.action_type ILIKE ${add(`%${input.action}%`)}`)
     if (input.severity) where.push(`event.severity = ${add(input.severity)}`)
@@ -11817,7 +11826,7 @@ function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: 
     if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
         return supportError('invalid_support_filter', 'Support inspection limit must be a positive number.', { filter: 'limit' })
     }
-    const hasTarget = Boolean(filter.q || filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.blocker || filter.reason || filter.scope || filter.context)
+    const hasTarget = Boolean(filter.q || filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.workflow || filter.blocker || filter.reason || filter.scope || filter.context)
     if (!hasTarget && Boolean(filter.action || filter.source || filter.service || filter.severity || filter.outcome || filter.from || filter.to)) {
         return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, entityType, or supportSession with audit timeline filters.', {
             filters: supportTimelineFilter(filter),
@@ -11836,6 +11845,7 @@ function supportTimelineFilter(input: Omit<SupportTimelineFilter, 'unsupported'>
         entity: input.entity,
         entityType: input.entityType,
         supportSession: input.supportSession,
+        workflow: input.workflow || '',
         action: input.action,
         severity: input.severity,
         outcome: input.outcome,
@@ -12492,6 +12502,7 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             action: ['action', 'actionType'],
+            workflow: ['workflow', 'bridgeWorkflow'],
             severity: ['severity'],
             time: ['from', 'to'],
             entity: ['entity', 'entityId', 'entityType'],
@@ -13305,6 +13316,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
             actor: ['actor', 'actorId', 'supportActor', 'supportActorId'],
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             action: ['action', 'actionType'],
+            workflow: ['workflow', 'bridgeWorkflow'],
             entity: ['entity', 'entityId', 'entityType'],
             request: ['request', 'requestId', 'correlation', 'correlationId'],
             blocker: ['blocker', 'blockerCode'],
@@ -13356,6 +13368,7 @@ function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
             target: ['target', 'targetId', 'user', 'userId', 'targetUserId'],
             request: ['request', 'requestId', 'correlation', 'correlationId'],
             entity: ['entity', 'entityId', 'entityType'],
+            workflow: ['workflow', 'bridgeWorkflow'],
             supportSession: ['session', 'supportSession', 'supportSessionId'],
             blocker: ['blocker', 'blockerCode'],
             reason: ['reason', 'supportReason'],
