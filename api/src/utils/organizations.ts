@@ -2030,6 +2030,22 @@ export type OrganizationReadinessProof = {
                 noSilentMembershipMutation: true
                 nonmemberEnumeration: false
             }
+            supportAssistedRecoveryReceipt: {
+                schemaVersion: 'organization.member_support_assisted_recovery_receipt.v1'
+                supportActionHistoryBridge: 'organization.member_recovery_support_history_bridge.v1'
+                allowedOutcome: 'invite_required'
+                directMembershipMutationAllowed: false
+                ownerlessRecoveryMutationAllowed: false
+                requiresAcceptedInvite: true
+                requiredAuditFields: Array<'organizationId' | 'targetUserId' | 'requestId' | 'supportSessionId' | 'reason' | 'outcome'>
+                blockedRoutesUntilAcceptedMembership: Array<
+                    | 'GET /api/organizations/:id/watchlists'
+                    | 'GET /api/organizations/:id/watchlists/alert-terms'
+                    | 'GET /api/organizations/:id/alert-case-visibility'
+                    | 'POST /v1/dwm/webhooks/deliver'
+                >
+                nonmemberEnumeration: false
+            }
         }
         nonmemberEnumeration: false
     }
@@ -5123,6 +5139,22 @@ export function organizationReadinessProof(input: {
                     },
                     requiredAuditFields: ['organizationId', 'targetUserId', 'requestId', 'supportSessionId', 'reason', 'outcome'],
                     noSilentMembershipMutation: true,
+                    nonmemberEnumeration: false,
+                },
+                supportAssistedRecoveryReceipt: {
+                    schemaVersion: 'organization.member_support_assisted_recovery_receipt.v1',
+                    supportActionHistoryBridge: 'organization.member_recovery_support_history_bridge.v1',
+                    allowedOutcome: 'invite_required',
+                    directMembershipMutationAllowed: false,
+                    ownerlessRecoveryMutationAllowed: false,
+                    requiresAcceptedInvite: true,
+                    requiredAuditFields: ['organizationId', 'targetUserId', 'requestId', 'supportSessionId', 'reason', 'outcome'],
+                    blockedRoutesUntilAcceptedMembership: [
+                        'GET /api/organizations/:id/watchlists',
+                        'GET /api/organizations/:id/watchlists/alert-terms',
+                        'GET /api/organizations/:id/alert-case-visibility',
+                        'POST /v1/dwm/webhooks/deliver',
+                    ],
                     nonmemberEnumeration: false,
                 },
             },
