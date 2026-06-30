@@ -2079,6 +2079,16 @@ export type OrganizationReadinessProof = {
         }
         lifecycleBlockers: Array<'needs_10_active_members_or_pending_invites' | 'needs_shared_watchlist_item' | 'no_active_terms' | 'org_archived' | 'org_deleted' | 'member_revoked'>
         noEnumerationFields: Array<'otherOrg.members' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret'>
+        fixtureBackedReadiness: {
+            schemaVersion: 'organization.ten_member_workspace_fixture.v1'
+            fixtureName: 'organization_watchlist'
+            downstreamConsumers: Array<'alert_queue' | 'case_workflow' | 'webhook_delivery' | 'dashboard_readiness' | 'support_timeline'>
+            requiredOrganizationFields: Array<'organizationId' | 'tenantId' | 'activeMemberCount' | 'pendingInviteCount' | 'ownerCount'>
+            requiredWatchlistFields: Array<'watchlistItemId' | 'alertGenerationRef' | 'alertGeneratorKey' | 'termFamily' | 'normalizedTerm' | 'status'>
+            cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
+            memberLifecycleBlockers: Array<'member_revoked' | 'not_member' | 'invite_expired'>
+            noEnumerationFields: Array<'otherOrg.members' | 'otherOrg.watchlistItemIds' | 'destination.secret'>
+        }
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
     uiProof: {
@@ -5135,6 +5145,43 @@ export function organizationReadinessProof(input: {
                 'otherOrg.alertGeneratorKeys',
                 'destination.secret',
             ],
+            fixtureBackedReadiness: {
+                schemaVersion: 'organization.ten_member_workspace_fixture.v1',
+                fixtureName: 'organization_watchlist',
+                downstreamConsumers: [
+                    'alert_queue',
+                    'case_workflow',
+                    'webhook_delivery',
+                    'dashboard_readiness',
+                    'support_timeline',
+                ],
+                requiredOrganizationFields: [
+                    'organizationId',
+                    'tenantId',
+                    'activeMemberCount',
+                    'pendingInviteCount',
+                    'ownerCount',
+                ],
+                requiredWatchlistFields: [
+                    'watchlistItemId',
+                    'alertGenerationRef',
+                    'alertGeneratorKey',
+                    'termFamily',
+                    'normalizedTerm',
+                    'status',
+                ],
+                cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
+                memberLifecycleBlockers: [
+                    'member_revoked',
+                    'not_member',
+                    'invite_expired',
+                ],
+                noEnumerationFields: [
+                    'otherOrg.members',
+                    'otherOrg.watchlistItemIds',
+                    'destination.secret',
+                ],
+            },
             proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         uiProof: {
