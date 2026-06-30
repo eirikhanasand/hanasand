@@ -404,6 +404,9 @@ describe("dwm org alert pipeline proof", () => {
       assignedOwner: "analyst-pipeline",
       workflowEventCount: 1,
       caseReady: true,
+      caseIdCandidate: "case_pipeline_acme",
+      casePath: "/v1/cases/case_pipeline_acme?alertId=alert_pipeline_acme",
+      caseHandoffIdempotencyKey: expect.stringMatching(/^dwm_case_handoff_/),
       deliveryReady: true,
       delivered: true,
       deliveryHistoryRefs: ["delivery_pipeline_acme"]
@@ -430,12 +433,14 @@ describe("dwm org alert pipeline proof", () => {
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("readiness.zeroAlertProof");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.provenanceGapCodes");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.workflowStatus");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.casePath");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.deliveryHistoryRefs");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.selectedCaptureIds");
     expect(proof.consumerAdapters.publicTI.gapFields).toContain("readiness.sourceFamilyGaps.blockerCode");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.provenanceGapCodes");
     expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("readiness.zeroAlertProof.watchlistTerms");
     expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("alerts.workflowEventCount");
+    expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.caseHandoffIdempotencyKey");
     expect(proof.gaps).toEqual([]);
   });
 

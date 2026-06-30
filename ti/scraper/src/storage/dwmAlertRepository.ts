@@ -1024,6 +1024,10 @@ export type DwmOrgAlertPipelineProof = {
     assignedOwner?: string;
     workflowEventCount: number;
     caseReady: boolean;
+    caseIdCandidate?: string;
+    caseId?: string;
+    casePath?: string;
+    caseHandoffIdempotencyKey?: string;
     deliveryReady: boolean;
     delivered: boolean;
     downstreamBlockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
@@ -1708,6 +1712,10 @@ export function buildDwmOrgAlertPipelineProof(input: {
       assignedOwner: alert.assignedOwner ? String(alert.assignedOwner) : undefined,
       workflowEventCount: handoff.workflowVersion.eventCount,
       caseReady: handoff.caseReadiness.ready,
+      caseIdCandidate: handoff.caseReadiness.caseIdCandidate,
+      caseId: handoff.caseReadiness.caseId,
+      casePath: handoff.caseReadiness.casePath,
+      caseHandoffIdempotencyKey: handoff.caseReadiness.idempotencyKey,
       deliveryReady: handoff.deliveryReadiness.ready,
       delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
       downstreamBlockerCodes: handoff.blockerCodes,
@@ -2064,6 +2072,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.evidenceCount",
         "alerts.provenanceGapCodes",
         "alerts.workflowStatus",
+        "alerts.casePath",
         "gaps.blockerCodes"
       ];
   const gapFields = [
@@ -2082,6 +2091,8 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
       stableFields: [
         ...sharedStableFields,
         "alerts.caseReady",
+        "alerts.caseIdCandidate",
+        "alerts.caseHandoffIdempotencyKey",
         "alerts.deliveryReady",
         "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
@@ -2127,6 +2138,8 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
       stableFields: [
         ...sharedStableFields,
         "alerts.caseReady",
+        "alerts.casePath",
+        "alerts.caseHandoffIdempotencyKey",
         "alerts.deliveryReady",
         "alerts.delivered",
         "alerts.workflowStatus",
