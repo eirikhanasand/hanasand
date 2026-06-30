@@ -435,7 +435,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
-                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} payload={actionability.exportPayloads.enrichment} />
+                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
                             <ActionPanel
@@ -3132,7 +3132,7 @@ function collectionGapTaskPayloadFor(task: EnrichmentTask, intake: TiActionabili
     }
 }
 
-function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
+function SourceHealthPanel({ queue, intake, coverage, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; coverage: TiActionabilityModel['actorEnrichmentCoverage']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
     const rows = queue.rows
 
     return (
@@ -3140,9 +3140,14 @@ function SourceHealthPanel({ queue, intake, payload }: { queue: TiActionabilityM
             <div data-ti-source-health-queue='true' className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {intake.summary.total} intake item{intake.summary.total === 1 ? '' : 's'} · {queue.summary.blocked} blocked
+                        {queue.summary.total} source row{queue.summary.total === 1 ? '' : 's'} · {coverage.summary.coveredFieldCount}/{coverage.summary.fieldCount} covered · {coverage.summary.retryableFieldCount} retry
                     </p>
-                    <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, enrichmentPayload: payload }} />
+                    <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                        <span data-ti-enrichment-coverage-export='true' className='inline-flex'>
+                            <CopyPayloadButton label='Coverage review' payload={coverage} />
+                        </span>
+                        <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, enrichmentPayload: payload }} />
+                    </div>
                 </div>
                 {rows.length ? rows.slice(0, 5).map(row => (
                     <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
