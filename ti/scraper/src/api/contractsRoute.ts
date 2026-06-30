@@ -31,6 +31,7 @@ import {
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
 
 export const PRODUCT_READINESS_PROOF_VIEW_SCHEMA_VERSION = "hanasand.product_readiness.proof_view.v1" as const;
+export const PRODUCT_READINESS_ORG_CAPABILITY_PACKET_SCHEMA_VERSION = "hanasand.product_readiness.org_capability_packet.v1" as const;
 
 export function contractIndex() {
   const routes = [
@@ -132,6 +133,7 @@ export function contractIndex() {
           customerNotificationReadiness: "dwm.case_customer_notification_readiness.v1",
           sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
           supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
+          workflowTransitionHistory: "dwm.case_workflow_transition_history.v1",
           auditTimeline: "dwm.case_replay_audit_timeline.v1",
           readiness: "dwm.case_handoff_action_readiness.v1",
           detail: "analyst.case_detail.v1"
@@ -139,7 +141,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
         queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"],
-        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "customerNotificationReadiness", "auditTimeline", "nextAnalystActions"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "customerNotificationReadiness", "workflowTransitionHistory", "auditTimeline", "nextAnalystActions"],
         blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "missing_organization_scope", "case_closed"],
         safeOutput: {
           metadataOnly: true,
@@ -175,11 +177,12 @@ export function contractIndex() {
         methods: ["PATCH"],
         schemas: {
           transition: "analyst.case_workflow_transition.v1",
+          transitionHistory: "dwm.case_workflow_transition_history.v1",
           detail: "analyst.case_detail.v1"
         },
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId"],
         writeFields: ["organizationId", "action", "status", "assignedOwner", "note", "idempotencyKey"],
-        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState"],
+        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory"],
         workflowActions: ["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"],
         blockerCodes: ["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "invalid_case_owner_role", "missing_note", "missing_assigned_owner"],
         safeOutput: {
@@ -239,6 +242,32 @@ export function contractIndex() {
           { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["workflowId", "state", "webhookDestinationId", "destinationDeliveryState"] },
           { ownerLane: "publicTI", route: "/ti", requiredFields: ["workflowId", "state", "provenanceHash", "sourceFamilies"] },
           { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["workflowId", "state", "blockerCodes", "scopeFields"] }
+        ],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false,
+          crossOrgDataExposed: false
+        }
+      },
+      {
+        id: "product_readiness_org_capability_packet",
+        ownerLane: "integration",
+        route: "/v1/contracts",
+        methods: ["GET"],
+        schemas: {
+          orgCapabilityPacket: PRODUCT_READINESS_ORG_CAPABILITY_PACKET_SCHEMA_VERSION,
+          proofView: PRODUCT_READINESS_PROOF_VIEW_SCHEMA_VERSION
+        },
+        scopeFields: ["tenantId", "organizationId", "workflowId", "orgCapabilityId", "ownerLane"],
+        recordFields: ["orgCapabilityId", "workflowId", "state", "proof", "readinessFields", "missingReadinessFields", "blockerCodes", "downstreamConsumers", "safeOutput"],
+        blockerCodes: ["workflow_unsupported", "workflow_partial", "workflow_blocked", "missing_org_capability_fields"],
+        downstreamConsumers: [
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["orgCapabilityId", "state", "proof", "blockerCodes"] },
+          { ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness", requiredFields: ["organizationId", "watchlistId", "alertId", "caseId", "provenanceHash"] },
+          { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["organizationId", "alertId", "caseId", "destinationDeliveryState"] },
+          { ownerLane: "publicTI", route: "/ti", requiredFields: ["organizationId", "provenanceHash", "sourceCoverageState"] },
+          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "orgCapabilityId", "blockerCodes"] }
         ],
         safeOutput: {
           metadataOnly: true,
@@ -393,6 +422,20 @@ export function contractIndex() {
             { ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness", requiredFields: ["workflowId", "capabilityIds", "schemaIds"] },
             { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["workflowId", "webhookDestinationId", "destinationDeliveryState"] },
             { ownerLane: "publicTI", route: "/ti", requiredFields: ["workflowId", "provenanceHash", "sourceFamilies"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: PRODUCT_READINESS_ORG_CAPABILITY_PACKET_SCHEMA_VERSION,
+          contractId: "product_readiness_org_capability_packet",
+          ownerLane: "integration",
+          route: "/v1/contracts",
+          scopeFields: ["tenantId", "organizationId", "workflowId", "orgCapabilityId", "ownerLane"],
+          blockerCodes: ["workflow_unsupported", "workflow_partial", "workflow_blocked", "missing_org_capability_fields"],
+          downstreamConsumers: [
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["orgCapabilityId", "state", "proof"] },
+            { ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness", requiredFields: ["organizationId", "watchlistId", "alertId", "caseId", "provenanceHash"] },
+            { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["organizationId", "alertId", "caseId", "destinationDeliveryState"] },
+            { ownerLane: "publicTI", route: "/ti", requiredFields: ["organizationId", "provenanceHash", "sourceCoverageState"] }
           ]
         }),
         schemaLookupRow({
@@ -624,11 +667,15 @@ export function contractIndex() {
     index.productReadinessReceiptMatrix,
     productReadinessReceiptMatrixCoverageArtifact
   );
+  const productReadinessOrgCapabilityPacketArtifact = buildProductReadinessOrgCapabilityPacket(
+    productReadinessProofViewArtifact
+  );
   const productReadinessContractCopyGuardArtifact = productReadinessContractCopyGuard(index);
   return {
     ...index,
     productReadinessReceiptMatrixCoverage: productReadinessReceiptMatrixCoverageArtifact,
     productReadinessProofView: productReadinessProofViewArtifact,
+    productReadinessOrgCapabilityPacket: productReadinessOrgCapabilityPacketArtifact,
     productReadinessContractCopyGuard: productReadinessContractCopyGuardArtifact,
     productReadinessIntegrationGate: productReadinessIntegrationGate({
       coverage: productReadinessReceiptMatrixCoverageArtifact,
@@ -878,10 +925,10 @@ export function buildProductReadinessProofView(
   const handoffFieldsByWorkflow: Record<string, string[]> = {
     org_membership: ["organizationId", "member.role", "member.status", "invite.status", "auditEventId"],
     shared_watchlists: ["organizationId", "watchlistId", "watchlistItemIds", "termExport.alertGeneratorKeys"],
-    alert_generation: ["organizationId", "watchlistId", "watchlistItemIds", "alertId", "provenanceHash", "sourceIds", "captureIds"],
+    alert_generation: ["organizationId", "watchlistId", "watchlistItemIds", "alertId", "caseId", "provenanceHash", "sourceIds", "captureIds", "sourceCoverageState", "workflowState", "destinationDeliveryState"],
     webhook_delivery: ["organizationId", "alertId", "caseId", "webhookDestinationId", "destinationDeliveryState", "deliveryId"],
     case_workflow: ["organizationId", "alertId", "caseId", "casePath", "workflowState", "replayState"],
-    source_health: ["organizationId", "sourceIds", "captureIds", "provenanceHash", "freshnessState"],
+    source_health: ["organizationId", "sourceIds", "captureIds", "provenanceHash", "freshnessState", "sourceCoverageState"],
     public_ti_handoff: ["organizationId", "artifactId", "actor", "provenanceHash", "sourceFamilies"]
   };
   const coverageByCapability = new Map(coverage.diffRows.map((row) => [row.capabilityId, row]));
@@ -940,6 +987,77 @@ export function buildProductReadinessProofView(
       unsupported: "no matrix row advertises the workflow"
     },
     requiredWorkflowIds,
+    rows,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+export function buildProductReadinessOrgCapabilityPacket(proofView: ReturnType<typeof buildProductReadinessProofView>) {
+  const requiredFieldsByWorkflow: Record<string, string[]> = {
+    org_membership: ["organizationId", "member.role", "member.status"],
+    shared_watchlists: ["organizationId", "watchlistId", "watchlistItemIds"],
+    alert_generation: ["organizationId", "watchlistId", "alertId", "caseId", "provenanceHash", "sourceCoverageState", "workflowState", "destinationDeliveryState"],
+    webhook_delivery: ["organizationId", "alertId", "caseId", "destinationDeliveryState"],
+    case_workflow: ["organizationId", "alertId", "caseId", "workflowState"],
+    source_health: ["organizationId", "sourceCoverageState", "provenanceHash"],
+    public_ti_handoff: ["organizationId", "provenanceHash"]
+  };
+  const orgCapabilityIdByWorkflow: Record<string, string> = {
+    org_membership: "organization_membership",
+    shared_watchlists: "shared_watchlist_scope",
+    alert_generation: "org_scoped_alert_bridge",
+    webhook_delivery: "destination_delivery_state",
+    case_workflow: "case_workflow_state",
+    source_health: "source_coverage_state",
+    public_ti_handoff: "public_ti_handoff"
+  };
+  const readinessFieldNames = ["organizationId", "watchlistId", "alertId", "caseId", "provenanceHash", "sourceCoverageState", "workflowState", "destinationDeliveryState"];
+  const rows = proofView.rows.map((row) => {
+    const requiredFields = requiredFieldsByWorkflow[row.workflowId] || [];
+    const missingReadinessFields = requiredFields.filter((field) => !row.handoffFields.includes(field));
+    const state = row.state === "ready" && missingReadinessFields.length > 0 ? "partial" : row.state;
+    const blockerCodes = uniqueStrings([
+      ...row.stateBlockerCodes,
+      ...missingReadinessFields.map(() => "missing_org_capability_fields")
+    ]);
+    return {
+      orgCapabilityId: orgCapabilityIdByWorkflow[row.workflowId] || row.workflowId,
+      workflowId: row.workflowId,
+      state,
+      ownerLane: row.ownerLanes[0] || "integration",
+      ownerLanes: row.ownerLanes,
+      proof: {
+        route: row.readinessRoutes[0] || "/v1/contracts",
+        readinessRoutes: row.readinessRoutes,
+        contractIds: row.contractIds,
+        schemaIds: row.schemaIds,
+        receiptSchemaIds: row.receiptSchemaIds
+      },
+      readinessFields: readinessFieldNames.filter((field) => row.handoffFields.includes(field)),
+      missingReadinessFields,
+      blockerCodes,
+      downstreamConsumers: row.downstreamConsumers,
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    };
+  });
+  return {
+    schemaVersion: PRODUCT_READINESS_ORG_CAPABILITY_PACKET_SCHEMA_VERSION,
+    proofViewSchemaVersion: proofView.schemaVersion,
+    route: "/v1/contracts",
+    producer: "buildProductReadinessOrgCapabilityPacket",
+    stateSemantics: proofView.stateSemantics,
+    requiredOrgCapabilityIds: rows.map((row) => row.orgCapabilityId),
+    readinessFieldNames,
     rows,
     safeOutput: {
       metadataOnly: true,

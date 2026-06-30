@@ -920,6 +920,11 @@ describe("DWM alert case handoff route", () => {
       },
       workflowTransition: {
         action: "false_positive",
+        note: "Corporate domain match was benign vendor chatter.",
+        idempotencyKey: "case-false-positive-001",
+        replayState: "recorded",
+        auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+        eventId: expect.stringMatching(/^case_event_/),
         fromStatus: "open",
         toStatus: "false_positive",
         workflowState: {
@@ -958,6 +963,11 @@ describe("DWM alert case handoff route", () => {
       },
       workflowTransition: {
         action: "reopen",
+        note: "New source evidence requires review.",
+        idempotencyKey: "case-reopen-false-positive-001",
+        replayState: "recorded",
+        auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+        eventId: expect.stringMatching(/^case_event_/),
         fromStatus: "false_positive",
         toStatus: "open",
         workflowState: {
@@ -976,6 +986,50 @@ describe("DWM alert case handoff route", () => {
       "false_positive",
       "reopen"
     ]);
+    expect(replayExportPayload.workflowTransitionHistory).toMatchObject({
+      schemaVersion: "dwm.case_workflow_transition_history.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      ready: true,
+      currentState: {
+        status: "open",
+        assignedOwner: "owner@acme.com",
+        lastDecision: "New source evidence requires review."
+      },
+      summary: {
+        transitionCount: 3,
+        decisionTransitionCount: 2,
+        actions: ["open", "false_positive", "reopen"],
+        actors: ["case-api"],
+        latestTransition: expect.objectContaining({
+          action: "reopen",
+          note: "New source evidence requires review.",
+          idempotencyKey: "case-reopen-false-positive-001",
+          replayState: "recorded",
+          auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+          eventId: expect.stringMatching(/^case_event_/)
+        }),
+        decisionRationales: [
+          expect.objectContaining({
+            action: "false_positive",
+            rationale: "Corporate domain match was benign vendor chatter.",
+            auditEventId: expect.stringMatching(/^case_workflow_audit_/)
+          }),
+          expect.objectContaining({
+            action: "reopen",
+            rationale: "New source evidence requires review.",
+            auditEventId: expect.stringMatching(/^case_workflow_audit_/)
+          })
+        ]
+      },
+      auditSafety: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
     expect(replayExportPayload.auditTimeline.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
         rowType: "workflow_transition",
@@ -1527,6 +1581,7 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         workflowTransitionCount: 1,
+        workflowTransitionHistoryReady: true,
         handoffReceiptCount: 1,
         auditTimelineRowCount: 2
       }
@@ -1608,6 +1663,7 @@ describe("DWM alert case handoff route", () => {
       caseId: "case_alert_unassigned",
       replayPlan: {
         supportRecoveryReady: false,
+        workflowTransitionHistoryReady: true,
         workflowTransitionCount: 4
       },
       supportRecoveryReadiness: {

@@ -1549,6 +1549,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     .filter((event) => !filters.eventAction || event.action === filters.eventAction)
     .filter((event) => !filters.idempotencyKey || event.idempotencyKey === filters.idempotencyKey)
     .map((event) => caseWorkflowTransition(caseRecord, event));
+  const workflowTransitionHistory = caseWorkflowTransitionHistory(caseRecord, workflowTransitions, filters);
   const customerNotifications = (caseRecord.customerNotifications ?? [])
     .filter((receipt) => !filters.idempotencyKey || receipt.idempotencyKey === filters.idempotencyKey)
     .map((receipt) => ({
@@ -1632,6 +1633,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       receipts: handoffHistory.receipts
     },
     workflowTransitions,
+    workflowTransitionHistory,
     customerNotifications,
     alertReasonContext,
     auditTimeline,
@@ -1644,6 +1646,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     nextAnalystActions,
     replayPlan: {
       workflowTransitionCount: workflowTransitions.length,
+      workflowTransitionHistoryReady: workflowTransitionHistory.ready,
       handoffReceiptCount: handoffHistory.receipts.length,
       customerNotificationCount: customerNotifications.length,
       auditTimelineRowCount: auditTimeline.summary.rowCount,
@@ -1665,6 +1668,68 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       contentHashes: handoffHistory.handoffActionReadiness?.provenance?.contentHashes ?? [],
       evidenceCount: handoffHistory.handoffActionReadiness?.provenance?.evidenceCount ?? 0
     },
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseWorkflowTransitionHistory(caseRecord: AnalystCase, transitions: Array<any>, filters: {
+  actionId?: "alertReplay" | "webhookDryRun";
+  idempotencyKey?: string;
+  eventAction?: string;
+}) {
+  const decisionTransitions = transitions.filter((transition) => ["escalate", "suppress", "false_positive", "close", "reopen"].includes(transition.action));
+  return {
+    schemaVersion: "dwm.case_workflow_transition_history.v1",
+    generatedAt: nowIso(),
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    filters,
+    ready: true,
+    currentState: {
+      status: caseRecord.status,
+      assignedOwner: caseRecord.assignedOwner,
+      updatedAt: caseRecord.updatedAt,
+      closedAt: caseRecord.closedAt,
+      lastDecision: caseRecord.lastDecision
+    },
+    summary: {
+      transitionCount: transitions.length,
+      decisionTransitionCount: decisionTransitions.length,
+      latestTransition: transitions[transitions.length - 1],
+      actions: uniqueCaseStrings(transitions.map((transition) => transition.action)),
+      actors: uniqueCaseStrings(transitions.map((transition) => transition.actor)),
+      statusTrail: transitions.map((transition) => ({
+        eventId: transition.eventId,
+        action: transition.action,
+        fromStatus: transition.fromStatus,
+        toStatus: transition.toStatus,
+        at: transition.at
+      })),
+      ownerTrail: transitions
+        .filter((transition) => transition.fromOwner !== transition.toOwner || transition.toOwner)
+        .map((transition) => ({
+          eventId: transition.eventId,
+          action: transition.action,
+          fromOwner: transition.fromOwner,
+          toOwner: transition.toOwner,
+          at: transition.at
+        })),
+      decisionRationales: decisionTransitions.map((transition) => ({
+        eventId: transition.eventId,
+        action: transition.action,
+        rationale: transition.note,
+        actor: transition.actor,
+        at: transition.at,
+        auditEventId: transition.auditEventId
+      }))
+    },
+    transitions,
     auditSafety: {
       metadataOnly: true,
       rawEvidenceExposed: false,
@@ -2652,6 +2717,8 @@ function caseWorkflowSummary(caseRecord: AnalystCase) {
 function caseWorkflowTransition(caseRecord: AnalystCase, event: AnalystCaseEvent) {
   return {
     schemaVersion: "analyst.case_workflow_transition.v1",
+    eventId: event.id,
+    auditEventId: event.auditEventId,
     caseId: caseRecord.id,
     tenantId: caseRecord.tenantId,
     organizationId: caseRecord.organizationId,
@@ -2659,10 +2726,14 @@ function caseWorkflowTransition(caseRecord: AnalystCase, event: AnalystCaseEvent
     at: event.at,
     actor: event.actor,
     action: event.action,
+    note: event.note,
     fromStatus: event.fromStatus,
     toStatus: event.toStatus,
     fromOwner: event.fromOwner,
     toOwner: event.toOwner,
+    idempotencyKey: event.idempotencyKey,
+    dedupeKey: event.transitionKey,
+    replayState: event.replayState ?? "recorded",
     workflowState: {
       status: caseRecord.status,
       assignedOwner: caseRecord.assignedOwner,
