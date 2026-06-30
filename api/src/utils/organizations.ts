@@ -1734,6 +1734,70 @@ export type OrganizationWebhookDestinationAccessDecision = {
         blockerCodes: string[]
         noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys' | 'case.evidence.rawContent'>
     }
+    deliveryConsumerReceipt: {
+        schemaVersion: 'organization.webhook_destination_delivery_consumer.v1'
+        organizationId: string
+        tenantId: string
+        route: 'POST /v1/dwm/webhooks/deliver'
+        eventType: 'dwm.alert'
+        actor: {
+            userId: string
+            role: OrganizationRole
+            status: 'active'
+        }
+        readyForDelivery: boolean
+        destinationDeliveryReady: boolean
+        dryRunReady: boolean
+        blockerReason: string | null
+        roleGates: {
+            automaticDelivery: Array<'owner' | 'admin'>
+            manualTrigger: Array<'owner' | 'admin'>
+            readDeliverySummary: OrganizationRole[]
+        }
+        destinationScope: {
+            selectedDestinationOrgField: 'destination.org_id'
+            selectedDestinationIdField: 'webhookDestinationIds[]'
+            crossOrgDestinationAllowed: false
+            nonmemberDestinationEnumeration: false
+        }
+        watchlistMatches: Array<{
+            organizationId: string
+            tenantId: string
+            watchlistId: string
+            watchlistItemId: string
+            watchedEntity: {
+                type: WatchlistKind
+                value: string
+                normalizedValue: string
+            }
+            matchReason: {
+                kind: 'shared_watchlist_term'
+                code: 'organization_watchlist_term_match'
+            }
+            actorRef: {
+                userId: string
+                role: OrganizationRole
+                source: 'organization_member'
+            }
+            sourceRefs: {
+                sourceFamily: 'organization_watchlist'
+                exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms'
+                caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility'
+            }
+            provenanceHash: string
+            workflowStatus: 'ready_for_delivery' | 'blocked'
+            destinationReadiness: {
+                destinationDeliveryReady: boolean
+                dryRunReady: boolean
+                selectedDestinationOrgField: 'destination.org_id'
+                selectedDestinationIdField: 'webhookDestinationIds[]'
+                blockerReason: string | null
+            }
+        }>
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'watchlist_paused' | 'watchlist_archived' | 'manual_webhook_selection_required' | 'role_not_allowed'>
+        blockerCodes: string[]
+        noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys' | 'case.evidence.rawContent'>
+    }
     proofAssertions: Array<
         | 'destination_org_matches_alert_org'
         | 'idempotency_scoped_to_org_destination_alert'
@@ -7296,6 +7360,107 @@ export function organizationWatchlistAlertTermsExport(
                 manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
                 readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
             },
+            blockerCodes: Array.from(new Set([
+                ...alertGeneration.blockedReasons,
+                ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+                ...webhookDestinationOwnership.blockerCodes,
+                ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+            ].map(String))),
+            noLeakFields: [
+                'destination.secret',
+                'destination.endpoint',
+                'otherOrg.destinationIds',
+                'otherOrg.alertGeneratorKeys',
+                'case.evidence.rawContent',
+            ],
+        },
+        deliveryConsumerReceipt: {
+            schemaVersion: 'organization.webhook_destination_delivery_consumer.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            route: webhookDestinationOwnership.route,
+            eventType: webhookDestinationOwnership.eventType,
+            actor: {
+                userId: member.userId,
+                role: member.role,
+                status: 'active',
+            },
+            readyForDelivery: alertGeneration.canGenerateAlerts
+                && sharedWatchlistIntegrationGuardrails.caseSafety.ok
+                && webhookDestinationOwnership.blockerCodes.length === 0
+                && canManageWebhookDestinations,
+            destinationDeliveryReady: webhookDestinationOwnership.blockerCodes.length === 0,
+            dryRunReady: canManageWebhookDestinations,
+            blockerReason: Array.from(new Set([
+                ...alertGeneration.blockedReasons,
+                ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+                ...webhookDestinationOwnership.blockerCodes,
+                ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+            ].map(String)))[0] ?? null,
+            roleGates: {
+                automaticDelivery: ['owner', 'admin'],
+                manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
+                readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+            },
+            destinationScope: {
+                selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+                selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+                crossOrgDestinationAllowed: false,
+                nonmemberDestinationEnumeration: webhookDestinationOwnership.nonmemberDestinationEnumeration,
+            },
+            watchlistMatches: activeTerms.map(term => {
+                const blockerCodes = Array.from(new Set([
+                    ...alertGeneration.blockedReasons,
+                    ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+                    ...webhookDestinationOwnership.blockerCodes,
+                    ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+                ].map(String)))
+                const provenanceHash = organizationWatchlistMatchProvenanceHash(term)
+
+                return {
+                    organizationId: term.organizationId,
+                    tenantId: term.tenantId,
+                    watchlistId: term.watchlistItemId,
+                    watchlistItemId: term.watchlistItemId,
+                    watchedEntity: {
+                        type: term.termFamily,
+                        value: term.term,
+                        normalizedValue: term.alertGenerationRef.normalizedTerm,
+                    },
+                    matchReason: {
+                        kind: 'shared_watchlist_term' as const,
+                        code: 'organization_watchlist_term_match' as const,
+                    },
+                    actorRef: {
+                        userId: member.userId,
+                        role: member.role,
+                        source: 'organization_member' as const,
+                    },
+                    sourceRefs: {
+                        sourceFamily: 'organization_watchlist' as const,
+                        exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms' as const,
+                        caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility' as const,
+                    },
+                    provenanceHash,
+                    workflowStatus: blockerCodes.length === 0 ? 'ready_for_delivery' as const : 'blocked' as const,
+                    destinationReadiness: {
+                        destinationDeliveryReady: webhookDestinationOwnership.blockerCodes.length === 0,
+                        dryRunReady: canManageWebhookDestinations,
+                        selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+                        selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+                        blockerReason: blockerCodes[0] ?? null,
+                    },
+                }
+            }),
+            lifecycleBlockers: [
+                'org_archived',
+                'org_deleted',
+                'member_revoked',
+                'watchlist_paused',
+                'watchlist_archived',
+                'manual_webhook_selection_required',
+                'role_not_allowed',
+            ],
             blockerCodes: Array.from(new Set([
                 ...alertGeneration.blockedReasons,
                 ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
