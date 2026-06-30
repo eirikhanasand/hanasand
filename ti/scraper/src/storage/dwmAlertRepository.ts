@@ -2033,7 +2033,7 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
     receiptSchemaIds: ["dwm.webhook.alert_source_handoff_readiness_consumer.v1", "dwm.alert_created_event_dispatch.v1"],
     blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.webhookConsumer.blockerCodes)),
-    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.webhookConsumer.selectedWebhookDestinationId"],
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression", "alerts.sourceHandoffReadiness.webhookConsumer.selectedWebhookDestinationId"],
     downstreamOwners: ["webhook", "dashboard"],
     missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.webhookConsumer.ready),
     safeOutput: metadataOnlyAlertReceiptSafeOutput()
@@ -2059,7 +2059,7 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
     receiptSchemaIds: ["dwm.org_alert_consumer_receipt_matrix.v1"],
     blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.publicTiConsumer.gapFields.includes("provenanceGapCodes") ? alert.sourceHandoffReadiness.provenanceGapCodes : [])),
-    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"],
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression", "alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"],
     downstreamOwners: ["public_ti", "dashboard"],
     missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.publicTiConsumer.ready),
     safeOutput: metadataOnlyAlertReceiptSafeOutput()
@@ -2504,6 +2504,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.sourceFamily",
         "alerts.selectedCaptureIds",
         "alerts.evidenceCount",
+        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.provenanceGapCodes",
         "alerts.workflowStatus",
         "alerts.workflowTransitionActions",
@@ -2530,6 +2531,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.caseHandoffIdempotencyKey",
         "alerts.deliveryReady",
         "alerts.sourceHandoffReadiness",
+        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
       ],
@@ -2547,6 +2549,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.deliveryReady",
         "alerts.deliveryHistoryRefs",
         "alerts.sourceHandoffReadiness.webhookConsumer",
+        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.selectedCaptureIds",
         "alerts.provenanceGapCodes",
         "candidates.webhookDestinationIds",
@@ -2565,6 +2568,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "readiness.sourceFamilyGaps",
         "alerts.sourceFamily",
         "alerts.sourceHandoffReadiness",
+        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.provenanceGapCodes",
         "gaps.detail"
       ],
@@ -2581,6 +2585,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.deliveryReady",
         "alerts.delivered",
         "alerts.sourceHandoffReadiness",
+        "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.workflowStatus",
         "alerts.workflowTransitionActions",
         "alerts.workflowEventCount",
