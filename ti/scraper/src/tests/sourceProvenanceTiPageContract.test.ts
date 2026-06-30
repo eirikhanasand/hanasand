@@ -18,6 +18,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -60,6 +61,7 @@ import {
   buildSourceProvenanceSourceCandidateValidationReceipt,
   buildSourceProvenanceActorSourceCoveragePortfolio,
   buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket,
+  buildSourceProvenanceActorEnrichmentSourceHealthEventPacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -4289,6 +4291,163 @@ describe("source provenance TI page contract", () => {
       "actorRows[].alertReadiness",
       "actorRows[].missingPrerequisites",
       "actorRows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("emits source health events from actor alert prerequisites for public TI and alerts", () => {
+    const aptReceipt = buildActorValidationReceiptFixture({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_health_events",
+      captureId: "cap_actor_page_apt29_health_events",
+      contentHash: "hash_actor_page_apt29_health_events",
+      provenance: "Actor page fixture gives APT29 parser health and source coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareReceipt = buildActorValidationReceiptFixture({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_health_events",
+      captureId: "cap_public_advisory_akira_health_events",
+      contentHash: "hash_public_advisory_akira_health_events",
+      provenance: "Public advisory fixture gives Akira parser health and alert family coverage.",
+      relationship: "targeting"
+    });
+    const portfolio = buildSourceProvenanceActorSourceCoveragePortfolio({
+      validationReceipts: [aptReceipt, ransomwareReceipt],
+      generatedAt: "2026-06-29T12:50:00.000Z"
+    });
+    const prerequisites = buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket({
+      portfolio,
+      generatedAt: "2026-06-29T12:51:00.000Z"
+    });
+    const packet = buildSourceProvenanceActorEnrichmentSourceHealthEventPacket({
+      alertPrerequisitePacket: prerequisites,
+      generatedAt: "2026-06-29T12:52:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actorEnrichmentAlertPrerequisitePacketId: prerequisites.id,
+      summary: {
+        accepted: 2,
+        retryGated: 2,
+        policyGated: 2,
+        inspectOnly: 6,
+        healthy: 2,
+        degraded: 6,
+        stale: 2,
+        blocked: 2,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+        affectedAlertFamilies: expect.arrayContaining(["watchlist_terms", "actor_enrichment", "campaign_freshness", "restricted_metadata"]),
+        newestLastRunAt: "2026-06-29T12:28:00.000Z",
+        newestLastSuccessAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(packet.summary.eventCount).toBe(packet.events.length);
+    expect(packet.summary.inspectOnly >= 2).toBe(true);
+    expect(packet.summary.degraded >= 2).toBe(true);
+
+    const aptAccepted = packet.events.find((event) => event.actor === "APT29" && event.sourceFamily === "actor_page" && event.candidateValidation.state === "accepted");
+    const aptRetry = packet.events.find((event) => event.actor === "APT29" && event.sourceFamily === "telegram_public" && event.candidateValidation.state === "retry_gated");
+    const aptPolicy = packet.events.find((event) => event.actor === "APT29" && event.sourceFamily === "darkweb_metadata" && event.candidateValidation.state === "policy_gated");
+    const ransomwareAccepted = packet.events.find((event) => event.actor === "Akira" && event.candidateValidation.state === "accepted");
+
+    expect(aptAccepted).toMatchObject({
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      sourceFamily: "actor_page",
+      candidateValidation: expect.objectContaining({
+        state: "accepted",
+        policyStatus: "allowed",
+        parserCompatible: true,
+        expectedActorCoverage: ["APT29"],
+        expectedEntityCoverage: expect.arrayContaining(["actor_profile", "source_provenance", "alertable_fields"])
+      }),
+      parserHealth: expect.objectContaining({
+        parserStatus: "ready",
+        healthState: "healthy",
+        lastRunAt: "2026-06-29T12:28:00.000Z",
+        lastSuccessAt: "2026-06-29T12:28:00.000Z",
+        staleThresholdMinutes: 1440
+      }),
+      activationTest: expect.objectContaining({ state: "active", testResult: "passed" }),
+      affected: expect.objectContaining({
+        actorPages: ["/ti/APT29"],
+        alertFamilies: expect.arrayContaining(["watchlist_terms", "actor_enrichment"])
+      })
+    });
+    expect(aptRetry).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "telegram_public",
+      candidateValidation: expect.objectContaining({ state: "retry_gated", parserCompatible: true }),
+      parserHealth: expect.objectContaining({
+        parserStatus: "retry_scheduled",
+        healthState: "stale",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        staleThresholdMinutes: 360
+      }),
+      activationTest: expect.objectContaining({ state: "retry_scheduled", testResult: "failed" })
+    });
+    expect(aptPolicy).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "darkweb_metadata",
+      candidateValidation: expect.objectContaining({
+        state: "policy_gated",
+        policyStatus: "metadata_only_review_required",
+        parserCompatible: false,
+        rejectionReason: "Candidate requires policy approval before intake."
+      }),
+      parserHealth: expect.objectContaining({
+        parserStatus: "blocked",
+        healthState: "blocked"
+      }),
+      activationTest: expect.objectContaining({ state: "policy_blocked", testResult: "not_run" }),
+      affected: expect.objectContaining({
+        alertFamilies: expect.arrayContaining(["restricted_metadata", "watchlist_terms"])
+      })
+    });
+    expect(ransomwareAccepted).toMatchObject({
+      actor: "Akira",
+      publicTiRoute: "/ti/Akira",
+      candidateValidation: expect.objectContaining({
+        state: "accepted",
+        policyStatus: "allowed",
+        expectedActorCoverage: ["Akira"]
+      }),
+      parserHealth: expect.objectContaining({ parserStatus: "ready", healthState: "healthy" })
+    });
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/:query", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, requiredFields: expect.arrayContaining(["events[].affected.alertFamilies", "events[].activationTest"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["events[].candidateValidation", "events[].parserHealth", "events[].activationTest", "summary"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["events[].provenance", "events[].parserHealth"]) })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "events[].candidateValidation",
+      "events[].parserHealth",
+      "events[].activationTest",
+      "events[].affected",
+      "events[].provenance",
       "summary"
     ]));
     expect(JSON.stringify(packet)).not.toContain("rawText");
