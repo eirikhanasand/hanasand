@@ -2857,6 +2857,15 @@ function webhookActions(scope: OperatorScope, organization: DwmOrganizationSumma
             body: { webhookDestinationId: destination.id, dryRun: true },
         })
     }
+    if (hasWebhookDestination && latestDelivery?.alertId) {
+        actions.push({
+            id: 'replay_latest_delivery',
+            label: 'Replay latest alert',
+            method: 'POST',
+            href: '/api/dwm/webhooks/deliver',
+            body: { ...actionScope(scope), alertId: latestDelivery.alertId, limit: 1 },
+        })
+    }
     if (hasWebhookDestination) {
         actions.push({
             id: 'deliver_webhooks',

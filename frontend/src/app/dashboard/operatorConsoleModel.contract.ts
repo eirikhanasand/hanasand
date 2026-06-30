@@ -1300,6 +1300,13 @@ if (deliveryRouteCase.actions?.find(action => action.id === 'open_delivery_histo
 if (deliveryRouteCase.relatedLinks.find(link => link.href === deliveryHistoryHref)?.label !== 'Delivery history') {
     throw new Error('Expected delivery readiness links to include the scoped delivery history.')
 }
+const replayLatestDeliveryAction = deliveryRouteCase.actions?.find(action => action.id === 'replay_latest_delivery')
+if (replayLatestDeliveryAction?.href !== '/api/dwm/webhooks/deliver') {
+    throw new Error('Expected delivery readiness to expose the backed webhook replay route.')
+}
+if (replayLatestDeliveryAction?.body?.organizationId !== 'org_acme' || replayLatestDeliveryAction.body.alertId !== 'alert_acme_1' || replayLatestDeliveryAction.body.limit !== 1) {
+    throw new Error('Expected delivery replay action to target the latest alert in the selected organization scope.')
+}
 const supportReadinessCase = expectWorkbenchCase(cases, 'support_admin_readiness')
 if (supportReadinessCase.actions?.find(action => action.id === 'inspect_support_recovery')?.href !== '/api/backend/admin/support/access-recovery') {
     throw new Error('Expected support readiness to expose the backed recovery queue drill-in.')
