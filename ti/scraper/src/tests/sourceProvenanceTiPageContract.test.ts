@@ -22,6 +22,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_DRILLDOWN_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
@@ -76,6 +77,7 @@ import {
   buildSourceProvenanceSourcePackFixtureActionExecutionPacket,
   buildSourceProvenanceSourcePackFixtureActionAuditPacket,
   buildSourceProvenanceSourcePackFixtureActionDrilldownPacket,
+  buildSourceProvenanceSourcePackFixtureActionAlertBridgePacket,
   buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
@@ -4977,6 +4979,181 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(actionDrilldown)).not.toContain("rawText");
     expect(JSON.stringify(actionDrilldown)).not.toContain("password");
+  });
+
+  test("bridges source fixture action drilldown into alert and public TI readiness", () => {
+    const aptGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_action_alert_bridge",
+      captureId: "cap_actor_page_apt29_action_alert_bridge",
+      contentHash: "hash_actor_page_apt29_action_alert_bridge",
+      provenance: "Actor page fixture gives APT29 action alert bridge coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareGrowthPacket = buildActorFixtureGrowthPacket({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_action_alert_bridge",
+      captureId: "cap_public_advisory_akira_action_alert_bridge",
+      contentHash: "hash_public_advisory_akira_action_alert_bridge",
+      provenance: "Public advisory fixture gives Akira action alert bridge coverage.",
+      relationship: "targeting"
+    });
+    const catalog = buildSourceProvenanceSourcePackFixtureCatalogPacket({
+      growthPackets: [aptGrowthPacket, ransomwareGrowthPacket],
+      generatedAt: "2026-06-29T15:30:00.000Z"
+    });
+    const handoff = buildSourceProvenanceSourcePackFixtureAlertReadinessPacket({
+      catalog,
+      generatedAt: "2026-06-29T15:31:00.000Z"
+    });
+    const dedupe = buildSourceProvenanceSourcePackFixtureAlertDedupePacket({
+      alertReadiness: handoff,
+      generatedAt: "2026-06-29T15:32:00.000Z"
+    });
+    const health = buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket({
+      dedupe,
+      generatedAt: "2026-06-29T15:33:00.000Z"
+    });
+    const intelligence = buildSourceProvenanceSourcePackFixtureIntelligencePacket({
+      drilldown: health,
+      generatedAt: "2026-06-29T15:34:00.000Z"
+    });
+    const remediation = buildSourceProvenanceSourcePackFixtureOperatorRemediationPacket({
+      intelligence,
+      generatedAt: "2026-06-29T15:35:00.000Z"
+    });
+    const execution = buildSourceProvenanceSourcePackFixtureActionExecutionPacket({
+      remediation,
+      generatedAt: "2026-06-29T15:36:00.000Z"
+    });
+    const audit = buildSourceProvenanceSourcePackFixtureActionAuditPacket({
+      execution,
+      generatedAt: "2026-06-29T15:37:00.000Z"
+    });
+    const actionDrilldown = buildSourceProvenanceSourcePackFixtureActionDrilldownPacket({
+      audit,
+      generatedAt: "2026-06-29T15:38:00.000Z"
+    });
+    const alertBridge = buildSourceProvenanceSourcePackFixtureActionAlertBridgePacket({
+      drilldown: actionDrilldown,
+      generatedAt: "2026-06-29T15:39:00.000Z"
+    });
+
+    expect(alertBridge).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourcePackFixtureActionDrilldownPacketId: actionDrilldown.id,
+      summary: {
+        rowCount: 10,
+        alertReadyRows: 2,
+        publicTiReadyRows: 6,
+        blockedRows: 2,
+        degradedRows: 2,
+        missingPrerequisiteCount: 16,
+        actors: expect.arrayContaining(["APT29", "Akira"]),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        coverageStates: expect.arrayContaining(["alert_ready", "public_ti_only", "degraded", "blocked"]),
+        blockerCodes: expect.arrayContaining(["retry_window_pending", "policy_review_required", "source_health_inspection_required", "source_not_alert_ready"]),
+        matchableFields: expect.arrayContaining(["actor", "source_family", "public_ti_route", "provenance_hash", "watchlist_term", "indicator", "ttp", "actor_alias", "source_freshness"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+
+    const alertReadyRow = alertBridge.rows.find((row) => row.actor === "Akira" && row.coverageState === "alert_ready");
+    const publicTiOnlyRow = alertBridge.rows.find((row) => row.actor === "APT29" && row.coverageState === "public_ti_only");
+    const retryRow = alertBridge.rows.find((row) => row.actor === "APT29" && row.sourceFamily === "telegram_public");
+    const policyRow = alertBridge.rows.find((row) => row.actor === "Akira" && row.sourceFamily === "darkweb_metadata");
+
+    expect(alertReadyRow).toMatchObject({
+      actor: "Akira",
+      publicTiRoute: "/ti/Akira",
+      sourceFamily: "public_advisory",
+      coverageState: "alert_ready",
+      alertReadiness: "ready",
+      publicTiReadiness: "ready",
+      freshness: { state: "fresh" },
+      matchableFields: expect.arrayContaining(["watchlist_term", "indicator", "ttp", "provenance_hash"]),
+      missingPrerequisites: [],
+      provenance: expect.objectContaining({
+        sourcePackFixtureActionDrilldownPacketId: actionDrilldown.id,
+        sourcePackFixtureActionAuditPacketId: audit.id,
+        sourcePackFixtureActionExecutionPacketId: execution.id,
+        fixtureBacked: true
+      })
+    });
+    expect(publicTiOnlyRow).toMatchObject({
+      actor: "APT29",
+      coverageState: "public_ti_only",
+      alertReadiness: "blocked",
+      publicTiReadiness: "ready",
+      freshness: { state: "stale" },
+      matchableFields: expect.arrayContaining(["actor_alias", "source_freshness"]),
+      missingPrerequisites: expect.arrayContaining([
+        expect.objectContaining({ code: "source_health_inspection_required", ownerLane: "source", nextAction: "inspect_source_health" }),
+        expect.objectContaining({ code: "source_not_alert_ready", ownerLane: "alert", nextAction: "queue_alert_rebuild" })
+      ])
+    });
+    expect(retryRow).toMatchObject({
+      actor: "APT29",
+      sourceFamily: "telegram_public",
+      coverageState: "degraded",
+      alertReadiness: "blocked",
+      publicTiReadiness: "blocked",
+      freshness: {
+        state: "stale",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      missingPrerequisites: expect.arrayContaining([
+        expect.objectContaining({ code: "retry_window_pending", ownerLane: "parser", field: "retry.nextRetryAt" }),
+        expect.objectContaining({ code: "source_not_alert_ready", ownerLane: "alert" })
+      ])
+    });
+    expect(policyRow).toMatchObject({
+      actor: "Akira",
+      sourceFamily: "darkweb_metadata",
+      coverageState: "blocked",
+      alertReadiness: "blocked",
+      publicTiReadiness: "blocked",
+      missingPrerequisites: expect.arrayContaining([
+        expect.objectContaining({ code: "policy_review_required", ownerLane: "policy", field: "sourceFamily" }),
+        expect.objectContaining({ code: "source_not_alert_ready", ownerLane: "alert" })
+      ])
+    });
+
+    expect(alertBridge.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, requiredFields: expect.arrayContaining(["rows[].coverageState", "rows[].freshness", "rows[].missingPrerequisites"]) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, requiredFields: expect.arrayContaining(["rows[].alertReadiness", "rows[].matchableFields", "rows[].provenance"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["summary", "rows[].coverageState", "rows[].missingPrerequisites"]) }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["rows[].freshness", "rows[].route", "rows[].missingPrerequisites"]) }),
+      expect.objectContaining({ consumer: "support", ready: true, requiredFields: expect.arrayContaining(["rows[].publicTiRoute", "rows[].missingPrerequisites", "safeOutput"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["sourcePackFixtureActionDrilldownPacketId", "rows[].rowId", "safeOutput"]) })
+    ]));
+    expect(alertBridge.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].coverageState",
+      "rows[].alertReadiness",
+      "rows[].publicTiReadiness",
+      "rows[].matchableFields",
+      "rows[].freshness",
+      "rows[].missingPrerequisites",
+      "rows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(alertBridge)).not.toContain("rawText");
+    expect(JSON.stringify(alertBridge)).not.toContain("password");
   });
 
   test("exports source-pack fixture readiness for dashboard integration and alerts", () => {
