@@ -2859,6 +2859,57 @@ export function organizationAlertCaseWorkflowState(
             alertGeneratorKeys: caseWorkflow.watchlistScope.alertGeneratorKeys,
             actorActions: caseWorkflow.actorActions,
         },
+        caseAssignment: {
+            schemaVersion: 'organization.case_assignment_visibility.v1' as const,
+            route: caseWorkflow.routes.update,
+            organizationId: proof.organizationId,
+            tenantId: proof.tenantId,
+            sourceFamily: 'organization_watchlist' as const,
+            requiredPayloadFields: [
+                'organizationId',
+                'caseId',
+                'assigneeId',
+                'rationale',
+                'watchlistItemIds',
+            ],
+            requiredPersistedFields: [
+                'case.organizationId',
+                'case.tenantId',
+                'case.watchlistItemIds',
+                'case.visibilityDecision',
+                'case.assigneeId',
+                'case.assignmentAudit.requestId',
+            ],
+            watchlistScope: {
+                watchlistItemIds: caseWorkflow.watchlistScope.watchlistItemIds,
+                alertGeneratorKeys: caseWorkflow.watchlistScope.alertGeneratorKeys,
+                crossTenantCollisionAllowed: false as const,
+            },
+            allowed: caseWorkflow.actorActions.canAssignCase,
+            allowedRoles: ['owner', 'admin', 'analyst'] as const,
+            actorRole: downstreamAuthorization.member.role,
+            denialReason: caseWorkflow.actorActions.canAssignCase
+                ? null
+                : caseWorkflow.actorActions.denialReason ?? (downstreamAuthorization.visibility.allowed ? 'role_not_allowed' as const : downstreamAuthorization.visibility.reason ?? 'role_not_allowed' as const),
+            blockerCodes: caseWorkflow.actorActions.canAssignCase
+                ? []
+                : Array.from(new Set([
+                    ...caseWorkflow.blockerCodes,
+                    caseWorkflow.actorActions.denialReason ?? (downstreamAuthorization.visibility.allowed ? 'role_not_allowed' : downstreamAuthorization.visibility.reason ?? 'role_not_allowed'),
+                ].filter(Boolean).map(String))).sort(),
+            memberLifecycleBlockers: [
+                'member_revoked',
+                'not_member',
+                'invite_expired',
+            ],
+            noEnumerationFields: [
+                'otherOrg.caseIds',
+                'otherOrg.watchlistItemIds',
+                'case.evidence.rawContent',
+                'destination.secret',
+            ],
+            auditEventAction: 'organization_case_assignment_visibility_checked' as const,
+        },
         webhookDestinationOwnership: {
             schemaVersion: 'organization.webhook_destination_ownership.v1' as const,
             route: proof.webhookBridge.route,
@@ -5703,6 +5754,8 @@ export function organizationAccessDenial(input: {
             'organization.invites',
             'watchlistScope.alertGeneratorKeys',
             'activeTerms[]',
+            'otherOrg.caseIds',
+            'otherOrg.destinationIds',
             'destination.secret',
         ],
         downstreamRoutes: {
@@ -5710,6 +5763,14 @@ export function organizationAccessDenial(input: {
             alertReadiness: 'GET /api/organizations/:id/alert-readiness',
             alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
             alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+            webhookDelivery: 'POST /v1/dwm/webhooks/deliver',
+        },
+        downstreamRefs: {
+            sharedWatchlistReadiness: 'organization.shared_watchlist_readiness_export.v1' as const,
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1' as const,
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1' as const,
+            webhookDestinationReadiness: 'organization.webhook_destination_readiness_bridge.v1' as const,
+            webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1' as const,
         },
         serviceLogAction: 'organization_access_denied' as const,
         requestId: input.requestId ?? null,
