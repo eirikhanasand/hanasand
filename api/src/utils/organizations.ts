@@ -1695,6 +1695,45 @@ export type OrganizationWebhookDestinationAccessDecision = {
         requiredDestinationFields: Array<'destination.id' | 'destination.org_id' | 'destination.enabled' | 'destination.eventSubscriptions'>
         noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys'>
     }
+    alertDeliveryReadiness: {
+        schemaVersion: 'organization.webhook_alert_delivery_readiness.v1'
+        organizationId: string
+        tenantId: string
+        sourceFamily: 'organization_watchlist'
+        route: 'POST /v1/dwm/webhooks/deliver'
+        eventType: 'dwm.alert'
+        actor: {
+            userId: string
+            role: OrganizationRole
+            status: 'active'
+        }
+        watchlistScope: {
+            watchlistItemIds: string[]
+            alertGeneratorKeys: string[]
+            provenanceHashes: string[]
+            crossOrgDeliveryAllowed: false
+        }
+        workflowState: {
+            alertGenerationReady: boolean
+            caseReplayReady: boolean
+            destinationDeliveryReady: boolean
+            dryRunReady: boolean
+        }
+        deliveryContract: {
+            selectedDestinationOrgField: 'destination.org_id'
+            selectedDestinationIdField: 'webhookDestinationIds[]'
+            requiredAlertFields: Array<'alert.organizationId' | 'alert.tenantId' | 'alert.watchlistItemIds' | 'alert.workflowContext.alertGeneratorKeys' | 'alert.dedupeKey'>
+            requiredDestinationFields: Array<'destination.id' | 'destination.org_id' | 'destination.enabled' | 'destination.eventSubscriptions'>
+            idempotencyKeyFields: Array<'eventType' | 'organizationId' | 'destinationId' | 'alert.dedupeKey'>
+        }
+        roleGates: {
+            automaticDelivery: Array<'owner' | 'admin'>
+            manualTrigger: Array<'owner' | 'admin'>
+            readDeliverySummary: OrganizationRole[]
+        }
+        blockerCodes: string[]
+        noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys' | 'case.evidence.rawContent'>
+    }
     proofAssertions: Array<
         | 'destination_org_matches_alert_org'
         | 'idempotency_scoped_to_org_destination_alert'
@@ -7207,6 +7246,67 @@ export function organizationWatchlistAlertTermsExport(
                 'destination.endpoint',
                 'otherOrg.destinationIds',
                 'otherOrg.alertGeneratorKeys',
+            ],
+        },
+        alertDeliveryReadiness: {
+            schemaVersion: 'organization.webhook_alert_delivery_readiness.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            sourceFamily: 'organization_watchlist',
+            route: webhookDestinationOwnership.route,
+            eventType: webhookDestinationOwnership.eventType,
+            actor: {
+                userId: member.userId,
+                role: member.role,
+                status: 'active',
+            },
+            watchlistScope: {
+                watchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+                alertGeneratorKeys: activeTerms.map(term => term.alertGeneratorKey),
+                provenanceHashes: activeTerms.map(term => organizationWatchlistMatchProvenanceHash(term)),
+                crossOrgDeliveryAllowed: false,
+            },
+            workflowState: {
+                alertGenerationReady: alertGeneration.canGenerateAlerts,
+                caseReplayReady: sharedWatchlistIntegrationGuardrails.caseSafety.ok,
+                destinationDeliveryReady: webhookDestinationOwnership.blockerCodes.length === 0,
+                dryRunReady: canManageWebhookDestinations,
+            },
+            deliveryContract: {
+                selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+                selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+                requiredAlertFields: [
+                    'alert.organizationId',
+                    'alert.tenantId',
+                    'alert.watchlistItemIds',
+                    'alert.workflowContext.alertGeneratorKeys',
+                    'alert.dedupeKey',
+                ],
+                requiredDestinationFields: [
+                    'destination.id',
+                    'destination.org_id',
+                    'destination.enabled',
+                    'destination.eventSubscriptions',
+                ],
+                idempotencyKeyFields: webhookDestinationOwnership.idempotency.keyFields,
+            },
+            roleGates: {
+                automaticDelivery: ['owner', 'admin'],
+                manualTrigger: webhookDestinationOwnership.roleGates.manualTriggerAllowedRoles,
+                readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+            },
+            blockerCodes: Array.from(new Set([
+                ...alertGeneration.blockedReasons,
+                ...sharedWatchlistIntegrationGuardrails.caseSafety.blockerCodes,
+                ...webhookDestinationOwnership.blockerCodes,
+                ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+            ].map(String))),
+            noLeakFields: [
+                'destination.secret',
+                'destination.endpoint',
+                'otherOrg.destinationIds',
+                'otherOrg.alertGeneratorKeys',
+                'case.evidence.rawContent',
             ],
         },
         proofAssertions: [
