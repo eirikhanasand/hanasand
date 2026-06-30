@@ -1182,6 +1182,20 @@ describe("dwm workflow persistence", () => {
       workflowReadyCount: 1,
       deliveryHistoryCount: 0,
       sourceFamilies: ["darkweb_metadata"],
+      sourceFamilyRows: [{
+        sourceFamily: "darkweb_metadata",
+        alertCount: 1,
+        readyCount: 1,
+        blockedCount: 0,
+        caseReadyCount: 1,
+        deliveryReadyCount: 1,
+        replayReadyCount: 1,
+        workflowReadyCount: 1,
+        selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        watchlistItemIds: ["watch_item_workflow_alpha_acme"],
+        blockerCodes: [],
+        states: ["ready"]
+      }],
       selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
       watchlistItemIds: ["watch_item_workflow_alpha_acme"],
       blockerCodes: [],
@@ -1208,6 +1222,11 @@ describe("dwm workflow persistence", () => {
       readyCount: 1,
       replayReadyCount: 1,
       sourceFamilies: ["darkweb_metadata"],
+      sourceFamilyRows: [expect.objectContaining({
+        sourceFamily: "darkweb_metadata",
+        replayReadyCount: 1,
+        blockerCodes: []
+      })],
       blockerCodes: []
     });
 

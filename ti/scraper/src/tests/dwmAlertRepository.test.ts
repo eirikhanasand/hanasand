@@ -3866,6 +3866,20 @@ describe("dwm alert repository", () => {
       workflowReadyCount: 1,
       deliveryHistoryCount: 0,
       sourceFamilies: ["telegram_public"],
+      sourceFamilyRows: [{
+        sourceFamily: "telegram_public",
+        alertCount: 1,
+        readyCount: 0,
+        blockedCount: 1,
+        caseReadyCount: 1,
+        deliveryReadyCount: 0,
+        replayReadyCount: 0,
+        workflowReadyCount: 1,
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        watchlistItemIds: [list.alerts[0].watchlistItemIds[0]],
+        blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]),
+        states: ["delivery_handoff_blocked"]
+      }],
       selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
       watchlistItemIds: [list.alerts[0].watchlistItemIds[0]],
       blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]),
@@ -3899,6 +3913,7 @@ describe("dwm alert repository", () => {
       deliveryReadyCount: 0,
       replayReadyCount: 0,
       sourceFamilies: [],
+      sourceFamilyRows: [],
       blockerCodes: []
     });
 
