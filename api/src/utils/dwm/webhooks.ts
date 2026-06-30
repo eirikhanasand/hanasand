@@ -8088,6 +8088,13 @@ function buildDwmWebhookDeliveryTransitionReceipt({
             },
         },
     }
+    const caseActionDryRunReceipt = buildDwmWebhookCaseActionDryRunReceipt({
+        entry,
+        retryBody,
+        blockers: uniqueBlockers,
+        canDryRunRetry,
+        liveDeliveryEnabled,
+    })
     const nextState = blockingCodes.includes('destination_unavailable')
         ? 'destination_unavailable'
         : blockingCodes.includes('destination_disabled')
@@ -8193,6 +8200,7 @@ function buildDwmWebhookDeliveryTransitionReceipt({
                 expectedAuditAction: entry.replay ? 'delivery.replayed' : 'delivery.retry_requested',
             },
         },
+        caseActionDryRunReceipt,
         denial: {
             denied: blockingCodes.length > 0 || !access.canRetry && entry.retry.retryable,
             blockers: uniqueBlockers,
@@ -8201,6 +8209,147 @@ function buildDwmWebhookDeliveryTransitionReceipt({
         redaction: {
             safeForCustomerDisplay: true,
             endpointExposed: false,
+        },
+    }
+}
+
+function buildDwmWebhookCaseActionDryRunReceipt({
+    entry,
+    retryBody,
+    blockers,
+    canDryRunRetry,
+    liveDeliveryEnabled,
+}: {
+    entry: ReturnType<typeof buildDwmWebhookDeliveryHistory>['entries'][number]
+    retryBody: Record<string, unknown>
+    blockers: ReturnType<typeof retryQueueBlocker>[]
+    canDryRunRetry: boolean
+    liveDeliveryEnabled: boolean
+}) {
+    const blockingCodes = blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code)
+    const body = canDryRunRetry
+        ? {
+            ...retryBody,
+            dryRun: true,
+            live: false,
+            replay: entry.replay,
+        }
+        : null
+    const casePath = entry.alert.casePath || null
+    const caseId = entry.alert.caseId || null
+
+    return {
+        schemaVersion: 'dwm.webhook.case_action_dry_run_receipt.v1',
+        noNetwork: true,
+        externalSendEnabled: false,
+        liveDeliveryEnabled,
+        ready: canDryRunRetry,
+        org: {
+            id: entry.orgId,
+        },
+        destination: {
+            id: entry.destinationId,
+            label: entry.destination.label,
+            type: entry.destination.type,
+            endpointHint: entry.destination.redactedEndpoint.endpointHint,
+            endpointHash: entry.destination.redactedEndpoint.endpointHash,
+            endpointExposed: false,
+        },
+        alert: {
+            id: entry.alert.id,
+            title: entry.alert.title,
+            severity: entry.alert.severity,
+            sourceFamily: entry.alert.sourceFamily,
+            evidenceCount: entry.alert.evidenceCount,
+        },
+        case: {
+            id: caseId,
+            path: casePath,
+            alertUrl: entry.alert.alertUrl,
+            routeUrl: entry.alert.alertUrl || casePath || entry.route || null,
+        },
+        watchlist: {
+            id: entry.watchlist.id,
+            term: entry.watchlist.terms[0] || entry.watchlist.name || null,
+            name: entry.watchlist.name,
+        },
+        provenance: {
+            ...entry.alert.provenanceIds,
+            summary: entry.alert.provenanceSummary || null,
+        },
+        workflow: {
+            eventType: entry.eventType,
+            status: entry.replay ? 'replayed' : entry.eventType.replace('dwm.alert.', ''),
+            replay: entry.replay,
+            dryRun: true,
+            live: false,
+            route: entry.route,
+            routeUrl: entry.alert.alertUrl || casePath || entry.route || null,
+            idempotencyKey: entry.deliveryProof.idempotencyKey,
+            dedupeKey: entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey),
+        },
+        audit: {
+            auditEventId: entry.deliveryProof.auditEventId,
+            currentAction: entry.deliveryProof.auditAction,
+            expectedAction: entry.replay ? 'delivery.replayed' : 'delivery.retry_requested',
+        },
+        bodyPreview: body,
+        payloadPreview: entry.sanitizedPayloadPreview
+            ? {
+                schemaVersion: entry.sanitizedPayloadPreview.schemaVersion,
+                payloadHash: entry.sanitizedPayloadPreview.payloadHash,
+                discord: {
+                    title: entry.discordPreview?.title || entry.alert.title || null,
+                    fieldNames: entry.discordPreview?.fieldNames || [],
+                    content: entry.discordPreview?.content || null,
+                },
+                context: {
+                    alertId: entry.alert.id,
+                    caseId,
+                    casePath,
+                    watchlistTerm: entry.watchlist.terms[0] || entry.watchlist.name || null,
+                    sourceFamily: entry.alert.sourceFamily,
+                    routeUrl: entry.alert.alertUrl || casePath || entry.route || null,
+                },
+                redaction: {
+                    safeForCustomerDisplay: true,
+                    endpointExposed: false,
+                    payloadExposed: false,
+                },
+            }
+            : null,
+        historyQuery: {
+            method: 'GET' as const,
+            route: 'GET /api/dwm/webhook-deliveries',
+            query: {
+                orgId: entry.orgId,
+                destinationId: entry.destinationId,
+                alertId: entry.alert.id,
+                casePath,
+                dedupeKey: entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey),
+                deliveryId: entry.deliveryId,
+            },
+            noNetwork: true as const,
+        },
+        actionRequest: {
+            method: 'POST' as const,
+            route: 'POST /api/dwm/webhook-deliveries',
+            canSend: canDryRunRetry,
+            body,
+            expectedAuditAction: entry.replay ? 'delivery.replayed' : 'delivery.retry_requested',
+            blockers: canDryRunRetry ? [] : blockers.filter(blocker => blocker.blocking),
+            noNetwork: true as const,
+            externalSendEnabled: false as const,
+        },
+        denial: {
+            denied: blockingCodes.length > 0,
+            blockingCodes,
+            blockers,
+        },
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            secretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
         },
     }
 }
