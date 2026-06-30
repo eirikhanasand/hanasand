@@ -186,6 +186,7 @@ function Results({ result }: { result: TiSearchResponse }) {
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
     const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
+    const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
     const selectedArtifactHandoffs = selectedArtifact ? buildActorArtifactHandoffs(result, selectedArtifact, actionability) : null
@@ -331,6 +332,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 confidence={queueConfidenceFilter}
                                 sort={queueSort}
                                 sources={queueSourceOptions}
+                                sourceCounts={queueSourceCounts}
                                 onKindChange={setQueueKindFilter}
                                 onSourceChange={setQueueSourceFilter}
                                 onConfidenceChange={setQueueConfidenceFilter}
@@ -370,6 +372,23 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
+                                <MobileEvidenceWorkbar
+                                    selected={selected}
+                                    filteredCount={filteredWorkItems.length}
+                                    totalCount={workItems.length}
+                                    kind={queueKindFilter}
+                                    source={queueSourceFilter}
+                                    confidence={queueConfidenceFilter}
+                                    sourceCounts={queueSourceCounts}
+                                    onKindChange={setQueueKindFilter}
+                                    onSourceChange={setQueueSourceFilter}
+                                    onConfidenceChange={setQueueConfidenceFilter}
+                                    onMarkReviewed={() => applyDecision('reviewing')}
+                                    onEscalate={() => applyDecision('escalated')}
+                                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                                    onCase={() => stageSelectedHandoff()}
+                                    caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
+                                />
                                 <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
@@ -4974,6 +4993,7 @@ function EvidenceQueueFilters({
     confidence,
     sort,
     sources,
+    sourceCounts,
     onKindChange,
     onSourceChange,
     onConfidenceChange,
@@ -4984,6 +5004,7 @@ function EvidenceQueueFilters({
     confidence: 'all' | 'high' | 'medium'
     sort: 'priority' | 'confidence' | 'freshness'
     sources: string[]
+    sourceCounts: Array<{ source: string; count: number }>
     onKindChange: (value: AnalystWorkItem['kind'] | 'all') => void
     onSourceChange: (value: string) => void
     onConfidenceChange: (value: 'all' | 'high' | 'medium') => void
@@ -5029,7 +5050,127 @@ function EvidenceQueueFilters({
                     </select>
                 </label>
             </div>
+            {sourceCounts.length ? (
+                <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+                    {sourceCounts.slice(0, 5).map(item => (
+                        <button
+                            key={item.source}
+                            type='button'
+                            onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
+                            className={`inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd] dark:hover:bg-[#172131]'}`}
+                        >
+                            <span>{item.source}</span>
+                            <span className='rounded bg-[#f2f4f7] px-1 text-[10px] text-[#475467] dark:bg-[#1d2939] dark:text-[#b7c2d4]'>{item.count}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
         </div>
+    )
+}
+
+function MobileEvidenceWorkbar({
+    selected,
+    filteredCount,
+    totalCount,
+    kind,
+    source,
+    confidence,
+    sourceCounts,
+    onKindChange,
+    onSourceChange,
+    onConfidenceChange,
+    onMarkReviewed,
+    onEscalate,
+    onWatchlist,
+    onCase,
+    caseAvailable,
+}: {
+    selected: AnalystWorkItem
+    filteredCount: number
+    totalCount: number
+    kind: AnalystWorkItem['kind'] | 'all'
+    source: string
+    confidence: 'all' | 'high' | 'medium'
+    sourceCounts: Array<{ source: string; count: number }>
+    onKindChange: (value: AnalystWorkItem['kind'] | 'all') => void
+    onSourceChange: (value: string) => void
+    onConfidenceChange: (value: 'all' | 'high' | 'medium') => void
+    onMarkReviewed: () => void
+    onEscalate: () => void
+    onWatchlist: () => void
+    onCase: () => void
+    caseAvailable: boolean
+}) {
+    const kindOptions: Array<{ value: AnalystWorkItem['kind'] | 'all'; label: string }> = [
+        { value: 'all', label: 'All' },
+        { value: 'activity', label: 'Activity' },
+        { value: 'exposure', label: 'Exposure' },
+        { value: 'victim', label: 'Victims' },
+        { value: 'tradecraft', label: 'TTPs' },
+        { value: 'collection', label: 'Gaps' },
+    ]
+    return (
+        <section data-ti-mobile-workbar='true' className='lg:hidden sticky top-2 z-20 grid min-w-0 gap-2 rounded-lg border border-[#dfe5ee] bg-white/95 p-2 shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101722]/95'>
+            <div className='flex min-w-0 items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>{filteredCount}/{totalCount} evidence rows</p>
+                    <p className='mt-0.5 line-clamp-1 text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected.title}</p>
+                </div>
+                <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+            </div>
+
+            <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+                {kindOptions.map(item => (
+                    <button
+                        key={item.value}
+                        type='button'
+                        onClick={() => onKindChange(item.value)}
+                        className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${kind === item.value ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
+                    >
+                        {item.label}
+                    </button>
+                ))}
+                <button type='button' onClick={() => onConfidenceChange(confidence === 'high' ? 'all' : 'high')} className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${confidence === 'high' ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}>
+                    70%+
+                </button>
+            </div>
+
+            {sourceCounts.length ? (
+                <div className='flex min-w-0 gap-1.5 overflow-x-auto pb-1'>
+                    {sourceCounts.slice(0, 6).map(item => (
+                        <button
+                            key={item.source}
+                            type='button'
+                            onClick={() => onSourceChange(source === item.source ? 'all' : item.source)}
+                            className={`inline-flex min-h-8 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${source === item.source ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}
+                        >
+                            <span>{item.source}</span>
+                            <span className='rounded bg-[#f2f4f7] px-1 text-[10px] text-[#475467] dark:bg-[#1d2939] dark:text-[#b7c2d4]'>{item.count}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+
+            <div className='grid grid-cols-4 gap-1.5'>
+                <button type='button' onClick={onWatchlist} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-[#d8dee9] bg-white px-1 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                    <BellRing className='h-3 w-3' />
+                    Watch
+                </button>
+                <button type='button' onClick={onCase} disabled={!caseAvailable} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-[#d8dee9] bg-white px-1 text-[11px] font-semibold text-[#344054] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:disabled:bg-[#172131] dark:disabled:text-[#77869a]'>
+                    <ClipboardList className='h-3 w-3' />
+                    Case
+                </button>
+                <button type='button' onClick={onEscalate} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-[#d8dee9] bg-white px-1 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                    <Send className='h-3 w-3' />
+                    Escalate
+                </button>
+                <button type='button' onClick={onMarkReviewed} className='inline-flex min-h-8 items-center justify-center gap-1 rounded-md border border-[#d8dee9] bg-white px-1 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                    <CheckCircle2 className='h-3 w-3' />
+                    Review
+                </button>
+            </div>
+        </section>
     )
 }
 
@@ -6884,6 +7025,16 @@ function filteredAnalystWorkItems(
             if (filters.sort === 'freshness') return Date.parse(b.timestamp || '') - Date.parse(a.timestamp || '')
             return (b.priority?.score ?? severityScore(b.severity)) - (a.priority?.score ?? severityScore(a.severity))
         })
+}
+
+function sourceCountsFor(items: AnalystWorkItem[]) {
+    const counts = new Map<string, number>()
+    for (const item of items) {
+        const source = item.source || 'Unspecified source'
+        counts.set(source, (counts.get(source) ?? 0) + 1)
+    }
+    return Array.from(counts, ([source, count]) => ({ source, count }))
+        .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source))
 }
 
 function severityScore(severity: AnalystWorkItem['severity']) {
