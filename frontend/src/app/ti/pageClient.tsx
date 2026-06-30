@@ -3355,7 +3355,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {stage.request ? (
                                         <span className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                                            {stage.request.method} {stage.request.path}
+                                            {stage.request.method} {consumerRequestPathLabel(stage.request.path)}
                                         </span>
                                     ) : null}
                                     <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
@@ -3442,6 +3442,15 @@ function consumerRequestFields(stage: TiActionabilityModel['consumerReadiness'][
             }
         })
         .filter(field => field.state !== 'review' || field.value !== 'needed')
+}
+
+function consumerRequestPathLabel(value: string) {
+    if (value.includes('alert-readiness')) return 'org alert state'
+    if (value.includes('/v1/dwm/watchlists')) return 'watchlist API'
+    if (value.includes('/v1/dwm/alerts')) return 'alert API'
+    if (value.includes('/v1/cases')) return 'case API'
+    if (value.includes('/v1/dwm/webhooks')) return 'delivery API'
+    return sourceRequestRouteLabel(value)
 }
 
 function readRequestField(value: unknown) {
