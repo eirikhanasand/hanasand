@@ -34,6 +34,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SC
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_audit_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_drilldown_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_BRIDGE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_alert_bridge_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_DEDUPE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_alert_dedupe_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -2400,6 +2401,75 @@ export type TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite = {
   field: string;
   reason: string;
   nextAction: TiSourceProvenanceSourcePackFixtureActionDrilldownRow["action"] | "queue_alert_rebuild";
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_DEDUPE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureActionAlertBridgePacketId: string;
+  rows: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow[];
+  summary: {
+    rowCount: number;
+    canonicalRows: number;
+    duplicateRows: number;
+    heldRows: number;
+    alertReadyRows: number;
+    publicTiReadyRows: number;
+    actors: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    blockerCodes: TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite["code"][];
+    dedupeStates: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["dedupeState"][];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "support" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureActionAlertBridgePacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow = {
+  rowId: string;
+  bridgeRowId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  dedupeKey: string;
+  dedupeState: "canonical" | "duplicate" | "held";
+  duplicateOf?: string;
+  alertReadiness: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["alertReadiness"];
+  publicTiReadiness: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["publicTiReadiness"];
+  coverageState: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["coverageState"];
+  matchableFields: string[];
+  freshness: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["freshness"];
+  blockerCodes: TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite["code"][];
+  action: {
+    action: "queue_alert_rebuild" | "suppress_duplicate" | "review_blockers";
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  };
+  provenance: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["provenance"] & {
+    sourcePackFixtureActionAlertBridgePacketId: string;
+  };
 };
 
 export type TiSourceProvenanceSourcePackFixtureReadinessExport = {
@@ -5726,6 +5796,60 @@ export function buildSourceProvenanceSourcePackFixtureActionAlertBridgePacket(in
       "summary"
     ],
     safeOutput: input.drilldown.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureActionAlertDedupePacket(input: {
+  alertBridge: TiSourceProvenanceSourcePackFixtureActionAlertBridgePacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket {
+  const generatedAt = input.generatedAt ?? input.alertBridge.generatedAt;
+  const seen = new Map<string, string>();
+  const rows = input.alertBridge.rows.map((row) => sourcePackFixtureActionAlertDedupeRow(input.alertBridge, row, seen));
+  const sourceFamilies = uniqueStrings(rows.flatMap((row) => row.sourceFamily ? [row.sourceFamily] : [])) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const blockerCodes = uniqueStrings(rows.flatMap((row) => row.blockerCodes)) as TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite["code"][];
+  const dedupeStates = uniqueStrings(rows.map((row) => row.dedupeState)) as TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["dedupeState"][];
+  const canonicalRows = rows.filter((row) => row.dedupeState === "canonical").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_DEDUPE_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_action_alert_dedupe_packet", `${input.alertBridge.id}:${generatedAt}:${rows.map((row) => row.rowId).join(",")}`),
+    generatedAt,
+    ok: rows.length > 0,
+    status: rows.length === 0 ? "blocked" : canonicalRows > 0 && rows.some((row) => row.dedupeState !== "canonical") ? "partial" : canonicalRows > 0 ? "ready" : "blocked",
+    tenantId: input.alertBridge.tenantId,
+    organizationId: input.alertBridge.organizationId,
+    sourcePackFixtureActionAlertBridgePacketId: input.alertBridge.id,
+    rows,
+    summary: {
+      rowCount: rows.length,
+      canonicalRows,
+      duplicateRows: rows.filter((row) => row.dedupeState === "duplicate").length,
+      heldRows: rows.filter((row) => row.dedupeState === "held").length,
+      alertReadyRows: rows.filter((row) => row.alertReadiness === "ready").length,
+      publicTiReadyRows: rows.filter((row) => row.publicTiReadiness === "ready").length,
+      actors: uniqueStrings(rows.map((row) => row.actor)),
+      sourceFamilies,
+      blockerCodes,
+      dedupeStates,
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.freshness.nextRetryAt))
+    },
+    consumers: sourcePackFixtureActionAlertDedupeConsumers(rows),
+    payloadShape: [
+      "rows[].actor",
+      "rows[].publicTiRoute",
+      "rows[].sourceFamily",
+      "rows[].dedupeKey",
+      "rows[].dedupeState",
+      "rows[].duplicateOf",
+      "rows[].alertReadiness",
+      "rows[].matchableFields",
+      "rows[].blockerCodes",
+      "rows[].action",
+      "rows[].provenance",
+      "summary"
+    ],
+    safeOutput: input.alertBridge.safeOutput
   };
 }
 
@@ -11680,6 +11804,160 @@ function sourcePackFixtureActionAlertBridgeConsumers(
       method: "GET",
       path: "/v1/dwm/source-requests",
       body: { includeFixtureActionAlertBridge: true, consumer: "integration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureActionAlertDedupeRow(
+  packet: TiSourceProvenanceSourcePackFixtureActionAlertBridgePacket,
+  row: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow,
+  seen: Map<string, string>
+): TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow {
+  const dedupeKey = sourcePackFixtureActionAlertDedupeKey(row);
+  const duplicateOf = seen.get(dedupeKey);
+  const dedupeState: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["dedupeState"] = row.alertReadiness !== "ready"
+    ? "held"
+    : duplicateOf
+      ? "duplicate"
+      : "canonical";
+  const rowId = stableId("ti_source_provenance_source_pack_fixture_action_alert_dedupe_row", `${packet.id}:${row.rowId}:${dedupeKey}:${dedupeState}`);
+  if (dedupeState === "canonical") seen.set(dedupeKey, rowId);
+  return {
+    rowId,
+    bridgeRowId: row.rowId,
+    actor: row.actor,
+    publicTiRoute: row.publicTiRoute,
+    sourceFamily: row.sourceFamily,
+    dedupeKey,
+    dedupeState,
+    duplicateOf,
+    alertReadiness: row.alertReadiness,
+    publicTiReadiness: row.publicTiReadiness,
+    coverageState: row.coverageState,
+    matchableFields: row.matchableFields,
+    freshness: row.freshness,
+    blockerCodes: row.missingPrerequisites.map((prerequisite) => prerequisite.code),
+    action: sourcePackFixtureActionAlertDedupeAction(row, dedupeState, dedupeKey, duplicateOf),
+    provenance: {
+      ...row.provenance,
+      sourcePackFixtureActionAlertBridgePacketId: packet.id
+    }
+  };
+}
+
+function sourcePackFixtureActionAlertDedupeKey(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow
+): string {
+  return stableId("ti_source_provenance_source_pack_fixture_action_alert_dedupe_key", [
+    row.actor,
+    row.sourceFamily ?? "unknown",
+    row.publicTiRoute,
+    ...row.matchableFields.slice().sort(),
+    ...row.provenance.contentHashes.slice().sort()
+  ].join(":"));
+}
+
+function sourcePackFixtureActionAlertDedupeAction(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow,
+  dedupeState: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["dedupeState"],
+  dedupeKey: string,
+  duplicateOf?: string
+): TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["action"] {
+  const action = dedupeState === "canonical"
+    ? "queue_alert_rebuild"
+    : dedupeState === "duplicate"
+      ? "suppress_duplicate"
+      : "review_blockers";
+  return {
+    action,
+    route: {
+      method: action === "queue_alert_rebuild" ? "POST" : "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        action,
+        actor: row.actor,
+        sourceFamily: row.sourceFamily,
+        dedupeKey,
+        duplicateOf,
+        blockerCodes: row.missingPrerequisites.map((prerequisite) => prerequisite.code),
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourcePackFixtureActionAlertDedupeConsumers(
+  rows: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow[]
+): TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket["consumers"] {
+  const hasRows = rows.length > 0;
+  const hasCanonical = rows.some((row) => row.dedupeState === "canonical");
+  return [{
+    consumer: "publicTI",
+    ready: rows.some((row) => row.publicTiReadiness === "ready"),
+    requiredFields: ["rows[].actor", "rows[].publicTiRoute", "rows[].dedupeState", "rows[].blockerCodes"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "publicTI", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasCanonical,
+    requiredFields: ["rows[].dedupeKey", "rows[].dedupeState", "rows[].action", "rows[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "alertGeneration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRows,
+    requiredFields: ["summary", "rows[].dedupeState", "rows[].coverageState"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "dashboard", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasRows,
+    requiredFields: ["rows[].freshness", "rows[].blockerCodes", "rows[].action"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "sourceOps", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "support",
+    ready: hasRows,
+    requiredFields: ["rows[].publicTiRoute", "rows[].blockerCodes", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "support", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRows,
+    requiredFields: ["schemaVersion", "sourcePackFixtureActionAlertBridgePacketId", "rows[].rowId", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertDedupe: true, consumer: "integration", dryRun: true },
       dryRunSupported: true,
       liveNetworkFetch: false
     }
