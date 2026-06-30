@@ -1,4 +1,5 @@
 import { buildTiActionability } from '../src/utils/ti/actionability'
+import { sanitizeTiResultForPublicPage } from '../src/app/ti/publicResult'
 import { buildActorIntelligence } from '../src/utils/ti/actorIntelligence'
 import { victimObservationsFor } from '../src/utils/ti/actorProfile'
 import type { TiSearchResponse } from '../src/utils/ti/search'
@@ -42,6 +43,37 @@ assert(apt29.orgRelevance.handoffRows.some(row => row.kind === 'alert_case' && r
 assert(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).actorIdentity, 'Analyst handoff bundle should include org relevance actor identity.')
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).sourceCoverage).some(item => readObject(item).status === 'capture_ready'), 'Analyst handoff bundle should include source coverage readiness.')
 assert(readArray(readObject(apt29.actionPayloads.payloads.analystHandoffBundle.body.orgRelevance).watchlistIntersections).some(item => readObject(item).recommendedAction === 'open_case'), 'Analyst handoff bundle should include org watchlist intersections.')
+
+const sanitizedApt29Result = sanitizeTiResultForPublicPage(apt29Result())
+assert(sanitizedApt29Result, 'Public /ti result sanitizer should return a result.')
+assert(sanitizedApt29Result?.actorIntelligence?.structuredProvenance?.some(row =>
+    row.sourceId === 'src_microsoft_midnight_blizzard'
+    && row.captureId === 'capture_microsoft_apt29_2024'
+    && row.parserStatus === undefined
+    && row.provenance === 'https://www.microsoft.com/en-us/security/blog/'
+), 'Public /ti result sanitizer should preserve structured actor provenance for first render.')
+assert(sanitizedApt29Result.actionability?.sourceProvenance?.some(row =>
+    row.sourceId === 'src_microsoft_midnight_blizzard'
+    && row.captureId === 'capture_microsoft_apt29_2024'
+), 'Public /ti result sanitizer should preserve source provenance rows.')
+assert(sanitizedApt29Result.actionability?.watchlistMatches?.some(match =>
+    match.organizationId === 'org_acme'
+    && match.watchlistItemId === 'item_microsoft'
+    && match.casePath === '/dashboard/dwm/cases/case_apt29_microsoft'
+), 'Public /ti result sanitizer should preserve backed watchlist and case routing.')
+assert(sanitizedApt29Result.actionability?.handoffs?.alertRebuild?.endpoint === '/v1/dwm/alerts/rebuild', 'Public /ti result sanitizer should preserve alert rebuild handoff route.')
+const sanitizedVictims = victimObservationsFor(sanitizedApt29Result)
+const sanitizedActor = buildActorIntelligence(sanitizedApt29Result, sanitizedVictims)
+const sanitizedActionability = buildTiActionability(sanitizedApt29Result, sanitizedActor, sanitizedVictims)
+assert(sanitizedActor.sourceCoverage.captureRows > 0, 'Sanitized /ti result should still produce capture-backed source coverage.')
+assert(sanitizedActor.malwareTools.length > 0, 'Sanitized /ti result should still carry actor tools and malware facts.')
+assert(sanitizedActionability.orgRelevance.watchlistIntersections.some(item =>
+    item.state === 'ready'
+    && item.recommendedAction === 'open_case'
+    && item.sourceFamilies.includes('vendor_disclosure')
+), 'Sanitized /ti result should still produce alert and case-ready watchlist relevance.')
+assert(sanitizedActionability.createAlertHandoff.ready, 'Sanitized /ti result should keep alert handoff ready.')
+assert(sanitizedActionability.caseHandoff.ready, 'Sanitized /ti result should keep case handoff ready.')
 
 const blocked = (() => {
     const result: TiSearchResponse = {
