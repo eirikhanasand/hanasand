@@ -297,6 +297,9 @@ assert.equal(partialExternal.sourceGrowth?.sourceCustomerConfigReady, true)
 assert.equal(partialExternal.sourceGrowth?.sourceReadinessArtifactReady, true)
 assert.equal(partialExternal.sourceGrowth?.sourceProxyVerificationReady, true)
 assert.equal(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('dwm.source_readiness_artifact.v1'), true)
+assert.equal(partialExternal.sourceGrowth?.workerStatus, 'ready')
+assert.equal(partialExternal.sourceGrowth?.collectionReadyRows, 349)
+assert.equal(partialExternal.sourceGrowth?.workerLastRunAt, generatedAt)
 const partialContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -671,6 +674,9 @@ assert.ok(longLabelContext.readiness.productReadiness.every(item => item.backend
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseId, 'case_acme_1')
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseDetailHref, '/api/cases/case_acme_1')
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseDetailTimelineCount, 1)
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.workerStatus, 'ready')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.collectionReadyRows, 349)
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.queuedValidationJobs, 0)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.activeDestinationCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryReadyCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.latestDeliveryAt, generatedAt)
@@ -853,6 +859,8 @@ assert.ok(workbenchSource.includes('GET /api/dwm/alerts returns the persisted al
 assert.ok(workbenchSource.includes('open_dwm_alert_workflow'), 'Alert readiness should deep-link to the DWM workflow for watchlist/rebuild work.')
 assert.ok(workbenchSource.includes('\'dashboard_evidence\', \'analyst_workflow\', \'source_inventory_probe\''), 'Operator action rail should prioritize blocked analyst workflow readiness after dashboard evidence.')
 assert.ok(workbenchSource.includes('item.caseDetailTimelineCount'), 'Analyst workflow readiness rail should surface backed case timeline proof.')
+assert.ok(workbenchSource.includes('item.workerStatus'), 'Source inventory readiness rail should surface backed worker status.')
+assert.ok(workbenchSource.includes('item.collectionReadyRows'), 'Source inventory readiness rail should surface backed collection-ready source rows.')
 assert.ok(workbenchSource.includes('item.activeDestinationCount'), 'Webhook health readiness rail should surface backed active destination counts.')
 assert.ok(workbenchSource.includes('item.latestDeliveryAt'), 'Webhook health readiness rail should surface backed latest delivery proof.')
 assert.ok(workbenchSource.includes('orgInviteDisabledReason(orgContext, selectedCaseDetail)'), 'Invite handler should use the same org/case access guard as the invite UI.')

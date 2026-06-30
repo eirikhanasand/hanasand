@@ -199,6 +199,15 @@ export type WorkbenchProductReadinessItem = {
     deliveryReadyCount?: number
     latestDeliveryAt?: string
     latestAuditEventAt?: string
+    workerStatus?: 'ready' | 'missing' | 'stale' | 'blocked' | 'unavailable'
+    workerLastRunAt?: string
+    queuedValidationJobs?: number
+    validatingJobs?: number
+    activeSourceRows?: number
+    collectionReadyRows?: number
+    registeredTotal?: number
+    activeSourceCount?: number
+    reviewQueueCount?: number
 }
 
 export type WorkbenchOrgContext = {
@@ -1675,10 +1684,13 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
             const webhookHealthDetail = item.id === 'webhook_health'
                 ? ` Destinations ${item.activeDestinationCount ?? 0}/${item.destinationCount ?? 0} active; ${item.deliveryReadyCount ?? 0} delivery-ready${item.latestDeliveryAt ? `; latest delivery ${relativeTime(item.latestDeliveryAt)}` : item.latestAuditEventAt ? `; latest audit ${relativeTime(item.latestAuditEventAt)}` : ''}.`
                 : ''
+            const sourceWorkerDetail = item.id === 'source_inventory_probe'
+                ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
+                : ''
             return {
                 id: `readiness_${item.id}`,
                 label: item.operatorAction || item.label,
-                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}`,
+                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}`,
                 tone: productReadinessTone(item.status),
                 href: item.href,
                 disabledReason: item.status === 'unavailable' ? item.source : undefined,
