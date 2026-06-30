@@ -1206,6 +1206,44 @@ export type OrganizationWatchlistAlertTermsExport = {
         blockerCodes: string[]
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    termExportDeltaReceipt: {
+        schemaVersion: 'organization.watchlist_term_export_delta_receipt.v1'
+        organizationId: string
+        tenantId: string
+        actor: {
+            userId: string
+            role: OrganizationRole
+            status: 'active'
+        }
+        route: 'GET /api/organizations/:id/watchlists/alert-terms'
+        activeTermCount: number
+        exportedWatchlistItemIds: string[]
+        exportedAlertGeneratorKeys: string[]
+        excludedTermCount: number
+        excludedWatchlistItemIds: string[]
+        excludedReasons: Array<'watchlist_paused' | 'watchlist_archived'>
+        lifecycle: {
+            activeItemIds: string[]
+            pausedItemIds: string[]
+            archivedItemIds: string[]
+            deletedTermIds: string[]
+        }
+        downstreamRefs: {
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
+            alertPersistenceContract: 'organization.watchlist_alert_persistence_contract.v1'
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1'
+            webhookOwnership: 'organization.shared_watchlist_webhook_ownership_hint.v1'
+        }
+        roleGates: {
+            exportTerms: OrganizationRole[]
+            mutateWatchlists: Array<'owner' | 'admin'>
+            readSharedWatchlists: OrganizationRole[]
+        }
+        blockerCodes: string[]
+        stableDedupeFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
+        nonmemberEnumeration: false
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -5919,6 +5957,47 @@ export function organizationWatchlistAlertTermsExport(
         ])),
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
+    const termExportDeltaReceipt: OrganizationWatchlistAlertTermsExport['termExportDeltaReceipt'] = {
+        schemaVersion: 'organization.watchlist_term_export_delta_receipt.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        actor: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        route: 'GET /api/organizations/:id/watchlists/alert-terms',
+        activeTermCount: activeTerms.length,
+        exportedWatchlistItemIds: activeTerms.map(term => term.watchlistItemId),
+        exportedAlertGeneratorKeys: activeTerms.map(term => term.alertGeneratorKey),
+        excludedTermCount: termLifecycle.excludedFromAlertMatching.length,
+        excludedWatchlistItemIds: termLifecycle.excludedFromAlertMatching.map(term => term.watchlistItemId),
+        excludedReasons: Array.from(new Set(termLifecycle.excludedFromAlertMatching.map(term => term.blockerCode))),
+        lifecycle: {
+            activeItemIds: termLifecycle.activeItemIds,
+            pausedItemIds: termLifecycle.pausedItemIds,
+            archivedItemIds: termLifecycle.archivedItemIds,
+            deletedTermIds: termLifecycle.deletedTermIds,
+        },
+        downstreamRefs: {
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1',
+            alertPersistenceContract: sharedWatchlistDownstreamProof.alertBridge.persistenceContract.schemaVersion,
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1',
+            webhookOwnership: 'organization.shared_watchlist_webhook_ownership_hint.v1',
+        },
+        roleGates: {
+            exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
+            mutateWatchlists: ['owner', 'admin'],
+            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+        },
+        blockerCodes: Array.from(new Set([
+            ...alertGeneration.blockedReasons,
+            ...termLifecycle.excludedFromAlertMatching.map(item => item.blockerCode),
+        ])),
+        stableDedupeFields: ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'],
+        nonmemberEnumeration: false,
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -6103,6 +6182,7 @@ export function organizationWatchlistAlertTermsExport(
         webhookDestinationAccessDecision,
         consumerReadiness,
         alertGenerationConsumer,
+        termExportDeltaReceipt,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
