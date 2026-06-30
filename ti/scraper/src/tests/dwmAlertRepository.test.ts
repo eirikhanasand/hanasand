@@ -3282,4 +3282,76 @@ describe("dwm alert repository", () => {
     expect(detail.consumerContract.evidence.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
     expect(detail.consumerContract.persistedReadModel.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
   });
+
+  test("API readiness explains zero alerts when captures do not match watchlist terms", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveCapture(nonmatchCapture);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_api_zero",
+        name: "API zero-alert proof watch",
+        terms: ["acme.com"]
+      })
+    }), options);
+    expect(watchlistResponse.status).toBe(201);
+
+    const readinessResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/generation-readiness?tenantId=tenant_api_zero"), options);
+    const readiness = await readinessResponse.json() as any;
+
+    expect(readinessResponse.status).toBe(200);
+    expect(readiness.readiness).toMatchObject({
+      schemaVersion: "dwm.alert_generation_readiness.v1",
+      tenantId: "tenant_api_zero",
+      readyForRebuild: true,
+      readyForCustomerDelivery: false,
+      counts: {
+        candidateCount: 1,
+        captureRefCount: 0,
+        matchedCandidateCount: 0,
+        unmatchedCandidateCount: 1
+      },
+      zeroAlertProof: {
+        schemaVersion: "dwm.zero_alert_proof.v1",
+        zeroAlert: true,
+        state: "blocked_no_matching_capture",
+        expectedAlertDelta: 0,
+        nextAction: "Add or collect a recent capture containing the active watchlist term."
+      }
+    });
+    expect(readiness.readiness.blockerCodes).toEqual(expect.arrayContaining(["no_matching_captures", "missing_evidence"]));
+    expect(readiness.readiness.zeroAlertProof.blockerCodes).toEqual(expect.arrayContaining(["no_matching_captures", "missing_evidence"]));
+    expect(readiness.readiness.plan.candidates[0]).toMatchObject({
+      normalizedTerm: "acme.com",
+      captureRefs: [],
+      suppressedDuplicateCaptureRefs: []
+    });
+    expect(readiness.readiness.sourceFamilyGaps.find((row: any) => row.sourceFamily === "telegram_public")).toMatchObject({
+      schemaVersion: "dwm.alert_source_family_gap.v1",
+      active: true,
+      state: "active_no_match",
+      blockerCode: "no_matching_captures",
+      captureRefCount: 0
+    });
+
+    const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_api_zero" })
+    }), options);
+    const rebuild = await rebuildResponse.json() as any;
+
+    expect(rebuildResponse.status).toBe(200);
+    expect(rebuild.savedAlertCount).toBe(0);
+    expect(rebuild.alerts).toEqual([]);
+    expect(rebuild.zeroAlertProof).toMatchObject({
+      schemaVersion: "dwm.zero_alert_proof.v1",
+      zeroAlert: true,
+      state: "blocked_no_matching_capture",
+      expectedAlertDelta: 0
+    });
+    expect((store as any).listDwmAlerts()).toEqual([]);
+  });
 });
