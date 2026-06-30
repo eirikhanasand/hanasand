@@ -1197,6 +1197,36 @@ export type OrganizationWatchlistAlertTermsExport = {
         archivedCount: number
         inactiveCount: number
     }
+    termLifecycle: {
+        schemaVersion: 'organization.watchlist_term_lifecycle.v1'
+        organizationId: string
+        tenantId: string
+        activeItemIds: string[]
+        pausedItemIds: string[]
+        archivedItemIds: string[]
+        deletedTermIds: string[]
+        deletedTermCount: number
+        deletedTermSource: 'DELETE /api/organizations/:organizationId/watchlists/:itemId'
+        cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup'
+        alertMatchingEligibleStatuses: Array<'active'>
+        exportExcludesDeletedTerms: true
+        excludedFromAlertMatching: Array<{
+            watchlistItemId: string
+            itemId: string
+            status: 'paused' | 'archived'
+            blockerCode: 'watchlist_paused' | 'watchlist_archived'
+            deletedByArchive: boolean
+            archivedAt: string | null
+            lifecycleReason: string | null
+            lifecycleRequestId: string | null
+        }>
+        downstreamRefs: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+            alertReadiness: 'GET /api/organizations/:id/alert-readiness'
+            webhookDestinationOrgField: 'destination.org_id'
+            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId'
+        }
+    }
     blockedReasons: string[]
     canGenerateAlerts: boolean
 }
@@ -5486,9 +5516,44 @@ export function organizationWatchlistAlertTermsExport(
             },
         }
     })
-    const statuses = items.map(normalizeWatchlistStatus)
-    const pausedCount = statuses.filter(status => status === 'paused').length
-    const archivedCount = statuses.filter(status => status === 'archived').length
+    const activeItems = items.filter(item => normalizeWatchlistStatus(item) === 'active')
+    const pausedItems = items.filter(item => normalizeWatchlistStatus(item) === 'paused')
+    const archivedItems = items.filter(item => normalizeWatchlistStatus(item) === 'archived')
+    const pausedCount = pausedItems.length
+    const archivedCount = archivedItems.length
+    const termLifecycle: OrganizationWatchlistAlertTermsExport['termLifecycle'] = {
+        schemaVersion: 'organization.watchlist_term_lifecycle.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        activeItemIds: activeItems.map(item => item.id),
+        pausedItemIds: pausedItems.map(item => item.id),
+        archivedItemIds: archivedItems.map(item => item.id),
+        deletedTermIds: archivedItems.map(item => item.id),
+        deletedTermCount: archivedItems.length,
+        deletedTermSource: 'DELETE /api/organizations/:organizationId/watchlists/:itemId',
+        cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup',
+        alertMatchingEligibleStatuses: ['active'],
+        exportExcludesDeletedTerms: true,
+        excludedFromAlertMatching: [...pausedItems, ...archivedItems].map(item => {
+            const status = normalizeWatchlistStatus(item) as 'paused' | 'archived'
+            return {
+                watchlistItemId: item.id,
+                itemId: item.id,
+                status,
+                blockerCode: status === 'paused' ? 'watchlist_paused' : 'watchlist_archived',
+                deletedByArchive: status === 'archived',
+                archivedAt: item.archived_at ?? null,
+                lifecycleReason: item.lifecycle_reason ?? null,
+                lifecycleRequestId: item.lifecycle_request_id ?? null,
+            }
+        }),
+        downstreamRefs: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            alertReadiness: 'GET /api/organizations/:id/alert-readiness',
+            webhookDestinationOrgField: 'destination.org_id',
+            casePathTemplate: '/dashboard/dwm?organizationId=:organizationId&watchlistItemId=:watchlistItemId',
+        },
+    }
     const activeAdminCount = Number(organization.admin_count ?? organization.owner_count ?? 0)
     const organizationStatus = normalizeOrganizationStatus(organization.status)
     const typedBlockers = organizationWatchlistAlertBridgeBlockers({
@@ -5877,6 +5942,7 @@ export function organizationWatchlistAlertTermsExport(
             archivedCount,
             inactiveCount: pausedCount + archivedCount,
         },
+        termLifecycle,
         blockedReasons: alertGeneration.blockedReasons,
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
     }
