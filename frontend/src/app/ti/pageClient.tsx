@@ -186,6 +186,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const selectedCaseActionTrail = selected ? selectedCaseActionTrailFor(result, selected, actionability, reviewHandoff, selectedCaseDraft, selectedDecision, selectedRelevance, selectedNote) : null
+    const selectedWatchlistPlan = selected ? selectedWatchlistPlanFor(result, selected, actionability, watchlist, selectedRelevance) : null
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
@@ -448,6 +449,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 reviewHandoff={reviewHandoff}
                                 caseDraft={selectedCaseDraft}
                                 caseActionTrail={selectedCaseActionTrail}
+                                watchlistPlan={selectedWatchlistPlan}
                                 alertPlan={selectedAlertPlan}
                                 enrichmentTriage={selectedEnrichmentTriage}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
@@ -747,6 +749,61 @@ type SelectedAlertActionPlan = {
         ready: boolean
         endpoint: string
         route?: string
+        missing: string[]
+    }
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
+}
+
+type SelectedWatchlistPlan = {
+    schemaVersion: 'ti.public_actor.selected_watchlist_plan.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    state: TiActionabilityModel['watchlistRelevance']['state']
+    ready: boolean
+    route: string
+    nextAction: string
+    terms: Array<{
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        matched: boolean
+        notes: string
+    }>
+    intersections: Array<{
+        intersectionId: string
+        kind: WatchlistIntersectionRow['kind']
+        value: string
+        state: WatchlistIntersectionRow['state']
+        route: string
+        organizationId?: string
+        watchlistId?: string
+        watchlistItemId?: string
+        alertIds: string[]
+        casePaths: string[]
+        captureIds: string[]
+        sourceEvidenceRefs: string[]
+        recommendedAction: WatchlistIntersectionRow['recommendedAction']
+        blockers: WatchlistIntersectionRow['blockers']
+    }>
+    sourceRefs: {
+        sourceIds: string[]
+        captureIds: string[]
+        alertIds: string[]
+        casePaths: string[]
+    }
+    blockers: string[]
+    handoff: {
+        ready: boolean
+        route: string
+        blocked: boolean
         missing: string[]
     }
     safeOutput: {
@@ -3514,13 +3571,14 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, watchlistPlan, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
     caseDraft: SelectedCaseDraft | null
     caseActionTrail: CaseActionTrailPayload | null
+    watchlistPlan: SelectedWatchlistPlan | null
     alertPlan: SelectedAlertActionPlan | null
     enrichmentTriage: SelectedEnrichmentTriage | null
     onNoteChange: (value: string) => void
@@ -3581,6 +3639,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                     </div>
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
                 {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
                 {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
                 {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
@@ -3622,6 +3681,50 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
+    const status: DecisionStep['status'] = plan.ready ? 'ready' : plan.blockers.length || plan.state === 'missing_terms' ? 'blocked' : 'review'
+    return (
+        <div data-ti-selected-watchlist-plan='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist plan</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence mapped to watchlist terms, organization intersections, and source refs.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
+                    <CopyPayloadButton label='Watchlist plan' payload={plan} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Terms' value={`${plan.terms.length}`} />
+                <EvidenceMetric label='Matches' value={`${plan.intersections.filter(item => item.state === 'ready').length}`} />
+                <EvidenceMetric label='Alerts' value={`${plan.sourceRefs.alertIds.length}`} />
+                <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.route}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <div className='mt-2 grid gap-2'>
+                {plan.terms.slice(0, 3).map(term => (
+                    <div key={`${term.kind}:${term.value}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{term.kind}: {term.value}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{term.notes}</p>
+                            </div>
+                            <span className={sourceHealthChipClass(term.matched ? 'ready' : plan.blockers.length ? 'blocked' : 'review')}>
+                                {term.matched ? 'matched' : plan.blockers.length ? 'blocked' : 'candidate'}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+                {!plan.terms.length ? <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-[11px] leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No watchlist terms are attached to this selected evidence.</p> : null}
+            </div>
+        </div>
     )
 }
 
@@ -4323,6 +4426,100 @@ function selectedCaseActionTrailFor(
             blocked,
             sessionLocal: true,
             replayable: activeReplayRows.some(row => row.ready),
+        },
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function selectedWatchlistPlanFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    watchlist: WatchlistRelevance,
+    relevance: LocalRelevanceMark | undefined
+): SelectedWatchlistPlan {
+    const selectedText = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const candidateTerms = uniqueBy([
+        ...actionability.watchlistRelevance.terms,
+        ...watchlist.terms.map(term => {
+            const parsed = watchlistTermParts(term)
+            return { kind: parsed.kind, value: parsed.value, notes: watchlist.rationale, matched: watchlist.matchedTerms.some(match => match.toLowerCase() === term.toLowerCase()) }
+        }),
+        ...(relevance?.watchTerms ?? []).map(term => {
+            const parsed = watchlistTermParts(term)
+            return { kind: parsed.kind, value: parsed.value, notes: relevance?.rationale ?? 'Session relevance mark.', matched: false }
+        }),
+    ], term => `${term.kind}:${term.value.toLowerCase()}`).filter(term =>
+        selectedText.includes(term.value.toLowerCase())
+        || actionability.orgRelevance.candidateTerms.some(candidate => candidate.kind === term.kind && candidate.value.toLowerCase() === term.value.toLowerCase())
+    )
+    const selectedTerms = candidateTerms.length ? candidateTerms : actionability.watchlistRelevance.terms.slice(0, 4)
+    const selectedValues = new Set(selectedTerms.map(term => `${term.kind}:${term.value.toLowerCase()}`))
+    const intersections = actionability.orgRelevance.watchlistIntersections.filter(item =>
+        selectedValues.has(`${item.kind}:${item.value.toLowerCase()}`)
+        || item.sourceEvidenceRefs.some(ref => selectedSourceIds.includes(ref) || selectedText.includes(ref.toLowerCase()))
+    )
+    const relevantIntersections = intersections.length ? intersections : actionability.orgRelevance.watchlistIntersections.slice(0, 3)
+    const blockers = unique([
+        ...actionability.watchlistRelevance.blockers,
+        ...actionability.exportPayloads.watchlist.missing,
+        ...relevantIntersections.flatMap(item => item.blockers.map(blocker => blocker.handoff)),
+    ]).slice(0, 8)
+    const ready = actionability.actionPayloads.payloads.watchlistAdd.ready && relevantIntersections.some(item => item.state === 'ready')
+    return {
+        schemaVersion: 'ti.public_actor.selected_watchlist_plan.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: result.generatedAt,
+        selectedItemId: selected.id,
+        title: selected.title,
+        state: actionability.watchlistRelevance.state,
+        ready,
+        route: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+        nextAction: ready
+            ? 'Open the authenticated watchlist workflow with the selected evidence and persisted item refs.'
+            : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before monitoring this evidence.` : 'Review the candidate term and persist it to an organization watchlist.',
+        terms: selectedTerms.map(term => ({
+            kind: term.kind,
+            value: term.value,
+            matched: term.matched || relevantIntersections.some(item => item.kind === term.kind && item.value.toLowerCase() === term.value.toLowerCase()),
+            notes: term.notes,
+        })),
+        intersections: relevantIntersections.map(item => ({
+            intersectionId: item.intersectionId,
+            kind: item.kind,
+            value: item.value,
+            state: item.state,
+            route: item.route,
+            organizationId: item.organizationId,
+            watchlistId: item.watchlistId,
+            watchlistItemId: item.watchlistItemId,
+            alertIds: item.alertIds,
+            casePaths: item.casePaths,
+            captureIds: item.captureIds,
+            sourceEvidenceRefs: item.sourceEvidenceRefs,
+            recommendedAction: item.recommendedAction,
+            blockers: item.blockers,
+        })),
+        sourceRefs: {
+            sourceIds: unique([...selectedSourceIds, ...actionability.sourceProvenance.map(row => row.sourceId).filter((value): value is string => Boolean(value))]),
+            captureIds: unique(relevantIntersections.flatMap(item => item.captureIds)),
+            alertIds: unique(relevantIntersections.flatMap(item => item.alertIds)),
+            casePaths: unique(relevantIntersections.flatMap(item => item.casePaths)),
+        },
+        blockers,
+        handoff: {
+            ready,
+            route: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+            blocked: actionability.exportPayloads.watchlist.blocked,
+            missing: actionability.exportPayloads.watchlist.missing,
         },
         safeOutput: {
             metadataOnly: true,
