@@ -1069,6 +1069,14 @@ describe("DWM alert case handoff route", () => {
     const reopenedPayload = await reopened.json() as any;
     const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
     const replayExportPayload = await replayExport.json() as any;
+    const ownerTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const ownerTransitionHistoryPayload = await ownerTransitionHistory.json() as any;
+    const viewerTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme&action=false_positive");
+    const viewerTransitionHistoryPayload = await viewerTransitionHistory.json() as any;
+    const actorTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&actor=case-api&idempotencyKey=case-reopen-false-positive-001");
+    const actorTransitionHistoryPayload = await actorTransitionHistory.json() as any;
+    const wrongOrgTransitionHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
+    const wrongOrgTransitionHistoryPayload = await wrongOrgTransitionHistory.json() as any;
 
     expect(missingRationale.status).toBe(400);
     expect(missingRationalePayload.error).toMatchObject({ code: "missing_decision_rationale" });
@@ -1231,6 +1239,97 @@ describe("DWM alert case handoff route", () => {
         webhookSecretExposed: false
       }
     });
+    expect(ownerTransitionHistory.status).toBe(200);
+    expect(ownerTransitionHistoryPayload).toMatchObject({
+      schemaVersion: "dwm.case_workflow_transition_history_response.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      access: {
+        role: "owner",
+        readOnly: false
+      },
+      summary: {
+        transitionCount: 3,
+        totalTransitionCount: 3,
+        actionIds: ["open", "false_positive", "reopen"],
+        actorIds: ["case-api"],
+        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        blockedActionIds: ["reopen"],
+        readOnly: false
+      },
+      workflowTransitionHistory: {
+        summary: {
+          decisionTransitionCount: 2,
+          decisionRationales: [
+            expect.objectContaining({ action: "false_positive", rationale: "Corporate domain match was benign vendor chatter." }),
+            expect.objectContaining({ action: "reopen", rationale: "New source evidence requires review." })
+          ]
+        }
+      },
+      workflowActionPolicy: {
+        schemaVersion: "analyst.case_workflow_action_policy.v1",
+        readOnly: false
+      },
+      auditSafety: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(ownerTransitionHistoryPayload.workflowTransitions.map((transition: any) => transition.action)).toEqual([
+      "open",
+      "false_positive",
+      "reopen"
+    ]);
+    expect(viewerTransitionHistory.status).toBe(200);
+    expect(viewerTransitionHistoryPayload).toMatchObject({
+      access: {
+        role: "viewer",
+        readOnly: true
+      },
+      filters: {
+        eventAction: "false_positive"
+      },
+      summary: {
+        transitionCount: 1,
+        totalTransitionCount: 3,
+        blockedActionIds: expect.arrayContaining(["assign", "escalate", "close", "suppress", "false_positive", "reopen"]),
+        readOnly: true
+      },
+      workflowTransitions: [
+        expect.objectContaining({
+          action: "false_positive",
+          note: "Corporate domain match was benign vendor chatter.",
+          idempotencyKey: "case-false-positive-001"
+        })
+      ],
+      workflowActionPolicy: {
+        readOnly: true
+      }
+    });
+    expect(actorTransitionHistory.status).toBe(200);
+    expect(actorTransitionHistoryPayload).toMatchObject({
+      filters: {
+        idempotencyKey: "case-reopen-false-positive-001",
+        actor: "case-api"
+      },
+      summary: {
+        transitionCount: 1,
+        totalTransitionCount: 3,
+        actionIds: ["reopen"]
+      },
+      workflowTransitions: [
+        expect.objectContaining({
+          action: "reopen",
+          idempotencyKey: "case-reopen-false-positive-001"
+        })
+      ]
+    });
+    expect(wrongOrgTransitionHistory.status).toBe(404);
+    expect(wrongOrgTransitionHistoryPayload.error).toMatchObject({ code: "case_not_found" });
+    expect(JSON.stringify(ownerTransitionHistoryPayload)).not.toContain("rawText");
     expect(replayExportPayload.auditTimeline.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
         rowType: "workflow_transition",
@@ -2119,6 +2218,12 @@ async function getHandoffActions(options: ReturnType<typeof fixtureRuntime>["opt
 
 async function getActionReplayExport(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/action-replay-export?${query}`, {
+    headers: { "x-user-email": email }
+  }), options);
+}
+
+async function getWorkflowTransitions(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/workflow-transitions?${query}`, {
     headers: { "x-user-email": email }
   }), options);
 }

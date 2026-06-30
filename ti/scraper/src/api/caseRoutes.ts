@@ -277,6 +277,20 @@ export function listCaseHandoffActions(url: URL, options: ApiServerOptions, case
   }));
 }
 
+export function listCaseWorkflowTransitions(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const caseRecord = findCase(options, caseId);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  return json(buildCaseWorkflowTransitionHistoryResponse(caseRecord, options, scope.organization, access, {
+    eventAction: normalizeNote(url.searchParams.get("eventAction") ?? url.searchParams.get("action")),
+    idempotencyKey: normalizeNote(url.searchParams.get("idempotencyKey") ?? url.searchParams.get("idempotency")),
+    actor: normalizeNote(url.searchParams.get("actor"))
+  }));
+}
+
 export function exportCaseActionReplay(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
@@ -1784,10 +1798,57 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
   };
 }
 
+function buildCaseWorkflowTransitionHistoryResponse(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult, filters: {
+  eventAction?: string;
+  idempotencyKey?: string;
+  actor?: string;
+}) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const workflowTransitions = (caseRecord.workflowEvents ?? [])
+    .filter((event) => !filters.eventAction || event.action === filters.eventAction)
+    .filter((event) => !filters.idempotencyKey || event.idempotencyKey === filters.idempotencyKey)
+    .filter((event) => !filters.actor || normalizeIdentity(event.actor) === normalizeIdentity(filters.actor))
+    .map((event) => caseWorkflowTransition(caseRecord, event));
+  const workflowTransitionHistory = caseWorkflowTransitionHistory(caseRecord, workflowTransitions, filters);
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
+  return {
+    schemaVersion: "dwm.case_workflow_transition_history_response.v1",
+    generatedAt: nowIso(),
+    organization,
+    access: caseAccessSummary(access),
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    filters,
+    workflowState: caseWorkflowSummary(caseRecord),
+    workflowTransitionHistory,
+    workflowTransitions,
+    workflowActionPolicy,
+    summary: {
+      transitionCount: workflowTransitions.length,
+      totalTransitionCount: (caseRecord.workflowEvents ?? []).length,
+      actionIds: uniqueCaseStrings(workflowTransitions.map((transition) => transition.action)),
+      actorIds: uniqueCaseStrings(workflowTransitions.map((transition) => transition.actor)),
+      latestTransition: workflowTransitions[workflowTransitions.length - 1],
+      enabledActionIds: workflowActionPolicy.summary.enabledActionIds,
+      blockedActionIds: workflowActionPolicy.summary.blockedActionIds,
+      readOnly: workflowActionPolicy.readOnly
+    },
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
 function caseWorkflowTransitionHistory(caseRecord: AnalystCase, transitions: Array<any>, filters: {
   actionId?: "alertReplay" | "webhookDryRun";
   idempotencyKey?: string;
   eventAction?: string;
+  actor?: string;
 }) {
   const decisionTransitions = transitions.filter((transition) => ["escalate", "suppress", "false_positive", "close", "reopen"].includes(transition.action));
   return {

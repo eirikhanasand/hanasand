@@ -22,6 +22,7 @@ describe("api regression sentinel", () => {
       "/v1/cases",
       "/v1/cases/:caseId/action-replay-export",
       "/v1/cases/:caseId/handoff-actions",
+      "/v1/cases/:caseId/workflow-transitions",
       "/v1/cases/:caseId/handoff-action",
       "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
@@ -1078,6 +1079,7 @@ describe("api regression sentinel", () => {
     expect(contract.routeInventory.routes).toEqual(expect.arrayContaining([
       { method: "GET", path: "/v1/cases/:caseId/action-replay-export" },
       { method: "GET", path: "/v1/cases/:caseId/handoff-actions" },
+      { method: "GET", path: "/v1/cases/:caseId/workflow-transitions" },
       { method: "POST", path: "/v1/cases/:caseId/handoff-action" }
     ]));
     expect(receiptSurface).toMatchObject({
@@ -1152,15 +1154,18 @@ describe("api regression sentinel", () => {
       ownerLane: "case",
       route: "/v1/cases/:caseId",
       listRoute: "/v1/cases",
-      methods: ["PATCH"],
+      historyRoute: "/v1/cases/:caseId/workflow-transitions",
+      methods: ["GET", "PATCH"],
       schemas: {
         transition: "analyst.case_workflow_transition.v1",
         transitionHistory: "dwm.case_workflow_transition_history.v1",
+        transitionHistoryResponse: "dwm.case_workflow_transition_history_response.v1",
         actionPolicy: "analyst.case_workflow_action_policy.v1",
         detail: "analyst.case_detail.v1"
       },
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId"]),
       writeFields: expect.arrayContaining(["action", "assignedOwner", "note", "idempotencyKey"]),
+      queryFields: expect.arrayContaining(["organizationId", "eventAction", "action", "idempotencyKey", "actor"]),
       recordFields: expect.arrayContaining(["caseId", "alertId", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy", "workflowActionPolicySummary"]),
       workflowActions: expect.arrayContaining(["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]),
       blockerCodes: expect.arrayContaining(["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "missing_note", "missing_assigned_owner"])
