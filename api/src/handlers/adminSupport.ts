@@ -931,7 +931,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         return res.status(404).send({ error: 'Organization not found.' })
     }
 
-    const [members, invites, watchlists, audit, availability] = await Promise.all([
+    const [members, invites, watchlists, webhookDestinationsResult, audit, availability] = await Promise.all([
         run(`
             SELECT
                 om.organization_id,
@@ -967,6 +967,30 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             ORDER BY kind ASC, value ASC
         `, [organization.id]),
         run(`
+            SELECT
+                id,
+                org_id,
+                owner_id,
+                name,
+                kind,
+                endpoint_hint,
+                endpoint_hash <> '' AS endpoint_fingerprint_present,
+                status,
+                events,
+                created_by,
+                last_tested_at,
+                last_test_status,
+                last_test_error IS NOT NULL AS last_test_error_present,
+                last_test_http_status,
+                last_delivery_at,
+                created_at,
+                updated_at
+            FROM dwm_webhook_destinations
+            WHERE org_id = $1
+              AND status <> 'archived'
+            ORDER BY status ASC, updated_at DESC
+        `, [organization.id]),
+        run(`
             SELECT id, action_type, severity, source, service, actor_id, target_type, target_id, entity_id, request_id, outcome, reason, context, created_at
             FROM admin_audit_events
             WHERE organization_id = $1
@@ -991,11 +1015,20 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
             memberCount: members.rows.length,
             pendingInviteCount: invites.rows.filter((invite: { status: string }) => invite.status === 'pending').length,
             watchlistItemCount: watchlists.rows.length,
+            webhookDestinationCount: webhookDestinationsResult.rows.length,
         }),
     })
 
     const watchlistItems = watchlists.rows as OrganizationWatchlistRow[]
+    const webhookDestinations = (webhookDestinationsResult.rows as Record<string, unknown>[]).map(toSupportWebhookDestination)
     const alertReferences = watchlistItems.map(item => buildOrganizationDwmAlertReference(organization, item))
+    const webhookDestinationReadiness = supportWebhookDestinationReadiness({
+        organizationId: organization.id,
+        requestId: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        supportContext: inspectionAudit.supportContext,
+        destinations: webhookDestinations,
+    })
     const recentAuditTimeline = supportRecentAuditTimeline({
         org: organization.id,
         target: organization.id,
@@ -1177,6 +1210,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         members: members.rows.map(toSupportMember),
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
+        webhookDestinations,
         alertReadiness: {
             schemaVersion: 'support.organization.alert_readiness.v1',
             organizationId: organization.id,
@@ -1194,11 +1228,13 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
                 testCommand: 'cd api && bun run smoke:admin-support-unit',
             },
         },
+        webhookDestinationReadiness,
         supportLinks: {
             inspectUser: '/api/admin/support/users/:id',
             inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/invites`,
             accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(organization.id)}/access-recovery`,
             audit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}`,
+            webhookAudit: `/api/admin/audit-events?org=${encodeURIComponent(organization.id)}&action=webhook`,
         },
         supportActivityRollup,
         recentAuditEvents: recentAuditTimeline.events,
@@ -5656,6 +5692,85 @@ function toSupportMemberDetail(row: Record<string, unknown>) {
         removed: row.status === 'removed',
         deactivated: row.active === false || Boolean(row.deactivated_at),
         deletionScheduled: Boolean(row.deletion_scheduled_at),
+    }
+}
+
+function toSupportWebhookDestination(row: Record<string, unknown>) {
+    return {
+        schemaVersion: 'support.organization.webhook_destination.v1',
+        id: row.id,
+        organizationId: row.org_id,
+        ownerId: row.owner_id,
+        createdBy: row.created_by,
+        name: row.name,
+        kind: row.kind,
+        status: row.status,
+        endpointHint: row.endpoint_hint || null,
+        endpointFingerprintPresent: Boolean(row.endpoint_fingerprint_present),
+        events: Array.isArray(row.events) ? row.events : [],
+        lastTestedAt: row.last_tested_at || null,
+        lastTestStatus: row.last_test_status || null,
+        lastTestErrorPresent: Boolean(row.last_test_error_present),
+        lastTestHttpStatus: row.last_test_http_status || null,
+        lastDeliveryAt: row.last_delivery_at || null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        redacted: true,
+        forbiddenFieldsExcluded: ['endpoint_encrypted', 'endpoint_url', 'secret', 'token', 'authorization'],
+    }
+}
+
+function supportWebhookDestinationReadiness(input: {
+    organizationId: string
+    requestId: string
+    reason: string
+    supportContext: string
+    destinations: Array<Record<string, any>>
+}) {
+    const active = input.destinations.filter(destination => destination.status === 'active')
+    const paused = input.destinations.filter(destination => destination.status === 'paused')
+    const failedTests = input.destinations.filter(destination => destination.lastTestStatus === 'failed' || destination.lastTestErrorPresent)
+    const destinationIds = input.destinations.map(destination => text(destination.id)).filter(Boolean)
+    return {
+        schemaVersion: 'support.organization.webhook_destination_readiness.v1',
+        generatedAt: new Date().toISOString(),
+        organizationId: input.organizationId,
+        requestId: input.requestId,
+        reason: input.reason || null,
+        supportContextPresent: Boolean(input.supportContext),
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        destinationCount: input.destinations.length,
+        activeCount: active.length,
+        pausedCount: paused.length,
+        failedTestCount: failedTests.length,
+        destinationIds,
+        audit: {
+            current: auditFilterQuery({ org: input.organizationId, action: 'webhook', request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            byDestination: destinationIds.map(entity => auditFilterQuery({ org: input.organizationId, entity, action: 'webhook', source: 'admin', service: 'hanasand-api' })),
+            denied: auditFilterQuery({ org: input.organizationId, action: 'webhook', outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+            failed: auditFilterQuery({ org: input.organizationId, action: 'webhook', outcome: 'failed', source: 'admin', service: 'hanasand-api' }),
+        },
+        caseReadiness: {
+            schemaVersion: 'support.webhook_destination.case_readiness.v1',
+            expectedConsumer: 'case.replay',
+            organizationId: input.organizationId,
+            blockers: uniqueTimelineValues([
+                input.destinations.length ? '' : 'missing_webhook_destination',
+                failedTests.length ? 'webhook_destination_test_failed' : '',
+            ]),
+            noLiveDelivery: true,
+            noSecretExposure: true,
+        },
+        forbiddenFields: ['endpoint_encrypted', 'endpointUrl', 'webhookUrl', 'secret', 'token', 'authorization'],
+        denialCases: [
+            'support_role_required',
+            'wrong_org_scope',
+            'webhook_destination_not_found',
+            'webhook_destination_test_failed',
+            'redaction_required',
+        ],
     }
 }
 
