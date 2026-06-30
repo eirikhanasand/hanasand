@@ -9421,6 +9421,52 @@ function destinationLifecycleReadinessReceipt({
             lastErrorCategory: health.retry.errorClass,
             terminalFailure,
         },
+        organizationLifecycleSettingsConsumer: {
+            schemaVersion: 'dwm.webhook.organization_lifecycle_settings_consumer.v1',
+            consumesSchemaVersion: 'organization.lifecycle_settings_mutation_receipt.v1',
+            route: `PUT /api/organizations/${encodeURIComponent(health.orgId)}/settings`,
+            readRoute: `GET /api/organizations/${encodeURIComponent(health.orgId)}/alert-readiness`,
+            noNetwork: true,
+            organizationId: health.orgId,
+            destinationId: health.destinationId,
+            expectedLifecycleStatuses: ['active', 'archived', 'deleted'],
+            expectedDownstreamFields: [
+                'settingsMutationReceipt.downstreamReadiness.webhookDeliveryReady',
+                'settingsMutationReceipt.destinationReadiness.deliveryBlockedByLifecycle',
+                'settingsMutationReceipt.destinationReadiness.nonmemberDestinationEnumeration',
+                'settingsMutationReceipt.noLeakFields',
+            ],
+            deliveryBlockers: {
+                archived: 'org_archived',
+                deleted: 'org_deleted',
+                active: null,
+            },
+            destinationReadiness: {
+                deliveryBlockedByLifecycle: false,
+                nonmemberDestinationEnumeration: false,
+                endpointExposed: false,
+                webhookSecretExposed: false,
+            },
+            mutationPreview: {
+                archive: {
+                    method: 'PUT',
+                    body: { lifecycleStatus: 'archived' },
+                    expectedWebhookDeliveryReady: false,
+                    expectedBlocker: 'org_archived',
+                },
+                reactivate: {
+                    method: 'PUT',
+                    body: { lifecycleStatus: 'active' },
+                    expectedWebhookDeliveryReady: true,
+                    expectedBlocker: null,
+                },
+            },
+            redaction: {
+                safeForCustomerDisplay: true,
+                endpointExposed: false,
+                webhookSecretExposed: false,
+            },
+        },
         audit: {
             latestAuditEventId: health.latestAuditEventId,
             auditEventIds: canManage ? health.auditEventIds : [],
