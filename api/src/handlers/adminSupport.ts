@@ -14028,17 +14028,22 @@ function supportAuditActionEvidenceRollup(timeline: Array<Record<string, any>>) 
         .filter(item => item.controls?.durationOrExpiryRequired && !item.durationMinutes && !item.expiresAt)
         .map(item => Number(timeline.find(event => event.actionEvidence === item)?.id))
         .filter((id): id is number => Number.isFinite(id))
+    const workflows = uniqueTimelineValues(evidence.map(item => item.workflow))
+    const actionTypes = uniqueTimelineValues(evidence.map(item => item.actionType))
+    const outcomes = uniqueTimelineValues(evidence.map(item => item.outcome))
+    const supportSessionIds = uniqueTimelineValues(evidence.map(item => item.supportSessionId))
+    const idempotencyKeys = uniqueTimelineValues(evidence.map(item => item.idempotencyKey))
 
     return {
         schemaVersion: 'support.audit.action_evidence_rollup.v1',
         eventCount: timeline.length,
         evidenceCount: evidence.length,
         eventIds,
-        workflows: uniqueTimelineValues(evidence.map(item => item.workflow)),
-        actionTypes: uniqueTimelineValues(evidence.map(item => item.actionType)),
-        outcomes: uniqueTimelineValues(evidence.map(item => item.outcome)),
-        supportSessionIds: uniqueTimelineValues(evidence.map(item => item.supportSessionId)),
-        idempotencyKeys: uniqueTimelineValues(evidence.map(item => item.idempotencyKey)),
+        workflows,
+        actionTypes,
+        outcomes,
+        supportSessionIds,
+        idempotencyKeys,
         reasonRequiredCount: evidence.filter(item => item.controls?.reasonRequired).length,
         reasonPresentCount: evidence.filter(item => item.reasonPresent).length,
         scopeRequiredCount: evidence.filter(item => item.controls?.scopeRequired).length,
@@ -14048,6 +14053,28 @@ function supportAuditActionEvidenceRollup(timeline: Array<Record<string, any>>) 
         scopeMissingEventIds,
         durationMissingEventIds,
         blockerCodes: evidenceBlockers,
+        guardrailReplay: {
+            schemaVersion: 'support.audit.action_guardrail_replay.v1',
+            redacted: true,
+            noMutation: true,
+            reasonRequiredMissing: reasonMissingEventIds.map(id => `/api/admin/audit-events/${id}`),
+            scopeRequiredMissing: scopeMissingEventIds.map(id => `/api/admin/audit-events/${id}`),
+            durationRequiredMissing: durationMissingEventIds.map(id => `/api/admin/audit-events/${id}`),
+            missingEvidence: missingEvidenceEventIds.map(id => `/api/admin/audit-events/${id}`),
+            byWorkflow: workflows.map(workflow => auditFilterQuery({ workflow, source: 'admin', service: 'hanasand-api' })),
+            byAction: actionTypes.map(action => auditFilterQuery({ action, source: 'admin', service: 'hanasand-api' })),
+            byOutcome: outcomes.map(outcome => auditFilterQuery({ outcome, source: 'admin', service: 'hanasand-api' })),
+            bySupportSession: supportSessionIds.map(supportSession => auditFilterQuery({ supportSession, source: 'admin', service: 'hanasand-api' })),
+            byIdempotency: idempotencyKeys.map(idempotency => auditFilterQuery({ idempotency, source: 'admin', service: 'hanasand-api' })),
+            denied: auditFilterQuery({ outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+            safeHandoff: {
+                noLiveAccessGrant: true,
+                noSilentMutation: true,
+                noSilentImpersonation: true,
+                noCrossOrgLeakage: true,
+                redactionRequired: true,
+            },
+        },
         blockers: [
             missingEvidenceEventIds.length ? 'missing_action_evidence' : '',
             reasonMissingEventIds.length ? 'missing_reason_on_source_event' : '',
