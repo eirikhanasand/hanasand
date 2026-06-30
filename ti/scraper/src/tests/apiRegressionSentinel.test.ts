@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
-import { buildProductReadinessOrgCapabilityPacket, buildProductReadinessProofView, contractIndex, productReadinessContractCopyGuard, productReadinessIntegrationGate, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
+import { buildProductReadinessConsumerHandoffPacket, buildProductReadinessOrgCapabilityPacket, buildProductReadinessProofView, contractIndex, productReadinessContractCopyGuard, productReadinessIntegrationGate, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
@@ -252,10 +252,12 @@ describe("api regression sentinel", () => {
     const integrationGate = contract.productReadinessIntegrationGate;
     const proofView = contract.productReadinessProofView;
     const orgCapabilityPacket = contract.productReadinessOrgCapabilityPacket;
+    const consumerHandoffPacket = contract.productReadinessConsumerHandoffPacket;
     const matrixRows = JSON.parse(JSON.stringify(matrix.rows));
     const rows = new Map(matrixRows.map((row: any) => [row.capabilityId, row]));
     const proofRows = new Map(proofView.rows.map((row: any) => [row.workflowId, row]));
     const orgCapabilityRows = new Map(orgCapabilityPacket.rows.map((row: any) => [row.orgCapabilityId, row]));
+    const consumerRows = new Map(consumerHandoffPacket.rows.map((row: any) => [row.consumerId, row]));
     const knownSchemaIds = new Set<string>([
       ...contract.schemaLookup.rows.map((row: any) => row.schemaId),
       ...contract.receiptSchemas.flatMap((receipt: any) => Object.values(receipt.schemas)),
@@ -309,6 +311,23 @@ describe("api regression sentinel", () => {
       },
       recordFields: expect.arrayContaining(["orgCapabilityId", "workflowId", "state", "proof", "readinessFields", "missingReadinessFields", "blockerCodes"]),
       blockerCodes: expect.arrayContaining(["workflow_unsupported", "workflow_partial", "workflow_blocked", "missing_org_capability_fields"]),
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
+        expect.objectContaining({ ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness" }),
+        expect.objectContaining({ ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver" }),
+        expect.objectContaining({ ownerLane: "publicTI", route: "/ti" }),
+        expect.objectContaining({ ownerLane: "support", route: "/api/admin/support/readiness" })
+      ])
+    });
+    expect(contract.surfaces.find((surface: any) => surface.id === "product_readiness_consumer_handoff_packet")).toMatchObject({
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      schemas: {
+        consumerHandoffPacket: "hanasand.product_readiness.consumer_handoff_packet.v1",
+        orgCapabilityPacket: "hanasand.product_readiness.org_capability_packet.v1"
+      },
+      recordFields: expect.arrayContaining(["consumerId", "state", "ownerLane", "orgCapabilityIds", "proof", "fieldAliases", "blockerCodes"]),
+      blockerCodes: expect.arrayContaining(["consumer_handoff_unsupported", "consumer_handoff_partial", "consumer_handoff_blocked", "missing_consumer_handoff_fields"]),
       downstreamConsumers: expect.arrayContaining([
         expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
         expect.objectContaining({ ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness" }),
@@ -424,6 +443,19 @@ describe("api regression sentinel", () => {
         expect.objectContaining({ ownerLane: "publicTI", route: "/ti" })
       ])
     });
+    expect(contract.schemaLookup.rows.find((row: any) => row.contractId === "product_readiness_consumer_handoff_packet")).toMatchObject({
+      schemaId: "hanasand.product_readiness.consumer_handoff_packet.v1",
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      scopeFields: expect.arrayContaining(["organizationId", "consumerId", "orgCapabilityIds", "ownerLane"]),
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
+        expect.objectContaining({ ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness" }),
+        expect.objectContaining({ ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver" }),
+        expect.objectContaining({ ownerLane: "publicTI", route: "/ti" }),
+        expect.objectContaining({ ownerLane: "support", route: "/api/admin/support/readiness" })
+      ])
+    });
     expect(proofView).toMatchObject({
       schemaVersion: "hanasand.product_readiness.proof_view.v1",
       matrixSchemaVersion: "hanasand.product_readiness.receipt_matrix.v1",
@@ -521,6 +553,63 @@ describe("api regression sentinel", () => {
       state: "ready",
       readinessFields: expect.arrayContaining(["organizationId", "provenanceHash", "sourceCoverageState"]),
       missingReadinessFields: []
+    });
+    expect(consumerHandoffPacket).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.consumer_handoff_packet.v1",
+      orgCapabilityPacketSchemaVersion: "hanasand.product_readiness.org_capability_packet.v1",
+      route: "/v1/contracts",
+      producer: "buildProductReadinessConsumerHandoffPacket",
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(consumerHandoffPacket.rows).toHaveLength(5);
+    expect([...consumerRows.values()].every((row: any) => row.state === "ready")).toBe(true);
+    expect([...consumerRows.values()].every((row: any) => row.safeOutput.metadataOnly && !row.safeOutput.rawEvidenceExposed && !row.safeOutput.webhookSecretExposed && !row.safeOutput.crossOrgDataExposed)).toBe(true);
+    expect(consumerRows.get("alert_generation")).toMatchObject({
+      ownerLane: "alert",
+      route: "/v1/dwm/alerts/generation-readiness",
+      orgCapabilityIds: expect.arrayContaining(["shared_watchlist_scope", "org_scoped_alert_bridge", "source_coverage_state"]),
+      fieldAliases: {
+        orgId: "organizationId",
+        watchlistId: "watchlistId",
+        alertId: "alertId",
+        caseId: "caseId",
+        provenanceHash: "provenanceHash",
+        sourceCoverage: "sourceCoverageState",
+        blockerReason: "blockerCodes",
+        owningLane: "ownerLane"
+      },
+      blockerCodes: [],
+      proof: {
+        contractIds: expect.arrayContaining(["shared_watchlist_alert_export", "org_scoped_alert_case_workflow", "source_provenance_receipts"]),
+        schemaIds: expect.arrayContaining(["organization.watchlist_alert_readiness.v1"])
+      }
+    });
+    expect(consumerRows.get("webhook_delivery")).toMatchObject({
+      ownerLane: "webhook",
+      route: "/v1/dwm/webhooks/deliver",
+      fieldAliases: expect.objectContaining({
+        orgId: "organizationId",
+        alertId: "alertId",
+        caseId: "caseId",
+        workflowState: "workflowState",
+        destinationDeliveryState: "destinationDeliveryState"
+      }),
+      blockerCodes: []
+    });
+    expect(consumerRows.get("public_ti_handoff")).toMatchObject({
+      ownerLane: "publicTI",
+      route: "/ti",
+      fieldAliases: expect.objectContaining({
+        orgId: "organizationId",
+        watchlistId: "watchlistId",
+        provenanceHash: "provenanceHash",
+        sourceCoverage: "sourceCoverageState"
+      })
     });
     expect(matrixRows.map((row: any) => row.capabilityId).sort()).toEqual([
       "alert_case_workflow",
@@ -808,8 +897,10 @@ describe("api regression sentinel", () => {
     );
     const proofView = buildProductReadinessProofView(brokenMatrix, coverage);
     const orgCapabilityPacket = buildProductReadinessOrgCapabilityPacket(proofView);
+    const consumerHandoffPacket = buildProductReadinessConsumerHandoffPacket(orgCapabilityPacket);
     const rows = new Map(proofView.rows.map((row: any) => [row.workflowId, row]));
     const orgCapabilityRows = new Map(orgCapabilityPacket.rows.map((row: any) => [row.orgCapabilityId, row]));
+    const consumerRows = new Map(consumerHandoffPacket.rows.map((row: any) => [row.consumerId, row]));
 
     expect(proofView).toMatchObject({
       schemaVersion: "hanasand.product_readiness.proof_view.v1",
@@ -872,6 +963,33 @@ describe("api regression sentinel", () => {
       workflowId: "public_ti_handoff",
       state: "unsupported",
       blockerCodes: ["workflow_unsupported"]
+    });
+    expect(consumerHandoffPacket).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.consumer_handoff_packet.v1",
+      route: "/v1/contracts",
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(consumerRows.get("dashboard_readiness")).toMatchObject({
+      state: "unsupported",
+      blockerCodes: expect.arrayContaining(["consumer_handoff_unsupported", "missing_required_receipt_schema", "unsafe_receipt_matrix_row", "workflow_unsupported"])
+    });
+    expect(consumerRows.get("alert_generation")).toMatchObject({
+      state: "partial",
+      blockerCodes: expect.arrayContaining(["consumer_handoff_partial", "missing_required_receipt_schema"])
+    });
+    expect(consumerRows.get("webhook_delivery")).toMatchObject({
+      state: "blocked",
+      blockerCodes: expect.arrayContaining(["consumer_handoff_blocked", "unsafe_receipt_matrix_row"])
+    });
+    expect(consumerRows.get("public_ti_handoff")).toMatchObject({
+      state: "unsupported",
+      missingCapabilityIds: [],
+      blockerCodes: expect.arrayContaining(["consumer_handoff_unsupported", "workflow_unsupported"])
     });
   });
 
@@ -976,6 +1094,7 @@ describe("api regression sentinel", () => {
         webhookReplayFixture: "dwm.case_to_webhook_replay_readiness_fixture.v1",
         publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
         webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
+        webhookDeliveryReplayContext: "dwm.case_webhook_delivery_replay_context.v1",
         customerNotificationReadiness: "dwm.case_customer_notification_readiness.v1",
         sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
         supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
@@ -987,7 +1106,7 @@ describe("api regression sentinel", () => {
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
       queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"]),
-      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "customerNotificationReadiness", "workflowTransitionHistory", "auditTimeline", "nextAnalystActions"]),
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "auditTimeline", "nextAnalystActions"]),
       blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "case_closed"])
     });
     expect(JSON.stringify(receiptSurface)).not.toContain("https://discord.com");

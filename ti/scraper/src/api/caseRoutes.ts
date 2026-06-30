@@ -1583,6 +1583,13 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     customerNotifications,
     access
   });
+  const webhookDeliveryReplayContext = caseWebhookDeliveryReplayContext({
+    caseRecord,
+    deliveries,
+    webhookDryRunReadiness,
+    customerNotificationReadiness,
+    customerNotifications
+  });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
   const alertReasonContext = caseAlertReasonContext({ alert, caseRecord, sourceHandoffReadiness });
   const publicTiHandoffReadiness = casePublicTiHandoffReadiness({ alert, caseRecord, sourceHandoffReadiness });
@@ -1640,6 +1647,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     organizationAccessReadiness,
     publicTiHandoffReadiness,
     webhookDryRunReadiness,
+    webhookDeliveryReplayContext,
     customerNotificationReadiness,
     sourceHandoffReadiness,
     supportRecoveryReadiness,
@@ -1652,6 +1660,8 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       auditTimelineRowCount: auditTimeline.summary.rowCount,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       deliveredWebhookReceiptCount: customerNotificationReadiness.deliveryReceipts.length,
+      webhookDeliveryAttemptCount: webhookDeliveryReplayContext.summary.deliveryAttemptCount,
+      webhookRetryableDeliveryCount: webhookDeliveryReplayContext.summary.retryableDeliveryCount,
       customerNotificationRecorded: customerNotificationReadiness.notificationRecorded,
       alertReasonReady: alertReasonContext.ready,
       organizationAccessReady: organizationAccessReadiness.ready,
@@ -2384,6 +2394,115 @@ function caseCustomerNotificationReadiness(input: {
     latestDelivery: deliveryReceipts[0],
     linkedNotificationReceipts,
     requiredFields: ["organizationId", "webhookDeliveryId", "rationale"],
+    auditSafety: {
+      metadataOnly: true,
+      endpointSecretExposed: false,
+      payloadBodyExposed: false
+    }
+  };
+}
+
+function caseWebhookDeliveryReplayContext(input: {
+  caseRecord: AnalystCase;
+  deliveries: any[];
+  webhookDryRunReadiness: any;
+  customerNotificationReadiness: any;
+  customerNotifications: Array<{
+    id: string;
+    webhookDeliveryId?: string;
+    webhookDestinationId?: string;
+    webhookStatus?: string;
+    idempotencyKey: string;
+  }>;
+}) {
+  const deliveryReceipts = [...input.deliveries]
+    .sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")))
+    .map((delivery: any) => {
+      const retryable = delivery.status === "failed" || delivery.status === "skipped" || delivery.retryable === true || Boolean(delivery.nextRetryAt);
+      const linkedCustomerNotification = input.customerNotifications.find((receipt) => receipt.webhookDeliveryId === delivery.id);
+      return {
+        id: delivery.id,
+        deliveryId: delivery.id,
+        alertId: delivery.alertId,
+        caseId: input.caseRecord.id,
+        tenantId: delivery.tenantId ?? input.caseRecord.tenantId,
+        organizationId: delivery.organizationId ?? input.caseRecord.organizationId,
+        watchlistId: delivery.watchlistId,
+        webhookDestinationId: delivery.webhookDestinationId,
+        status: delivery.status,
+        deliveryKind: delivery.deliveryKind,
+        attemptedAt: delivery.attemptedAt,
+        httpStatus: delivery.httpStatus,
+        dryRun: delivery.dryRun === true || delivery.status === "dry_run",
+        replay: delivery.replay === true,
+        endpointHash: delivery.endpointHash,
+        payloadHash: delivery.payloadHash,
+        dedupeKey: delivery.dedupeKey,
+        idempotencyKey: delivery.idempotencyKey,
+        auditEventId: delivery.auditEventId,
+        nextRetryAt: delivery.nextRetryAt,
+        errorClass: delivery.errorClass,
+        retry: {
+          retryable,
+          nextRetryAt: delivery.nextRetryAt,
+          auditEventId: delivery.auditEventId,
+          blockerCodes: retryable ? [] : ["retry_not_eligible"]
+        },
+        linkedCustomerNotification: linkedCustomerNotification ? {
+          id: linkedCustomerNotification.id,
+          webhookDeliveryId: linkedCustomerNotification.webhookDeliveryId,
+          webhookDestinationId: linkedCustomerNotification.webhookDestinationId,
+          webhookStatus: linkedCustomerNotification.webhookStatus,
+          idempotencyKey: linkedCustomerNotification.idempotencyKey
+        } : undefined
+      };
+    });
+  const retryableDeliveries = deliveryReceipts.filter((delivery) => delivery.retry.retryable);
+  const statusCounts = deliveryReceipts.reduce((acc: Record<string, number>, delivery) => {
+    const key = String(delivery.status ?? "unknown");
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const retryBlockerCodes = uniqueCaseStrings([
+    ...(!deliveryReceipts.length ? ["missing_webhook_delivery_attempt"] : []),
+    ...(retryableDeliveries.length ? [] : ["retry_not_eligible"])
+  ]);
+  return {
+    schemaVersion: "dwm.case_webhook_delivery_replay_context.v1",
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    ready: deliveryReceipts.length > 0,
+    route: "/v1/dwm/webhooks/deliver",
+    summary: {
+      deliveryAttemptCount: deliveryReceipts.length,
+      retryableDeliveryCount: retryableDeliveries.length,
+      deliveredCount: statusCounts.delivered ?? 0,
+      dryRunCount: statusCounts.dry_run ?? 0,
+      failedCount: statusCounts.failed ?? 0,
+      skippedCount: statusCounts.skipped ?? 0,
+      latestDelivery: deliveryReceipts[0],
+      statusCounts,
+      webhookDestinationIds: uniqueCaseStrings(deliveryReceipts.map((delivery) => delivery.webhookDestinationId)),
+      deliveryIds: deliveryReceipts.map((delivery) => delivery.id),
+      auditEventIds: uniqueCaseStrings(deliveryReceipts.map((delivery) => delivery.auditEventId)),
+      dedupeKeys: uniqueCaseStrings(deliveryReceipts.map((delivery) => delivery.dedupeKey))
+    },
+    retryState: {
+      retryable: retryableDeliveries.length > 0,
+      retryDeliveryIds: retryableDeliveries.map((delivery) => delivery.id),
+      nextRetryAt: retryableDeliveries.map((delivery) => delivery.nextRetryAt).filter(Boolean).sort()[0],
+      auditEventIds: uniqueCaseStrings(retryableDeliveries.map((delivery) => delivery.auditEventId)),
+      blockerCodes: retryBlockerCodes
+    },
+    readinessRefs: {
+      dryRunReady: Boolean(input.webhookDryRunReadiness.readyForReplay),
+      dryRunReceiptAvailable: Boolean(input.webhookDryRunReadiness.receiptAvailable),
+      customerNotificationReadyForRecord: Boolean(input.customerNotificationReadiness.readyForRecord),
+      customerNotificationRecorded: Boolean(input.customerNotificationReadiness.notificationRecorded)
+    },
+    deliveryReceipts,
     auditSafety: {
       metadataOnly: true,
       endpointSecretExposed: false,

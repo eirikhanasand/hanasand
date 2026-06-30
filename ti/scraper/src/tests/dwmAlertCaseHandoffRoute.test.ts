@@ -200,6 +200,25 @@ describe("DWM alert case handoff route", () => {
       status: "dry_run",
       httpStatus: 0
     });
+    (store as any).saveDwmWebhookDelivery({
+      id: "delivery_retry_case_alert_acme",
+      organizationId: "org_acme",
+      tenantId: "tenant_acme",
+      alertId: "alert_acme",
+      watchlistId: "watch_acme",
+      webhookDestinationId: "webhook_acme_discord",
+      endpointHash: "endpoint_hash_retry",
+      dedupeKey: "delivery_alert_acme_webhook_retry",
+      idempotencyKey: "webhook-retry-case-alert-acme",
+      attemptedAt: "2026-06-29T14:04:00.000Z",
+      nextRetryAt: "2026-06-29T14:09:00.000Z",
+      payloadHash: "payload_hash_retry",
+      deliveryKind: "discord",
+      status: "failed",
+      httpStatus: 502,
+      errorClass: "upstream_5xx",
+      auditEventId: "audit_retry_case_alert_acme"
+    });
     const receiptDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
       headers: { "x-user-email": "owner@acme.com" }
     }), options);
@@ -243,9 +262,76 @@ describe("DWM alert case handoff route", () => {
     });
     expect(replayExportPayload.webhookDryRunReadiness.deliveryReceipts).toHaveLength(1);
     expect(replayExportPayload.replayPlan).toMatchObject({
-      dryRunDeliveryReceiptCount: 1
+      dryRunDeliveryReceiptCount: 1,
+      webhookDeliveryAttemptCount: 2,
+      webhookRetryableDeliveryCount: 1
+    });
+    expect(replayExportPayload.webhookDeliveryReplayContext).toMatchObject({
+      schemaVersion: "dwm.case_webhook_delivery_replay_context.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      ready: true,
+      route: "/v1/dwm/webhooks/deliver",
+      summary: {
+        deliveryAttemptCount: 2,
+        retryableDeliveryCount: 1,
+        dryRunCount: 1,
+        failedCount: 1,
+        webhookDestinationIds: ["webhook_acme_discord"],
+        deliveryIds: ["delivery_retry_case_alert_acme", "delivery_dry_run_case_alert_acme"],
+        auditEventIds: ["audit_retry_case_alert_acme"],
+        dedupeKeys: ["delivery_alert_acme_webhook_retry", "delivery_alert_acme_webhook"],
+        latestDelivery: expect.objectContaining({
+          id: "delivery_retry_case_alert_acme",
+          status: "failed",
+          endpointHash: "endpoint_hash_retry",
+          payloadHash: "payload_hash_retry",
+          auditEventId: "audit_retry_case_alert_acme"
+        })
+      },
+      retryState: {
+        retryable: true,
+        retryDeliveryIds: ["delivery_retry_case_alert_acme"],
+        nextRetryAt: "2026-06-29T14:09:00.000Z",
+        auditEventIds: ["audit_retry_case_alert_acme"],
+        blockerCodes: []
+      },
+      readinessRefs: {
+        dryRunReady: true,
+        dryRunReceiptAvailable: true,
+        customerNotificationReadyForRecord: false,
+        customerNotificationRecorded: false
+      },
+      deliveryReceipts: expect.arrayContaining([
+        expect.objectContaining({
+          id: "delivery_retry_case_alert_acme",
+          status: "failed",
+          retry: {
+            retryable: true,
+            nextRetryAt: "2026-06-29T14:09:00.000Z",
+            auditEventId: "audit_retry_case_alert_acme",
+            blockerCodes: []
+          }
+        }),
+        expect.objectContaining({
+          id: "delivery_dry_run_case_alert_acme",
+          status: "dry_run",
+          retry: {
+            retryable: false,
+            blockerCodes: ["retry_not_eligible"]
+          }
+        })
+      ]),
+      auditSafety: {
+        metadataOnly: true,
+        endpointSecretExposed: false,
+        payloadBodyExposed: false
+      }
     });
     expect(JSON.stringify(replayExportPayload.webhookDryRunReadiness)).not.toContain("discord.com");
+    expect(JSON.stringify(replayExportPayload.webhookDeliveryReplayContext)).not.toContain("discord.com");
     const viewerDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
       headers: { "x-user-email": "viewer@acme.com" }
     }), options);

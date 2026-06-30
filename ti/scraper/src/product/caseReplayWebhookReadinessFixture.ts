@@ -16,9 +16,11 @@ export function buildCaseWebhookReplayReadinessFixture(replayExport: ReplayExpor
   const orgAccess = replayExport.organizationAccessReadiness ?? {};
   const source = replayExport.sourceHandoffReadiness ?? {};
   const webhook = replayExport.webhookDryRunReadiness ?? {};
+  const deliveryReplay = replayExport.webhookDeliveryReplayContext ?? {};
   const destinations = uniqueStrings([
     ...(Array.isArray(webhook.destinationIds) ? webhook.destinationIds : []),
-    ...(Array.isArray(source.consumers?.webhook?.webhookDestinationIds) ? source.consumers.webhook.webhookDestinationIds : [])
+    ...(Array.isArray(source.consumers?.webhook?.webhookDestinationIds) ? source.consumers.webhook.webhookDestinationIds : []),
+    ...(Array.isArray(deliveryReplay.summary?.webhookDestinationIds) ? deliveryReplay.summary.webhookDestinationIds : [])
   ]);
   const workflowTransitions = Array.isArray(replayExport.workflowTransitions) ? replayExport.workflowTransitions : [];
   const handoffReceipts = Array.isArray(replayExport.handoffActionHistory?.receipts) ? replayExport.handoffActionHistory.receipts : [];
@@ -68,6 +70,13 @@ export function buildCaseWebhookReplayReadinessFixture(replayExport: ReplayExpor
         transitionCount: workflowTransitions.length,
         handoffReceiptCount: handoffReceipts.length
       },
+      deliveryReplay: {
+        attemptCount: Number(deliveryReplay.summary?.deliveryAttemptCount ?? 0),
+        retryableDeliveryCount: Number(deliveryReplay.summary?.retryableDeliveryCount ?? 0),
+        retryableDeliveryIds: stringArray(deliveryReplay.retryState?.retryDeliveryIds),
+        nextRetryAt: deliveryReplay.retryState?.nextRetryAt,
+        auditEventIds: stringArray(deliveryReplay.retryState?.auditEventIds)
+      },
       blockerCodes: deliveryBlockers
     };
   });
@@ -85,6 +94,18 @@ export function buildCaseWebhookReplayReadinessFixture(replayExport: ReplayExpor
     alertId,
     ready: fixtureBlockers.length === 0 && plannedDeliveries.length > 0,
     deliveryCount: plannedDeliveries.length,
+    deliveryReplay: {
+      schemaVersion: deliveryReplay.schemaVersion,
+      ready: Boolean(deliveryReplay.ready),
+      attemptCount: Number(deliveryReplay.summary?.deliveryAttemptCount ?? 0),
+      retryableDeliveryCount: Number(deliveryReplay.summary?.retryableDeliveryCount ?? 0),
+      latestDeliveryId: deliveryReplay.summary?.latestDelivery?.id,
+      retryable: Boolean(deliveryReplay.retryState?.retryable),
+      retryDeliveryIds: stringArray(deliveryReplay.retryState?.retryDeliveryIds),
+      nextRetryAt: deliveryReplay.retryState?.nextRetryAt,
+      auditEventIds: stringArray(deliveryReplay.retryState?.auditEventIds),
+      blockerCodes: stringArray(deliveryReplay.retryState?.blockerCodes)
+    },
     plannedDeliveries,
     blockerCodes: fixtureBlockers,
     nextAnalystActions: (Array.isArray(replayExport.nextAnalystActions) ? replayExport.nextAnalystActions : [])

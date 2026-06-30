@@ -14,6 +14,18 @@ describe("case replay webhook readiness fixture", () => {
       alertId: "alert_acme",
       ready: true,
       deliveryCount: 1,
+      deliveryReplay: {
+        schemaVersion: "dwm.case_webhook_delivery_replay_context.v1",
+        ready: true,
+        attemptCount: 2,
+        retryableDeliveryCount: 1,
+        latestDeliveryId: "delivery_retry_case_alert_acme",
+        retryable: true,
+        retryDeliveryIds: ["delivery_retry_case_alert_acme"],
+        nextRetryAt: "2026-06-29T14:09:00.000Z",
+        auditEventIds: ["audit_retry_case_alert_acme"],
+        blockerCodes: []
+      },
       blockerCodes: [],
       plannedDeliveries: [
         expect.objectContaining({
@@ -37,6 +49,13 @@ describe("case replay webhook readiness fixture", () => {
             assignedOwner: "owner@acme.com",
             transitionCount: 2,
             handoffReceiptCount: 1
+          },
+          deliveryReplay: {
+            attemptCount: 2,
+            retryableDeliveryCount: 1,
+            retryableDeliveryIds: ["delivery_retry_case_alert_acme"],
+            nextRetryAt: "2026-06-29T14:09:00.000Z",
+            auditEventIds: ["audit_retry_case_alert_acme"]
           },
           blockerCodes: []
         })
@@ -82,8 +101,26 @@ describe("case replay webhook readiness fixture", () => {
     expect(fixture).toMatchObject({
       ready: false,
       organizationId: undefined,
-      deliveryCount: 0,
-      plannedDeliveries: [],
+      deliveryCount: 1,
+      deliveryReplay: {
+        attemptCount: 2,
+        retryableDeliveryCount: 1,
+        retryable: true,
+        retryDeliveryIds: ["delivery_retry_case_alert_acme"]
+      },
+      plannedDeliveries: [
+        expect.objectContaining({
+          organizationId: undefined,
+          webhookDestinationId: "webhook_acme_discord",
+          ready: false,
+          blockerCodes: expect.arrayContaining([
+            "missing_organization_scope",
+            "missing_webhook_destination",
+            "missing_webhook_dry_run_receipt",
+            "source_webhook_handoff_not_ready"
+          ])
+        })
+      ],
       blockerCodes: expect.arrayContaining([
         "missing_organization_scope",
         "missing_webhook_destination",
@@ -128,6 +165,23 @@ function happyReplayExport() {
       readyForReplay: true,
       destinationIds: ["webhook_acme_discord"],
       blockerCodes: []
+    },
+    webhookDeliveryReplayContext: {
+      schemaVersion: "dwm.case_webhook_delivery_replay_context.v1",
+      ready: true,
+      summary: {
+        deliveryAttemptCount: 2,
+        retryableDeliveryCount: 1,
+        latestDelivery: { id: "delivery_retry_case_alert_acme" },
+        webhookDestinationIds: ["webhook_acme_discord"]
+      },
+      retryState: {
+        retryable: true,
+        retryDeliveryIds: ["delivery_retry_case_alert_acme"],
+        nextRetryAt: "2026-06-29T14:09:00.000Z",
+        auditEventIds: ["audit_retry_case_alert_acme"],
+        blockerCodes: []
+      }
     },
     provenance: {
       captureIds: ["cap_acme_1"],
