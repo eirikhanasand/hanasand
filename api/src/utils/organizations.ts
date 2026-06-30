@@ -1275,6 +1275,67 @@ export type OrganizationWatchlistAlertTermsExport = {
         noEnumeration: false
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    readinessExport: {
+        schemaVersion: 'organization.shared_watchlist_readiness_export.v1'
+        organizationId: string
+        tenantId: string
+        sourceFamily: 'organization_watchlist'
+        actor: {
+            userId: string
+            role: OrganizationRole
+            status: 'active'
+        }
+        routes: {
+            alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms'
+            alertQueue: 'GET /v1/dwm/alerts'
+            caseVisibility: 'GET /api/organizations/:id/alert-case-visibility'
+            caseOpen: 'POST /v1/cases'
+            webhookDeliver: 'POST /v1/dwm/webhooks/deliver'
+            dashboardReadiness: 'GET /api/organizations/:id/alert-readiness'
+        }
+        readiness: {
+            alertExportReady: boolean
+            alertQueueReady: boolean
+            casePersistenceReady: boolean
+            caseVisibilityReady: boolean
+            webhookDestinationReady: boolean
+            supportRedactedReadReady: boolean
+            dashboardReadinessReady: boolean
+        }
+        watchlistScope: {
+            activeItemIds: string[]
+            pausedItemIds: string[]
+            archivedItemIds: string[]
+            alertGeneratorKeys: string[]
+            crossTenantCollisionAllowed: false
+        }
+        downstreamRefs: {
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
+            alertPersistenceReceipt: 'organization.alert_case_bridge_persistence_receipt.v1'
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1'
+            webhookDestinationOwnership: 'organization.webhook_destination_ownership.v1'
+            webhookDestinationAccessDecision: 'organization.webhook_destination_access_decision.v1'
+            termExportDeltaReceipt: 'organization.watchlist_term_export_delta_receipt.v1'
+        }
+        roleGates: {
+            exportTerms: OrganizationRole[]
+            mutateWatchlists: Array<'owner' | 'admin'>
+            manualWebhookTrigger: Array<'owner' | 'admin'>
+            assignCase: OrganizationAlertCaseRole[]
+        }
+        lifecycleAccess: {
+            activeMembershipRequired: true
+            removedMemberBlocker: 'member_revoked'
+            revokedInviteBlocker: 'member_revoked'
+            expiredInviteBlocker: 'invite_expired'
+            pausedWatchlistBlocker: 'watchlist_paused'
+            archivedWatchlistBlocker: 'watchlist_archived'
+            nonmemberEnumeration: false
+        }
+        blockers: string[]
+        noLeakFields: Array<'activeTerms[].term' | 'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret' | 'case.evidence.rawContent'>
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -6227,6 +6288,78 @@ export function organizationWatchlistAlertTermsExport(
         noEnumeration: false,
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
+    const readinessExport: OrganizationWatchlistAlertTermsExport['readinessExport'] = {
+        schemaVersion: 'organization.shared_watchlist_readiness_export.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        sourceFamily: 'organization_watchlist',
+        actor: {
+            userId: member.userId,
+            role: member.role,
+            status: 'active',
+        },
+        routes: {
+            alertTermsExport: consumerReadiness.routes.alertTermsExport,
+            alertQueue: consumerReadiness.routes.alertList,
+            caseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+            caseOpen: sharedWatchlistDownstreamProof.caseBridge.caseWorkflowContract.routes.open,
+            webhookDeliver: consumerReadiness.routes.webhookDeliver,
+            dashboardReadiness: consumerReadiness.routes.dashboardReadiness,
+        },
+        readiness: {
+            alertExportReady: alertGenerationConsumer.canGenerateAlerts && alertGenerationConsumer.blockerCodes.length === 0,
+            alertQueueReady: consumerReadiness.readiness.alertQueueReady,
+            casePersistenceReady: alertCasePersistenceReceipt.blockerCodes.length === 0,
+            caseVisibilityReady: consumerReadiness.readiness.caseWorkflowReady,
+            webhookDestinationReady: webhookDestinationAccessDecision.blockerCodes.length === 0,
+            supportRedactedReadReady: consumerReadiness.readiness.supportRedactedReadReady,
+            dashboardReadinessReady: consumerReadiness.readiness.dashboardReadinessReady,
+        },
+        watchlistScope: {
+            activeItemIds: termLifecycle.activeItemIds,
+            pausedItemIds: termLifecycle.pausedItemIds,
+            archivedItemIds: termLifecycle.archivedItemIds,
+            alertGeneratorKeys: consumerReadiness.watchlists.alertGeneratorKeys,
+            crossTenantCollisionAllowed: false,
+        },
+        downstreamRefs: {
+            alertGenerationConsumer: alertGenerationConsumer.schemaVersion,
+            alertPersistenceReceipt: alertCasePersistenceReceipt.schemaVersion,
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1',
+            webhookDestinationOwnership: webhookDestinationOwnership.schemaVersion,
+            webhookDestinationAccessDecision: webhookDestinationAccessDecision.schemaVersion,
+            termExportDeltaReceipt: termExportDeltaReceipt.schemaVersion,
+        },
+        roleGates: {
+            exportTerms: consumerReadiness.roleGates.exportTerms,
+            mutateWatchlists: consumerReadiness.roleGates.mutateWatchlists,
+            manualWebhookTrigger: consumerReadiness.roleGates.manualWebhookTrigger,
+            assignCase: consumerReadiness.roleGates.assignCase,
+        },
+        lifecycleAccess: {
+            activeMembershipRequired: true,
+            removedMemberBlocker: 'member_revoked',
+            revokedInviteBlocker: 'member_revoked',
+            expiredInviteBlocker: 'invite_expired',
+            pausedWatchlistBlocker: 'watchlist_paused',
+            archivedWatchlistBlocker: 'watchlist_archived',
+            nonmemberEnumeration: false,
+        },
+        blockers: Array.from(new Set([
+            ...consumerReadiness.blockers,
+            ...alertGenerationConsumer.blockerCodes,
+            ...alertCasePersistenceReceipt.blockerCodes.map(String),
+            ...webhookDestinationAccessDecision.blockerCodes,
+        ])),
+        noLeakFields: [
+            'activeTerms[].term',
+            'otherOrg.watchlistItemIds',
+            'otherOrg.alertGeneratorKeys',
+            'destination.secret',
+            'case.evidence.rawContent',
+        ],
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -6413,6 +6546,7 @@ export function organizationWatchlistAlertTermsExport(
         alertGenerationConsumer,
         termExportDeltaReceipt,
         alertCasePersistenceReceipt,
+        readinessExport,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
