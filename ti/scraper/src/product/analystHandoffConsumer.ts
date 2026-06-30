@@ -43,6 +43,16 @@ export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as
 export const ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION = "organization.shared_watchlist_alert_generation_export.v1" as const;
 export const ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION = "organization.shared_watchlist_alert_generation_consumers.v1" as const;
 export const ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION = "organization.shared_watchlist_readiness_proof.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION = "dwm.org_alert_case_action_receipt.v1" as const;
+export const DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION = "dwm.org_alert_case_action_audit_event.v1" as const;
+export const DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION = "dwm.webhook_event_contract.v1" as const;
+export const DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION = "dwm.webhook_event_support_handoff.v1" as const;
+export const DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION = "dwm.webhook_support_action_request.v1" as const;
+export const DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION = "dwm.webhook_dispatch_retry_audit.v1" as const;
+export const TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_alert_rebuild_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_gap_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_activation_decision_receipt.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -72,7 +82,17 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION,
   orgSharedWatchlistAlertExport: ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
   orgSharedWatchlistAlertConsumers: ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
-  orgSharedWatchlistReadinessProof: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION
+  orgSharedWatchlistReadinessProof: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
+  orgAlertCaseActionReceipt: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+  orgAlertCaseActionAuditEvent: DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION,
+  webhookEventContract: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+  webhookEventSupportHandoff: DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+  webhookSupportActionRequest: DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+  webhookDispatchRetryAudit: DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION,
+  sourceProvenanceAlertRebuildReceipt: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+  sourceProvenanceActorEnrichmentGapReceipt: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+  sourceProvenanceSourcePackIntakeReceipt: TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+  sourceProvenanceSourceActivationDecisionReceipt: TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION
 } as const;
 
 export const PRODUCT_READINESS_FORBIDDEN_LANGUAGE = [
@@ -673,6 +693,7 @@ export type ProductReadinessState = "ready" | "degraded" | "blocked" | "provisio
 export type ProductReadinessContractReference = {
   ownerLane: ProductReadinessOwnerLane | "case" | "integration";
   schemaVersions: string[];
+  receiptSchemaIds?: string[];
   routes: string[];
   blockerCodes: string[];
   scopeFields: string[];
@@ -1411,6 +1432,9 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
           const field = `workflowContract.contractReferences[${index}]`;
           if (!reference.ownerLane) blockers.push({ code: "missing_contract_owner_lane", rowId, field: `${field}.ownerLane`, detail: "Contract references need an owner lane." });
           if (!Array.isArray(reference.schemaVersions) || !reference.schemaVersions.length) blockers.push({ code: "missing_contract_schema_ids", rowId, field: `${field}.schemaVersions`, detail: "Contract references need schema ids." });
+          if (reference.receiptSchemaIds !== undefined && (!Array.isArray(reference.receiptSchemaIds) || !reference.receiptSchemaIds.length || reference.receiptSchemaIds.some((schemaId) => !schemaId))) {
+            blockers.push({ code: "missing_receipt_schema_ids", rowId, field: `${field}.receiptSchemaIds`, detail: "Receipt references must list stable receipt schema ids when provided." });
+          }
           if (!Array.isArray(reference.routes) || !reference.routes.length) blockers.push({ code: "missing_contract_routes", rowId, field: `${field}.routes`, detail: "Contract references need route discoverability." });
           if (!Array.isArray(reference.blockerCodes)) blockers.push({ code: "missing_contract_blockers", rowId, field: `${field}.blockerCodes`, detail: "Contract references need blocker code metadata." });
           if (!Array.isArray(reference.scopeFields) || !reference.scopeFields.length) blockers.push({ code: "missing_contract_scope_fields", rowId, field: `${field}.scopeFields`, detail: "Contract references need org/member scope fields." });
@@ -1915,6 +1939,12 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       return [metadataContractReference({
         ownerLane: "source",
         schemaVersions: [DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION, DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION],
+        receiptSchemaIds: [
+          TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+          TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+          TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+          TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION
+        ],
         routes: ["GET /v1/dwm/source-requests/readiness", "POST /v1/dwm/source-requests/actions"],
         blockerCodes: ["source_inactive", "source_policy_inactive", "source_worker_not_ready", "missing_source_provenance"],
         scopeFields: ["tenantId", "organizationId", "sourceIds", "sourceFamily", "provenance.refs"],
@@ -1927,6 +1957,10 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       return [metadataContractReference({
         ownerLane: "alert",
         schemaVersions: [ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION, "dwm.alert_case_handoff.v1", "analyst.case_detail.v1"],
+        receiptSchemaIds: [
+          DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+          DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION
+        ],
         routes: ["POST /v1/dwm/alerts/rebuild", "POST /v1/dwm/alerts/:alertId/case-handoff", "POST /v1/cases"],
         blockerCodes: ["missing_alert_provenance", "missing_alert_id", "case_closed", "organization_visibility_denied", "case_read_only_member"],
         scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "casePath", "watchlistItemIds"],
@@ -1940,6 +1974,12 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       return [metadataContractReference({
         ownerLane: "webhook",
         schemaVersions: [DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION, DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION],
+        receiptSchemaIds: [
+          DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+          DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+          DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+          DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
+        ],
         routes: ["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"],
         blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
         scopeFields: ["tenantId", "organizationId", "destinationId", "webhookDestinationIds", "alertId", "casePath"],
@@ -1952,6 +1992,10 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       return [metadataContractReference({
         ownerLane: "support",
         schemaVersions: [SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION],
+        receiptSchemaIds: [
+          SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+          SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
+        ],
         routes: ["GET /api/admin/support/readiness", "POST /api/admin/support/organizations/:id/access-recovery", "POST /api/admin/support/organizations/:id/invites"],
         blockerCodes: ["support_executor_unavailable", "helpdesk_audit_unavailable", "missing_invite_teammate_executor"],
         scopeFields: ["tenantId", "organizationId", "actorId", "action", "audit.reason", "idempotencyKey"],

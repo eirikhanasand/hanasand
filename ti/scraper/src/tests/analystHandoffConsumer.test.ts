@@ -737,6 +737,22 @@ describe("analyst handoff consumer validation", () => {
         proofRowId: "dashboard_operator_workspace"
       }
     });
+    expect(aggregate.rows.find((row) => row.id === "source_activation")?.workflowContract.contractReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        receiptSchemaIds: expect.arrayContaining([
+          "ti.source_provenance_alert_rebuild_receipt.v1",
+          "ti.source_provenance_actor_enrichment_gap_receipt.v1",
+          "ti.source_provenance_source_pack_intake_receipt.v1",
+          "ti.source_provenance_source_activation_decision_receipt.v1"
+        ]),
+        routes: expect.arrayContaining(["GET /v1/dwm/source-requests/readiness", "POST /v1/dwm/source-requests/actions"]),
+        blockerCodes: expect.arrayContaining(["source_inactive", "missing_source_provenance"]),
+        downstreamConsumers: expect.arrayContaining([
+          expect.objectContaining({ ownerLane: "alert", route: "POST /v1/dwm/alerts/rebuild" }),
+          expect.objectContaining({ ownerLane: "publicTI", route: "/ti" })
+        ])
+      })
+    ]));
     expect(aggregate.rows.find((row) => row.id === "website_product_surface")).toMatchObject({
       ownerLane: "website",
       customerVisibleState: "ready",
@@ -758,6 +774,12 @@ describe("analyst handoff consumer validation", () => {
         expectedAdapter: "persistedAlertToWebhookTriggerContext",
         contractReferences: [expect.objectContaining({
           schemaVersions: expect.arrayContaining(["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"]),
+          receiptSchemaIds: expect.arrayContaining([
+            "dwm.webhook_event_contract.v1",
+            "dwm.webhook_event_support_handoff.v1",
+            "dwm.webhook_support_action_request.v1",
+            "dwm.webhook_dispatch_retry_audit.v1"
+          ]),
           routes: expect.arrayContaining(["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"]),
           blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"]),
           scopeFields: expect.arrayContaining(["organizationId", "destinationId", "alertId", "casePath"])
@@ -767,10 +789,23 @@ describe("analyst handoff consumer validation", () => {
     expect(aggregate.rows.find((row) => row.id === "alert_case_workflow")?.workflowContract.contractReferences).toEqual(expect.arrayContaining([
       expect.objectContaining({
         schemaVersions: expect.arrayContaining(["dwm.alert_case_handoff.v1", "analyst.case_detail.v1"]),
+        receiptSchemaIds: expect.arrayContaining([
+          "dwm.org_alert_case_action_receipt.v1",
+          "dwm.org_alert_case_action_audit_event.v1"
+        ]),
         downstreamConsumers: expect.arrayContaining([
           expect.objectContaining({ ownerLane: "case", route: "PATCH /v1/cases/:caseId" }),
           expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" })
         ])
+      })
+    ]));
+    expect(aggregate.rows.find((row) => row.id === "support_controls")?.workflowContract.contractReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        receiptSchemaIds: expect.arrayContaining([
+          "support.action_execution_handoff.v1",
+          "support.action_executor_readiness.v1"
+        ]),
+        scopeFields: expect.arrayContaining(["tenantId", "organizationId", "actorId", "idempotencyKey"])
       })
     ]));
     const serialized = JSON.stringify(aggregate);
@@ -1030,6 +1065,7 @@ describe("analyst handoff consumer validation", () => {
         contractReferences: [{
           ownerLane: "watchlist",
           schemaVersions: [],
+          receiptSchemaIds: [],
           routes: [],
           blockerCodes: [],
           scopeFields: [],
@@ -1045,6 +1081,7 @@ describe("analyst handoff consumer validation", () => {
     };
     expect(validateProductReadinessAggregateArtifact(unsafeContractReference).blockerCodes).toEqual(expect.arrayContaining([
       "missing_contract_schema_ids",
+      "missing_receipt_schema_ids",
       "missing_contract_routes",
       "missing_contract_scope_fields",
       "unsafe_contract_reference"
