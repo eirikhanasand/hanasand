@@ -199,6 +199,13 @@ export type WorkbenchProductReadinessItem = {
     caseDetailReady?: boolean
     caseDetailTimelineCount?: number
     caseDetailReadOnly?: boolean
+    candidateCount?: number
+    captureRefCount?: number
+    matchedCandidateCount?: number
+    missingRouteCandidateCount?: number
+    generationEvidenceWindowCaptureCount?: number
+    generationEvidenceWindowSourceFamilies?: string[]
+    latestEvidenceAt?: string
     destinationCount?: number
     activeDestinationCount?: number
     deliveryReadyCount?: number
@@ -1697,10 +1704,13 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
             const sourceWorkerDetail = item.id === 'source_inventory_probe'
                 ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.parserSourceFamilyCount ?? 0} parser families; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
                 : ''
+            const alertGenerationDetail = item.id === 'dashboard_evidence'
+                ? ` Candidates ${item.candidateCount ?? item.matchedCandidateCount ?? 0}; evidence captures ${item.generationEvidenceWindowCaptureCount ?? item.captureRefCount ?? 0}; missing routes ${item.missingRouteCandidateCount ?? 0}.`
+                : ''
             return {
                 id: `readiness_${item.id}`,
                 label: item.operatorAction || item.label,
-                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}`,
+                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}${alertGenerationDetail}`,
                 tone: productReadinessTone(item.status),
                 href: item.href,
                 disabledReason: item.status === 'unavailable' ? item.source : undefined,
@@ -2000,6 +2010,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
     const proofTime = item.proofTimestamp || item.checkedAt || ''
     const tone = productReadinessTone(item.status)
     const actions = item.actions || []
+    const metrics = readinessDetailMetrics(item)
     return (
         <div
             className='mt-3 rounded-lg border border-[#d8e1ef] bg-white p-3 dark:border-[#2d3a52] dark:bg-[#111827]'
@@ -2031,6 +2042,9 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                 <ReadinessDetailField label='Provenance' value={item.evidenceProvenance || item.source || 'provenance unavailable'} />
                 <ReadinessDetailField label='Stale window' value={formatSeconds(item.staleAfterSeconds)} />
                 <ReadinessDetailField label='Source' value={item.source || 'source unavailable'} />
+                {metrics.map(metric => (
+                    <ReadinessDetailField key={metric.label} label={metric.label} value={metric.value} />
+                ))}
             </div>
             <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
                 <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{item.status === 'ready' ? 'Evidence' : 'Blocker'}</p>
@@ -2091,6 +2105,27 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
             )}
         </div>
     )
+}
+
+function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
+    if (item.id === 'dashboard_evidence') {
+        return [
+            typeof item.candidateCount === 'number' || typeof item.matchedCandidateCount === 'number'
+                ? { label: 'Candidates', value: String(item.candidateCount ?? item.matchedCandidateCount ?? 0) }
+                : undefined,
+            typeof item.generationEvidenceWindowCaptureCount === 'number' || typeof item.captureRefCount === 'number'
+                ? { label: 'Evidence window', value: `${item.generationEvidenceWindowCaptureCount ?? item.captureRefCount ?? 0} captures` }
+                : undefined,
+            typeof item.missingRouteCandidateCount === 'number'
+                ? { label: 'Route gaps', value: `${item.missingRouteCandidateCount} candidate${item.missingRouteCandidateCount === 1 ? '' : 's'}` }
+                : undefined,
+            item.latestEvidenceAt ? { label: 'Latest evidence', value: relativeTime(item.latestEvidenceAt) } : undefined,
+            item.generationEvidenceWindowSourceFamilies?.length
+                ? { label: 'Source families', value: item.generationEvidenceWindowSourceFamilies.join(', ') }
+                : undefined,
+        ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
+    }
+    return []
 }
 
 function ReadinessDetailField({ label: fieldLabel, value }: { label: string, value: string }) {

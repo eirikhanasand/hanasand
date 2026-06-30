@@ -1565,6 +1565,7 @@ function buildProductReadiness(input: {
     const webhookHealth = input.externalReadiness?.webhookHealth
     const dashboardEvidence = input.externalReadiness?.dashboardEvidence
     const analystWorkflow = input.externalReadiness?.analystWorkflow
+    const alertGeneration = input.externalReadiness?.alertGeneration
     const entitlement = input.externalReadiness?.entitlement
     const sourceGrowthStatus: WorkbenchProductReadinessItem['status'] = sourceGrowthReady(sourceGrowth)
         ? 'ready'
@@ -1710,7 +1711,7 @@ function buildProductReadiness(input: {
             label: 'Dashboard evidence',
             status: dashboardEvidence?.status || 'unavailable',
             detail: dashboardEvidence
-                ? dashboardEvidence.detail || dashboardEvidenceDetail(dashboardEvidence)
+                ? dashboardAlertReadinessDetail(dashboardEvidence, alertGeneration)
                 : 'Product progress has not provided dashboard-visible alert and matching delivery proof.',
             source: dashboardEvidence?.source || 'Missing dashboard alert evidence contract',
             href: dashboardEvidence?.href || dashboardEvidence?.dashboardPath || '/dashboard',
@@ -1721,6 +1722,13 @@ function buildProductReadiness(input: {
             expectedDashboardRowId: dashboardEvidence?.expectedDashboardRowId,
             integrationProbeHint: dashboardEvidence?.integrationProbeHint,
             backendProofContractVersion: dashboardEvidence?.backendProofContractVersion || dashboardEvidence?.schemaVersion,
+            candidateCount: alertGeneration?.candidateCount,
+            captureRefCount: alertGeneration?.captureRefCount,
+            matchedCandidateCount: alertGeneration?.matchedCandidateCount,
+            missingRouteCandidateCount: alertGeneration?.missingRouteCandidateCount,
+            generationEvidenceWindowCaptureCount: alertGeneration?.generationEvidenceWindowCaptureCount,
+            generationEvidenceWindowSourceFamilies: alertGeneration?.generationEvidenceWindowSourceFamilies,
+            latestEvidenceAt: alertGeneration?.latestEvidenceAt,
         },
         {
             id: 'analyst_workflow',
@@ -2409,6 +2417,20 @@ function dashboardEvidenceDetail(input: DashboardAlertEvidenceReadiness) {
     if (input.blockers?.length) return input.blockers.join('; ')
     if (input.alertId && input.deliveryId) return `Dashboard alert ${input.alertId} matches delivery ${input.deliveryId}.`
     return 'Dashboard evidence snapshot loaded.'
+}
+
+function dashboardAlertReadinessDetail(input: DashboardAlertEvidenceReadiness, alertGeneration: DwmAlertGenerationReadiness | undefined) {
+    const base = input.detail || dashboardEvidenceDetail(input)
+    if (!alertGeneration) return base
+    if (alertGeneration.blockers?.length) return `${base} Alert generation: ${alertGeneration.blockers.join('; ')}`
+    const candidateCount = alertGeneration.candidateCount ?? alertGeneration.matchedCandidateCount
+    const captureCount = alertGeneration.generationEvidenceWindowCaptureCount ?? alertGeneration.captureRefCount
+    const parts = [
+        typeof candidateCount === 'number' ? `${candidateCount} candidate${candidateCount === 1 ? '' : 's'}` : '',
+        typeof captureCount === 'number' ? `${captureCount} evidence capture${captureCount === 1 ? '' : 's'}` : '',
+        typeof alertGeneration.missingRouteCandidateCount === 'number' ? `${alertGeneration.missingRouteCandidateCount} route gap${alertGeneration.missingRouteCandidateCount === 1 ? '' : 's'}` : '',
+    ].filter(Boolean)
+    return parts.length ? `${base} Alert generation: ${parts.join(', ')}.` : base
 }
 
 function analystWorkflowDetail(input: AnalystWorkflowReadiness) {

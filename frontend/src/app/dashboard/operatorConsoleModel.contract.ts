@@ -1446,6 +1446,16 @@ void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_p
 void expectProductReadinessStatus(productProgressOrgContext, 'entitlement_readiness', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'org_alert_export', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready')
+void (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').candidateCount satisfies number | undefined)
+if (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').candidateCount !== 3) {
+    throw new Error('Expected dashboard evidence readiness to expose alert-generation candidate count.')
+}
+if (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').generationEvidenceWindowCaptureCount !== 35) {
+    throw new Error('Expected dashboard evidence readiness to expose alert-generation evidence-window captures.')
+}
+if (expectProductReadinessStatus(productProgressOrgContext, 'dashboard_evidence', 'ready').missingRouteCandidateCount !== 0) {
+    throw new Error('Expected dashboard evidence readiness to expose alert-generation route gaps.')
+}
 void (expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready').activeDestinationCount satisfies number | undefined)
 void (expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready').deliveryReadyCount satisfies number | undefined)
 void (expectProductReadinessStatus(productProgressOrgContext, 'webhook_health', 'ready').latestDeliveryAt satisfies string | undefined)
