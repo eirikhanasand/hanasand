@@ -148,6 +148,12 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             data-north-star-readiness-ledger-blocker-probe-id={row.probeId}
                             data-north-star-readiness-ledger-blocker-action={row.requiredNextAction}
                             data-north-star-readiness-ledger-blocker-deploy-risk={row.deployRisk}
+                            data-north-star-readiness-ledger-blocker-ui-proof={row.uiQualityProofExists ? 'true' : 'false'}
+                            data-north-star-readiness-ledger-blocker-workflow-route={row.workflowRoute}
+                            data-north-star-readiness-ledger-blocker-workflow-proof-row-id={row.workflowProofRowId}
+                            data-north-star-readiness-ledger-blocker-workflow-test={row.workflowTestName}
+                            data-north-star-readiness-ledger-blocker-workflow-adapter={row.workflowExpectedAdapter}
+                            data-north-star-readiness-ledger-blocker-workflow-command={row.workflowProofCommand}
                         >
                             <p className='font-semibold text-[#171a21] dark:text-white'>{row.label}</p>
                             <p className='mt-1 wrap-break-word'>{row.blockers.join(', ') || row.requiredNextAction}</p>
@@ -156,9 +162,17 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                                 <Fact label='Artifact' value={row.proofArtifactId} />
                                 <Fact label='Probe' value={row.probeId || 'not loaded'} />
                                 <Fact label='Risk' value={row.deployRisk || 'not loaded'} />
+                                <Fact label='UI proof' value={row.uiQualityProofExists ? 'present' : 'not loaded'} />
+                                <Fact label='Adapter' value={row.workflowExpectedAdapter || 'not loaded'} />
                             </dl>
+                            {(row.workflowTestName || row.workflowProofCommand) && (
+                                <dl className='mt-2 grid gap-2 rounded-lg border border-[#fed7aa] bg-white/55 px-3 py-2 text-[11px] leading-4 dark:border-[#7c3b16] dark:bg-black/10'>
+                                    <Fact label='Test' value={row.workflowTestName || 'not loaded'} />
+                                    <Fact label='Command' value={row.workflowProofCommand || 'not loaded'} />
+                                </dl>
+                            )}
                             <div className='mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                                <p className='min-w-0 wrap-break-word text-[11px] leading-4'>{row.route || 'No backed route returned.'}</p>
+                                <p className='min-w-0 wrap-break-word text-[11px] leading-4'>{row.workflowRoute || row.route || 'No backed route returned.'}</p>
                                 {localRoute(row.route) ? (
                                     <Link href={row.route} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#fed7aa] px-3 py-1.5 text-xs font-semibold text-[#9a3412] transition hover:bg-[#ffedd5] focus:outline-none focus:ring-2 focus:ring-[#fdba74] dark:border-[#7c3b16] dark:text-[#fdba74] dark:hover:bg-[#3a1d0c]'>
                                         Open route

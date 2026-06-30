@@ -401,12 +401,19 @@ const aggregateScoreboard = buildProductNorthStarScoreboard(partialPayload, {
             probeId: aggregate!.rows[0]!.proofArtifact.probeId || '',
             requiredNextAction: aggregate!.rows[0]!.requiredNextAction,
             deployRisk: aggregate!.rows[0]!.deployRisk,
+            uiQualityProofExists: aggregate!.rows[0]!.uiQualityProofExists,
+            workflowRoute: aggregate!.rows[0]!.workflowContract?.route || '',
+            workflowProofRowId: aggregate!.rows[0]!.workflowContract?.proofRowId || '',
+            workflowTestName: aggregate!.rows[0]!.workflowContract?.testName || '',
+            workflowExpectedAdapter: aggregate!.rows[0]!.workflowContract?.expectedAdapter || '',
+            workflowProofCommand: aggregate!.rows[0]!.workflowContract?.proofCommand || '',
         }],
     },
 })
 assert.equal(aggregateScoreboard.productReadinessAggregate.state, 'blocked')
 assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.id, 'source_activation')
 assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.requiredNextAction, 'activate_source_policy')
+assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.workflowExpectedAdapter, 'buildDwmSourceReadinessArtifact')
 
 const readyPayload = {
     ...partialPayload,
@@ -551,6 +558,12 @@ for (const token of [
     'data-north-star-readiness-ledger-blocker-probe-id',
     'data-north-star-readiness-ledger-blocker-action',
     'data-north-star-readiness-ledger-blocker-deploy-risk',
+    'data-north-star-readiness-ledger-blocker-ui-proof',
+    'data-north-star-readiness-ledger-blocker-workflow-route',
+    'data-north-star-readiness-ledger-blocker-workflow-proof-row-id',
+    'data-north-star-readiness-ledger-blocker-workflow-test',
+    'data-north-star-readiness-ledger-blocker-workflow-adapter',
+    'data-north-star-readiness-ledger-blocker-workflow-command',
     'data-north-star-blocker-row-id',
     'data-north-star-blocker-state',
     'data-north-star-blocker-owner-lane',
@@ -572,6 +585,9 @@ for (const token of [
     'row.proofArtifactSchemaVersion',
     'row.probeId',
     'row.deployRisk',
+    'row.uiQualityProofExists',
+    'row.workflowExpectedAdapter',
+    'row.workflowProofCommand',
     'Open workflow',
     'Stale after',
     'scoreboard.deployGate.blockingProofRows',
@@ -621,6 +637,9 @@ for (const token of [
     'missingProductReadinessAggregateSource',
     'blockingRows',
     'customerVisibleBlockedCount',
+    'uiQualityProofExists',
+    'workflowExpectedAdapter',
+    'workflowProofCommand',
 ]) {
     assert.ok(productReadinessAggregateSource.includes(token), `Product readiness aggregate source missing ${token}.`)
 }

@@ -76,6 +76,12 @@ export type ProductReadinessAggregateSourceRow = {
     probeId: string
     requiredNextAction: string
     deployRisk: string
+    uiQualityProofExists: boolean
+    workflowRoute: string
+    workflowProofRowId: string
+    workflowTestName: string
+    workflowExpectedAdapter: string
+    workflowProofCommand: string
 }
 
 export async function loadProductReadinessAggregate(env: Record<string, string | undefined> = process.env): Promise<ProductReadinessAggregateSource> {
@@ -164,6 +170,12 @@ function toProductReadinessAggregateSource(aggregate: ProductReadinessAggregate,
             probeId: row.proofArtifact.probeId || row.workflowContract?.proofRowId || '',
             requiredNextAction: row.requiredNextAction,
             deployRisk: row.deployRisk,
+            uiQualityProofExists: row.uiQualityProofExists,
+            workflowRoute: row.workflowContract?.route || '',
+            workflowProofRowId: row.workflowContract?.proofRowId || '',
+            workflowTestName: row.workflowContract?.testName || '',
+            workflowExpectedAdapter: row.workflowContract?.expectedAdapter || '',
+            workflowProofCommand: row.workflowContract?.proofCommand || '',
         }))
     const state = aggregate.ok && blockingRows.length === 0
         ? 'ready'
@@ -240,6 +252,12 @@ function isProductReadinessAggregateSourceRow(input: unknown): input is ProductR
         && typeof input.probeId === 'string'
         && typeof input.requiredNextAction === 'string'
         && typeof input.deployRisk === 'string'
+        && typeof input.uiQualityProofExists === 'boolean'
+        && typeof input.workflowRoute === 'string'
+        && typeof input.workflowProofRowId === 'string'
+        && typeof input.workflowTestName === 'string'
+        && typeof input.workflowExpectedAdapter === 'string'
+        && typeof input.workflowProofCommand === 'string'
 }
 
 function parseJsonAggregate(input: string | undefined) {
