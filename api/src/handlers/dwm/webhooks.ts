@@ -28,6 +28,7 @@ import {
     buildDwmWebhookDestinationTestContract,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryHistory,
+    buildDwmWebhookDeliveryHistoryConsumerProof,
     buildDwmWebhookDeliveryLedger,
     buildDwmWebhookDeliveryOperations,
     buildDwmWebhookDeliveryPersistenceProof,
@@ -611,6 +612,12 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
                 destinations,
                 filters: deliveryFilters,
             }),
+        deliveryHistoryConsumer: buildDwmWebhookDeliveryHistoryConsumerProof({
+            deliveries: visibilityResult && !visibilityResult.decision.allowed ? [] : deliveries,
+            auditEvents: visibilityResult && !visibilityResult.decision.allowed ? [] : auditEvents,
+            destinations: visibilityResult && !visibilityResult.decision.allowed ? [] : destinations,
+            filters: deliveryFilters,
+        }),
         deliveryPersistenceProof: visibilityResult && !visibilityResult.decision.allowed
             ? buildDwmWebhookDeliveryPersistenceProof({
                 deliveries: [],

@@ -1050,6 +1050,30 @@ export function buildDwmWebhookDeliveryHistoryConsumerProof({
             detail: 'GET /api/dwm/webhook-deliveries?orgId=<org_id>&deliveryId=<delivery_id>',
             retryDryRun: 'POST /api/dwm/webhook-deliveries',
         },
+        routeContract: {
+            schemaVersion: 'dwm.webhook.delivery_history_routes.v1',
+            list: {
+                method: 'GET' as const,
+                route: '/api/dwm/webhook-deliveries',
+                requiredQuery: ['orgId'],
+                optionalQuery: ['destinationId', 'alertId', 'casePath', 'dedupeKey', 'deliveryId'],
+                noNetwork: true,
+            },
+            detail: {
+                method: 'GET' as const,
+                route: '/api/dwm/webhook-deliveries',
+                requiredQuery: ['orgId', 'deliveryId'],
+                optionalQuery: ['destinationId', 'alertId', 'dedupeKey'],
+                responseRowSchema: 'dwm.webhook.delivery_history_consumer_row.v1',
+                noNetwork: true,
+            },
+            retryDryRun: {
+                method: 'POST' as const,
+                route: '/api/dwm/webhook-deliveries',
+                requiredBody: ['orgId', 'destinationId', 'alertId', 'dedupeKey', 'dryRun'],
+                noNetworkDefault: true,
+            },
+        },
         counts: {
             total: rows.length,
             auditLinked: rows.filter(row => row.audit.linked).length,

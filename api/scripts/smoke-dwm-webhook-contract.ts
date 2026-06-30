@@ -3097,6 +3097,7 @@ expect(deliveryHistoryMissingDestination?.destination.availability.state === 'mi
 expect(deliveryHistoryMissingDestination?.sanitizedPayloadPreview?.context.watchlistId === 'watchlist_item_replay_contract' && deliveryHistoryMissingDestination.deliveryProof.auditEventId === 'audit_missing_destination_contract', 'Missing destination history should preserve sanitized Discord preview and audit proof.', deliveryHistoryMissingDestination)
 expect(!JSON.stringify(deliveryHistory).includes(secret), 'Delivery history should not leak endpoint, response, or payload secrets.', deliveryHistory)
 expect(deliveryHistoryConsumer.schemaVersion === 'dwm.webhook.delivery_history_consumer.v1' && deliveryHistoryConsumer.counts.total >= 1 && deliveryHistoryConsumer.routes.detail.includes('delivery_id'), 'Delivery history consumer proof should expose stable list/detail routes.', deliveryHistoryConsumer)
+expect(deliveryHistoryConsumer.routeContract.detail.requiredQuery.join(',') === 'orgId,deliveryId' && deliveryHistoryConsumer.routeContract.retryDryRun.noNetworkDefault === true, 'Delivery history consumer proof should define list/detail/retry route contracts.', deliveryHistoryConsumer.routeContract)
 expect(deliveryHistoryConsumerReplay?.redactedDestination.endpointExposed === false && deliveryHistoryConsumerReplay.redactedDestination.endpointHash === 'endpoint_replay_hash', 'Delivery history consumer proof should expose redacted destination metadata.', deliveryHistoryConsumerReplay?.redactedDestination)
 expect(deliveryHistoryConsumerReplay?.discord.fieldNames.includes('Alert URL') && deliveryHistoryConsumerReplay.discord.safeForCustomerDisplay === true, 'Delivery history consumer proof should expose Discord-safe preview fields.', deliveryHistoryConsumerReplay?.discord)
 expect(deliveryHistoryConsumerReplay?.audit.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryConsumerReplay.idempotency.duplicateAttemptCount === 2 && deliveryHistoryConsumerReplay.replayHistory.duplicateReplay === true, 'Delivery history consumer proof should expose audit and replay idempotency proof.', deliveryHistoryConsumerReplay)
@@ -3516,6 +3517,8 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].dedupe.alreadyDelivered',
             'deliveryHistory.entries[].status',
             'deliveryHistoryConsumer.schemaVersion',
+            'deliveryHistoryConsumer.routeContract.detail.requiredQuery',
+            'deliveryHistoryConsumer.routeContract.retryDryRun.noNetworkDefault',
             'deliveryHistoryConsumer.rows[].redactedDestination.endpointHash',
             'deliveryHistoryConsumer.rows[].discord.fieldNames',
             'deliveryHistoryConsumer.rows[].idempotency.duplicateAttemptCount',
