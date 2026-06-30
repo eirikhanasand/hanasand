@@ -3446,6 +3446,7 @@ function consumerRequestFields(stage: TiActionabilityModel['consumerReadiness'][
 
 function consumerRequestPathLabel(value: string) {
     if (value.includes('alert-readiness')) return 'org alert state'
+    if (value.includes('/api/organizations') && value.includes('watchlists')) return 'org watchlist API'
     if (value.includes('/v1/dwm/watchlists')) return 'watchlist API'
     if (value.includes('/v1/dwm/alerts')) return 'alert API'
     if (value.includes('/v1/cases')) return 'case API'
@@ -3515,8 +3516,10 @@ function displayRequirementText(value: string) {
     return value
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-status/gi, 'Check organization alert state')
+        .replace(/GET\s+\/api\/organizations\/[^/\s]+\/watchlists/gi, 'Open organization watchlists')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'organization alert state')
         .replace(/\/api\/organizations\/[^/\s]+\/alert-status/gi, 'organization alert state')
+        .replace(/\/api\/organizations\/[^/\s]+\/watchlists/gi, 'organization watchlist API')
         .replace(/GET\s+\/api\/organizations\/:id\/alert-readiness/gi, 'Check org alert state')
         .replace(/GET\s+\/api\/organizations\/:id\/alert-status/gi, 'Check org alert state')
         .replace(/\/api\/organizations\/:id\/alert-readiness/gi, 'org alert state')
