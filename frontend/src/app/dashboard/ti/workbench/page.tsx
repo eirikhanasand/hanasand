@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { ArrowUpRight, Inbox, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils/dwm/product'
+import { demoDwmProductSnapshot, type DwmAlert } from '@/utils/dwm/product'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
-import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './workbenchClient'
+import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence } from './workbenchClient'
+import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,72 +58,12 @@ async function loadDwmAlerts(): Promise<DwmAlert[]> {
 }
 
 function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[]): WorkbenchCase[] {
-    const alertCases = alerts.map(alertToCase)
+    const alertCases = alerts.map(dwmAlertToWorkbenchCase)
     const domainCases = overview.domains.map(domain => domainToCase(domain, overview.captures))
     const captureCases = overview.captures.map(captureToCase)
 
     return [...alertCases, ...domainCases, ...captureCases]
         .sort((a, b) => b.priority - a.priority || b.updatedAt.localeCompare(a.updatedAt))
-}
-
-function alertToCase(alert: DwmAlert): WorkbenchCase {
-    const workflowAlert = alert as DwmAlert & { assignedOwner?: string }
-    const severity = normalizeSeverity(alert.severity)
-    const timeline: WorkbenchTimelineItem[] = [
-        {
-            id: `${alert.id}_seen`,
-            at: alert.firstSeenAt,
-            title: 'Alert created',
-            body: `${alert.matchedTerm.value} matched ${alert.sourceCount} ${pluralize('source', alert.sourceCount)}.`,
-        },
-        {
-            id: `${alert.id}_route`,
-            at: alert.firstSeenAt,
-            title: 'Recommended route',
-            body: alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
-        },
-    ]
-
-    return {
-        id: alert.id,
-        kind: 'dwm_alert',
-        queue: severity === 'critical' ? 'Incident response' : alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
-        title: alert.company,
-        subtitle: alert.claimSummary,
-        severity,
-        status: alert.reviewState || 'needs_review',
-        priority: severityPriority(severity) + alert.confidence,
-        confidence: alert.confidence,
-        owner: workflowAlert.assignedOwner || 'unassigned',
-        createdAt: alert.firstSeenAt,
-        updatedAt: alert.firstSeenAt,
-        company: alert.company,
-        matchedTerm: alert.matchedTerm.value,
-        actor: alert.actor || alert.sourceFamily.replaceAll('_', ' '),
-        sourceLabel: `${alert.sourceCount} ${pluralize('source', alert.sourceCount)}`,
-        recommendedAction: alert.recommendedAction,
-        routeLabel: alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
-        persistent: true,
-        evidence: alert.evidence.map(item => ({
-            id: item.id,
-            sourceName: item.sourceName,
-            sourceFamily: item.sourceFamily.replaceAll('_', ' '),
-            captureMode: item.captureMode.replaceAll('_', ' '),
-            redactionState: item.redactionState.replaceAll('_', ' '),
-            contentHash: item.contentHash,
-            excerpt: item.excerpt,
-        })),
-        timeline,
-        nextTasks: [
-            'Validate company identity and matched domain.',
-            'Confirm whether this belongs in incident response, vendor risk, or analyst review.',
-            'Deliver only redacted metadata and safe excerpts to customer workflows.',
-        ],
-        relatedLinks: [
-            { href: '/dashboard/dwm', label: 'Open DWM console' },
-            { href: '/dashboard/automations?setup=dwm', label: 'Delivery route' },
-        ],
-    }
 }
 
 function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {
@@ -242,10 +183,6 @@ function captureEvidence(capture: TiAdminCapture): WorkbenchEvidence {
         excerpt: capture.resultSummary,
         metadata: capture.metadata,
     }
-}
-
-function normalizeSeverity(severity: DwmSeverity): WorkbenchCase['severity'] {
-    return severity
 }
 
 function severityPriority(severity: WorkbenchCase['severity']) {
