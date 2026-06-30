@@ -2529,9 +2529,15 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'source_health_at', at: input.operations?.latestRun?.updatedAt || now, title: input.operations?.latestRun ? 'Latest collection run' : 'Source snapshot missing', body: input.operations?.latestRun ? `${input.operations.latestRun.status}: ${input.operations.latestRun.captureCount} captures.` : 'Source coverage cannot be verified without TI scraper backend.' }],
             nextTasks: [`Owner: source-ops. Active sources: ${activeSources}/${sourceCount}.`, 'Approve bounded public Telegram coverage.', 'Approve metadata-only dark web source coverage.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }, { href: '/api/ti/scraper/control', label: 'Source inventory API' }],
+            relatedLinks: [{ href: '/dashboard/dwm', label: 'Run collection' }, { href: '/dashboard/ti/sources', label: 'Review TI sources' }, { href: sourceInventoryHref(input.scope), label: 'Source inventory API' }],
             workflowPath: path,
             actions: [
+                {
+                    id: 'inspect_source_inventory',
+                    label: 'Inspect source inventory',
+                    method: 'GET',
+                    href: sourceInventoryHref(input.scope),
+                },
                 {
                     id: 'request_source_coverage',
                     label: 'Request sources',
@@ -2779,6 +2785,17 @@ function deliveryLedgerHref(scope: OperatorScope, latestDelivery?: DwmDeliveryIt
         params.set('alertId', latestDelivery.alertId)
     }
     return `/api/dwm/webhooks/deliveries?${params.toString()}`
+}
+
+function sourceInventoryHref(scope: OperatorScope) {
+    const params = new URLSearchParams()
+    params.set('q', scope.organizationId || scope.tenantId)
+    if (scope.organizationId) {
+        params.set('organizationId', scope.organizationId)
+    } else {
+        params.set('tenantId', scope.tenantId)
+    }
+    return `/api/ti/scraper/control?${params.toString()}`
 }
 
 function actionScope(scope: OperatorScope) {

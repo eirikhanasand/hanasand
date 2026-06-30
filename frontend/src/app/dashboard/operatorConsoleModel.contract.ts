@@ -1249,6 +1249,14 @@ if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org
 if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_webhooks')?.href !== '/api/organizations/org_acme/webhooks') {
     throw new Error('Expected organization readiness to expose the webhook destination drill-in.')
 }
+const sourceCoverageCase = expectWorkbenchCase(cases, 'source_coverage')
+const sourceInventoryHref = '/api/ti/scraper/control?q=org_acme&organizationId=org_acme'
+if (sourceCoverageCase.actions?.find(action => action.id === 'inspect_source_inventory')?.href !== sourceInventoryHref) {
+    throw new Error('Expected source coverage to expose the scoped source inventory drill-in.')
+}
+if (sourceCoverageCase.relatedLinks.find(link => link.href === sourceInventoryHref)?.label !== 'Source inventory API') {
+    throw new Error('Expected source coverage links to include scoped source inventory.')
+}
 const deliveryRouteCase = expectWorkbenchCase(cases, 'delivery_route')
 const deliveryHistoryHref = '/api/dwm/webhooks/deliveries?organizationId=org_acme&alertId=alert_acme_1'
 if (deliveryRouteCase.actions?.find(action => action.id === 'open_delivery_history')?.href !== deliveryHistoryHref) {
