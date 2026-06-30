@@ -1031,11 +1031,81 @@ describe("dwm workflow persistence", () => {
       watchlistIds: ["watch_workflow_alpha_acme"],
       watchlistItemIds: ["watch_item_workflow_alpha_acme"]
     });
+    expect(alphaUpdatedList.alerts[0].customerReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_customer_readiness.v1",
+      ready: true,
+      state: "ready",
+      alertReadiness: {
+        ready: true,
+        sourceFamily: "darkweb_metadata",
+        selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        watchlistIds: ["watch_workflow_alpha_acme"],
+        watchlistItemIds: ["watch_item_workflow_alpha_acme"],
+        recommendedRoute: "incident_response",
+        blockerCodes: []
+      },
+      caseHandoff: {
+        ready: true,
+        caseId: "case_alpha_darkweb",
+        casePath: `/v1/cases/case_alpha_darkweb?alertId=${alphaDarkweb.id}`
+      },
+      deliveryReadiness: {
+        ready: true,
+        selectedWebhookDestinationId: "webhook_workflow_alpha",
+        webhookDestinationIds: ["webhook_workflow_alpha"],
+        blockerCodes: []
+      },
+      webhookReplayReadiness: {
+        schemaVersion: "dwm.alert_webhook_replay_readiness.v1",
+        ready: true,
+        replayCount: 0,
+        workflowEventCount: 1,
+        deliveryDedupeKey: alphaDarkweb.dedupeKey,
+        selectedWebhookDestinationId: "webhook_workflow_alpha",
+        webhookDestinationIds: ["webhook_workflow_alpha"],
+        selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        caseId: "case_alpha_darkweb",
+        casePath: `/v1/cases/case_alpha_darkweb?alertId=${alphaDarkweb.id}`,
+        watchlistItemIds: ["watch_item_workflow_alpha_acme"],
+        deliveryHistoryRefs: [],
+        hasDeliveryHistory: false,
+        duplicateReplay: false,
+        canReplay: true,
+        blockerCodes: []
+      },
+      workflowReadiness: {
+        ready: true,
+        status: "investigating",
+        assignedOwner: "owner-alpha-workflow",
+        eventCount: 1,
+        readyActions: expect.arrayContaining(["replay", "deliver"])
+      },
+      transitionHandoff: {
+        ready: true,
+        workflowEventCount: 1,
+        actions: ["escalated"],
+        caseLinked: true,
+        updateReceipt: {
+          ready: true,
+          addedCaptureIds: ["cap_workflow_onion_acme_followup"],
+          workflowEventCount: 1,
+          deliveryDedupeKey: alphaDarkweb.dedupeKey
+        },
+        replayReceipt: {
+          ready: true,
+          workflowEventCount: 1,
+          selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+          blockerCodes: []
+        }
+      },
+      blockerCodes: []
+    });
+    expect(alphaUpdatedList.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.webhookReplayReadiness");
     expect(alphaUpdatedList.alertQueueVisibility).toMatchObject({
       consumerContract: {
         schemaVersion: "dwm.alert_queue_consumer_contract.v1",
         route: "/v1/dwm/alerts",
-        filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily"]),
+        filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily", "replayReady", "hasDeliveryHistory"]),
         zeroAlertContract: "dwm.zero_alert_proof.v1"
       },
       orgAlertWorkflowBridge: {
@@ -1093,12 +1163,35 @@ describe("dwm workflow persistence", () => {
       "alerts[].sourceProvenanceSummary",
       "alerts[].orgWatchlistScope",
       "alerts[].alertEventSummary",
+      "alerts[].customerReadiness.webhookReplayReadiness",
       "alerts[].evidenceFreshness",
       "alertQueueVisibility.orgAlertWorkflowBridge",
       "alertQueueVisibility.zeroAlertProof",
       "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
       "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
     ]));
+
+    const replayReadyListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&replayReady=true&deliveryReady=true&caseReady=true&hasDeliveryHistory=false&readyAction=deliver&transitionAction=escalated`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const replayReadyList = await replayReadyListResponse.json() as any;
+    expect(replayReadyListResponse.status).toBe(200);
+    expect(replayReadyList.alerts.map((alert: any) => alert.id)).toEqual([alphaDarkweb.id]);
+    expect(replayReadyList.alertQueueVisibility.filters).toMatchObject({
+      replayReady: "true",
+      deliveryReady: "true",
+      caseReady: "true",
+      hasDeliveryHistory: "false",
+      readyAction: "deliver",
+      transitionAction: "escalated"
+    });
+
+    const replayBlockedListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&replayReady=false&sourceFamily=darkweb_metadata`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const replayBlockedList = await replayBlockedListResponse.json() as any;
+    expect(replayBlockedListResponse.status).toBe(200);
+    expect(replayBlockedList.alerts).toHaveLength(0);
 
     const alphaUpdatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
       headers: { "x-user-email": "owner-alpha@workflow.example" }

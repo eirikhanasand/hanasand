@@ -1512,6 +1512,28 @@ function buildDwmAlertCustomerReadiness(input: {
       idempotencyKey: input.downstreamHandoff.deliverySelection.idempotencyKey,
       blockerCodes: input.downstreamHandoff.deliverySelection.blockerCodes
     },
+    webhookReplayReadiness: {
+      schemaVersion: "dwm.alert_webhook_replay_readiness.v1",
+      ready: input.downstreamHandoff.replayReceipt.ready,
+      replayMarker: input.downstreamHandoff.replayReceipt.replayMarker,
+      replayCount: input.downstreamHandoff.replayReceipt.replayCount,
+      workflowEventCount: input.downstreamHandoff.replayReceipt.workflowEventCount,
+      idempotencyKey: input.downstreamHandoff.replayReceipt.idempotencyKey,
+      deliveryDedupeKey: input.downstreamHandoff.replayReceipt.deliveryDedupeKey,
+      selectedWebhookDestinationId: input.downstreamHandoff.deliverySelection.selectedWebhookDestinationId,
+      webhookDestinationIds: input.downstreamHandoff.deliverySelection.webhookDestinationIds,
+      selectedCaptureIds: input.downstreamHandoff.replayReceipt.selectedCaptureIds,
+      caseIdCandidate: input.downstreamHandoff.replayReceipt.caseIdCandidate,
+      caseId: input.downstreamHandoff.replayReceipt.caseId,
+      casePath: input.downstreamHandoff.replayReceipt.casePath,
+      watchlistItemIds: input.downstreamHandoff.replayReceipt.watchlistItemIds,
+      alertGenerationRefs: input.downstreamHandoff.replayReceipt.alertGenerationRefs,
+      deliveryHistoryRefs: input.downstreamHandoff.deliveryReadiness.deliveryHistoryRefs,
+      hasDeliveryHistory: input.downstreamHandoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
+      duplicateReplay: input.downstreamHandoff.replay.duplicate,
+      canReplay: input.downstreamHandoff.replay.canReplay,
+      blockerCodes: input.downstreamHandoff.replayReceipt.blockerCodes
+    },
     workflowReadiness: {
       ready: workflowReady,
       status: alert.workflowStatus ?? "new",
@@ -1610,7 +1632,7 @@ function buildDwmAlertCustomerReadiness(input: {
     ],
     consumerFields: {
       dashboard: ["id", "alertDetailPath", "customerReadiness.alertReadiness", "customerReadiness.workflowReadiness", "customerReadiness.transitionHandoff", "customerReadiness.blockerCodes"],
-      webhook: ["customerReadiness.deliveryReadiness", "customerReadiness.transitionHandoff.replayReceipt", "alertCreatedDispatch", "downstreamHandoff.createdEventDispatch"],
+      webhook: ["customerReadiness.deliveryReadiness", "customerReadiness.webhookReplayReadiness", "customerReadiness.transitionHandoff.replayReceipt", "alertCreatedDispatch", "downstreamHandoff.createdEventDispatch"],
       publicTI: ["customerReadiness.sourceCoverage", "customerReadiness.alertReadiness.matchReason", "sourceProvenanceSummary"],
       analystPortal: ["customerReadiness.workflowReadiness", "customerReadiness.transitionHandoff", "caseHandoff", "nextBestAction"]
     }
@@ -1727,6 +1749,7 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].customerReadiness.workflowReadiness",
         "alerts[].customerReadiness.transitionHandoff",
         "alerts[].customerReadiness.transitionHandoff.replayReceipt",
+        "alerts[].customerReadiness.webhookReplayReadiness",
         "alerts[].customerReadiness.deliveryReadiness",
         "alerts[].customerReadiness.caseHandoff",
         "alertQueueVisibility.orgAlertWorkflowBridge",
@@ -1734,7 +1757,7 @@ function buildDwmAlertQueueVisibility(input: {
         "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
         "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
       ],
-      filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId", "customerReadinessState", "customerReady", "caseReady", "deliveryReady", "workflowReady", "readinessBlocker", "readyAction", "blockedAction", "transitionAction", "transitionBlocker"],
+      filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId", "customerReadinessState", "customerReady", "caseReady", "deliveryReady", "workflowReady", "replayReady", "hasDeliveryHistory", "readinessBlocker", "readyAction", "blockedAction", "transitionAction", "transitionBlocker"],
       zeroAlertContract: "dwm.zero_alert_proof.v1"
     },
     watchlistScope: {
@@ -1766,6 +1789,8 @@ function buildDwmAlertQueueVisibility(input: {
       customerReady: input.url.searchParams.get("customerReady") ?? input.url.searchParams.get("alertReady"),
       caseReady: input.url.searchParams.get("caseReady") ?? input.url.searchParams.get("caseHandoffReady"),
       deliveryReady: input.url.searchParams.get("deliveryReady") ?? input.url.searchParams.get("webhookReady"),
+      replayReady: input.url.searchParams.get("replayReady") ?? input.url.searchParams.get("webhookReplayReady"),
+      hasDeliveryHistory: input.url.searchParams.get("hasDeliveryHistory"),
       readinessBlocker: input.url.searchParams.get("readinessBlocker") ?? input.url.searchParams.get("blockerCode"),
       readyAction: input.url.searchParams.get("readyAction"),
       blockedAction: input.url.searchParams.get("blockedAction"),
@@ -2069,6 +2094,8 @@ function alertMatchesDwmAlertReadinessFilters(alert: any, url: URL) {
   if (!matchesBooleanParam(url, ["customerReady", "alertReady"], Boolean(readiness.ready))) return false;
   if (!matchesBooleanParam(url, ["caseReady", "caseHandoffReady"], Boolean(readiness.caseHandoff?.ready))) return false;
   if (!matchesBooleanParam(url, ["deliveryReady", "webhookReady"], Boolean(readiness.deliveryReadiness?.ready))) return false;
+  if (!matchesBooleanParam(url, ["replayReady", "webhookReplayReady"], Boolean(readiness.webhookReplayReadiness?.ready))) return false;
+  if (!matchesBooleanParam(url, ["hasDeliveryHistory"], Boolean(readiness.webhookReplayReadiness?.hasDeliveryHistory))) return false;
   if (!matchesBooleanParam(url, ["workflowReady", "analystWorkflowReady"], Boolean(readiness.workflowReadiness?.ready))) return false;
   if (!matchesAnyParam(url, ["readinessBlocker", "blockerCode"], readiness.blockerCodes ?? [])) return false;
   if (!matchesAnyParam(url, ["sourceCoverageBlocker"], readiness.sourceCoverage?.blockerCodes ?? [])) return false;
