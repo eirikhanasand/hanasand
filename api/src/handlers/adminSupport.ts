@@ -1102,6 +1102,21 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         timeline: recentAuditTimeline.events,
         timelineFilter: organizationTimelineFilter,
     })
+    const caseAccessReadiness = supportOrganizationCaseAccessReadiness({
+        organizationId: organization.id,
+        requestId: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        supportContext: inspectionAudit.supportContext,
+        members: members.rows.map(toSupportMember),
+        invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
+        watchlistItems: watchlistItems.map(toWatchlistItem),
+        alertReferences,
+        webhookDestinations,
+        webhookDestinationReadiness,
+        accessStatus: organizationAccessStatus,
+        accessRecoveryPlan,
+        timeline: recentAuditTimeline.events,
+    })
     const authorization = buildSupportInspectionAuthorization({
         actorId: actor.id,
         requestedOrg: req.params.id,
@@ -1210,6 +1225,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         alertReferences,
         webhookDestinations,
         webhookDestinationReadiness,
+        caseAccessReadiness,
         accessRecoveryPlan,
         actionHistoryExport,
         timeline: recentAuditTimeline.events,
@@ -1226,6 +1242,7 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
         webhookDestinations,
+        caseAccessReadiness,
         alertReadiness: {
             schemaVersion: 'support.organization.alert_readiness.v1',
             organizationId: organization.id,
@@ -5830,6 +5847,111 @@ function supportWebhookDestinationReadiness(input: {
     }
 }
 
+function supportOrganizationCaseAccessReadiness(input: {
+    organizationId: string
+    requestId: string
+    reason: string
+    supportContext: string
+    members: Array<Record<string, any>>
+    invites: Array<Record<string, any>>
+    watchlistItems: Array<Record<string, any>>
+    alertReferences: Array<Record<string, any>>
+    webhookDestinations: Array<Record<string, any>>
+    webhookDestinationReadiness: Record<string, any>
+    accessStatus: Record<string, any>
+    accessRecoveryPlan: Record<string, any>
+    timeline: Array<Record<string, any>>
+}) {
+    const auditEventIds = input.timeline.map(event => Number(event.id)).filter(id => Number.isFinite(id))
+    const pendingInvites = input.invites.filter(invite => invite.status === 'pending')
+    const activeMembers = input.members.filter(member => member.status === 'active' || member.active === true)
+    const failedWebhookBlockers = Array.isArray(input.webhookDestinationReadiness.caseReadiness?.blockers)
+        ? input.webhookDestinationReadiness.caseReadiness.blockers
+        : []
+    const accessBlockers = Array.isArray(input.accessStatus.blockers) ? input.accessStatus.blockers : []
+    const recoveryBlockers = Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []
+    const blockers = uniqueTimelineValues([
+        activeMembers.length ? '' : 'missing_active_member',
+        input.watchlistItems.length || input.alertReferences.length ? '' : 'missing_alert_or_watchlist_evidence',
+        input.webhookDestinations.length ? '' : 'missing_webhook_destination',
+        auditEventIds.length ? '' : 'missing_case_audit_events',
+        ...failedWebhookBlockers,
+        ...accessBlockers,
+        ...recoveryBlockers,
+    ])
+    return {
+        schemaVersion: 'support.case_access_readiness.v1',
+        generatedAt: new Date().toISOString(),
+        organizationId: input.organizationId,
+        requestId: input.requestId,
+        reason: input.reason || null,
+        supportContextPresent: Boolean(input.supportContext),
+        status: blockers.length ? 'needs_review' : 'ready',
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        evidence: {
+            activeMemberCount: activeMembers.length,
+            pendingInviteCount: pendingInvites.length,
+            watchlistItemCount: input.watchlistItems.length,
+            alertReferenceCount: input.alertReferences.length,
+            webhookDestinationCount: input.webhookDestinations.length,
+            auditEventIds,
+        },
+        recoveryState: {
+            accessStatus: input.accessStatus.overall || null,
+            recoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
+            blockers: uniqueTimelineValues([...accessBlockers, ...recoveryBlockers]),
+        },
+        replayFilters: {
+            current: auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            members: auditFilterQuery({ org: input.organizationId, entityType: 'member', source: 'admin', service: 'hanasand-api' }),
+            invites: auditFilterQuery({ org: input.organizationId, entityType: 'invite', source: 'admin', service: 'hanasand-api' }),
+            watchlists: auditFilterQuery({ org: input.organizationId, action: 'watchlist', source: 'admin', service: 'hanasand-api' }),
+            alerts: auditFilterQuery({ org: input.organizationId, action: 'alert', source: 'admin', service: 'hanasand-api' }),
+            webhooks: auditFilterQuery({ org: input.organizationId, action: 'webhook', source: 'admin', service: 'hanasand-api' }),
+            recovery: auditFilterQuery({ org: input.organizationId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ org: input.organizationId, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+        },
+        nextRoutes: {
+            organizationInspection: `/api/admin/support/organizations/${encodeURIComponent(input.organizationId)}`,
+            inviteAssist: `/api/admin/support/organizations/${encodeURIComponent(input.organizationId)}/invites`,
+            accessRecovery: `/api/admin/support/organizations/${encodeURIComponent(input.organizationId)}/access-recovery`,
+            auditReplay: auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            caseReplay: '/api/admin/support/receipt-replay',
+        },
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noSilentMembershipMutation: true,
+            noLiveWebhookDelivery: true,
+            noSecretExposure: true,
+            noCrossOrgLeakage: true,
+            redactionRequired: true,
+        },
+        forbiddenFields: ['endpoint_encrypted', 'endpointUrl', 'webhookUrl', 'secret', 'token', 'authorization', 'cookie', 'sessionToken', 'inviteToken'],
+        denialStates: [
+            'support_role_required',
+            'missing_support_reason',
+            'wrong_org_scope',
+            'missing_active_member',
+            'missing_alert_or_watchlist_evidence',
+            'missing_webhook_destination',
+            'webhook_destination_test_failed',
+            'denied_recovery_approval',
+            'redaction_required',
+        ],
+        blockers,
+        copyText: [
+            `Support case access readiness org=${input.organizationId}`,
+            `Members: ${activeMembers.length}`,
+            `Invites: ${pendingInvites.length}`,
+            `Alerts/watchlists/webhooks: ${input.alertReferences.length}/${input.watchlistItems.length}/${input.webhookDestinations.length}`,
+            `Replay: ${auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' })}`,
+            `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
 function supportOrganizationCaseHandoff(input: {
     actorId: string
     organizationId: string
@@ -5840,6 +5962,7 @@ function supportOrganizationCaseHandoff(input: {
     alertReferences: Array<Record<string, any>>
     webhookDestinations: Array<Record<string, any>>
     webhookDestinationReadiness: Record<string, any>
+    caseAccessReadiness: Record<string, any>
     accessRecoveryPlan: Record<string, any>
     actionHistoryExport: Record<string, any>
     timeline: Array<Record<string, any>>
@@ -5870,6 +5993,7 @@ function supportOrganizationCaseHandoff(input: {
             actions,
             outcomes,
             caseTimeline: supportCaseTimelineEntries(input.timeline),
+            caseAccessReadiness: input.caseAccessReadiness,
         },
         recovery: {
             accessRecoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
