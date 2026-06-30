@@ -2210,6 +2210,24 @@ describe("dwm alert repository", () => {
       eventCount: 1,
       replayCount: 3
     });
+    expect(preservedHandoff.replayReceipt).toMatchObject({
+      schemaVersion: "dwm.alert_replay_receipt.v1",
+      ready: false,
+      alertId: alert.id,
+      tenantId: "org_repo_customer",
+      organizationId: "org_repo_customer",
+      replayCount: 3,
+      workflowEventCount: 1,
+      caseIdCandidate: preserved.caseIdCandidate,
+      caseId: "case_customer_proof",
+      casePath: `/v1/cases/case_customer_proof?alertId=${alert.id}`,
+      deliveryDedupeKey: alert.dedupeKey,
+      watchlistItemIds: ["watch_item_customer"],
+      blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"])
+    });
+    expect(preservedHandoff.replayReceipt.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
+    expect(preservedHandoff.replayReceipt.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(preservedHandoff.replayReceipt.alertGenerationRefs[0].dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
     expect(preservedHandoff.evidence.generationEvidenceWindow).toMatchObject({
       sourceFamilies: ["telegram_public"],
       firstObservedAt: "2026-06-28T13:04:00.000Z",

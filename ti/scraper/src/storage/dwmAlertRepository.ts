@@ -618,6 +618,25 @@ export type DwmAlertDownstreamHandoff = {
     replayMarker?: string;
     nextReplayIdempotencyKey?: string;
   };
+  replayReceipt: {
+    schemaVersion: "dwm.alert_replay_receipt.v1";
+    ready: boolean;
+    alertId?: string;
+    tenantId?: string;
+    organizationId?: string;
+    replayMarker?: string;
+    replayCount: number;
+    idempotencyKey?: string;
+    workflowEventCount: number;
+    caseIdCandidate?: string;
+    caseId?: string;
+    casePath?: string;
+    deliveryDedupeKey?: string;
+    selectedCaptureIds: string[];
+    watchlistItemIds: string[];
+    alertGenerationRefs: Array<Record<string, any>>;
+    blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
+  };
   customerProof: {
     schemaVersion: "dwm.customer_alert_proof.v1";
     blockerCodes: DwmCustomerProofBlockerCode[];
@@ -2791,6 +2810,8 @@ export function buildDwmAlertDownstreamHandoff(input: {
     !createdEventCaptureIds.length || evidenceCount === 0 ? "missing_capture_evidence" : undefined
   ].filter(Boolean).map(String)) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
   const createdEventDispatchReady = Boolean(createdEvent?.eventId) && createdEventDispatchBlockerCodes.length === 0;
+  const replayMarker = context.replayMarker ? String(context.replayMarker) : undefined;
+  const replayIdempotencyKey = alertId && replayMarker ? stableId("dwm_replay_handoff", `${orgId ?? tenantId}:${alertId}:${replayMarker}:${eventCount}`) : undefined;
   return {
     schemaVersion: "dwm.alert_downstream_handoff.v1",
     handoffId: stableId("dwm_downstream_handoff", `${tenantId ?? "missing"}:${orgId ?? "missing"}:${alertId ?? "missing"}:${deliveryDedupeKey}:${eventCount}`),
@@ -2913,8 +2934,30 @@ export function buildDwmAlertDownstreamHandoff(input: {
         && !blockerCodes.includes("suppressed_alert")
         && !blockerCodes.includes("revoked_actor")
         && !blockerCodes.includes("no_active_source_match"),
-      replayMarker: context.replayMarker,
-      nextReplayIdempotencyKey: alertId && context.replayMarker ? stableId("dwm_replay_handoff", `${orgId ?? tenantId}:${alertId}:${context.replayMarker}:${eventCount}`) : undefined
+      replayMarker,
+      nextReplayIdempotencyKey: replayIdempotencyKey
+    },
+    replayReceipt: {
+      schemaVersion: "dwm.alert_replay_receipt.v1",
+      ready: !duplicateReplay && blockerCodes.length === 0 && deliverySelectionBlockerCodes.length === 0,
+      alertId,
+      tenantId,
+      organizationId: orgId,
+      replayMarker,
+      replayCount: Number(alert?.replayCount ?? 0),
+      idempotencyKey: replayIdempotencyKey,
+      workflowEventCount: eventCount,
+      caseIdCandidate,
+      caseId: context.caseId ?? alert?.caseId,
+      casePath,
+      deliveryDedupeKey,
+      selectedCaptureIds,
+      watchlistItemIds,
+      alertGenerationRefs,
+      blockerCodes: uniqueStrings([
+        ...blockerCodes,
+        ...deliverySelectionBlockerCodes
+      ]) as Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>
     },
     customerProof: {
       schemaVersion: "dwm.customer_alert_proof.v1",
