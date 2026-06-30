@@ -1251,6 +1251,21 @@ export type DwmOrgAlertPipelineProof = {
         caseLinked: boolean;
         suppressed: boolean;
         closed: boolean;
+        actionReadiness: {
+          schemaVersion: "dwm.alert_analyst_action_readiness.v1";
+          expectedWorkflowEventCount: number;
+          readyActions: DwmAlertWorkflowExecutionReadiness["action"][];
+          blockedActions: DwmAlertWorkflowExecutionReadiness["action"][];
+          actions: Array<{
+            action: DwmAlertWorkflowExecutionReadiness["action"];
+            ready: boolean;
+            idempotencyKey?: string;
+            workflowEventCount: number;
+            casePath?: string;
+            deliveryDedupeKey?: string;
+            blockerCodes: DwmAlertWorkflowExecutionBlockerCode[];
+          }>;
+        };
         blockerCodes: string[];
       };
       stableFields: string[];
@@ -1971,6 +1986,7 @@ export function buildDwmOrgAlertPipelineProof(input: {
     });
     const transitionEvents = buildDwmAlertCustomerProofWorkflowTransitionEvents(alert);
     const sourceHandoffReadiness = buildDwmAlertSourceHandoffReadiness({
+      alert,
       handoff,
       sourceProvenanceSummary
     });
@@ -2136,7 +2152,7 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
     receiptSchemaIds: ["dwm.alert_replay_receipt.v1"],
     blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.caseConsumer.blockerCodes)),
-    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.matchReason", "alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer"],
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.matchReason", "alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer", "alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness"],
     downstreamOwners: ["case", "analyst_portal"],
     missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.caseConsumer.ready),
     safeOutput: metadataOnlyAlertReceiptSafeOutput()
@@ -2176,6 +2192,7 @@ function metadataOnlyAlertReceiptSafeOutput(): DwmOrgAlertPipelineProof["consume
 }
 
 function buildDwmAlertSourceHandoffReadiness(input: {
+  alert?: any;
   handoff: DwmAlertDownstreamHandoff;
   sourceProvenanceSummary: DwmAlertSourceProvenanceSummary;
 }): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"] {
@@ -2224,6 +2241,10 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     handoff: input.handoff,
     provenanceGapCodes,
     evidenceFreshnessBlockerCodes: evidenceFreshness.blockerCodes
+  });
+  const actionReadiness = buildDwmAlertAnalystActionReadiness({
+    alert: input.alert,
+    handoff: input.handoff
   });
 
   return {
@@ -2296,6 +2317,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       caseLinked: input.handoff.workflowTransitions.caseLinked,
       suppressed: input.handoff.workflowTransitions.suppressed,
       closed: input.handoff.workflowTransitions.closed,
+      actionReadiness,
       blockerCodes: analystWorkflowBlockerCodes
     },
     stableFields: [
@@ -2315,7 +2337,8 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "analystWorkflowConsumer.workflowStatus",
       "analystWorkflowConsumer.decisionValue",
       "analystWorkflowConsumer.transitionActions",
-      "analystWorkflowConsumer.caseLinked"
+      "analystWorkflowConsumer.caseLinked",
+      "analystWorkflowConsumer.actionReadiness"
     ],
     gapFields: [
       "state",
@@ -2362,6 +2385,79 @@ function buildDwmAlertSourceHandoffBlockerReasons(input: {
     if (!byCodeAndField.has(key)) byCodeAndField.set(key, reason);
   }
   return [...byCodeAndField.values()];
+}
+
+function buildDwmAlertAnalystActionReadiness(input: {
+  alert?: any;
+  handoff: DwmAlertDownstreamHandoff;
+}): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["analystWorkflowConsumer"]["actionReadiness"] {
+  const actions: DwmAlertWorkflowExecutionReadiness["action"][] = [
+    "assign",
+    "note",
+    "transition",
+    "case_link",
+    "replay",
+    "close",
+    "reopen",
+    "suppress",
+    "deliver"
+  ];
+  const expectedWorkflowEventCount = input.handoff.workflowVersion.eventCount;
+  const actionRows = actions.map((action) => {
+    const readiness = buildDwmAlertWorkflowExecutionReadiness({
+      alert: input.alert,
+      organizationId: input.handoff.organizationId,
+      action,
+      actorRole: "analyst",
+      expectedWorkflowEventCount,
+      caseAvailable: action === "case_link" ? input.handoff.caseReadiness.ready : undefined,
+      deliveryAvailable: action === "deliver" ? input.handoff.deliveryReadiness.ready : undefined,
+      duplicateReplay: action === "replay" ? input.handoff.replay.duplicate : undefined,
+      lifecycleBlockers: workflowActionLifecycleBlockers(action, input.handoff)
+    });
+    return {
+      action,
+      ready: readiness.ready,
+      idempotencyKey: readiness.idempotencyKey,
+      workflowEventCount: readiness.currentWorkflowEventCount ?? expectedWorkflowEventCount,
+      casePath: readiness.workflowActionEvent?.casePath,
+      deliveryDedupeKey: readiness.workflowActionEvent?.deliveryDedupeKey,
+      blockerCodes: readiness.blockerCodes
+    };
+  });
+  return {
+    schemaVersion: "dwm.alert_analyst_action_readiness.v1",
+    expectedWorkflowEventCount,
+    readyActions: actionRows.filter((row) => row.ready).map((row) => row.action),
+    blockedActions: actionRows.filter((row) => !row.ready).map((row) => row.action),
+    actions: actionRows
+  };
+}
+
+function workflowActionLifecycleBlockers(
+  action: DwmAlertWorkflowExecutionReadiness["action"],
+  handoff: DwmAlertDownstreamHandoff
+): DwmAlertWorkflowExecutionBlockerCode[] {
+  const lifecycleCodes = handoff.blockerCodes.flatMap((code): DwmAlertWorkflowExecutionBlockerCode[] => {
+    if (code === "archived_org"
+      || code === "retired_watchlist"
+      || code === "disabled_destination"
+      || code === "closed_alert"
+      || code === "suppressed_alert"
+      || code === "revoked_actor"
+      || code === "no_active_source_match"
+      || code === "entitlement_denied"
+      || code === "org_mismatch") {
+      return [code];
+    }
+    return [];
+  });
+  return lifecycleCodes.filter((code) => {
+    if (code === "disabled_destination") return action === "deliver" || action === "replay";
+    if (code === "closed_alert") return action === "deliver" || action === "replay" || action === "close";
+    if (code === "suppressed_alert") return action === "deliver" || action === "replay" || action === "suppress";
+    return true;
+  });
 }
 
 function buildDwmAlertEvidenceFreshness(handoff: DwmAlertDownstreamHandoff): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["evidenceFreshness"] {
@@ -2753,6 +2849,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
     "alerts.workflowStatus",
     "alerts.workflowTransitionActions",
     "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
+    "alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness",
     "alerts.casePath",
     "gaps.blockerCodes"
   ];
@@ -2780,6 +2877,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.sourceHandoffReadiness.sourceCoverage",
         "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
+        "alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness",
         "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
       ],
@@ -2842,6 +2940,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.sourceHandoffReadiness.sourceCoverage",
         "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
         "alerts.sourceHandoffReadiness.analystWorkflowConsumer",
+        "alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness",
         "alerts.workflowStatus",
         "alerts.workflowTransitionActions",
         "alerts.workflowEventCount",

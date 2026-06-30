@@ -1245,7 +1245,26 @@ describe("dwm alert repository", () => {
       workflowEventCount: 1,
       blockerCodes: []
     });
+    expect(preservedPipelineProof.alerts[0].sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_analyst_action_readiness.v1",
+      expectedWorkflowEventCount: 1,
+      readyActions: expect.arrayContaining(["assign", "note", "transition", "case_link", "close", "reopen"]),
+      blockedActions: expect.arrayContaining(["replay", "suppress", "deliver"])
+    });
+    const preservedActionRows = new Map(preservedPipelineProof.alerts[0].sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness.actions.map((row) => [row.action, row]));
+    expect(preservedActionRows.get("deliver")).toMatchObject({
+      ready: false,
+      workflowEventCount: 1,
+      deliveryDedupeKey: existing.dedupeKey,
+      blockerCodes: expect.arrayContaining(["delivery_unavailable", "suppressed_alert"])
+    });
+    expect(preservedActionRows.get("reopen")).toMatchObject({
+      ready: true,
+      workflowEventCount: 1,
+      casePath: preserved?.casePath
+    });
     expect(preservedPipelineProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("analystWorkflowConsumer.decisionValue");
+    expect(preservedPipelineProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("analystWorkflowConsumer.actionReadiness");
     expect(buildDwmAlertWorkflowExecutionReadiness({
       alert: preserved,
       organizationId: "org_repo_acme",
@@ -3404,6 +3423,25 @@ describe("dwm alert repository", () => {
       closed: false,
       blockerCodes: []
     });
+    expect(telegramProof?.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness).toMatchObject({
+      schemaVersion: "dwm.alert_analyst_action_readiness.v1",
+      expectedWorkflowEventCount: 1,
+      readyActions: expect.arrayContaining(["assign", "note", "transition", "case_link", "replay", "close", "reopen", "suppress", "deliver"]),
+      blockedActions: []
+    });
+    const deltaActionRows = new Map((telegramProof?.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness.actions ?? []).map((row) => [row.action, row]));
+    expect(deltaActionRows.get("deliver")).toMatchObject({
+      ready: true,
+      workflowEventCount: 1,
+      casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
+      blockerCodes: []
+    });
+    expect(deltaActionRows.get("case_link")).toMatchObject({
+      ready: true,
+      workflowEventCount: 1,
+      casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
+      blockerCodes: []
+    });
     expect(telegramProof?.sourceHandoffReadiness.publicTiConsumer).toMatchObject({
       ready: true,
       redacted: true,
@@ -3413,7 +3451,7 @@ describe("dwm alert repository", () => {
       gapFields: expect.arrayContaining(["blockerReasons", "sourceCoverage.blockerCodes", "provenanceGapCodes"])
     });
     expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["matchReason", "sourceCoverage", "selectedCaptureIds", "duplicateEvidenceSuppression", "evidenceFreshness", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
-    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["analystWorkflowConsumer.workflowStatus", "analystWorkflowConsumer.transitionActions", "analystWorkflowConsumer.caseLinked"]));
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["analystWorkflowConsumer.workflowStatus", "analystWorkflowConsumer.transitionActions", "analystWorkflowConsumer.caseLinked", "analystWorkflowConsumer.actionReadiness"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["blockerReasons", "sourceCoverage.blockerCodes", "provenanceGapCodes", "evidenceFreshness.blockerCodes", "webhookConsumer.blockerCodes"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toContain("analystWorkflowConsumer.blockerCodes");
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
@@ -3485,6 +3523,7 @@ describe("dwm alert repository", () => {
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.matchReason");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
+    expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness");
     expect(proof.consumerReceiptMatrix).toMatchObject({
       schemaVersion: "dwm.org_alert_consumer_receipt_matrix.v1",
       checkedAt: "2026-06-28T13:40:00.000Z",
@@ -3510,7 +3549,7 @@ describe("dwm alert repository", () => {
     expect(receiptRows.get("case_workflow")).toMatchObject({
       readinessRoute: "/v1/cases",
       receiptSchemaIds: expect.arrayContaining(["dwm.alert_replay_receipt.v1"]),
-      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.caseConsumer.casePath", "alerts.sourceHandoffReadiness.analystWorkflowConsumer", "alerts.sourceHandoffReadiness.analystWorkflowConsumer.actionReadiness"]),
       downstreamOwners: expect.arrayContaining(["case", "analyst_portal"]),
       missingContract: false
     });
