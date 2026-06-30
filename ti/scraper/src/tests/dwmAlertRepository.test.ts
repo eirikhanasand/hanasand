@@ -1770,6 +1770,21 @@ describe("dwm alert repository", () => {
         sourceFamilies: ["telegram_public"],
         blockerCodes: ["stale_capture_evidence"]
       },
+      sourceCoverage: {
+        schemaVersion: "dwm.alert_source_coverage.v1",
+        sourceFamily: "telegram_public",
+        captureCount: 1,
+        provenanceCaptureCount: 1,
+        provenanceSourceCount: 1,
+        freshnessState: "stale",
+        blockerCodes: ["stale_capture_evidence"]
+      },
+      blockerReasons: [expect.objectContaining({
+        code: "stale_capture_evidence",
+        field: "sourceHandoffReadiness.evidenceFreshness",
+        recoverable: true,
+        ownerLane: "source_operations"
+      })],
       webhookConsumer: {
         ready: false,
         deliveryReady: true,
@@ -1777,7 +1792,9 @@ describe("dwm alert repository", () => {
       }
     });
     expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("evidenceFreshness");
+    expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("sourceCoverage");
     expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.gapFields).toContain("evidenceFreshness.blockerCodes");
+    expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.gapFields).toContain("blockerReasons");
     const staleEvidenceReceiptRows = new Map(staleEvidenceProof.consumerReceiptMatrix.rows.map((row) => [row.ownerLane, row]));
     expect(staleEvidenceReceiptRows.get("alert_generation")).toMatchObject({
       blockerCodes: expect.arrayContaining(["stale_capture_evidence"]),
@@ -1789,7 +1806,7 @@ describe("dwm alert repository", () => {
     });
     expect(staleEvidenceReceiptRows.get("public_ti")).toMatchObject({
       blockerCodes: ["stale_capture_evidence"],
-      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.evidenceFreshness"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.evidenceFreshness", "alerts.sourceHandoffReadiness.sourceCoverage", "alerts.sourceHandoffReadiness.blockerReasons"]),
       missingContract: true
     });
 
@@ -3317,6 +3334,24 @@ describe("dwm alert repository", () => {
     expect(telegramProof?.sourceHandoffReadiness.sourceFamily).toBe("telegram_public");
     expect(telegramProof?.sourceHandoffReadiness.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(telegramProof?.sourceHandoffReadiness.evidenceCount).toBe(2);
+    expect(telegramProof?.sourceHandoffReadiness.matchReason).toMatchObject({
+      schemaVersion: "dwm.alert_match_reason.v1",
+      sourceFamily: "telegram_public",
+      matchedTerm: expect.objectContaining({ value: "acme.com", kind: "domain" }),
+      captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+      evidenceCount: 2,
+      recommendedRoute: "identity_response"
+    });
+    expect(telegramProof?.sourceHandoffReadiness.sourceCoverage).toMatchObject({
+      schemaVersion: "dwm.alert_source_coverage.v1",
+      sourceFamily: "telegram_public",
+      captureCount: 2,
+      provenanceCaptureCount: 2,
+      provenanceSourceCount: 1,
+      freshnessState: "fresh",
+      blockerCodes: []
+    });
+    expect(telegramProof?.sourceHandoffReadiness.blockerReasons).toEqual([]);
     expect(telegramProof?.sourceHandoffReadiness.duplicateEvidenceSuppression).toMatchObject({
       schemaVersion: "dwm.duplicate_evidence_suppression.v1",
       suppressedCount: 1,
@@ -3374,12 +3409,12 @@ describe("dwm alert repository", () => {
       redacted: true,
       alertGenerationRefCount: 2,
       sourceFamily: "telegram_public",
-      stableFields: expect.arrayContaining(["provenanceCaptureIds", "alertGenerationRefCount"]),
-      gapFields: expect.arrayContaining(["provenanceGapCodes"])
+      stableFields: expect.arrayContaining(["matchReason", "sourceCoverage", "provenanceCaptureIds", "alertGenerationRefCount"]),
+      gapFields: expect.arrayContaining(["blockerReasons", "sourceCoverage.blockerCodes", "provenanceGapCodes"])
     });
-    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "duplicateEvidenceSuppression", "evidenceFreshness", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["matchReason", "sourceCoverage", "selectedCaptureIds", "duplicateEvidenceSuppression", "evidenceFreshness", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
     expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["analystWorkflowConsumer.workflowStatus", "analystWorkflowConsumer.transitionActions", "analystWorkflowConsumer.caseLinked"]));
-    expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "evidenceFreshness.blockerCodes", "webhookConsumer.blockerCodes"]));
+    expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["blockerReasons", "sourceCoverage.blockerCodes", "provenanceGapCodes", "evidenceFreshness.blockerCodes", "webhookConsumer.blockerCodes"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toContain("analystWorkflowConsumer.blockerCodes");
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
     expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
@@ -3400,6 +3435,22 @@ describe("dwm alert repository", () => {
       provenanceCaptureIds: ["cap_repo_darkweb_acme"],
       provenanceSourceIds: ["src_repo_darkweb"],
       provenanceGapCodes: [],
+      matchReason: expect.objectContaining({
+        schemaVersion: "dwm.alert_match_reason.v1",
+        sourceFamily: "darkweb_metadata",
+        matchedTerm: expect.objectContaining({ value: "acme.com" }),
+        captureIds: ["cap_repo_darkweb_acme"]
+      }),
+      sourceCoverage: {
+        schemaVersion: "dwm.alert_source_coverage.v1",
+        sourceFamily: "darkweb_metadata",
+        captureCount: 1,
+        provenanceCaptureCount: 1,
+        provenanceSourceCount: 1,
+        freshnessState: "fresh",
+        blockerCodes: []
+      },
+      blockerReasons: [],
       webhookConsumer: {
         ready: true,
         deliveryReady: true,
@@ -3418,14 +3469,20 @@ describe("dwm alert repository", () => {
       }
     });
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.matchReason");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.sourceCoverage");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.evidenceFreshness");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.webhookConsumer");
+    expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.matchReason");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness.matchReason");
+    expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness.blockerReasons");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.matchReason");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
     expect(proof.consumerReceiptMatrix).toMatchObject({
