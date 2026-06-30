@@ -1297,6 +1297,29 @@ export type OrganizationWatchlistAlertTermsExportDenial = {
     redactedFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys'>
     blockerCodes: Array<OrganizationVisibilityDenyReason | 'alert_export_unavailable'>
     nonmemberEnumeration: false
+    alertGenerationConsumerDenial: {
+        schemaVersion: 'organization.watchlist_alert_generation_consumer_denial.v1'
+        organizationId: string
+        tenantId: string
+        repositoryAdapter: 'organizationWatchlistAlertTermsExport'
+        route: 'GET /api/organizations/:id/watchlists/alert-terms'
+        member: {
+            role: OrganizationRole
+            status: 'active'
+        }
+        canReadSharedWatchlists: true
+        canExportAlertTerms: false
+        canMutateWatchlists: boolean
+        allowedExportRoles: OrganizationRole[]
+        readSharedWatchlistRoles: OrganizationRole[]
+        mutateWatchlistRoles: Array<'owner' | 'admin'>
+        denialReason: OrganizationVisibilityDenyReason | 'alert_export_unavailable'
+        safeFields: Array<'organizationId' | 'tenantId' | 'member.role' | 'allowedExportRoles' | 'denialReason' | 'requestId'>
+        noLeakFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'alertGeneratorKeys[]' | 'watchlistScope.alertGeneratorKeys' | 'otherOrg.watchlistItemIds'>
+        nonmemberEnumeration: false
+        removedMemberDenied: 'member_revoked'
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     auditProof: {
         schemaVersion: 'organization.watchlist_alert_terms_denial_audit.v1'
         serviceLogAction: 'organization_watchlist_alert_terms_export_denied'
@@ -4341,6 +4364,42 @@ export function organizationWatchlistAlertTermsExportDenial(input: {
         redactedFields,
         blockerCodes: [input.visibility.reason ?? 'alert_export_unavailable'],
         nonmemberEnumeration: false,
+        alertGenerationConsumerDenial: {
+            schemaVersion: 'organization.watchlist_alert_generation_consumer_denial.v1',
+            organizationId: input.organizationId,
+            tenantId: input.tenantId ?? input.organizationId,
+            repositoryAdapter: 'organizationWatchlistAlertTermsExport',
+            route: 'GET /api/organizations/:id/watchlists/alert-terms',
+            member: {
+                role: input.member.role,
+                status: 'active',
+            },
+            canReadSharedWatchlists: true,
+            canExportAlertTerms: false,
+            canMutateWatchlists: roleCanWriteWatchlist(input.member.role),
+            allowedExportRoles: input.visibility.allowedRoles,
+            readSharedWatchlistRoles: ['owner', 'admin', 'member', 'viewer'],
+            mutateWatchlistRoles: ['owner', 'admin'],
+            denialReason: input.visibility.reason ?? 'alert_export_unavailable',
+            safeFields: [
+                'organizationId',
+                'tenantId',
+                'member.role',
+                'allowedExportRoles',
+                'denialReason',
+                'requestId',
+            ],
+            noLeakFields: [
+                'activeTerms[]',
+                'activeWatchlistTerms[]',
+                'alertGeneratorKeys[]',
+                'watchlistScope.alertGeneratorKeys',
+                'otherOrg.watchlistItemIds',
+            ],
+            nonmemberEnumeration: false,
+            removedMemberDenied: 'member_revoked',
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
         auditProof: {
             schemaVersion: 'organization.watchlist_alert_terms_denial_audit.v1',
             serviceLogAction: 'organization_watchlist_alert_terms_export_denied',
