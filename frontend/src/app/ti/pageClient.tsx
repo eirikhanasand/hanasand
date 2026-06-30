@@ -714,6 +714,30 @@ type SelectedCaseCreateRequest = {
         sourceIds: string[]
         watchTerms: string[]
     }
+    caseReviewRows: Array<{
+        id: string
+        evidenceRowId: string
+        title: string
+        priority: CaseReviewIntakeItem['priority']
+        state: CaseReviewIntakeItem['state']
+        route: string
+        ownerLane: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
+        nextAction: string
+        recommendedAction: CaseReviewIntakeItem['recommendedAction']
+        reasons: string[]
+        alertIds: string[]
+        captureIds: string[]
+        casePaths: string[]
+        sourceIds: string[]
+        blockers: string[]
+        replay: {
+            ready: boolean
+            state: TiActionabilityModel['caseReplayReadiness']['rows'][number]['state']
+            exportRoute?: string
+            caseId?: string
+            blockerCodes: string[]
+        }
+    }>
     blockers: string[]
     consumerStage?: {
         state: string
@@ -4029,6 +4053,37 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 {request.refs.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
                 {request.consumerStage?.request ? <span className={sourceHealthChipClass(request.ready ? 'ready' : 'blocked')}>{request.consumerStage.request}</span> : null}
             </div>
+            {request.caseReviewRows.length ? (
+                <div data-ti-selected-case-create-readiness='true' className='mt-2 grid gap-2'>
+                    {request.caseReviewRows.slice(0, 3).map(row => (
+                        <div key={row.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.title}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                        {formatLabel(row.priority)} · {row.alertIds.length} alert{row.alertIds.length === 1 ? '' : 's'} · {row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'} · {readinessOwnerLabel(row.ownerLane)}
+                                    </p>
+                                </div>
+                                <span className={sourceHealthChipClass(row.replay.ready ? 'ready' : row.blockers.length ? 'blocked' : 'review')}>
+                                    {row.replay.ready ? 'replay ready' : row.replay.blockerCodes.slice(0, 2).join(', ') || decisionStepStatusLabel(row.state)}
+                                </span>
+                            </div>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                {row.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
+                                {row.replay.exportRoute ? <span className={sourceHealthChipClass('ready')}>{sourceRequestRouteLabel(row.replay.exportRoute)}</span> : null}
+                                {row.sourceIds.slice(0, 3).map(sourceId => <span key={sourceId} className={sourceHealthChipClass('review')}>source {sourceId}</span>)}
+                            </div>
+                            {row.reasons.length ? (
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.reasons.slice(0, 2).join(' ')}</p>
+                            ) : null}
+                            {row.blockers.length ? (
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
+                            ) : null}
+                        </div>
+                    ))}
+                </div>
+            ) : null}
             {request.blockers.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(request.blockers.slice(0, 4))}</p>
             ) : (
@@ -4782,6 +4837,12 @@ function selectedCaseCreateRequestFor(
 ): SelectedCaseCreateRequest {
     const caseStage = actionability.consumerReadiness.stages.find(stage => stage.id === 'caseHandoff')
     const caseAction = actionability.actionPayloads.payloads.caseHandoff
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const selectedAlertIds = selected.priority?.alertIds ?? []
+    const selectedCaptureIds = selected.priority?.captureIds ?? []
+    const selectedCasePaths = selected.priority?.casePaths ?? []
+    const selectedEvidenceRowId = selected.priority?.rowId
+    const selectedText = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
     const sourceRows = (caseDraft?.sourceRows.length ? caseDraft.sourceRows : drilldown?.rows ?? []).map(row => ({
         sourceName: row.sourceName,
         sourceId: row.sourceId,
@@ -4817,6 +4878,53 @@ function selectedCaseCreateRequestFor(
         ...readStringArray(caseAction.body.watchTerms),
         ...readStringArray(caseAction.body.terms),
     ])
+    const matchedCaseItems = actionability.caseReviewIntake.items.filter(item =>
+        item.evidenceRowId === selectedEvidenceRowId
+        || item.sourceIds.some(sourceId => selectedSourceIds.includes(sourceId) || selectedText.includes(sourceId.toLowerCase()))
+        || item.alertIds.some(alertId => selectedAlertIds.includes(alertId) || selectedText.includes(alertId.toLowerCase()))
+        || item.casePaths.some(path => selectedCasePaths.includes(path) || selectedText.includes(path.toLowerCase()))
+        || item.captureIds.some(captureId => selectedCaptureIds.includes(captureId) || selectedText.includes(captureId.toLowerCase()))
+    )
+    const activeCaseItems = matchedCaseItems.length ? matchedCaseItems : actionability.caseReviewIntake.items.slice(0, 3)
+    const caseReviewRows = activeCaseItems.slice(0, 4).map(item => {
+        const replayRow = actionability.caseReplayReadiness.rows.find(row =>
+            row.caseReviewIntakeItemId === item.id
+            || row.evidenceRowId === item.evidenceRowId
+            || row.alertIds.some(alertId => item.alertIds.includes(alertId))
+            || row.captureIds.some(captureId => item.captureIds.includes(captureId))
+        )
+        const ownerLane = item.blockedBy[0]?.ownerLane
+            ?? replayRow?.blockedBy[0]?.ownerLane
+            ?? caseAction.blockedBy[0]?.ownerLane
+            ?? (caseStage?.state === 'blocked' ? 'case' : 'case')
+        return {
+            id: item.id,
+            evidenceRowId: item.evidenceRowId,
+            title: item.title,
+            priority: item.priority,
+            state: item.state,
+            route: item.route,
+            ownerLane,
+            nextAction: item.nextAction,
+            recommendedAction: item.recommendedAction,
+            reasons: item.reasons,
+            alertIds: item.alertIds,
+            captureIds: item.captureIds,
+            casePaths: item.casePaths,
+            sourceIds: item.sourceIds,
+            blockers: unique([
+                ...item.blockedBy.map(blocker => blocker.detail),
+                ...(replayRow?.blockedBy.map(blocker => blocker.detail) ?? []),
+            ]),
+            replay: {
+                ready: replayRow?.ready ?? false,
+                state: replayRow?.state ?? 'blocked',
+                exportRoute: replayRow?.exportRoute,
+                caseId: replayRow?.caseId,
+                blockerCodes: replayRow?.blockerCodes ?? ['missing_case_route'],
+            },
+        }
+    })
     const blockers = unique([
         ...(caseDraft?.missing ?? []),
         ...caseAction.blockedBy.map(blocker => blocker.detail),
@@ -4825,6 +4933,7 @@ function selectedCaseCreateRequestFor(
         ...(sourceRows.length ? [] : ['Source provenance is required before case creation review.']),
         ...(alertIds.length ? [] : ['Alert ID is required before case creation review.']),
         ...(captureIds.length ? [] : ['Capture evidence is required before case creation review.']),
+        ...caseReviewRows.flatMap(row => row.blockers),
     ]).slice(0, 10)
     const requestBody = {
         ...caseAction.body,
@@ -4838,6 +4947,7 @@ function selectedCaseCreateRequestFor(
         casePaths,
         sourceIds,
         watchTerms,
+        caseReviewRows,
         noMutation: true,
     }
     const ready = Boolean(caseDraft?.ready)
@@ -4876,6 +4986,7 @@ function selectedCaseCreateRequestFor(
             sourceIds,
             watchTerms,
         },
+        caseReviewRows,
         blockers,
         consumerStage: caseStage ? {
             state: caseStage.state,
