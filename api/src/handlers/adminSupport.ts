@@ -1520,6 +1520,19 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
             accessRecovery: organizationIds[0] ? `/api/admin/support/organizations/${encodeURIComponent(organizationIds[0])}/access-recovery` : null,
         },
     })
+    const caseAccessReadiness = supportUserCaseAccessReadiness({
+        userId: req.params.id,
+        organizationIds,
+        requestId: inspectionAudit.requestId,
+        reason: inspectionAudit.reason,
+        supportContext: inspectionAudit.supportContext,
+        memberships: memberships.rows.map(toSupportMembership),
+        pendingInvites: invites.rows.map(toSupportInvite),
+        approvalRequests: approvalDetails,
+        accessStatus: userAccessStatus,
+        accessRecoveryPlan,
+        timeline: recentAuditTimeline.events,
+    })
     const caseHandoff = supportUserCaseHandoff({
         actorId: actor.id,
         userId: req.params.id,
@@ -1530,6 +1543,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
         approvalRequests: approvalDetails,
+        caseAccessReadiness,
         accessRecoveryPlan,
         actionHistoryExport,
         timeline: recentAuditTimeline.events,
@@ -1542,6 +1556,7 @@ export async function getSupportUser(req: FastifyRequest<{ Params: UserParams }>
         inspectionReceipt,
         actionHistoryReceipt,
         actionHistoryExport,
+        caseAccessReadiness,
         caseHandoff,
         memberships: memberships.rows.map(toSupportMembership),
         pendingInvites: invites.rows.map(toSupportInvite),
@@ -5952,6 +5967,105 @@ function supportOrganizationCaseAccessReadiness(input: {
     }
 }
 
+function supportUserCaseAccessReadiness(input: {
+    userId: string
+    organizationIds: string[]
+    requestId: string
+    reason: string
+    supportContext: string
+    memberships: Array<Record<string, any>>
+    pendingInvites: Array<Record<string, any>>
+    approvalRequests: Array<Record<string, any>>
+    accessStatus: Record<string, any>
+    accessRecoveryPlan: Record<string, any>
+    timeline: Array<Record<string, any>>
+}) {
+    const auditEventIds = input.timeline.map(event => Number(event.id)).filter(id => Number.isFinite(id))
+    const activeMemberships = input.memberships.filter(membership => membership.status === 'active')
+    const removedMemberships = input.memberships.filter(membership => membership.status === 'removed' || membership.removed === true)
+    const pendingInvites = input.pendingInvites.filter(invite => invite.status === 'pending')
+    const accessBlockers = Array.isArray(input.accessStatus.blockers) ? input.accessStatus.blockers : []
+    const recoveryBlockers = Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []
+    const blockers = uniqueTimelineValues([
+        input.organizationIds.length ? '' : 'missing_organization_scope',
+        activeMemberships.length || pendingInvites.length || input.approvalRequests.length ? '' : 'missing_access_evidence',
+        auditEventIds.length ? '' : 'missing_case_audit_events',
+        ...accessBlockers,
+        ...recoveryBlockers,
+    ])
+    return {
+        schemaVersion: 'support.user_case_access_readiness.v1',
+        generatedAt: new Date().toISOString(),
+        userId: input.userId,
+        organizationIds: input.organizationIds,
+        requestId: input.requestId,
+        reason: input.reason || null,
+        supportContextPresent: Boolean(input.supportContext),
+        status: blockers.length ? 'needs_review' : 'ready',
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        evidence: {
+            activeMembershipCount: activeMemberships.length,
+            removedMembershipCount: removedMemberships.length,
+            pendingInviteCount: pendingInvites.length,
+            approvalRequestCount: input.approvalRequests.length,
+            auditEventIds,
+        },
+        recoveryState: {
+            accessStatus: input.accessStatus.overall || null,
+            recoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
+            blockers: uniqueTimelineValues([...accessBlockers, ...recoveryBlockers]),
+        },
+        replayFilters: {
+            current: auditFilterQuery({ target: input.userId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            memberships: input.organizationIds.map(org => auditFilterQuery({ org, target: input.userId, entityType: 'member', source: 'admin', service: 'hanasand-api' })),
+            invites: pendingInvites.map(invite => auditFilterQuery({ org: invite.organizationId, entity: invite.id, entityType: 'invite', source: 'admin', service: 'hanasand-api' })),
+            recovery: auditFilterQuery({ target: input.userId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
+            impersonation: auditFilterQuery({ target: input.userId, action: 'impersonation', source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ target: input.userId, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+        },
+        nextRoutes: {
+            userInspection: `/api/admin/support/users/${encodeURIComponent(input.userId)}`,
+            organizationInspections: input.organizationIds.map(org => `/api/admin/support/organizations/${encodeURIComponent(org)}`),
+            accessRecovery: input.organizationIds[0] ? `/api/admin/support/organizations/${encodeURIComponent(input.organizationIds[0])}/access-recovery` : null,
+            impersonation: '/api/impersonation/start',
+            impersonationEvents: `/api/impersonation/events?target=${encodeURIComponent(input.userId)}`,
+            auditReplay: auditFilterQuery({ target: input.userId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            caseReplay: '/api/admin/support/receipt-replay',
+        },
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noSilentMembershipMutation: true,
+            noSilentImpersonation: true,
+            noCrossOrgLeakage: true,
+            noSecretExposure: true,
+            redactionRequired: true,
+        },
+        forbiddenFields: ['token', 'secret', 'authorization', 'cookie', 'sessionToken', 'inviteToken', 'privateSourceUrl'],
+        denialStates: [
+            'support_role_required',
+            'missing_support_reason',
+            'missing_organization_scope',
+            'missing_access_evidence',
+            'support_session_expired',
+            'support_session_revoked',
+            'support_session_scope_denied',
+            'impersonation_ineligible',
+            'denied_recovery_approval',
+            'redaction_required',
+        ],
+        blockers,
+        copyText: [
+            `Support user case access readiness user=${input.userId}`,
+            `Organizations: ${input.organizationIds.length}`,
+            `Evidence: memberships=${activeMemberships.length} invites=${pendingInvites.length} approvals=${input.approvalRequests.length}`,
+            `Replay: ${auditFilterQuery({ target: input.userId, request: input.requestId, source: 'admin', service: 'hanasand-api' })}`,
+            `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
+    }
+}
+
 function supportOrganizationCaseHandoff(input: {
     actorId: string
     organizationId: string
@@ -6058,6 +6172,7 @@ function supportUserCaseHandoff(input: {
     memberships: Array<Record<string, any>>
     pendingInvites: Array<Record<string, any>>
     approvalRequests: Array<Record<string, any>>
+    caseAccessReadiness: Record<string, any>
     accessRecoveryPlan: Record<string, any>
     actionHistoryExport: Record<string, any>
     timeline: Array<Record<string, any>>
@@ -6092,6 +6207,7 @@ function supportUserCaseHandoff(input: {
             actions,
             outcomes,
             caseTimeline: supportCaseTimelineEntries(input.timeline),
+            caseAccessReadiness: input.caseAccessReadiness,
         },
         recovery: {
             accessRecoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
