@@ -4156,6 +4156,25 @@ export function buildDwmWebhookDestinationCrudContract({
 
     const uniqueBlockers = uniqueCrudBlockers(blockers)
     const blocking = uniqueBlockers.filter(blocker => blocker.blocking)
+    const routeContract = destinationCrudRouteContract()
+    const managementRequest = destinationCrudManagementRequest({
+        action,
+        orgId: normalizedOrgId,
+        destinationId: destination?.id || null,
+        requestId,
+        label: normalizedLabel.slice(0, 120),
+        kind: normalizedKind,
+        channel: firstClean(input.channelName, input.channel_name, input.channel) || null,
+        status,
+        events: parseEvents(input.events),
+        redactedEndpoint: {
+            endpointHint: normalizedEndpointHint,
+            endpointHash: normalizedEndpointHash,
+        },
+        blockers: uniqueBlockers,
+        canApply: blocking.length === 0,
+        liveDeliveryEnabled,
+    })
     return {
         schemaVersion: 'dwm.webhook.destination_crud.v1',
         action,
@@ -4230,6 +4249,8 @@ export function buildDwmWebhookDestinationCrudContract({
             latestDedupeKey: proofRow?.dedupe.latestDedupeKey || null,
             duplicateDestinationId: duplicate?.id || null,
         },
+        routeContract,
+        managementRequest,
         noNetwork: true,
         liveDeliveryEnabled,
     }
@@ -8172,6 +8193,143 @@ function uniqueCrudBlockers(blockers: ReturnType<typeof crudBlocker>[]) {
         unique.push(blocker)
     }
     return unique
+}
+
+function destinationCrudRouteContract() {
+    return {
+        schemaVersion: 'dwm.webhook.destination_crud_routes.v1',
+        list: {
+            method: 'GET',
+            route: '/api/dwm/webhook-destinations',
+            requiredQuery: ['orgId'],
+            noNetwork: true,
+        },
+        create: {
+            method: 'POST',
+            route: '/api/dwm/webhook-destinations',
+            requiredBody: ['orgId', 'endpointUrl'],
+            optionalBody: ['name', 'label', 'type', 'kind', 'channel', 'events', 'requestId'],
+            secretBodyFields: ['endpointUrl', 'webhookUrl', 'url'],
+            noNetwork: true,
+        },
+        update: {
+            method: 'PUT',
+            route: '/api/dwm/webhook-destinations/:id',
+            requiredBody: ['orgId'],
+            optionalBody: ['name', 'label', 'endpointUrl', 'webhookUrl', 'url', 'type', 'kind', 'channel', 'events', 'status', 'requestId'],
+            secretBodyFields: ['endpointUrl', 'webhookUrl', 'url'],
+            noNetwork: true,
+        },
+        disable: {
+            method: 'DELETE',
+            route: '/api/dwm/webhook-destinations/:id',
+            requiredQuery: ['orgId'],
+            noNetwork: true,
+        },
+        enable: {
+            method: 'PUT',
+            route: '/api/dwm/webhook-destinations/:id',
+            requiredBody: ['orgId', 'status'],
+            optionalBody: ['requestId'],
+            noNetwork: true,
+        },
+        test: {
+            method: 'POST',
+            route: '/api/dwm/webhook-destinations/:id/test',
+            requiredBody: ['orgId', 'dryRun'],
+            optionalBody: ['alert', 'eventType', 'dedupeKey', 'casePath', 'requestId'],
+            noNetworkDefault: true,
+        },
+    }
+}
+
+function destinationCrudManagementRequest({
+    action,
+    orgId,
+    destinationId,
+    requestId,
+    label,
+    kind,
+    channel,
+    status,
+    events,
+    redactedEndpoint,
+    blockers,
+    canApply,
+    liveDeliveryEnabled,
+}: {
+    action: DwmWebhookDestinationCrudAction
+    orgId: string
+    destinationId: string | null
+    requestId: string
+    label: string
+    kind: DwmWebhookKind
+    channel: string | null
+    status: DwmWebhookStatus
+    events: DwmAlertEventType[]
+    redactedEndpoint: { endpointHint: string | null, endpointHash: string | null }
+    blockers: ReturnType<typeof crudBlocker>[]
+    canApply: boolean
+    liveDeliveryEnabled: boolean
+}) {
+    const route = action === 'create'
+        ? '/api/dwm/webhook-destinations'
+        : action === 'test'
+            ? `/api/dwm/webhook-destinations/${destinationId || '<destination_id>'}/test`
+            : `/api/dwm/webhook-destinations/${destinationId || '<destination_id>'}`
+    const method = action === 'create' || action === 'test'
+        ? 'POST'
+        : action === 'disable' || action === 'delete'
+            ? 'DELETE'
+            : 'PUT'
+    const expectedAuditAction = action === 'create'
+        ? 'destination.created'
+        : action === 'disable' || action === 'delete'
+            ? 'destination.archived'
+            : action === 'test'
+                ? 'delivery.tested'
+                : 'destination.updated'
+    const bodyPreview = method === 'DELETE'
+        ? null
+        : {
+            orgId,
+            destinationId,
+            requestId: requestId || null,
+            label,
+            type: kind,
+            kind,
+            channel,
+            status,
+            events,
+            dryRun: action === 'test' ? true : undefined,
+            redactedEndpoint: {
+                endpointHint: redactedEndpoint.endpointHint,
+                endpointHash: redactedEndpoint.endpointHash,
+                endpointExposed: false,
+            },
+            secretFields: action === 'create' || action === 'update' ? ['endpointUrl', 'webhookUrl', 'url'] : [],
+        }
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_management_request.v1',
+        action,
+        method,
+        route,
+        noNetwork: true,
+        liveDeliveryEnabled,
+        canSend: canApply,
+        expectedAuditAction,
+        expectedPersistedAttempt: action === 'test',
+        bodyPreview,
+        queryPreview: method === 'DELETE' ? { orgId, requestId: requestId || null } : null,
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            secretFields: ['endpointUrl', 'webhookUrl', 'url'],
+        },
+        blockers,
+        blockingCodes: blockers.filter(blocker => blocker.blocking).map(blocker => blocker.code),
+    }
 }
 
 function adminProofBlocker(
