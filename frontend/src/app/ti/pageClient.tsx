@@ -736,7 +736,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                     {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
                 </EvidencePanel>
                 <SourceCoveragePanel coverage={actor.sourceCoverage} />
-                <StructuredProvenancePanel rows={actor.provenanceRows} />
+                <StructuredProvenancePanel rows={actor.provenanceRows} actor={actor} actionability={actionability} query={result.query} />
             </div>
         </section>
     )
@@ -892,24 +892,101 @@ function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
     )
 }
 
-function StructuredProvenancePanel({ rows }: { rows: TiActorIntelligenceProfile['provenanceRows'] }) {
+function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows: TiActorIntelligenceProfile['provenanceRows']; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; query: string }) {
     return (
         <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source provenance</p>
             <div className='mt-2 grid gap-2'>
-                {rows.length ? rows.slice(0, 6).map(row => (
-                    <div key={`${row.sourceName}-${row.provenance}`} className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
-                            <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                {rows.length ? rows.slice(0, 6).map(row => {
+                    const href = linkFromText(row.provenance)
+                    return (
+                        <div key={`${row.sourceName}-${row.provenance}`} data-ti-provenance-artifact-export='true' className='rounded-lg border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                                <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                    <span className='shrink-0 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.reportDate ? formatDate(row.reportDate) : row.captureId ? `capture ${row.captureId}` : `${Math.round((row.confidence ?? 0) * 100)}%`}</span>
+                                    <CopyPayloadButton label='Provenance artifact' payload={provenanceArtifactPayloadFor(row, actor, actionability, query)} />
+                                    {href ? (
+                                        <a href={href} target='_blank' rel='noopener noreferrer' className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                                            <ExternalLink className='h-3.5 w-3.5' />
+                                            Open
+                                        </a>
+                                    ) : null}
+                                </div>
+                            </div>
+                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
                         </div>
-                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
-                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
-                    </div>
-                )) : <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>No structured provenance rows returned.</p>}
+                    )
+                }) : <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>No structured provenance rows returned.</p>}
             </div>
         </div>
     )
+}
+
+function provenanceArtifactPayloadFor(row: TiActorIntelligenceProfile['provenanceRows'][number], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel, query: string) {
+    const sourceHealthRows = actionability.sourceHealthQueue.rows.filter(item =>
+        (row.sourceId ? item.sourceId === row.sourceId : false)
+        || (row.captureId ? item.captureId === row.captureId : false)
+        || (row.sourceRequestId ? item.sourceRequestId === row.sourceRequestId : false)
+        || item.provenance === row.provenance
+        || item.sourceName === row.sourceName
+    )
+    const sourceHealthRowIds = new Set(sourceHealthRows.map(item => item.id))
+    const sourceEnrichmentItems = actionability.sourceEnrichmentIntake.items.filter(item =>
+        sourceHealthRowIds.has(item.sourceHealthRowId)
+        || (row.sourceId ? item.sourceId === row.sourceId : false)
+        || (row.captureId ? item.captureId === row.captureId : false)
+        || (row.sourceRequestId ? item.sourceRequestId === row.sourceRequestId : false)
+        || item.evidence.provenance === row.provenance
+    )
+    const evidencePriority = actionability.evidencePriority.filter(item =>
+        (row.sourceId ? item.sourceIds.includes(row.sourceId) : false)
+        || (row.captureId ? item.captureIds.includes(row.captureId) : false)
+        || item.reasons.some(reason => reason.includes(row.sourceName) || reason.includes(row.provenance))
+    )
+    const watchlistIntersections = actionability.orgRelevance.watchlistIntersections.filter(item =>
+        item.sourceEvidenceRefs.some(ref => ref === row.sourceId || ref === row.captureId || row.provenance.includes(ref) || row.sourceName.includes(ref))
+    )
+    return {
+        schemaVersion: 'ti.public_actor.provenance_artifact.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query,
+        generatedAt: actionability.sourceHealthQueue.generatedAt,
+        actor: {
+            actorClass: actor.actorClass,
+            confidence: actor.confidence,
+            freshness: actor.freshness,
+        },
+        provenance: row,
+        sourceHealthRows,
+        sourceEnrichmentIntake: {
+            schemaVersion: actionability.sourceEnrichmentIntake.schemaVersion,
+            route: actionability.sourceEnrichmentIntake.route,
+            matchingItems: sourceEnrichmentItems,
+        },
+        evidencePriority,
+        watchlistIntersections,
+        relatedWorkflow: {
+            alerts: actionability.relatedAlerts.filter(item => evidencePriority.some(priority => priority.alertIds.includes(item.id))),
+            cases: actionability.relatedCases.filter(item => {
+                const path = item.path
+                return Boolean(path && evidencePriority.some(priority => priority.casePaths.includes(path)))
+            }),
+            caseReviewIntake: actionability.caseReviewIntake.items.filter(item =>
+                evidencePriority.some(priority => item.evidenceRowId === priority.rowId)
+                || (row.sourceId ? item.sourceIds.includes(row.sourceId) : false)
+                || (row.captureId ? item.captureIds.includes(row.captureId) : false)
+            ),
+        },
+        handoffRoutes: {
+            sourceEnrichment: actionability.sourceEnrichmentIntake.route,
+            watchlist: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+            alertRebuild: actionability.createAlertHandoff.backedRoute || actionability.createAlertHandoff.endpoint,
+            caseReview: actionability.caseHandoff.backedRoute || actionability.caseHandoff.endpoint,
+        },
+    }
 }
 
 function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfile['sourceCoverage'] }) {
