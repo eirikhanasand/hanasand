@@ -546,6 +546,40 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
             staleInviteAcceptanceBlocker: 'member_revoked' as const,
             noOrphanedInviteTokens: true,
             serviceLogAction: 'organization_member_removed' as const,
+            consumerAccessRevocation: {
+                schemaVersion: 'organization.member_consumer_access_revocation.v1',
+                organizationId: req.params.id,
+                tenantId: req.params.id,
+                targetUserId: req.params.userId,
+                targetRole: target.role,
+                revokedInviteIds: revokedInvites.rows.map((invite: OrganizationInviteRow) => invite.id),
+                revokedInviteCount: revokedInvites.rows.length,
+                blockedRoutes: [
+                    'GET /api/organizations/:id/watchlists',
+                    'GET /api/organizations/:id/watchlists/alert-terms',
+                    'GET /api/organizations/:id/alert-case-visibility',
+                    'GET /api/organizations/:id/alert-readiness',
+                ],
+                blockedConsumerContracts: [
+                    'organization.watchlist_alert_generation_consumer.v1',
+                    'organization.watchlist_alert_generation_consumer_denial.v1',
+                    'organization.case_visibility_consumer.v1',
+                ],
+                denialContracts: [
+                    'organization.access_denial.v1',
+                    'organization.watchlist_alert_terms_export_denial.v1',
+                    'organization.alert_case_visibility_denial.v1',
+                ],
+                blockerCode: 'member_revoked' as const,
+                noEnumeration: true,
+                noLeakFields: [
+                    'activeTerms',
+                    'watchlistScope.alertGeneratorKeys',
+                    'case.evidence.rawContent',
+                    'otherOrg.watchlistItemIds',
+                    'destination.secret',
+                ],
+            },
         },
     })
 }

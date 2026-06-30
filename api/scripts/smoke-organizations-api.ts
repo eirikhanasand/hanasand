@@ -3996,6 +3996,23 @@ assert.equal(removeViewerCleanup.revokedInviteCount, 1)
 assert.equal(removeViewerCleanup.revokedInviteStatus, 'revoked')
 assert.equal(removeViewerCleanup.staleInviteAcceptanceBlocker, 'member_revoked')
 assert.equal(removeViewerCleanup.noOrphanedInviteTokens, true)
+assert.equal(removeViewerCleanup.consumerAccessRevocation.schemaVersion, 'organization.member_consumer_access_revocation.v1')
+assert.equal(removeViewerCleanup.consumerAccessRevocation.organizationId, organization.id)
+assert.equal(removeViewerCleanup.consumerAccessRevocation.tenantId, organization.id)
+assert.equal(removeViewerCleanup.consumerAccessRevocation.targetUserId, 'org_smoke_viewer')
+assert.equal(removeViewerCleanup.consumerAccessRevocation.targetRole, 'viewer')
+assert.deepEqual(removeViewerCleanup.consumerAccessRevocation.revokedInviteIds, [viewerPendingInviteBeforeRemoval.id])
+assert.equal(removeViewerCleanup.consumerAccessRevocation.revokedInviteCount, 1)
+assert.equal(removeViewerCleanup.consumerAccessRevocation.blockerCode, 'member_revoked')
+assert.equal(removeViewerCleanup.consumerAccessRevocation.noEnumeration, true)
+assert.ok(removeViewerCleanup.consumerAccessRevocation.blockedRoutes.includes('GET /api/organizations/:id/watchlists'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.blockedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.blockedRoutes.includes('GET /api/organizations/:id/alert-case-visibility'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.blockedConsumerContracts.includes('organization.watchlist_alert_generation_consumer.v1'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.blockedConsumerContracts.includes('organization.case_visibility_consumer.v1'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.denialContracts.includes('organization.access_denial.v1'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.noLeakFields.includes('activeTerms'))
+assert.ok(removeViewerCleanup.consumerAccessRevocation.noLeakFields.includes('otherOrg.watchlistItemIds'))
 assert.equal(invites.get(viewerPendingInviteBeforeRemoval.id)?.status, 'revoked')
 
 const staleRemovedViewerInvite = nowRow({
@@ -4053,6 +4070,27 @@ const removedViewerReadinessResponse = await app.inject({
     headers: authHeaders('org_smoke_viewer', 'viewer-token'),
 })
 assert.equal(removedViewerReadinessResponse.statusCode, 404, removedViewerReadinessResponse.body)
+
+const removedViewerAlertTermsResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/alert-terms?requestId=smoke-removed-viewer-alert-terms`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(removedViewerAlertTermsResponse.statusCode, 404, removedViewerAlertTermsResponse.body)
+const removedViewerAlertTermsDenial = parseBody(removedViewerAlertTermsResponse.body).organizationAccessDenial
+assert.equal(removedViewerAlertTermsDenial.schemaVersion, 'organization.access_denial.v1')
+assert.equal(removedViewerAlertTermsDenial.organizationId, organization.id)
+assert.equal(removedViewerAlertTermsDenial.actorId, 'org_smoke_viewer')
+assert.equal(removedViewerAlertTermsDenial.route, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.equal(removedViewerAlertTermsDenial.blockerCode, 'nonmember_denied')
+assert.equal(removedViewerAlertTermsDenial.nonmemberEnumeration, false)
+
+const removedViewerCaseVisibilityResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/alert-case-visibility?requestId=smoke-removed-viewer-case-visibility`,
+    headers: authHeaders('org_smoke_viewer', 'viewer-token'),
+})
+assert.equal(removedViewerCaseVisibilityResponse.statusCode, 404, removedViewerCaseVisibilityResponse.body)
 assert.equal(readiness.readinessProof.memberLifecycleProof.denialReasons.removedMember, 'member_removed')
 assert.equal(readiness.readinessProof.memberLifecycleProof.denialReasons.expiredInvite, 'invite_expired')
 
