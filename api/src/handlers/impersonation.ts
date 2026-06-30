@@ -533,9 +533,9 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             supportedValues: ['impersonation.start', 'impersonation.stop'],
         }))
     }
-    if (outcomeFilter && outcomeFilter !== 'success') {
-        return res.status(400).send(impersonationError('unsupported_impersonation_outcome_filter', 'Impersonation lifecycle history only stores successful lifecycle events; use admin audit events for denied attempts.', {
-            supportedValues: ['success'],
+    if (outcomeFilter && !['success', 'denied', 'failed'].includes(outcomeFilter)) {
+        return res.status(400).send(impersonationError('unsupported_impersonation_outcome_filter', 'Unsupported impersonation outcome filter.', {
+            supportedValues: ['success', 'denied', 'failed'],
             auditRoute: '/api/admin/audit-events?action=impersonation&outcome=denied&source=admin&service=hanasand-api',
         }))
     }
@@ -561,7 +561,8 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         where.push(`e.created_at <= ${add(new Date(toFilter).toISOString())}`)
     }
 
-    const result = await run(`
+    const includeLifecycle = !outcomeFilter || outcomeFilter === 'success'
+    const result = includeLifecycle ? await run(`
         SELECT
             e.id,
             e.session_id,
@@ -585,9 +586,10 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
         ${where.length ? `WHERE ${where.join('\n          AND ')}` : ''}
         ORDER BY e.created_at DESC
         LIMIT ${add(limit)}
-    `, values)
+    `, values) : { rows: [] }
     const filters = { q, actor: actorFilter, target: targetFilter, action: actionFilter, outcome: outcomeFilter || 'success', method: methodFilter, path: pathFilter, session: sessionFilter, supportSession: sessionFilter, reason: reasonFilter, from: fromFilter, to: toFilter, limit }
     const timeline = result.rows.map(toImpersonationTimelineEvent)
+    const guardrailAudit = await loadImpersonationGuardrailAuditEvents(filters)
     return res.send({
         events: result.rows,
         filters,
@@ -599,6 +601,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             filterContract: impersonationTimelineFilterContract(filters, timeline),
             decisionPacket: impersonationTimelineDecisionPacket(filters, timeline),
             lifecycleReceipt: impersonationLifecycleReceipt(filters, timeline),
+            guardrailReplay: supportImpersonationGuardrailAuditReplay(filters, guardrailAudit),
             events: timeline,
             redacted: true,
             links: {
@@ -608,6 +611,165 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
             copyText: timeline.map(event => event.copyText).join('\n'),
         },
     })
+}
+
+async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unknown>) {
+    const where = [`event.action_type = 'impersonation.start'`]
+    const values: Array<string | number> = []
+    const add = (value: string | number) => {
+        values.push(value)
+        return `$${values.length}`
+    }
+    const q = cleanText(filters.q)
+    const actor = cleanText(filters.actor)
+    const target = cleanText(filters.target)
+    const outcome = cleanText(filters.outcome)
+    const session = cleanText(filters.session || filters.supportSession || filters.supportSessionId)
+    const reason = cleanText(filters.reason)
+    const from = cleanText(filters.from)
+    const to = cleanText(filters.to)
+    const limit = Number(filters.limit || 200)
+
+    if (q) {
+        const placeholder = add(`%${q}%`)
+        where.push(`(
+            event.actor_id ILIKE ${placeholder}
+            OR actor.name ILIKE ${placeholder}
+            OR event.target_id ILIKE ${placeholder}
+            OR target.name ILIKE ${placeholder}
+            OR event.entity_id ILIKE ${placeholder}
+            OR event.request_id ILIKE ${placeholder}
+            OR event.reason ILIKE ${placeholder}
+            OR event.context::text ILIKE ${placeholder}
+        )`)
+    }
+    if (actor) {
+        const placeholder = add(`%${actor}%`)
+        where.push('(event.actor_id ILIKE ' + placeholder + ' OR actor.name ILIKE ' + placeholder + ')')
+    }
+    if (target) {
+        const placeholder = add(`%${target}%`)
+        where.push('(event.target_id ILIKE ' + placeholder + ' OR target.name ILIKE ' + placeholder + ')')
+    }
+    if (outcome) where.push(`event.outcome = ${add(outcome)}`)
+    if (session) {
+        const placeholder = add(`%${session}%`)
+        where.push('(event.entity_id ILIKE ' + placeholder + ' OR event.context->>\'supportSessionId\' ILIKE ' + placeholder + ' OR event.context->>\'sessionId\' ILIKE ' + placeholder + ')')
+    }
+    if (reason) where.push(`event.reason ILIKE ${add(`%${reason}%`)}`)
+    if (from && !Number.isNaN(Date.parse(from))) where.push(`event.created_at >= ${add(new Date(from).toISOString())}`)
+    if (to && !Number.isNaN(Date.parse(to))) where.push(`event.created_at <= ${add(new Date(to).toISOString())}`)
+
+    const result = await run(`
+        SELECT
+            event.id,
+            event.action_type,
+            event.severity,
+            event.actor_id,
+            actor.name AS actor_name,
+            event.target_id,
+            target.name AS target_name,
+            event.organization_id,
+            event.entity_id,
+            event.request_id,
+            event.outcome,
+            event.reason,
+            event.context,
+            event.created_at
+        FROM admin_audit_events event
+        LEFT JOIN users actor ON actor.id = event.actor_id
+        LEFT JOIN users target ON target.id = event.target_id
+        WHERE ${where.join('\n          AND ')}
+        ORDER BY event.created_at DESC, event.id DESC
+        LIMIT ${add(Number.isFinite(limit) ? Math.min(Math.max(Math.trunc(limit), 1), 500) : 200)}
+    `, values)
+    return result.rows as Array<Record<string, any>>
+}
+
+function supportImpersonationGuardrailAuditReplay(filters: Record<string, unknown>, rows: Array<Record<string, any>>) {
+    const events = rows.map((row) => {
+        const context = row.context as Record<string, any> || {}
+        return {
+            schemaVersion: 'support.impersonation.guardrail_audit_event.v1',
+            id: Number(row.id),
+            timestamp: row.created_at || null,
+            actionType: row.action_type || 'impersonation.start',
+            severity: row.severity || null,
+            outcome: row.outcome || null,
+            actor: {
+                id: row.actor_id || null,
+                name: row.actor_name || null,
+            },
+            target: {
+                type: 'user',
+                id: row.target_id || null,
+                name: row.target_name || null,
+            },
+            organizationId: row.organization_id || context.organizationId || null,
+            entityId: row.entity_id || null,
+            requestId: row.request_id || context.requestId || null,
+            reasonPresent: Boolean(cleanText(row.reason)),
+            supportSessionId: context.supportSessionId || context.sessionId || null,
+            durationMinutes: context.durationMinutes ?? null,
+            expiresAt: context.expiresAt || null,
+            scope: Array.isArray(context.scope) ? context.scope.map(item => cleanText(item)).filter(Boolean) : [],
+            blockerCode: context.blockerCode || null,
+            noSilentImpersonation: context.noSilentImpersonation === true,
+            redacted: true,
+            links: {
+                detail: `/api/admin/audit-events/${encodeURIComponent(String(row.id))}`,
+                request: row.request_id ? `/api/admin/audit-events?request=${encodeURIComponent(String(row.request_id))}&action=impersonation.start&source=admin&service=hanasand-api` : null,
+                supportSession: context.supportSessionId ? `/api/admin/support/sessions/${encodeURIComponent(String(context.supportSessionId))}` : null,
+            },
+        }
+    })
+    const eventIds = events.map(event => event.id).filter(id => Number.isFinite(id))
+    const blockerCodes = uniqueImpersonationValues(events.map(event => event.blockerCode))
+    const supportSessionIds = uniqueImpersonationValues(events.map(event => event.supportSessionId))
+    const outcomes = uniqueImpersonationValues(events.map(event => event.outcome))
+    return {
+        schemaVersion: 'support.impersonation.guardrail_audit_replay.v1',
+        generatedAt: new Date().toISOString(),
+        redacted: true,
+        noSilentImpersonation: true,
+        supportRoleRequired: true,
+        filters,
+        eventIds,
+        outcomes,
+        blockerCodes,
+        supportSessionIds,
+        events,
+        replayFilters: {
+            current: `/api/admin/audit-events?action=impersonation.start&source=admin&service=hanasand-api${filters.outcome ? `&outcome=${encodeURIComponent(String(filters.outcome))}` : ''}`,
+            denied: '/api/admin/audit-events?action=impersonation.start&outcome=denied&source=admin&service=hanasand-api',
+            bySupportSession: supportSessionIds.map(session => `/api/admin/audit-events?action=impersonation.start&entity=${encodeURIComponent(session)}&source=admin&service=hanasand-api`),
+            byBlocker: blockerCodes.map(blocker => `/api/admin/audit-events?action=impersonation.start&blocker=${encodeURIComponent(blocker)}&source=admin&service=hanasand-api`),
+        },
+        denialCases: [
+            'missing_support_reason',
+            'invalid_duration',
+            'invalid_scope',
+            'support_session_not_found',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_actor_mismatch',
+            'support_session_org_mismatch',
+            'support_session_user_mismatch',
+            'support_session_action_denied',
+            'support_session_scope_denied',
+            'support_session_duration_exceeds_scope',
+        ],
+        blockers: [
+            events.length ? '' : 'guardrail_audit_unavailable',
+            events.some(event => event.outcome === 'denied') ? '' : 'denied_guardrail_not_matched',
+        ].filter(Boolean),
+        copyText: [
+            'Support impersonation guardrail audit replay',
+            `Events: ${eventIds.join(', ') || 'none'}`,
+            `Blockers: ${blockerCodes.join(', ') || 'none'}`,
+            `Sessions: ${supportSessionIds.join(', ') || 'none'}`,
+        ].join('\n'),
+    }
 }
 
 function toImpersonationTimelineEvent(row: Record<string, any>) {
