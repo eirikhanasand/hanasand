@@ -1286,6 +1286,9 @@ if (productProgressSourceWorker.relatedLinks.find(link => link.href === '/dashbo
 if (productProgressSourceWorker.actions?.find(action => action.id === 'open_source_worker_readiness')?.href !== '/dashboard/ti/sources') {
     throw new Error('Expected source worker action to open source operations.')
 }
+if (productProgressSourceWorker.actions?.find(action => action.id === 'inspect_source_worker_proof')?.href !== '/api/ti/scraper/control?q=LockBit') {
+    throw new Error('Expected source worker action to expose the backed source proof route.')
+}
 const productProgressAlertGeneration = expectWorkbenchCase(productProgressCases, 'alert_generation')
 void (productProgressAlertGeneration.evidence.find(item => item.id === 'ev_alert_generation')?.provenance satisfies string | undefined)
 if (productProgressAlertGeneration.status !== 'ready') {
@@ -1440,6 +1443,15 @@ void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_prob
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount satisfies number | undefined)
 if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount !== 2) {
     throw new Error('Expected source inventory readiness to expose parser-family coverage from source-pack proof.')
+}
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').contractLookupRows !== 1) {
+    throw new Error('Expected source inventory readiness to expose contract lookup rows.')
+}
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').receiptMatrixRows !== 1) {
+    throw new Error('Expected source inventory readiness to expose product-readiness receipt rows.')
+}
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').receiptMatrixBlockedRows !== 1) {
+    throw new Error('Expected source inventory readiness to expose receipt blocker counts.')
 }
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')

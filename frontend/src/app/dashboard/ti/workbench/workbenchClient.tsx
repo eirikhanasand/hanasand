@@ -228,9 +228,21 @@ export type WorkbenchProductReadinessItem = {
     collectionReadyRows?: number
     registeredTotal?: number
     activeSourceCount?: number
+    sourceFamilyCount?: number
     reviewQueueCount?: number
+    sourcePackCount?: number
+    catalogCandidates?: number
+    netNewCandidates?: number
+    duplicateCandidates?: number
     parserSourceFamilyCount?: number
     parserSourceFamilyNames?: string[]
+    schemaLookupReady?: boolean
+    schemaLookupSafe?: boolean
+    contractLookupRows?: number
+    receiptMatrixReady?: boolean
+    receiptMatrixSafe?: boolean
+    receiptMatrixRows?: number
+    receiptMatrixBlockedRows?: number
 }
 
 export type WorkbenchOrgContext = {
@@ -2151,6 +2163,20 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.canGenerateAlerts === 'boolean' ? { label: 'Alert export', value: item.canGenerateAlerts ? 'ready' : 'blocked' } : undefined,
             item.exportedAt ? { label: 'Exported', value: relativeTime(item.exportedAt) } : undefined,
             item.organizationId ? { label: 'Organization', value: item.organizationId } : undefined,
+        ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
+    }
+    if (item.id === 'source_inventory_probe') {
+        return [
+            item.workerStatus ? { label: 'Worker', value: item.workerStatus } : undefined,
+            typeof item.activeSourceCount === 'number' || typeof item.registeredTotal === 'number'
+                ? { label: 'Sources', value: `${item.activeSourceCount ?? 0}/${item.registeredTotal ?? 0} active` }
+                : undefined,
+            typeof item.sourceFamilyCount === 'number' ? { label: 'Source families', value: String(item.sourceFamilyCount) } : undefined,
+            typeof item.parserSourceFamilyCount === 'number' ? { label: 'Parser families', value: String(item.parserSourceFamilyCount) } : undefined,
+            typeof item.contractLookupRows === 'number' ? { label: 'Contract rows', value: String(item.contractLookupRows) } : undefined,
+            typeof item.receiptMatrixRows === 'number' ? { label: 'Receipt rows', value: String(item.receiptMatrixRows) } : undefined,
+            typeof item.receiptMatrixBlockedRows === 'number' ? { label: 'Receipt blockers', value: String(item.receiptMatrixBlockedRows) } : undefined,
+            item.workerLastRunAt ? { label: 'Worker run', value: relativeTime(item.workerLastRunAt) } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
     }
     return []

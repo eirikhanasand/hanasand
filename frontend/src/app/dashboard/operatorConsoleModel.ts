@@ -1785,9 +1785,21 @@ function buildProductReadiness(input: {
             collectionReadyRows: sourceGrowth?.collectionReadyRows,
             registeredTotal: sourceGrowth?.registeredTotal,
             activeSourceCount: sourceGrowth?.activeSourceCount,
+            sourceFamilyCount: sourceGrowth?.sourceFamilyCount,
             reviewQueueCount: sourceGrowth?.reviewQueueCount,
+            sourcePackCount: sourceGrowth?.sourcePackCount,
+            catalogCandidates: sourceGrowth?.catalogCandidates,
+            netNewCandidates: sourceGrowth?.netNewCandidates,
+            duplicateCandidates: sourceGrowth?.duplicateCandidates,
             parserSourceFamilyCount: sourceGrowth?.parserSourceFamilyCount,
             parserSourceFamilyNames: sourceGrowth?.parserSourceFamilyNames,
+            schemaLookupReady: sourceGrowth?.schemaLookupReady,
+            schemaLookupSafe: sourceGrowth?.schemaLookupSafe,
+            contractLookupRows: sourceGrowth?.contractLookupRows,
+            receiptMatrixReady: sourceGrowth?.receiptMatrixReady,
+            receiptMatrixSafe: sourceGrowth?.receiptMatrixSafe,
+            receiptMatrixRows: sourceGrowth?.receiptMatrixRows,
+            receiptMatrixBlockedRows: sourceGrowth?.receiptMatrixBlockedRows,
         },
         {
             id: 'public_ti_provenance',
@@ -2459,12 +2471,27 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
         typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
         typeof input.sourceFamilyCount === 'number' ? `${input.sourceFamilyCount} source families` : '',
         typeof input.parserSourceFamilyCount === 'number' ? `${input.parserSourceFamilyCount} parser families` : '',
+        typeof input.contractLookupRows === 'number' ? `${input.contractLookupRows} contract rows` : '',
+        typeof input.receiptMatrixRows === 'number' ? `${input.receiptMatrixRows} receipt rows` : '',
         typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
         typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
         typeof input.collectionReadyRows === 'number' ? `${input.collectionReadyRows} worker-ready rows` : '',
     ].filter(Boolean)
     const proxy = sourceGrowthReady(input) ? 'operator proxy and worker status loaded' : input.proxyExposed ? 'operator proxy loaded; worker readiness still blocked' : 'scraper inventory works, dashboard proxy still missing'
     return counts.length ? `${counts.join(', ')}; ${proxy}.` : proxy + '.'
+}
+
+function sourceWorkerProofSummary(input: SourceGrowthReadiness, blockers: string[], ready: boolean) {
+    if (!ready) return blockers.join('; ') || input.unavailableReason || 'Source worker readiness is not operator-reachable.'
+    return [
+        `worker ${input.workerStatus || 'ready'}`,
+        `${input.collectionReadyRows ?? 0} collection-ready row${input.collectionReadyRows === 1 ? '' : 's'}`,
+        `${input.parserSourceFamilyCount ?? 0} parser famil${input.parserSourceFamilyCount === 1 ? 'y' : 'ies'}`,
+        `${input.contractLookupRows ?? 0} contract row${input.contractLookupRows === 1 ? '' : 's'}`,
+        `${input.receiptMatrixRows ?? 0} receipt row${input.receiptMatrixRows === 1 ? '' : 's'}`,
+        `${input.receiptMatrixBlockedRows ?? 0} receipt blocker${input.receiptMatrixBlockedRows === 1 ? '' : 's'}`,
+        `last run ${input.workerLastRunAt || 'not returned'}`,
+    ].join('; ') + '.'
 }
 
 function dwmProductDetail(input: DwmProductSnapshotReadiness) {
@@ -2927,9 +2954,7 @@ export function buildReadinessCases(input: {
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
                 contentHash: sourceGrowth.backendProofContractVersion || sourceGrowth.schemaVersion,
-                excerpt: sourceWorkerReady
-                    ? `${sourceGrowth.collectionReadyRows ?? 0} collection-ready rows, ${sourceGrowth.activeSourceRows ?? sourceGrowth.activeSourceCount ?? 0} active sources, worker ${sourceGrowth.workerStatus || 'ready'}.`
-                    : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Source worker readiness is not operator-reachable.',
+                excerpt: sourceWorkerProofSummary(sourceGrowth, sourceWorkerBlockers, sourceWorkerReady),
                 observedAt: sourceWorkerCheckedAt,
                 provenance: sourceGrowth.source || '/api/ti/scraper/control',
                 confidence: sourceWorkerReady ? 89 : 66,
@@ -2938,16 +2963,14 @@ export function buildReadinessCases(input: {
                 id: 'source_worker_readiness_at',
                 at: sourceWorkerCheckedAt,
                 title: sourceWorkerReady ? 'Source worker ready' : 'Source worker blocked',
-                body: sourceWorkerReady
-                    ? `Worker status ${sourceGrowth.workerStatus || 'ready'}; ${sourceGrowth.collectionReadyRows ?? 0} collection-ready rows; last run ${sourceGrowth.workerLastRunAt || 'not returned'}.`
-                    : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Source worker readiness needs operator proof.',
+                body: sourceWorkerProofSummary(sourceGrowth, sourceWorkerBlockers, sourceWorkerReady),
             }],
             nextTasks: sourceWorkerReady
-                ? ['Owner: source ops. Inspect source worker proof in source operations.', 'Confirm source family coverage before alert rebuild.', 'Return to the alert queue after source worker proof stays fresh.']
-                : ['Owner: source ops. Open source operations.', 'Resolve source inventory, source-pack, worker, or proxy verification blockers.', 'Rerun product-progress readiness after source proof is operator-reachable.'],
+                ? ['Owner: source ops. Inspect source worker proof in source operations.', 'Confirm contract lookup and receipt matrix stay safe before alert rebuild.', 'Return to the alert queue after source worker proof stays fresh.']
+                : ['Owner: source ops. Open source operations.', 'Resolve source inventory, source-pack, contract lookup, receipt matrix, worker, or proxy verification blockers.', 'Rerun product-progress readiness after source proof is operator-reachable.'],
             relatedLinks: [
                 { href: sourceGrowth.href || '/dashboard/ti/sources', label: 'Source operations' },
-                { href: '/api/ti/scraper/control', label: 'Source proof API' },
+                { href: sourceGrowth.source || '/api/ti/scraper/control', label: 'Source proof API' },
                 { href: '/dashboard/dwm', label: 'DWM console' },
             ],
             workflowPath: path,
@@ -2957,6 +2980,11 @@ export function buildReadinessCases(input: {
                 label: 'Open source operations',
                 method: 'GET',
                 href: sourceGrowth.href || '/dashboard/ti/sources',
+            }, {
+                id: 'inspect_source_worker_proof',
+                label: 'Inspect source proof',
+                method: 'GET',
+                href: sourceGrowth.source || '/api/ti/scraper/control',
             }],
         })] : []),
         readinessCase({
