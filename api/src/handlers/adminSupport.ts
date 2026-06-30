@@ -1242,6 +1242,8 @@ export async function getSupportOrganization(req: FastifyRequest<{ Params: Organ
         requestId: inspectionAudit.requestId,
         reason: inspectionAudit.reason,
         supportContext: inspectionAudit.supportContext,
+        members: members.rows.map(toSupportMember),
+        invites: (invites.rows as OrganizationInviteRow[]).map(toInvite),
         watchlistItems: watchlistItems.map(toWatchlistItem),
         alertReferences,
         webhookDestinations,
@@ -6140,6 +6142,8 @@ function supportOrganizationCaseHandoff(input: {
     requestId: string
     reason: string
     supportContext: string
+    members: Array<Record<string, any>>
+    invites: Array<Record<string, any>>
     watchlistItems: Array<Record<string, any>>
     alertReferences: Array<Record<string, any>>
     webhookDestinations: Array<Record<string, any>>
@@ -6155,6 +6159,38 @@ function supportOrganizationCaseHandoff(input: {
     const deliveryHistoryDiagnostic = isPlainObject(input.webhookDestinationReadiness.deliveryHistoryDiagnostic)
         ? input.webhookDestinationReadiness.deliveryHistoryDiagnostic as Record<string, any>
         : null
+    const activeMembers = input.members.filter(member => member.status === 'active' || member.active === true)
+    const removedMembers = input.members.filter(member => member.status === 'removed' || member.removed === true)
+    const pendingInvites = input.invites.filter(invite => invite.status === 'pending')
+    const recoveryContextDiagnostic = {
+        schemaVersion: 'support.organization.recovery_context_diagnostic.v1',
+        generatedAt: new Date().toISOString(),
+        organizationId: input.organizationId,
+        requestId: input.requestId,
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        activeMemberCount: activeMembers.length,
+        removedMemberCount: removedMembers.length,
+        pendingInviteCount: pendingInvites.length,
+        replayFilters: {
+            members: auditFilterQuery({ org: input.organizationId, entityType: 'member', source: 'admin', service: 'hanasand-api' }),
+            invites: auditFilterQuery({ org: input.organizationId, entityType: 'invite', source: 'admin', service: 'hanasand-api' }),
+            recovery: auditFilterQuery({ org: input.organizationId, action: 'access_recovery', source: 'admin', service: 'hanasand-api' }),
+            memberRecovery: auditFilterQuery({ org: input.organizationId, action: 'member_role_recovery', source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ org: input.organizationId, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+        },
+        blockers: uniqueTimelineValues([
+            activeMembers.length ? '' : 'missing_active_member',
+            activeMembers.length || pendingInvites.length ? '' : 'missing_member_or_invite_access_evidence',
+        ]),
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noSilentMembershipMutation: true,
+            noCrossOrgLeakage: true,
+            redactionRequired: true,
+        },
+    }
     const alertReadinessDiagnostic = {
         schemaVersion: 'support.organization.alert_readiness.case_diagnostic.v1',
         generatedAt: new Date().toISOString(),
@@ -6189,6 +6225,7 @@ function supportOrganizationCaseHandoff(input: {
         ...(Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []),
         ...(Array.isArray(input.webhookDestinationReadiness.caseReadiness?.blockers) ? input.webhookDestinationReadiness.caseReadiness.blockers : []),
         ...(Array.isArray(deliveryHistoryDiagnostic?.blockers) ? deliveryHistoryDiagnostic.blockers : []),
+        ...recoveryContextDiagnostic.blockers,
         ...alertReadinessDiagnostic.blockers,
     ])
     return {
@@ -6211,6 +6248,7 @@ function supportOrganizationCaseHandoff(input: {
             outcomes,
             caseTimeline: supportCaseTimelineEntries(input.timeline),
             caseAccessReadiness: input.caseAccessReadiness,
+            recoveryContextDiagnostic,
             deliveryHistoryDiagnostic,
             alertReadinessDiagnostic,
         },
@@ -6222,6 +6260,7 @@ function supportOrganizationCaseHandoff(input: {
         },
         replayFilters: {
             current: auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
+            recoveryContext: recoveryContextDiagnostic.replayFilters,
             alerts: auditFilterQuery({ org: input.organizationId, action: 'alert', source: 'admin', service: 'hanasand-api' }),
             watchlists: auditFilterQuery({ org: input.organizationId, action: 'watchlist', source: 'admin', service: 'hanasand-api' }),
             alertReadiness: alertReadinessDiagnostic.replayFilters,
@@ -6252,6 +6291,7 @@ function supportOrganizationCaseHandoff(input: {
             'missing_support_reason',
             'wrong_org_scope',
             'missing_case_evidence',
+            'missing_member_or_invite_access_evidence',
             'missing_watchlist_evidence',
             'missing_alert_reference',
             'missing_webhook_delivery_history',
@@ -6267,6 +6307,7 @@ function supportOrganizationCaseHandoff(input: {
         copyText: [
             `Support case handoff org=${input.organizationId}`,
             `Request: ${input.requestId}`,
+            `Recovery context: members=${activeMembers.length} removed=${removedMembers.length} pendingInvites=${pendingInvites.length}`,
             `Evidence: watchlists=${input.watchlistItems.length} alerts=${input.alertReferences.length} webhooks=${input.webhookDestinations.length}`,
             `Alert readiness blockers: ${alertReadinessDiagnostic.blockers.join(', ') || 'none'}`,
             `Webhook deliveries observed: ${deliveryHistoryDiagnostic?.deliveryObservedCount ?? 0}`,
