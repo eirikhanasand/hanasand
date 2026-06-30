@@ -6314,6 +6314,7 @@ export function organizationInviteAcceptanceDenial(input: {
             'organization.watchlist_alert_generation_consumer.v1',
             'organization.case_visibility_consumer.v1',
             'organization.webhook_destination_access_decision.v1',
+            'organization.webhook_alert_delivery_readiness.v1',
         ],
         readinessRefs: {
             inviteLifecycle: 'organization.invite_lifecycle_readiness_proof.v1' as const,

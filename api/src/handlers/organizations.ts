@@ -568,6 +568,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                     'organization.shared_watchlist_readiness_export.v1',
                     'organization.webhook_destination_ownership.v1',
                     'organization.webhook_destination_access_decision.v1',
+                    'organization.webhook_alert_delivery_readiness.v1',
                 ],
                 denialContracts: [
                     'organization.access_denial.v1',
@@ -593,6 +594,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                     blockedContracts: [
                         'organization.webhook_destination_ownership.v1',
                         'organization.webhook_destination_access_decision.v1',
+                        'organization.webhook_alert_delivery_readiness.v1',
                         'organization.webhook_destination_readiness_bridge.v1',
                         'organization.shared_watchlist_readiness_export.v1',
                     ],
@@ -1210,6 +1212,7 @@ export async function postOrganizationInviteAction(req: FastifyRequest<{ Params:
                 blockedConsumerContracts: [
                     'organization.watchlist_alert_generation_consumer.v1',
                     'organization.case_visibility_consumer.v1',
+                    'organization.webhook_alert_delivery_readiness.v1',
                 ],
                 noEnumeration: true,
             },
@@ -2915,6 +2918,7 @@ function sendWatchlistLookupDenial(
             'organization.watchlist_alert_generation_consumer.v1',
             'organization.case_visibility_consumer.v1',
             'organization.webhook_destination_access_decision.v1',
+            'organization.webhook_alert_delivery_readiness.v1',
         ],
         message: 'Watchlist item not found.',
         safeFields: [
