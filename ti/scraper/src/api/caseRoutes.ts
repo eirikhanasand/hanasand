@@ -1210,8 +1210,9 @@ function nextAllowedActionsForCase(caseRecord: AnalystCase, alert: any, deliveri
     { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, enabled: !readOnly },
     { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
     { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" && caseRecord.status !== "suppressed" },
-    { id: "close", label: "Close", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" },
-    { id: "suppress", label: "Suppress", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "suppressed" },
+    { id: "close", label: "Close", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
+    { id: "suppress", label: "Suppress", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
+    { id: "false_positive", label: "Mark false positive", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
     { id: "reopen", label: "Reopen", method: "PATCH", requiresRationale: false, enabled: !readOnly && (caseRecord.status === "closed" || caseRecord.status === "suppressed" || caseRecord.status === "false_positive") }
   ];
   if (alert?.deliveryState === "ready_to_send" && !deliveries.some((delivery: any) => delivery.status === "delivered")) {

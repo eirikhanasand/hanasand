@@ -717,6 +717,152 @@ describe("DWM alert case handoff route", () => {
     ]);
   });
 
+  test("marks false positives with rationale and preserves reopen audit history", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case before false-positive review.",
+      idempotencyKey: "alert-case-handoff-false-positive"
+    });
+
+    const missingRationale = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "false_positive",
+      idempotencyKey: "case-false-positive-missing-rationale"
+    });
+    const missingRationalePayload = await missingRationale.json() as any;
+    const falsePositive = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "false_positive",
+      note: "Corporate domain match was benign vendor chatter.",
+      idempotencyKey: "case-false-positive-001"
+    });
+    const falsePositivePayload = await falsePositive.json() as any;
+    const detailAfterFalsePositive = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const detailAfterFalsePositivePayload = await detailAfterFalsePositive.json() as any;
+    const blockedEscalate = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "escalate",
+      note: "Should reopen before escalating.",
+      idempotencyKey: "case-escalate-after-false-positive"
+    });
+    const blockedEscalatePayload = await blockedEscalate.json() as any;
+    const reopened = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "reopen",
+      note: "New source evidence requires review.",
+      idempotencyKey: "case-reopen-false-positive-001"
+    });
+    const reopenedPayload = await reopened.json() as any;
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const replayExportPayload = await replayExport.json() as any;
+
+    expect(missingRationale.status).toBe(400);
+    expect(missingRationalePayload.error).toMatchObject({ code: "missing_decision_rationale" });
+    expect(falsePositive.status).toBe(200);
+    expect(falsePositivePayload).toMatchObject({
+      case: {
+        id: "case_alert_acme",
+        status: "false_positive",
+        assignedOwner: "owner@acme.com",
+        lastDecision: "Corporate domain match was benign vendor chatter."
+      },
+      workflowTransition: {
+        action: "false_positive",
+        fromStatus: "open",
+        toStatus: "false_positive",
+        workflowState: {
+          status: "false_positive",
+          idempotencyKey: "case-false-positive-001"
+        }
+      },
+      alert: {
+        id: "alert_acme",
+        reviewState: "false_positive",
+        deliveryState: "muted"
+      }
+    });
+    expect(detailAfterFalsePositive.status).toBe(200);
+    expect(detailAfterFalsePositivePayload.nextAllowedActions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "note", enabled: true }),
+      expect.objectContaining({ id: "assign", enabled: false }),
+      expect.objectContaining({ id: "escalate", enabled: false }),
+      expect.objectContaining({ id: "suppress", enabled: false }),
+      expect.objectContaining({ id: "false_positive", enabled: false }),
+      expect.objectContaining({ id: "reopen", enabled: true })
+    ]));
+    expect(blockedEscalate.status).toBe(409);
+    expect(blockedEscalatePayload.error).toMatchObject({
+      code: "invalid_case_transition",
+      fromStatus: "false_positive",
+      requestedAction: "escalate"
+    });
+    expect(reopened.status).toBe(200);
+    expect(reopenedPayload).toMatchObject({
+      case: {
+        id: "case_alert_acme",
+        status: "open",
+        assignedOwner: "owner@acme.com",
+        lastDecision: "New source evidence requires review."
+      },
+      workflowTransition: {
+        action: "reopen",
+        fromStatus: "false_positive",
+        toStatus: "open",
+        workflowState: {
+          status: "open",
+          idempotencyKey: "case-reopen-false-positive-001"
+        }
+      },
+      alert: {
+        id: "alert_acme",
+        reviewState: "reviewing"
+      }
+    });
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload.workflowTransitions.map((transition: any) => transition.action)).toEqual([
+      "open",
+      "false_positive",
+      "reopen"
+    ]);
+    expect(replayExportPayload.auditTimeline.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rowType: "workflow_transition",
+        action: "false_positive",
+        rationale: "Corporate domain match was benign vendor chatter.",
+        workflow: expect.objectContaining({
+          fromStatus: "open",
+          toStatus: "false_positive"
+        }),
+        replay: expect.objectContaining({
+          idempotencyKey: "case-false-positive-001",
+          auditEventId: expect.stringMatching(/^case_workflow_audit_/)
+        })
+      }),
+      expect.objectContaining({
+        rowType: "workflow_transition",
+        action: "reopen",
+        rationale: "New source evidence requires review.",
+        workflow: expect.objectContaining({
+          fromStatus: "false_positive",
+          toStatus: "open"
+        }),
+        replay: expect.objectContaining({
+          idempotencyKey: "case-reopen-false-positive-001",
+          auditEventId: expect.stringMatching(/^case_workflow_audit_/)
+        })
+      })
+    ]));
+    expect((store as any).getCase("case_alert_acme").workflowEvents.map((event: any) => event.action)).toEqual([
+      "open",
+      "false_positive",
+      "reopen"
+    ]);
+  });
+
   test("records idempotent case handoff action receipts with org access gates", async () => {
     const { options, store } = fixtureRuntime();
     await postHandoff(options, "alert_acme", {
