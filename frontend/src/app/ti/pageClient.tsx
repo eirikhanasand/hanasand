@@ -962,6 +962,41 @@ type SelectedAlertActionPlan = {
         alertIds: string[]
         sourceFamilies: string[]
     }
+    evidenceRows: Array<{
+        rowId: string
+        kind: TiActionabilityModel['orgRelevance']['handoffRows'][number]['kind']
+        state: TiActionabilityModel['orgRelevance']['handoffRows'][number]['state']
+        ownerLane: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
+        label: string
+        action: string
+        route: string
+        sourceFamily: string
+        provenanceRefs: string[]
+        alertId?: string
+        casePath?: string
+        captureIds: string[]
+        evidence: {
+            summary: string
+            sourceName?: string
+            provenance?: string
+            reportDate?: string
+            captureId?: string
+            parserStatus?: string
+            confidence?: number
+        }
+        blockers: string[]
+    }>
+    replayRows: Array<{
+        id: string
+        ready: boolean
+        state: TiActionabilityModel['caseReplayReadiness']['rows'][number]['state']
+        exportRoute?: string
+        caseId?: string
+        alertIds: string[]
+        captureIds: string[]
+        sourceIds: string[]
+        blockerCodes: string[]
+    }>
     blockers: TiActionabilityModel['alertGenerationReadiness']['blockers']
     handoff: {
         ready: boolean
@@ -4310,6 +4345,42 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 ))}
                 {!plan.watchlist.terms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
             </div>
+            {plan.evidenceRows.length ? (
+                <div data-ti-selected-alert-evidence='true' className='mt-2 grid gap-2'>
+                    {plan.evidenceRows.slice(0, 3).map(row => (
+                        <div key={row.rowId} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.label}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                        {formatLabel(row.kind)} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}
+                                    </p>
+                                </div>
+                                <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(row.state)}</span>
+                            </div>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.evidence.summary}</p>
+                            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                {row.alertId ? <span className={sourceHealthChipClass('ready')}>alert {row.alertId}</span> : null}
+                                {row.casePath ? <span className={sourceHealthChipClass('ready')}>{row.casePath}</span> : null}
+                                {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
+                            </div>
+                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                            {row.blockers.length ? (
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
+                            ) : null}
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+            {plan.replayRows.length ? (
+                <div data-ti-selected-alert-replay='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                    {plan.replayRows.slice(0, 3).map(row => (
+                        <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
+                            {row.ready ? row.exportRoute ?? 'replay ready' : row.blockerCodes.slice(0, 2).join(', ') || 'case replay blocked'}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
             {plan.blockers.length ? (
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 3).map(blocker => blocker.detail))}</p>
             ) : (
@@ -5539,6 +5610,9 @@ function selectedAlertActionPlanFor(
     relevance: LocalRelevanceMark | undefined
 ): SelectedAlertActionPlan {
     const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const selectedAlertIds = selected.priority?.alertIds ?? []
+    const selectedCaptureIds = selected.priority?.captureIds ?? []
+    const selectedText = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
     const watchTerms = unique([
         ...watchlist.terms,
         ...actionability.watchlistRelevance.terms.map(term => `${term.kind}: ${term.value}`),
@@ -5552,9 +5626,36 @@ function selectedAlertActionPlanFor(
         ...actionability.alertGenerationReadiness.generationEvidenceWindowSourceFamilies,
         ...actionability.sourceHealthQueue.rows.map(row => row.sourceFamily),
     ]).slice(0, 8)
+    const evidenceRefs = unique([
+        ...selectedSourceIds,
+        ...selectedAlertIds,
+        ...selectedCaptureIds,
+        ...captureIds,
+        selected.source,
+        selected.provenance,
+    ].filter(Boolean))
+    const alertHandoffRows = actionability.orgRelevance.handoffRows.filter(row =>
+        row.kind === 'alert_case'
+        || row.kind === 'watchlist_match'
+        || row.kind === 'source_evidence'
+        || row.provenanceRefs.some(ref => evidenceRefs.includes(ref) || selectedText.includes(ref.toLowerCase()))
+        || (row.alertId ? selectedAlertIds.includes(row.alertId) : false)
+        || row.captureIds.some(captureId => selectedCaptureIds.includes(captureId) || captureIds.includes(captureId))
+        || watchTerms.some(term => row.label.toLowerCase().includes(term.toLowerCase().replace(/^[^:]+:\s*/, '')))
+    )
+    const activeAlertHandoffRows = alertHandoffRows.length
+        ? alertHandoffRows
+        : actionability.orgRelevance.handoffRows.filter(row => row.kind === 'alert_case' || row.kind === 'source_evidence' || row.kind === 'watchlist_match').slice(0, 4)
+    const replayRows = actionability.caseReplayReadiness.rows.filter(row =>
+        row.alertIds.some(alertId => selectedAlertIds.includes(alertId) || actionability.readiness.backedIds.alertIds.includes(alertId))
+        || row.captureIds.some(captureId => selectedCaptureIds.includes(captureId) || captureIds.includes(captureId))
+        || row.sourceIds.some(sourceId => selectedSourceIds.includes(sourceId))
+    )
+    const activeReplayRows = replayRows.length ? replayRows : actionability.caseReplayReadiness.rows.slice(0, 3)
     const missing = unique([
         ...actionability.createAlertHandoff.missing,
         ...actionability.alertGenerationReadiness.blockers.map(blocker => blocker.detail),
+        ...activeAlertHandoffRows.flatMap(row => row.blockers.map(blocker => blocker.detail)),
     ]).slice(0, 8)
     return {
         schemaVersion: 'ti.public_actor.selected_alert_action_plan.v1',
@@ -5592,6 +5693,41 @@ function selectedAlertActionPlanFor(
             alertIds: actionability.readiness.backedIds.alertIds,
             sourceFamilies,
         },
+        evidenceRows: activeAlertHandoffRows.slice(0, 4).map(row => ({
+            rowId: row.rowId,
+            kind: row.kind,
+            state: row.state,
+            ownerLane: row.ownerLane,
+            label: row.label,
+            action: row.action,
+            route: row.route,
+            sourceFamily: row.sourceFamily,
+            provenanceRefs: row.provenanceRefs,
+            alertId: row.alertId,
+            casePath: row.casePath,
+            captureIds: row.captureIds,
+            evidence: {
+                summary: row.evidence.summary,
+                sourceName: row.evidence.sourceName,
+                provenance: row.evidence.provenance,
+                reportDate: row.evidence.reportDate,
+                captureId: row.evidence.captureId,
+                parserStatus: row.evidence.parserStatus,
+                confidence: row.evidence.confidence,
+            },
+            blockers: row.blockers.map(blocker => blocker.detail),
+        })),
+        replayRows: activeReplayRows.slice(0, 4).map(row => ({
+            id: row.id,
+            ready: row.ready,
+            state: row.state,
+            exportRoute: row.exportRoute,
+            caseId: row.caseId,
+            alertIds: row.alertIds,
+            captureIds: row.captureIds,
+            sourceIds: row.sourceIds,
+            blockerCodes: row.blockerCodes,
+        })),
         blockers: actionability.alertGenerationReadiness.blockers,
         handoff: {
             ready: actionability.createAlertHandoff.ready,
