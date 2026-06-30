@@ -432,6 +432,13 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     access: caseAccessSummary(access),
     case: caseRecord,
     workflowState: caseWorkflowSummary(caseRecord),
+    alertCaseHandoffContext: alert ? buildAlertCaseHandoff({
+      caseRecord,
+      alert,
+      route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
+      replayState: "reused",
+      provenance: alertCaseHandoffProvenance(alert)
+    }) : undefined,
     alert,
     alertContext: alert ? {
       id: alert.id,

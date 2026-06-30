@@ -21,6 +21,10 @@ describe("DWM alert case handoff route", () => {
       idempotencyKey: "alert-case-handoff-001"
     });
     const duplicatePayload = await duplicate.json() as any;
+    const detail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const detailPayload = await detail.json() as any;
 
     expect(created.status).toBe(201);
     expect(createdPayload.case).toMatchObject({
@@ -59,6 +63,24 @@ describe("DWM alert case handoff route", () => {
         contentHashes: ["hash_acme_1"],
         sourceFamilies: ["telegram_public"],
         evidenceCount: 1,
+        blockers: []
+      }
+    });
+    expect(detail.status).toBe(200);
+    expect(detailPayload.alertCaseHandoffContext).toMatchObject({
+      schemaVersion: "dwm.alert_case_handoff.v1",
+      route: "/v1/dwm/alerts/alert_acme/case-handoff",
+      caseId: "case_alert_acme",
+      alertId: "alert_acme",
+      workflowState: {
+        caseStatus: "open",
+        replayState: "reused",
+        dedupeKey: expect.stringMatching(/^dwm_alert_case_handoff_/)
+      },
+      provenance: {
+        captureIds: ["cap_acme_1"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_1"],
         blockers: []
       }
     });
