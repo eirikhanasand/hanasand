@@ -255,8 +255,8 @@ function Results({ result }: { result: TiSearchResponse }) {
     }
 
     function stageSelectedHandoff() {
-        if (!selected || !reviewHandoff || !selectedSourceDrilldown || !selectedCaseDraft || !selectedCaseOwnership || !selectedCaseCreateRequest || !selectedWatchlistPlan || !selectedAlertPlan || !selectedDeliveryPlan || !selectedEnrichmentTriage || !selectedCaseActionTrail) return
-        const staged = stagedHandoffFor(result, selected, reviewHandoff, selectedSourceDrilldown, selectedCaseDraft, selectedCaseOwnership, selectedCaseCreateRequest, selectedWatchlistPlan, selectedAlertPlan, selectedDeliveryPlan, selectedEnrichmentTriage, selectedCaseActionTrail, selectedRelevance)
+        if (!selected || !selectedArtifact || !selectedArtifactHandoffs || !reviewHandoff || !selectedSourceDrilldown || !selectedCaseDraft || !selectedCaseOwnership || !selectedCaseCreateRequest || !selectedWatchlistPlan || !selectedAlertPlan || !selectedDeliveryPlan || !selectedEnrichmentTriage || !selectedCaseActionTrail) return
+        const staged = stagedHandoffFor(result, selected, selectedArtifactPayloadFor(selectedArtifact, selectedArtifactHandoffs), reviewHandoff, selectedSourceDrilldown, selectedCaseDraft, selectedCaseOwnership, selectedCaseCreateRequest, selectedWatchlistPlan, selectedAlertPlan, selectedDeliveryPlan, selectedEnrichmentTriage, selectedCaseActionTrail, selectedRelevance)
         setStagedHandoffs(current => ({ ...current, [staged.id]: staged }))
     }
 
@@ -1287,6 +1287,7 @@ type StagedHandoff = {
     caseIntent: LocalRelevanceMark['caseIntent'] | 'not_set'
     ready: boolean
     blockers: string[]
+    selectedArtifact: ReturnType<typeof selectedArtifactPayloadFor>
     reviewHandoff: SelectedReviewHandoff
     sourceDrilldown: SelectedSourceDrilldown
     caseDraft: SelectedCaseDraft
@@ -4785,7 +4786,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
                                     <div className='min-w-0'>
                                         <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} TTP{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'} · {item.caseActionTrail.summary.total} trail event{item.caseActionTrail.summary.total === 1 ? '' : 's'}
+                                            {formatLabel(item.caseIntent)} · {relevanceLabelForStaged(item.relevanceState)} · {item.selectedArtifact.artifact.kind}: {item.selectedArtifact.artifact.label} · {item.sourceDrilldown.rows.length} source row{item.sourceDrilldown.rows.length === 1 ? '' : 's'} · {item.caseCreateRequest.actorContext.techniques.length} TTP{item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'} · {item.caseActionTrail.summary.total} trail event{item.caseActionTrail.summary.total === 1 ? '' : 's'}
                                         </p>
                                     </div>
                                     <span className={item.ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{item.ready ? 'ready' : 'blocked'}</span>
@@ -4810,6 +4811,7 @@ function StagedHandoffQueuePanel({ items, onClear }: { items: StagedHandoff[]; o
 function stagedReadinessChips(item: StagedHandoff) {
     const sourceMissing = unique(item.sourceDrilldown.rows.flatMap(row => row.missing))
     const actorReady = item.caseCreateRequest.actorContext.sourceCoverage.totalRows > 0 && item.caseCreateRequest.actorContext.techniques.length > 0
+    const artifactReady = !item.selectedArtifact.readiness.blockers.length && !item.selectedArtifact.readiness.missing.length
     const replayReady = item.caseCreateRequest.actionReplay.rows.some(row => row.ready)
     const ownershipReady = item.caseOwnership.state === 'ready' && item.caseOwnership.blockers.length === 0
     const alertReady = item.alertPlan.ready && item.alertPlan.blockers.length === 0
@@ -4821,6 +4823,7 @@ function stagedReadinessChips(item: StagedHandoff) {
         { label: 'source', value: sourceMissing.length ? `${sourceMissing.length} missing` : `${item.sourceDrilldown.rows.length} row${item.sourceDrilldown.rows.length === 1 ? '' : 's'}`, ready: sourceMissing.length === 0 },
         { label: 'case', value: item.caseDraft.missing.length ? `${item.caseDraft.missing.length} missing` : item.caseDraft.route ? 'route ready' : 'draft ready', ready: item.caseDraft.missing.length === 0 },
         { label: 'owner', value: ownershipReady ? item.caseOwnership.owner.label : item.caseOwnership.blockers.length ? `${item.caseOwnership.blockers.length} blocker${item.caseOwnership.blockers.length === 1 ? '' : 's'}` : 'review', ready: ownershipReady },
+        { label: 'artifact', value: artifactReady ? formatLabel(item.selectedArtifact.artifact.kind) : item.selectedArtifact.readiness.blockers.length ? `${item.selectedArtifact.readiness.blockers.length} blocker${item.selectedArtifact.readiness.blockers.length === 1 ? '' : 's'}` : 'review', ready: artifactReady },
         { label: 'actor', value: actorReady ? `${item.caseCreateRequest.actorContext.techniques.length} TTP${item.caseCreateRequest.actorContext.techniques.length === 1 ? '' : 's'}` : 'needs context', ready: actorReady },
         { label: 'watchlist', value: item.caseCreateRequest.watchlistBasis.ready ? 'matched' : item.caseCreateRequest.watchlistBasis.blockers.length ? `${item.caseCreateRequest.watchlistBasis.blockers.length} blocker${item.caseCreateRequest.watchlistBasis.blockers.length === 1 ? '' : 's'}` : 'review', ready: item.caseCreateRequest.watchlistBasis.ready },
         { label: 'alert', value: alertReady ? `${item.alertPlan.readiness.matchedCandidateCount} matched` : item.alertPlan.blockers.length ? `${item.alertPlan.blockers.length} blocker${item.alertPlan.blockers.length === 1 ? '' : 's'}` : 'review', ready: alertReady },
@@ -6435,6 +6438,7 @@ function publicTiCaseIdFromPath(path?: string) {
 function stagedHandoffFor(
     result: TiSearchResponse,
     selected: AnalystWorkItem,
+    selectedArtifact: ReturnType<typeof selectedArtifactPayloadFor>,
     reviewHandoff: SelectedReviewHandoff,
     sourceDrilldown: SelectedSourceDrilldown,
     caseDraft: SelectedCaseDraft,
@@ -6449,6 +6453,8 @@ function stagedHandoffFor(
 ): StagedHandoff {
     const blockers = unique([
         ...reviewHandoff.blockers,
+        ...selectedArtifact.readiness.blockers,
+        ...selectedArtifact.readiness.missing,
         ...sourceDrilldown.blockers,
         ...caseDraft.missing,
         ...caseOwnership.blockers,
@@ -6473,6 +6479,7 @@ function stagedHandoffFor(
         caseIntent: relevance?.caseIntent ?? caseDraft.caseIntent,
         ready: caseDraft.ready && caseCreateRequest.ready && watchlistPlan.ready && alertPlan.ready && deliveryPlan.state === 'ready' && enrichmentTriage.state !== 'blocked' && blockers.length === 0,
         blockers,
+        selectedArtifact,
         reviewHandoff,
         sourceDrilldown,
         caseDraft,
