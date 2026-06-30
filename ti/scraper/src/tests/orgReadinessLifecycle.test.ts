@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   ORG_READINESS_LIFECYCLE_BLOCKER_SCHEMA_VERSION,
   ORG_READINESS_LIFECYCLE_SCHEMA_VERSION,
+  ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
   buildOrgReadinessLifecycle,
   buildOrgReadinessLifecycleExamples,
+  buildOrgSharedWatchlistReadinessProof,
   type OrgReadinessLifecycleExampleId,
   type OrgReadinessLifecycleOwnerLane
 } from "../product/orgReadinessLifecycle.ts";
@@ -19,7 +21,23 @@ describe("organization readiness lifecycle contract", () => {
       activeAdminCount: 1,
       activeMemberCount: 5,
       pendingInviteCount: 3,
-      sharedWatchlistExport: { available: true, activeTermCount: 2, canGenerateAlerts: true },
+      sharedWatchlistExport: {
+        available: true,
+        activeTermCount: 2,
+        canGenerateAlerts: true,
+        schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+        consumerSchemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+        exportedWatchlistCount: 1,
+        alertGeneratorKeyCount: 2,
+        memberRole: "analyst",
+        memberStatus: "active",
+        route: "/v1/dwm/watchlists",
+        downstreamRoutes: {
+          alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+          alertRebuild: "/v1/dwm/alerts/rebuild",
+          webhookDelivery: "/v1/dwm/webhooks/deliver"
+        }
+      },
       entitlement: { persistedPolicy: true, status: "active" },
       source: { ready: true, activeSourceCount: 2 },
       alertMatching: { ready: true, probeId: "alert.matching.contract" },
@@ -45,9 +63,151 @@ describe("organization readiness lifecycle contract", () => {
       "analyst-handoff"
     ]);
     expect(lifecycle.stages.shared_watchlist_export).toMatchObject({
-      sourceContract: "organization.watchlist_alert_terms_export.v1",
-      route: "GET /api/organizations/:id/watchlists/alert-terms",
+      sourceContract: "organization.shared_watchlist_alert_generation_export.v1",
+      route: "/v1/dwm/watchlists",
       probeId: "org.watchlist_export"
+    });
+  });
+
+  test("aggregates shared watchlist export readiness for alert dashboard and webhook consumers", () => {
+    const proof = buildOrgSharedWatchlistReadinessProof({
+      generatedAt: "2026-06-29T13:02:00.000Z",
+      organizationId: "org_shared_ready",
+      tenantId: "tenant_shared_ready",
+      organizationExists: true,
+      activeOwnerCount: 1,
+      activeAdminCount: 1,
+      activeMemberCount: 3,
+      pendingInviteCount: 0,
+      sharedWatchlistExport: {
+        available: true,
+        activeTermCount: 4,
+        canGenerateAlerts: true,
+        schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+        consumerSchemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+        exportedWatchlistCount: 2,
+        alertGeneratorKeyCount: 4,
+        memberRole: "admin",
+        memberStatus: "active",
+        route: "/v1/dwm/watchlists",
+        downstreamRoutes: {
+          alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+          alertRebuild: "/v1/dwm/alerts/rebuild",
+          webhookDelivery: "/v1/dwm/webhooks/deliver"
+        }
+      },
+      entitlement: { persistedPolicy: true, status: "active" },
+      source: { ready: true, activeSourceCount: 2 },
+      alertMatching: { ready: true, probeId: "alert.matching.ready" },
+      webhook: { ready: true, verifiedDestinationCount: 1 },
+      helpdesk: { ready: true, auditAvailable: true, executorAvailable: true },
+      analystHandoff: { compatible: true }
+    });
+
+    expect(proof).toMatchObject({
+      schemaVersion: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
+      state: "ready",
+      sourceContract: "organization.shared_watchlist_alert_generation_export.v1",
+      consumerContract: "organization.shared_watchlist_alert_generation_consumers.v1",
+      ownerLane: "watchlist",
+      memberScope: {
+        role: "admin",
+        status: "active",
+        allowed: true
+      },
+      termExport: {
+        activeTermCount: 4,
+        exportedWatchlistCount: 2,
+        alertGeneratorKeyCount: 4
+      },
+      routes: {
+        watchlists: "/v1/dwm/watchlists",
+        alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+        alertRebuild: "/v1/dwm/alerts/rebuild",
+        webhookDelivery: "/v1/dwm/webhooks/deliver"
+      },
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(proof.blockers).toEqual([]);
+    expect(proof.consumerReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "dashboard",
+        route: "/v1/dwm/watchlists",
+        requiredFields: expect.arrayContaining(["state", "member.role", "blockers.code"])
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        route: "/v1/dwm/alerts/generation-readiness",
+        requiredFields: expect.arrayContaining(["runtimeWatchlists", "termExport.alertGeneratorKeys"])
+      }),
+      expect.objectContaining({
+        consumer: "webhook",
+        route: "/v1/dwm/webhooks/deliver",
+        requiredFields: expect.arrayContaining(["runtimeWatchlists[].webhookDestinationId"])
+      })
+    ]));
+    expect(JSON.stringify(proof)).not.toContain("https://discord.com");
+    expect(JSON.stringify(proof)).not.toContain("rawText");
+    expect(JSON.stringify(proof)).not.toContain("password");
+  });
+
+  test("keeps blocked shared watchlist export proof metadata-only for denied member scope", () => {
+    const proof = buildOrgSharedWatchlistReadinessProof({
+      generatedAt: "2026-06-29T13:03:00.000Z",
+      organizationId: "org_shared_blocked",
+      tenantId: "tenant_shared_blocked",
+      organizationExists: true,
+      activeOwnerCount: 1,
+      activeAdminCount: 0,
+      activeMemberCount: 2,
+      pendingInviteCount: 0,
+      sharedWatchlistExport: {
+        available: false,
+        activeTermCount: 0,
+        canGenerateAlerts: false,
+        blockerCodes: ["role_not_allowed"],
+        schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+        consumerSchemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+        memberRole: "viewer",
+        memberStatus: "active",
+        route: "/v1/dwm/watchlists"
+      },
+      entitlement: { persistedPolicy: true, status: "active" },
+      source: { ready: true, activeSourceCount: 1 },
+      alertMatching: { ready: false, blockerCodes: ["no_active_watchlist_terms"] },
+      webhook: { ready: false, verifiedDestinationCount: 0, blockerCodes: ["webhook_not_verified"] },
+      helpdesk: { ready: true, auditAvailable: true, executorAvailable: true },
+      analystHandoff: { compatible: true }
+    });
+
+    expect(proof.state).toBe("blocked");
+    expect(proof.memberScope).toMatchObject({
+      role: "viewer",
+      status: "active",
+      allowed: false
+    });
+    expect(proof.blockers).toEqual([expect.objectContaining({
+      schemaVersion: ORG_READINESS_LIFECYCLE_BLOCKER_SCHEMA_VERSION,
+      ownerLane: "watchlist",
+      code: "role_not_allowed",
+      sourceContract: "organization.shared_watchlist_alert_generation_export.v1",
+      route: "/v1/dwm/watchlists",
+      nextAction: "export_shared_watchlist_terms"
+    })]);
+    expect(proof.termExport).toMatchObject({
+      activeTermCount: 0,
+      exportedWatchlistCount: 0,
+      alertGeneratorKeyCount: 0
+    });
+    expect(proof.safeOutput).toMatchObject({
+      metadataOnly: true,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
     });
   });
 
@@ -86,8 +246,8 @@ describe("organization readiness lifecycle contract", () => {
       schemaVersion: ORG_READINESS_LIFECYCLE_BLOCKER_SCHEMA_VERSION,
       ownerLane: "watchlist",
       code: "missing_shared_watchlist_export",
-      sourceContract: "organization.watchlist_alert_terms_export.v1",
-      route: "GET /api/organizations/:id/watchlists/alert-terms"
+      sourceContract: "organization.shared_watchlist_alert_generation_export.v1",
+      route: "/v1/dwm/watchlists"
     });
     expect(examples.get("entitlement_denied")?.stages.entitlement_readiness.blockers[0]).toMatchObject({
       ownerLane: "entitlement",

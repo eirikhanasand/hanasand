@@ -1,5 +1,6 @@
 export const ORG_READINESS_LIFECYCLE_SCHEMA_VERSION = "organization.readiness_lifecycle.v1" as const;
 export const ORG_READINESS_LIFECYCLE_BLOCKER_SCHEMA_VERSION = "organization.readiness_lifecycle.blocker.v1" as const;
+export const ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION = "organization.shared_watchlist_readiness_proof.v1" as const;
 
 export type OrgReadinessLifecycleOwnerLane =
   | "org"
@@ -66,6 +67,18 @@ export type OrgReadinessLifecycleInput = {
     activeTermCount: number;
     canGenerateAlerts: boolean;
     blockerCodes?: string[];
+    schemaVersion?: string;
+    consumerSchemaVersion?: string;
+    exportedWatchlistCount?: number;
+    alertGeneratorKeyCount?: number;
+    memberRole?: string;
+    memberStatus?: string;
+    route?: string;
+    downstreamRoutes?: {
+      alertGenerationReadiness?: string;
+      alertRebuild?: string;
+      webhookDelivery?: string;
+    };
   };
   entitlement: {
     persistedPolicy: boolean;
@@ -135,6 +148,48 @@ export type OrgReadinessLifecycleExamples = {
   examples: OrgReadinessLifecycleExample[];
 };
 
+export type OrgSharedWatchlistReadinessProof = {
+  schemaVersion: typeof ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION;
+  generatedAt: string;
+  organization: {
+    id?: string;
+    tenantId?: string;
+  };
+  state: "ready" | "blocked";
+  sourceContract: string;
+  consumerContract: string;
+  ownerLane: "watchlist";
+  memberScope: {
+    role?: string;
+    status?: string;
+    allowed: boolean;
+  };
+  termExport: {
+    activeTermCount: number;
+    exportedWatchlistCount: number;
+    alertGeneratorKeyCount: number;
+  };
+  routes: {
+    watchlists: string;
+    alertGenerationReadiness: string;
+    alertRebuild: string;
+    webhookDelivery: string;
+  };
+  blockers: OrgReadinessLifecycleBlocker[];
+  consumerReferences: Array<{
+    consumer: "dashboard" | "alertGeneration" | "webhook";
+    schemaVersion: string;
+    route: string;
+    requiredFields: string[];
+  }>;
+  safeOutput: {
+    metadataOnly: true;
+    rawEvidenceExposed: false;
+    webhookSecretExposed: false;
+    crossOrgDataExposed: false;
+  };
+};
+
 const DEFAULT_GENERATED_AT = "2026-06-29T00:00:00.000Z";
 
 export function buildOrgReadinessLifecycle(input: OrgReadinessLifecycleInput): OrgReadinessLifecycle {
@@ -177,12 +232,12 @@ export function buildOrgReadinessLifecycle(input: OrgReadinessLifecycleInput): O
       id: "shared_watchlist_export",
       ownerLane: "watchlist",
       status: input.sharedWatchlistExport.available && input.sharedWatchlistExport.canGenerateAlerts && input.sharedWatchlistExport.activeTermCount > 0 ? "ready" : "blocked",
-      sourceContract: "organization.watchlist_alert_terms_export.v1",
-      route: "GET /api/organizations/:id/watchlists/alert-terms",
+      sourceContract: input.sharedWatchlistExport.schemaVersion ?? "organization.shared_watchlist_alert_generation_export.v1",
+      route: input.sharedWatchlistExport.route ?? "/v1/dwm/watchlists",
       probeId: "org.watchlist_export",
       blockerCode: first(input.sharedWatchlistExport.blockerCodes) ?? (input.sharedWatchlistExport.activeTermCount > 0 ? undefined : "missing_active_watchlist_terms"),
-      nextAction: "create_or_repair_shared_watchlist_export",
-      supportText: "Shared watchlist export must include active terms and alert-generation refs."
+      nextAction: "export_shared_watchlist_terms",
+      supportText: "Shared watchlist export must include active terms, member scope, and alert-generation references."
     }),
     entitlement_readiness: entitlementStage(input),
     source_readiness: stage({
@@ -271,6 +326,63 @@ export function buildOrgReadinessLifecycleExamples(input: { generatedAt?: string
       example("helpdesk_audit_unavailable", "Helpdesk audit or support executor contract is unavailable.", { ...base, helpdesk: { ready: false, auditAvailable: false, executorAvailable: true, blockerCodes: ["helpdesk_audit_unavailable"] } }),
       example("handoff_incompatible", "Analyst handoff validation reports downstream incompatibility.", { ...base, analystHandoff: { compatible: false, blockerCodes: ["handoff_incompatible"] } })
     ]
+  };
+}
+
+export function buildOrgSharedWatchlistReadinessProof(input: OrgReadinessLifecycleInput): OrgSharedWatchlistReadinessProof {
+  const lifecycle = buildOrgReadinessLifecycle(input);
+  const stage = lifecycle.stages.shared_watchlist_export;
+  const sourceContract = input.sharedWatchlistExport.schemaVersion ?? "organization.shared_watchlist_alert_generation_export.v1";
+  const consumerContract = input.sharedWatchlistExport.consumerSchemaVersion ?? "organization.shared_watchlist_alert_generation_consumers.v1";
+  const routes = {
+    watchlists: input.sharedWatchlistExport.route ?? "/v1/dwm/watchlists",
+    alertGenerationReadiness: input.sharedWatchlistExport.downstreamRoutes?.alertGenerationReadiness ?? "/v1/dwm/alerts/generation-readiness",
+    alertRebuild: input.sharedWatchlistExport.downstreamRoutes?.alertRebuild ?? "/v1/dwm/alerts/rebuild",
+    webhookDelivery: input.sharedWatchlistExport.downstreamRoutes?.webhookDelivery ?? "/v1/dwm/webhooks/deliver"
+  };
+
+  return {
+    schemaVersion: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
+    generatedAt: lifecycle.generatedAt,
+    organization: lifecycle.organization,
+    state: stage.status === "ready" ? "ready" : "blocked",
+    sourceContract,
+    consumerContract,
+    ownerLane: "watchlist",
+    memberScope: {
+      role: input.sharedWatchlistExport.memberRole,
+      status: input.sharedWatchlistExport.memberStatus,
+      allowed: stage.status === "ready"
+    },
+    termExport: {
+      activeTermCount: input.sharedWatchlistExport.activeTermCount,
+      exportedWatchlistCount: input.sharedWatchlistExport.exportedWatchlistCount ?? (stage.status === "ready" ? 1 : 0),
+      alertGeneratorKeyCount: input.sharedWatchlistExport.alertGeneratorKeyCount ?? input.sharedWatchlistExport.activeTermCount
+    },
+    routes,
+    blockers: stage.blockers,
+    consumerReferences: [{
+      consumer: "dashboard",
+      schemaVersion: consumerContract,
+      route: routes.watchlists,
+      requiredFields: ["state", "member.role", "termExport", "blockers.code"]
+    }, {
+      consumer: "alertGeneration",
+      schemaVersion: consumerContract,
+      route: routes.alertGenerationReadiness,
+      requiredFields: ["runtimeWatchlists", "termExport.alertGeneratorKeys", "termExport.watchlistItemIds"]
+    }, {
+      consumer: "webhook",
+      schemaVersion: consumerContract,
+      route: routes.webhookDelivery,
+      requiredFields: ["runtimeWatchlists[].webhookDestinationId", "termExport.alertGeneratorKeys"]
+    }],
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
   };
 }
 
@@ -368,7 +480,23 @@ function goodInput(generatedAt: string): OrgReadinessLifecycleInput {
     activeAdminCount: 1,
     activeMemberCount: 4,
     pendingInviteCount: 2,
-    sharedWatchlistExport: { available: true, activeTermCount: 3, canGenerateAlerts: true },
+    sharedWatchlistExport: {
+      available: true,
+      activeTermCount: 3,
+      canGenerateAlerts: true,
+      schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+      consumerSchemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+      exportedWatchlistCount: 2,
+      alertGeneratorKeyCount: 3,
+      memberRole: "admin",
+      memberStatus: "active",
+      route: "/v1/dwm/watchlists",
+      downstreamRoutes: {
+        alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+        alertRebuild: "/v1/dwm/alerts/rebuild",
+        webhookDelivery: "/v1/dwm/webhooks/deliver"
+      }
+    },
     entitlement: { persistedPolicy: true, status: "active" },
     source: { ready: true, activeSourceCount: 2 },
     alertMatching: { ready: true, probeId: "alert.matching.ready" },
