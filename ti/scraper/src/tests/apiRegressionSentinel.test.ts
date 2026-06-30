@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
+import { contractIndex, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
@@ -246,6 +247,7 @@ describe("api regression sentinel", () => {
     const contract = await response.json() as any;
     const matrixSurface = contract.surfaces.find((surface: any) => surface.id === "product_readiness_receipt_matrix");
     const matrix = contract.productReadinessReceiptMatrix;
+    const coverage = contract.productReadinessReceiptMatrixCoverage;
     const matrixRows = JSON.parse(JSON.stringify(matrix.rows));
     const rows = new Map(matrixRows.map((row: any) => [row.capabilityId, row]));
     const knownSchemaIds = new Set<string>([
@@ -284,6 +286,23 @@ describe("api regression sentinel", () => {
       producer: "buildProductReadinessReceiptMatrix",
       validator: "validateProductReadinessReceiptMatrix"
     });
+    expect(coverage).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.receipt_matrix_coverage.v1",
+      matrixSchemaVersion: "hanasand.product_readiness.receipt_matrix.v1",
+      route: "/v1/contracts",
+      ok: true,
+      rowCount: 9,
+      missingCapabilityIds: [],
+      matrixSchemaLookupPresent: true,
+      blockerCodes: [],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(coverage.diffRows.every((row: any) => row.ok)).toBe(true);
     expect(matrixRows.map((row: any) => row.capabilityId).sort()).toEqual([
       "alert_case_workflow",
       "dashboard_operator_workspace",
@@ -351,6 +370,71 @@ describe("api regression sentinel", () => {
       downstreamOwners: expect.arrayContaining(["alert", "publicTI"])
     });
     const serialized = JSON.stringify(matrix);
+    expect(serialized).not.toContain("https://discord.com");
+    expect(serialized).not.toContain("authorization:");
+    expect(serialized).not.toContain("webhookUrl");
+    expect(serialized).not.toContain("rawText");
+    expect(serialized).not.toContain("password");
+  });
+
+  test("reports stale or unsafe product readiness matrix references", () => {
+    const contract = contractIndex() as any;
+    const brokenMatrix = JSON.parse(JSON.stringify(contract.productReadinessReceiptMatrix));
+    brokenMatrix.rows = brokenMatrix.rows.filter((row: any) => row.capabilityId !== "website_product_surface");
+    brokenMatrix.rows[0].contractIds = [];
+    brokenMatrix.rows[1].receiptSchemaIds = ["unknown.receipt.v1"];
+    brokenMatrix.rows[2].downstreamConsumers = [];
+    brokenMatrix.rows[3].safeOutput.rawEvidenceExposed = true;
+    brokenMatrix.safeOutput.webhookSecretExposed = true;
+
+    const coverage = productReadinessReceiptMatrixCoverage(
+      brokenMatrix,
+      contract.receiptSchemas,
+      contract.schemaLookup.rows.filter((row: any) => row.schemaId !== "hanasand.product_readiness.receipt_matrix.v1")
+    );
+    const rows = new Map(coverage.diffRows.map((row: any) => [row.capabilityId, row]));
+
+    expect(coverage).toMatchObject({
+      ok: false,
+      missingCapabilityIds: ["website_product_surface"],
+      matrixSchemaLookupPresent: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_capability_row",
+        "missing_contract_ids",
+        "stale_receipt_schema_reference",
+        "missing_downstream_consumers",
+        "unsafe_receipt_matrix_row",
+        "unsafe_receipt_matrix",
+        "missing_matrix_schema_lookup"
+      ]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(rows.get("organization_lifecycle")).toMatchObject({
+      ok: false,
+      missingContractIds: ["contractIds"],
+      blockerCodes: expect.arrayContaining(["missing_contract_ids"])
+    });
+    expect(rows.get("shared_watchlists")).toMatchObject({
+      ok: false,
+      unindexedReceiptSchemaIds: ["unknown.receipt.v1"],
+      blockerCodes: expect.arrayContaining(["stale_receipt_schema_reference"])
+    });
+    expect(rows.get("source_activation")).toMatchObject({
+      ok: false,
+      missingDownstreamConsumers: ["downstreamConsumers"],
+      blockerCodes: expect.arrayContaining(["missing_downstream_consumers"])
+    });
+    expect(rows.get("alert_case_workflow")).toMatchObject({
+      ok: false,
+      unsafeFields: ["safeOutput.rawEvidenceExposed"],
+      blockerCodes: expect.arrayContaining(["unsafe_receipt_matrix_row"])
+    });
+    const serialized = JSON.stringify(coverage);
     expect(serialized).not.toContain("https://discord.com");
     expect(serialized).not.toContain("authorization:");
     expect(serialized).not.toContain("webhookUrl");

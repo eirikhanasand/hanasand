@@ -55,7 +55,7 @@ export function contractIndex() {
     route("POST", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
     route("GET", ORG_ALERT_CASE_ACTION_TIMELINE_ROUTE)
   ];
-  return {
+  const index = {
     endpoint: "/v1/contracts",
     schemaVersion: "ti.api_contract_index.compact.v4",
     routeInventory: { count: routes.length, routes },
@@ -515,6 +515,14 @@ export function contractIndex() {
     semantics: { safeMetadataOnly: true, noCredentialCollection: true, noThreatActorInteraction: true },
     publicCompatibility: { canonicalSearchRoute: "/api/ti/search", unknownQueryCopy: "searching", noDefaultActor: true }
   };
+  return {
+    ...index,
+    productReadinessReceiptMatrixCoverage: productReadinessReceiptMatrixCoverage(
+      index.productReadinessReceiptMatrix,
+      index.receiptSchemas,
+      index.schemaLookup.rows
+    )
+  };
 }
 
 function route(method: "GET" | "POST" | "PATCH", path: string) {
@@ -558,6 +566,111 @@ function productReadinessReceiptMatrixRow(input: {
     receiptSchemaIds: input.receiptSchemaIds || [],
     downstreamOwners: [...new Set(input.downstreamConsumers.map((consumer) => consumer.ownerLane))],
     missingContract: false,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+export function productReadinessReceiptMatrixCoverage(
+  matrix: {
+    schemaVersion: string;
+    rows: Array<{
+      capabilityId: string;
+      ownerLane: string;
+      readinessRoute: string;
+      contractIds: string[];
+      schemaIds: string[];
+      receiptSchemaIds: string[];
+      blockerCodes: string[];
+      scopeFields: string[];
+      downstreamConsumers: Array<{ ownerLane: string; route: string; requiredFields: string[] }>;
+      safeOutput?: { metadataOnly?: boolean; rawEvidenceExposed?: boolean; webhookSecretExposed?: boolean; crossOrgDataExposed?: boolean };
+    }>;
+    safeOutput?: { metadataOnly?: boolean; rawEvidenceExposed?: boolean; webhookSecretExposed?: boolean; crossOrgDataExposed?: boolean };
+  },
+  receiptSchemas: Array<{ schemas: Record<string, string> }>,
+  schemaLookupRows: Array<{ schemaId: string; contractId: string }>
+) {
+  const requiredCapabilityIds = [
+    "organization_lifecycle",
+    "shared_watchlists",
+    "source_activation",
+    "alert_case_workflow",
+    "webhook_delivery",
+    "support_controls",
+    "dashboard_operator_workspace",
+    "public_ti_actor_handoff",
+    "website_product_surface"
+  ];
+  const knownSchemaIds = new Set([
+    ...schemaLookupRows.map((row) => row.schemaId),
+    ...receiptSchemas.flatMap((receipt) => Object.values(receipt.schemas)),
+    ...matrix.rows.flatMap((row) => row.schemaIds)
+  ]);
+  const matrixCapabilityIds = new Set(matrix.rows.map((row) => row.capabilityId));
+  const missingCapabilityIds = requiredCapabilityIds.filter((id) => !matrixCapabilityIds.has(id));
+  const diffRows = matrix.rows.map((row) => {
+    const missingContractIds = !Array.isArray(row.contractIds) || row.contractIds.length === 0 ? ["contractIds"] : [];
+    const missingSchemaIds = !Array.isArray(row.schemaIds) || row.schemaIds.length === 0 ? ["schemaIds"] : [];
+    const missingScopeFields = !Array.isArray(row.scopeFields) || row.scopeFields.length === 0 ? ["scopeFields"] : [];
+    const missingDownstreamConsumers = !Array.isArray(row.downstreamConsumers) || row.downstreamConsumers.length === 0 ? ["downstreamConsumers"] : [];
+    const unindexedReceiptSchemaIds = (row.receiptSchemaIds || []).filter((schemaId) => !knownSchemaIds.has(schemaId));
+    const unsafeFields = [
+      !row.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
+      row.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
+      row.safeOutput?.webhookSecretExposed ? "safeOutput.webhookSecretExposed" : "",
+      row.safeOutput?.crossOrgDataExposed ? "safeOutput.crossOrgDataExposed" : ""
+    ].filter(Boolean);
+    const blockerCodes = [
+      ...missingContractIds.map(() => "missing_contract_ids"),
+      ...missingSchemaIds.map(() => "missing_schema_ids"),
+      ...missingScopeFields.map(() => "missing_scope_fields"),
+      ...missingDownstreamConsumers.map(() => "missing_downstream_consumers"),
+      ...unindexedReceiptSchemaIds.map(() => "stale_receipt_schema_reference"),
+      ...unsafeFields.map(() => "unsafe_receipt_matrix_row")
+    ];
+    return {
+      capabilityId: row.capabilityId,
+      ownerLane: row.ownerLane,
+      readinessRoute: row.readinessRoute,
+      ok: blockerCodes.length === 0,
+      blockerCodes,
+      missingContractIds,
+      missingSchemaIds,
+      missingScopeFields,
+      missingDownstreamConsumers,
+      unindexedReceiptSchemaIds,
+      unsafeFields
+    };
+  });
+  const unsafeMatrixFields = [
+    !matrix.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
+    matrix.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
+    matrix.safeOutput?.webhookSecretExposed ? "safeOutput.webhookSecretExposed" : "",
+    matrix.safeOutput?.crossOrgDataExposed ? "safeOutput.crossOrgDataExposed" : ""
+  ].filter(Boolean);
+  const matrixSchemaLookupPresent = schemaLookupRows.some((row) => row.schemaId === matrix.schemaVersion && row.contractId === "product_readiness_receipt_matrix");
+  const blockerCodes = [
+    ...(!matrixSchemaLookupPresent ? ["missing_matrix_schema_lookup"] : []),
+    ...missingCapabilityIds.map(() => "missing_capability_row"),
+    ...unsafeMatrixFields.map(() => "unsafe_receipt_matrix"),
+    ...diffRows.flatMap((row) => row.blockerCodes)
+  ];
+  return {
+    schemaVersion: "hanasand.product_readiness.receipt_matrix_coverage.v1",
+    matrixSchemaVersion: matrix.schemaVersion,
+    route: "/v1/contracts",
+    ok: blockerCodes.length === 0,
+    rowCount: matrix.rows.length,
+    requiredCapabilityIds,
+    missingCapabilityIds,
+    matrixSchemaLookupPresent,
+    blockerCodes: [...new Set(blockerCodes)].sort(),
+    diffRows,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,
