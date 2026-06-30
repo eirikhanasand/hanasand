@@ -186,6 +186,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedSourceDrilldown = selected ? selectedSourceDrilldownFor(result, selected, actionability, actorIntel) : null
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const selectedCaseActionTrail = selected ? selectedCaseActionTrailFor(result, selected, actionability, reviewHandoff, selectedCaseDraft, selectedDecision, selectedRelevance, selectedNote) : null
+    const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -299,7 +300,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <QueueMetric label='Closed' value={queueCounts.closed} />
                             </div>
                         </div>
-                        <div className='max-h-[40rem] overflow-y-auto p-2'>
+                        <div className='p-2 lg:max-h-[40rem] lg:overflow-y-auto'>
                             {workItems.map(item => {
                                 const decision = localDecisions[item.id]
                                 const active = selected?.id === item.id
@@ -446,6 +447,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 reviewHandoff={reviewHandoff}
                                 caseDraft={selectedCaseDraft}
                                 caseActionTrail={selectedCaseActionTrail}
+                                alertPlan={selectedAlertPlan}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                                 onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
@@ -710,6 +712,46 @@ type CaseActionTrailEvent = {
         confidence?: number
         reportDate?: string
         source?: string
+    }
+}
+
+type SelectedAlertActionPlan = {
+    schemaVersion: 'ti.public_actor.selected_alert_action_plan.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    state: TiActionabilityModel['alertGenerationReadiness']['state']
+    ready: boolean
+    route: string
+    sourceRoute: string
+    nextAction: string
+    readiness: Pick<TiActionabilityModel['alertGenerationReadiness'], 'schemaVersion' | 'readyForCustomerDelivery' | 'candidateCount' | 'matchedCandidateCount' | 'captureRefCount' | 'generationEvidenceWindowReady' | 'latestEvidenceAt' | 'provenance'>
+    watchlist: {
+        terms: string[]
+        matchedTerms: string[]
+        organizations: string[]
+    }
+    sourceRefs: {
+        sourceIds: string[]
+        captureIds: string[]
+        alertIds: string[]
+        sourceFamilies: string[]
+    }
+    blockers: TiActionabilityModel['alertGenerationReadiness']['blockers']
+    handoff: {
+        ready: boolean
+        endpoint: string
+        route?: string
+        missing: string[]
+    }
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
     }
 }
 
@@ -3425,13 +3467,14 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, alertPlan, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
     caseDraft: SelectedCaseDraft | null
     caseActionTrail: CaseActionTrailPayload | null
+    alertPlan: SelectedAlertActionPlan | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
     onRelevance: (state: LocalRelevanceMark['state']) => void
@@ -3490,6 +3533,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                     </div>
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
                 {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
                 <button
                     type='button'
@@ -3529,6 +3573,45 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan }) {
+    const status = plan.ready ? 'ready' : plan.state === 'review' ? 'review' : 'blocked'
+    return (
+        <div data-ti-selected-alert-action-plan='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Alert action plan</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence mapped to watchlist terms, source refs, and alert rebuild readiness.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(status)}>{decisionStepStatusLabel(status)}</span>
+                    <CopyPayloadButton label='Alert action plan' payload={plan} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Candidates' value={`${plan.readiness.candidateCount}`} />
+                <EvidenceMetric label='Matches' value={`${plan.readiness.matchedCandidateCount}`} />
+                <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
+                <EvidenceMetric label='Evidence window' value={plan.readiness.generationEvidenceWindowReady ? 'Ready' : 'Pending'} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.handoff.route || plan.route}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                {plan.watchlist.terms.slice(0, 4).map(term => (
+                    <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
+                ))}
+                {!plan.watchlist.terms.length ? <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>No watch terms attached.</span> : null}
+            </div>
+            {plan.blockers.length ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 3).map(blocker => blocker.detail))}</p>
+            ) : (
+                <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Alert rebuild has the required watchlist, capture, and source context.</p>
+            )}
+        </div>
     )
 }
 
@@ -4148,6 +4231,84 @@ function selectedCaseActionTrailFor(
             blocked,
             sessionLocal: true,
             replayable: activeReplayRows.some(row => row.ready),
+        },
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function selectedAlertActionPlanFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    watchlist: WatchlistRelevance,
+    caseDraft: SelectedCaseDraft | null,
+    relevance: LocalRelevanceMark | undefined
+): SelectedAlertActionPlan {
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const watchTerms = unique([
+        ...watchlist.terms,
+        ...actionability.watchlistRelevance.terms.map(term => `${term.kind}: ${term.value}`),
+        ...(relevance?.watchTerms ?? []),
+    ]).slice(0, 12)
+    const captureIds = unique([
+        ...actionability.readiness.backedIds.captureIds,
+        ...(caseDraft?.sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)) ?? []),
+    ])
+    const sourceFamilies = unique([
+        ...actionability.alertGenerationReadiness.generationEvidenceWindowSourceFamilies,
+        ...actionability.sourceHealthQueue.rows.map(row => row.sourceFamily),
+    ]).slice(0, 8)
+    const missing = unique([
+        ...actionability.createAlertHandoff.missing,
+        ...actionability.alertGenerationReadiness.blockers.map(blocker => blocker.detail),
+    ]).slice(0, 8)
+    return {
+        schemaVersion: 'ti.public_actor.selected_alert_action_plan.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: new Date().toISOString(),
+        selectedItemId: selected.id,
+        title: selected.title,
+        state: actionability.alertGenerationReadiness.state,
+        ready: actionability.createAlertHandoff.ready && actionability.alertGenerationReadiness.readyForCustomerDelivery,
+        route: actionability.alertGenerationReadiness.route,
+        sourceRoute: actionability.alertGenerationReadiness.sourceRoute,
+        nextAction: missing.length
+            ? `Resolve ${displayRequirementList(missing.slice(0, 2))} before alert rebuild.`
+            : 'Open the authenticated alert workflow with the selected evidence and watchlist context.',
+        readiness: {
+            schemaVersion: actionability.alertGenerationReadiness.schemaVersion,
+            readyForCustomerDelivery: actionability.alertGenerationReadiness.readyForCustomerDelivery,
+            candidateCount: actionability.alertGenerationReadiness.candidateCount,
+            matchedCandidateCount: actionability.alertGenerationReadiness.matchedCandidateCount,
+            captureRefCount: actionability.alertGenerationReadiness.captureRefCount,
+            generationEvidenceWindowReady: actionability.alertGenerationReadiness.generationEvidenceWindowReady,
+            latestEvidenceAt: actionability.alertGenerationReadiness.latestEvidenceAt,
+            provenance: actionability.alertGenerationReadiness.provenance,
+        },
+        watchlist: {
+            terms: watchTerms,
+            matchedTerms: watchlist.matchedTerms,
+            organizations: watchlist.organizations,
+        },
+        sourceRefs: {
+            sourceIds: unique([...selectedSourceIds, ...actionability.sourceProvenance.map(row => row.sourceId).filter((value): value is string => Boolean(value))]),
+            captureIds,
+            alertIds: actionability.readiness.backedIds.alertIds,
+            sourceFamilies,
+        },
+        blockers: actionability.alertGenerationReadiness.blockers,
+        handoff: {
+            ready: actionability.createAlertHandoff.ready,
+            endpoint: actionability.createAlertHandoff.endpoint,
+            route: actionability.createAlertHandoff.backedRoute,
+            missing,
         },
         safeOutput: {
             metadataOnly: true,
