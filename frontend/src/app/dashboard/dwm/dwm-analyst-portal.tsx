@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
@@ -304,6 +304,8 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                             <CaseWorkspace
                                 alert={selectedAlert}
                                 deliveries={selectedDeliveries}
+                                sourceCoverage={snapshot.sourceCoverage}
+                                sourceHealth={operations?.sourceHealth ?? []}
                                 localState={localCaseState[selectedAlert.id]}
                                 busyAction={busyAction}
                                 onLocalStateChange={(patch) => {
@@ -343,9 +345,11 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     )
 }
 
-function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
+function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
+    sourceCoverage: DwmProductSnapshot['sourceCoverage']
+    sourceHealth: OperationsSnapshot['sourceHealth']
     localState?: LocalCaseState
     busyAction: string | null
     onLocalStateChange: (patch: LocalCaseState) => void
@@ -372,6 +376,15 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
     const visibleEvidence = sourceFilter === 'all' ? alert.evidence : alert.evidence.filter(item => item.sourceFamily === sourceFilter)
     const [selectedEvidenceId, setSelectedEvidenceId] = useState(alert.evidence[0]?.id ?? '')
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
+    const [copiedHash, setCopiedHash] = useState('')
+    async function copyHash(value: string) {
+        try {
+            await navigator.clipboard.writeText(value)
+            setCopiedHash(value)
+        } catch {
+            setCopiedHash('')
+        }
+    }
     return (
         <div className='grid gap-5 p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -396,6 +409,14 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                 onReplay={onReplay}
                 onTest={onTest}
                 onSend={onSend}
+            />
+
+            <SourceCoverageStrip
+                evidenceSummary={evidenceSummary}
+                sourceCoverage={sourceCoverage}
+                sourceHealth={sourceHealth}
+                sourceFilter={sourceFilter}
+                onSourceFilter={setSourceFilter}
             />
 
             <section className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:grid-cols-2 xl:grid-cols-5'>
@@ -491,33 +512,76 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     sourceFilter={sourceFilter}
                     selectedEvidence={selectedEvidence}
                     visibleEvidence={visibleEvidence}
+                    copiedHash={copiedHash}
                     onSourceFilter={setSourceFilter}
                     onSelectEvidence={setSelectedEvidenceId}
+                    onCopyHash={copyHash}
                 />
 
-                <div className='rounded-lg border border-[#e0e5ed] bg-white'>
-                    <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
-                        <div>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Case timeline</h3>
-                            <p className='mt-0.5 text-xs text-[#667085]'>{timeline.length} event{timeline.length === 1 ? '' : 's'} recorded.</p>
-                        </div>
-                        <Clock3 className='h-4 w-4 text-[#3056d3]' />
-                    </div>
-                    <div className='grid gap-3 p-4'>
-                        {timeline.map(item => (
-                            <div key={item.id} className='grid grid-cols-[auto_1fr] gap-3'>
-                                <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
-                                <div>
-                                    <p className='text-sm font-semibold text-[#171a21]'>{item.title}</p>
-                                    <p className='mt-1 text-xs leading-5 text-[#667085]'>{item.detail}</p>
-                                    <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTimeLabel(item.at)}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
             </section>
         </div>
+    )
+}
+
+function SourceCoverageStrip({ evidenceSummary, sourceCoverage, sourceHealth, sourceFilter, onSourceFilter }: {
+    evidenceSummary: NonNullable<PortalAlert['evidenceSummary']>
+    sourceCoverage: DwmProductSnapshot['sourceCoverage']
+    sourceHealth: OperationsSnapshot['sourceHealth']
+    sourceFilter: string
+    onSourceFilter: (value: string) => void
+}) {
+    const rows = sourceCoverage.map(source => {
+        const healthRows = sourceHealth.filter(item => item.family === source.family)
+        const newest = healthRows
+            .map(item => item.lastCollectedAt)
+            .filter(Boolean)
+            .sort()
+            .at(-1)
+        return {
+            family: source.family,
+            label: source.label,
+            activeCount: source.activeCount,
+            sourceCount: source.sourceCount,
+            health: source.health,
+            evidenceCount: evidenceSummary.sourceFamilyCounts[source.family] ?? 0,
+            newest,
+        }
+    })
+    return (
+        <section className='rounded-lg border border-[#dfe5ee] bg-white'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Source coverage</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>Coverage, newest pull, and evidence count for this case.</p>
+                </div>
+                <button type='button' onClick={() => onSourceFilter('all')} className={`h-8 rounded-lg border px-3 text-xs font-semibold transition ${sourceFilter === 'all' ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}>
+                    All sources
+                </button>
+            </div>
+            <div className='grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-5'>
+                {rows.map(row => (
+                    <button
+                        key={row.family}
+                        type='button'
+                        onClick={() => onSourceFilter(row.family)}
+                        className={`min-w-0 rounded-lg border p-3 text-left transition ${sourceFilter === row.family ? 'border-[#3056d3] bg-[#f8fbff]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9]'}`}
+                    >
+                        <div className='flex items-center justify-between gap-2'>
+                            <span className='truncate text-sm font-semibold text-[#171a21]' title={row.label}>{row.label}</span>
+                            <span className={row.health === 'healthy' ? 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b]' : 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]'}>
+                                {stateLabel(row.health)}
+                            </span>
+                        </div>
+                        <div className='mt-3 grid grid-cols-3 gap-2 text-[11px]'>
+                            <QueueCell label='active' value={`${row.activeCount}/${row.sourceCount}`} />
+                            <QueueCell label='evidence' value={`${row.evidenceCount}`} />
+                            <QueueCell label='newest' value={row.newest ? relativeTimeLabel(row.newest) : 'none'} />
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </section>
     )
 }
 
@@ -578,14 +642,16 @@ function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routin
     )
 }
 
-function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, visibleEvidence, onSourceFilter, onSelectEvidence }: {
+function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, visibleEvidence, copiedHash, onSourceFilter, onSelectEvidence, onCopyHash }: {
     alert: PortalAlert
     sourceFamilies: string[]
     sourceFilter: string
     selectedEvidence?: PortalAlert['evidence'][number]
     visibleEvidence: PortalAlert['evidence']
+    copiedHash: string
     onSourceFilter: (value: string) => void
     onSelectEvidence: (value: string) => void
+    onCopyHash: (value: string) => void
 }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -617,7 +683,13 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                             <p><span className='font-semibold text-[#475467]'>Capture:</span> {selectedEvidence.provenance?.captureId ?? selectedEvidence.id}</p>
                             <p><span className='font-semibold text-[#475467]'>Source:</span> {selectedEvidence.provenance?.sourceId ?? selectedEvidence.sourceName}</p>
                             <p><span className='font-semibold text-[#475467]'>State:</span> {stateLabel(selectedEvidence.redactionState)}</p>
-                            <p><span className='font-semibold text-[#475467]'>Hash:</span> <span className='font-mono'>{selectedEvidence.contentHash}</span></p>
+                            <p className='flex flex-wrap items-center gap-2'>
+                                <span><span className='font-semibold text-[#475467]'>Hash:</span> <span className='font-mono'>{selectedEvidence.contentHash}</span></span>
+                                <button type='button' onClick={() => onCopyHash(selectedEvidence.contentHash)} className='inline-flex h-8 items-center gap-1 rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                    <Copy className='h-3.5 w-3.5' />
+                                    {copiedHash === selectedEvidence.contentHash ? 'Copied' : 'Copy'}
+                                </button>
+                            </p>
                         </div>
                     </div>
                 )}
@@ -653,6 +725,57 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
                     </table>
                 </div>
                 {!visibleEvidence.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-3 text-sm text-[#596170]'>No evidence rows for this source family.</p>}
+            </div>
+        </div>
+    )
+}
+
+function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext }: {
+    alert: PortalAlert
+    deliveries: DeliveryItem[]
+    timeline: Array<{ id: string, at: string, title: string, detail: string }>
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+}) {
+    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const caseId = workflowContext.caseId || alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate
+    const failedDelivery = deliveries.find(delivery => delivery.status === 'failed')
+    return (
+        <div className='rounded-lg border border-[#e0e5ed] bg-white'>
+            <div className='flex items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#171a21]'>Delivery and case activity</h3>
+                    <p className='mt-0.5 text-xs text-[#667085]'>{timeline.length} event{timeline.length === 1 ? '' : 's'} · {deliveries.length} delivery attempt{deliveries.length === 1 ? '' : 's'}</p>
+                </div>
+                <Clock3 className='h-4 w-4 text-[#3056d3]' />
+            </div>
+            <div className='grid gap-3 p-4'>
+                <div className='grid gap-2 sm:grid-cols-2'>
+                    <ActionStatus label='Last delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : 'not sent'} tone={latestDelivery?.status === 'failed' ? 'warn' : 'neutral'} />
+                    <ActionStatus label='Case route' value={caseId || 'candidate pending'} />
+                    <ActionStatus label='Replay count' value={`${alert.replayCount ?? 0}`} />
+                    <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : workflowContext.hasWebhookRoute ? 'route available' : 'route unavailable'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
+                </div>
+                {failedDelivery?.error && <p className='rounded-lg border border-[#fde2d6] bg-[#fff7f3] px-3 py-2 text-xs text-[#9a3412]'>{failedDelivery.error}</p>}
+                <div className='overflow-hidden rounded-lg border border-[#eef1f5]'>
+                    <table className='w-full text-left text-xs'>
+                        <thead className='bg-[#f8fafc] text-[10px] uppercase text-[#667085]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Time</th>
+                                <th className='px-3 py-2 font-semibold'>Event</th>
+                                <th className='px-3 py-2 font-semibold'>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5]'>
+                            {timeline.slice(0, 8).map(item => (
+                                <tr key={item.id} className='align-top'>
+                                    <td className='px-3 py-2 font-semibold text-[#475467]'>{relativeTimeLabel(item.at)}</td>
+                                    <td className='px-3 py-2 font-semibold text-[#171a21]'>{item.title}</td>
+                                    <td className='px-3 py-2 text-[#667085]'>{item.detail}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     )
