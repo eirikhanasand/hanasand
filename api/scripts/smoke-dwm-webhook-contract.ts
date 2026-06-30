@@ -3033,9 +3033,13 @@ const lookupRetryDestination = destinationLookup.destinations.find(item => item.
 const lookupDisabledDestination = destinationLookup.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 expect(deliveryRetryPersistence.schemaVersion === 'dwm.webhook.delivery_retry_persistence.v1' && deliveryRetryPersistence.counts.retryable >= 1, 'Delivery retry persistence should expose grouped retry proof.', deliveryRetryPersistence)
 expect(persistedRetryKey?.retry.retryable === true && persistedRetryKey.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && persistedRetryKey.retry.persistedAttemptCount === 2, 'Delivery retry persistence should keep retry/backoff attempts by idempotency key.', persistedRetryKey)
+expect(persistedRetryKey?.retry.backoffPersisted === true && persistedRetryKey.retry.nextAuditAction === 'delivery.retry_scheduled' && persistedRetryKey.persistence.retryBackoffPersisted === true, 'Delivery retry persistence should expose persisted backoff and next audit action for retryable failures.', persistedRetryKey)
+expect(persistedRetryKey?.persistence.persistedDeliveryIds.includes('delivery_live_failed_retry_contract') && persistedRetryKey.persistence.blockerCodes.includes('live_delivery_disabled') && persistedRetryKey.persistence.redaction.webhookSecretExposed === false, 'Delivery retry persistence should expose secret-safe persisted delivery ids and blockers.', persistedRetryKey?.persistence)
 expect(persistedReplayKey?.replay === true && persistedReplayKey.dedupe.duplicate === true && persistedReplayKey.dedupe.duplicateAttemptCount === 2, 'Delivery retry persistence should expose duplicate replay/dedupe proof.', persistedReplayKey)
 expect(persistedTerminalKey?.status === 'terminal_failure' && persistedTerminalKey.retry.terminalFailure === true && persistedTerminalKey.retry.lastErrorCategory === 'upstream_4xx', 'Delivery retry persistence should separate terminal failures from retryable failures.', persistedTerminalKey)
+expect(persistedTerminalKey?.retry.nextAuditAction === 'delivery.retry_terminal_failure' && persistedTerminalKey.persistence.blockerCodes.includes('terminal_failure'), 'Delivery retry persistence should expose terminal failure audit action and blocker state.', persistedTerminalKey)
 expect(persistedSentKey?.dedupe.alreadyDelivered === true && persistedSentKey.status === 'delivered', 'Delivery retry persistence should mark already delivered dedupe keys.', persistedSentKey)
+expect(persistedSentKey?.retry.nextAuditAction === 'delivery.retry_skipped_duplicate' && persistedSentKey.persistence.blockerCodes.includes('dedupe_already_delivered'), 'Delivery retry persistence should preserve duplicate live-send protection for delivered keys.', persistedSentKey)
 expect(foreignDeliveryRetryPersistence.deliveryKeys.length === 1 && foreignDeliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_foreign'), 'Delivery retry persistence org filter should not leak other org attempts.', foreignDeliveryRetryPersistence)
 expect(!JSON.stringify(deliveryRetryPersistence).includes(secret), 'Delivery retry persistence should redact endpoint, response, and error secrets.', deliveryRetryPersistence)
 expect(deliveryRetryQueue.schemaVersion === 'dwm.webhook.delivery_retry_queue.v1' && deliveryRetryQueue.noNetwork === true && deliveryRetryQueue.counts.retryable >= 1, 'Delivery retry queue should expose no-network retryable delivery proof.', deliveryRetryQueue)
@@ -3516,8 +3520,12 @@ console.log(JSON.stringify({
         'delivery replay guard nonmember denial',
         'delivery replay guard secret redaction',
         'delivery retry persistence grouped idempotency keys',
+        'delivery retry persistence persisted backoff/audit action',
+        'delivery retry persistence secret-safe persisted ids',
         'delivery retry persistence terminal failure state',
+        'delivery retry persistence terminal blocker action',
         'delivery retry persistence duplicate replay dedupe',
+        'delivery retry persistence duplicate live-send guard',
         'delivery retry persistence wrong-org filtering',
         'delivery retry persistence secret redaction',
         'delivery retry queue no-network dry-run readiness',
@@ -3772,8 +3780,15 @@ console.log(JSON.stringify({
             'deliveryRetryPersistence.schemaVersion',
             'deliveryRetryPersistence.deliveryKeys[].retry.nextRetryAt',
             'deliveryRetryPersistence.deliveryKeys[].retry.persistedAttemptCount',
+            'deliveryRetryPersistence.deliveryKeys[].retry.backoffPersisted',
+            'deliveryRetryPersistence.deliveryKeys[].retry.nextAuditAction',
+            'deliveryRetryPersistence.deliveryKeys[].retry.blockerCodes',
             'deliveryRetryPersistence.deliveryKeys[].retry.terminalFailure',
             'deliveryRetryPersistence.deliveryKeys[].dedupe.duplicateAttemptCount',
+            'deliveryRetryPersistence.deliveryKeys[].persistence.persistedDeliveryIds',
+            'deliveryRetryPersistence.deliveryKeys[].persistence.retryBackoffPersisted',
+            'deliveryRetryPersistence.deliveryKeys[].persistence.nextAuditAction',
+            'deliveryRetryPersistence.deliveryKeys[].persistence.blockerCodes',
             'deliveryRetryQueue.schemaVersion',
             'deliveryRetryQueue.noNetwork',
             'deliveryRetryQueue.entries[].retry.dryRunReady',

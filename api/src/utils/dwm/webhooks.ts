@@ -1993,6 +1993,29 @@ export function buildDwmWebhookDeliveryRetryPersistence({
             && latest.errorClass !== 'live_delivery_disabled'
         const retryable = !sent && latest.retryable
         const duplicateAttemptCount = sortedAttempts.length > 1 ? sortedAttempts.length : 0
+        const retryBlockerCodes = [
+            destination && destination.status !== 'active' ? 'destination_disabled' : null,
+            !latest.redactedDestination.endpointHash && !latest.redactedDestination.endpointHint ? 'missing_webhook_url' : null,
+            !liveDeliveryEnabled ? 'live_delivery_disabled' : null,
+            sent ? 'dedupe_already_delivered' : null,
+            terminalFailure ? 'terminal_failure' : null,
+            !retryable && !sent && !terminalFailure ? 'retry_not_eligible' : null,
+            auditEventIds.length === 0 ? 'audit_missing' : null,
+        ].filter(Boolean) as string[]
+        const retryNextAction = sent
+            ? 'delivery.retry_skipped_duplicate'
+            : terminalFailure
+                ? 'delivery.retry_terminal_failure'
+                : retryable
+                    ? 'delivery.retry_scheduled'
+                    : 'delivery.retry_not_eligible'
+        const retryCustomerAction = sent
+            ? 'View delivered attempt before replaying.'
+            : terminalFailure
+                ? 'Fix the destination or payload issue before retrying.'
+                : retryable
+                    ? 'Run a dry-run retry and confirm the payload before enabling live delivery.'
+                    : 'Review delivery evidence before retrying.'
 
         return {
             schemaVersion: 'dwm.webhook.delivery_retry_key.v1',
@@ -2024,6 +2047,10 @@ export function buildDwmWebhookDeliveryRetryPersistence({
                 lastErrorCategory: latest.errorClass,
                 reason: latest.retryReason,
                 terminalFailure,
+                backoffPersisted: retryable && Boolean(latest.nextRetryAt),
+                nextAuditAction: retryNextAction,
+                nextCustomerAction: retryCustomerAction,
+                blockerCodes: retryBlockerCodes,
             },
             dedupe: {
                 alreadyDelivered: Boolean(sent),
@@ -2062,6 +2089,28 @@ export function buildDwmWebhookDeliveryRetryPersistence({
             audit: {
                 latestAuditEventId: auditEventIds[0] || null,
                 auditEventIds,
+            },
+            persistence: {
+                rowKey: latest.idempotencyKey || key,
+                primaryDeliveryId: latest.deliveryId,
+                persistedDeliveryIds: sortedAttempts.map(attempt => attempt.deliveryId),
+                persistedRequestIds: sortedAttempts.map(attempt => attempt.requestId),
+                createdAt: sortedAttempts[sortedAttempts.length - 1]?.createdAt || null,
+                updatedAt: latest.attemptedAt || latest.createdAt,
+                latestStatus: latest.status,
+                latestResponseStatus: latest.responseStatus,
+                latestErrorCategory: latest.errorClass,
+                auditEventIds,
+                retryBackoffPersisted: retryable && Boolean(latest.nextRetryAt),
+                nextRetryAt: retryable ? latest.nextRetryAt : null,
+                nextAuditAction: retryNextAction,
+                blockerCodes: retryBlockerCodes,
+                redaction: {
+                    safeForCustomerDisplay: true,
+                    endpointExposed: false,
+                    responseBodyExposed: false,
+                    webhookSecretExposed: false,
+                },
             },
         }
     }).sort((a, b) => String(b.latestAttempt.attemptedAt).localeCompare(String(a.latestAttempt.attemptedAt)))
