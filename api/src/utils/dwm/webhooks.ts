@@ -4853,6 +4853,21 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
             dedupeKey: normalizedAlert.dedupeKey,
         },
     })
+    const deliveryReadinessConsumer = buildDwmWebhookDeliveryReadinessConsumerProof({
+        destinations,
+        deliveries,
+        auditEvents,
+        liveDeliveryEnabled,
+        viewerRole,
+        canManage,
+        filters: {
+            orgId: dispatch.orgId,
+            destinationId,
+            alertId: normalizedAlert.id,
+            casePath: normalizedAlert.casePath,
+            dedupeKey: normalizedAlert.dedupeKey,
+        },
+    })
     const customerSetup = buildDwmWebhookCustomerSetupProof({
         destinations,
         deliveries,
@@ -4932,6 +4947,7 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
         deliveryTimeline,
         deliveryActionPlan,
         deliveryReplayGuard,
+        deliveryReadinessConsumer,
         auditEventContracts,
     }
 }

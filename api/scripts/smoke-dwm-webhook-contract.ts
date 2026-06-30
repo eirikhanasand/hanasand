@@ -3004,6 +3004,8 @@ const memberReplayLifecycle = memberLifecycle.find(item => item.destinationId ==
 const orgAlertReplayHealth = orgAlertDeliveryContract.destinationHealth.find(item => item.destinationId === 'destination_replay_contract')
 const orgAlertRetryLifecycle = orgAlertDeliveryContract.destinationLifecycle.find(item => item.destinationId === 'destination_live_contract')
 const orgAlertDeliveryProof = orgAlertDeliveryContract.alertDeliveryProof
+const orgAlertDeliveryReadinessConsumer = orgAlertDeliveryContract.deliveryReadinessConsumer
+const orgAlertDeliveryReadinessReplay = orgAlertDeliveryReadinessConsumer.rows.find(item => item.destinationId === 'destination_replay_contract')
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -3077,6 +3079,10 @@ expect(orgAlertReplayOutcome?.preview?.discord.fieldNames.includes('Workflow') &
 expect(orgAlertReplayOutcome?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && orgAlertReplayOutcome.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Org alert delivery outcome should carry stable customer operation links for delivery proof.', orgAlertReplayOutcome)
 expect(orgAlertDisabledOutcome?.reason === 'disabled' && orgAlertDisabledOutcome.blockers.some(item => item.code === 'disabled' && item.blocking === true), 'Org alert delivery outcome should expose disabled destination skips as blockers.', orgAlertDisabledOutcome)
 expect(orgAlertDeliveryContract.deliveryOutcome.noNetwork === true && orgAlertDeliveryContract.deliveryOutcome.externalSendEnabled === false, 'Org alert delivery outcome should preserve no-network dry-run semantics.', orgAlertDeliveryContract.deliveryOutcome)
+expect(orgAlertDeliveryReadinessConsumer.schemaVersion === 'dwm.webhook.delivery_readiness_consumer.v1' && orgAlertDeliveryReadinessConsumer.noNetwork === true && orgAlertDeliveryReadinessConsumer.filters.alertId === 'alert_replay_contract', 'Org alert delivery contract should expose alert-scoped delivery readiness consumer fields.', orgAlertDeliveryReadinessConsumer)
+expect(orgAlertDeliveryReadinessReplay?.readiness.idempotentReplay === true && orgAlertDeliveryReadinessReplay.readiness.redactedDryRun === true && orgAlertDeliveryReadinessReplay.audit.linked === true, 'Org alert delivery readiness consumer should prove replay, dry-run redaction, and audit linkage.', orgAlertDeliveryReadinessReplay)
+expect(orgAlertDeliveryReadinessReplay?.context.casePath === replayWorkflowAlert.casePath && orgAlertDeliveryReadinessReplay.context.sourceFamily === 'telegram_public' && orgAlertDeliveryReadinessReplay.operationLinks.deliveryDetail.includes('delivery_replay_duplicate_contract'), 'Org alert delivery readiness consumer should preserve case/source/deep-link context.', orgAlertDeliveryReadinessReplay)
+expect(orgAlertDeliveryReadinessConsumer.redaction.webhookSecretExposed === false && !JSON.stringify(orgAlertDeliveryReadinessConsumer).includes(secret), 'Org alert delivery readiness consumer should redact webhook secrets.', orgAlertDeliveryReadinessConsumer)
 expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
 expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
 expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
@@ -3550,6 +3556,8 @@ console.log(JSON.stringify({
         'org alert delivery persisted outcome proof',
         'org alert delivery selected/skipped outcome blockers',
         'org alert delivery audit/ledger linkage',
+        'org alert delivery readiness consumer proof',
+        'org alert delivery readiness consumer redaction',
         'org alert delivery secret redaction',
         'two-org overlapping watchlist destination isolation',
         'two-org overlapping watchlist delivery isolation',
@@ -4000,6 +4008,12 @@ console.log(JSON.stringify({
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].operationLinks.deliveryDetail',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].operationLinks.destinationTest',
             'orgAlertDelivery.deliveryOutcome.skippedDestinations[].blockers[].code',
+            'orgAlertDelivery.deliveryReadinessConsumer.schemaVersion',
+            'orgAlertDelivery.deliveryReadinessConsumer.rows[].readiness.idempotentReplay',
+            'orgAlertDelivery.deliveryReadinessConsumer.rows[].readiness.redactedDryRun',
+            'orgAlertDelivery.deliveryReadinessConsumer.rows[].context.casePath',
+            'orgAlertDelivery.deliveryReadinessConsumer.rows[].operationLinks.deliveryDetail',
+            'orgAlertDelivery.deliveryReadinessConsumer.redaction.webhookSecretExposed',
             'orgAlertDelivery.deliveryTimeline.schemaVersion',
             'orgAlertDelivery.deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
             'orgAlertDelivery.deliveryActionPlan.schemaVersion',
