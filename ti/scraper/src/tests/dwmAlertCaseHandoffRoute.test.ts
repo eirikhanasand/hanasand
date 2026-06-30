@@ -480,6 +480,79 @@ describe("DWM alert case handoff route", () => {
       adminDryRunPayload.receipt.id,
       memberReplayPayload.receipt.id
     ]));
+
+    const ownerHistory = await getHandoffActions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const ownerHistoryPayload = await ownerHistory.json() as any;
+    const viewerHistory = await getHandoffActions(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme&actionId=webhookDryRun");
+    const viewerHistoryPayload = await viewerHistory.json() as any;
+    const idempotencyHistory = await getHandoffActions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&idempotencyKey=case-action-replay-001");
+    const idempotencyHistoryPayload = await idempotencyHistory.json() as any;
+    const wrongOrgHistory = await getHandoffActions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
+    const wrongOrgHistoryPayload = await wrongOrgHistory.json() as any;
+
+    expect(ownerHistory.status).toBe(200);
+    expect(ownerHistoryPayload).toMatchObject({
+      schemaVersion: "dwm.case_handoff_action_history.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      summary: {
+        receiptCount: 3,
+        totalReceiptCount: 3,
+        actionIds: ["alertReplay", "webhookDryRun"],
+        latestByAction: {
+          alertReplay: expect.objectContaining({ idempotencyKey: "case-action-replay-member" }),
+          webhookDryRun: expect.objectContaining({ idempotencyKey: "case-action-webhook-001" })
+        }
+      },
+      handoffActionReadiness: {
+        readyActionIds: ["alertReplay", "webhookDryRun"]
+      },
+      auditSafety: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(ownerHistoryPayload.receipts).toHaveLength(3);
+    expect(JSON.stringify(ownerHistoryPayload)).not.toContain("rawText");
+    expect(viewerHistory.status).toBe(200);
+    expect(viewerHistoryPayload).toMatchObject({
+      access: {
+        role: "viewer",
+        readOnly: true
+      },
+      filters: {
+        actionId: "webhookDryRun"
+      },
+      summary: {
+        receiptCount: 1,
+        totalReceiptCount: 3
+      },
+      handoffActionReadiness: {
+        readyActionIds: [],
+        actions: {
+          webhookDryRun: {
+            ready: false,
+            blockerCodes: ["case_read_only_member"]
+          }
+        }
+      }
+    });
+    expect(viewerHistoryPayload.receipts).toEqual([expect.objectContaining({ actionId: "webhookDryRun", idempotencyKey: "case-action-webhook-001" })]);
+    expect(idempotencyHistory.status).toBe(200);
+    expect(idempotencyHistoryPayload.receipts).toEqual([expect.objectContaining({
+      actionId: "alertReplay",
+      idempotencyKey: "case-action-replay-001",
+      provenance: expect.objectContaining({
+        captureIds: ["cap_acme_1"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_1"]
+      })
+    })]);
+    expect(wrongOrgHistory.status).toBe(404);
+    expect(wrongOrgHistoryPayload.error).toMatchObject({ code: "case_not_found" });
   });
 
   test("blocks handoff action receipts for missing alert, missing destination, and unsupported actions", async () => {
@@ -616,6 +689,12 @@ async function postHandoffAction(options: ReturnType<typeof fixtureRuntime>["opt
     method: "POST",
     headers: { "x-user-email": email },
     body: JSON.stringify(body)
+  }), options);
+}
+
+async function getHandoffActions(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/handoff-actions?${query}`, {
+    headers: { "x-user-email": email }
   }), options);
 }
 

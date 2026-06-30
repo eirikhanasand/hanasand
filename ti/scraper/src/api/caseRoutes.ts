@@ -262,6 +262,21 @@ export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: strin
   return json(buildCaseDetail(caseRecord, options, scope.organization, access));
 }
 
+export function listCaseHandoffActions(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const caseRecord = findCase(options, caseId);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  return json(buildCaseHandoffActionHistory(caseRecord, options, scope.organization, access, {
+    actionId: normalizeHandoffActionId(url.searchParams.get("actionId") ?? url.searchParams.get("action")),
+    idempotencyKey: normalizeNote(url.searchParams.get("idempotencyKey") ?? url.searchParams.get("idempotency")),
+    dedupeKey: normalizeNote(url.searchParams.get("dedupeKey") ?? url.searchParams.get("dedupe")),
+    actor: normalizeNote(url.searchParams.get("actor"))
+  }));
+}
+
 export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
@@ -1433,6 +1448,66 @@ function handoffActionReceiptContext(caseRecord: AnalystCase) {
     latest,
     actionIds: uniqueCaseStrings(receipts.map((receipt) => receipt.actionId)),
     route: "/v1/cases/:caseId/handoff-action"
+  };
+}
+
+function buildCaseHandoffActionHistory(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult, filters: {
+  actionId?: "alertReplay" | "webhookDryRun";
+  idempotencyKey?: string;
+  dedupeKey?: string;
+  actor?: string;
+}) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === caseRecord.alertId);
+  const alertCaseHandoffContext = alert ? buildAlertCaseHandoff({
+    caseRecord,
+    alert,
+    route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
+    replayState: "reused",
+    provenance: alertCaseHandoffProvenance(alert)
+  }) : undefined;
+  const handoffActionReadiness = alertCaseHandoffContext ? buildCaseHandoffActionReadiness({
+    caseRecord,
+    handoff: alertCaseHandoffContext,
+    deliveries,
+    access
+  }) : undefined;
+  const allReceipts = [...(caseRecord.handoffActionReceipts ?? [])].sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")));
+  const receipts = allReceipts.filter((receipt) => {
+    if (filters.actionId && receipt.actionId !== filters.actionId) return false;
+    if (filters.idempotencyKey && receipt.idempotencyKey !== filters.idempotencyKey) return false;
+    if (filters.dedupeKey && receipt.dedupeKey !== filters.dedupeKey) return false;
+    if (filters.actor && normalizeIdentity(receipt.actor) !== normalizeIdentity(filters.actor)) return false;
+    return true;
+  });
+  const latestByAction = Object.fromEntries(["alertReplay", "webhookDryRun"].map((actionId) => [
+    actionId,
+    allReceipts.find((receipt) => receipt.actionId === actionId)
+  ]));
+  return {
+    schemaVersion: "dwm.case_handoff_action_history.v1",
+    generatedAt: nowIso(),
+    organization,
+    access: caseAccessSummary(access),
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    filters,
+    summary: {
+      receiptCount: receipts.length,
+      totalReceiptCount: allReceipts.length,
+      actionIds: uniqueCaseStrings(allReceipts.map((receipt) => receipt.actionId)),
+      latestReceipt: allReceipts[0],
+      latestByAction
+    },
+    handoffActionReadiness,
+    receipts,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
   };
 }
 

@@ -42,6 +42,7 @@ export function contractIndex() {
     route("POST", "/v1/dwm/watchlists"),
     route("GET", "/v1/dwm/alerts/generation-readiness"),
     route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
+    route("GET", "/v1/cases/:caseId/handoff-actions"),
     route("POST", "/v1/cases/:caseId/handoff-action"),
     route("PATCH", "/v1/cases/:caseId"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
@@ -107,14 +108,17 @@ export function contractIndex() {
         id: "case_handoff_action_receipt",
         ownerLane: "case",
         route: "/v1/cases/:caseId/handoff-action",
-        methods: ["POST"],
+        historyRoute: "/v1/cases/:caseId/handoff-actions",
+        methods: ["GET", "POST"],
         schemas: {
           receipt: "dwm.case_handoff_action_receipt.v1",
+          history: "dwm.case_handoff_action_history.v1",
           readiness: "dwm.case_handoff_action_readiness.v1",
           detail: "analyst.case_detail.v1"
         },
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
+        queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor"],
         recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes"],
         blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination"],
         safeOutput: {

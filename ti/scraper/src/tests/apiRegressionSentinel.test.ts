@@ -18,6 +18,7 @@ describe("api regression sentinel", () => {
       "/v1/dwm/watchlists",
       "/v1/dwm/alerts/generation-readiness",
       "/v1/dwm/alerts/:alertId/case-handoff",
+      "/v1/cases/:caseId/handoff-actions",
       "/v1/cases/:caseId/handoff-action",
       "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
@@ -300,19 +301,23 @@ describe("api regression sentinel", () => {
     const receiptSurface = contract.surfaces.find((surface: any) => surface.id === "case_handoff_action_receipt");
 
     expect(contract.routeInventory.routes).toEqual(expect.arrayContaining([
+      { method: "GET", path: "/v1/cases/:caseId/handoff-actions" },
       { method: "POST", path: "/v1/cases/:caseId/handoff-action" }
     ]));
     expect(receiptSurface).toMatchObject({
       ownerLane: "case",
       route: "/v1/cases/:caseId/handoff-action",
-      methods: ["POST"],
+      historyRoute: "/v1/cases/:caseId/handoff-actions",
+      methods: ["GET", "POST"],
       schemas: {
         receipt: "dwm.case_handoff_action_receipt.v1",
+        history: "dwm.case_handoff_action_history.v1",
         readiness: "dwm.case_handoff_action_readiness.v1",
         detail: "analyst.case_detail.v1"
       },
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
+      queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor"]),
       recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes"]),
       blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination"])
     });
