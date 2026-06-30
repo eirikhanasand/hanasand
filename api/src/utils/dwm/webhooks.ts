@@ -6088,6 +6088,8 @@ function buildSanitizedDwmWebhookPayloadPreview(
         clean(alert.alertUrl),
         clean(deliveryContext.casePath),
         clean(alert.casePath),
+        clean(deliveryContext.caseActionPath),
+        clean(alert.caseActionPath),
         delivery.casePath,
     ].filter((link): link is string => Boolean(link))
 
@@ -6122,6 +6124,8 @@ function buildSanitizedDwmWebhookPayloadPreview(
             watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name) || delivery.watchlistName || '', 120)) || null,
             route: clean(deliveryContext.route) || delivery.route,
             casePath: clean(deliveryContext.casePath) || clean(alert.casePath) || delivery.casePath,
+            caseActionId: clean(deliveryContext.caseActionId) || clean(alert.caseActionId) || null,
+            caseActionPath: clean(deliveryContext.caseActionPath) || clean(alert.caseActionPath) || null,
             alertUrl: clean(deliveryContext.alertUrl) || clean(alert.alertUrl),
             dedupeKey: clean(deliveryContext.dedupeKey) || clean(alert.dedupeKey) || dedupeFromIdempotencyKey(delivery.idempotencyKey),
             replay: delivery.eventType === 'dwm.alert.replayed' || deliveryContext.replay === true,
@@ -6182,6 +6186,8 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
             watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name), 120)) || null,
             route: clean(delivery.route),
             casePath: clean(delivery.casePath),
+            caseActionId: clean(delivery.caseActionId) || clean(alert.caseActionId) || null,
+            caseActionPath: clean(delivery.caseActionPath) || clean(alert.caseActionPath) || null,
             analystLink: clean(delivery.analystLink),
             dedupeKey: clean(delivery.dedupeKey) || clean(context.idempotencyKey),
             replay: delivery.replay === true,
@@ -6944,6 +6950,7 @@ function buildDwmWebhookDeliveryPayloadFieldContract({
     const optional = [
         deliveryPayloadField('caseId', ['caseId', 'alert.caseId'], Boolean(firstClean(inputRecord.caseId, inputAlert.caseId))),
         deliveryPayloadField('casePath', ['casePath', 'caseUrl', 'alert.casePath', 'alert.caseUrl'], Boolean(alert.casePath)),
+        deliveryPayloadField('caseAction', ['caseActionId', 'caseActionPath', 'actionId', 'actionPath', 'alert.caseActionId', 'alert.caseActionPath'], Boolean(alert.caseActionId || alert.caseActionPath)),
         deliveryPayloadField('route', ['route', 'recommendedRoute', 'alert.route', 'alert.recommendedRoute'], Boolean(alert.route)),
         deliveryPayloadField('confidence', ['alert.confidence', 'alert.confidenceScore', 'alert.confidenceReason'], Boolean(firstClean(inputAlert.confidence, inputAlert.confidenceScore, inputAlert.confidenceReason))),
         deliveryPayloadField('dryRunState', ['dryRun', 'dry_run'], true),
@@ -7580,6 +7587,8 @@ export function buildDwmAlertDeliveryPayload({
             route: normalizedAlert.route,
             casePath: normalizedAlert.casePath,
             alertUrl: normalizedAlert.alertUrl,
+            caseActionId: normalizedAlert.caseActionId,
+            caseActionPath: normalizedAlert.caseActionPath,
             analystLink,
             deliveryState: normalizedAlert.deliveryState,
             dedupeKey: displayDedupeKey,
@@ -7625,6 +7634,7 @@ export function buildDwmAlertDeliveryPayload({
                     discordField('Dedupe key', displayDedupeKey, false),
                     normalizedAlert.caseId ? discordField('Case ID', normalizedAlert.caseId, true) : null,
                     normalizedAlert.casePath ? discordField('Case', normalizedAlert.casePath, false) : null,
+                    normalizedAlert.caseActionPath ? discordField('Case action', normalizedAlert.caseActionPath, false) : null,
                     normalizedAlert.alertUrl ? discordField('Alert URL', normalizedAlert.alertUrl, false) : null,
                     analystLink ? discordField('Analyst link', analystLink, false) : null,
                     normalizedAlert.provenanceSummary ? discordField('Provenance', normalizedAlert.provenanceSummary, false) : null,
@@ -7711,7 +7721,7 @@ function buildDwmDiscordPayloadTemplateProof({
         templateId,
         eventType,
         requiredFields,
-        optionalFields: ['Confidence', 'Evidence summary', 'Case ID', 'Case', 'Alert URL', 'Analyst link', 'Provenance', 'Recommended action'],
+        optionalFields: ['Confidence', 'Evidence summary', 'Case ID', 'Case', 'Case action', 'Alert URL', 'Analyst link', 'Provenance', 'Recommended action'],
         fieldOrder: [
             'Organization',
             'Severity',
@@ -7730,6 +7740,7 @@ function buildDwmDiscordPayloadTemplateProof({
             'Dedupe key',
             'Case ID',
             'Case',
+            'Case action',
             'Alert URL',
             'Analyst link',
             'Provenance',
@@ -8501,6 +8512,8 @@ function normalizeAlert(alert: Record<string, unknown>) {
         || clean(alert.url)
         || clean(alert.caseUrl)
         || (casePath.startsWith('http://') || casePath.startsWith('https://') ? casePath : '')
+    const caseActionId = firstClean(alert.caseActionId, alert.actionId, webhookContext.caseActionId, webhookContext.actionId, workflowContext.caseActionId, workflowContext.actionId)
+    const caseActionPath = firstClean(alert.caseActionPath, alert.actionPath, alert.actionUrl, webhookContext.caseActionPath, webhookContext.actionPath, webhookContext.actionUrl, workflowContext.caseActionPath, workflowContext.actionPath, workflowContext.actionUrl)
     const provenance = alert.provenance || webhookContext.provenance || {
         captureIds: cleanList(webhookContext.captureIds).length ? cleanList(webhookContext.captureIds) : cleanList(workflowContext.captureIds),
         sourceIds: cleanList(webhookContext.sourceIds).length ? cleanList(webhookContext.sourceIds) : cleanList(workflowContext.sourceIds),
@@ -8557,6 +8570,8 @@ function normalizeAlert(alert: Record<string, unknown>) {
         casePath,
         alertUrl,
         caseId: clean(alert.caseId) || clean(alert.caseIdCandidate) || clean(workflowContext.caseIdCandidate),
+        caseActionId,
+        caseActionPath,
         evidence,
         evidenceCount: evidence.length || evidenceCount,
         evidenceSummary: summarizeEvidence(evidence),
