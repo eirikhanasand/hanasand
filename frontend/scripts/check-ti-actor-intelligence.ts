@@ -123,6 +123,7 @@ const fullPublicProfile = buildActorIntelligence(fixture, fullPublicVictims)
 const fullPublicActionability = buildTiActionability(fixture, fullPublicProfile, fullPublicVictims)
 const geo = actorGeoProfile(fixture)
 const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', import.meta.url), 'utf8')
+const globalStylesSource = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
 const bannedUiCopy = [
@@ -728,6 +729,10 @@ assert(pageClientSource.includes('dark:border-[#273244]'), 'Public TI dense inte
 assert(pageClientSource.includes('grid-cols-[minmax(0,1fr)]'), 'Public TI selected intelligence stack should constrain mobile grid width.')
 assert(pageClientSource.includes('flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'), 'Public TI action clusters should wrap complete controls on narrow widths.')
 assert(!pageClientSource.includes('truncate font-semibold'), 'Public TI profile stats should wrap values instead of clipping mobile status text.')
+assert(pageClientSource.includes('document.body.dataset.publicTiRoute'), 'Public TI route should mark the body for route-scoped render guardrails.')
+assert(pageClientSource.includes('min-h-8 min-w-16 max-w-full'), 'Public TI copy/export actions should keep a stable mobile tap target width.')
+assert(globalStylesSource.includes('body[data-public-ti-route="true"] nextjs-portal'), 'Public TI should hide dev overlays that can cover mobile evidence during render proof.')
+assert(globalStylesSource.includes('body[data-public-ti-route="true"] [data-testid="theme-switch"]'), 'Public TI should keep the header theme switch wider than narrow action thresholds.')
 
 assert(containsToyThreatIntelCopy('target signals'), 'Copy guard should catch target signal language.')
 assert(containsToyThreatIntelCopy('Named examples'), 'Copy guard should catch named-example language.')

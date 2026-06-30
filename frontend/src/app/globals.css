@@ -972,6 +972,18 @@ body.dragging {
   user-select: none !important;
 }
 
+body[data-public-ti-route="true"] nextjs-portal,
+body[data-public-ti-route="true"] [data-nextjs-dev-tools],
+body[data-public-ti-route="true"] [data-nextjs-dev-tools-button],
+body[data-public-ti-route="true"] [data-nextjs-dialog],
+body[data-public-ti-route="true"] [data-nextjs-toast] {
+  display: none !important;
+}
+
+body[data-public-ti-route="true"] [data-testid="theme-switch"] {
+  min-width: 4rem !important;
+}
+
 @keyframes blink {
   0%, 50% { opacity: 1; }
   50.1%, 100% { opacity: 0; }

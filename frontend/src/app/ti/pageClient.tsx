@@ -25,6 +25,13 @@ export default function TiPageClient({ initialQuery, initialResult }: { initialQ
     const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
+        document.body.dataset.publicTiRoute = 'true'
+        return () => {
+            delete document.body.dataset.publicTiRoute
+        }
+    }, [])
+
+    useEffect(() => {
         activeQueryRef.current = query.trim().toLowerCase()
     }, [query])
 
@@ -3048,7 +3055,7 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     }
 
     return (
-        <button type='button' onClick={copyPayload} className='inline-flex min-h-8 w-fit max-w-full items-center justify-center gap-1.5 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
+        <button type='button' onClick={copyPayload} className='inline-flex min-h-8 min-w-16 max-w-full items-center justify-center gap-1.5 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
             {state === 'copied' ? <CheckCircle2 className='h-3.5 w-3.5 text-[#147a3b]' /> : <Copy className='h-3.5 w-3.5' />}
             {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : 'Copy'}
         </button>
@@ -4478,14 +4485,14 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
 function InfoTip({ label }: { label: string }) {
     return (
         <span className='group relative inline-flex'>
-            <button
-                type='button'
+            <span
+                tabIndex={0}
                 aria-label={label}
-                className='inline-flex h-6 w-6 items-center justify-center rounded-full text-[#667085] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                className='inline-flex h-6 w-6 cursor-help items-center justify-center rounded-full text-[#667085] transition hover:bg-[#eef3ff] hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:text-[#9aa8bd] dark:hover:bg-[#182235] dark:hover:text-[#d8e2f2]'
             >
                 <HelpCircle className='h-3.5 w-3.5' />
-            </button>
-            <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block'>
+            </span>
+            <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block dark:border-[#273244] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                 {label}
             </span>
         </span>
