@@ -4279,6 +4279,7 @@ export function buildDwmWebhookDestinationLifecycle({
     const healthRows = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
     const auditContracts = buildDwmWebhookAuditEventContracts({ destinations, deliveries, auditEvents })
     const auditByDestination = new Map<string, typeof auditContracts>()
+    const destinationById = new Map(destinations.map(destination => [destination.id, destination]))
     for (const audit of auditContracts) {
         if (!audit.destinationId) continue
         const audits = auditByDestination.get(audit.destinationId) || []
@@ -4293,6 +4294,8 @@ export function buildDwmWebhookDestinationLifecycle({
         const disabled = audits.find(audit => audit.action === 'destination.archived') || null
         const replay = health.recentAttempts.find(attempt => attempt.eventType === 'dwm.alert.replayed') || null
         const adminAuditEvents = canManage ? audits : []
+        const destination = destinationById.get(health.destinationId) || null
+        const lifecycleState = destinationLifecycleState({ destination, health, audits, canManage })
 
         return {
             schemaVersion: 'dwm.webhook.destination_lifecycle.v1',
@@ -4312,6 +4315,7 @@ export function buildDwmWebhookDestinationLifecycle({
                 canDisable: canManage && health.enabled,
                 memberSafe: !canManage,
             },
+            lifecycleState,
             redactedEndpoint: health.redactedEndpoint,
             lifecycle: {
                 created: lifecycleEvent(created, canManage),
@@ -8496,6 +8500,134 @@ function lifecycleEvent(
         actorId: includeActor ? audit.actorId : null,
         requestId: audit.requestId,
         createdAt: audit.createdAt,
+    }
+}
+
+function destinationLifecycleState({
+    destination,
+    health,
+    audits,
+    canManage,
+}: {
+    destination: DwmWebhookDestinationPublic | null
+    health: ReturnType<typeof buildDwmWebhookDestinationHealth>[number]
+    audits: ReturnType<typeof buildDwmWebhookAuditEventContracts>
+    canManage: boolean
+}) {
+    const endpointPresent = Boolean(health.redactedEndpoint.endpointHash || health.redactedEndpoint.endpointHint)
+    const latestSecretAudit = audits.find((audit) => {
+        if (audit.action !== 'destination.updated') return false
+        const metadata = recordOrEmpty(audit.metadata)
+        return Boolean(clean(metadata.endpointHash) || clean(metadata.endpointHint) || clean(metadata.endpointUrl) || clean(metadata.webhookUrl))
+    }) || null
+    const latestSecretUpdateAt = latestSecretAudit?.createdAt || null
+    const lastTestAt = health.lastTest.at || null
+    const secretRotated = Boolean(
+        latestSecretUpdateAt
+        && (!lastTestAt || String(latestSecretUpdateAt).localeCompare(String(lastTestAt)) > 0)
+    )
+    const revokedOwner = Boolean(destination?.createdBy && destination?.ownerId && destination.createdBy !== destination.ownerId)
+    const failed = health.lastTest.status === 'failed' || Boolean(
+        health.lastFailure
+        && !health.lastFailure.retryable
+        && health.lastFailure.errorClass !== 'live_delivery_disabled'
+    )
+    const verified = health.lastTest.status === 'dry_run' || health.lastTest.status === 'delivered'
+    const testRequired = health.enabled && endpointPresent && (!verified || secretRotated)
+    const states = [
+        health.enabled ? null : 'disabled',
+        failed ? 'failed' : null,
+        revokedOwner ? 'revoked_owner' : null,
+        secretRotated ? 'secret_rotated' : null,
+        testRequired ? 'test_required' : null,
+        health.enabled && endpointPresent && verified && !failed && !revokedOwner && !secretRotated ? 'active' : null,
+    ].filter(Boolean) as string[]
+    const primary = states[0] || (health.enabled ? 'test_required' : 'disabled')
+    const blockers = [
+        !health.enabled ? lifecycleStateBlocker('disabled', 'Destination is disabled and will not receive alert deliveries.', health.destinationId, true) : null,
+        failed ? lifecycleStateBlocker('failed', 'Latest destination test or delivery failed and needs remediation before live use.', health.destinationId, true) : null,
+        revokedOwner ? lifecycleStateBlocker('revoked_owner', 'Destination was created by a user who no longer owns this destination record.', health.destinationId, true) : null,
+        secretRotated ? lifecycleStateBlocker('secret_rotated', 'Webhook URL or secret reference changed after the last verified dry-run test.', health.destinationId, false) : null,
+        testRequired ? lifecycleStateBlocker('test_required', 'Run a no-network dry-run test before relying on this destination.', health.destinationId, false) : null,
+    ].filter(Boolean) as ReturnType<typeof lifecycleStateBlocker>[]
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_lifecycle_state.v1',
+        primary,
+        states: [...new Set(states)],
+        active: states.includes('active'),
+        disabled: states.includes('disabled'),
+        failed: states.includes('failed'),
+        revokedOwner: states.includes('revoked_owner'),
+        secretRotated: states.includes('secret_rotated'),
+        testRequired: states.includes('test_required'),
+        verified,
+        secretState: endpointPresent ? 'redacted' : 'missing',
+        ownerState: revokedOwner ? 'revoked_owner' : 'current',
+        owner: {
+            ownerId: canManage ? destination?.ownerId || null : null,
+            createdBy: canManage ? destination?.createdBy || null : null,
+            actorExposed: canManage,
+        },
+        rotation: {
+            rotatedAt: latestSecretUpdateAt,
+            auditEventId: latestSecretAudit?.auditEventId || null,
+            lastVerifiedTestAt: lastTestAt,
+            endpointHash: health.redactedEndpoint.endpointHash,
+            endpointExposed: false,
+        },
+        blockers,
+        requiredActions: lifecycleStateActions({ destinationId: health.destinationId, blockers }),
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            webhookSecretExposed: false,
+            actorExposed: canManage,
+        },
+    }
+}
+
+function lifecycleStateBlocker(
+    code: 'disabled' | 'failed' | 'revoked_owner' | 'secret_rotated' | 'test_required',
+    message: string,
+    destinationId: string | null,
+    blocking = false
+) {
+    return { code, message, destinationId, blocking }
+}
+
+function lifecycleStateActions({
+    destinationId,
+    blockers,
+}: {
+    destinationId: string
+    blockers: ReturnType<typeof lifecycleStateBlocker>[]
+}) {
+    const codes = new Set(blockers.map(blocker => blocker.code))
+    return {
+        dryRunTest: codes.has('test_required') || codes.has('secret_rotated') || codes.has('failed')
+            ? {
+                route: `POST /api/dwm/webhook-destinations/${destinationId}/test`,
+                method: 'POST',
+                body: { dryRun: true, live: false },
+                noNetworkDefault: true,
+            }
+            : null,
+        updateDestination: codes.has('failed') || codes.has('revoked_owner')
+            ? {
+                route: `PATCH /api/dwm/webhook-destinations/${destinationId}`,
+                method: 'PATCH',
+                noNetworkDefault: true,
+            }
+            : null,
+        enableDestination: codes.has('disabled')
+            ? {
+                route: `PATCH /api/dwm/webhook-destinations/${destinationId}`,
+                method: 'PATCH',
+                body: { status: 'active' },
+                noNetworkDefault: true,
+            }
+            : null,
     }
 }
 

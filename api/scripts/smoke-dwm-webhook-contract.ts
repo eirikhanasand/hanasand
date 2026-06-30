@@ -1873,40 +1873,131 @@ const nonmemberHealthVisibility = filterDwmWebhookDestinationHealthForVisibility
     destinationHealth,
     visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
 })
+const lifecycleStateDestinations = [
+    ...auditDestinationRows,
+    {
+        id: 'destination_secret_rotated_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Rotated Secret Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/888888888/${secret}`,
+        endpointHash: 'endpoint_secret_rotated_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:15:00.000Z',
+    },
+    {
+        id: 'destination_test_required_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Needs Test Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/999999999/${secret}`,
+        endpointHash: 'endpoint_test_required_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: null,
+        lastTestStatus: null,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T11:00:00.000Z',
+    },
+    {
+        id: 'destination_revoked_owner_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Revoked Owner Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/101010101/${secret}`,
+        endpointHash: 'endpoint_revoked_owner_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'removed_member_contract',
+        lastTestedAt: '2026-06-28T12:04:00.000Z',
+        lastTestStatus: 'dry_run' as const,
+        lastTestError: null,
+        lastTestHttpStatus: null,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T11:00:00.000Z',
+    },
+    {
+        id: 'destination_failed_contract',
+        ownerId: 'owner_contract',
+        orgId: 'org_contract',
+        name: 'Failed Lifecycle Discord',
+        kind: 'discord' as const,
+        endpointHint: `https://discord.com/api/webhooks/121212121/${secret}`,
+        endpointHash: 'endpoint_failed_lifecycle_hash',
+        status: 'active' as const,
+        events: ['dwm.alert.created', 'dwm.alert.replayed'],
+        createdBy: 'owner_contract',
+        lastTestedAt: '2026-06-28T12:14:00.000Z',
+        lastTestStatus: 'failed' as const,
+        lastTestError: `test failed token=${secret}`,
+        lastTestHttpStatus: 400,
+        lastDeliveryAt: null,
+        createdAt: '2026-06-28T11:00:00.000Z',
+        updatedAt: '2026-06-28T12:14:00.000Z',
+    },
+]
+const lifecycleStateAuditEvents = [
+    ...auditEventContracts.map(item => ({
+        id: item.auditEventId,
+        ownerId: 'owner_contract',
+        actorId: item.actorId,
+        orgId: item.orgId,
+        destinationId: item.destinationId,
+        deliveryId: item.deliveryId,
+        action: item.action,
+        metadata: item.metadata,
+        createdAt: item.createdAt,
+    })),
+    {
+        id: 'audit_secret_rotated_contract',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_secret_rotated_contract',
+        deliveryId: null,
+        action: 'destination.updated',
+        metadata: { endpointHash: 'endpoint_secret_rotated_hash', endpointHint: `https://discord.com/api/webhooks/888888888/${secret}` },
+        createdAt: '2026-06-28T12:15:00.000Z',
+    },
+    {
+        id: 'audit_replay_duplicate_contract',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_replay_contract',
+        deliveryId: 'delivery_replay_duplicate_contract',
+        action: 'delivery.replayed',
+        metadata: { status: 'dry_run' },
+        createdAt: '2026-06-28T12:08:01.000Z',
+    },
+]
 const adminLifecycle = buildDwmWebhookDestinationLifecycle({
     liveDeliveryEnabled: false,
-    destinations: auditDestinationRows,
+    destinations: lifecycleStateDestinations,
     deliveries: auditDeliveryRows,
-    auditEvents: [
-        ...auditEventContracts.map(item => ({
-            id: item.auditEventId,
-            ownerId: 'owner_contract',
-            actorId: item.actorId,
-            orgId: item.orgId,
-            destinationId: item.destinationId,
-            deliveryId: item.deliveryId,
-            action: item.action,
-            metadata: item.metadata,
-            createdAt: item.createdAt,
-        })),
-        {
-            id: 'audit_replay_duplicate_contract',
-            ownerId: 'owner_contract',
-            actorId: 'owner_contract',
-            orgId: 'org_contract',
-            destinationId: 'destination_replay_contract',
-            deliveryId: 'delivery_replay_duplicate_contract',
-            action: 'delivery.replayed',
-            metadata: { status: 'dry_run' },
-            createdAt: '2026-06-28T12:08:01.000Z',
-        },
-    ],
+    auditEvents: lifecycleStateAuditEvents,
     viewerRole: 'admin',
     canManage: true,
 })
 const memberLifecycle = buildDwmWebhookDestinationLifecycle({
     liveDeliveryEnabled: false,
-    destinations: auditDestinationRows,
+    destinations: lifecycleStateDestinations,
     deliveries: auditDeliveryRows,
     auditEvents: [
         {
@@ -3000,7 +3091,12 @@ const skippedHealth = destinationHealth.find(item => item.destinationId === 'des
 const adminReplayLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_replay_contract')
 const adminRetryLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_live_contract')
 const adminDisabledLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_disabled_contract')
+const adminSecretRotatedLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_secret_rotated_contract')
+const adminTestRequiredLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_test_required_contract')
+const adminRevokedOwnerLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_revoked_owner_contract')
+const adminFailedLifecycle = adminLifecycle.find(item => item.destinationId === 'destination_failed_contract')
 const memberReplayLifecycle = memberLifecycle.find(item => item.destinationId === 'destination_replay_contract')
+const memberRevokedOwnerLifecycle = memberLifecycle.find(item => item.destinationId === 'destination_revoked_owner_contract')
 const orgAlertReplayHealth = orgAlertDeliveryContract.destinationHealth.find(item => item.destinationId === 'destination_replay_contract')
 const orgAlertRetryLifecycle = orgAlertDeliveryContract.destinationLifecycle.find(item => item.destinationId === 'destination_live_contract')
 const orgAlertDeliveryProof = orgAlertDeliveryContract.alertDeliveryProof
@@ -3062,7 +3158,14 @@ expect(adminReplayLifecycle?.lifecycle.lastReplay?.deliveryId === 'delivery_repl
 expect(adminRetryLifecycle?.retry.retryable === true && adminRetryLifecycle.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && adminRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Destination lifecycle should expose retry/backoff visibility.', adminRetryLifecycle)
 expect(adminRetryLifecycle?.retry.deliveryId === 'delivery_live_failed_retry_contract' && adminRetryLifecycle.retry.dedupeKey === 'dwm_dedupe_live_contract', 'Destination lifecycle retry state should include delivery/request and dedupe context.', adminRetryLifecycle)
 expect(adminDisabledLifecycle?.enabled === false && adminDisabledLifecycle.access.canDisable === false && adminDisabledLifecycle.lifecycle.disabled?.auditEventId === 'audit_destination_archived_contract', 'Destination lifecycle should expose disabled state and disable audit event.', adminDisabledLifecycle)
+expect(adminReplayLifecycle?.lifecycleState.primary === 'active' && adminReplayLifecycle.lifecycleState.active === true && adminReplayLifecycle.lifecycleState.secretState === 'redacted', 'Destination lifecycle state should mark verified active destinations with redacted secret refs.', adminReplayLifecycle?.lifecycleState)
+expect(adminDisabledLifecycle?.lifecycleState.primary === 'disabled' && adminDisabledLifecycle.lifecycleState.disabled === true && adminDisabledLifecycle.lifecycleState.requiredActions.enableDestination?.body.status === 'active', 'Destination lifecycle state should expose disabled remediation without secrets.', adminDisabledLifecycle?.lifecycleState)
+expect(adminFailedLifecycle?.lifecycleState.primary === 'failed' && adminFailedLifecycle.lifecycleState.failed === true && adminFailedLifecycle.lifecycleState.requiredActions.dryRunTest?.body.dryRun === true, 'Destination lifecycle state should expose failed test remediation.', adminFailedLifecycle?.lifecycleState)
+expect(adminSecretRotatedLifecycle?.lifecycleState.primary === 'secret_rotated' && adminSecretRotatedLifecycle.lifecycleState.secretRotated === true && adminSecretRotatedLifecycle.lifecycleState.testRequired === true && adminSecretRotatedLifecycle.lifecycleState.rotation.endpointExposed === false, 'Destination lifecycle state should require dry-run proof after secret rotation.', adminSecretRotatedLifecycle?.lifecycleState)
+expect(adminTestRequiredLifecycle?.lifecycleState.primary === 'test_required' && adminTestRequiredLifecycle.lifecycleState.testRequired === true && adminTestRequiredLifecycle.lifecycleState.requiredActions.dryRunTest?.noNetworkDefault === true, 'Destination lifecycle state should expose test-required destinations with no-network test action.', adminTestRequiredLifecycle?.lifecycleState)
+expect(adminRevokedOwnerLifecycle?.lifecycleState.primary === 'revoked_owner' && adminRevokedOwnerLifecycle.lifecycleState.revokedOwner === true && adminRevokedOwnerLifecycle.lifecycleState.owner.createdBy === 'removed_member_contract', 'Destination lifecycle state should expose revoked-owner state to admins.', adminRevokedOwnerLifecycle?.lifecycleState)
 expect(memberReplayLifecycle?.view === 'member' && memberReplayLifecycle.access.canUpdate === false && memberReplayLifecycle.access.canTest === false && memberReplayLifecycle.auditEventContracts.length === 0, 'Member lifecycle should expose safe read status without admin audit detail.', memberReplayLifecycle)
+expect(memberRevokedOwnerLifecycle?.lifecycleState.owner.createdBy === null && memberRevokedOwnerLifecycle.lifecycleState.redaction.actorExposed === false, 'Member lifecycle state should hide revoked-owner actor identifiers.', memberRevokedOwnerLifecycle?.lifecycleState)
 expect(!JSON.stringify(adminLifecycle).includes(secret) && !JSON.stringify(memberLifecycle).includes(secret), 'Destination lifecycle should not leak endpoint, response, or audit secrets.', { adminLifecycle, memberLifecycle })
 expect(orgAlertDeliveryContract.schemaVersion === 'dwm.webhook.org_alert_delivery.v1' && orgAlertDeliveryContract.orgId === 'org_contract', 'Org alert delivery contract should normalize org alert context.', orgAlertDeliveryContract)
 expect(orgAlertDeliveryContract.eventType === 'dwm.alert.replayed' && orgAlertDeliveryContract.dryRun === true && orgAlertDeliveryContract.externalSendEnabled === false, 'Org alert delivery contract should preserve dry-run/no-network semantics.', orgAlertDeliveryContract)
@@ -3780,6 +3883,13 @@ console.log(JSON.stringify({
             'destinationAdminProof.destinations[].replay.latestReplayRequestId',
             'destinationAdminProof.destinations[].dedupe.latestDedupeKey',
             'destinationAdminProof.destinations[].audit.latestAuditEventId',
+            'destinationLifecycle[].lifecycleState.primary',
+            'destinationLifecycle[].lifecycleState.states',
+            'destinationLifecycle[].lifecycleState.secretRotated',
+            'destinationLifecycle[].lifecycleState.testRequired',
+            'destinationLifecycle[].lifecycleState.revokedOwner',
+            'destinationLifecycle[].lifecycleState.requiredActions.dryRunTest.noNetworkDefault',
+            'destinationLifecycle[].lifecycleState.redaction.webhookSecretExposed',
             'destinationCrud.schemaVersion',
             'destinationCrud.action',
             'destinationCrud.canApply',
