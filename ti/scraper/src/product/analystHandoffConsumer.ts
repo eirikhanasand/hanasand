@@ -40,6 +40,9 @@ export const PRODUCT_READINESS_SCHEMA_VERSION = "hanasand.product_readiness.v1" 
 export const BETA_READINESS_SCHEMA_VERSION = "hanasand.beta_readiness.v1" as const;
 export const BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION = "hanasand.beta_readiness.deploy_gate_coverage.v1" as const;
 export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as const;
+export const ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION = "organization.shared_watchlist_alert_generation_export.v1" as const;
+export const ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION = "organization.shared_watchlist_alert_generation_consumers.v1" as const;
+export const ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION = "organization.shared_watchlist_readiness_proof.v1" as const;
 
 export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   consumer: ANALYST_HANDOFF_CONSUMER_SCHEMA_VERSION,
@@ -66,7 +69,10 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   productReadiness: PRODUCT_READINESS_SCHEMA_VERSION,
   betaReadiness: BETA_READINESS_SCHEMA_VERSION,
   betaDeployGateCoverage: BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION,
-  uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION
+  uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION,
+  orgSharedWatchlistAlertExport: ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
+  orgSharedWatchlistAlertConsumers: ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
+  orgSharedWatchlistReadinessProof: ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION
 } as const;
 
 export const PRODUCT_READINESS_FORBIDDEN_LANGUAGE = [
@@ -664,6 +670,25 @@ export type ProductReadinessOwnerLane =
 
 export type ProductReadinessState = "ready" | "degraded" | "blocked" | "provisional";
 
+export type ProductReadinessContractReference = {
+  ownerLane: ProductReadinessOwnerLane | "case" | "integration";
+  schemaVersions: string[];
+  routes: string[];
+  blockerCodes: string[];
+  scopeFields: string[];
+  downstreamConsumers: Array<{
+    ownerLane: ProductReadinessOwnerLane | "case" | "integration";
+    route: string;
+    requiredFields: string[];
+  }>;
+  safeOutput: {
+    metadataOnly: true;
+    rawEvidenceExposed: false;
+    webhookSecretExposed: false;
+    crossOrgDataExposed: false;
+  };
+};
+
 export type ProductReadinessWorkflowContract = {
   route: string;
   routeHandler: string;
@@ -673,6 +698,7 @@ export type ProductReadinessWorkflowContract = {
   expectedAdapter: string;
   payloadShape: string[];
   proofCommand: string;
+  contractReferences?: ProductReadinessContractReference[];
 };
 
 export type ProductReadinessRow = {
@@ -1377,6 +1403,23 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
       if (!typed.workflowContract.expectedAdapter) blockers.push({ code: "missing_expected_adapter", rowId, field: "workflowContract.expectedAdapter", detail: "Every product workflow needs an adapter contract name." });
       if (!Array.isArray(typed.workflowContract.payloadShape) || !typed.workflowContract.payloadShape.length) blockers.push({ code: "missing_payload_shape", rowId, field: "workflowContract.payloadShape", detail: "Every product workflow needs a payload shape." });
       if (!typed.workflowContract.proofCommand) blockers.push({ code: "missing_proof_command", rowId, field: "workflowContract.proofCommand", detail: "Every product workflow needs a proof command." });
+      if (typed.workflowContract.contractReferences !== undefined) {
+        if (!Array.isArray(typed.workflowContract.contractReferences) || !typed.workflowContract.contractReferences.length) {
+          blockers.push({ code: "missing_contract_references", rowId, field: "workflowContract.contractReferences", detail: "Contract references must name schema ids, routes, blockers, scope fields, and downstream consumers." });
+        }
+        for (const [index, reference] of (typed.workflowContract.contractReferences || []).entries()) {
+          const field = `workflowContract.contractReferences[${index}]`;
+          if (!reference.ownerLane) blockers.push({ code: "missing_contract_owner_lane", rowId, field: `${field}.ownerLane`, detail: "Contract references need an owner lane." });
+          if (!Array.isArray(reference.schemaVersions) || !reference.schemaVersions.length) blockers.push({ code: "missing_contract_schema_ids", rowId, field: `${field}.schemaVersions`, detail: "Contract references need schema ids." });
+          if (!Array.isArray(reference.routes) || !reference.routes.length) blockers.push({ code: "missing_contract_routes", rowId, field: `${field}.routes`, detail: "Contract references need route discoverability." });
+          if (!Array.isArray(reference.blockerCodes)) blockers.push({ code: "missing_contract_blockers", rowId, field: `${field}.blockerCodes`, detail: "Contract references need blocker code metadata." });
+          if (!Array.isArray(reference.scopeFields) || !reference.scopeFields.length) blockers.push({ code: "missing_contract_scope_fields", rowId, field: `${field}.scopeFields`, detail: "Contract references need org/member scope fields." });
+          if (!Array.isArray(reference.downstreamConsumers)) blockers.push({ code: "missing_downstream_consumers", rowId, field: `${field}.downstreamConsumers`, detail: "Contract references need downstream consumer metadata." });
+          if (!reference.safeOutput?.metadataOnly || reference.safeOutput.rawEvidenceExposed || reference.safeOutput.webhookSecretExposed || reference.safeOutput.crossOrgDataExposed) {
+            blockers.push({ code: "unsafe_contract_reference", rowId, field: `${field}.safeOutput`, detail: "Contract references must stay metadata-only and cannot expose raw evidence, secrets, or cross-org data." });
+          }
+        }
+      }
     }
     const uiFacing = [
       typed.capabilityLabel,
@@ -1791,7 +1834,7 @@ function productRowFromMatrix(input: {
     requiredNextAction: input.requiredNextAction,
     deployRisk: input.matrixRow?.deployRisk ?? "high",
     uiQualityProofExists: false,
-    workflowContract: input.workflowContract
+    workflowContract: withProductContractReferences(input.id, input.workflowContract)
   };
 }
 
@@ -1826,7 +1869,144 @@ function surfaceProductReadinessRow(input: {
     requiredNextAction: input.requiredNextAction,
     deployRisk: blockers.length ? "high" : "none",
     uiQualityProofExists: Boolean(input.proof?.passed),
-    workflowContract: input.workflowContract
+    workflowContract: withProductContractReferences(input.id, input.workflowContract)
+  };
+}
+
+function withProductContractReferences(id: ProductReadinessCapabilityId, contract: ProductReadinessWorkflowContract): ProductReadinessWorkflowContract {
+  return {
+    ...contract,
+    contractReferences: contract.contractReferences ?? productContractReferences(id)
+  };
+}
+
+function productContractReferences(id: ProductReadinessCapabilityId): ProductReadinessContractReference[] {
+  switch (id) {
+    case "organization_lifecycle":
+      return [metadataContractReference({
+        ownerLane: "org",
+        schemaVersions: [ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION],
+        routes: ["POST /api/organizations", "GET /api/organizations/:id/readiness-lifecycle"],
+        blockerCodes: ["org_missing", "missing_active_owner", "member_inactive"],
+        scopeFields: ["tenantId", "organizationId", "member.role", "member.status"],
+        downstreamConsumers: [
+          { ownerLane: "watchlist", route: "GET /api/organizations/:id/watchlists/alert-terms", requiredFields: ["organizationId", "tenantId", "member.role", "member.status"] },
+          { ownerLane: "support", route: "POST /api/admin/support/organizations/:id/access-recovery", requiredFields: ["organizationId", "actorId", "audit.reason"] }
+        ]
+      })];
+    case "shared_watchlists":
+      return [metadataContractReference({
+        ownerLane: "watchlist",
+        schemaVersions: [
+          ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
+          ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
+          ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION
+        ],
+        routes: ["GET /api/organizations/:id/watchlists/alert-terms", "/v1/dwm/watchlists", "/v1/dwm/alerts/generation-readiness"],
+        blockerCodes: ["not_member", "member_inactive", "role_not_allowed", "term_org_mismatch", "no_active_watchlist_terms"],
+        scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "watchlistId", "watchlistItemIds"],
+        downstreamConsumers: [
+          { ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness", requiredFields: ["runtimeWatchlists", "termExport.alertGeneratorKeys", "termExport.watchlistItemIds"] },
+          { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["runtimeWatchlists[].webhookDestinationId", "termExport.alertGeneratorKeys"] },
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["state", "member.role", "termExport", "blockers.code"] }
+        ]
+      })];
+    case "source_activation":
+      return [metadataContractReference({
+        ownerLane: "source",
+        schemaVersions: [DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION, DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION],
+        routes: ["GET /v1/dwm/source-requests/readiness", "POST /v1/dwm/source-requests/actions"],
+        blockerCodes: ["source_inactive", "source_policy_inactive", "source_worker_not_ready", "missing_source_provenance"],
+        scopeFields: ["tenantId", "organizationId", "sourceIds", "sourceFamily", "provenance.refs"],
+        downstreamConsumers: [
+          { ownerLane: "alert", route: "POST /v1/dwm/alerts/rebuild", requiredFields: ["sourceIds", "captureIds", "freshProvenance"] },
+          { ownerLane: "publicTI", route: "/ti", requiredFields: ["artifactId", "provenance", "backedIds.sourceIds"] }
+        ]
+      })];
+    case "alert_case_workflow":
+      return [metadataContractReference({
+        ownerLane: "alert",
+        schemaVersions: [ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION, "dwm.alert_case_handoff.v1", "analyst.case_detail.v1"],
+        routes: ["POST /v1/dwm/alerts/rebuild", "POST /v1/dwm/alerts/:alertId/case-handoff", "POST /v1/cases"],
+        blockerCodes: ["missing_alert_provenance", "missing_alert_id", "case_closed", "organization_visibility_denied", "case_read_only_member"],
+        scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "casePath", "watchlistItemIds"],
+        downstreamConsumers: [
+          { ownerLane: "case", route: "PATCH /v1/cases/:caseId", requiredFields: ["alertId", "casePath", "workflowState", "timeline"] },
+          { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["alertId", "casePath", "webhookDestinationIds"] },
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["alertId", "casePath", "nextAllowedActions"] }
+        ]
+      })];
+    case "webhook_delivery":
+      return [metadataContractReference({
+        ownerLane: "webhook",
+        schemaVersions: [DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION, DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION],
+        routes: ["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"],
+        blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
+        scopeFields: ["tenantId", "organizationId", "destinationId", "webhookDestinationIds", "alertId", "casePath"],
+        downstreamConsumers: [
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["deliveryId", "destination.status", "lastAttempt.status"] },
+          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "destinationId", "auditEventId"] }
+        ]
+      })];
+    case "support_controls":
+      return [metadataContractReference({
+        ownerLane: "support",
+        schemaVersions: [SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION],
+        routes: ["GET /api/admin/support/readiness", "POST /api/admin/support/organizations/:id/access-recovery", "POST /api/admin/support/organizations/:id/invites"],
+        blockerCodes: ["support_executor_unavailable", "helpdesk_audit_unavailable", "missing_invite_teammate_executor"],
+        scopeFields: ["tenantId", "organizationId", "actorId", "action", "audit.reason", "idempotencyKey"],
+        downstreamConsumers: [
+          { ownerLane: "org", route: "GET /api/organizations/:id/members", requiredFields: ["member.status", "invite.status", "auditEventId"] },
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["organizationId", "supportAction.status"] }
+        ]
+      })];
+    case "public_ti_actor_handoff":
+      return [metadataContractReference({
+        ownerLane: "publicTI",
+        schemaVersions: [PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_READINESS_SCHEMA_VERSION],
+        routes: ["/ti", "/api/ti/search"],
+        blockerCodes: ["public_ti_contract_mismatch", "missing_source_provenance", "source_coverage_required_for_ti"],
+        scopeFields: ["tenantId", "organizationId", "artifactId", "query", "provenance.refs"],
+        downstreamConsumers: [
+          { ownerLane: "watchlist", route: "GET /api/organizations/:id/watchlists/alert-terms", requiredFields: ["watchlistTerms", "actorAliases", "provenance"] },
+          { ownerLane: "case", route: "POST /v1/cases", requiredFields: ["actorId", "casePath", "sourceRefs"] }
+        ]
+      })];
+    case "dashboard_operator_workspace":
+      return [metadataContractReference({
+        ownerLane: "dashboard",
+        schemaVersions: [UI_QUALITY_PROOF_SCHEMA_VERSION, "analyst.case_detail.v1"],
+        routes: ["/dashboard", "/v1/cases/:caseId"],
+        blockerCodes: ["missing_dashboard_ui_quality_proof", "case_read_only_member", "organization_visibility_denied"],
+        scopeFields: ["tenantId", "organizationId", "member.role", "alertId", "caseId"],
+        downstreamConsumers: [
+          { ownerLane: "alert", route: "PATCH /v1/cases/:caseId", requiredFields: ["status", "assignedOwner", "rationale"] },
+          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "caseId", "auditEventId"] }
+        ]
+      })];
+    case "website_product_surface":
+      return [metadataContractReference({
+        ownerLane: "website",
+        schemaVersions: [UI_QUALITY_PROOF_SCHEMA_VERSION, PRODUCT_READINESS_SCHEMA_VERSION],
+        routes: ["/", "/solutions/onion-session"],
+        blockerCodes: ["missing_website_ui_quality_proof"],
+        scopeFields: ["route", "checkedAt", "proofArtifactId"],
+        downstreamConsumers: [
+          { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["routeInventory", "surfaces", "publicCompatibility"] }
+        ]
+      })];
+  }
+}
+
+function metadataContractReference(input: Omit<ProductReadinessContractReference, "safeOutput">): ProductReadinessContractReference {
+  return {
+    ...input,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
   };
 }
 

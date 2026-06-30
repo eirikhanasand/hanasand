@@ -670,7 +670,9 @@ describe("analyst handoff consumer validation", () => {
       && row.workflowContract.expectedAdapter
       && row.workflowContract.payloadShape.length
       && row.workflowContract.proofCommand
+      && row.workflowContract.contractReferences?.length
     )).toBe(true);
+    expect(validateProductReadinessAggregateArtifact(aggregate).ok).toBe(true);
     expect(aggregate.rows.find((row) => row.id === "organization_lifecycle")).toMatchObject({
       workflowContract: {
         route: "GET /api/organizations/:id/readiness-lifecycle",
@@ -685,7 +687,38 @@ describe("analyst handoff consumer validation", () => {
         route: "GET /api/organizations/:id/watchlists/alert-terms",
         storageModule: "api/src/utils/organizations.ts",
         proofRowId: "shared_watchlist_alert_export",
-        expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest"
+        expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
+        contractReferences: [expect.objectContaining({
+          schemaVersions: expect.arrayContaining([
+            "organization.shared_watchlist_alert_generation_export.v1",
+            "organization.shared_watchlist_alert_generation_consumers.v1",
+            "organization.shared_watchlist_readiness_proof.v1"
+          ]),
+          routes: expect.arrayContaining([
+            "GET /api/organizations/:id/watchlists/alert-terms",
+            "/v1/dwm/alerts/generation-readiness"
+          ]),
+          blockerCodes: expect.arrayContaining(["not_member", "role_not_allowed", "no_active_watchlist_terms"]),
+          scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "watchlistItemIds"]),
+          downstreamConsumers: expect.arrayContaining([
+            expect.objectContaining({
+              ownerLane: "alert",
+              route: "/v1/dwm/alerts/generation-readiness",
+              requiredFields: expect.arrayContaining(["runtimeWatchlists", "termExport.alertGeneratorKeys"])
+            }),
+            expect.objectContaining({
+              ownerLane: "webhook",
+              route: "/v1/dwm/webhooks/deliver",
+              requiredFields: expect.arrayContaining(["runtimeWatchlists[].webhookDestinationId"])
+            })
+          ]),
+          safeOutput: {
+            metadataOnly: true,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+            crossOrgDataExposed: false
+          }
+        })]
       }
     });
     expect(aggregate.rows.find((row) => row.id === "dashboard_operator_workspace")).toMatchObject({
@@ -722,10 +755,24 @@ describe("analyst handoff consumer validation", () => {
       workflowContract: {
         route: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
         proofRowId: "webhook_destination",
-        expectedAdapter: "persistedAlertToWebhookTriggerContext"
+        expectedAdapter: "persistedAlertToWebhookTriggerContext",
+        contractReferences: [expect.objectContaining({
+          schemaVersions: expect.arrayContaining(["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"]),
+          routes: expect.arrayContaining(["POST /api/organizations/:id/webhooks", "POST /v1/dwm/webhooks/deliver"]),
+          blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"]),
+          scopeFields: expect.arrayContaining(["organizationId", "destinationId", "alertId", "casePath"])
+        })]
       }
     });
-    expect(validateProductReadinessAggregateArtifact(aggregate).ok).toBe(true);
+    expect(aggregate.rows.find((row) => row.id === "alert_case_workflow")?.workflowContract.contractReferences).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        schemaVersions: expect.arrayContaining(["dwm.alert_case_handoff.v1", "analyst.case_detail.v1"]),
+        downstreamConsumers: expect.arrayContaining([
+          expect.objectContaining({ ownerLane: "case", route: "PATCH /v1/cases/:caseId" }),
+          expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" })
+        ])
+      })
+    ]));
     const serialized = JSON.stringify(aggregate);
     expect(serialized).not.toContain("\"stages\"");
     expect(serialized).not.toContain("\"deployGate\"");
@@ -975,6 +1022,33 @@ describe("analyst handoff consumer validation", () => {
     const badProductWorkflow = clone(report.productReadinessAggregate) as ProductReadinessAggregate;
     delete (badProductWorkflow.rows[0] as Partial<(typeof badProductWorkflow.rows)[number]>).workflowContract;
     expect(validateProductReadinessAggregateArtifact(badProductWorkflow).blockerCodes).toContain("missing_workflow_contract");
+    const unsafeContractReference = clone(report.productReadinessAggregate) as ProductReadinessAggregate;
+    unsafeContractReference.rows[1] = {
+      ...unsafeContractReference.rows[1]!,
+      workflowContract: {
+        ...unsafeContractReference.rows[1]!.workflowContract,
+        contractReferences: [{
+          ownerLane: "watchlist",
+          schemaVersions: [],
+          routes: [],
+          blockerCodes: [],
+          scopeFields: [],
+          downstreamConsumers: [],
+          safeOutput: {
+            metadataOnly: true,
+            rawEvidenceExposed: true,
+            webhookSecretExposed: false,
+            crossOrgDataExposed: false
+          } as any
+        }]
+      }
+    };
+    expect(validateProductReadinessAggregateArtifact(unsafeContractReference).blockerCodes).toEqual(expect.arrayContaining([
+      "missing_contract_schema_ids",
+      "missing_contract_routes",
+      "missing_contract_scope_fields",
+      "unsafe_contract_reference"
+    ]));
     const badBeta = clone(report.betaReadiness) as BetaReadinessArtifact;
     badBeta.rows[0] = {
       ...badBeta.rows[0]!,
