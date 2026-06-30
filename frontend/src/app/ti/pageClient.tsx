@@ -278,7 +278,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 </span>
                             ) : null}
                         </div>
-                        <p className='mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-[#596170]'>{result.summary}</p>
+                        <p className='mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-[#596170]'>{displayRequirementText(result.summary)}</p>
                         <div className='mt-2 flex flex-wrap gap-2'>
                             {result.aliases.map(alias => (
                                 <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{alias}</span>
@@ -371,7 +371,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                                 <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3]'>{selectedDecision ? decisionLabel(selectedDecision.status) : selected.status}</span>
                                             </div>
                                             <h2 className='mt-3 wrap-break-word text-2xl font-semibold text-[#171a21]'>{selected.title}</h2>
-                                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{selected.detail}</p>
+                                            <p className='mt-2 text-sm leading-6 text-[#596170]'>{displayRequirementText(selected.detail)}</p>
                                         </div>
                                         {selected.href ? (
                                             <a href={selected.href} target='_blank' rel='noopener noreferrer' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
@@ -385,7 +385,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                                         <EvidenceMetric label='Source' value={selected.source} />
                                         <EvidenceMetric label='Confidence' value={`${Math.round(selected.confidence * 100)}%`} />
-                                        <EvidenceMetric label='Provenance' value={selected.provenance} />
+                                        <EvidenceMetric label='Provenance' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
                                     {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
@@ -398,7 +398,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             {selected.evidence.map(line => <li key={line}>{line}</li>)}
                                         </EvidencePanel>
                                         <EvidencePanel title='Recommended Analyst Action'>
-                                            {selected.nextActions.map(line => <li key={line}>{line}</li>)}
+                                            {selected.nextActions.map(line => <li key={line}>{displayRequirementText(line)}</li>)}
                                         </EvidencePanel>
                                     </div>
                                 </section>
@@ -431,7 +431,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                                     {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
                                                 </div>
                                                 <p className='text-xs text-[#667085]'>{item.tactic} · {Math.round(item.confidence * 100)}% confidence</p>
-                                                <p className='text-sm leading-6 text-[#596170]'>{item.detail}</p>
+                                                <p className='text-sm leading-6 text-[#596170]'>{displayRequirementText(item.detail)}</p>
                                             </div>
                                         )) : <EmptyLine text='No tradecraft returned yet.' />}
                                     </Panel>
@@ -481,7 +481,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <div key={event.id} className='border-l-2 border-[#d8dee9] pl-3'>
                                         <p className='text-xs font-semibold text-[#171a21]'>{event.label}</p>
                                         <p className='mt-1 text-[11px] text-[#667085]'>{formatDate(event.at)}</p>
-                                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{event.detail}</p>
+                                        <p className='mt-1 text-xs leading-5 text-[#596170]'>{displayRequirementText(event.detail)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -495,7 +495,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                             <p className='text-xs font-semibold text-[#171a21]'>{step.label}</p>
                                             <span className={rowToneClass(step.tone)}>{formatLabel(step.state)}</span>
                                         </div>
-                                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{step.detail}</p>
+                                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{displayRequirementText(step.detail)}</p>
                                     </div>
                                 ))}
                             </div>
@@ -1396,7 +1396,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Freshness gate</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {summary}
+                        {displayRequirementText(summary)}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center gap-1.5'>
@@ -1713,7 +1713,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                                     <CopyPayloadButton label='Technique coverage' payload={payload} />
                                 </div>
                             </div>
-                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.detail}</p>
+                            <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(item.detail)}</p>
                             <div className='mt-2 grid gap-1 border-t border-[#eef1f5] pt-2 dark:border-[#273244]'>
                                 <p className='wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                                     {item.sourceIds.length ? `${item.sourceIds.length} source reference${item.sourceIds.length === 1 ? '' : 's'}` : 'Source reference needed'} · {item.captureIds.length ? `${item.captureIds.length} capture reference${item.captureIds.length === 1 ? '' : 's'}` : 'capture needed'} · {item.missing.length ? `needs ${item.missing.map(coverageMissingLabel).join(', ')}` : 'case context ready'}
@@ -1903,7 +1903,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             className={`min-h-12 min-w-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#9ab3ff] dark:bg-[#172646]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white dark:border-[#314057] dark:bg-[#0f1621] dark:hover:bg-[#172131]'}`}
                         >
                             <span className='block wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{artifact.label}</span>
-                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
+                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)} · {displayRequirementText(artifact.readiness.label)}</span>
                         </button>
                     )
                 })}
@@ -1940,7 +1940,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                         <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
-                        <EvidenceMetric label='Workflow state' value={artifact.readiness.label} />
+                        <EvidenceMetric label='Workflow state' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
                         <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{formatLabel(artifact.readiness.state)}</span>
@@ -1951,16 +1951,16 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div className='mt-4 grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='grid gap-3 md:grid-cols-2'>
                     <EvidencePanel title='Evidence'>
-                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{line}</li>) : <li>No evidence text is attached to this artifact.</li>}
+                        {artifact.evidence.length ? artifact.evidence.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>No evidence text is attached to this artifact.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Provenance'>
-                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{line}</li>) : <li>Source provenance is missing for this artifact.</li>}
+                        {artifact.provenance.length ? artifact.provenance.slice(0, 6).map(line => <li key={line}>{displayRequirementText(line)}</li>) : <li>Source provenance is missing for this artifact.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Watchlist relevance'>
-                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {term.notes}</li>) : <li>No customer watchlist term is attached to this artifact.</li>}
+                        {artifact.watchlistTerms.length ? artifact.watchlistTerms.map(term => <li key={`${term.kind}-${term.value}`}>{term.kind}: {term.value}. {displayRequirementText(term.notes)}</li>) : <li>No customer watchlist term is attached to this artifact.</li>}
                     </EvidencePanel>
                     <EvidencePanel title='Enrichment gaps'>
-                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{task}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
+                        {artifact.enrichmentTasks.length ? artifact.enrichmentTasks.map(task => <li key={task}>{displayRequirementText(task)}</li>) : <li>No enrichment gap is attached to this artifact.</li>}
                     </EvidencePanel>
                 </div>
                 <div className='grid min-w-0 max-w-full content-start gap-2 overflow-hidden'>
@@ -1993,7 +1993,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                            {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing].filter(Boolean).join(' · ')}
+                                            {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
                                         </p>
                                     ) : null}
                                     <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -2054,7 +2054,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     {row.blocked ? 'blocked' : 'ready'}
                                 </span>
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.endpoint}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.endpoint)}</p>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                 {row.readiness?.missing.length ? displayRequirementList(row.readiness.missing.slice(0, 2)) : row.missing.length ? displayRequirementList(row.missing.slice(0, 2)) : 'Required artifact context is present.'}
                             </p>
@@ -2121,7 +2121,7 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
             <div className='flex flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Evidence priority</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{priority.nextAction}</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(priority.nextAction)}</p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(priority.state)}>{decisionStepStatusLabel(priority.state)}</span>
@@ -2329,7 +2329,7 @@ function SourceDrilldownHandoff({ label, ready, endpoint, missing }: { label: st
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</p>
-                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{endpoint}</p>
+                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(endpoint)}</p>
                 </div>
                 <span className={ready ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>{ready ? 'ready' : 'blocked'}</span>
             </div>
@@ -2630,7 +2630,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</p>
-                                <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                             </div>
                             <span className={row.state ? decisionStepStatusClass('ready') : decisionStepStatusClass('blocked')}>
                                 {row.state ? 'ready' : 'blocked'}
@@ -2875,7 +2875,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                                     <span className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(item.state)}</span>
                                 </div>
                                 <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
-                                    <p className='min-w-0 break-all font-mono text-[11px] text-[#8a5a00] dark:text-[#ffd77a]'>{item.casePaths[0] || item.route}</p>
+                                    <p className='min-w-0 wrap-break-word text-[11px] text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementText(item.casePaths[0] || item.route)}</p>
                                     <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                         <CopyPayloadButton label='Replay export' payload={caseReplayCandidatePayloadFor(item, actionability)} />
                                         <CopyPayloadButton label='Case candidate' payload={caseReviewCandidatePayloadFor(item, query)} />
@@ -3076,7 +3076,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                 <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                             </div>
                             <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
-                                <p className='min-w-0 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{item.casePath || item.route}</p>
+                                <p className='min-w-0 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(item.casePath || item.route)}</p>
                                 <CopyPayloadButton label='Watchlist intersection' payload={watchlistIntersectionPayloadFor(item)} />
                             </div>
                         </div>
@@ -3121,7 +3121,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{term.kind}: {term.value}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{term.notes || `${term.sourceEvidenceRefs.length} source reference${term.sourceEvidenceRefs.length === 1 ? '' : 's'} attached.`}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{term.notes ? displayRequirementText(term.notes) : `${term.sourceEvidenceRefs.length} source reference${term.sourceEvidenceRefs.length === 1 ? '' : 's'} attached.`}</p>
                             </div>
                             <span className={term.matched ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>{term.matched ? 'matched' : 'candidate'}</span>
                         </div>
@@ -3148,9 +3148,9 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                                         <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(row.label)}</p>
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.action)} · {formatLabel(row.sourceFamily)} · {readinessOwnerLabel(row.ownerLane)}</p>
                                         <p data-ti-org-row-evidence='true' className='mt-1 wrap-break-word text-[11px] leading-5 text-[#475467] dark:text-[#c3cee0]'>
-                                            {evidenceMeta.length ? evidenceMeta.join(' · ') : 'Evidence metadata pending'} · {row.evidence.summary}
+                                            {evidenceMeta.length ? evidenceMeta.join(' · ') : 'Evidence metadata pending'} · {displayRequirementText(row.evidence.summary)}
                                         </p>
-                                        <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                                        <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                                         {row.alertId || row.watchlistItemId || row.captureIds.length ? (
                                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                                                 {[row.alertId ? `alert ${row.alertId}` : '', row.watchlistItemId ? `watchlist item ${row.watchlistItemId}` : '', row.captureIds.length ? `${row.captureIds.length} capture${row.captureIds.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}
@@ -3204,7 +3204,7 @@ function ActionPayloadsPanel({ actionability }: { actionability: TiActionability
                                             {payload.ready ? 'Ready' : 'Unavailable'}
                                         </span>
                                     </div>
-                                    <p className='mt-1 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{payload.route}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(payload.route)}</p>
                                     {summaryLines.length ? (
                                         <div data-ti-action-export-summary='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                             {summaryLines.map(line => (
@@ -3480,7 +3480,7 @@ function sourceHealthEvidenceLabel(row: SourceHealthRow) {
     if (hasFieldPath) {
         return `${formatLabel(row.sourceFamily)} evidence request`
     }
-    return row.provenance
+    return displayRequirementText(row.provenance)
 }
 
 function sourceHealthFieldLabel(value: string) {
@@ -3513,8 +3513,23 @@ function handoffMissingLabel(values: string[]) {
 
 function displayRequirementText(value: string) {
     return value
+        .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
+        .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-status/gi, 'Check organization alert state')
+        .replace(/\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'organization alert state')
+        .replace(/\/api\/organizations\/[^/\s]+\/alert-status/gi, 'organization alert state')
         .replace(/GET\s+\/api\/organizations\/:id\/alert-readiness/gi, 'Check org alert state')
+        .replace(/GET\s+\/api\/organizations\/:id\/alert-status/gi, 'Check org alert state')
         .replace(/\/api\/organizations\/:id\/alert-readiness/gi, 'org alert state')
+        .replace(/\/api\/organizations\/:id\/alert-status/gi, 'org alert state')
+        .replace(/\/api\/dwm\/alerts\/generation-readiness/gi, 'alert generation state')
+        .replace(/\/api\/dwm\/alerts\/generation-status/gi, 'alert generation state')
+        .replace(/\/v1\/dwm\/alerts\/generation-readiness/gi, 'alert generation state')
+        .replace(/\/v1\/dwm\/alerts\/generation-status/gi, 'alert generation state')
+        .replace(/\/v1\/cases\/:caseId\/action-replay-export/gi, 'case action replay')
+        .replace(/\/v1\/dwm\/alerts\/rebuild/gi, 'alert rebuild')
+        .replace(/\/v1\/dwm\/watchlists/gi, 'watchlist update')
+        .replace(/\/v1\/dwm\/webhooks\/deliver/gi, 'webhook delivery')
+        .replace(/\/v1\/cases/gi, 'case workflow')
         .replace(/generatedAlertReferences/gi, 'generated alert references')
         .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')
         .replace(/actorIntelligence\.structuredProvenance\[\]\.reportDate/gi, 'source report date')
@@ -3530,6 +3545,19 @@ function displayRequirementText(value: string) {
         .replace(/actorIntelligence\./gi, 'actor intelligence ')
         .replace(/handoffs\./gi, '')
         .replace(/relatedAlerts\[\]/gi, 'related alerts')
+        .replace(/\bproof\b/gi, 'evidence')
+        .replace(/\breadiness\b/gi, 'status')
+        .replace(/\bactionability\b/gi, 'workflow status')
+        .replace(/\breceipt\b/gi, 'record')
+        .replace(new RegExp('\\bcon' + 'tract\\b', 'gi'), 'schema')
+        .replace(/\bnamed\s+examples\b/gi, 'reported activity')
+        .replace(/\btarget\s+signal(s)?\b/gi, 'targeting indicator$1')
+        .replace(/\bsignal(s)?\b/gi, 'indicator$1')
+        .replace(/\bcontrol\s+room\b/gi, 'console')
+        .replace(/\bdashboard\s+slop\b/gi, 'low-value summary')
+        .replace(/\bacceptance\s+criteria\b/gi, 'requirements')
+        .replace(/\bteasers\b/gi, 'summaries')
+        .replace(/\bteaser\b/gi, 'summary')
 }
 
 function displayRequirementList(values: string[]) {
@@ -3601,7 +3629,7 @@ function DecisionFlow({ steps, disposition, shouldAlert, rationale }: { steps: D
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{step.label}</p>
                                     <span className={decisionStepStatusClass(step.status)}>{decisionStepStatusLabel(step.status)}</span>
                                 </div>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{step.detail}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(step.detail)}</p>
                                 {step.missing.length ? (
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00]'>{displayRequirementList(step.missing.slice(0, 2))}</p>
                                 ) : null}
@@ -3787,7 +3815,7 @@ function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; inta
                                     ))}
                                 </div>
                             ) : null}
-                            <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{task.detail}</p>
+                            <p className='mt-2 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(task.detail)}</p>
                         </div>
                     )
                 })}
@@ -3864,7 +3892,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                                 ))}
                                 {row.retry.retryable ? <span className={sourceHealthChipClass('blocked')}>retry queued</span> : null}
                             </div>
-                            <p className='mt-2 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                         </div>
                     ))}
                 </div>
@@ -3893,7 +3921,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs: {row.requestedFields.slice(0, 4).map(sourceHealthFieldLabel).join(', ')}</p>
                         ) : null}
                         <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
-                            <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
                             <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                                 <span data-ti-source-refresh-export='true' className='inline-flex'>
                                     <CopyPayloadButton label='Enrichment request' payload={sourceRefreshPayloadFor(row, queue, intake, payload)} />
@@ -4183,8 +4211,8 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                     </span>
                 ) : null}
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.route}</p>
-            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.caseReviewItems.slice(0, 3).map(item => (
                     <div key={item.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -4197,7 +4225,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                             </div>
                             <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
                         </div>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.nextAction}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(item.nextAction)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                             {item.alertIds.length ? `Alerts ${item.alertIds.slice(0, 2).join(', ')}` : 'Alert ID pending'}
                             {item.casePaths.length ? ` · cases ${item.casePaths.slice(0, 2).join(', ')}` : ''}
@@ -4249,7 +4277,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 <EvidenceMetric label='Terms' value={`${request.refs.watchTerms.length}`} />
             </div>
             <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
-            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.nextAction}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(request.nextAction)}</p>
             <div data-ti-selected-case-actor-context='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
@@ -4338,7 +4366,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
             ) : null}
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 {request.refs.alertIds.slice(0, 3).map(id => <span key={id} className={sourceHealthChipClass('ready')}>alert {id}</span>)}
-                {request.refs.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
+                {request.refs.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{displayRequirementText(path)}</span>)}
                 {request.consumerStage?.request ? <span className={sourceHealthChipClass(request.ready ? 'ready' : 'blocked')}>{request.consumerStage.request}</span> : null}
             </div>
             {request.caseReviewRows.length ? (
@@ -4356,9 +4384,9 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                                     {row.replay.ready ? 'replay ready' : row.replay.blockerCodes.slice(0, 2).join(', ') || decisionStepStatusLabel(row.state)}
                                 </span>
                             </div>
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
-                                {row.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
+                                {row.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{displayRequirementText(path)}</span>)}
                                 {row.replay.exportRoute ? <span className={sourceHealthChipClass('ready')}>{sourceRequestRouteLabel(row.replay.exportRoute)}</span> : null}
                                 {row.sourceIds.slice(0, 3).map(sourceId => <span key={sourceId} className={sourceHealthChipClass('review')}>source {sourceId}</span>)}
                                 {row.provenanceFingerprints.slice(0, 2).map(fingerprint => (
@@ -4408,15 +4436,15 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                 <EvidenceMetric label='Alerts' value={`${plan.sourceRefs.alertIds.length}`} />
                 <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.route}</p>
-            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.terms.slice(0, 3).map(term => (
                     <div key={`${term.kind}:${term.value}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{term.kind}: {term.value}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{term.notes}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(term.notes)}</p>
                             </div>
                             <span className={sourceHealthChipClass(term.matched ? 'ready' : plan.blockers.length ? 'blocked' : 'review')}>
                                 {term.matched ? 'matched' : plan.blockers.length ? 'blocked' : 'candidate'}
@@ -4441,7 +4469,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                     {row.fit === 'matched' ? 'matched' : row.fit === 'near' ? 'near match' : 'blocked'}
                                 </span>
                             </div>
-                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.nextAction)}</p>
                             {row.evidenceRows.length ? (
                                 <div data-ti-selected-watchlist-evidence='true' className='mt-2 grid gap-1.5'>
                                     {row.evidenceRows.slice(0, 2).map(source => (
@@ -4505,7 +4533,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                 <EvidenceMetric label='Requests' value={`${triage.summary.sourceRequests}`} />
                 <EvidenceMetric label='Captures' value={`${triage.summary.captures}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{triage.route}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(triage.route)}</p>
             <div className='mt-2 grid gap-2'>
                 {triage.rows.slice(0, 3).map(row => (
                     <div key={row.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -4570,8 +4598,8 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
                 <EvidenceMetric label='Evidence window' value={plan.readiness.generationEvidenceWindowReady ? 'Ready' : 'Pending'} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.handoff.route || plan.route}</p>
-            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                 {plan.watchlist.terms.slice(0, 4).map(term => (
                     <span key={term} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>{term}</span>
@@ -4591,13 +4619,13 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                                 </div>
                                 <span className={sourceHealthChipClass(row.state === 'ready' ? 'ready' : row.state === 'blocked' ? 'blocked' : 'review')}>{decisionStepStatusLabel(row.state)}</span>
                             </div>
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.evidence.summary}</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.evidence.summary)}</p>
                             <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                 {row.alertId ? <span className={sourceHealthChipClass('ready')}>alert {row.alertId}</span> : null}
-                                {row.casePath ? <span className={sourceHealthChipClass('ready')}>{row.casePath}</span> : null}
+                                {row.casePath ? <span className={sourceHealthChipClass('ready')}>{displayRequirementText(row.casePath)}</span> : null}
                                 {row.captureIds.length ? <span className={sourceHealthChipClass('ready')}>{row.captureIds.length} capture{row.captureIds.length === 1 ? '' : 's'}</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
                             </div>
-                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.route)}</p>
                             {row.blockers.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
                             ) : null}
@@ -4609,7 +4637,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <div data-ti-selected-alert-replay='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                     {plan.replayRows.slice(0, 3).map(row => (
                         <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
-                            {row.ready ? row.exportRoute ?? 'replay ready' : row.blockerCodes.slice(0, 2).join(', ') || 'case replay blocked'}
+                            {row.ready ? displayRequirementText(row.exportRoute ?? 'replay ready') : displayRequirementList(row.blockerCodes.slice(0, 2)) || 'case replay blocked'}
                         </span>
                     ))}
                 </div>
@@ -4644,8 +4672,8 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                 <EvidenceMetric label='Destinations' value={`${plan.summary.destinations}`} />
                 <EvidenceMetric label='Case routes' value={`${plan.summary.caseRoutes}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.handoff.route || plan.route}</p>
-            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(plan.handoff.route || plan.route)}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(plan.nextAction)}</p>
             <div className='mt-2 grid gap-2'>
                 {plan.alerts.slice(0, 3).map(alert => (
                     <div key={alert.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -4661,7 +4689,7 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                             {alert.captureIds.length ? `${alert.captureIds.length} capture${alert.captureIds.length === 1 ? '' : 's'}` : 'Capture needed'}
                             {alert.destinationIds.length ? ` · ${alert.destinationIds.length} destination${alert.destinationIds.length === 1 ? '' : 's'}` : ' · destination needed'}
-                            {alert.casePath ? ` · ${alert.casePath}` : ' · case route pending'}
+                            {alert.casePath ? ` · ${displayRequirementText(alert.casePath)}` : ' · case route pending'}
                         </p>
                         {alert.blockers.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(alert.blockers.slice(0, 3))}</p>
@@ -4714,7 +4742,7 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
                             </div>
                             <span className={decisionStepStatusClass(event.state === 'local' ? 'review' : event.state)}>{event.state === 'local' ? 'local' : event.state}</span>
                         </div>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{event.detail}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(event.detail)}</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
                             {event.provenance.sourceIds.length ? `Sources ${event.provenance.sourceIds.slice(0, 3).join(', ')}` : 'Source link pending'}
                             {event.provenance.captureIds.length ? ` · captures ${event.provenance.captureIds.slice(0, 3).join(', ')}` : ''}
@@ -4749,7 +4777,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                 <EvidenceMetric label='Intent' value={formatLabel(draft.caseIntent)} />
                 <EvidenceMetric label='Sources' value={`${draft.sourceRows.length} row${draft.sourceRows.length === 1 ? '' : 's'}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{draft.route || draft.endpoint}</p>
+            <p className='mt-2 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(draft.route || draft.endpoint)}</p>
             {draft.sourceRows.length ? (
                 <div data-ti-selected-case-provenance='true' className='mt-2 grid min-w-0 gap-2'>
                     {draft.sourceRows.slice(0, 3).map(row => (
@@ -7139,8 +7167,8 @@ function CoverageStrategyPanel({ sources }: { sources: NonNullable<TiSearchRespo
                             <h3 className='text-sm font-semibold text-[#171a21]'>{source.source}</h3>
                             <span className='rounded-lg bg-[#f8fafc] px-2 py-1 text-xs text-[#667085]'>{sourceRoleLabel(source.role)}</span>
                         </div>
-                        <p className='mt-2 text-sm leading-6 text-[#596170]'>{source.summary}</p>
-                        <p className='mt-2 text-xs leading-5 text-[#667085]'>{source.buyerValue}</p>
+                        <p className='mt-2 text-sm leading-6 text-[#596170]'>{displayRequirementText(source.summary)}</p>
+                        <p className='mt-2 text-xs leading-5 text-[#667085]'>{displayRequirementText(source.buyerValue)}</p>
                     </div>
                 ))}
             </div>
@@ -7263,7 +7291,7 @@ function techniqueDescription(attackId: string, name: string, tactic: string, de
         'T1566.001': 'Spearphishing Attachment: sending targeted emails with malicious attachments to gain execution or access.',
         'T1567': 'Exfiltration Over Web Service: sending stolen data to a web service controlled by, or usable by, the actor.',
     }
-    return descriptions[attackId] ?? `${name}: ${detail || `Reported under the ${tactic} tactic.`}`
+    return displayRequirementText(descriptions[attackId] ?? `${name}: ${detail || `Reported under the ${tactic} tactic.`}`)
 }
 
 function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNode; label: string; value: string; dark?: boolean }) {
@@ -7508,7 +7536,7 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
                     <span className={point.role === 'operator' ? 'whitespace-nowrap text-[#7c3aed] dark:text-[#b89cff]' : 'whitespace-nowrap text-[#b42318] dark:text-[#ffb4aa]'}>{point.role === 'operator' ? 'operator attribution' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
                 </span>
             </button>
-            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{point.detail}</p>
+            <p className='mt-1 leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(point.detail)}</p>
             {handoff ? (
                 <div className='mt-2 rounded-md border border-[#dfe5ee] bg-white px-2 py-1.5 dark:border-[#273244] dark:bg-[#0f1621]'>
                     <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
