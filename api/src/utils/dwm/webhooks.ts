@@ -7262,6 +7262,7 @@ export function buildDwmWebhookDeliveryAttemptPersistenceReadModel({
                         orgId: item.orgId,
                         destinationId: item.destinationId,
                         alertId: item.alertId,
+                        watchlistId: item.watchlistId,
                         casePath: item.casePath,
                         caseActionId: item.caseActionId,
                         caseActionPath: item.caseActionPath,

@@ -3476,6 +3476,7 @@ expect(!JSON.stringify(deliveryPersistenceProof).includes(secret), 'Delivery per
 expect(deliveryAttemptPersistenceRead.schemaVersion === 'dwm.webhook.delivery_attempt_persistence_read.v1' && deliveryAttemptPersistenceRead.total >= 1 && deliveryAttemptPersistenceRead.counts.auditLinked >= 1, 'Delivery attempt persistence read model should summarize persisted attempts for history consumers.', deliveryAttemptPersistenceRead)
 expect(deliveryAttemptPersistenceReadReplay?.sanitizedPayloadPreview?.discord.fieldNames.includes('Alert URL') && deliveryAttemptPersistenceReadReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery attempt persistence read model should expose Discord preview and audit linkage.', deliveryAttemptPersistenceReadReplay)
 expect(deliveryAttemptPersistenceReadReplay?.actionRequests.dryRunReplay.body?.dryRun === true && deliveryAttemptPersistenceReadReplay.actionRequests.liveReplay.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery attempt persistence read model should expose dry-run replay and live-disabled blockers.', deliveryAttemptPersistenceReadReplay?.actionRequests)
+expect(deliveryAttemptPersistenceReadReplay?.actionRequests.deliveryHistory.query.watchlistId === 'watchlist_item_replay_contract' && deliveryAttemptPersistenceReadReplay.actionRequests.deliveryHistory.query.caseActionPath === replayWorkflowAlert.caseActionPath, 'Delivery attempt persistence read model should expose watchlist and case-action history filters.', deliveryAttemptPersistenceReadReplay?.actionRequests.deliveryHistory)
 expect(deliveryAttemptPersistenceReadReplay?.redactedDestination.endpointExposed === false && deliveryAttemptPersistenceReadReplay.redactedDestination.label === 'Replay Discord', 'Delivery attempt persistence read model should expose redacted destination labels only.', deliveryAttemptPersistenceReadReplay?.redactedDestination)
 expect(deliveryAttemptPersistenceReadReplay?.idempotency.duplicate === true && deliveryAttemptPersistenceReadReplay.idempotency.duplicateAttemptCount === 2 && deliveryAttemptPersistenceReadReplay.replayHistory.duplicateReplay === true, 'Delivery attempt persistence read model should expose duplicate replay idempotency history.', deliveryAttemptPersistenceReadReplay)
 expect(!JSON.stringify(deliveryAttemptPersistenceRead).includes(secret), 'Delivery attempt persistence read model should not leak endpoint or payload secrets.', deliveryAttemptPersistenceRead)
@@ -4070,6 +4071,7 @@ console.log(JSON.stringify({
             'deliveryAttemptPersistence.rows[].sanitizedPayloadPreview.discord.fieldNames',
             'deliveryAttemptPersistence.rows[].retry.nextRetryAt',
             'deliveryAttemptPersistence.rows[].audit.auditEventId',
+            'deliveryAttemptPersistence.rows[].actionRequests.deliveryHistory.query',
             'deliveryAttemptPersistence.rows[].actionRequests.dryRunReplay.body',
             'deliveryAttemptPersistence.rows[].actionRequests.liveReplay.blockers[].code',
             'deliveryAttemptPersistence.rows[].operationLinks.deliveryDetail',
