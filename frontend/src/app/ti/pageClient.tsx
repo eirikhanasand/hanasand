@@ -661,6 +661,19 @@ type SelectedSourceDrilldownRow = {
     handoff: string
 }
 
+type SelectedCaseSourceRow = {
+    sourceName: string
+    sourceId?: string
+    provenance: string
+    captureId?: string
+    reportDate?: string
+    confidence?: number
+    state: SelectedSourceDrilldownRow['state']
+    missing: string[]
+    provenanceRefs: string[]
+    provenanceFingerprint: string
+}
+
 type SelectedCaseDraft = {
     schemaVersion: 'ti.public_actor.selected_case_draft.v1'
     source: 'public-ti'
@@ -676,7 +689,7 @@ type SelectedCaseDraft = {
     route?: string
     missing: string[]
     watchTerms: string[]
-    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'reportDate' | 'confidence' | 'state' | 'missing'>>
+    sourceRows: SelectedCaseSourceRow[]
     body: Record<string, unknown>
 }
 
@@ -697,16 +710,7 @@ type SelectedCaseCreateRequest = {
         path: string
         body: Record<string, unknown>
     }
-    sourceRows: Array<{
-        sourceName: string
-        sourceId?: string
-        provenance: string
-        captureId?: string
-        reportDate?: string
-        confidence?: number
-        state: SelectedSourceDrilldownRow['state']
-        missing: string[]
-    }>
+    sourceRows: SelectedCaseSourceRow[]
     refs: {
         alertIds: string[]
         captureIds: string[]
@@ -729,6 +733,8 @@ type SelectedCaseCreateRequest = {
         captureIds: string[]
         casePaths: string[]
         sourceIds: string[]
+        provenanceRefs: string[]
+        provenanceFingerprints: string[]
         blockers: string[]
         replay: {
             ready: boolean
@@ -4104,6 +4110,12 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                                 {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${Math.round(row.confidence * 100)}% confidence` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
+                            <div data-ti-selected-case-provenance-fingerprints='true' className='mt-1 flex min-w-0 flex-wrap gap-1.5'>
+                                <span className={sourceHealthChipClass('review')}>{row.provenanceRefs.length} provenance ref{row.provenanceRefs.length === 1 ? '' : 's'}</span>
+                                <span className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[10px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                    {row.provenanceFingerprint}
+                                </span>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -4133,6 +4145,11 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                                 {row.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
                                 {row.replay.exportRoute ? <span className={sourceHealthChipClass('ready')}>{sourceRequestRouteLabel(row.replay.exportRoute)}</span> : null}
                                 {row.sourceIds.slice(0, 3).map(sourceId => <span key={sourceId} className={sourceHealthChipClass('review')}>source {sourceId}</span>)}
+                                {row.provenanceFingerprints.slice(0, 2).map(fingerprint => (
+                                    <span key={fingerprint} className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[10px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                        {fingerprint}
+                                    </span>
+                                ))}
                             </div>
                             {row.reasons.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.reasons.slice(0, 2).join(' ')}</p>
@@ -4884,6 +4901,41 @@ function selectedReviewHandoffFor(
     }
 }
 
+function caseSourceRowFor(row: SelectedSourceDrilldownRow | SelectedCaseSourceRow): SelectedCaseSourceRow {
+    const provenanceRefs = caseSourceProvenanceRefs(row)
+    return {
+        sourceName: row.sourceName,
+        sourceId: row.sourceId,
+        provenance: row.provenance,
+        captureId: row.captureId,
+        reportDate: row.reportDate,
+        confidence: row.confidence,
+        state: row.state,
+        missing: row.missing,
+        provenanceRefs,
+        provenanceFingerprint: stableEvidenceFingerprint(provenanceRefs),
+    }
+}
+
+function caseSourceProvenanceRefs(row: Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'reportDate'>) {
+    return unique([
+        row.sourceId,
+        row.captureId,
+        row.provenance,
+        row.reportDate ? `${row.sourceName}:${row.reportDate}` : undefined,
+    ].filter((value): value is string => Boolean(value)))
+}
+
+function stableEvidenceFingerprint(values: Array<string | undefined>) {
+    const input = values.filter((value): value is string => Boolean(value)).join('|').toLowerCase()
+    let hash = 2166136261
+    for (let index = 0; index < input.length; index += 1) {
+        hash ^= input.charCodeAt(index)
+        hash = Math.imul(hash, 16777619)
+    }
+    return `evidence:${(hash >>> 0).toString(16).padStart(8, '0')}`
+}
+
 function selectedCaseDraftFor(
     result: TiSearchResponse,
     selected: AnalystWorkItem,
@@ -4894,16 +4946,7 @@ function selectedCaseDraftFor(
     relevance: LocalRelevanceMark | undefined,
     note: string
 ): SelectedCaseDraft {
-    const sourceRows = drilldown.rows.map(row => ({
-        sourceName: row.sourceName,
-        sourceId: row.sourceId,
-        provenance: row.provenance,
-        captureId: row.captureId,
-        reportDate: row.reportDate,
-        confidence: row.confidence,
-        state: row.state,
-        missing: row.missing,
-    }))
+    const sourceRows = drilldown.rows.map(caseSourceRowFor)
     const sourceMissing = unique(drilldown.rows.flatMap(row => row.missing))
     const watchTerms = unique([
         ...(relevance?.watchTerms ?? []),
@@ -4930,7 +4973,18 @@ function selectedCaseDraftFor(
         sourceRows,
         alertId: actionability.readiness.backedIds.alertIds[0],
         captureIds: unique(sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value))),
-        provenance: drilldown.rows.map(row => ({ sourceName: row.sourceName, sourceId: row.sourceId, provenance: row.provenance, captureId: row.captureId, reportDate: row.reportDate, confidence: row.confidence })),
+        provenance: sourceRows.map(row => ({
+            sourceName: row.sourceName,
+            sourceId: row.sourceId,
+            provenance: row.provenance,
+            provenanceRefs: row.provenanceRefs,
+            provenanceFingerprint: row.provenanceFingerprint,
+            captureId: row.captureId,
+            reportDate: row.reportDate,
+            confidence: row.confidence,
+        })),
+        provenanceRefs: unique(sourceRows.flatMap(row => row.provenanceRefs)),
+        provenanceFingerprints: unique(sourceRows.map(row => row.provenanceFingerprint)),
         requiredBeforePost: missing,
     }
 
@@ -4970,16 +5024,7 @@ function selectedCaseCreateRequestFor(
     const selectedCasePaths = selected.priority?.casePaths ?? []
     const selectedEvidenceRowId = selected.priority?.rowId
     const selectedText = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
-    const sourceRows = (caseDraft?.sourceRows.length ? caseDraft.sourceRows : drilldown?.rows ?? []).map(row => ({
-        sourceName: row.sourceName,
-        sourceId: row.sourceId,
-        provenance: row.provenance,
-        captureId: row.captureId,
-        reportDate: row.reportDate,
-        confidence: row.confidence,
-        state: row.state,
-        missing: row.missing,
-    }))
+    const sourceRows = (caseDraft?.sourceRows.length ? caseDraft.sourceRows : drilldown?.rows ?? []).map(caseSourceRowFor)
     const alertIds = unique([
         ...actionability.readiness.backedIds.alertIds,
         ...(caseOwnership?.sourceRefs.alertIds ?? []),
@@ -5014,6 +5059,18 @@ function selectedCaseCreateRequestFor(
     )
     const activeCaseItems = matchedCaseItems.length ? matchedCaseItems : actionability.caseReviewIntake.items.slice(0, 3)
     const caseReviewRows = activeCaseItems.slice(0, 4).map(item => {
+        const itemSourceRows = sourceRows.filter(row =>
+            (row.sourceId ? item.sourceIds.includes(row.sourceId) : false)
+            || (row.captureId ? item.captureIds.includes(row.captureId) : false)
+            || item.reasons.some(reason => reason.toLowerCase().includes(row.sourceName.toLowerCase()))
+        )
+        const provenanceRefs = unique([
+            ...item.sourceIds,
+            ...item.captureIds,
+            ...item.alertIds,
+            ...item.casePaths,
+            ...itemSourceRows.flatMap(row => row.provenanceRefs),
+        ])
         const replayRow = actionability.caseReplayReadiness.rows.find(row =>
             row.caseReviewIntakeItemId === item.id
             || row.evidenceRowId === item.evidenceRowId
@@ -5039,6 +5096,11 @@ function selectedCaseCreateRequestFor(
             captureIds: item.captureIds,
             casePaths: item.casePaths,
             sourceIds: item.sourceIds,
+            provenanceRefs,
+            provenanceFingerprints: unique([
+                ...itemSourceRows.map(row => row.provenanceFingerprint),
+                stableEvidenceFingerprint([item.id, item.evidenceRowId, ...provenanceRefs]),
+            ]),
             blockers: unique([
                 ...item.blockedBy.map(blocker => blocker.detail),
                 ...(replayRow?.blockedBy.map(blocker => blocker.detail) ?? []),
@@ -5075,6 +5137,14 @@ function selectedCaseCreateRequestFor(
         sourceIds,
         watchTerms,
         caseReviewRows,
+        provenanceRefs: unique([
+            ...sourceRows.flatMap(row => row.provenanceRefs),
+            ...caseReviewRows.flatMap(row => row.provenanceRefs),
+        ]),
+        provenanceFingerprints: unique([
+            ...sourceRows.map(row => row.provenanceFingerprint),
+            ...caseReviewRows.flatMap(row => row.provenanceFingerprints),
+        ]),
         noMutation: true,
     }
     const ready = Boolean(caseDraft?.ready)
