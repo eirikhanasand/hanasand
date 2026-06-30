@@ -2479,7 +2479,11 @@ export function buildReadinessCases(input: {
             ],
             workflowPath: path,
             missingDependency: helpdeskReady ? undefined : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Missing support audit readiness proof.',
-            actions: [{ id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' }],
+            actions: [
+                { id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' },
+                { id: 'inspect_support_recovery', label: 'Inspect recovery', method: 'GET', href: '/api/backend/admin/support/access-recovery' },
+                { id: 'inspect_admin_audit', label: 'Inspect audit', method: 'GET', href: '/api/backend/admin/audit-events?limit=50' },
+            ],
         }),
         ...(analystWorkflow ? [readinessCase({
             id: 'case_workflow_readiness',

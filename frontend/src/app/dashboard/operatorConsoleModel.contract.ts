@@ -1300,6 +1300,13 @@ if (deliveryRouteCase.actions?.find(action => action.id === 'open_delivery_histo
 if (deliveryRouteCase.relatedLinks.find(link => link.href === deliveryHistoryHref)?.label !== 'Delivery history') {
     throw new Error('Expected delivery readiness links to include the scoped delivery history.')
 }
+const supportReadinessCase = expectWorkbenchCase(cases, 'support_admin_readiness')
+if (supportReadinessCase.actions?.find(action => action.id === 'inspect_support_recovery')?.href !== '/api/backend/admin/support/access-recovery') {
+    throw new Error('Expected support readiness to expose the backed recovery queue drill-in.')
+}
+if (supportReadinessCase.actions?.find(action => action.id === 'inspect_admin_audit')?.href !== '/api/backend/admin/audit-events?limit=50') {
+    throw new Error('Expected support readiness to expose the backed admin audit drill-in.')
+}
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
 void (liveProofAlertsUrl.searchParams.get('organizationId') satisfies string | null)
