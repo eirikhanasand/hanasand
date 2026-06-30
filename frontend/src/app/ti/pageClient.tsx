@@ -537,19 +537,20 @@ function Results({ result }: { result: TiSearchResponse }) {
                             </div>
                         </Panel>
 
-                        <Panel title='Collection Gaps' description='Source families and missing fields that need collection or enrichment before stronger handoff.' icon={<Database className='h-4 w-4' />}>
-                            <div className='grid gap-2'>
-                                {(result.analystLoop?.nextSteps ?? defaultNextStepsFor(result)).map(step => (
-                                    <div key={`${step.state}-${step.label}`} className='rounded-lg border border-[#eef1f5] bg-white p-3'>
-                                        <div className='flex items-center justify-between gap-2'>
-                                            <p className='text-xs font-semibold text-[#171a21]'>{step.label}</p>
-                                            <span className={rowToneClass(step.tone)}>{formatLabel(step.state)}</span>
-                                        </div>
-                                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{displayRequirementText(step.detail)}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </Panel>
+                        <EnrichmentGapWorkbench
+                            tasks={enrichmentTasks}
+                            result={result}
+                            actor={actorIntel}
+                            actionability={actionability}
+                            workItems={workItems}
+                            artifacts={actorArtifacts}
+                            selectedId={selected?.id}
+                            selectedArtifactId={selectedArtifact?.id}
+                            onSelectEvidence={setSelectedId}
+                            onSelectArtifact={setSelectedArtifactId}
+                            onReview={() => applyDecision('reviewing')}
+                            onEscalate={() => applyDecision('escalated')}
+                        />
                         {result.analystLoop?.sourceActivationWorkflow.required ? <SourceActivationPanel activation={result.analystLoop.sourceActivationWorkflow} /> : null}
                     </aside>
                 </div>
@@ -1388,6 +1389,23 @@ type EnrichmentTask = {
     sourceFamily?: string
     requestedFields?: string[]
     ownerLane?: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
+}
+
+type EnrichmentGapWorkbenchRow = {
+    id: string
+    type: string
+    label: string
+    entity: string
+    state: 'ready' | 'review' | 'blocked'
+    confidenceValues: number[]
+    newestAt?: string
+    source: string
+    impact: string
+    route?: string
+    evidenceItems: AnalystWorkItem[]
+    artifactIds: string[]
+    missing: string[]
+    payload: Record<string, unknown>
 }
 
 type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
@@ -4505,6 +4523,135 @@ function EnrichmentTasksPanel({ tasks, intake }: { tasks: EnrichmentTask[]; inta
     )
 }
 
+function EnrichmentGapWorkbench({
+    tasks,
+    result,
+    actor,
+    actionability,
+    workItems,
+    artifacts,
+    selectedId,
+    selectedArtifactId,
+    onSelectEvidence,
+    onSelectArtifact,
+    onReview,
+    onEscalate,
+}: {
+    tasks: EnrichmentTask[]
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    workItems: AnalystWorkItem[]
+    artifacts: ActorArtifact[]
+    selectedId?: string
+    selectedArtifactId?: string
+    onSelectEvidence: (id: string) => void
+    onSelectArtifact: (id: string) => void
+    onReview: () => void
+    onEscalate: () => void
+}) {
+    const rows = useMemo(() => enrichmentGapWorkbenchRowsFor({ tasks, result, actor, actionability, workItems, artifacts }), [tasks, result, actor, actionability, workItems, artifacts])
+    const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id ?? '')
+    useEffect(() => {
+        if (!rows.length) return
+        if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
+    }, [rows, selectedRowId])
+    const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
+    const selectedEvidence = selectedRow?.evidenceItems.find(item => item.id === selectedId) ?? selectedRow?.evidenceItems[0]
+    const selectedArtifact = selectedRow?.artifactIds.find(id => id === selectedArtifactId) ?? selectedRow?.artifactIds[0]
+    const blockedCount = rows.filter(row => row.state === 'blocked').length
+    const reviewCount = rows.filter(row => row.state === 'review').length
+
+    return (
+        <Panel title='Collection Worklist' description='Open data gaps tied to evidence, artifacts, sources, and case handoff.' icon={<Database className='h-4 w-4' />}>
+            <div data-ti-enrichment-gap-workbench='true' className='grid min-w-0 gap-3'>
+                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {rows.length} row{rows.length === 1 ? '' : 's'} · {blockedCount} blocked · {reviewCount} review
+                        </p>
+                    </div>
+                    {selectedRow ? <CopyPayloadButton label='Enrichment row' payload={selectedRow.payload} /> : null}
+                </div>
+                <div className='max-h-[24rem] min-w-0 overflow-auto rounded-lg border border-[#eef1f5] dark:border-[#273244]'>
+                    <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Gap</th>
+                                <th className='px-3 py-2 font-semibold'>Entity</th>
+                                <th className='px-3 py-2 font-semibold'>Freshness</th>
+                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                            {rows.map(row => {
+                                const active = selectedRow?.id === row.id
+                                return (
+                                    <tr key={row.id} className={`${active ? 'bg-[#eef3ff] dark:bg-[#172646]' : 'bg-white dark:bg-[#101722]'} align-top`}>
+                                        <td className='px-3 py-2'>
+                                            <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
+                                                <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</span>
+                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.type)}</span>
+                                            </button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <p className='wrap-break-word font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.entity}</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.impact)}</p>
+                                        </td>
+                                        <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Artifact</button> : null}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                {selectedRow ? (
+                    <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected gap</p>
+                                <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.impact)}</p>
+                            </div>
+                            <span className={sourceHealthChipClass(selectedRow.state)}>{selectedRow.state}</span>
+                        </div>
+                        <div className='mt-3 grid grid-cols-2 gap-2 text-xs'>
+                            <EvidenceMetric label='Source' value={selectedRow.source} />
+                            <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
+                            <EvidenceMetric label='Artifacts' value={String(selectedRow.artifactIds.length)} />
+                            <EvidenceMetric label='Missing' value={String(selectedRow.missing.length)} />
+                        </div>
+                        {selectedRow.missing.length ? (
+                            <div className='mt-3 rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                                {displayRequirementList(selectedRow.missing.slice(0, 3))}
+                            </div>
+                        ) : null}
+                        <div className='mt-3 grid grid-cols-2 gap-1.5'>
+                            <button type='button' onClick={onReview} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review</button>
+                            <button type='button' onClick={onEscalate} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Escalate</button>
+                            {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open row</button> : null}
+                            {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open artifact</button> : null}
+                        </div>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                            {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'><ExternalLink className='h-3.5 w-3.5' />Open route</a> : null}
+                            <CopyPayloadButton label='Export gap' payload={selectedRow.payload} showLabel />
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+        </Panel>
+    )
+}
+
 function collectionGapTaskPayloadFor(task: EnrichmentTask, intake: TiActionabilityModel['sourceEnrichmentIntake']) {
     const requestedFields = task.requestedFields ?? []
     const matchingItems = intake.items.filter(item =>
@@ -5829,23 +5976,6 @@ function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
         })),
     ]
     return events
-}
-
-function defaultNextStepsFor(result: TiSearchResponse): NonNullable<TiSearchResponse['analystLoop']>['nextSteps'] {
-    if (result.status === 'searching' || result.status === 'queued') {
-        return [{
-            state: 'queued',
-            label: 'Live collection in progress',
-            detail: 'The page will poll for new evidence. Keep the result open or search an alias while the run continues.',
-            tone: 'watch',
-        }]
-    }
-    return [{
-        state: 'ready',
-        label: 'Review queue built',
-        detail: 'Use the selected work item, evidence, notes, and decision actions to triage this result.',
-        tone: 'ok',
-    }]
 }
 
 function sectionOverviewFor(input: {
@@ -7723,6 +7853,202 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
     ]
 }
 
+function enrichmentGapWorkbenchRowsFor({
+    tasks,
+    result,
+    actor,
+    actionability,
+    workItems,
+    artifacts,
+}: {
+    tasks: EnrichmentTask[]
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    workItems: AnalystWorkItem[]
+    artifacts: ActorArtifact[]
+}): EnrichmentGapWorkbenchRow[] {
+    const rows: EnrichmentGapWorkbenchRow[] = []
+
+    for (const task of tasks) {
+        const evidenceItems = matchingWorkItemsForGap(workItems, task.title, task.detail)
+        const artifactIds = matchingArtifactIdsForGap(artifacts, task.title, task.detail)
+        rows.push(enrichmentGapRow({
+            id: `task:${task.title}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            type: task.sourceFamily || task.ownerLane || task.status,
+            label: task.title,
+            entity: task.sourceFamily ? formatLabel(task.sourceFamily) : task.ownerLane ? readinessOwnerLabel(task.ownerLane) : taskStatusLabel(task.status),
+            state: task.status === 'ready' ? 'ready' : task.status === 'needs_api' ? 'blocked' : 'review',
+            newestAt: newestDate([...evidenceItems.map(item => item.timestamp), actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt]),
+            source: task.sourceFamily ? formatLabel(task.sourceFamily) : 'Public TI',
+            impact: task.detail,
+            route: task.route,
+            evidenceItems,
+            artifactIds,
+            missing: task.requestedFields ?? [],
+            payload: {
+                schemaVersion: 'ti.public_actor.enrichment_gap_row.v1',
+                source: 'public-ti',
+                query: result.query,
+                task,
+                evidenceRows: evidenceItems.map(enrichmentEvidenceRef),
+                artifactIds,
+            },
+        }))
+    }
+
+    for (const row of actionability.sourceHealthQueue.rows.filter(item => item.state !== 'ready')) {
+        const evidenceItems = matchingWorkItemsForGap(workItems, row.sourceName, row.provenance)
+        rows.push(enrichmentGapRow({
+            id: `source-health:${row.id}`,
+            type: row.sourceFamily,
+            label: row.parserStatus,
+            entity: row.sourceName,
+            state: row.state,
+            confidenceValues: [row.confidence].filter((value): value is number => typeof value === 'number'),
+            newestAt: row.timestamp,
+            source: row.sourceName,
+            impact: row.nextAction,
+            route: row.route,
+            evidenceItems,
+            artifactIds: matchingArtifactIdsForGap(artifacts, row.sourceName, row.provenance),
+            missing: row.requestedFields,
+            payload: {
+                schemaVersion: 'ti.public_actor.enrichment_gap_row.v1',
+                source: 'public-ti',
+                query: result.query,
+                sourceHealthRow: row,
+                evidenceRows: evidenceItems.map(enrichmentEvidenceRef),
+            },
+        }))
+    }
+
+    for (const item of workItems.filter(item => item.confidence < 0.55 || !item.href || isDateStale(item.timestamp, result.generatedAt)).slice(0, 8)) {
+        const missing = [
+            item.confidence < 0.55 ? 'confidence' : '',
+            item.href ? '' : 'sourceProvenance[].provenance',
+            isDateStale(item.timestamp, result.generatedAt) ? 'report date' : '',
+        ].filter(Boolean)
+        rows.push(enrichmentGapRow({
+            id: `evidence:${item.id}`,
+            type: item.kind,
+            label: item.confidence < 0.55 ? 'Corroborate evidence' : !item.href ? 'Attach source link' : 'Refresh evidence date',
+            entity: item.title,
+            state: !item.href || item.confidence < 0.4 ? 'blocked' : 'review',
+            confidenceValues: [item.confidence],
+            newestAt: item.timestamp,
+            source: item.source,
+            impact: item.detail,
+            route: item.href,
+            evidenceItems: [item],
+            artifactIds: matchingArtifactIdsForGap(artifacts, item.title, item.detail, item.evidence.join(' ')),
+            missing,
+            payload: {
+                schemaVersion: 'ti.public_actor.enrichment_gap_row.v1',
+                source: 'public-ti',
+                query: result.query,
+                evidenceRow: enrichmentEvidenceRef(item),
+                missing,
+            },
+        }))
+    }
+
+    for (const artifact of artifacts.filter(item => item.readiness.blockers.length || item.enrichmentTasks.length).slice(0, 8)) {
+        const evidenceItems = matchingWorkItemsForGap(workItems, artifact.label, artifact.evidence.join(' '))
+        rows.push(enrichmentGapRow({
+            id: `artifact:${artifact.id}`,
+            type: artifact.kind,
+            label: artifact.enrichmentTasks[0] || artifactStateLabel(artifact),
+            entity: artifact.label,
+            state: artifactStateFor(artifact),
+            confidenceValues: [artifact.confidence],
+            newestAt: artifact.freshness,
+            source: artifact.provenance[0] || 'Artifact context',
+            impact: artifact.subtitle,
+            route: artifact.readiness.state === 'needs_source' ? '/dashboard/ti/enrichment' : undefined,
+            evidenceItems,
+            artifactIds: [artifact.id],
+            missing: [...artifact.readiness.blockers, ...artifact.enrichmentTasks],
+            payload: {
+                schemaVersion: 'ti.public_actor.enrichment_gap_row.v1',
+                source: 'public-ti',
+                query: result.query,
+                artifact: artifactWorklistPayloadFor(artifact),
+                evidenceRows: evidenceItems.map(enrichmentEvidenceRef),
+            },
+        }))
+    }
+
+    if (actor.sourceCoverage.missing.length) {
+        rows.push(enrichmentGapRow({
+            id: 'actor-source-coverage',
+            type: 'source coverage',
+            label: 'Complete source coverage',
+            entity: actor.actorClass,
+            state: 'blocked',
+            newestAt: actor.sourceCoverage.latestReportDate || actor.lastSeen,
+            source: 'Actor profile',
+            impact: actor.freshness.reason,
+            route: '/dashboard/ti/enrichment',
+            evidenceItems: workItems.slice(0, 3),
+            artifactIds: artifacts.slice(0, 3).map(item => item.id),
+            missing: actor.sourceCoverage.missing,
+            payload: {
+                schemaVersion: 'ti.public_actor.enrichment_gap_row.v1',
+                source: 'public-ti',
+                query: result.query,
+                sourceCoverage: actor.sourceCoverage,
+            },
+        }))
+    }
+
+    return uniqueBy(rows, row => row.id)
+        .sort((a, b) => sourceCoverageStateRank(a.state) - sourceCoverageStateRank(b.state)
+            || Date.parse(b.newestAt || '') - Date.parse(a.newestAt || '')
+            || b.evidenceItems.length - a.evidenceItems.length
+            || a.label.localeCompare(b.label))
+        .slice(0, 14)
+}
+
+function enrichmentGapRow(input: Omit<EnrichmentGapWorkbenchRow, 'confidenceValues'> & { confidenceValues?: number[] }): EnrichmentGapWorkbenchRow {
+    const confidenceValues = uniqueNumbers([...(input.confidenceValues ?? []), ...input.evidenceItems.map(item => item.confidence)])
+    return {
+        ...input,
+        confidenceValues,
+        missing: unique(input.missing.map(displayRequirementText)),
+    }
+}
+
+function matchingWorkItemsForGap(items: AnalystWorkItem[], ...values: string[]) {
+    const tokens = unique(values.join(' ').split(/[^a-z0-9._-]+/i).filter(value => value.length > 3)).map(value => value.toLowerCase()).slice(0, 12)
+    if (!tokens.length) return []
+    return items.filter(item => {
+        const body = `${item.title} ${item.subtitle} ${item.detail} ${item.source} ${item.provenance} ${item.evidence.join(' ')}`.toLowerCase()
+        return tokens.some(token => body.includes(token))
+    }).slice(0, 5)
+}
+
+function matchingArtifactIdsForGap(artifacts: ActorArtifact[], ...values: string[]) {
+    const tokens = unique(values.join(' ').split(/[^a-z0-9._-]+/i).filter(value => value.length > 3)).map(value => value.toLowerCase()).slice(0, 12)
+    if (!tokens.length) return []
+    return artifacts.filter(artifact => {
+        const body = watchlistArtifactText(artifact)
+        return tokens.some(token => body.includes(token))
+    }).map(item => item.id).slice(0, 5)
+}
+
+function enrichmentEvidenceRef(item: AnalystWorkItem) {
+    return {
+        id: item.id,
+        kind: item.kind,
+        title: item.title,
+        source: item.source,
+        timestamp: item.timestamp,
+        confidence: item.confidence,
+        provenance: item.provenance,
+    }
+}
+
 function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, LocalDecision>) {
     return items.reduce((counts, item) => {
         const decision = decisions[item.id]
@@ -8931,12 +9257,6 @@ function MapZoomButton({ label, onClick, wide = false }: { label: string; onClic
             {label}
         </button>
     )
-}
-
-function rowToneClass(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'bad') return 'bg-[#fee4e2] text-[#b42318]'
-    if (tone === 'watch') return 'bg-[#fff4d6] text-[#8a5a00]'
-    return 'bg-[#e9f8ef] text-[#147a3b]'
 }
 
 function formatLabel(value: string) {
