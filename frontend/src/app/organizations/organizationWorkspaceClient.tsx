@@ -493,6 +493,18 @@ export default function OrganizationWorkspaceClient() {
         return 'Watchlist term archived.'
     })
 
+    const cleanupWatchlists = () => selectedOrganization && runAction('cleanup-watchlists', async () => {
+        const payload = await requestJson<{ archivedCount?: number, cleanupCount?: number, disabledCount?: number }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/cleanup`, {
+            method: 'POST',
+            body: JSON.stringify({
+                reason: 'Archived watchlist cleanup from organization workspace.',
+                requestId: `org-ui-${Date.now()}`,
+            }),
+        })
+        const count = payload.archivedCount ?? payload.cleanupCount ?? payload.disabledCount
+        return count === undefined ? 'Archived watchlists cleaned up.' : `${count} archived watchlist${count === 1 ? '' : 's'} cleaned up.`
+    })
+
     const testWatchlistDestination = (item: WatchlistItem, mode: 'save' | 'replay') => selectedOrganization && runAction(mode === 'save' ? 'save-destination' : 'replay-destination', async () => {
         const draft = destinationDrafts[item.id] || { kind: 'discord', url: '' }
         const withUrl = mode === 'save'
@@ -649,6 +661,7 @@ export default function OrganizationWorkspaceClient() {
                                             deliveryResults={deliveryResults}
                                             setDestinationDrafts={setDestinationDrafts}
                                             onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
+                                            onCleanup={() => void cleanupWatchlists()}
                                         />
                                     </div>
                                     <div className='grid gap-5 content-start'>
@@ -856,10 +869,17 @@ function MemberPanel({ members, canManage, busy, onRoleChange, onRemove }: { mem
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void }) {
+    const archivedCount = watchlists.filter(item => item.status === 'archived').length
     return (
         <section id='watchlists' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Terms, owners, destinations.' />
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+                <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Terms, owners, destinations.' />
+                <button type='button' className={secondaryButtonClass} disabled={!canManage || archivedCount === 0 || Boolean(busy)} onClick={onCleanup}>
+                    <Archive className='h-4 w-4' />
+                    Cleanup archived
+                </button>
+            </div>
             <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522] md:grid-cols-[9rem_1fr]'>
                 <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
                 <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='example.com, vendor name, company, actor' />
@@ -976,6 +996,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No route hash'
     const selectedAlertId = alert?.id || liveDwmAlertId
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
+    const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
     return (
         <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
             <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
@@ -990,7 +1011,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
                 <div className='grid grid-cols-2 gap-2 sm:flex'>
                     <button type='button' className={secondaryButtonClass} disabled={!configured || Boolean(busy)} onClick={() => onTest('replay')}>
                         <Play className='h-4 w-4' />
-                        Replay
+                        {replayLabel}
                     </button>
                     <a href={`/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`} className={secondaryButtonClass}>
                         <ExternalLink className='h-4 w-4' />
