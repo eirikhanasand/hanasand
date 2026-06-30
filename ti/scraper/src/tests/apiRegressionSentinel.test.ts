@@ -124,8 +124,12 @@ describe("api regression sentinel", () => {
       },
       scopeFields: expect.arrayContaining(["organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"]),
       writeFields: expect.arrayContaining(["assignedOwner", "note", "idempotencyKey"]),
-      recordFields: expect.arrayContaining(["alertId", "caseId", "casePath", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "replayState"]),
-      blockerCodes: expect.arrayContaining(["alert_not_found", "missing_alert_provenance", "case_read_only_member"])
+      recordFields: expect.arrayContaining(["alertId", "caseId", "casePath", "webhookDestinationIds", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "deliveryDedupeKey", "replayState", "readiness", "consumerActions"]),
+      consumerActions: expect.arrayContaining([
+        expect.objectContaining({ id: "alertReplay", route: "/v1/dwm/alerts/:alertId/replay" }),
+        expect.objectContaining({ id: "webhookDryRun", route: "/v1/dwm/webhooks/deliver" })
+      ]),
+      blockerCodes: expect.arrayContaining(["alert_not_found", "missing_alert_provenance", "missing_webhook_destination", "case_read_only_member"])
     });
     expect(JSON.stringify(handoffSurface)).not.toContain("https://discord.com");
   });

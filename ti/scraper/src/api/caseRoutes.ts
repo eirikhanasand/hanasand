@@ -1307,15 +1307,47 @@ function buildAlertCaseHandoff(input: {
   provenance: ReturnType<typeof alertCaseHandoffProvenance>;
 }) {
   const casePath = input.alert?.casePath ?? input.alert?.workflowContext?.casePath ?? `/v1/cases/${input.caseRecord.id}?alertId=${input.caseRecord.alertId ?? input.alert?.id}`;
+  const alertId = input.alert?.id ?? input.caseRecord.alertId;
+  const webhookDestinationIds = uniqueCaseStrings([
+    ...(input.alert?.deliveryReadinessContext?.webhookDestinationIds ?? []),
+    ...(input.alert?.workflowContext?.webhookDestinationIds ?? []),
+    ...(input.alert?.webhookContext?.webhookDestinationIds ?? [])
+  ]);
+  const selectedWebhookDestinationId = webhookDestinationIds[0];
+  const workflowEventCount = Array.isArray(input.alert?.workflowEvents) ? input.alert.workflowEvents.length : 0;
+  const dedupeKey = stableId("dwm_alert_case_handoff", `${input.caseRecord.tenantId}:${input.caseRecord.organizationId ?? ""}:${alertId}:${input.idempotencyKey ?? input.caseRecord.id}`);
+  const deliveryDedupeKey = input.alert?.deliveryReadinessContext?.deliveryDedupeKey
+    ?? input.alert?.webhookDelivery?.dedupeKey
+    ?? input.alert?.dedupeKey
+    ?? stableId("dwm_webhook_delivery", `${input.caseRecord.tenantId}:${input.caseRecord.organizationId ?? ""}:${alertId}:${selectedWebhookDestinationId ?? "missing_destination"}`);
+  const readinessBlockers = [
+    ...input.provenance.blockers,
+    ...(!webhookDestinationIds.length ? [{
+      code: "missing_webhook_destination",
+      message: "No webhook destination is attached to this alert.",
+      path: "alert.workflowContext.webhookDestinationIds"
+    }] : []),
+    ...(!alertId ? [{
+      code: "missing_alert_id",
+      message: "Alert replay requires a persisted alert id.",
+      path: "alert.id"
+    }] : []),
+    ...(input.caseRecord.status === "closed" ? [{
+      code: "case_closed",
+      message: "Case is closed; reopen before sending another customer notification.",
+      path: "case.status"
+    }] : [])
+  ];
   return {
     schemaVersion: "dwm.alert_case_handoff.v1",
     route: input.route ?? "/v1/cases",
     method: "POST",
     tenantId: input.caseRecord.tenantId,
     organizationId: input.caseRecord.organizationId,
-    alertId: input.alert?.id ?? input.caseRecord.alertId,
+    alertId,
     caseId: input.caseRecord.id,
     casePath,
+    webhookDestinationIds,
     watchlistIds: uniqueCaseStrings([
       ...(input.alert?.watchlistIds ?? []),
       ...(input.alert?.workflowContext?.watchlistIds ?? [])
@@ -1328,11 +1360,49 @@ function buildAlertCaseHandoff(input: {
       alertWorkflowStatus: input.alert?.workflowStatus,
       replayState: input.replayState,
       idempotencyKey: input.idempotencyKey,
-      dedupeKey: stableId("dwm_alert_case_handoff", `${input.caseRecord.tenantId}:${input.caseRecord.organizationId ?? ""}:${input.alert?.id ?? input.caseRecord.alertId}:${input.idempotencyKey ?? input.caseRecord.id}`)
+      dedupeKey
+    },
+    readiness: {
+      schemaVersion: "dwm.alert_case_handoff_readiness.v1",
+      replayReady: Boolean(alertId) && input.provenance.blockers.length === 0,
+      webhookDryRunReady: Boolean(alertId && selectedWebhookDestinationId) && input.provenance.blockers.length === 0 && input.caseRecord.status !== "closed",
+      blockerCodes: uniqueCaseStrings(readinessBlockers.map((blocker) => blocker.code)),
+      blockers: readinessBlockers
+    },
+    consumerActions: {
+      alertReplay: {
+        schemaVersion: "dwm.alert_replay_request.v1",
+        route: `/v1/dwm/alerts/${encodeURIComponent(String(alertId ?? ""))}/replay`,
+        method: "POST",
+        idempotencyKey: dedupeKey,
+        body: {
+          organizationId: input.caseRecord.organizationId,
+          caseId: input.caseRecord.id,
+          casePath,
+          expectedWorkflowEventCount: workflowEventCount
+        }
+      },
+      webhookDryRun: {
+        schemaVersion: "dwm.webhook_delivery_request.v1",
+        route: "/v1/dwm/webhooks/deliver",
+        method: "POST",
+        idempotencyKey: deliveryDedupeKey,
+        dedupeKey: deliveryDedupeKey,
+        body: {
+          organizationId: input.caseRecord.organizationId,
+          alertId,
+          caseId: input.caseRecord.id,
+          casePath,
+          webhookDestinationId: selectedWebhookDestinationId,
+          webhookDestinationIds,
+          dryRun: true,
+          limit: 1
+        }
+      }
     },
     provenance: {
       source: "dwm_alert",
-      alertId: input.alert?.id ?? input.caseRecord.alertId,
+      alertId,
       caseId: input.caseRecord.id,
       auditEventId: input.event?.auditEventId,
       workflowEventId: input.event?.id,

@@ -69,8 +69,12 @@ export function contractIndex() {
         },
         scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"],
         writeFields: ["organizationId", "assignedOwner", "note", "idempotencyKey"],
-        recordFields: ["alertId", "caseId", "casePath", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "replayState"],
-        blockerCodes: ["alert_not_found", "missing_alert_provenance", "organization_visibility_denied", "case_read_only_member", "invalid_case_owner_role"],
+        recordFields: ["alertId", "caseId", "casePath", "webhookDestinationIds", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "deliveryDedupeKey", "replayState", "readiness", "consumerActions"],
+        consumerActions: [
+          { id: "alertReplay", route: "/v1/dwm/alerts/:alertId/replay", method: "POST", bodyFields: ["organizationId", "caseId", "casePath", "expectedWorkflowEventCount"] },
+          { id: "webhookDryRun", route: "/v1/dwm/webhooks/deliver", method: "POST", bodyFields: ["organizationId", "alertId", "caseId", "casePath", "webhookDestinationId", "webhookDestinationIds", "dryRun", "limit"] }
+        ],
+        blockerCodes: ["alert_not_found", "missing_alert_provenance", "missing_webhook_destination", "missing_alert_id", "case_closed", "organization_visibility_denied", "case_read_only_member", "invalid_case_owner_role"],
         safeOutput: {
           metadataOnly: true,
           rawEvidenceExposed: false,

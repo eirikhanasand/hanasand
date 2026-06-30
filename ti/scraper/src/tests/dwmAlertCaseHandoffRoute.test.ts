@@ -44,6 +44,7 @@ describe("DWM alert case handoff route", () => {
       alertId: "alert_acme",
       caseId: "case_alert_acme",
       casePath: "/v1/cases/case_alert_acme?alertId=alert_acme",
+      webhookDestinationIds: ["webhook_acme_discord"],
       watchlistIds: ["watch_acme"],
       watchlistItemIds: ["watch_item_acme_domain"],
       workflowState: {
@@ -51,6 +52,36 @@ describe("DWM alert case handoff route", () => {
         replayState: "recorded",
         idempotencyKey: "alert-case-handoff-001",
         dedupeKey: expect.stringMatching(/^dwm_alert_case_handoff_/)
+      },
+      readiness: {
+        replayReady: true,
+        webhookDryRunReady: true,
+        blockerCodes: []
+      },
+      consumerActions: {
+        alertReplay: {
+          route: "/v1/dwm/alerts/alert_acme/replay",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            caseId: "case_alert_acme",
+            casePath: "/v1/cases/case_alert_acme?alertId=alert_acme",
+            expectedWorkflowEventCount: 2
+          }
+        },
+        webhookDryRun: {
+          route: "/v1/dwm/webhooks/deliver",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            alertId: "alert_acme",
+            caseId: "case_alert_acme",
+            webhookDestinationId: "webhook_acme_discord",
+            webhookDestinationIds: ["webhook_acme_discord"],
+            dryRun: true,
+            limit: 1
+          }
+        }
       },
       provenance: {
         source: "dwm_alert",
@@ -72,10 +103,38 @@ describe("DWM alert case handoff route", () => {
       route: "/v1/dwm/alerts/alert_acme/case-handoff",
       caseId: "case_alert_acme",
       alertId: "alert_acme",
+      webhookDestinationIds: ["webhook_acme_discord"],
       workflowState: {
         caseStatus: "open",
         replayState: "reused",
         dedupeKey: expect.stringMatching(/^dwm_alert_case_handoff_/)
+      },
+      readiness: {
+        replayReady: true,
+        webhookDryRunReady: true,
+        blockerCodes: []
+      },
+      consumerActions: {
+        alertReplay: {
+          route: "/v1/dwm/alerts/alert_acme/replay",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            caseId: "case_alert_acme",
+            expectedWorkflowEventCount: 2
+          }
+        },
+        webhookDryRun: {
+          route: "/v1/dwm/webhooks/deliver",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            alertId: "alert_acme",
+            caseId: "case_alert_acme",
+            webhookDestinationId: "webhook_acme_discord",
+            dryRun: true
+          }
+        }
       },
       provenance: {
         captureIds: ["cap_acme_1"],
@@ -99,6 +158,77 @@ describe("DWM alert case handoff route", () => {
     expect((store as any).getCase("case_alert_acme").workflowEvents).toHaveLength(1);
     expect((store as any).getDwmAlert("alert_acme").caseId).toBe("case_alert_acme");
     expect(JSON.stringify({ createdPayload, duplicatePayload })).not.toContain("https://discord.com");
+  });
+
+  test("keeps case handoff usable while blocking webhook dry-run without a destination", async () => {
+    const { options, store } = fixtureRuntime();
+    store.saveDwmAlert({
+      ...provenancedAlert(),
+      id: "alert_no_destination",
+      caseIdCandidate: "case_alert_no_destination",
+      casePath: "/v1/cases/case_alert_no_destination?alertId=alert_no_destination",
+      workflowContext: {
+        ...provenancedAlert().workflowContext,
+        caseIdCandidate: "case_alert_no_destination",
+        casePath: "/v1/cases/case_alert_no_destination?alertId=alert_no_destination",
+        webhookDestinationIds: []
+      },
+      webhookContext: undefined,
+      deliveryReadinessContext: undefined
+    });
+
+    const created = await postHandoff(options, "alert_no_destination", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open a case before webhook routing is configured."
+    });
+    const createdPayload = await created.json() as any;
+    const detail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_no_destination?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const detailPayload = await detail.json() as any;
+
+    expect(created.status).toBe(201);
+    expect(createdPayload.alertCaseHandoff).toMatchObject({
+      caseId: "case_alert_no_destination",
+      alertId: "alert_no_destination",
+      webhookDestinationIds: [],
+      readiness: {
+        replayReady: true,
+        webhookDryRunReady: false,
+        blockerCodes: ["missing_webhook_destination"],
+        blockers: [{
+          code: "missing_webhook_destination",
+          path: "alert.workflowContext.webhookDestinationIds"
+        }]
+      },
+      consumerActions: {
+        alertReplay: {
+          route: "/v1/dwm/alerts/alert_no_destination/replay",
+          body: {
+            organizationId: "org_acme",
+            caseId: "case_alert_no_destination"
+          }
+        },
+        webhookDryRun: {
+          route: "/v1/dwm/webhooks/deliver",
+          body: {
+            organizationId: "org_acme",
+            alertId: "alert_no_destination",
+            caseId: "case_alert_no_destination",
+            webhookDestinationIds: [],
+            dryRun: true
+          }
+        }
+      }
+    });
+    expect(detail.status).toBe(200);
+    expect(detailPayload.alertCaseHandoffContext.readiness).toMatchObject({
+      replayReady: true,
+      webhookDryRunReady: false,
+      blockerCodes: ["missing_webhook_destination"]
+    });
+    expect((store as any).getCase("case_alert_no_destination").organizationId).toBe("org_acme");
   });
 
   test("blocks missing provenance, wrong org, and read-only members", async () => {
@@ -178,10 +308,27 @@ function provenancedAlert() {
       watchlistItemIds: ["watch_item_acme_domain"],
       captureIds: ["cap_acme_1"],
       sourceIds: ["src_acme_tg"],
+      evidenceCount: 1,
+      webhookDestinationIds: ["webhook_acme_discord"]
+    },
+    webhookContext: {
+      organizationId: "org_acme",
+      webhookDestinationIds: ["webhook_acme_discord"],
+      captureIds: ["cap_acme_1"],
+      sourceIds: ["src_acme_tg"],
       evidenceCount: 1
+    },
+    deliveryReadinessContext: {
+      webhookDestinationIds: ["webhook_acme_discord"],
+      deliveryDedupeKey: "delivery_alert_acme_webhook"
     },
     watchlistIds: ["watch_acme"],
     watchlistItemIds: ["watch_item_acme_domain"],
+    workflowEvents: [{
+      id: "alert_event_created",
+      at: "2026-06-29T14:01:00.000Z",
+      action: "created"
+    }],
     evidence: [{
       id: "ev_acme_1",
       sourceId: "src_acme_tg",
