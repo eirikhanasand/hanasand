@@ -28,6 +28,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_CATALOG_PACKET_SCHEMA_VERS
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_alert_readiness_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_DEDUPE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_alert_dedupe_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_health_drilldown_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_intelligence_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -1945,6 +1946,108 @@ export type TiSourceProvenanceSourcePackFixtureHealthDrilldownFilter = {
       dryRunSupported: true;
       liveNetworkFetch: false;
     };
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureIntelligencePacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureHealthDrilldownPacketId: string;
+  actorRows: TiSourceProvenanceSourcePackFixtureIntelligenceActorRow[];
+  summary: {
+    actorCount: number;
+    readyActors: number;
+    partialActors: number;
+    blockedActors: number;
+    aliasCount: number;
+    indicatorCount: number;
+    techniqueCount: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    coverageStates: TiSourceProvenanceSourcePackFixtureIntelligenceActorRow["coverageState"][];
+    gapCodes: TiSourceProvenanceSourcePackFixtureIntelligenceGap["code"][];
+    newestObservedAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureIntelligenceActorRow = {
+  actor: string;
+  publicTiRoute: string;
+  coverageState: "ready" | "partial" | "blocked";
+  aliases: string[];
+  sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  confidence: number;
+  freshness: {
+    state: "fresh" | "stale" | "missing";
+    newestObservedAt?: string;
+    nextRetryAt?: string;
+  };
+  indicators: TiSourceProvenanceSourcePackFixtureIntelligenceIndicator[];
+  ttps: TiSourceProvenanceSourcePackFixtureIntelligenceTtp[];
+  gaps: TiSourceProvenanceSourcePackFixtureIntelligenceGap[];
+  downstreamRoutes: {
+    publicTI: string;
+    alertGeneration: string;
+    sourceOps: string;
+  };
+  provenance: {
+    sourcePackFixtureHealthDrilldownPacketId: string;
+    drilldownRowIds: string[];
+    captureIds: string[];
+    contentHashes: string[];
+    fixtureBacked: true;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureIntelligenceIndicator = {
+  type: "domain" | "infrastructure" | "watchlist_term";
+  value: string;
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  confidence: number;
+  provenanceId: string;
+  fixtureBacked: true;
+};
+
+export type TiSourceProvenanceSourcePackFixtureIntelligenceTtp = {
+  techniqueId: string;
+  name: string;
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  confidence: number;
+  provenanceId: string;
+  fixtureBacked: true;
+};
+
+export type TiSourceProvenanceSourcePackFixtureIntelligenceGap = {
+  code: TiSourceProvenanceSourcePackFixtureHealthDrilldownFailureCode | "missing_indicator_coverage";
+  ownerLane: "alert" | "source" | "parser" | "policy" | "org";
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  reason: string;
+  nextAction: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow["failure"]["nextAction"];
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
   };
 };
 
@@ -4951,6 +5054,63 @@ export function buildSourceProvenanceSourcePackFixtureHealthDrilldownPacket(inpu
       "summary"
     ],
     safeOutput: input.dedupe.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureIntelligencePacket(input: {
+  drilldown: TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureIntelligencePacket {
+  const generatedAt = input.generatedAt ?? input.drilldown.generatedAt;
+  const actorRows = sourcePackFixtureIntelligenceRows(input.drilldown);
+  const readyActors = actorRows.filter((row) => row.coverageState === "ready").length;
+  const partialActors = actorRows.filter((row) => row.coverageState === "partial").length;
+  const blockedActors = actorRows.filter((row) => row.coverageState === "blocked").length;
+  const sourceFamilies = uniqueStrings(actorRows.flatMap((row) => row.sourceFamilies)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const coverageStates = uniqueStrings(actorRows.map((row) => row.coverageState)) as TiSourceProvenanceSourcePackFixtureIntelligenceActorRow["coverageState"][];
+  const gapCodes = uniqueStrings(actorRows.flatMap((row) => row.gaps.map((gap) => gap.code))) as TiSourceProvenanceSourcePackFixtureIntelligenceGap["code"][];
+  const status = actorRows.length === 0 || readyActors + partialActors === 0 ? "blocked" : blockedActors === 0 && partialActors === 0 ? "ready" : "partial";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_intelligence_packet", `${input.drilldown.id}:${generatedAt}:${actorRows.map((row) => `${row.actor}:${row.coverageState}`).join(",")}`),
+    generatedAt,
+    ok: readyActors + partialActors > 0,
+    status,
+    tenantId: input.drilldown.tenantId,
+    organizationId: input.drilldown.organizationId,
+    sourcePackFixtureHealthDrilldownPacketId: input.drilldown.id,
+    actorRows,
+    summary: {
+      actorCount: actorRows.length,
+      readyActors,
+      partialActors,
+      blockedActors,
+      aliasCount: actorRows.reduce((sum, row) => sum + row.aliases.length, 0),
+      indicatorCount: actorRows.reduce((sum, row) => sum + row.indicators.length, 0),
+      techniqueCount: actorRows.reduce((sum, row) => sum + row.ttps.length, 0),
+      sourceFamilies,
+      coverageStates,
+      gapCodes,
+      newestObservedAt: newestTimestamp(actorRows.map((row) => row.freshness.newestObservedAt)),
+      nextRetryAt: earliestTimestamp(actorRows.map((row) => row.freshness.nextRetryAt))
+    },
+    consumers: sourcePackFixtureIntelligenceConsumers(actorRows),
+    payloadShape: [
+      "actorRows[].actor",
+      "actorRows[].aliases",
+      "actorRows[].coverageState",
+      "actorRows[].sourceFamilies",
+      "actorRows[].confidence",
+      "actorRows[].freshness",
+      "actorRows[].indicators",
+      "actorRows[].ttps",
+      "actorRows[].gaps",
+      "actorRows[].downstreamRoutes",
+      "actorRows[].provenance",
+      "summary"
+    ],
+    safeOutput: input.drilldown.safeOutput
   };
 }
 
@@ -9884,6 +10044,240 @@ function sourcePackFixtureHealthDrilldownConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationFixtureHealthDrilldown: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureIntelligenceRows(
+  packet: TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket
+): TiSourceProvenanceSourcePackFixtureIntelligenceActorRow[] {
+  const byActor = new Map<string, TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]>();
+  for (const row of packet.rows) {
+    const current = byActor.get(row.actor) ?? [];
+    current.push(row);
+    byActor.set(row.actor, current);
+  }
+  return [...byActor.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([actor, rows]) => sourcePackFixtureIntelligenceActorRow(packet, actor, rows));
+}
+
+function sourcePackFixtureIntelligenceActorRow(
+  packet: TiSourceProvenanceSourcePackFixtureHealthDrilldownPacket,
+  actor: string,
+  rows: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow[]
+): TiSourceProvenanceSourcePackFixtureIntelligenceActorRow {
+  const activeRows = rows.filter((row) => row.activationState === "active");
+  const gaps = rows
+    .filter((row) => row.failure.code !== "none")
+    .map(sourcePackFixtureIntelligenceGap);
+  const coverageState: TiSourceProvenanceSourcePackFixtureIntelligenceActorRow["coverageState"] = activeRows.length === 0
+    ? "blocked"
+    : gaps.length > 0
+      ? "partial"
+      : "ready";
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const activeConfidence = activeRows.length > 0 ? activeRows.reduce((sum, row) => sum + row.confidence, 0) / activeRows.length : 0;
+  const representativeRow = activeRows[0] ?? rows[0];
+  return {
+    actor,
+    publicTiRoute: representativeRow?.publicTiRoute ?? `/ti/${encodeURIComponent(actor)}`,
+    coverageState,
+    aliases: sourcePackFixtureIntelligenceAliases(actor),
+    sourceFamilies,
+    confidence: Number(activeConfidence.toFixed(2)),
+    freshness: {
+      state: activeRows.length > 0 ? "fresh" : rows.some((row) => row.retry.nextRetryAt) ? "stale" : "missing",
+      newestObservedAt: newestTimestamp(rows.map((row) => row.observedAt)),
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.retry.nextRetryAt))
+    },
+    indicators: activeRows.flatMap((row) => sourcePackFixtureIntelligenceIndicators(actor, row)),
+    ttps: activeRows.flatMap((row) => sourcePackFixtureIntelligenceTtps(actor, row)),
+    gaps,
+    downstreamRoutes: representativeRow?.downstreamRoutes ?? {
+      publicTI: `/ti/${encodeURIComponent(actor)}`,
+      alertGeneration: "/v1/dwm/alerts/rebuild",
+      sourceOps: "/v1/dwm/source-requests"
+    },
+    provenance: {
+      sourcePackFixtureHealthDrilldownPacketId: packet.id,
+      drilldownRowIds: rows.map((row) => row.drilldownRowId),
+      captureIds: uniqueStrings(rows.map((row) => row.provenance.captureId)),
+      contentHashes: uniqueStrings(rows.map((row) => row.provenance.contentHash)),
+      fixtureBacked: true
+    }
+  };
+}
+
+function sourcePackFixtureIntelligenceAliases(actor: string): string[] {
+  if (actor.toLowerCase() === "apt29") return ["APT29", "Nobelium", "Cozy Bear"];
+  if (actor.toLowerCase() === "akira") return ["Akira"];
+  return [actor];
+}
+
+function sourcePackFixtureIntelligenceIndicators(
+  actor: string,
+  row: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow
+): TiSourceProvenanceSourcePackFixtureIntelligenceIndicator[] {
+  const actorKey = actor.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "actor";
+  const values = actor.toLowerCase() === "apt29"
+    ? [{
+      type: "infrastructure" as const,
+      value: "apt29-c2.example.invalid"
+    }, {
+      type: "watchlist_term" as const,
+      value: "nobelium-watchlist.example.invalid"
+    }]
+    : actor.toLowerCase() === "akira"
+      ? [{
+        type: "domain" as const,
+        value: "akira-leaksite.example.invalid"
+      }, {
+        type: "watchlist_term" as const,
+        value: "akira-ransom-note.example.invalid"
+      }]
+      : [{
+        type: "watchlist_term" as const,
+        value: `${actorKey}.example.invalid`
+      }];
+  return values.map((indicator) => ({
+    ...indicator,
+    sourceFamily: row.sourceFamily,
+    confidence: row.confidence,
+    provenanceId: row.provenance.captureId,
+    fixtureBacked: true
+  }));
+}
+
+function sourcePackFixtureIntelligenceTtps(
+  actor: string,
+  row: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow
+): TiSourceProvenanceSourcePackFixtureIntelligenceTtp[] {
+  const values = actor.toLowerCase() === "apt29"
+    ? [{
+      techniqueId: "T1566",
+      name: "Phishing"
+    }, {
+      techniqueId: "T1090",
+      name: "Proxy"
+    }]
+    : actor.toLowerCase() === "akira"
+      ? [{
+        techniqueId: "T1486",
+        name: "Data Encrypted for Impact"
+      }, {
+        techniqueId: "T1490",
+        name: "Inhibit System Recovery"
+      }]
+      : [{
+        techniqueId: "T1589",
+        name: "Gather Victim Identity Information"
+      }];
+  return values.map((ttp) => ({
+    ...ttp,
+    sourceFamily: row.sourceFamily,
+    confidence: row.confidence,
+    provenanceId: row.provenance.sourceHealthProofId,
+    fixtureBacked: true
+  }));
+}
+
+function sourcePackFixtureIntelligenceGap(
+  row: TiSourceProvenanceSourcePackFixtureHealthDrilldownRow
+): TiSourceProvenanceSourcePackFixtureIntelligenceGap {
+  return {
+    code: row.failure.code,
+    ownerLane: row.failure.ownerLane,
+    sourceFamily: row.sourceFamily,
+    reason: row.failure.reason,
+    nextAction: row.failure.nextAction,
+    route: {
+      method: row.failure.nextAction === "queue_alert_rebuild" ? "POST" : row.failure.nextAction === "inspect_source_health" ? "GET" : "POST",
+      path: row.failure.nextAction === "queue_alert_rebuild" ? row.downstreamRoutes.alertGeneration : "/v1/dwm/source-requests",
+      body: {
+        actor: row.actor,
+        sourceFamily: row.sourceFamily,
+        activationState: row.activationState,
+        action: row.failure.nextAction,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourcePackFixtureIntelligenceConsumers(
+  actorRows: TiSourceProvenanceSourcePackFixtureIntelligenceActorRow[]
+): TiSourceProvenanceSourcePackFixtureIntelligencePacket["consumers"] {
+  const hasRows = actorRows.length > 0;
+  const hasIndicators = actorRows.some((row) => row.indicators.length > 0);
+  const hasGaps = actorRows.some((row) => row.gaps.length > 0);
+  return [{
+    consumer: "publicTI",
+    ready: hasRows,
+    requiredFields: ["actorRows[].aliases", "actorRows[].indicators", "actorRows[].ttps", "actorRows[].freshness", "actorRows[].provenance"],
+    route: {
+      method: "GET",
+      path: "/ti/:query",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasIndicators,
+    requiredFields: ["actorRows[].indicators", "actorRows[].confidence", "actorRows[].gaps", "actorRows[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        includeFixtureIntelligence: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRows,
+    requiredFields: ["actorRows[].coverageState", "actorRows[].sourceFamilies", "actorRows[].gaps", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeFixtureIntelligence: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasGaps,
+    requiredFields: ["actorRows[].gaps[].nextAction", "actorRows[].gaps[].route", "actorRows[].freshness.nextRetryAt"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeFixtureIntelligenceGaps: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRows,
+    requiredFields: ["schemaVersion", "sourcePackFixtureHealthDrilldownPacketId", "safeOutput", "actorRows[].provenance"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeIntegrationFixtureIntelligence: true,
         dryRun: true
       },
       dryRunSupported: true,
