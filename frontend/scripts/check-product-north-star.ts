@@ -398,6 +398,9 @@ const aggregateScoreboard = buildProductNorthStarScoreboard(partialPayload, {
             label: aggregate!.rows[0]!.capabilityLabel,
             ownerLane: aggregate!.rows[0]!.ownerLane,
             state: aggregate!.rows[0]!.customerVisibleState,
+            lastCheckedAt: aggregate!.rows[0]!.lastCheckedAt,
+            lastCheckedAgeSeconds: 0,
+            lastCheckedStale: false,
             blockers: aggregate!.rows[0]!.blockers,
             proofArtifactSchemaVersion: aggregate!.rows[0]!.proofArtifact.schemaVersion,
             proofArtifactId: aggregate!.rows[0]!.proofArtifact.artifactId,
@@ -416,6 +419,8 @@ const aggregateScoreboard = buildProductNorthStarScoreboard(partialPayload, {
 })
 assert.equal(aggregateScoreboard.productReadinessAggregate.state, 'blocked')
 assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.id, 'source_activation')
+assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.lastCheckedAt, generatedAt)
+assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.lastCheckedStale, false)
 assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.requiredNextAction, 'activate_source_policy')
 assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.workflowExpectedAdapter, 'buildDwmSourceReadinessArtifact')
 
@@ -593,6 +598,9 @@ for (const token of [
     'data-north-star-readiness-ledger-blocker-id',
     'data-north-star-readiness-ledger-blocker-owner-lane',
     'data-north-star-readiness-ledger-blocker-state',
+    'data-north-star-readiness-ledger-blocker-last-checked-at',
+    'data-north-star-readiness-ledger-blocker-last-checked-age-seconds',
+    'data-north-star-readiness-ledger-blocker-last-checked-stale',
     'data-north-star-readiness-ledger-blocker-proof-schema-version',
     'data-north-star-readiness-ledger-blocker-proof-artifact-id',
     'data-north-star-readiness-ledger-blocker-route',
@@ -624,6 +632,9 @@ for (const token of [
     'Open route',
     'localRoute(row.route)',
     'row.proofArtifactSchemaVersion',
+    'row.lastCheckedAt',
+    'row.lastCheckedAgeSeconds',
+    'row.lastCheckedStale',
     'row.probeId',
     'row.deployRisk',
     'row.uiQualityProofExists',
@@ -682,6 +693,8 @@ for (const token of [
     'customerVisibleBlockedCount',
     'staleAfterSeconds',
     'ageSeconds',
+    'lastCheckedAgeSeconds',
+    'lastCheckedStale',
     'product_readiness_aggregate_stale',
     'uiQualityProofExists',
     'workflowExpectedAdapter',

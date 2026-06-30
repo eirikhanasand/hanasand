@@ -74,6 +74,9 @@ export type ProductReadinessAggregateSourceRow = {
     label: string
     ownerLane: string
     state: ProductReadinessAggregateState
+    lastCheckedAt: string
+    lastCheckedAgeSeconds: number
+    lastCheckedStale: boolean
     blockers: string[]
     proofArtifactSchemaVersion: string
     proofArtifactId: string
@@ -171,28 +174,34 @@ function toProductReadinessAggregateSource(
     source: string,
     env: Record<string, string | undefined>,
 ): ProductReadinessAggregateSource {
+    const staleAfterSeconds = staleAfterSecondsFromEnv(env)
     const blockingRows = aggregate.rows
         .filter(row => row.customerVisible && row.customerVisibleState !== 'ready')
-        .map(row => ({
-            id: row.id,
-            label: row.capabilityLabel,
-            ownerLane: row.ownerLane,
-            state: row.customerVisibleState,
-            blockers: row.blockers,
-            proofArtifactSchemaVersion: row.proofArtifact.schemaVersion,
-            proofArtifactId: row.proofArtifact.artifactId,
-            route: row.proofArtifact.route || row.workflowContract?.route || '',
-            probeId: row.proofArtifact.probeId || row.workflowContract?.proofRowId || '',
-            requiredNextAction: row.requiredNextAction,
-            deployRisk: row.deployRisk,
-            uiQualityProofExists: row.uiQualityProofExists,
-            workflowRoute: row.workflowContract?.route || '',
-            workflowProofRowId: row.workflowContract?.proofRowId || '',
-            workflowTestName: row.workflowContract?.testName || '',
-            workflowExpectedAdapter: row.workflowContract?.expectedAdapter || '',
-            workflowProofCommand: row.workflowContract?.proofCommand || '',
-        }))
-    const staleAfterSeconds = staleAfterSecondsFromEnv(env)
+        .map(row => {
+            const lastCheckedAgeSeconds = ageSecondsSince(row.lastCheckedAt)
+            return {
+                id: row.id,
+                label: row.capabilityLabel,
+                ownerLane: row.ownerLane,
+                state: row.customerVisibleState,
+                lastCheckedAt: row.lastCheckedAt,
+                lastCheckedAgeSeconds,
+                lastCheckedStale: lastCheckedAgeSeconds > staleAfterSeconds,
+                blockers: row.blockers,
+                proofArtifactSchemaVersion: row.proofArtifact.schemaVersion,
+                proofArtifactId: row.proofArtifact.artifactId,
+                route: row.proofArtifact.route || row.workflowContract?.route || '',
+                probeId: row.proofArtifact.probeId || row.workflowContract?.proofRowId || '',
+                requiredNextAction: row.requiredNextAction,
+                deployRisk: row.deployRisk,
+                uiQualityProofExists: row.uiQualityProofExists,
+                workflowRoute: row.workflowContract?.route || '',
+                workflowProofRowId: row.workflowContract?.proofRowId || '',
+                workflowTestName: row.workflowContract?.testName || '',
+                workflowExpectedAdapter: row.workflowContract?.expectedAdapter || '',
+                workflowProofCommand: row.workflowContract?.proofCommand || '',
+            }
+        })
     const ageSeconds = ageSecondsSince(aggregate.checkedAt)
     const stale = ageSeconds > staleAfterSeconds
     const state = aggregate.ok && blockingRows.length === 0 && !stale
@@ -265,6 +274,9 @@ function isProductReadinessAggregateSourceRow(input: unknown): input is ProductR
         && typeof input.label === 'string'
         && typeof input.ownerLane === 'string'
         && isAggregateState(input.state)
+        && typeof input.lastCheckedAt === 'string'
+        && typeof input.lastCheckedAgeSeconds === 'number'
+        && typeof input.lastCheckedStale === 'boolean'
         && Array.isArray(input.blockers)
         && input.blockers.every(value => typeof value === 'string')
         && typeof input.proofArtifactSchemaVersion === 'string'

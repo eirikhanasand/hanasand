@@ -147,6 +147,9 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             data-north-star-readiness-ledger-blocker-id={row.id}
                             data-north-star-readiness-ledger-blocker-owner-lane={row.ownerLane}
                             data-north-star-readiness-ledger-blocker-state={row.state}
+                            data-north-star-readiness-ledger-blocker-last-checked-at={row.lastCheckedAt}
+                            data-north-star-readiness-ledger-blocker-last-checked-age-seconds={row.lastCheckedAgeSeconds}
+                            data-north-star-readiness-ledger-blocker-last-checked-stale={row.lastCheckedStale ? 'true' : 'false'}
                             data-north-star-readiness-ledger-blocker-proof-schema-version={row.proofArtifactSchemaVersion}
                             data-north-star-readiness-ledger-blocker-proof-artifact-id={row.proofArtifactId}
                             data-north-star-readiness-ledger-blocker-route={row.route}
@@ -167,6 +170,9 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                                 <Fact label='Artifact' value={row.proofArtifactId} />
                                 <Fact label='Probe' value={row.probeId || 'not loaded'} />
                                 <Fact label='Risk' value={row.deployRisk || 'not loaded'} />
+                                <Fact label='Checked' value={formatChecked(row.lastCheckedAt)} />
+                                <Fact label='Row age' value={formatDuration(row.lastCheckedAgeSeconds)} />
+                                <Fact label='Stale' value={row.lastCheckedStale ? 'yes' : 'no'} />
                                 <Fact label='UI proof' value={row.uiQualityProofExists ? 'present' : 'not loaded'} />
                                 <Fact label='Adapter' value={row.workflowExpectedAdapter || 'not loaded'} />
                             </dl>
