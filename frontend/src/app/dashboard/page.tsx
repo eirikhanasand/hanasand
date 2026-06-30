@@ -579,6 +579,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                     summary: alert.claimSummary,
                     priority: severity,
                     reopen: true,
+                    ...alertActionRequestGuard(actionReadiness, 'case_link', { includeIdempotencyKey: true }),
                 },
                 disabledReason: alertActionDisabledReason(actionReadiness, 'case_link'),
             },
@@ -587,7 +588,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                 label: 'Send alert',
                 method: 'POST',
                 href: '/api/dwm/webhooks/deliver',
-                body: { ...actionScope(scope), alertId: alert.id, limit: 1 },
+                body: { ...actionScope(scope), alertId: alert.id, limit: 1, ...alertActionRequestGuard(actionReadiness, 'deliver', { includeDeliveryDedupeKey: true }) },
                 disabledReason: alertActionDisabledReason(actionReadiness, 'deliver'),
             },
             ...alertWorkflowActions(alert, deliveryState, scope, actionReadiness),
@@ -613,13 +614,14 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
     const href = `/api/dwm/alerts/${encodeURIComponent(alert.id)}`
     const scoped = { ...actionScope(scope), alertId: alert.id }
     const closeDeliveryState = deliveryState === 'delivered' ? 'delivered' : 'muted'
+    const transitionGuard = alertActionRequestGuard(readiness, 'transition')
     return [
         {
             id: 'replay_alert',
             label: 'Replay',
             method: 'POST' as const,
             href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}/replay`,
-            body: { ...scoped, action: 'replay' },
+            body: { ...scoped, action: 'replay', ...alertActionRequestGuard(readiness, 'replay', { includeIdempotencyKey: true }) },
             disabledReason: alertActionDisabledReason(readiness, 'replay'),
         },
         {
@@ -627,7 +629,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             label: 'Review alert',
             method: 'PATCH' as const,
             href,
-            body: { ...scoped, reviewState: 'reviewing', deliveryState: 'pending_review', note: 'Analyst review started.' },
+            body: { ...scoped, reviewState: 'reviewing', deliveryState: 'pending_review', note: 'Analyst review started.', ...transitionGuard },
             disabledReason: alertActionDisabledReason(readiness, 'transition'),
         },
         {
@@ -635,7 +637,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             label: 'Escalate alert',
             method: 'PATCH' as const,
             href,
-            body: { ...scoped, reviewState: 'route_to_customer', deliveryState: 'ready_to_send', note: 'Escalated for customer or incident response.' },
+            body: { ...scoped, reviewState: 'route_to_customer', deliveryState: 'ready_to_send', note: 'Escalated for customer or incident response.', ...transitionGuard },
             disabledReason: alertActionDisabledReason(readiness, 'transition'),
         },
         {
@@ -643,7 +645,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             label: 'Suppress alert',
             method: 'PATCH' as const,
             href,
-            body: { ...scoped, reviewState: 'false_positive', deliveryState: 'muted', note: 'Suppressed as low-value or false positive.' },
+            body: { ...scoped, reviewState: 'false_positive', deliveryState: 'muted', note: 'Suppressed as low-value or false positive.', ...alertActionRequestGuard(readiness, 'suppress', { includeIdempotencyKey: true }) },
             disabledReason: alertActionDisabledReason(readiness, 'suppress'),
         },
         {
@@ -651,7 +653,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             label: 'Close alert',
             method: 'PATCH' as const,
             href,
-            body: { ...scoped, reviewState: 'resolved', deliveryState: closeDeliveryState, note: 'Closed from analyst workbench.' },
+            body: { ...scoped, reviewState: 'resolved', deliveryState: closeDeliveryState, note: 'Closed from analyst workbench.', ...alertActionRequestGuard(readiness, 'close', { includeIdempotencyKey: true }) },
             disabledReason: alertActionDisabledReason(readiness, deliveryState === 'delivered' ? 'close' : 'close'),
         },
     ]
@@ -669,6 +671,18 @@ function alertActionDisabledReason(readiness: DwmAlertAnalystActionReadiness | u
     if (row.ready) return undefined
     const blockers = row.blockerCodes?.length ? row.blockerCodes.join(', ') : 'not ready'
     return `${action.replaceAll('_', ' ')} blocked by backend action readiness: ${blockers}.`
+}
+
+function alertActionRequestGuard(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction, options: { includeIdempotencyKey?: boolean, includeDeliveryDedupeKey?: boolean } = {}) {
+    if (!readiness) return {}
+    const row = readiness.actions?.find(item => item.action === action)
+    const expectedWorkflowEventCount = readiness.expectedWorkflowEventCount ?? row?.workflowEventCount
+    return {
+        ...(expectedWorkflowEventCount !== undefined ? { expectedWorkflowEventCount } : {}),
+        ...(row?.casePath ? { casePath: row.casePath } : {}),
+        ...(options.includeIdempotencyKey && row?.idempotencyKey ? { idempotencyKey: row.idempotencyKey } : {}),
+        ...(options.includeDeliveryDedupeKey && row?.deliveryDedupeKey ? { deliveryDedupeKey: row.deliveryDedupeKey } : {}),
+    }
 }
 
 function alertActionReadinessSummary(readiness: DwmAlertAnalystActionReadiness) {
