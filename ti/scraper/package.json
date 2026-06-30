@@ -16,6 +16,7 @@
     "check:paid-actor-release-audit": "bun run scripts/check-paid-actor-release-audit.ts",
     "check:hosted-apify-paid-readiness": "bun run scripts/check-hosted-apify-paid-readiness.ts",
     "check:contract-index": "bun run scripts/check-contract-index.ts",
+    "check:product-readiness-contracts": "PATH=\"$HOME/.bun/bin:$PATH\" bun run scripts/check-product-readiness-contracts.ts",
     "check:api-regression": "bun run scripts/check-api-regression.ts",
     "check:api-gateway": "bun run scripts/check-api-gateway.ts",
     "check:frontier-apply-plan": "bun run scripts/check-frontier-apply-plan.ts",

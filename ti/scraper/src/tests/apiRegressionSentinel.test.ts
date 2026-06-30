@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
-import { contractIndex, productReadinessContractCopyGuard, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
+import { contractIndex, productReadinessContractCopyGuard, productReadinessIntegrationGate, productReadinessReceiptMatrixCoverage } from "../api/contractsRoute.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 
@@ -249,6 +249,7 @@ describe("api regression sentinel", () => {
     const matrix = contract.productReadinessReceiptMatrix;
     const coverage = contract.productReadinessReceiptMatrixCoverage;
     const copyGuard = contract.productReadinessContractCopyGuard;
+    const integrationGate = contract.productReadinessIntegrationGate;
     const matrixRows = JSON.parse(JSON.stringify(matrix.rows));
     const rows = new Map(matrixRows.map((row: any) => [row.capabilityId, row]));
     const knownSchemaIds = new Set<string>([
@@ -325,6 +326,34 @@ describe("api regression sentinel", () => {
       }
     });
     expect(copyGuard.scannedFieldCount).toBeGreaterThan(0);
+    expect(integrationGate).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.integration_gate.v1",
+      route: "/v1/contracts",
+      ok: true,
+      decision: "pass",
+      checkCount: 2,
+      blockerCodes: [],
+      checks: expect.arrayContaining([
+        expect.objectContaining({
+          id: "receipt_matrix_coverage",
+          ownerLane: "integration",
+          artifact: "productReadinessReceiptMatrixCoverage",
+          ok: true
+        }),
+        expect.objectContaining({
+          id: "contract_copy_guard",
+          ownerLane: "integration",
+          artifact: "productReadinessContractCopyGuard",
+          ok: true
+        })
+      ]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
     expect(matrixRows.map((row: any) => row.capabilityId).sort()).toEqual([
       "alert_case_workflow",
       "dashboard_operator_workspace",
@@ -449,6 +478,65 @@ describe("api regression sentinel", () => {
         source: "schemaLookup",
         path: expect.stringContaining("blockerCodes"),
         term: "control room"
+      })
+    ]));
+  });
+
+  test("builds a product readiness integration gate from coverage and copy guard artifacts", () => {
+    const contract = contractIndex() as any;
+    const brokenMatrix = JSON.parse(JSON.stringify(contract.productReadinessReceiptMatrix));
+    brokenMatrix.rows[2].receiptSchemaIds = [];
+    const coverage = productReadinessReceiptMatrixCoverage(
+      brokenMatrix,
+      contract.receiptSchemas,
+      contract.schemaLookup.rows
+    );
+    const brokenCopy = JSON.parse(JSON.stringify({
+      surfaces: contract.surfaces,
+      schemaLookup: contract.schemaLookup,
+      productReadinessReceiptMatrix: contract.productReadinessReceiptMatrix
+    }));
+    brokenCopy.productReadinessReceiptMatrix.rows[0].blockerCodes.push("signal");
+    const copyGuard = productReadinessContractCopyGuard(brokenCopy);
+
+    const gate = productReadinessIntegrationGate({ coverage, copyGuard });
+
+    expect(gate).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.integration_gate.v1",
+      route: "/v1/contracts",
+      ok: false,
+      decision: "hold",
+      checkCount: 2,
+      blockerCodes: expect.arrayContaining(["missing_required_receipt_schema", "copy_guard_signal"]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(gate.checks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "receipt_matrix_coverage",
+        ok: false,
+        evidence: expect.objectContaining({
+          failingRows: expect.arrayContaining([
+            expect.objectContaining({
+              capabilityId: "source_activation",
+              missingRequiredReceiptSchemaIds: expect.arrayContaining(["ti.source_provenance_alert_rebuild_receipt.v1"])
+            })
+          ])
+        })
+      }),
+      expect.objectContaining({
+        id: "contract_copy_guard",
+        ok: false,
+        evidence: expect.objectContaining({
+          violationCount: 1,
+          violations: expect.arrayContaining([
+            expect.objectContaining({ capabilityId: "organization_lifecycle", term: "signal" })
+          ])
+        })
       })
     ]));
   });

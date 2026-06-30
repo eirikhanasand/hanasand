@@ -516,14 +516,20 @@ export function contractIndex() {
     semantics: { safeMetadataOnly: true, noCredentialCollection: true, noThreatActorInteraction: true },
     publicCompatibility: { canonicalSearchRoute: "/api/ti/search", unknownQueryCopy: "searching", noDefaultActor: true }
   };
+  const productReadinessReceiptMatrixCoverageArtifact = productReadinessReceiptMatrixCoverage(
+    index.productReadinessReceiptMatrix,
+    index.receiptSchemas,
+    index.schemaLookup.rows
+  );
+  const productReadinessContractCopyGuardArtifact = productReadinessContractCopyGuard(index);
   return {
     ...index,
-    productReadinessReceiptMatrixCoverage: productReadinessReceiptMatrixCoverage(
-      index.productReadinessReceiptMatrix,
-      index.receiptSchemas,
-      index.schemaLookup.rows
-    ),
-    productReadinessContractCopyGuard: productReadinessContractCopyGuard(index)
+    productReadinessReceiptMatrixCoverage: productReadinessReceiptMatrixCoverageArtifact,
+    productReadinessContractCopyGuard: productReadinessContractCopyGuardArtifact,
+    productReadinessIntegrationGate: productReadinessIntegrationGate({
+      coverage: productReadinessReceiptMatrixCoverageArtifact,
+      copyGuard: productReadinessContractCopyGuardArtifact
+    })
   };
 }
 
@@ -777,6 +783,86 @@ export function productReadinessContractCopyGuard(index: {
     scannedFieldCount,
     violationCount: violations.length,
     violations,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+export function productReadinessIntegrationGate(input: {
+  coverage: {
+    ok: boolean;
+    schemaVersion: string;
+    route: string;
+    blockerCodes: string[];
+    missingCapabilityIds: string[];
+    matrixSchemaLookupPresent: boolean;
+    diffRows: Array<{
+      capabilityId: string;
+      ownerLane: string;
+      ok: boolean;
+      blockerCodes: string[];
+      missingRequiredReceiptSchemaIds: string[];
+      unindexedReceiptSchemaIds: string[];
+      unsafeFields: string[];
+    }>;
+  };
+  copyGuard: {
+    ok: boolean;
+    schemaVersion: string;
+    route: string;
+    violationCount: number;
+    violations: Array<{ source: string; path: string; term: string; ownerLane?: string; capabilityId?: string }>;
+  };
+}) {
+  const checks = [
+    {
+      id: "receipt_matrix_coverage",
+      ownerLane: "integration",
+      route: input.coverage.route,
+      artifact: "productReadinessReceiptMatrixCoverage",
+      ok: input.coverage.ok,
+      blockerCodes: input.coverage.blockerCodes,
+      evidence: {
+        schemaVersion: input.coverage.schemaVersion,
+        missingCapabilityIds: input.coverage.missingCapabilityIds,
+        matrixSchemaLookupPresent: input.coverage.matrixSchemaLookupPresent,
+        failingRows: input.coverage.diffRows.filter((row) => !row.ok).map((row) => ({
+          capabilityId: row.capabilityId,
+          ownerLane: row.ownerLane,
+          blockerCodes: row.blockerCodes,
+          missingRequiredReceiptSchemaIds: row.missingRequiredReceiptSchemaIds,
+          unindexedReceiptSchemaIds: row.unindexedReceiptSchemaIds,
+          unsafeFields: row.unsafeFields
+        }))
+      }
+    },
+    {
+      id: "contract_copy_guard",
+      ownerLane: "integration",
+      route: input.copyGuard.route,
+      artifact: "productReadinessContractCopyGuard",
+      ok: input.copyGuard.ok,
+      blockerCodes: input.copyGuard.violations.map((violation) => `copy_guard_${violation.term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`),
+      evidence: {
+        schemaVersion: input.copyGuard.schemaVersion,
+        violationCount: input.copyGuard.violationCount,
+        violations: input.copyGuard.violations
+      }
+    }
+  ];
+  const blockerCodes = [...new Set(checks.flatMap((check) => check.blockerCodes))].sort();
+  return {
+    schemaVersion: "hanasand.product_readiness.integration_gate.v1",
+    route: "/v1/contracts",
+    ok: checks.every((check) => check.ok),
+    decision: checks.every((check) => check.ok) ? "pass" : "hold",
+    checkCount: checks.length,
+    blockerCodes,
+    checks,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,
