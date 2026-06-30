@@ -1745,6 +1745,7 @@ function buildProductReadiness(input: {
             caseDetailHref: analystWorkflow?.caseDetailRoute || (analystWorkflow?.caseId ? `/api/cases/${encodeURIComponent(analystWorkflow.caseId)}` : undefined),
             caseDetailReady: analystWorkflow?.caseDetailReady,
             caseDetailTimelineCount: analystWorkflow?.caseDetailTimelineCount,
+            caseDetailReadOnly: analystWorkflow?.caseDetailReadOnly,
         },
         {
             id: 'source_inventory_probe',
@@ -1966,6 +1967,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
         case 'analyst_workflow':
             actions.push({ id: 'open_case_workflow', label: 'Case workflow', method: 'GET', href: item.href || '/dashboard/ti/workbench' })
             if (item.caseDetailHref) actions.push({ id: 'open_case_detail', label: 'Case detail', method: 'GET', href: item.caseDetailHref })
+            actions.push(...caseReadinessMutationActions(item))
             break
         case 'helpdesk_audit':
             actions.push({ id: 'inspect_support_recovery', label: 'Recovery queue', method: 'GET', href: '/api/backend/admin/support/access-recovery' })
@@ -1985,6 +1987,42 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
             break
     }
     return actions
+}
+
+function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): WorkbenchAction[] {
+    const caseHref = item.caseDetailHref
+    const mutationBlockedReason = !caseHref
+        ? 'Case mutation requires a backed /api/cases/:id route.'
+        : item.caseDetailReady
+            ? item.caseDetailReadOnly ? 'Case detail is read-only for the current member.' : undefined
+            : 'Case mutation requires readable case detail from /api/cases/:id.'
+    const ownerBlockedReason = mutationBlockedReason || (item.assignedOwner ? undefined : 'Assignment requires an owner returned by analyst workflow readiness.')
+    return [
+        {
+            id: 'assign_case_owner',
+            label: 'Assign owner',
+            method: 'PATCH',
+            href: caseHref || '/api/cases/:id',
+            body: { action: 'assign', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Assigned from readiness queue.' },
+            disabledReason: ownerBlockedReason,
+        },
+        {
+            id: 'escalate_case',
+            label: 'Escalate case',
+            method: 'PATCH',
+            href: caseHref || '/api/cases/:id',
+            body: { action: 'escalate', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Escalated from readiness queue after evidence review.' },
+            disabledReason: mutationBlockedReason,
+        },
+        {
+            id: 'suppress_case',
+            label: 'Suppress case',
+            method: 'PATCH',
+            href: caseHref || '/api/cases/:id',
+            body: { action: 'suppress', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Suppressed from readiness queue after evidence review.' },
+            disabledReason: mutationBlockedReason,
+        },
+    ]
 }
 
 function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessItem): WorkbenchProductReadinessItem {

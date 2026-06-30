@@ -198,6 +198,7 @@ export type WorkbenchProductReadinessItem = {
     caseDetailHref?: string
     caseDetailReady?: boolean
     caseDetailTimelineCount?: number
+    caseDetailReadOnly?: boolean
     destinationCount?: number
     activeDestinationCount?: number
     deliveryReadyCount?: number

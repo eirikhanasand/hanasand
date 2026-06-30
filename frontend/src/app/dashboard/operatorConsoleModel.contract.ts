@@ -639,6 +639,23 @@ const productProgressOrgContext = buildOrgOperatingContext({
     liveAlertIds: ['alert_acme_1'],
     externalReadiness: productProgressExternalReadiness,
 })
+const mutableCaseWorkflowOrgContext = buildOrgOperatingContext({
+    backendConfigured: true,
+    scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
+    watchlists,
+    organizationState,
+    operations,
+    deliveries,
+    liveAlertCount: 1,
+    liveAlertIds: ['alert_acme_1'],
+    externalReadiness: {
+        ...productProgressExternalReadiness,
+        analystWorkflow: {
+            ...productProgressExternalReadiness.analystWorkflow!,
+            caseDetailReadOnly: false,
+        },
+    },
+})
 const absentProductProgressOrgContext = buildOrgOperatingContext({
     backendConfigured: true,
     scope: { tenantId: 'org_acme', organizationId: 'org_acme' },
@@ -1393,6 +1410,17 @@ if (expectProductReadinessAction(productProgressOrgContext, 'webhook_delivery', 
     throw new Error('Expected webhook replay action to carry the latest alert id.')
 }
 void expectProductReadinessAction(productProgressOrgContext, 'analyst_workflow', 'open_case_detail', '/api/cases/case_acme_1')
+if (!expectProductReadinessAction(productProgressOrgContext, 'analyst_workflow', 'assign_case_owner', '/api/cases/case_acme_1').disabledReason?.includes('read-only')) {
+    throw new Error('Expected read-only analyst workflow readiness to block case assignment.')
+}
+const mutableEscalateAction = expectProductReadinessAction(mutableCaseWorkflowOrgContext, 'analyst_workflow', 'escalate_case', '/api/cases/case_acme_1')
+if (mutableEscalateAction.disabledReason || mutableEscalateAction.method !== 'PATCH' || mutableEscalateAction.body?.action !== 'escalate') {
+    throw new Error('Expected mutable analyst workflow readiness to expose backed PATCH escalation.')
+}
+const mutableSuppressAction = expectProductReadinessAction(mutableCaseWorkflowOrgContext, 'analyst_workflow', 'suppress_case', '/api/cases/case_acme_1')
+if (mutableSuppressAction.disabledReason || mutableSuppressAction.method !== 'PATCH' || mutableSuppressAction.body?.action !== 'suppress') {
+    throw new Error('Expected mutable analyst workflow readiness to expose backed PATCH suppression.')
+}
 void expectProductReadinessAction(productProgressOrgContext, 'helpdesk_audit', 'inspect_admin_audit', '/api/backend/admin/audit-events?limit=50')
 void expectProductReadinessAction(productProgressOrgContext, 'public_ti_provenance', 'open_public_ti', '/ti')
 void expectProductReadinessAction(productProgressOrgContext, 'deploy_probe', 'open_deploy_status', '/status')
