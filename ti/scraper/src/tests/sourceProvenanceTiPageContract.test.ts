@@ -15,6 +15,7 @@ import {
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_PARSER_HEALTH_PROVENANCE_SUMMARY_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ALERT_HANDOFF_STATE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_OPS_ACTION_QUEUE_SCHEMA_VERSION,
@@ -40,6 +41,7 @@ import {
   buildSourceProvenanceScraperEnrichmentLifecycle,
   buildSourceProvenanceSourceFreshnessGapPacket,
   buildSourceProvenanceParserHealthAlertPacket,
+  buildSourceProvenanceParserHealthProvenanceSummary,
   buildSourceProvenanceAlertHandoffState,
   buildSourceProvenanceSourceOpsActionQueue,
   buildSourceProvenanceSourceOpsFixtureBundle,
@@ -2507,6 +2509,189 @@ describe("source provenance TI page contract", () => {
       expect.objectContaining({ consumer: "alertGeneration", ready: true }),
       expect.objectContaining({ consumer: "sourceOps", ready: true }),
       expect.objectContaining({ consumer: "webhook", ready: false })
+    ]));
+  });
+
+  test("summarizes parser health provenance with activation decisions for public TI and alerts", () => {
+    const { readiness, lifecycle } = buildBlockedSourceLifecycle();
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({
+      activationReadiness: readiness,
+      generatedAt: "2026-06-29T12:45:00.000Z"
+    });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const summary = buildSourceProvenanceParserHealthProvenanceSummary({
+      parserHealthPacket,
+      activationDecisionReceipt: decisionReceipt,
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+
+    expect(summary).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PARSER_HEALTH_PROVENANCE_SUMMARY_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      parserHealthAlertPacketId: parserHealthPacket.id,
+      sourceActivationDecisionReceiptId: decisionReceipt.id,
+      summary: {
+        familyCount: 4,
+        healthyFamilyCount: 1,
+        parserAlertCount: 3,
+        retryableCount: 1,
+        policyBlockedCount: 1,
+        activationTestsQueued: 4,
+        alertableCandidates: 1,
+        lastSuccessAt: "2026-06-29T12:46:00.000Z",
+        lastFailureAt: "2026-06-29T12:47:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(summary.familyRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        family: "telegram_public",
+        parserState: "retry_scheduled",
+        parserRetriesQueued: 1,
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        blockers: [expect.objectContaining({
+          code: "parser_retry_scheduled",
+          ownerLane: "parser",
+          nextAction: "retry_parser"
+        })],
+        provenance: expect.objectContaining({
+          parserHealthAlertPacketId: parserHealthPacket.id,
+          sourceActivationDecisionReceiptId: decisionReceipt.id,
+          sourceHealthProofIds: expect.any(Array),
+          activationDecisionIds: expect.any(Array),
+          fixtureBacked: true
+        }),
+        readiness: {
+          publicTI: false,
+          alertGeneration: false,
+          sourceOps: true
+        }
+      }),
+      expect.objectContaining({
+        family: "darkweb_metadata",
+        parserState: "blocked",
+        policyReviewsRequired: 1,
+        blockers: [expect.objectContaining({
+          code: "policy_blocked",
+          ownerLane: "policy",
+          nextAction: "request_policy_approval"
+        })]
+      }),
+      expect.objectContaining({
+        family: "public_advisory",
+        parserState: "ready",
+        activationTestsQueued: 3,
+        alertableCandidates: 1,
+        readiness: expect.objectContaining({
+          publicTI: true,
+          alertGeneration: true
+        })
+      })
+    ]));
+    expect(summary.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        ready: true,
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        requiredFields: expect.arrayContaining(["familyRows[].provenance.sourceHealthProofIds"])
+      })
+    ]));
+    expect(summary.payloadShape).toEqual(expect.arrayContaining([
+      "familyRows[].parserState",
+      "familyRows[].blockers",
+      "summary.nextRetryAt"
+    ]));
+    expect(JSON.stringify(summary)).not.toContain("rawText");
+    expect(JSON.stringify(summary)).not.toContain("password");
+  });
+
+  test("keeps parser health provenance summary ready for clean ransomware source coverage", () => {
+    const { readiness, lifecycle } = buildFreshSourceLifecycle({ actor: "LockBit" });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({
+      activationReadiness: readiness,
+      generatedAt: "2026-06-29T12:45:00.000Z"
+    });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const summary = buildSourceProvenanceParserHealthProvenanceSummary({
+      parserHealthPacket,
+      activationDecisionReceipt: decisionReceipt,
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+
+    expect(summary).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_PARSER_HEALTH_PROVENANCE_SUMMARY_SCHEMA_VERSION,
+      ok: true,
+      actor: "LockBit",
+      publicTiRoute: "/ti/LockBit",
+      summary: {
+        familyCount: 1,
+        healthyFamilyCount: 1,
+        parserAlertCount: 0,
+        retryableCount: 0,
+        policyBlockedCount: 0,
+        activationTestsQueued: 1,
+        alertableCandidates: 1,
+        lastSuccessAt: "2026-06-29T12:46:00.000Z"
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(summary.familyRows).toEqual([
+      expect.objectContaining({
+        family: "public_advisory",
+        parserState: "ready",
+        parserAlertCount: 0,
+        activationTestsQueued: 1,
+        alertableCandidates: 1,
+        blockers: [],
+        readiness: {
+          publicTI: true,
+          alertGeneration: true,
+          sourceOps: true
+        }
+      })
+    ]);
+    expect(summary.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true })
     ]));
   });
 
