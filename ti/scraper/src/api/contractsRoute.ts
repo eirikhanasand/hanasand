@@ -136,6 +136,7 @@ export function contractIndex() {
           sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
           supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
           workflowTransitionHistory: "dwm.case_workflow_transition_history.v1",
+          workflowActionPolicy: "analyst.case_workflow_action_policy.v1",
           auditTimeline: "dwm.case_replay_audit_timeline.v1",
           readiness: "dwm.case_handoff_action_readiness.v1",
           detail: "analyst.case_detail.v1"
@@ -143,7 +144,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
         queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"],
-        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "auditTimeline", "nextAnalystActions"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions"],
         blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "missing_organization_scope", "case_closed"],
         safeOutput: {
           metadataOnly: true,
@@ -180,11 +181,12 @@ export function contractIndex() {
         schemas: {
           transition: "analyst.case_workflow_transition.v1",
           transitionHistory: "dwm.case_workflow_transition_history.v1",
+          actionPolicy: "analyst.case_workflow_action_policy.v1",
           detail: "analyst.case_detail.v1"
         },
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId"],
         writeFields: ["organizationId", "action", "status", "assignedOwner", "note", "idempotencyKey"],
-        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory"],
+        recordFields: ["caseId", "alertId", "organizationId", "action", "fromStatus", "toStatus", "fromOwner", "toOwner", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy"],
         workflowActions: ["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"],
         blockerCodes: ["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "invalid_case_owner_role", "missing_note", "missing_assigned_owner"],
         safeOutput: {

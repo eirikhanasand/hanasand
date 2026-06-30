@@ -613,6 +613,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
   const watchlists = caseWatchlists(options, alert, caseRecord);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
   const alertCaseHandoffContext = alert ? buildAlertCaseHandoff({
     caseRecord,
     alert,
@@ -628,6 +629,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     access: caseAccessSummary(access),
     case: caseRecord,
     workflowState: caseWorkflowSummary(caseRecord),
+    workflowActionPolicy,
     alertCaseHandoffContext,
     handoffActionReadiness: alertCaseHandoffContext ? buildCaseHandoffActionReadiness({
       caseRecord,
@@ -665,7 +667,14 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     evidence: alert?.evidence ?? [],
     timeline,
     nextActions: nextActionsForCase(caseRecord, alert, deliveries),
-    nextAllowedActions: nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
+    nextAllowedActions: workflowActionPolicy.actions.map((action: any) => ({
+      id: action.id,
+      label: action.label,
+      method: action.method,
+      requiresRationale: action.requiresRationale,
+      enabled: action.enabled,
+      disabledReason: action.disabledReason
+    }))
   };
 }
 
@@ -696,6 +705,7 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
   const deliveryEvidence = deliveries.map((delivery: any) => exportDeliveryEvidence(delivery));
   const nextAllowedActions = nextAllowedActionsForCase(caseRecord, alert, deliveries, access)
     .map((action) => exportAction(action, caseRecord, access, exportOptions));
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
   const matchedWatchlistTerms = watchlists.flatMap((watchlist: any) => (watchlist.matchedTerms ?? []).map((term: any) => ({
     watchlistId: watchlist.id,
     watchlistName: watchlist.name,
@@ -732,6 +742,7 @@ function buildCaseExport(caseRecord: AnalystCase, options: ApiServerOptions, org
     access: caseAccessSummary(access),
     summary,
     case: caseRecord,
+    workflowActionPolicy,
     alertContext: alert ? {
       id: alert.id,
       caseId: alert.caseId,
@@ -1205,20 +1216,88 @@ function caseActionLedgerContext(report: ReturnType<typeof buildCaseActionLedger
 }
 
 function nextAllowedActionsForCase(caseRecord: AnalystCase, alert: any, deliveries: any[], access?: CaseAccessResult) {
+  return caseWorkflowActionPolicy(caseRecord, alert, deliveries, access).actions.map((action: any) => ({
+    id: action.id,
+    label: action.label,
+    method: action.method,
+    requiresRationale: action.requiresRationale,
+    enabled: action.enabled,
+    disabledReason: action.disabledReason
+  }));
+}
+
+function caseWorkflowActionPolicy(caseRecord: AnalystCase, alert: any, deliveries: any[], access?: CaseAccessResult) {
   const readOnly = access?.readOnly === true;
-  const base = [
-    { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, enabled: !readOnly },
-    { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
-    { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "false_positive" && caseRecord.status !== "suppressed" },
-    { id: "close", label: "Close", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
-    { id: "suppress", label: "Suppress", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
-    { id: "false_positive", label: "Mark false positive", method: "PATCH", requiresRationale: true, enabled: !readOnly && caseRecord.status !== "closed" && caseRecord.status !== "suppressed" && caseRecord.status !== "false_positive" },
-    { id: "reopen", label: "Reopen", method: "PATCH", requiresRationale: false, enabled: !readOnly && (caseRecord.status === "closed" || caseRecord.status === "suppressed" || caseRecord.status === "false_positive") }
+  const delivered = deliveries.some((delivery: any) => delivery.status === "delivered");
+  const specs = [
+    { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => true },
+    { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, requiredFields: ["organizationId", "action", "assignedOwner", "idempotencyKey"], enabledWhen: () => caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
+    { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
+    { id: "close", label: "Close", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
+    { id: "suppress", label: "Suppress", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
+    { id: "false_positive", label: "False positive", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
+    { id: "reopen", label: "Reopen", method: "PATCH", requiresRationale: false, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => ["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
+    ...(alert?.deliveryState === "ready_to_send" && !delivered ? [{ id: "deliver_webhook", label: "Deliver webhook", method: "POST", requiresRationale: false, requiredFields: ["organizationId", "alertId", "caseId", "webhookDestinationId", "idempotencyKey"], enabledWhen: () => true }] : [])
   ];
-  if (alert?.deliveryState === "ready_to_send" && !deliveries.some((delivery: any) => delivery.status === "delivered")) {
-    base.push({ id: "deliver_webhook", label: "Deliver webhook", method: "POST", requiresRationale: false, enabled: !readOnly });
-  }
-  return base.map((action) => ({ ...action, disabledReason: action.enabled ? undefined : readOnly ? "read_only_member" : "not_applicable_for_status" }));
+  const actions = specs.map((spec) => {
+    const statusAllowed = spec.enabledWhen();
+    const blockerCodes = uniqueCaseStrings([
+      ...(readOnly ? ["case_read_only_member"] : []),
+      ...(statusAllowed ? [] : caseWorkflowActionStatusBlockers(caseRecord.status, spec.id))
+    ]);
+    const enabled = blockerCodes.length === 0;
+    const route = spec.method === "PATCH" ? `/v1/cases/${encodeURIComponent(caseRecord.id)}` : "/v1/dwm/webhooks/deliver";
+    return {
+      id: spec.id,
+      label: spec.label,
+      method: spec.method,
+      route,
+      enabled,
+      requiresRationale: spec.requiresRationale,
+      requiredFields: spec.requiredFields,
+      blockerCodes,
+      disabledReason: enabled ? undefined : readOnly ? "read_only_member" : "not_applicable_for_status",
+      request: enabled && !readOnly ? {
+        method: spec.method,
+        path: route,
+        body: {
+          organizationId: caseRecord.organizationId,
+          action: spec.method === "PATCH" ? spec.id : undefined,
+          alertId: caseRecord.alertId,
+          caseId: caseRecord.id
+        }
+      } : undefined
+    };
+  });
+  return {
+    schemaVersion: "analyst.case_workflow_action_policy.v1",
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    status: caseRecord.status,
+    assignedOwner: caseRecord.assignedOwner,
+    readOnly,
+    actions,
+    summary: {
+      enabledActionIds: actions.filter((action) => action.enabled).map((action) => action.id),
+      blockedActionIds: actions.filter((action) => !action.enabled).map((action) => action.id),
+      blockerCodes: uniqueCaseStrings(actions.flatMap((action) => action.blockerCodes))
+    },
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseWorkflowActionStatusBlockers(status: CaseStatus, actionId: string) {
+  if (status === "closed") return actionId === "reopen" ? [] : ["case_closed"];
+  if (status === "suppressed") return actionId === "reopen" || actionId === "note" ? [] : ["invalid_case_transition"];
+  if (status === "false_positive") return actionId === "reopen" || actionId === "note" ? [] : ["invalid_case_transition"];
+  if (actionId === "reopen") return ["not_applicable_for_status"];
+  return [];
 }
 
 function caseHasTimelineInWindow(caseRecord: AnalystCase, alert: any, deliveries: any[], filters: CaseFilters, caseActionRows: OrgAlertCaseActionTimelineRow[] = []): boolean {
@@ -1622,6 +1701,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     supportRecoveryReadiness,
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
+  const workflowActionPolicy = caseWorkflowActionPolicy(caseRecord, alert, deliveries, access);
   return {
     schemaVersion: "dwm.case_action_replay_export.v1",
     generatedAt: nowIso(),
@@ -1633,6 +1713,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     alertId: caseRecord.alertId,
     filters,
     workflowState: caseWorkflowSummary(caseRecord),
+    workflowActionPolicy,
     handoffActionReadiness: handoffHistory.handoffActionReadiness,
     handoffActionHistory: {
       schemaVersion: handoffHistory.schemaVersion,
@@ -1668,6 +1749,8 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       publicTiHandoffReady: publicTiHandoffReadiness.ready,
       sourceHandoffReady: sourceHandoffReadiness.ready,
       supportRecoveryReady: supportRecoveryReadiness.ready,
+      enabledWorkflowActionCount: workflowActionPolicy.summary.enabledActionIds.length,
+      blockedWorkflowActionCount: workflowActionPolicy.summary.blockedActionIds.length,
       nextActionCount: nextAnalystActions.length,
       replayable: blockerCodes.length === 0,
       blockerCodes

@@ -1099,6 +1099,7 @@ describe("api regression sentinel", () => {
         sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
         supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
         workflowTransitionHistory: "dwm.case_workflow_transition_history.v1",
+        workflowActionPolicy: "analyst.case_workflow_action_policy.v1",
         auditTimeline: "dwm.case_replay_audit_timeline.v1",
         readiness: "dwm.case_handoff_action_readiness.v1",
         detail: "analyst.case_detail.v1"
@@ -1106,7 +1107,7 @@ describe("api regression sentinel", () => {
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
       queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"]),
-      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "auditTimeline", "nextAnalystActions"]),
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "alertReasonContext", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "webhookDeliveryReplayContext", "customerNotificationReadiness", "workflowTransitionHistory", "workflowActionPolicy", "auditTimeline", "nextAnalystActions"]),
       blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_delivered_webhook", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "case_closed"])
     });
     expect(JSON.stringify(receiptSurface)).not.toContain("https://discord.com");
@@ -1153,11 +1154,12 @@ describe("api regression sentinel", () => {
       schemas: {
         transition: "analyst.case_workflow_transition.v1",
         transitionHistory: "dwm.case_workflow_transition_history.v1",
+        actionPolicy: "analyst.case_workflow_action_policy.v1",
         detail: "analyst.case_detail.v1"
       },
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId"]),
       writeFields: expect.arrayContaining(["action", "assignedOwner", "note", "idempotencyKey"]),
-      recordFields: expect.arrayContaining(["caseId", "alertId", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory"]),
+      recordFields: expect.arrayContaining(["caseId", "alertId", "note", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState", "workflowTransitionHistory", "workflowActionPolicy"]),
       workflowActions: expect.arrayContaining(["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]),
       blockerCodes: expect.arrayContaining(["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action", "missing_note", "missing_assigned_owner"])
     });

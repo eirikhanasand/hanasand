@@ -766,6 +766,35 @@ describe("DWM alert case handoff route", () => {
       expect.objectContaining({ id: "note", method: "PATCH", requiresRationale: true, enabled: true }),
       expect.objectContaining({ id: "escalate", method: "PATCH", requiresRationale: true, enabled: true })
     ]));
+    expect(detailPayload.workflowActionPolicy).toMatchObject({
+      schemaVersion: "analyst.case_workflow_action_policy.v1",
+      caseId: "case_alert_acme",
+      organizationId: "org_acme",
+      status: "open",
+      readOnly: false,
+      summary: {
+        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        blockedActionIds: ["reopen"],
+        blockerCodes: ["not_applicable_for_status"]
+      }
+    });
+    expect(detailPayload.workflowActionPolicy.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "assign",
+        enabled: true,
+        requiredFields: ["organizationId", "action", "assignedOwner", "idempotencyKey"],
+        request: expect.objectContaining({
+          method: "PATCH",
+          path: "/v1/cases/case_alert_acme",
+          body: expect.objectContaining({
+            organizationId: "org_acme",
+            action: "assign",
+            alertId: "alert_acme",
+            caseId: "case_alert_acme"
+          })
+        })
+      })
+    ]));
     expect(replayExport.status).toBe(200);
     expect(replayExportPayload).toMatchObject({
       filters: {
@@ -773,9 +802,18 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         workflowTransitionCount: 1,
+        enabledWorkflowActionCount: 6,
+        blockedWorkflowActionCount: 1,
         handoffReceiptCount: 0,
         customerNotificationCount: 0,
         auditTimelineRowCount: 1
+      },
+      workflowActionPolicy: {
+        schemaVersion: "analyst.case_workflow_action_policy.v1",
+        summary: {
+          enabledActionIds: expect.arrayContaining(["note", "assign", "escalate"]),
+          blockedActionIds: ["reopen"]
+        }
       },
       auditTimeline: {
         summary: {
@@ -1033,6 +1071,32 @@ describe("DWM alert case handoff route", () => {
       expect.objectContaining({ id: "false_positive", enabled: false }),
       expect.objectContaining({ id: "reopen", enabled: true })
     ]));
+    expect(detailAfterFalsePositivePayload.workflowActionPolicy).toMatchObject({
+      schemaVersion: "analyst.case_workflow_action_policy.v1",
+      status: "false_positive",
+      readOnly: false,
+      summary: {
+        enabledActionIds: ["note", "reopen"],
+        blockedActionIds: expect.arrayContaining(["assign", "escalate", "close", "suppress", "false_positive"]),
+        blockerCodes: ["invalid_case_transition"]
+      }
+    });
+    expect(detailAfterFalsePositivePayload.workflowActionPolicy.actions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "escalate",
+        enabled: false,
+        blockerCodes: ["invalid_case_transition"]
+      }),
+      expect.objectContaining({
+        id: "reopen",
+        enabled: true,
+        requiredFields: ["organizationId", "action", "note", "idempotencyKey"],
+        request: expect.objectContaining({
+          method: "PATCH",
+          path: "/v1/cases/case_alert_acme"
+        })
+      })
+    ]));
     expect(blockedEscalate.status).toBe(409);
     expect(blockedEscalatePayload.error).toMatchObject({
       code: "invalid_case_transition",
@@ -1072,6 +1136,19 @@ describe("DWM alert case handoff route", () => {
       "false_positive",
       "reopen"
     ]);
+    expect(replayExportPayload.replayPlan).toMatchObject({
+      enabledWorkflowActionCount: 6,
+      blockedWorkflowActionCount: 1
+    });
+    expect(replayExportPayload.workflowActionPolicy).toMatchObject({
+      schemaVersion: "analyst.case_workflow_action_policy.v1",
+      status: "open",
+      summary: {
+        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        blockedActionIds: ["reopen"],
+        blockerCodes: ["not_applicable_for_status"]
+      }
+    });
     expect(replayExportPayload.workflowTransitionHistory).toMatchObject({
       schemaVersion: "dwm.case_workflow_transition_history.v1",
       caseId: "case_alert_acme",
