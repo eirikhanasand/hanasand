@@ -3328,17 +3328,25 @@ expect(crudEntitlementDeniedContract.canApply === false && crudEntitlementDenied
 expect(crudUpdateContract.canApply === true && crudUpdateContract.action === 'update' && crudUpdateContract.desired.label === 'Renamed Discord' && crudUpdateContract.desired.channel === '#security', 'Destination CRUD contract should allow admin update and endpoint rotation preflight.', crudUpdateContract)
 expect(crudUpdateContract.managementRequest.method === 'PUT' && crudUpdateContract.managementRequest.route === '/api/dwm/webhook-destinations/destination_replay_contract' && crudUpdateContract.managementRequest.expectedAuditAction === 'destination.updated', 'Destination CRUD contract should expose a destination update request proof.', crudUpdateContract.managementRequest)
 expect(crudUpdateContract.managementRequest.bodyPreview?.redactedEndpoint.endpointHash?.startsWith('endpoint_') && !JSON.stringify(crudUpdateContract.managementRequest).includes('rotated-token'), 'Destination CRUD update request should prove secret redaction for endpoint rotation.', crudUpdateContract.managementRequest)
+expect(crudUpdateContract.destinationPersistenceReceipt.schemaVersion === 'dwm.webhook.destination_persistence_receipt.v1' && crudUpdateContract.destinationPersistenceReceipt.mutation.persisted === true && crudUpdateContract.destinationPersistenceReceipt.audit.expectedAction === 'destination.updated', 'Destination persistence receipt should prove update persistence and audit action.', crudUpdateContract.destinationPersistenceReceipt)
+expect(crudUpdateContract.destinationPersistenceReceipt.request.bodyPreview?.redactedEndpoint.endpointExposed === false && !JSON.stringify(crudUpdateContract.destinationPersistenceReceipt).includes('rotated-token'), 'Destination persistence receipt should keep update body previews secret-safe.', crudUpdateContract.destinationPersistenceReceipt)
 expect(crudOrgScopeMismatchContract.canApply === false && crudOrgScopeMismatchContract.blockers.some(item => item.code === 'org_scope_mismatch') && crudOrgScopeMismatchContract.destination?.orgId === 'org_contract', 'Destination CRUD contract should block cross-org destination reassignment.', crudOrgScopeMismatchContract)
 expect(crudOrgScopeMismatchContract.managementRequest.canSend === false && crudOrgScopeMismatchContract.managementRequest.blockingCodes.includes('org_scope_mismatch'), 'Destination CRUD management request should carry cross-org blockers without leaking destination secrets.', crudOrgScopeMismatchContract.managementRequest)
+expect(crudOrgScopeMismatchContract.destinationPersistenceReceipt.denial.blockingCodes.includes('org_scope_mismatch') && crudOrgScopeMismatchContract.destinationPersistenceReceipt.mutation.persisted === false, 'Destination persistence receipt should block cross-org persistence.', crudOrgScopeMismatchContract.destinationPersistenceReceipt)
 expect(crudDisableContract.canApply === true && crudDisableContract.access.canDisable === true && crudDisableContract.audit.auditEventIds.includes('audit_delivery_test_contract'), 'Destination CRUD contract should expose disable capability and audit linkage.', crudDisableContract)
 expect(crudDisableContract.managementRequest.method === 'DELETE' && crudDisableContract.managementRequest.queryPreview?.orgId === 'org_contract' && crudDisableContract.managementRequest.expectedAuditAction === 'destination.archived', 'Destination CRUD contract should expose disable/archive request proof.', crudDisableContract.managementRequest)
+expect(crudDisableContract.destinationPersistenceReceipt.mutation.nextStatus === 'paused' && crudDisableContract.destinationPersistenceReceipt.request.queryPreview?.orgId === 'org_contract', 'Destination persistence receipt should prove disable state transition and query preview.', crudDisableContract.destinationPersistenceReceipt)
 expect(crudDeleteContract.canApply === true && crudDeleteContract.action === 'delete' && crudDeleteContract.desired.status === 'archived' && crudDeleteContract.access.canDelete === true, 'Destination CRUD contract should expose delete/archive capability without hard-deleting delivery proof.', crudDeleteContract)
+expect(crudDeleteContract.destinationPersistenceReceipt.mutation.nextStatus === 'archived' && crudDeleteContract.destinationPersistenceReceipt.audit.expectedAction === 'destination.archived', 'Destination persistence receipt should prove archive/delete state transition.', crudDeleteContract.destinationPersistenceReceipt)
 expect(crudEnableContract.canApply === true && crudEnableContract.action === 'enable' && crudEnableContract.access.canEnable === true, 'Destination CRUD contract should allow enable preflight for paused destinations.', crudEnableContract)
 expect(crudTestContract.canApply === true && crudTestContract.access.canTest === true && crudTestContract.noNetwork === true, 'Destination CRUD contract should allow dry-run test preflight without network.', crudTestContract)
 expect(crudTestContract.managementRequest.method === 'POST' && crudTestContract.managementRequest.route === '/api/dwm/webhook-destinations/destination_replay_contract/test' && crudTestContract.managementRequest.expectedPersistedAttempt === true, 'Destination CRUD test request should expose persisted dry-run receipt intent.', crudTestContract.managementRequest)
+expect(crudTestContract.destinationPersistenceReceipt.dryRun.latestTestAuditEventId === 'audit_delivery_test_contract' && crudTestContract.destinationPersistenceReceipt.deliveryContext.workflowStatus === 'destination_mutation', 'Destination persistence receipt should expose dry-run test and non-alert workflow context.', crudTestContract.destinationPersistenceReceipt)
 expect(crudRoleDeniedContract.canApply === false && crudRoleDeniedContract.blockers.some(item => item.code === 'permission_denied'), 'Destination CRUD contract should enforce owner/admin mutation gates.', crudRoleDeniedContract)
 expect(crudRoleDeniedContract.managementRequest.canSend === false && crudRoleDeniedContract.managementRequest.blockingCodes.includes('permission_denied'), 'Destination CRUD management request should deny member mutation without destination leakage.', crudRoleDeniedContract.managementRequest)
+expect(crudRoleDeniedContract.destinationPersistenceReceipt.denial.blockingCodes.includes('permission_denied') && crudRoleDeniedContract.destinationPersistenceReceipt.mutation.persisted === false, 'Destination persistence receipt should deny member persistence without endpoint leakage.', crudRoleDeniedContract.destinationPersistenceReceipt)
 expect(crudIdempotencyContract.idempotency.alreadyDelivered === true && crudIdempotencyContract.blockers.some(item => item.code === 'idempotency_duplicate' && item.blocking === false), 'Destination CRUD contract should expose idempotency duplicates without leaking secrets.', crudIdempotencyContract)
+expect(crudIdempotencyContract.destinationPersistenceReceipt.idempotency.alreadyDelivered === true && crudIdempotencyContract.destinationPersistenceReceipt.redactedTarget.endpoint.endpointExposed === false, 'Destination persistence receipt should carry idempotency proof and redacted target.', crudIdempotencyContract.destinationPersistenceReceipt)
 expect(crudTestContract.health.productProgress.schemaVersion === 'dwm.webhook.destination_admin_product_progress.v1' && crudTestContract.health.productProgress.deliveryReadyCount >= 1, 'Destination CRUD contract should link product-progress/admin-proof health fields.', crudTestContract)
 expect(!JSON.stringify([crudCreateContract, crudUpdateContract, crudIdempotencyContract]).includes(secret) && !JSON.stringify(crudUpdateContract).includes('rotated-token'), 'Destination CRUD contracts should not leak endpoint secrets.', { crudCreateContract, crudUpdateContract, crudIdempotencyContract })
 expect(auditCreated?.category === 'destination' && auditCreated.outcome === 'created' && auditCreated.destination?.redactedEndpoint.endpointHash === 'endpoint_replay_hash', 'Audit contract should expose destination create events with redacted endpoint refs.', auditCreated)
@@ -3533,6 +3541,11 @@ console.log(JSON.stringify({
         'destination CRUD management route contract',
         'destination CRUD management request proof',
         'destination CRUD management redaction',
+        'destination CRUD persistence receipt update proof',
+        'destination CRUD persistence receipt disable/archive proof',
+        'destination CRUD persistence receipt denial blockers',
+        'destination CRUD persistence receipt dry-run/audit proof',
+        'destination CRUD persistence receipt idempotency proof',
         'destination CRUD invalid URL blocker',
         'destination CRUD unsupported type blocker',
         'destination CRUD duplicate endpoint blocker',
@@ -3735,6 +3748,12 @@ console.log(JSON.stringify({
             'destinationCrud.managementRequest.expectedAuditAction',
             'destinationCrud.managementRequest.bodyPreview.redactedEndpoint.endpointExposed',
             'destinationCrud.managementRequest.blockingCodes',
+            'destinationCrud.destinationPersistenceReceipt.schemaVersion',
+            'destinationCrud.destinationPersistenceReceipt.mutation.nextStatus',
+            'destinationCrud.destinationPersistenceReceipt.request.bodyPreview.redactedEndpoint.endpointExposed',
+            'destinationCrud.destinationPersistenceReceipt.audit.expectedAction',
+            'destinationCrud.destinationPersistenceReceipt.denial.blockingCodes',
+            'destinationCrud.destinationPersistenceReceipt.idempotency.alreadyDelivered',
             'dashboardReadiness.schemaVersion',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',
