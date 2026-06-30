@@ -26,6 +26,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERS
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_growth_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -1742,6 +1743,68 @@ export type TiSourceProvenanceSourcePackRetryPolicyRow = {
     ownerLane: "parser" | "policy" | "source" | "alert";
     route: TiSourceProvenanceSourcePackFixtureReadinessBlocker["route"];
   };
+};
+
+export type TiSourceProvenanceSourceCandidateValidationReceipt = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourcePackRetryPolicyPacketId: string;
+  validations: TiSourceProvenanceSourceCandidateValidationRow[];
+  summary: {
+    validationCount: number;
+    accepted: number;
+    retryGated: number;
+    policyGated: number;
+    inspectOnly: number;
+    alertReady: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+    healthStates: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+    blockerCodes: Array<TiSourceProvenanceSourcePackRetryPolicyRow["blockerCode"]>;
+    nextRetryAt?: string;
+    newestFreshnessAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackRetryPolicyPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourceCandidateValidationRow = {
+  validationId: string;
+  retryPolicyRowId: string;
+  candidateState: "accepted" | "retry_gated" | "policy_gated" | "inspect_only";
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  healthState: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"];
+  freshnessState: TiSourceProvenanceSourcePackFixtureGrowthRow["freshness"]["state"];
+  validation: {
+    allowedForPublicTI: boolean;
+    allowedForAlertGeneration: boolean;
+    allowedForDashboard: boolean;
+    allowedForIntegration: boolean;
+    reason: string;
+    blockerCode?: TiSourceProvenanceSourcePackRetryPolicyRow["blockerCode"];
+    nextRetryAt?: string;
+  };
+  downstreamRoutes: TiSourceProvenanceSourcePackRetryPolicyRow["downstreamConsumerRoutes"];
+  provenance: TiSourceProvenanceSourcePackRetryPolicyRow["provenance"];
 };
 
 export type TiSourceProvenanceScraperEnrichmentLifecycle = {
@@ -4063,6 +4126,72 @@ export function buildSourceProvenanceSourcePackRetryPolicyPacket(input: {
       "summary"
     ],
     safeOutput: input.readinessExport.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourceCandidateValidationReceipt(input: {
+  retryPolicyPacket: TiSourceProvenanceSourcePackRetryPolicyPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceCandidateValidationReceipt {
+  const generatedAt = input.generatedAt ?? input.retryPolicyPacket.generatedAt;
+  const validations = input.retryPolicyPacket.retryRows.map((row) => sourceCandidateValidationRow(input.retryPolicyPacket, row));
+  const accepted = validations.filter((row) => row.candidateState === "accepted").length;
+  const retryGated = validations.filter((row) => row.candidateState === "retry_gated").length;
+  const policyGated = validations.filter((row) => row.candidateState === "policy_gated").length;
+  const inspectOnly = validations.filter((row) => row.candidateState === "inspect_only").length;
+  const alertReady = validations.filter((row) => row.validation.allowedForAlertGeneration).length;
+  const sourceFamilies = uniqueStrings(validations.map((row) => row.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const parserStatuses = uniqueStrings(validations.map((row) => row.parserStatus)) as TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+  const healthStates = uniqueStrings(validations.map((row) => row.healthState)) as TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+  const blockerCodes = uniqueStrings(validations.map((row) => row.validation.blockerCode).filter(Boolean).map(String)) as Array<TiSourceProvenanceSourcePackRetryPolicyRow["blockerCode"]>;
+  const publicTiReady = validations.some((row) => row.validation.allowedForPublicTI);
+  const integrationReady = validations.length > 0 && validations.every((row) => row.validation.allowedForIntegration);
+  const status = alertReady > 0 && policyGated === 0 && retryGated === 0 ? "ready" : validations.length > 0 ? "partial" : "blocked";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_candidate_validation_receipt", `${input.retryPolicyPacket.id}:${generatedAt}:${validations.map((row) => `${row.retryPolicyRowId}:${row.candidateState}`).join(",")}`),
+    generatedAt,
+    ok: publicTiReady && alertReady > 0,
+    status,
+    tenantId: input.retryPolicyPacket.tenantId,
+    organizationId: input.retryPolicyPacket.organizationId,
+    actor: input.retryPolicyPacket.actor,
+    sourcePackRetryPolicyPacketId: input.retryPolicyPacket.id,
+    validations,
+    summary: {
+      validationCount: validations.length,
+      accepted,
+      retryGated,
+      policyGated,
+      inspectOnly,
+      alertReady,
+      sourceFamilies,
+      parserStatuses,
+      healthStates,
+      blockerCodes,
+      nextRetryAt: input.retryPolicyPacket.summary.nextRetryAt,
+      newestFreshnessAt: input.retryPolicyPacket.summary.newestFreshnessAt
+    },
+    consumers: sourceCandidateValidationConsumers(input.retryPolicyPacket, {
+      publicTI: publicTiReady,
+      alertGeneration: alertReady > 0,
+      dashboard: validations.length > 0,
+      sourceOps: retryGated > 0 || policyGated > 0 || inspectOnly > 0,
+      integration: integrationReady
+    }),
+    payloadShape: [
+      "validations[].candidateState",
+      "validations[].sourceFamily",
+      "validations[].parserStatus",
+      "validations[].healthState",
+      "validations[].freshnessState",
+      "validations[].validation",
+      "validations[].downstreamRoutes",
+      "validations[].provenance",
+      "summary"
+    ],
+    safeOutput: input.retryPolicyPacket.safeOutput
   };
 }
 
@@ -7989,6 +8118,135 @@ function sourcePackRetryPolicyConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         sourcePackFixtureReadinessExportId: readinessExport.id,
+        includeIntegrationProof: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourceCandidateValidationRow(
+  packet: TiSourceProvenanceSourcePackRetryPolicyPacket,
+  row: TiSourceProvenanceSourcePackRetryPolicyRow
+): TiSourceProvenanceSourceCandidateValidationRow {
+  const candidateState = sourceCandidateValidationState(row);
+  return {
+    validationId: stableId("ti_source_provenance_source_candidate_validation", `${packet.id}:${row.rowId}:${candidateState}`),
+    retryPolicyRowId: row.rowId,
+    candidateState,
+    sourceFamily: row.sourceFamily,
+    parserStatus: row.parserStatus,
+    healthState: row.healthState,
+    freshnessState: row.freshnessState,
+    validation: {
+      allowedForPublicTI: candidateState === "accepted" || candidateState === "inspect_only",
+      allowedForAlertGeneration: row.retryState === "alert_ready",
+      allowedForDashboard: true,
+      allowedForIntegration: true,
+      reason: sourceCandidateValidationReason(row, candidateState),
+      blockerCode: row.blockerCode,
+      nextRetryAt: row.nextRetryAt
+    },
+    downstreamRoutes: row.downstreamConsumerRoutes,
+    provenance: row.provenance
+  };
+}
+
+function sourceCandidateValidationState(
+  row: TiSourceProvenanceSourcePackRetryPolicyRow
+): TiSourceProvenanceSourceCandidateValidationRow["candidateState"] {
+  if (row.retryState === "alert_ready") return "accepted";
+  if (row.retryState === "retry_now" || row.retryState === "retry_later") return "retry_gated";
+  if (row.retryState === "policy_review_required") return "policy_gated";
+  return "inspect_only";
+}
+
+function sourceCandidateValidationReason(
+  row: TiSourceProvenanceSourcePackRetryPolicyRow,
+  state: TiSourceProvenanceSourceCandidateValidationRow["candidateState"]
+): string {
+  if (state === "accepted") return "Fixture capture is parser-ready, provenance-backed, and alert generation can consume it.";
+  if (state === "retry_gated") return row.blockerReason ?? "Parser retry must complete before this source can produce fresh enrichment.";
+  if (state === "policy_gated") return row.blockerReason ?? "Policy approval is required before this source can be activated.";
+  return row.blockerReason ?? "Source can enrich public TI but needs parser health inspection before alert generation.";
+}
+
+function sourceCandidateValidationConsumers(
+  packet: TiSourceProvenanceSourcePackRetryPolicyPacket,
+  readiness: {
+    publicTI: boolean;
+    alertGeneration: boolean;
+    dashboard: boolean;
+    sourceOps: boolean;
+    integration: boolean;
+  }
+): TiSourceProvenanceSourceCandidateValidationReceipt["consumers"] {
+  return [{
+    consumer: "publicTI",
+    ready: readiness.publicTI,
+    requiredFields: ["validations[].validation.allowedForPublicTI", "validations[].provenance.contentHash"],
+    route: {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(packet.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: readiness.alertGeneration,
+    requiredFields: ["validations[].validation.allowedForAlertGeneration", "validations[].provenance.captureId", "validations[].provenance.contentHash"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actor: packet.actor,
+        sourcePackRetryPolicyPacketId: packet.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: readiness.dashboard,
+    requiredFields: ["summary", "validations[].candidateState", "validations[].validation.reason"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackRetryPolicyPacketId: packet.id,
+        includeValidationReceipt: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: readiness.sourceOps,
+    requiredFields: ["validations[].validation.blockerCode", "validations[].validation.nextRetryAt", "validations[].downstreamRoutes"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackRetryPolicyPacketId: packet.id,
+        includeSourceActions: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: readiness.integration,
+    requiredFields: ["schemaVersion", "safeOutput", "payloadShape", "consumers[]"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackRetryPolicyPacketId: packet.id,
         includeIntegrationProof: true,
         dryRun: true
       },
