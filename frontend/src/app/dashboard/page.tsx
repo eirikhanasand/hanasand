@@ -477,8 +477,14 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             id: `${alert.id}_route`,
             at: alert.firstSeenAt,
             title: 'Recommended route',
-            body: alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
+            body: alert.routingContext?.reason || alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
         },
+        ...(alert.matchContext ? [{
+            id: `${alert.id}_match_context`,
+            at: alert.firstSeenAt,
+            title: 'Match reason',
+            body: `${alert.matchContext.termKind}:${alert.matchContext.normalizedTerm} matched ${alert.matchContext.matchedFieldHints.join(', ') || 'alert evidence'}.`,
+        }] : []),
         ...deliveryTimelineItems(alertDeliveries),
     ]
 
@@ -513,6 +519,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             observedAt: item.observedAt || item.firstSeenAt || alert.firstSeenAt,
             provenance: item.provenance ? `${item.provenance.sourceId} · ${item.provenance.captureId} · ${item.provenance.captureMode}` : `${item.sourceFamily.replaceAll('_', ' ')} · ${alert.webhookDelivery.dedupeKey}`,
             confidence: alert.confidence,
+            metadata: alertEvidenceMetadata(alert, item),
         })),
         timeline,
         nextTasks: [
@@ -576,6 +583,20 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             ...alertWorkflowActions(alert, deliveryState, scope),
         ] : [],
     }
+}
+
+function alertEvidenceMetadata(alert: DwmAlert, item: DwmAlert['evidence'][number]) {
+    return [
+        { label: 'Matched term', value: `${alert.matchedTerm.kind}:${alert.matchedTerm.value}` },
+        alert.matchContext?.matchType ? { label: 'Match type', value: alert.matchContext.matchType.replaceAll('_', ' ') } : undefined,
+        alert.matchContext?.matchedFieldHints?.length ? { label: 'Matched fields', value: alert.matchContext.matchedFieldHints.join(', ') } : undefined,
+        alert.routingContext?.reason ? { label: 'Routing reason', value: alert.routingContext.reason } : undefined,
+        alert.routingContext?.customerVisibleEvidence ? { label: 'Customer evidence', value: alert.routingContext.customerVisibleEvidence.replaceAll('_', ' ') } : undefined,
+        alert.evidenceSummary ? { label: 'Evidence window', value: `${alert.evidenceSummary.evidenceCount} item${alert.evidenceSummary.evidenceCount === 1 ? '' : 's'}; ${alert.evidenceSummary.publicSafeCount} customer-safe` } : undefined,
+        alert.evidenceSummary?.sourceFamilyCounts?.[item.sourceFamily] !== undefined ? { label: 'Family coverage', value: `${alert.evidenceSummary.sourceFamilyCounts[item.sourceFamily]} ${item.sourceFamily.replaceAll('_', ' ')} item${alert.evidenceSummary.sourceFamilyCounts[item.sourceFamily] === 1 ? '' : 's'}` } : undefined,
+        item.provenance?.retentionClass ? { label: 'Retention', value: item.provenance.retentionClass } : undefined,
+        item.provenance?.collector ? { label: 'Collector', value: item.provenance.collector } : undefined,
+    ].filter((meta): meta is { label: string, value: string } => Boolean(meta?.value))
 }
 
 function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: OperatorScope) {
