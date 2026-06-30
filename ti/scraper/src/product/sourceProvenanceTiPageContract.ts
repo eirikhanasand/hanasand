@@ -12,6 +12,7 @@ export const TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION =
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_CONTRACT_SCHEMA_VERSION = "ti.source_provenance_actor_profile_contract.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_GAP_SOURCE_PLAN_SCHEMA_VERSION = "ti.source_provenance_actor_profile_gap_source_plan.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_gap_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_EXPORT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_coverage_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
@@ -764,6 +765,80 @@ export type TiSourceProvenanceActorEnrichmentGapReceiptRow = {
     activationDecisionIds: string[];
     fixtureBacked: true;
   };
+};
+
+export type TiSourceProvenanceActorEnrichmentCoverageExport = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_EXPORT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  actorEnrichmentGapReceiptId: string;
+  coverageRows: TiSourceProvenanceActorEnrichmentCoverageExportRow[];
+  blockers: TiSourceProvenanceActorEnrichmentCoverageExportBlocker[];
+  summary: {
+    fieldCount: number;
+    coveredFieldCount: number;
+    blockedFieldCount: number;
+    retryableFieldCount: number;
+    alertableFamilyCount: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    lastSuccessAt?: string;
+    lastFailureAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "sourceOps";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentCoverageExportRow = {
+  rowId: string;
+  field: TiSourceProvenanceActorProfileGap["field"];
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  coverageState: "covered" | "pending" | "retry" | "blocked";
+  parserStatus?: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  nextRetryAt?: string;
+  alertableCandidates: number;
+  blockerCodes: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][];
+  provenance: {
+    actorEnrichmentGapReceiptId: string;
+    gapReceiptRowId?: string;
+    sourceHealthProofIds: string[];
+    activationDecisionIds: string[];
+    fixtureBacked: true;
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentCoverageExportBlocker = {
+  code: "missing_candidate" | "parser_retry" | "policy_blocked" | "coverage_pending";
+  ownerLane: "source" | "parser" | "policy" | "publicTI";
+  field: TiSourceProvenanceActorProfileGap["field"];
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  nextAction: TiSourceProvenanceActorEnrichmentGapReceiptRow["nextAction"];
+  nextRetryAt?: string;
+  provenanceRef: string;
 };
 
 export type TiSourceProvenanceActorProfileSourceUpdateWorkflow = {
@@ -2630,6 +2705,58 @@ export function buildSourceProvenanceActorEnrichmentGapReceipt(input: {
       "rows[].provenance",
       "coverage.sourceFamilies",
       "coverage.nextRetryAt"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceActorEnrichmentCoverageExport(input: {
+  gapReceipt: TiSourceProvenanceActorEnrichmentGapReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceActorEnrichmentCoverageExport {
+  const generatedAt = input.generatedAt ?? input.gapReceipt.generatedAt;
+  const coverageRows = actorEnrichmentCoverageRows(input.gapReceipt);
+  const blockers = actorEnrichmentCoverageBlockers(coverageRows);
+  const sourceFamilies = uniqueStrings(coverageRows.map((row) => row.sourceFamily).filter(Boolean).map(String)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_EXPORT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_enrichment_coverage_export", `${input.gapReceipt.id}:${generatedAt}:${coverageRows.map((row) => `${row.field}:${row.coverageState}`).join(",")}`),
+    generatedAt,
+    ok: blockers.length === 0,
+    tenantId: input.gapReceipt.tenantId,
+    organizationId: input.gapReceipt.organizationId,
+    actor: input.gapReceipt.actor,
+    publicTiRoute: input.gapReceipt.publicTiRoute,
+    actorEnrichmentGapReceiptId: input.gapReceipt.id,
+    coverageRows,
+    blockers,
+    summary: {
+      fieldCount: coverageRows.length,
+      coveredFieldCount: coverageRows.filter((row) => row.coverageState === "covered").length,
+      blockedFieldCount: coverageRows.filter((row) => row.coverageState === "blocked").length,
+      retryableFieldCount: coverageRows.filter((row) => row.coverageState === "retry").length,
+      alertableFamilyCount: coverageRows.filter((row) => row.alertableCandidates > 0).length,
+      sourceFamilies,
+      lastSuccessAt: newestTimestamp(coverageRows.map((row) => row.lastSuccessAt)),
+      lastFailureAt: newestTimestamp(coverageRows.map((row) => row.lastFailureAt)),
+      nextRetryAt: earliestTimestamp(coverageRows.map((row) => row.nextRetryAt))
+    },
+    consumers: actorEnrichmentCoverageConsumers(input.gapReceipt, coverageRows, blockers),
+    payloadShape: [
+      "coverageRows[].field",
+      "coverageRows[].coverageState",
+      "coverageRows[].sourceFamily",
+      "coverageRows[].parserStatus",
+      "coverageRows[].provenance",
+      "blockers[].code",
+      "summary.sourceFamilies",
+      "summary.nextRetryAt"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -5537,6 +5664,153 @@ function actorEnrichmentGapReceiptConsumers(
       body: {
         actorProfileContractId: profile.id,
         includeActorGapReceipt: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function actorEnrichmentCoverageRows(
+  receipt: TiSourceProvenanceActorEnrichmentGapReceipt
+): TiSourceProvenanceActorEnrichmentCoverageExportRow[] {
+  if (!receipt.rows.length) {
+    return [{
+      rowId: stableId("ti_source_provenance_actor_enrichment_coverage_row", `${receipt.id}:all_fields:covered`),
+      field: "sourceProvenance",
+      coverageState: "covered",
+      alertableCandidates: 0,
+      blockerCodes: [],
+      provenance: {
+        actorEnrichmentGapReceiptId: receipt.id,
+        sourceHealthProofIds: [],
+        activationDecisionIds: [],
+        fixtureBacked: true
+      }
+    }];
+  }
+  return receipt.rows.map((row) => {
+    const coverageState = actorEnrichmentCoverageState(row);
+    const blockerCodes = actorEnrichmentCoverageBlockerCodes(row, coverageState);
+    return {
+      rowId: stableId("ti_source_provenance_actor_enrichment_coverage_row", `${receipt.id}:${row.rowId}:${coverageState}`),
+      field: row.field,
+      sourceFamily: row.sourceFamily,
+      coverageState,
+      parserStatus: row.parserStatus,
+      lastSuccessAt: row.lastSuccessAt,
+      lastFailureAt: row.lastFailureAt,
+      nextRetryAt: row.nextRetryAt,
+      alertableCandidates: row.coverageCounts.alertableCandidates,
+      blockerCodes,
+      provenance: {
+        actorEnrichmentGapReceiptId: receipt.id,
+        gapReceiptRowId: row.rowId,
+        sourceHealthProofIds: row.provenance.sourceHealthProofIds,
+        activationDecisionIds: row.provenance.activationDecisionIds,
+        fixtureBacked: true
+      }
+    };
+  });
+}
+
+function actorEnrichmentCoverageState(
+  row: TiSourceProvenanceActorEnrichmentGapReceiptRow
+): TiSourceProvenanceActorEnrichmentCoverageExportRow["coverageState"] {
+  if (row.status === "source_ready") return "covered";
+  if (row.status === "parser_retry") return "retry";
+  if (row.status === "policy_blocked") return "blocked";
+  return "pending";
+}
+
+function actorEnrichmentCoverageBlockerCodes(
+  row: TiSourceProvenanceActorEnrichmentGapReceiptRow,
+  coverageState: TiSourceProvenanceActorEnrichmentCoverageExportRow["coverageState"]
+): TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][] {
+  if (coverageState === "covered") return [];
+  if (row.status === "missing_candidate") return ["missing_candidate"];
+  if (row.status === "parser_retry") return ["parser_retry"];
+  if (row.status === "policy_blocked") return ["policy_blocked"];
+  return ["coverage_pending"];
+}
+
+function actorEnrichmentCoverageBlockers(
+  rows: TiSourceProvenanceActorEnrichmentCoverageExportRow[]
+): TiSourceProvenanceActorEnrichmentCoverageExportBlocker[] {
+  return rows.flatMap((row) => row.blockerCodes.map((code) => ({
+    code,
+    ownerLane: actorEnrichmentCoverageBlockerOwner(code),
+    field: row.field,
+    sourceFamily: row.sourceFamily,
+    nextAction: actorEnrichmentCoverageBlockerNextAction(code),
+    nextRetryAt: row.nextRetryAt,
+    provenanceRef: row.provenance.gapReceiptRowId ?? row.provenance.actorEnrichmentGapReceiptId
+  })));
+}
+
+function actorEnrichmentCoverageBlockerOwner(
+  code: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"]
+): TiSourceProvenanceActorEnrichmentCoverageExportBlocker["ownerLane"] {
+  if (code === "parser_retry") return "parser";
+  if (code === "policy_blocked") return "policy";
+  if (code === "missing_candidate") return "source";
+  return "publicTI";
+}
+
+function actorEnrichmentCoverageBlockerNextAction(
+  code: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"]
+): TiSourceProvenanceActorEnrichmentCoverageExportBlocker["nextAction"] {
+  if (code === "parser_retry") return "retry_parser";
+  if (code === "policy_blocked") return "request_policy_approval";
+  if (code === "missing_candidate") return "request_candidate";
+  return "inspect_source_health";
+}
+
+function actorEnrichmentCoverageConsumers(
+  receipt: TiSourceProvenanceActorEnrichmentGapReceipt,
+  rows: TiSourceProvenanceActorEnrichmentCoverageExportRow[],
+  blockers: TiSourceProvenanceActorEnrichmentCoverageExportBlocker[]
+): TiSourceProvenanceActorEnrichmentCoverageExport["consumers"] {
+  const hasCovered = rows.some((row) => row.coverageState === "covered");
+  const hasRetryOrPolicy = blockers.some((blocker) => blocker.code === "parser_retry" || blocker.code === "policy_blocked");
+  return [{
+    consumer: "publicTI",
+    ready: hasCovered,
+    requiredFields: ["coverageRows[].field", "coverageRows[].coverageState", "coverageRows[].provenance", "blockers[].code"],
+    route: {
+      method: "GET",
+      path: receipt.publicTiRoute,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasCovered && !hasRetryOrPolicy,
+    requiredFields: ["coverageRows[].alertableCandidates", "coverageRows[].provenance.activationDecisionIds", "summary.nextRetryAt"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: receipt.tenantId,
+        organizationId: receipt.organizationId,
+        actor: receipt.actor,
+        actorEnrichmentGapReceiptId: receipt.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: blockers.length > 0,
+    requiredFields: ["blockers[].nextAction", "coverageRows[].sourceFamily", "coverageRows[].parserStatus", "coverageRows[].provenance.sourceHealthProofIds"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        actorEnrichmentGapReceiptId: receipt.id,
+        includeCoverageExport: true,
         dryRun: true
       },
       dryRunSupported: true,
