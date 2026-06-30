@@ -3599,6 +3599,7 @@ expect(dashboardLifecycleSecretRotated?.lifecycleState.primary === 'secret_rotat
 expect(dashboardLifecycleTestRequired?.lifecycleState.primary === 'test_required' && dashboardLifecycleTestRequired.lifecycleState.requiredActions.dryRunTest?.noNetworkDefault === true, 'Dashboard readiness should expose test-required lifecycle remediation.', dashboardLifecycleTestRequired?.lifecycleState)
 expect(dashboardLifecycleRevokedOwner?.lifecycleState.primary === 'revoked_owner' && dashboardLifecycleRevokedOwner.lifecycleState.owner.createdBy === 'removed_member_contract', 'Dashboard readiness should expose revoked-owner lifecycle state to admins.', dashboardLifecycleRevokedOwner?.lifecycleState)
 expect(memberDashboardLifecycleRevokedOwner?.lifecycleState.owner.createdBy === null && memberDashboardLifecycleRevokedOwner.lifecycleState.redaction.actorExposed === false, 'Dashboard readiness should keep revoked-owner actor details member-safe.', memberDashboardLifecycleRevokedOwner?.lifecycleState)
+expect(dashboardLifecycleReadiness.summary.lifecycleCounts.active >= 1 && dashboardLifecycleReadiness.summary.lifecycleCounts.disabled >= 1 && dashboardLifecycleReadiness.summary.lifecycleCounts.failed >= 1 && dashboardLifecycleReadiness.summary.lifecycleCounts.revokedOwner >= 1 && dashboardLifecycleReadiness.summary.lifecycleCounts.secretRotated >= 1 && dashboardLifecycleReadiness.summary.lifecycleCounts.testRequired >= 1, 'Dashboard readiness should summarize destination lifecycle states for operators.', dashboardLifecycleReadiness.summary.lifecycleCounts)
 expect(policyBlockedDashboardReadiness.summary.policyBlockedCount === 1 && policyBlockedDashboardReadiness.destinations.length === 0, 'Dashboard readiness should deny revoked/nonmember actors without destination leakage.', policyBlockedDashboardReadiness)
 expect(archivedOrgDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && archivedOrgDashboardReadiness.blockers.some(item => item.reason === 'org_archived'), 'Dashboard readiness should expose archived org policy blockers.', archivedOrgDashboardReadiness)
 expect(retiredWatchlistDashboardReadiness.destinations.every(item => item.healthStates.includes('policy_blocked')) && retiredWatchlistDashboardReadiness.blockers.some(item => item.reason === 'watchlist_retired'), 'Dashboard readiness should expose retired watchlist policy blockers.', retiredWatchlistDashboardReadiness)
@@ -4196,6 +4197,7 @@ console.log(JSON.stringify({
             'destinationCrud.destinationPersistenceReceipt.denial.blockingCodes',
             'destinationCrud.destinationPersistenceReceipt.idempotency.alreadyDelivered',
             'dashboardReadiness.schemaVersion',
+            'dashboardReadiness.summary.lifecycleCounts',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].lifecycleState.primary',
             'dashboardReadiness.destinations[].lifecycleState.requiredActions.dryRunTest',
