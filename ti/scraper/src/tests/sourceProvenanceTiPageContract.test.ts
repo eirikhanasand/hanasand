@@ -29,6 +29,7 @@ import {
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_HANDOFF_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CONSUMER_READINESS_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_ALERT_READINESS_BRIDGE_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
   buildSourceProvenanceActorProfileContract,
   buildSourceProvenanceActorProfileGapSourcePlan,
@@ -37,6 +38,7 @@ import {
   buildSourceProvenanceActorEnrichmentCoverageHandoff,
   buildSourceProvenanceActorEnrichmentConsumerReadinessReceipt,
   buildSourceProvenanceActorEnrichmentSourceAlertReadinessBridge,
+  buildSourceProvenanceActorEnrichmentParserStatusAuditPacket,
   buildSourceProvenanceActorProfileSourceUpdateWorkflow,
   buildSourceProvenanceActorEnrichmentCaseHandoff,
   buildSourceProvenanceAlertEnrichmentPacket,
@@ -2318,6 +2320,223 @@ describe("source provenance TI page contract", () => {
         crossOrgDataIncluded: false
       }
     });
+  });
+
+  test("builds parser status audit events from actor enrichment readiness", () => {
+    const { contract, readiness, lifecycle } = buildBlockedSourceLifecycle();
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({
+      profile,
+      generatedAt: "2026-06-29T12:05:00.000Z"
+    });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({
+      activationReadiness: readiness,
+      generatedAt: "2026-06-29T12:45:00.000Z"
+    });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const parserSummary = buildSourceProvenanceParserHealthProvenanceSummary({
+      parserHealthPacket,
+      activationDecisionReceipt: decisionReceipt,
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const gapReceipt = buildSourceProvenanceActorEnrichmentGapReceipt({
+      profile,
+      sourcePlan: plan,
+      parserHealthSummary: parserSummary,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+    const coverageExport = buildSourceProvenanceActorEnrichmentCoverageExport({
+      gapReceipt,
+      generatedAt: "2026-06-29T12:50:00.000Z"
+    });
+    const handoff = buildSourceProvenanceActorEnrichmentCoverageHandoff({
+      coverageExport,
+      generatedAt: "2026-06-29T12:51:00.000Z"
+    });
+    const receipt = buildSourceProvenanceActorEnrichmentConsumerReadinessReceipt({
+      handoff,
+      generatedAt: "2026-06-29T12:52:00.000Z"
+    });
+    const packet = buildSourceProvenanceActorEnrichmentParserStatusAuditPacket({
+      receipt,
+      generatedAt: "2026-06-29T12:54:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      consumerReadinessReceiptId: receipt.id,
+      summary: {
+        readyConsumers: 2,
+        blockedConsumers: 1,
+        actionRequiredEvents: 4,
+        retryableEvents: expect.any(Number),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "darkweb_metadata", "telegram_public"]),
+        parserStatuses: expect.arrayContaining(["not_tested", "ready", "retry_scheduled", "blocked"]),
+        blockerCodes: expect.arrayContaining(["coverage_pending", "parser_retry", "policy_blocked"]),
+        lastSuccessAt: "2026-06-29T12:46:00.000Z",
+        lastFailureAt: "2026-06-29T12:47:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(packet.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        eventType: "consumer_readiness",
+        consumer: "publicTI",
+        state: "ready",
+        parserStatus: "ready",
+        coverageCounts: expect.objectContaining({ covered: 3, retryable: 1, blocked: 1 }),
+        provenanceIds: expect.objectContaining({
+          actorEnrichmentCoverageHandoffId: handoff.id,
+          coverageExportId: coverageExport.id,
+          sourceHealthProofIds: expect.any(Array),
+          activationDecisionIds: expect.any(Array)
+        })
+      }),
+      expect.objectContaining({
+        eventType: "blocker_action",
+        consumer: "alertGeneration",
+        field: "campaigns",
+        blockerCode: "parser_retry",
+        ownerLane: "parser",
+        action: "retry",
+        parserStatus: "retry_scheduled",
+        retry: expect.objectContaining({
+          retryable: true,
+          nextRetryAt: "2026-06-29T12:37:00.000Z",
+          retryFields: expect.arrayContaining(["campaigns"])
+        }),
+        provenanceRef: expect.any(String)
+      }),
+      expect.objectContaining({
+        eventType: "blocker_action",
+        consumer: "sourceOps",
+        field: "infrastructure",
+        blockerCode: "policy_blocked",
+        ownerLane: "policy",
+        action: "request_policy_approval",
+        parserStatus: "blocked"
+      })
+    ]));
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: false }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "events[].parserStatus",
+      "events[].retry",
+      "events[].provenanceIds",
+      "summary"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("keeps parser status audit packet ready for backed actor coverage", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow(), {
+        ...sourceRow(),
+        sourceId: "src_public_advisory",
+        sourceFamily: "public_advisory",
+        captureId: "cap_public_advisory_apt29",
+        contentHash: "hash_public_advisory_apt29",
+        provenance: "Public advisory records APT29 infrastructure and targeting coverage.",
+        relationship: "targeting",
+        confidence: 0.8
+      }, {
+        ...sourceRow(),
+        sourceId: "src_actor_page",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt29",
+        contentHash: "hash_actor_page_apt29",
+        provenance: "Actor page records Nobelium aliases and source provenance coverage.",
+        relationship: "actor_activity",
+        confidence: 0.78
+      }]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: {
+        aliases: ["APT29", "Nobelium"],
+        motivations: ["espionage"],
+        sectors: ["government"],
+        regions: ["Europe"],
+        infrastructure: ["example.com"],
+        techniques: ["phishing"],
+        campaigns: ["diplomatic phishing"]
+      }
+    });
+    const gapReceipt = buildSourceProvenanceActorEnrichmentGapReceipt({
+      profile,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+    const coverageExport = buildSourceProvenanceActorEnrichmentCoverageExport({
+      gapReceipt,
+      generatedAt: "2026-06-29T12:50:00.000Z"
+    });
+    const handoff = buildSourceProvenanceActorEnrichmentCoverageHandoff({
+      coverageExport,
+      generatedAt: "2026-06-29T12:51:00.000Z"
+    });
+    const receipt = buildSourceProvenanceActorEnrichmentConsumerReadinessReceipt({
+      handoff,
+      generatedAt: "2026-06-29T12:52:00.000Z"
+    });
+    const packet = buildSourceProvenanceActorEnrichmentParserStatusAuditPacket({
+      receipt,
+      generatedAt: "2026-06-29T12:54:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION,
+      ok: true,
+      actor: "APT29",
+      summary: {
+        totalEvents: 3,
+        readyConsumers: 2,
+        blockedConsumers: 0,
+        actionRequiredEvents: 0,
+        retryableEvents: 0,
+        sourceFamilies: [],
+        parserStatuses: ["ready"],
+        blockerCodes: []
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(packet.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", eventType: "consumer_readiness", parserStatus: "ready" }),
+      expect.objectContaining({ consumer: "alertGeneration", eventType: "consumer_readiness", parserStatus: "ready" }),
+      expect.objectContaining({ consumer: "sourceOps", eventType: "consumer_readiness", state: "ready", parserStatus: "ready" })
+    ]));
   });
 
   test("builds offline source update workflow with parser health retry and policy blockers", () => {

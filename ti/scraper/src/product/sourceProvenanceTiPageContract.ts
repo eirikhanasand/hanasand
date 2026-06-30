@@ -16,6 +16,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_EXPORT_SCHEMA_VERSIO
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_HANDOFF_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_coverage_handoff.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CONSUMER_READINESS_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_consumer_readiness_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_ALERT_READINESS_BRIDGE_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_source_alert_readiness_bridge.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_parser_status_audit_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
@@ -1074,6 +1075,64 @@ export type TiSourceProvenanceActorEnrichmentSourceAlertReadinessAction = {
   ownerLane: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["ownerLane"];
   nextRetryAt?: string;
   provenanceRef: string;
+};
+
+export type TiSourceProvenanceActorEnrichmentParserStatusAuditPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  consumerReadinessReceiptId: string;
+  events: TiSourceProvenanceActorEnrichmentParserStatusAuditEvent[];
+  summary: {
+    totalEvents: number;
+    readyConsumers: number;
+    blockedConsumers: number;
+    actionRequiredEvents: number;
+    retryableEvents: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+    blockerCodes: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][];
+    lastSuccessAt?: string;
+    lastFailureAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "sourceOps";
+    ready: boolean;
+    requiredFields: string[];
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+    crossOrgDataIncluded: false;
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentParserStatusAuditEvent = {
+  eventId: string;
+  eventType: "consumer_readiness" | "blocker_action";
+  consumer: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["consumer"];
+  state: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["state"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  coverageCounts: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["coverageCounts"];
+  retry: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["retry"];
+  blockerCode?: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"];
+  field?: TiSourceProvenanceActorProfileGap["field"];
+  ownerLane?: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["ownerLane"];
+  action?: TiSourceProvenanceActorEnrichmentCoverageHandoffAction["action"];
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  provenanceIds: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["provenanceIds"];
+  provenanceRef?: string;
 };
 
 export type TiSourceProvenanceActorProfileSourceUpdateWorkflow = {
@@ -3211,6 +3270,73 @@ export function buildSourceProvenanceActorEnrichmentSourceAlertReadinessBridge(i
       "alertGeneration",
       "sourceHealth",
       "operatorActions[]"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false,
+      crossOrgDataIncluded: false
+    }
+  };
+}
+
+export function buildSourceProvenanceActorEnrichmentParserStatusAuditPacket(input: {
+  receipt: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceActorEnrichmentParserStatusAuditPacket {
+  const generatedAt = input.generatedAt ?? input.receipt.generatedAt;
+  const events = [
+    ...input.receipt.rows.map((row) => actorEnrichmentParserAuditConsumerEvent(input.receipt, row)),
+    ...input.receipt.blockerSummary.map((blocker) => actorEnrichmentParserAuditBlockerEvent(input.receipt, blocker))
+  ];
+  const blockerCodes = uniqueStrings(events.map((event) => event.blockerCode).filter(Boolean).map(String)) as TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][];
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_PARSER_STATUS_AUDIT_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_enrichment_parser_status_audit_packet", `${input.receipt.id}:${generatedAt}:${events.map((event) => `${event.consumer}:${event.eventType}:${event.parserStatus}`).join(",")}`),
+    generatedAt,
+    ok: input.receipt.ok && events.every((event) => event.blockerCode === undefined),
+    tenantId: input.receipt.tenantId,
+    organizationId: input.receipt.organizationId,
+    actor: input.receipt.actor,
+    publicTiRoute: input.receipt.publicTiRoute,
+    consumerReadinessReceiptId: input.receipt.id,
+    events,
+    summary: {
+      totalEvents: events.length,
+      readyConsumers: input.receipt.rows.filter((row) => row.ready).length,
+      blockedConsumers: input.receipt.rows.filter((row) => !row.ready && row.consumer !== "sourceOps").length,
+      actionRequiredEvents: events.filter((event) => event.state === "action_required").length,
+      retryableEvents: events.filter((event) => event.retry.retryable || event.blockerCode === "parser_retry").length,
+      sourceFamilies: input.receipt.sourceHealth.sourceFamilies,
+      parserStatuses: uniqueStrings(events.map((event) => event.parserStatus)) as TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][],
+      blockerCodes,
+      lastSuccessAt: input.receipt.sourceHealth.lastSuccessAt,
+      lastFailureAt: input.receipt.sourceHealth.lastFailureAt,
+      nextRetryAt: input.receipt.sourceHealth.nextRetryAt
+    },
+    consumers: [{
+      consumer: "publicTI",
+      ready: actorEnrichmentConsumerRow(input.receipt, "publicTI").ready,
+      requiredFields: ["events[].consumer", "events[].parserStatus", "events[].provenanceIds"]
+    }, {
+      consumer: "alertGeneration",
+      ready: actorEnrichmentConsumerRow(input.receipt, "alertGeneration").ready,
+      requiredFields: ["events[].retry", "events[].blockerCode", "summary.retryableEvents"]
+    }, {
+      consumer: "sourceOps",
+      ready: actorEnrichmentConsumerRow(input.receipt, "sourceOps").state === "ready" || input.receipt.blockerSummary.length > 0,
+      requiredFields: ["events[].action", "events[].ownerLane", "events[].provenanceRef"]
+    }],
+    payloadShape: [
+      "events[].eventType",
+      "events[].consumer",
+      "events[].parserStatus",
+      "events[].retry",
+      "events[].blockerCode",
+      "events[].provenanceIds",
+      "summary"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -6481,6 +6607,66 @@ function actorEnrichmentSourceAlertReadinessAction(
     nextRetryAt: blocker.nextRetryAt,
     provenanceRef: blocker.provenanceRef
   };
+}
+
+function actorEnrichmentParserAuditConsumerEvent(
+  receipt: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt,
+  row: TiSourceProvenanceActorEnrichmentConsumerReadinessRow
+): TiSourceProvenanceActorEnrichmentParserStatusAuditEvent {
+  const parserStatus = row.ready || row.state === "ready" ? "ready" : row.parserStatuses[0] ?? "not_tested";
+  return {
+    eventId: stableId("ti_source_provenance_actor_enrichment_parser_status_audit_event", `${receipt.id}:${row.consumer}:consumer:${parserStatus}`),
+    eventType: "consumer_readiness",
+    consumer: row.consumer,
+    state: row.state,
+    parserStatus,
+    sourceFamilies: row.sourceFamilies,
+    coverageCounts: row.coverageCounts,
+    retry: row.retry,
+    lastSuccessAt: receipt.sourceHealth.lastSuccessAt,
+    lastFailureAt: receipt.sourceHealth.lastFailureAt,
+    provenanceIds: row.provenanceIds
+  };
+}
+
+function actorEnrichmentParserAuditBlockerEvent(
+  receipt: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt,
+  blocker: TiSourceProvenanceActorEnrichmentConsumerReadinessBlocker
+): TiSourceProvenanceActorEnrichmentParserStatusAuditEvent {
+  const row = actorEnrichmentConsumerRow(receipt, blocker.consumer);
+  const parserStatus = actorEnrichmentParserStatusForBlocker(blocker.code, row);
+  return {
+    eventId: stableId("ti_source_provenance_actor_enrichment_parser_status_audit_event", `${receipt.id}:${blocker.consumer}:${blocker.field}:${blocker.code}`),
+    eventType: "blocker_action",
+    consumer: blocker.consumer,
+    state: row.state,
+    parserStatus,
+    sourceFamilies: row.sourceFamilies,
+    coverageCounts: row.coverageCounts,
+    retry: {
+      retryable: row.retry.retryable || blocker.code === "parser_retry",
+      nextRetryAt: blocker.nextRetryAt ?? row.retry.nextRetryAt,
+      retryFields: row.retry.retryFields.includes(blocker.field) ? row.retry.retryFields : [...row.retry.retryFields, blocker.field]
+    },
+    blockerCode: blocker.code,
+    field: blocker.field,
+    ownerLane: blocker.ownerLane,
+    action: blocker.action,
+    lastSuccessAt: receipt.sourceHealth.lastSuccessAt,
+    lastFailureAt: receipt.sourceHealth.lastFailureAt,
+    provenanceIds: row.provenanceIds,
+    provenanceRef: blocker.provenanceRef
+  };
+}
+
+function actorEnrichmentParserStatusForBlocker(
+  code: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"],
+  row: TiSourceProvenanceActorEnrichmentConsumerReadinessRow
+): TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"] {
+  if (code === "parser_retry") return "retry_scheduled";
+  if (code === "policy_blocked") return "blocked";
+  if (code === "missing_candidate") return "not_tested";
+  return row.parserStatuses[0] ?? "not_tested";
 }
 
 function actorProfileSourceUpdateTask(
