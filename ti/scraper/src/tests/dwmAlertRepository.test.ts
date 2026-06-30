@@ -2191,6 +2191,13 @@ describe("dwm alert repository", () => {
     expect(preservedHandoff.createdEventDispatch.blockerCodes).toContain("duplicate_delivered_dedupe");
     expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme");
     expect(preservedHandoff.createdEventDispatch.selectedCaptureIds).toContain("cap_repo_tg_acme_followup");
+    expect(preservedHandoff.watchlist.alertGenerationRefs[0].source).toBe("organization_shared_watchlist");
+    expect(preservedHandoff.watchlist.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(preservedHandoff.watchlist.alertGenerationRefs[0].dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
+    expect(preservedHandoff.createdEventDispatch.alertGenerationRefs[0].lifecycle).toMatchObject({
+      reason: "customer_watchlist_activation",
+      requestId: "req_customer_watchlist_activation"
+    });
     expect(preservedHandoff.workflowTransitions).toMatchObject({
       schemaVersion: "dwm.alert_workflow_transition_summary.v1",
       actions: ["escalated"],
@@ -2351,17 +2358,26 @@ describe("dwm alert repository", () => {
         }
       }
     });
+    expect(proof.alertGenerationRefs[0].source).toBe("organization_shared_watchlist");
+    expect(proof.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
+    expect(proof.alertGenerationRefs[0].dedupe.key).toBe("org:org_repo_customer:watchlist:watch_item_customer:domain:acme.com");
+    expect(proof.consumerAdapter.alertGenerationRefs[0].source).toBe("organization_shared_watchlist");
+    expect(proof.consumerAdapter.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
     expect(proof.consumerContract.queue.stableFields).toContain("caseHandoff.casePath");
     expect(proof.consumerContract.queue.stableFields).toContain("workflow.transitionEvents");
     expect(proof.consumerContract.queue.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
     expect(proof.consumerContract.queue.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.queue.stableFields).toContain("updatedEvent");
+    expect(proof.consumerAdapter.dashboard.fields).toContain("alertGenerationRefs");
+    expect(proof.consumerAdapter.publicTI.fields).toContain("alertGenerationRefs");
     expect(proof.consumerContract.detail.stableFields).toContain("alertDetailPath");
     expect(proof.consumerContract.detail.stableFields).toContain("generationEvidenceWindow");
     expect(proof.consumerContract.detail.stableFields).toContain("sourceProvenanceSummary.evidenceExcerpts");
     expect(proof.consumerContract.detail.stableFields).toContain("updatedEvent");
     expect(proof.consumerContract.publicTI.stableFields).toContain("provenance.captureIds");
     expect(proof.consumerContract.publicTI.stableFields).toContain("sourceProvenanceSummary.provenanceGaps");
+    expect(proof.consumerContract.publicTI.stableFields).toContain("alertGenerationRefs");
+    expect(proof.consumerContract.publicTI.alertGenerationRefs[0].watchlistItemId).toBe("watch_item_customer");
     expect(proof.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.createdEvent?.alertDetailPath).toBe(preserved.alertDetailPath);
     expect(proof.consumerAdapter.dashboard.fields).toContain("updatedEvent");

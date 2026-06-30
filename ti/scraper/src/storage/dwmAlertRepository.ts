@@ -238,6 +238,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     sourceIds: string[];
     generatedAt?: string;
   };
+  alertGenerationRefs: Array<Record<string, any>>;
   sourceProvenanceSummary: DwmAlertSourceProvenanceSummary;
   createdEvent?: {
     schemaVersion: "dwm.alert_created_event.v1";
@@ -341,6 +342,7 @@ export type DwmAlertCustomerProofHandoffRow = {
     watchlistIds: string[];
     watchlistItemIds: string[];
     alertGeneratorKeys: string[];
+    alertGenerationRefs: Array<Record<string, any>>;
     dashboard: {
       route: "organization_watchlist";
       casePath?: string;
@@ -397,6 +399,7 @@ export type DwmAlertCustomerProofHandoffRow = {
       canConsume: boolean;
       stableFields: string[];
       alertGeneratorKeys: string[];
+      alertGenerationRefs: Array<Record<string, any>>;
     };
   };
   blockerCodes: DwmCustomerProofBlockerCode[];
@@ -495,6 +498,7 @@ export type DwmAlertDownstreamHandoff = {
     watchlistIds: string[];
     watchlistItemIds: string[];
     alertGeneratorKeys: string[];
+    alertGenerationRefs: Array<Record<string, any>>;
   };
   evidence: {
     evidenceCount: number;
@@ -596,6 +600,7 @@ export type DwmAlertDownstreamHandoff = {
     deliveryDedupeKey?: string;
     idempotencyKey?: string;
     workflowEventCount: number;
+    alertGenerationRefs: Array<Record<string, any>>;
     blockerCodes: Array<DwmAlertDownstreamHandoffBlockerCode | DwmDeliveryReadinessBlockerCode>;
   };
   lifecycle: {
@@ -2373,6 +2378,13 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   ].map(String));
   const webhookDestinationIds = uniqueStrings(asStringArray(context.webhookDestinationIds ?? workflow.webhookDestinationIds ?? webhook.webhookDestinationIds));
   const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
+  const alertGenerationRefs = uniqueAlertGenerationRefs([
+    ...asRecordArray(context.alertGenerationRefs),
+    ...asRecordArray(workflow.alertGenerationRefs),
+    ...asRecordArray(webhook.alertGenerationRefs),
+    ...asRecordArray(alert.alertCreatedEvent?.consumerPayload?.alertGenerationRefs),
+    ...asRecordArray(alert.alertUpdatedEvent?.consumerPayload?.alertGenerationRefs)
+  ]);
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert.watchlistItemIds));
   const generationEvidenceWindow = normalizeGenerationEvidenceWindow(context.generationEvidenceWindow ?? workflow.generationEvidenceWindow ?? webhook.generationEvidenceWindow);
@@ -2422,6 +2434,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       sourceIds: uniqueStrings(asStringArray(alert.provenance?.sourceIds ?? (alert.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId))),
       generatedAt: alert.provenance?.generatedAt
     },
+    alertGenerationRefs,
     sourceProvenanceSummary,
     createdEvent,
     updatedEvent,
@@ -2480,11 +2493,12 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       watchlistIds,
       watchlistItemIds,
       alertGeneratorKeys,
+      alertGenerationRefs,
       dashboard: {
         route: "organization_watchlist",
         alertDetailPath,
         casePath: context.casePath ?? alert.casePath ?? workflow.casePath,
-        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "workflow.status", "workflow.transitionEvents", "sourceProvenanceSummary.provenanceGaps", "updatedEvent"]
+        fields: ["organizationId", "tenantId", "alertId", "alertDetailPath", "casePath", "watchlistItemIds", "alertGenerationRefs", "workflow.status", "workflow.transitionEvents", "sourceProvenanceSummary.provenanceGaps", "updatedEvent"]
       },
       helpdesk: {
         redacted: true,
@@ -2493,7 +2507,7 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       },
       publicTI: {
         canConsume: alertGeneratorKeys.length > 0,
-        fields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "alertGeneratorKeys"]
+        fields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "alertGeneratorKeys", "alertGenerationRefs"]
       },
       roleGates: {
         create_watchlist: ["owner", "admin"],
@@ -2540,8 +2554,9 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
       publicTI: {
         redacted: true,
         canConsume: alertGeneratorKeys.length > 0,
-        stableFields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "generationEvidenceWindow.sourceFamilies", "alertGeneratorKeys"],
-        alertGeneratorKeys
+        stableFields: ["organizationId", "tenantId", "sourceFamily", "provenance.captureIds", "sourceProvenanceSummary.provenanceGaps", "generationEvidenceWindow.sourceFamilies", "alertGeneratorKeys", "alertGenerationRefs"],
+        alertGeneratorKeys,
+        alertGenerationRefs
       }
     },
     blockerCodes,
@@ -2678,6 +2693,13 @@ export function buildDwmAlertDownstreamHandoff(input: {
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert?.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert?.watchlistItemIds));
   const alertGeneratorKeys = uniqueStrings(asStringArray(context.alertGeneratorKeys ?? workflow.alertGeneratorKeys ?? webhook.alertGeneratorKeys));
+  const alertGenerationRefs = uniqueAlertGenerationRefs([
+    ...asRecordArray(context.alertGenerationRefs),
+    ...asRecordArray(workflow.alertGenerationRefs),
+    ...asRecordArray(webhook.alertGenerationRefs),
+    ...asRecordArray(alert?.alertCreatedEvent?.consumerPayload?.alertGenerationRefs),
+    ...asRecordArray(alert?.alertUpdatedEvent?.consumerPayload?.alertGenerationRefs)
+  ]);
   const webhookDestinationIds = uniqueStrings(asStringArray(context.webhookDestinationIds ?? workflow.webhookDestinationIds ?? webhook.webhookDestinationIds));
   const deliveryHistoryRefs = uniqueStrings([
     ...asStringArray(context.deliveryHistoryRefs),
@@ -2781,7 +2803,8 @@ export function buildDwmAlertDownstreamHandoff(input: {
     watchlist: {
       watchlistIds,
       watchlistItemIds,
-      alertGeneratorKeys
+      alertGeneratorKeys,
+      alertGenerationRefs
     },
     evidence: {
       evidenceCount,
@@ -2865,6 +2888,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       deliveryDedupeKey,
       idempotencyKey: createdEvent?.eventId && deliveryDedupeKey ? stableId("dwm_alert_created_dispatch", `${orgId ?? tenantId}:${createdEvent.eventId}:${deliveryDedupeKey}:${eventCount}`) : undefined,
       workflowEventCount: eventCount,
+      alertGenerationRefs,
       blockerCodes: createdEventDispatchBlockerCodes
     },
     lifecycle: {
@@ -3012,6 +3036,27 @@ function asStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (value === undefined || value === null || value === "") return [];
   return [String(value)].filter(Boolean);
+}
+
+function asRecordArray(value: unknown): Array<Record<string, any>> {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+}
+
+function uniqueAlertGenerationRefs(refs: Array<Record<string, any>>): Array<Record<string, any>> {
+  const byKey = new Map<string, Record<string, any>>();
+  for (const ref of refs) {
+    const key = [
+      ref.dedupe?.key,
+      ref.organizationId,
+      ref.tenantId,
+      ref.watchlistItemId,
+      ref.termFamily,
+      ref.normalizedTerm
+    ].filter(Boolean).map(String).join(":") || JSON.stringify(ref);
+    if (!byKey.has(key)) byKey.set(key, ref);
+  }
+  return [...byKey.values()];
 }
 
 function buildGenerationReadinessBlockers(input: {
