@@ -13619,6 +13619,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
     const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
     const summary = supportAuditRedactedSummary(timeline)
     const requestIds = uniqueTimelineValues(timeline.map(event => event.requestId))
+    const sourceWorkflows = uniqueTimelineValues(timeline.map(event => supportAuditWorkflowName(event)))
     const supportSessionIds = uniqueTimelineValues(timeline.map(event => {
         const contextSession = text(event.context?.supportSessionId)
         const entityId = text(event.entity?.id)
@@ -13642,7 +13643,16 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             filters,
             requestIds,
             supportSessionIds,
+            sourceWorkflows,
+            bySourceWorkflow: sourceWorkflows.map(workflow => auditFilterQuery({ ...filters, workflow, source: 'admin', service: 'hanasand-api' })),
             entityLinks: supportAuditEntityLinkRollup(timeline),
+        },
+        sourceWorkflowHandoff: {
+            alias: 'sourceWorkflow',
+            workflows: sourceWorkflows,
+            safeForCaseReplay: true,
+            noLiveAccessGrant: true,
+            redacted: true,
         },
         exposedFields: [
             'id',
@@ -13668,6 +13678,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             'links.entity',
             'links.supportSession',
             'links.entities',
+            'actionEvidence.workflow',
         ],
         supportedFilters: Array.from(adminAuditFilters),
         supportWorkflows: [
@@ -13695,6 +13706,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
             `Replay: ${replayQuery}`,
             `Events: ${eventIds.join(', ') || 'none'}`,
             `Requests: ${requestIds.join(', ') || 'none'}`,
+            `Source workflows: ${sourceWorkflows.join(', ') || 'none'}`,
             `Outcomes: ${summary.outcomes.join(', ') || 'none'}`,
             `Actions: ${summary.actions.join(', ') || 'none'}`,
             'Redacted: true',
