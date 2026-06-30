@@ -4307,6 +4307,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
 
     const destinationHealth = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
     const retryPersistence = buildDwmWebhookDeliveryRetryPersistence({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
+    const deliveriesById = new Map(deliveries.map(delivery => [delivery.id, delivery]))
     const retryKeysByDestination = new Map<string, ReturnType<typeof buildDwmWebhookDeliveryRetryPersistence>['deliveryKeys']>()
     for (const key of retryPersistence.deliveryKeys) {
         if (!key.destinationId) continue
@@ -4341,6 +4342,8 @@ export function buildDwmWebhookDashboardReadinessAdapter({
             terminalFailure ? dashboardReadinessBlocker('terminal_failure', 'Latest delivery failure is not retryable.', health.destinationId, health.lastFailure?.errorClass || latestRetryKey?.retry.lastErrorCategory || 'terminal_failure') : null,
         ].filter(Boolean) as ReturnType<typeof dashboardReadinessBlocker>[]
         const healthStatus = dashboardPrimaryHealthStatus(states)
+        const latestDelivery = health.latestAttempt?.deliveryId ? deliveriesById.get(health.latestAttempt.deliveryId) || null : null
+        const latestPayloadPreview = latestDelivery?.payload ? buildDwmWebhookDestinationTestPayloadPreview(latestDelivery.payload) : null
 
         return {
             schemaVersion: 'dwm.webhook.dashboard_destination_readiness.v1',
@@ -4371,6 +4374,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
                 casePath: health.latestAttempt?.casePath || latestRetryKey?.casePath || null,
                 auditEventId: health.latestAttempt?.auditEventId || latestRetryKey?.audit.latestAuditEventId || null,
                 attemptedAt: health.latestAttempt?.attemptedAt || null,
+                discordTemplate: latestPayloadPreview?.context.discordTemplate || null,
             },
             test: {
                 status: health.lastTest.status,

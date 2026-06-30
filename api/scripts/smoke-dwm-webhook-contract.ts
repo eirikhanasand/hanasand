@@ -3565,6 +3565,7 @@ expect(persistedOnlyDestinationTest.status === 'verified' && persistedOnlyDestin
 expect(persistedOnlyDestinationTest.preview === null && persistedOnlyDestinationTest.blockers.every(item => item.code !== 'no_verified_dry_run'), 'Persisted test status should not fake a payload preview or mark the destination untested.', persistedOnlyDestinationTest)
 expect(dashboardReadiness.schemaVersion === 'dwm.webhook.dashboard_readiness.v1' && dashboardReadiness.summary.destinationCount === operationDestinations.length, 'Dashboard readiness should summarize all org destinations.', dashboardReadiness)
 expect(dashboardVerified?.healthStates.includes('verified') && dashboardVerified.latestDeliveryProof.auditEventId === 'audit_replay_duplicate_contract', 'Dashboard readiness should expose verified dry-run/latest delivery proof.', dashboardVerified)
+expect(dashboardVerified?.latestDeliveryProof.discordTemplate?.templateId === 'dwm.discord.alert_replay.v1' && dashboardVerified.latestDeliveryProof.discordTemplate.redaction.webhookSecretExposed === false, 'Dashboard readiness should expose redacted Discord template proof for latest delivery.', dashboardVerified?.latestDeliveryProof.discordTemplate)
 expect(dashboardDisabled?.healthStates.includes('disabled') && dashboardDisabled.blockers.some(item => item.code === 'disabled'), 'Dashboard readiness should expose disabled destination blockers.', dashboardDisabled)
 expect(dashboardSecretMissing?.healthStates.includes('secret_missing') && dashboardSecretMissing.secretState === 'missing', 'Dashboard readiness should expose missing secret/url state without leaking values.', dashboardSecretMissing)
 expect(dashboardRetry?.healthStates.includes('retry_scheduled') && dashboardRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Dashboard readiness should expose scheduled retry/backoff state.', dashboardRetry)
@@ -4168,6 +4169,7 @@ console.log(JSON.stringify({
             'dashboardReadiness.schemaVersion',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',
+            'dashboardReadiness.destinations[].latestDeliveryProof.discordTemplate.templateId',
             'dashboardReadiness.destinations[].retry.nextRetryAt',
             'customerSetup.schemaVersion',
             'customerSetup.summary.destinationCount',
