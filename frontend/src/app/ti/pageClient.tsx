@@ -175,7 +175,18 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [relevanceMarks, setRelevanceMarks] = useState<Record<string, LocalRelevanceMark>>({})
     const [stagedHandoffs, setStagedHandoffs] = useState<Record<string, StagedHandoff>>({})
     const [notes, setNotes] = useState<Record<string, string>>({})
-    const selected = workItems.find(item => item.id === selectedId) ?? workItems[0]
+    const [queueKindFilter, setQueueKindFilter] = useState<AnalystWorkItem['kind'] | 'all'>('all')
+    const [queueSourceFilter, setQueueSourceFilter] = useState('all')
+    const [queueConfidenceFilter, setQueueConfidenceFilter] = useState<'all' | 'high' | 'medium'>('all')
+    const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
+    const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
+        kind: queueKindFilter,
+        source: queueSourceFilter,
+        confidence: queueConfidenceFilter,
+        sort: queueSort,
+    }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
+    const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
+    const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
     const selectedArtifact = actorArtifacts.find(item => item.id === selectedArtifactId) ?? actorArtifacts[0]
     const selectedArtifactHandoffs = selectedArtifact ? buildActorArtifactHandoffs(result, selectedArtifact, actionability) : null
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
@@ -212,7 +223,7 @@ function Results({ result }: { result: TiSearchResponse }) {
             detail: mark.rationale || 'No relevance rationale recorded.',
         }
     })
-    const queueCounts = queueCountsFor(workItems, localDecisions)
+    const queueCounts = queueCountsFor(filteredWorkItems, localDecisions)
     const profileStats = [
         { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
         { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
@@ -222,7 +233,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
     const commandLinks = [
-        { href: '#ti-activity', label: 'Activity queue', value: `${workItems.length} rows`, icon: Inbox },
+        { href: '#ti-activity', label: 'Activity queue', value: `${filteredWorkItems.length}/${workItems.length} rows`, icon: Inbox },
         { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select row', icon: Eye },
         { href: '#ti-sources', label: 'Sources', value: `${sources.length} linked`, icon: Database },
         { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
@@ -231,8 +242,12 @@ function Results({ result }: { result: TiSearchResponse }) {
 
     useEffect(() => {
         if (!workItems.length) return
-        if (!workItems.some(item => item.id === selectedId)) setSelectedId(workItems[0]?.id ?? '')
-    }, [selectedId, workItems])
+        if (filteredWorkItems.length && !filteredWorkItems.some(item => item.id === selectedId)) {
+            setSelectedId(filteredWorkItems[0]?.id ?? '')
+            return
+        }
+        if (!filteredWorkItems.length && !workItems.some(item => item.id === selectedId)) setSelectedId(workItems[0]?.id ?? '')
+    }, [filteredWorkItems, selectedId, workItems])
 
     useEffect(() => {
         if (!actorArtifacts.length) return
@@ -310,9 +325,20 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 <QueueMetric label='High' value={queueCounts.high} />
                                 <QueueMetric label='Closed' value={queueCounts.closed} />
                             </div>
+                            <EvidenceQueueFilters
+                                kind={queueKindFilter}
+                                source={queueSourceFilter}
+                                confidence={queueConfidenceFilter}
+                                sort={queueSort}
+                                sources={queueSourceOptions}
+                                onKindChange={setQueueKindFilter}
+                                onSourceChange={setQueueSourceFilter}
+                                onConfidenceChange={setQueueConfidenceFilter}
+                                onSortChange={setQueueSort}
+                            />
                         </div>
                         <div className='p-2 lg:max-h-[40rem] lg:overflow-y-auto'>
-                            {workItems.map(item => {
+                            {filteredWorkItems.map(item => {
                                 const decision = localDecisions[item.id]
                                 const active = selected?.id === item.id
                                 return (
@@ -320,48 +346,30 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         key={item.id}
                                         type='button'
                                         onClick={() => setSelectedId(item.id)}
-                                        className={`grid w-full gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-transparent bg-transparent hover:border-[#d8dee9] hover:bg-white'}`}
+                                        className={`grid w-full gap-2 rounded-lg border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#8ca7ff] dark:bg-[#172646]' : 'border-transparent bg-transparent hover:border-[#d8dee9] hover:bg-white dark:hover:border-[#314057] dark:hover:bg-[#172131]'}`}
                                     >
                                         <div className='flex items-center justify-between gap-2'>
                                             <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${severityClass(item.severity)}`}>{item.severity}</span>
-                                            <span className='text-[11px] text-[#667085]'>{decision ? decisionLabel(decision.status) : item.status}</span>
+                                            <span className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{decision ? decisionLabel(decision.status) : item.status}</span>
                                         </div>
-                                        <span className='text-sm font-semibold leading-5 text-[#171a21]'>{item.title}</span>
-                                        <span className='line-clamp-2 text-xs leading-5 text-[#667085]'>{item.subtitle}</span>
-                                        <span className='flex flex-wrap gap-2 text-[11px] text-[#667085]'>
+                                        <span className='text-sm font-semibold leading-5 text-[#171a21] dark:text-[#eef4ff]'>{item.title}</span>
+                                        <span className='line-clamp-2 text-xs leading-5 text-[#667085] dark:text-[#9aa8bd]'>{item.subtitle}</span>
+                                        <span className='flex flex-wrap gap-2 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>
                                             <span>{item.timestamp}</span>
+                                            <span>{item.source}</span>
                                             <span>{Math.round(item.confidence * 100)}% confidence</span>
                                             {item.priority ? <span>{item.priority.score}/100 priority</span> : null}
                                         </span>
                                     </button>
                                 )
                             })}
-                            {!workItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#667085]'>No analyst work items returned yet.</p> : null}
+                            {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#667085] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>{workItems.length ? 'No rows match the current filters.' : 'No analyst work items returned yet.'}</p> : null}
                         </div>
                     </aside>
 
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
-                                <ActorIntelligenceDossier
-                                    actor={actorIntel}
-                                    actionability={actionability}
-                                    result={result}
-                                    artifacts={actorArtifacts}
-                                    selectedArtifactId={selectedArtifact?.id}
-                                    onSelectArtifact={setSelectedArtifactId}
-                                />
-                                {actorArtifacts.length ? (
-                                    <ArtifactNavigator
-                                        artifacts={actorArtifacts}
-                                        selectedArtifactId={selectedArtifact?.id}
-                                        onSelectArtifact={setSelectedArtifactId}
-                                    />
-                                ) : null}
-                                {selectedArtifact && selectedArtifactHandoffs ? (
-                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
-                                ) : null}
-
                                 <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
@@ -402,6 +410,24 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         </EvidencePanel>
                                     </div>
                                 </section>
+                                <ActorIntelligenceDossier
+                                    actor={actorIntel}
+                                    actionability={actionability}
+                                    result={result}
+                                    artifacts={actorArtifacts}
+                                    selectedArtifactId={selectedArtifact?.id}
+                                    onSelectArtifact={setSelectedArtifactId}
+                                />
+                                {actorArtifacts.length ? (
+                                    <ArtifactNavigator
+                                        artifacts={actorArtifacts}
+                                        selectedArtifactId={selectedArtifact?.id}
+                                        onSelectArtifact={setSelectedArtifactId}
+                                    />
+                                ) : null}
+                                {selectedArtifact && selectedArtifactHandoffs ? (
+                                    <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
+                                ) : null}
 
                                 <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
                                     <Panel title='Targeting' description='Country, victim, sector, timeframe, incident, and source basis for the selected actor/query.' icon={<Target className='h-4 w-4' />}>
@@ -4935,9 +4961,74 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
 
 function QueueMetric({ label, value }: { label: string; value: number }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
-            <p className='text-base font-semibold text-[#171a21]'>{value}</p>
-            <p className='text-[11px] text-[#667085]'>{label}</p>
+        <div className='rounded-lg border border-[#e0e5ed] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <p className='text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value}</p>
+            <p className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{label}</p>
+        </div>
+    )
+}
+
+function EvidenceQueueFilters({
+    kind,
+    source,
+    confidence,
+    sort,
+    sources,
+    onKindChange,
+    onSourceChange,
+    onConfidenceChange,
+    onSortChange,
+}: {
+    kind: AnalystWorkItem['kind'] | 'all'
+    source: string
+    confidence: 'all' | 'high' | 'medium'
+    sort: 'priority' | 'confidence' | 'freshness'
+    sources: string[]
+    onKindChange: (value: AnalystWorkItem['kind'] | 'all') => void
+    onSourceChange: (value: string) => void
+    onConfidenceChange: (value: 'all' | 'high' | 'medium') => void
+    onSortChange: (value: 'priority' | 'confidence' | 'freshness') => void
+}) {
+    return (
+        <div data-ti-evidence-filters='true' className='mt-3 grid gap-2'>
+            <div className='grid grid-cols-2 gap-2'>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Type</span>
+                    <select value={kind} onChange={event => onKindChange(event.target.value as AnalystWorkItem['kind'] | 'all')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        <option value='all'>All rows</option>
+                        <option value='activity'>Activity</option>
+                        <option value='exposure'>Exposure</option>
+                        <option value='victim'>Victim</option>
+                        <option value='tradecraft'>TTP</option>
+                        <option value='collection'>Collection</option>
+                    </select>
+                </label>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Confidence</span>
+                    <select value={confidence} onChange={event => onConfidenceChange(event.target.value as 'all' | 'high' | 'medium')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        <option value='all'>Any</option>
+                        <option value='high'>70%+</option>
+                        <option value='medium'>50%+</option>
+                    </select>
+                </label>
+            </div>
+            <div className='grid grid-cols-2 gap-2'>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source</span>
+                    <select value={source} onChange={event => onSourceChange(event.target.value)} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        <option value='all'>All sources</option>
+                        {sources.map(item => <option key={item} value={item}>{item}</option>)}
+                    </select>
+                </label>
+                <label className='grid min-w-0 gap-1'>
+                    <span className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Sort</span>
+                    <select value={sort} onChange={event => onSortChange(event.target.value as 'priority' | 'confidence' | 'freshness')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                        <option value='priority'>Priority</option>
+                        <option value='confidence'>Confidence</option>
+                        <option value='freshness'>Freshness</option>
+                    </select>
+                </label>
+            </div>
         </div>
     )
 }
@@ -6771,6 +6862,35 @@ function queueCountsFor(items: AnalystWorkItem[], decisions: Record<string, Loca
         if (item.severity === 'critical' || item.severity === 'high') counts.high += 1
         return counts
     }, { open: 0, high: 0, closed: 0 })
+}
+
+function filteredAnalystWorkItems(
+    items: AnalystWorkItem[],
+    filters: {
+        kind: AnalystWorkItem['kind'] | 'all'
+        source: string
+        confidence: 'all' | 'high' | 'medium'
+        sort: 'priority' | 'confidence' | 'freshness'
+    }
+) {
+    const minConfidence = filters.confidence === 'high' ? 0.7 : filters.confidence === 'medium' ? 0.5 : 0
+    return items
+        .filter(item => filters.kind === 'all' || item.kind === filters.kind)
+        .filter(item => filters.source === 'all' || item.source === filters.source)
+        .filter(item => item.confidence >= minConfidence)
+        .slice()
+        .sort((a, b) => {
+            if (filters.sort === 'confidence') return b.confidence - a.confidence
+            if (filters.sort === 'freshness') return Date.parse(b.timestamp || '') - Date.parse(a.timestamp || '')
+            return (b.priority?.score ?? severityScore(b.severity)) - (a.priority?.score ?? severityScore(a.severity))
+        })
+}
+
+function severityScore(severity: AnalystWorkItem['severity']) {
+    if (severity === 'critical') return 95
+    if (severity === 'high') return 80
+    if (severity === 'medium') return 55
+    return 25
 }
 
 function relevanceMarkFor(
