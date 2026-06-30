@@ -1662,6 +1662,39 @@ export type OrganizationWebhookDestinationAccessDecision = {
         nonmemberDestinationEnumeration: false
         noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds'>
     }
+    dryRunReceipt: {
+        schemaVersion: 'organization.webhook_destination_dry_run_visibility.v1'
+        organizationId: string
+        tenantId: string
+        route: 'POST /v1/dwm/webhooks/deliver'
+        eventType: 'dwm.alert'
+        actor: {
+            userId: string
+            role: OrganizationRole
+            status: 'active'
+        }
+        allowed: boolean
+        allowedRoles: Array<'owner' | 'admin'>
+        summaryVisibleRoles: OrganizationRole[]
+        deniedRoles: Array<'member' | 'viewer'>
+        denialReason: 'role_not_allowed' | 'manual_webhook_selection_required' | null
+        destinationScope: {
+            requiredDestinationOrgId: string
+            selectedDestinationOrgField: 'destination.org_id'
+            selectedDestinationIdField: 'webhookDestinationIds[]'
+            crossOrgDestinationAllowed: false
+            nonmemberDestinationEnumeration: false
+        }
+        readiness: {
+            destinationDeliveryReady: boolean
+            dryRunAllowed: boolean
+            manualSelectionRequired: boolean
+            blockerCodes: string[]
+        }
+        requiredAlertFields: Array<'alert.organizationId' | 'alert.tenantId' | 'alert.watchlistItemIds' | 'alert.workflowContext.alertGeneratorKeys' | 'alert.dedupeKey'>
+        requiredDestinationFields: Array<'destination.id' | 'destination.org_id' | 'destination.enabled' | 'destination.eventSubscriptions'>
+        noLeakFields: Array<'destination.secret' | 'destination.endpoint' | 'otherOrg.destinationIds' | 'otherOrg.alertGeneratorKeys'>
+    }
     proofAssertions: Array<
         | 'destination_org_matches_alert_org'
         | 'idempotency_scoped_to_org_destination_alert'
@@ -7120,6 +7153,60 @@ export function organizationWatchlistAlertTermsExport(
                 'destination.secret',
                 'destination.endpoint',
                 'otherOrg.destinationIds',
+            ],
+        },
+        dryRunReceipt: {
+            schemaVersion: 'organization.webhook_destination_dry_run_visibility.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            route: webhookDestinationOwnership.route,
+            eventType: webhookDestinationOwnership.eventType,
+            actor: {
+                userId: member.userId,
+                role: member.role,
+                status: 'active',
+            },
+            allowed: canManageWebhookDestinations,
+            allowedRoles: ['owner', 'admin'],
+            summaryVisibleRoles: ['owner', 'admin', 'member', 'viewer'],
+            deniedRoles: ['member', 'viewer'],
+            denialReason: canManageWebhookDestinations
+                ? (webhookDestinationOwnership.blockerCodes.includes('manual_webhook_selection_required') ? 'manual_webhook_selection_required' : null)
+                : 'role_not_allowed',
+            destinationScope: {
+                requiredDestinationOrgId: webhookDestinationOwnership.requiredDestinationOrgId,
+                selectedDestinationOrgField: webhookDestinationOwnership.selectedDestinationOrgField,
+                selectedDestinationIdField: webhookDestinationOwnership.selectedDestinationIdField,
+                crossOrgDestinationAllowed: false,
+                nonmemberDestinationEnumeration: webhookDestinationOwnership.nonmemberDestinationEnumeration,
+            },
+            readiness: {
+                destinationDeliveryReady: webhookDestinationOwnership.blockerCodes.length === 0,
+                dryRunAllowed: canManageWebhookDestinations,
+                manualSelectionRequired: webhookDestinationOwnership.blockerCodes.includes('manual_webhook_selection_required'),
+                blockerCodes: Array.from(new Set([
+                    ...webhookDestinationOwnership.blockerCodes,
+                    ...(canManageWebhookDestinations ? [] : ['role_not_allowed']),
+                ])),
+            },
+            requiredAlertFields: [
+                'alert.organizationId',
+                'alert.tenantId',
+                'alert.watchlistItemIds',
+                'alert.workflowContext.alertGeneratorKeys',
+                'alert.dedupeKey',
+            ],
+            requiredDestinationFields: [
+                'destination.id',
+                'destination.org_id',
+                'destination.enabled',
+                'destination.eventSubscriptions',
+            ],
+            noLeakFields: [
+                'destination.secret',
+                'destination.endpoint',
+                'otherOrg.destinationIds',
+                'otherOrg.alertGeneratorKeys',
             ],
         },
         proofAssertions: [
