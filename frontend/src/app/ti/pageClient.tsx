@@ -3351,7 +3351,7 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{stage.label}</p>
                                     <span className={decisionStepStatusClass(stage.state)}>{decisionStepStatusLabel(stage.state)}</span>
                                 </div>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{stage.detail}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(stage.detail)}</p>
                                 <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
                                     {stage.request ? (
                                         <span className='max-w-full break-all rounded-md border border-[#dfe5ee] bg-white px-2 py-1 font-mono text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
@@ -3513,6 +3513,9 @@ function handoffMissingLabel(values: string[]) {
 
 function displayRequirementText(value: string) {
     return value
+        .replace(/GET\s+\/api\/organizations\/:id\/alert-readiness/gi, 'Check org alert state')
+        .replace(/\/api\/organizations\/:id\/alert-readiness/gi, 'org alert state')
+        .replace(/generatedAlertReferences/gi, 'generated alert references')
         .replace(/TiSearchResponse\.actorIntelligence\.malwareTools\/campaigns/gi, 'actor tooling and campaign fields')
         .replace(/actorIntelligence\.structuredProvenance\[\]\.reportDate/gi, 'source report date')
         .replace(/sourceProvenance\[\]\.sourceRequestId/gi, 'source request ID')
