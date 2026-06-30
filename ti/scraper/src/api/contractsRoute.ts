@@ -26,6 +26,11 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION
 } from "../product/sourceProvenanceTiPageContract.ts";
 import {
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION,
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION
+} from "../product/productReadinessConsumerGuidance.ts";
+import {
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_LIST_SCHEMA_VERSION,
   DWM_ORG_ALERT_CASE_ACTION_LEDGER_API_WRITE_SCHEMA_VERSION
 } from "../storage/orgAlertCaseActionLedgerPostgres.ts";
@@ -316,6 +321,38 @@ export function contractIndex() {
         }
       },
       {
+        id: "product_readiness_customer_workflow_envelope",
+        ownerLane: "integration",
+        route: "/v1/contracts",
+        methods: ["GET"],
+        schemas: {
+          envelope: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+          compatibility: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+          consumerFixture: PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION
+        },
+        scopeFields: ["tenantId", "organizationId", "memberRef", "inviteRef", "watchlistId", "alertId", "caseId", "sourceCoverageId", "ownerLane"],
+        recordFields: ["schemaVersion", "version", "state", "workflowPacket", "workflowPacket.steps", "compatibility", "consumerImplementationNotes", "lastVerifiedAt", "safeOutput"],
+        consumerFields: ["orgId", "memberRef", "inviteRef", "watchlistId", "alertId", "caseId", "sourceCoverageId", "provenanceHash", "workflowStatus", "destinationDeliveryState", "supportAuditStatus", "blockerReason", "proofLink", "version", "lastVerifiedAt"],
+        blockerCodes: [
+          "missing_customer_workflow_field",
+          "missing_customer_workflow_step",
+          "missing_consumer_implementation_note",
+          "missing_customer_workflow_proof_link",
+          "unsafe_customer_workflow_output"
+        ],
+        downstreamConsumers: [
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["workflowPacket.steps", "orgId", "watchlistId", "alertId", "caseId", "workflowStatus", "deliveryStatus", "blockerReason", "proofLink"] },
+          { ownerLane: "website", route: "/", requiredFields: ["orgId", "provenanceHash", "sourceCoverage", "blockerReason", "proofLink"] },
+          { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["version", "orgId", "sourceCoverageId", "lastVerifiedAt", "compatibility.ok", "workflowPacket.steps[deploy_eligibility]"] }
+        ],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false,
+          crossOrgDataExposed: false
+        }
+      },
+      {
         id: "org_alert_case_action_ledger",
         ownerLane: "case",
         route: ORG_ALERT_CASE_ACTION_LEDGER_ROUTE,
@@ -490,6 +527,56 @@ export function contractIndex() {
             { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["orgId", "alertId", "caseId", "destinationDeliveryState", "workflowState"] },
             { ownerLane: "publicTI", route: "/ti", requiredFields: ["orgId", "provenanceHash", "sourceCoverage"] },
             { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["orgId", "blockerReason", "owningLane"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+          contractId: "product_readiness_customer_workflow_envelope",
+          ownerLane: "integration",
+          route: "/v1/contracts",
+          scopeFields: ["tenantId", "organizationId", "memberRef", "inviteRef", "watchlistId", "alertId", "caseId", "sourceCoverageId", "ownerLane"],
+          blockerCodes: [
+            "missing_customer_workflow_field",
+            "missing_customer_workflow_step",
+            "missing_consumer_implementation_note",
+            "missing_customer_workflow_proof_link",
+            "unsafe_customer_workflow_output"
+          ],
+          downstreamConsumers: [
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["workflowPacket.steps", "orgId", "watchlistId", "alertId", "caseId", "workflowStatus", "deliveryStatus", "proofLink"] },
+            { ownerLane: "website", route: "/", requiredFields: ["orgId", "sourceCoverage", "provenanceHash", "proofLink"] },
+            { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["version", "orgId", "sourceCoverageId", "lastVerifiedAt", "workflowPacket.steps[deploy_eligibility]"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
+          contractId: "product_readiness_customer_workflow_envelope",
+          ownerLane: "integration",
+          route: "/v1/contracts",
+          scopeFields: ["tenantId", "organizationId", "requiredFieldAliases", "requiredStepIds", "requiredConsumerNoteLanes"],
+          blockerCodes: [
+            "missing_customer_workflow_field",
+            "missing_customer_workflow_step",
+            "missing_consumer_implementation_note",
+            "missing_customer_workflow_proof_link",
+            "unsafe_customer_workflow_output"
+          ],
+          downstreamConsumers: [
+            { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["ok", "state", "missingRequiredFields", "acceptedFutureFields", "blockerCodes"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["ok", "state", "missingRequiredFields", "blockerCodes"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION,
+          contractId: "product_readiness_customer_workflow_envelope",
+          ownerLane: "integration",
+          route: "/v1/contracts",
+          scopeFields: ["tenantId", "organizationId", "consumerLane", "route", "envelopeSchemaVersion"],
+          blockerCodes: ["missing_customer_workflow_field", "missing_customer_workflow_step", "unsafe_customer_workflow_output"],
+          downstreamConsumers: [
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["consumers[].laneId", "consumers[].canReadEnvelope", "consumers[].missingRequiredFields"] },
+            { ownerLane: "website", route: "/", requiredFields: ["consumers[].laneId", "consumers[].canReadEnvelope", "consumers[].proofLinks"] },
+            { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["state", "compatibility.ok", "consumers[].requiredFields"] }
           ]
         }),
         schemaLookupRow({
