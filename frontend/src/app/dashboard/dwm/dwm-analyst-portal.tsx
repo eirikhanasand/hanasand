@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Clock3, Copy, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
-import type { DwmAlert, DwmProductSnapshot } from '@/utils/dwm/product'
+import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
 type PortalAlert = DwmAlert & {
@@ -355,7 +355,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     onTest: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
 }) {
-    const timeline = buildTimeline(alert, deliveries)
     const analystNote = localState?.note ?? ''
     const assignee = localState?.assignee ?? alert.assignedOwner ?? 'Unassigned'
     const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
@@ -380,6 +379,13 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     const [selectedEvidenceId, setSelectedEvidenceId] = useState(alert.evidence[0]?.id ?? '')
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
+    const timeline = buildTimeline(alert, deliveries, {
+        localState,
+        selectedEvidence,
+        selectedEntity,
+        sourceFilter,
+        actionMessage,
+    })
     async function copyHash(value: string) {
         try {
             await navigator.clipboard.writeText(value)
@@ -413,6 +419,16 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 onReplay={onReplay}
                 onTest={onTest}
                 onSend={onSend}
+            />
+
+            <SelectedContextBar
+                alert={alert}
+                selectedEvidence={selectedEvidence}
+                selectedEntity={selectedEntity}
+                sourceFilter={sourceFilter}
+                workflowContext={workflowContext}
+                copiedHash={copiedHash}
+                onCopyHash={copyHash}
             />
 
             <section className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:grid-cols-2 xl:grid-cols-5'>
@@ -825,6 +841,47 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
     )
 }
 
+function SelectedContextBar({ alert, selectedEvidence, selectedEntity, sourceFilter, workflowContext, copiedHash, onCopyHash }: {
+    alert: PortalAlert
+    selectedEvidence?: PortalAlert['evidence'][number]
+    selectedEntity?: ReturnType<typeof buildExposureEntities>[number]
+    sourceFilter: string
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+    copiedHash: string
+    onCopyHash: (value: string) => void
+}) {
+    const sourceLabel = sourceFilter === 'all' ? stateLabel(alert.sourceFamily) : stateLabel(sourceFilter)
+    return (
+        <section className='grid gap-2 rounded-lg border border-[#d8e2f0] bg-[#f8fbff] p-3 lg:grid-cols-[1fr_1fr_auto] lg:items-center'>
+            <div className='min-w-0'>
+                <p className='text-[10px] font-semibold text-[#667085]'>Selected context</p>
+                <p className='mt-1 truncate text-sm font-semibold text-[#171a21]' title={selectedEntity?.name || selectedEvidence?.sourceName || alert.company}>
+                    {selectedEntity?.name || selectedEvidence?.sourceName || alert.company}
+                </p>
+                <p className='mt-0.5 truncate text-xs text-[#667085]' title={selectedEvidence?.excerpt || alert.claimSummary}>
+                    {sourceLabel} · {selectedEvidence ? relativeTimeLabel(selectedEvidence.observedAt || selectedEvidence.firstSeenAt || alert.firstSeenAt) : relativeTimeLabel(alert.lastSeenAt || alert.firstSeenAt)}
+                </p>
+            </div>
+            <div className='grid gap-2 text-[11px] sm:grid-cols-3'>
+                <ActionStatus label='Entity' value={selectedEntity ? stateLabel(selectedEntity.kind) : stateLabel(alert.matchedTerm.kind)} />
+                <ActionStatus label='Evidence' value={selectedEvidence?.contentHash || `${alert.evidence.length} rows`} />
+                <ActionStatus label='Route' value={workflowContext.caseId || stateLabel(alert.webhookDelivery.recommendedRoute)} />
+            </div>
+            <div className='flex flex-wrap gap-2 lg:justify-end'>
+                {selectedEvidence?.contentHash && (
+                    <button type='button' onClick={() => onCopyHash(selectedEvidence.contentHash)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Copy className='h-4 w-4' />
+                        {copiedHash === selectedEvidence.contentHash ? 'Copied' : 'Copy hash'}
+                    </button>
+                )}
+                <a href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                    Organization
+                </a>
+            </div>
+        </section>
+    )
+}
+
 function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
@@ -898,6 +955,12 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
     const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
     const hasDeliveryRoute = Boolean(alert.webhookContext?.hasWebhookRoute || alert.webhookContext?.webhookDestinationIds?.length || alert.webhookDelivery.dedupeKey)
+    const transitionReady = actionReady(alert, 'transition')
+    const replayReady = actionReady(alert, 'replay')
+    const deliverReady = actionReady(alert, 'deliver') && hasDeliveryRoute
+    const suppressReady = actionReady(alert, 'suppress')
+    const closeReady = actionReady(alert, 'close')
+    const reopenReady = actionReady(alert, 'reopen')
     return (
         <section className='grid gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
             <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
@@ -907,15 +970,21 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'candidate pending'} />
             </div>
             <div className='grid gap-2'>
+                <div className='flex flex-wrap gap-1.5 xl:justify-end'>
+                    <ActionAvailability label='Workflow' ready={transitionReady} />
+                    <ActionAvailability label='Replay' ready={replayReady} />
+                    <ActionAvailability label='Delivery' ready={deliverReady} />
+                    <ActionAvailability label='Close' ready={closeReady} />
+                </div>
                 <div className='flex flex-wrap gap-2 xl:justify-end'>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                    <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
-                    <CaseButton busy={busyAction === `test:${alert.id}`} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
-                    <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
+                    <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
+                    <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
+                    <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!suppressReady} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!closeReady} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!reopenReady} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
                 </div>
                 {actionMessage && (
                     <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
@@ -924,6 +993,14 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 )}
             </div>
         </section>
+    )
+}
+
+function ActionAvailability({ label, ready }: { label: string, ready: boolean }) {
+    return (
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
+            {label}: {ready ? 'ready' : 'blocked'}
+        </span>
     )
 }
 
@@ -1296,10 +1373,10 @@ function WorkTile({ title, body, state }: { title: string, body: string, state: 
     )
 }
 
-function CaseButton({ busy, icon, onClick, children }: { busy: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false', onClick: () => void, children: string }) {
+function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false', onClick: () => void, children: string }) {
     const Icon = busy ? Loader2 : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
     return (
-        <button type='button' onClick={onClick} disabled={busy} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
             {children}
         </button>
@@ -1412,8 +1489,52 @@ function stateWeight(alert: PortalAlert) {
     return 2
 }
 
-function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[]) {
+function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[], context?: {
+    localState?: LocalCaseState
+    selectedEvidence?: PortalAlert['evidence'][number]
+    selectedEntity?: ReturnType<typeof buildExposureEntities>[number]
+    sourceFilter?: string
+    actionMessage?: { ok: boolean, text: string } | null
+}) {
     const events = alert.workflowEvents ?? []
+    const localRows = [
+        context?.localState?.assignee ? {
+            id: `${alert.id}:local-owner`,
+            at: new Date().toISOString(),
+            title: 'Owner selected',
+            detail: context.localState.assignee,
+        } : undefined,
+        context?.localState?.note ? {
+            id: `${alert.id}:local-note`,
+            at: new Date().toISOString(),
+            title: 'Decision drafted',
+            detail: context.localState.note,
+        } : undefined,
+        context?.selectedEntity ? {
+            id: `${alert.id}:entity:${context.selectedEntity.key}`,
+            at: context.selectedEntity.newestAt,
+            title: 'Entity pivot',
+            detail: `${stateLabel(context.selectedEntity.kind)} · ${context.selectedEntity.name}`,
+        } : undefined,
+        context?.selectedEvidence ? {
+            id: `${alert.id}:evidence:${context.selectedEvidence.id}`,
+            at: context.selectedEvidence.observedAt || context.selectedEvidence.firstSeenAt || alert.firstSeenAt,
+            title: 'Evidence selected',
+            detail: `${context.selectedEvidence.sourceName} · ${context.selectedEvidence.contentHash}`,
+        } : undefined,
+        context?.sourceFilter && context.sourceFilter !== 'all' ? {
+            id: `${alert.id}:source-filter:${context.sourceFilter}`,
+            at: alert.lastSeenAt || alert.firstSeenAt,
+            title: 'Source filter',
+            detail: stateLabel(context.sourceFilter),
+        } : undefined,
+        context?.actionMessage ? {
+            id: `${alert.id}:action-result`,
+            at: new Date().toISOString(),
+            title: context.actionMessage.ok ? 'Action completed' : 'Action failed',
+            detail: context.actionMessage.text,
+        } : undefined,
+    ].filter(Boolean) as Array<{ id: string, at: string, title: string, detail: string }>
     return [
         { id: `${alert.id}:created`, at: alert.savedAt || alert.firstSeenAt, title: 'Case opened', detail: `${stateLabel(alert.sourceFamily)} evidence matched ${alert.matchedTerm.value}.` },
         ...events.map(event => ({
@@ -1431,7 +1552,18 @@ function buildTimeline(alert: PortalAlert, deliveries: DeliveryItem[]) {
             title: `Webhook ${stateLabel(delivery.status)}`,
             detail: delivery.error || `HTTP ${delivery.httpStatus ?? 0} · ${delivery.endpointHash}`,
         })),
+        ...localRows,
     ].sort((a, b) => String(b.at).localeCompare(String(a.at)))
+}
+
+function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
+    const actionState = alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness
+    if (!actionState) return true
+    const row = actionState.actions?.find(item => item.action === action)
+    if (row) return row.ready
+    if (actionState.blockedActions?.includes(action)) return false
+    if (actionState.readyActions?.length) return actionState.readyActions.includes(action)
+    return true
 }
 
 async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number }> {
