@@ -156,6 +156,9 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
     .filter((row: any) => row.tenantId === tenantId)
     .filter((row: any) => !scope.organizationId || row.organizationId === scope.organizationId)
     .filter((alert: any) => alertMatchesDwmAlertFilters(alert, url));
+  const visibleAlertItems = visibleAlerts
+    .map((alert: any) => buildDwmAlertListItem(alert, options))
+    .filter((alert: any) => alertMatchesDwmAlertReadinessFilters(alert, url));
   return json({
     organization: scope.organization,
     visibilityDecision: access.visibilityDecision,
@@ -164,11 +167,11 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
       tenantId,
       organization: scope.organization,
       access,
-      alerts: visibleAlerts,
+      alerts: visibleAlertItems,
       options,
       url
     }),
-    alerts: visibleAlerts.map((alert: any) => buildDwmAlertListItem(alert, options))
+    alerts: visibleAlertItems
   });
 }
 
@@ -1731,7 +1734,7 @@ function buildDwmAlertQueueVisibility(input: {
         "alertQueueVisibility.generationReadiness.sourceFamilyCoverage",
         "alertQueueVisibility.generationReadiness.sourceFamilyGaps"
       ],
-      filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId"],
+      filters: ["organizationId", "status", "sourceFamily", "eventType", "hasUpdatedEvent", "watchlistId", "watchlistItemId", "captureId", "caseId", "customerReadinessState", "customerReady", "caseReady", "deliveryReady", "workflowReady", "readinessBlocker", "readyAction", "blockedAction", "transitionAction", "transitionBlocker"],
       zeroAlertContract: "dwm.zero_alert_proof.v1"
     },
     watchlistScope: {
@@ -1758,7 +1761,16 @@ function buildDwmAlertQueueVisibility(input: {
       status: input.url.searchParams.get("status") ?? input.url.searchParams.get("workflowStatus") ?? null,
       category: input.url.searchParams.get("category") ?? input.url.searchParams.get("termCategory") ?? null,
       watchlistItemId: input.url.searchParams.get("watchlistItemId"),
-      alertGeneratorKey: input.url.searchParams.get("alertGeneratorKey") ?? input.url.searchParams.get("generationRef")
+      alertGeneratorKey: input.url.searchParams.get("alertGeneratorKey") ?? input.url.searchParams.get("generationRef"),
+      customerReadinessState: input.url.searchParams.get("customerReadinessState") ?? input.url.searchParams.get("readinessState"),
+      customerReady: input.url.searchParams.get("customerReady") ?? input.url.searchParams.get("alertReady"),
+      caseReady: input.url.searchParams.get("caseReady") ?? input.url.searchParams.get("caseHandoffReady"),
+      deliveryReady: input.url.searchParams.get("deliveryReady") ?? input.url.searchParams.get("webhookReady"),
+      readinessBlocker: input.url.searchParams.get("readinessBlocker") ?? input.url.searchParams.get("blockerCode"),
+      readyAction: input.url.searchParams.get("readyAction"),
+      blockedAction: input.url.searchParams.get("blockedAction"),
+      transitionAction: input.url.searchParams.get("transitionAction"),
+      transitionBlocker: input.url.searchParams.get("transitionBlocker")
     },
     safeForDashboard: true,
     nonmemberEnumeration: false
@@ -2048,6 +2060,22 @@ function alertMatchesDwmAlertFilters(alert: any, url: URL) {
     ].filter(Boolean).join(" ").toLowerCase();
     if (!haystack.includes(query)) return false;
   }
+  return true;
+}
+
+function alertMatchesDwmAlertReadinessFilters(alert: any, url: URL) {
+  const readiness = alert.customerReadiness ?? {};
+  if (!matchesParam(url, ["customerReadinessState", "readinessState"], readiness.state)) return false;
+  if (!matchesBooleanParam(url, ["customerReady", "alertReady"], Boolean(readiness.ready))) return false;
+  if (!matchesBooleanParam(url, ["caseReady", "caseHandoffReady"], Boolean(readiness.caseHandoff?.ready))) return false;
+  if (!matchesBooleanParam(url, ["deliveryReady", "webhookReady"], Boolean(readiness.deliveryReadiness?.ready))) return false;
+  if (!matchesBooleanParam(url, ["workflowReady", "analystWorkflowReady"], Boolean(readiness.workflowReadiness?.ready))) return false;
+  if (!matchesAnyParam(url, ["readinessBlocker", "blockerCode"], readiness.blockerCodes ?? [])) return false;
+  if (!matchesAnyParam(url, ["sourceCoverageBlocker"], readiness.sourceCoverage?.blockerCodes ?? [])) return false;
+  if (!matchesAnyParam(url, ["readyAction"], readiness.workflowReadiness?.readyActions ?? [])) return false;
+  if (!matchesAnyParam(url, ["blockedAction"], (readiness.workflowReadiness?.blockedActions ?? []).map((row: any) => row.action))) return false;
+  if (!matchesAnyParam(url, ["transitionAction"], readiness.transitionHandoff?.actions ?? [])) return false;
+  if (!matchesAnyParam(url, ["transitionBlocker"], readiness.transitionHandoff?.blockerCodes ?? [])) return false;
   return true;
 }
 

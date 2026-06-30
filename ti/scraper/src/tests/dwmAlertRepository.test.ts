@@ -3854,6 +3854,27 @@ describe("dwm alert repository", () => {
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.transitionHandoff");
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.transitionHandoff.replayReceipt");
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.deliveryReadiness");
+    expect(list.alertQueueVisibility.consumerContract.filters).toEqual(expect.arrayContaining(["customerReadinessState", "caseReady", "deliveryReady", "readinessBlocker", "readyAction", "blockedAction", "transitionAction"]));
+
+    const readinessFilteredResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme&customerReadinessState=delivery_handoff_blocked&caseReady=true&deliveryReady=false&readinessBlocker=missing_org_ref&readyAction=replay&blockedAction=deliver&transitionAction=assigned"), options);
+    const readinessFiltered = await readinessFilteredResponse.json() as any;
+    expect(readinessFilteredResponse.status).toBe(200);
+    expect(readinessFiltered.alerts.map((alert: any) => alert.id)).toEqual([list.alerts[0].id]);
+    expect(readinessFiltered.alertQueueVisibility.filters).toMatchObject({
+      customerReadinessState: "delivery_handoff_blocked",
+      caseReady: "true",
+      deliveryReady: "false",
+      readinessBlocker: "missing_org_ref",
+      readyAction: "replay",
+      blockedAction: "deliver",
+      transitionAction: "assigned"
+    });
+
+    const deliveryReadyResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme&deliveryReady=true"), options);
+    const deliveryReadyList = await deliveryReadyResponse.json() as any;
+    expect(deliveryReadyResponse.status).toBe(200);
+    expect(deliveryReadyList.alerts).toHaveLength(0);
+    expect(deliveryReadyList.alertQueueVisibility.counts.visibleAlertCount).toBe(0);
 
     const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1${list.alerts[0].alertDetailPath}`), options);
     const detail = await detailResponse.json() as any;
