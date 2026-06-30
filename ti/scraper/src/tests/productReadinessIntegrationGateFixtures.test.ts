@@ -4,15 +4,19 @@ import {
   PRODUCT_READINESS_CONSUMER_VERIFICATION_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION,
   PRODUCT_READINESS_INTEGRATION_GATE_FIXTURE_SCHEMA_VERSION,
+  PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION,
+  PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_SCHEMA_VERSION,
   PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_RECEIPTS_SCHEMA_VERSION,
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixture,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessOwnerLaneReceiptExamples,
   buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
+  productReadinessOwnerLaneReceiptExamplesGuard,
   productReadinessSchemaLookupMetadataGuard,
   productReadinessWorkflowAcceptanceGuard
 } from "../product/productReadinessIntegrationGateFixtures.ts";
@@ -58,6 +62,22 @@ describe("product readiness integration gate fixtures", () => {
     });
     expect(fixture.workflowAcceptance).toMatchObject({
       schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
+      ok: true,
+      blockerCodes: [],
+      requiredWorkflowIds: [
+        "org_setup",
+        "shared_watchlists",
+        "source_health",
+        "alert_generation",
+        "webhook_delivery",
+        "case_workflow",
+        "public_ti_handoff",
+        "support_recovery",
+        "website_readiness"
+      ]
+    });
+    expect(fixture.ownerLaneReceiptExamples).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION,
       ok: true,
       blockerCodes: [],
       requiredWorkflowIds: [
@@ -301,6 +321,46 @@ describe("product readiness integration gate fixtures", () => {
         ])
       }
     });
+    expect(byKind.get("missing_owner_lane_schema_lookup")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_owner_lane_schema_lookup"],
+      actualBlockerCodes: expect.arrayContaining(["missing_owner_lane_schema_lookup"]),
+      ownerLaneReceiptExamples: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({ workflowId: "source_health", schemaLookupRefCount: 0 })
+        ])
+      }
+    });
+    expect(byKind.get("stale_owner_lane_receipt_example")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["stale_owner_lane_receipt_example"],
+      actualBlockerCodes: expect.arrayContaining(["stale_owner_lane_receipt_example"])
+    });
+    expect(byKind.get("untested_owner_lane_receipt_example")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["untested_owner_lane_receipt_example"],
+      actualBlockerCodes: expect.arrayContaining(["untested_owner_lane_receipt_example"])
+    });
+    expect(byKind.get("missing_owner_lane_consumer")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_owner_lane_consumer"],
+      actualBlockerCodes: expect.arrayContaining(["missing_owner_lane_consumer"])
+    });
+    expect(byKind.get("prompt_literal_owner_lane_copy")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["owner_lane_copy_guard_control_room", "owner_lane_copy_guard_signal"],
+      actualBlockerCodes: expect.arrayContaining(["owner_lane_copy_guard_control_room", "owner_lane_copy_guard_signal"])
+    });
+    expect(byKind.get("malformed_owner_lane_receipt_example")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_owner_lane", "missing_owner_lane_self_validate_command", "missing_owner_lane_payload_shape"],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_owner_lane",
+        "missing_owner_lane_self_validate_command",
+        "missing_owner_lane_payload_shape"
+      ])
+    });
   });
 
   test("keeps fixture output metadata-only for integration logs", () => {
@@ -518,6 +578,74 @@ describe("product readiness integration gate fixtures", () => {
         "workflow_copy_guard_how_this_feeds",
         "workflow_copy_guard_signal",
         "cross_workflow_inconsistency"
+      ])
+    });
+  });
+
+  test("publishes owner-lane receipt examples for adjacent lane self-validation", () => {
+    const contract = JSON.parse(JSON.stringify(contractIndex())) as ReturnType<typeof contractIndex>;
+    const workflowReceipts = buildProductReadinessWorkflowAcceptanceReceipts(contract);
+    const examples = buildProductReadinessOwnerLaneReceiptExamples(workflowReceipts);
+    const guard = productReadinessOwnerLaneReceiptExamplesGuard(examples);
+
+    expect(examples).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      proofCommand: expect.stringContaining("check:product-readiness-contracts"),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(examples.examples.map((example) => [example.workflowId, example.ownerLane])).toEqual([
+      ["org_setup", "org"],
+      ["shared_watchlists", "watchlist"],
+      ["source_health", "source"],
+      ["alert_generation", "alert"],
+      ["webhook_delivery", "webhook"],
+      ["case_workflow", "case"],
+      ["public_ti_handoff", "publicTI"],
+      ["support_recovery", "support"],
+      ["website_readiness", "website"]
+    ]);
+    expect(examples.examples.every((example) => example.selfValidateCommand.includes("check:product-readiness-contracts"))).toBe(true);
+    expect(examples.examples.every((example) => example.payloadShape.requiredFields.includes("ownerLane"))).toBe(true);
+    expect(guard).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      ok: true,
+      blockerCodes: [],
+      proofCommand: expect.stringContaining("check:product-readiness-contracts")
+    });
+
+    const broken = JSON.parse(JSON.stringify(examples)) as typeof examples;
+    const source = broken.examples.find((example) => example.workflowId === "source_health");
+    if (!source) throw new Error("source_health owner-lane example missing");
+    source.ownerLane = "";
+    source.schemaLookupRefs = [];
+    source.consumerOwnerLanes = [];
+    source.focusedCheck.result = "not_run" as "pass";
+    source.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
+    source.selfValidateCommand = "";
+    source.payloadShape.requiredFields = [];
+    source.uiCopyLabel = "control room signal";
+
+    const brokenGuard = productReadinessOwnerLaneReceiptExamplesGuard(broken);
+
+    expect(brokenGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_owner_lane",
+        "missing_owner_lane_schema_lookup",
+        "missing_owner_lane_consumer",
+        "untested_owner_lane_receipt_example",
+        "stale_owner_lane_receipt_example",
+        "missing_owner_lane_self_validate_command",
+        "missing_owner_lane_payload_shape",
+        "owner_lane_copy_guard_control_room",
+        "owner_lane_copy_guard_signal"
       ])
     });
   });

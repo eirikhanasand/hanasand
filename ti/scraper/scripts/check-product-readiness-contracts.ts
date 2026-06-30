@@ -2,9 +2,11 @@ import { contractIndex } from "../src/api/contractsRoute.ts";
 import {
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessOwnerLaneReceiptExamples,
   buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
+  productReadinessOwnerLaneReceiptExamplesGuard,
   productReadinessSchemaLookupMetadataGuard,
   productReadinessWorkflowAcceptanceGuard
 } from "../src/product/productReadinessIntegrationGateFixtures.ts";
@@ -14,7 +16,11 @@ const gate = contract.productReadinessIntegrationGate;
 const consumerProofMetadata = productReadinessConsumerProofMetadataGuard(contract);
 const schemaLookupMetadata = productReadinessSchemaLookupMetadataGuard(contract);
 const consumerVerification = productReadinessConsumerVerificationGuard(buildProductReadinessConsumerVerificationLedger(contract));
-const workflowAcceptance = productReadinessWorkflowAcceptanceGuard(buildProductReadinessWorkflowAcceptanceReceipts(contract));
+const workflowAcceptanceReceipts = buildProductReadinessWorkflowAcceptanceReceipts(contract);
+const workflowAcceptance = productReadinessWorkflowAcceptanceGuard(workflowAcceptanceReceipts);
+const ownerLaneReceiptExamples = productReadinessOwnerLaneReceiptExamplesGuard(
+  buildProductReadinessOwnerLaneReceiptExamples(workflowAcceptanceReceipts)
+);
 const consumerProofMetadataSummary = {
   schemaVersion: consumerProofMetadata.schemaVersion,
   route: consumerProofMetadata.route,
@@ -84,6 +90,28 @@ const workflowAcceptanceSummary = {
   })),
   safeOutput: workflowAcceptance.safeOutput
 };
+const ownerLaneReceiptExamplesSummary = {
+  schemaVersion: ownerLaneReceiptExamples.schemaVersion,
+  route: ownerLaneReceiptExamples.route,
+  ok: ownerLaneReceiptExamples.ok,
+  rowCount: ownerLaneReceiptExamples.rowCount,
+  requiredWorkflowIds: ownerLaneReceiptExamples.requiredWorkflowIds,
+  missingWorkflowIds: ownerLaneReceiptExamples.missingWorkflowIds,
+  verifiedAt: ownerLaneReceiptExamples.verifiedAt,
+  staleBefore: ownerLaneReceiptExamples.staleBefore,
+  proofCommand: ownerLaneReceiptExamples.proofCommand,
+  blockerCodes: ownerLaneReceiptExamples.blockerCodes,
+  failingRows: ownerLaneReceiptExamples.rows.filter((row) => !row.ok).map((row) => ({
+    exampleId: row.exampleId,
+    workflowId: row.workflowId,
+    ownerLane: row.ownerLane,
+    blockerCodes: row.blockerCodes,
+    schemaLookupRefCount: row.schemaLookupRefCount,
+    consumerOwnerLanes: row.consumerOwnerLanes,
+    payloadShapeRequiredFieldCount: row.payloadShapeRequiredFieldCount
+  })),
+  safeOutput: ownerLaneReceiptExamples.safeOutput
+};
 const fixtures = buildProductReadinessIntegrationGateFixtures();
 const fixtureChecks = fixtures.map((fixture) => ({
   kind: fixture.kind,
@@ -94,10 +122,17 @@ const fixtureChecks = fixtures.map((fixture) => ({
   consumerProofMetadataOk: fixture.consumerProofMetadata.ok,
   schemaLookupMetadataOk: fixture.schemaLookupMetadata.ok,
   consumerVerificationOk: fixture.consumerVerification.ok,
-  workflowAcceptanceOk: fixture.workflowAcceptance.ok
+  workflowAcceptanceOk: fixture.workflowAcceptance.ok,
+  ownerLaneReceiptExamplesOk: fixture.ownerLaneReceiptExamples.ok
 }));
 const fixturesOk = fixtureChecks.every((fixture) => fixture.passed);
-const ok = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && workflowAcceptance.ok && fixturesOk;
+const ok = gate.ok
+  && consumerProofMetadata.ok
+  && schemaLookupMetadata.ok
+  && consumerVerification.ok
+  && workflowAcceptance.ok
+  && ownerLaneReceiptExamples.ok
+  && fixturesOk;
 
 console.log(JSON.stringify({
   ok,
@@ -119,6 +154,7 @@ console.log(JSON.stringify({
   schemaLookupMetadata: schemaLookupMetadataSummary,
   consumerVerification: consumerVerificationSummary,
   workflowAcceptance: workflowAcceptanceSummary,
+  ownerLaneReceiptExamples: ownerLaneReceiptExamplesSummary,
   fixtureSchemaVersion: fixtures[0]?.schemaVersion,
   fixtureChecks,
   safeOutput: gate.safeOutput
