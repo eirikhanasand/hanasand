@@ -1817,6 +1817,38 @@ assert.ok(readiness.readinessProof.tenMemberWorkspaceProof.fixtureBackedReadines
 assert.ok(readiness.readinessProof.tenMemberWorkspaceProof.fixtureBackedReadiness.noEnumerationFields.includes('otherOrg.watchlistItemIds'))
 assert.ok(readiness.readinessProof.tenMemberWorkspaceProof.fixtureBackedReadiness.noEnumerationFields.includes('destination.secret'))
 assert.equal(readiness.readinessProof.tenMemberWorkspaceProof.proofCommand, 'cd api && bun scripts/smoke-organizations-api.ts')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.schemaVersion, 'organization.watchlist_alert_generation_handoff.v1')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.sourceContract, 'organization.watchlist_alert_generation_consumer.v1')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.fixtureContract, 'organization.watchlist_alert_generation_fixture.v1')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.route, 'organization_watchlist')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.exportRoute, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.cleanupRoute, 'POST /api/organizations/:id/watchlists/cleanup')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.organizationId, organization.id)
+assert.equal(readiness.readinessProof.alertGenerationHandoff.tenantId, organization.id)
+assert.equal(readiness.readinessProof.alertGenerationHandoff.activeTermCount, readiness.alertGenerationBridge.activeWatchlistTerms.length)
+assert.deepEqual(
+    readiness.readinessProof.alertGenerationHandoff.watchlistItemIds.sort(),
+    readiness.alertGenerationBridge.activeWatchlistTerms.map((term: Row) => term.watchlistItemId).sort(),
+)
+assert.deepEqual(
+    readiness.readinessProof.alertGenerationHandoff.alertGeneratorKeys.sort(),
+    readiness.alertGenerationBridge.activeWatchlistTerms
+        .map((term: Row) => `org:${organization.id}:watchlist:${term.watchlistItemId}:${term.termFamily}:${String(term.term).trim().toLowerCase()}`)
+        .sort(),
+)
+assert.ok(readiness.readinessProof.alertGenerationHandoff.matchingInputFields.includes('alertGenerationRef'))
+assert.ok(readiness.readinessProof.alertGenerationHandoff.expectedPersistedAlertFields.includes('workflowContext.organizationId'))
+assert.ok(readiness.readinessProof.alertGenerationHandoff.expectedPersistedAlertFields.includes('casePath'))
+assert.ok(readiness.readinessProof.alertGenerationHandoff.expectedCaseFields.includes('allowedActions'))
+assert.deepEqual(readiness.readinessProof.alertGenerationHandoff.dedupeKeyFields, ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'])
+assert.deepEqual(readiness.readinessProof.alertGenerationHandoff.replaySteps, ['export_alert_terms', 'match_capture_fixture', 'persist_org_alert', 'verify_case_visibility', 'deliver_webhook', 'archive_cleanup'])
+assert.equal(readiness.readinessProof.alertGenerationHandoff.readinessRefs.alertQueue, 'organization.alert_queue_visibility_proof.v1')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.readinessRefs.caseAssignment, 'organization.case_assignment_readiness.v1')
+assert.equal(readiness.readinessProof.alertGenerationHandoff.readinessRefs.destinationOwnership, 'organization.webhook_destination_ownership_readiness.v1')
+assert.ok(readiness.readinessProof.alertGenerationHandoff.lifecycleBlockers.includes('watchlist_archived'))
+assert.deepEqual(readiness.readinessProof.alertGenerationHandoff.blockerCodes, ['role_not_allowed'])
+assert.equal(readiness.readinessProof.alertGenerationHandoff.crossOrgDedupeAllowed, false)
+assert.equal(readiness.readinessProof.alertGenerationHandoff.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.uiProof.nonmemberEnumeration, false)
 assert.equal(readiness.readinessProof.uiProof.dashboardFixture, 'organization_watchlist')
 assert.ok(readiness.readinessProof.uiProof.safeFields.includes('routes'))
