@@ -204,7 +204,7 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
             </dl>
             <div className='mt-4 flex flex-col gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f] sm:flex-row sm:items-center sm:justify-between'>
                 <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{row.integrationProbeHint}</p>
-                <Link href={row.href} className='inline-flex min-h-9 w-fit shrink-0 items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+                <Link href={row.href} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
                     Inspect
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>
@@ -248,7 +248,7 @@ function DirectionCard({ item }: { item: ProductNorthStarDirection }) {
                     {item.blocker}
                 </p>
             )}
-            <Link href={item.href} className='mt-4 inline-flex min-h-9 w-fit items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238] dark:hover:text-white'>
+            <Link href={item.href} className='mt-4 inline-flex min-h-9 min-w-36 w-fit items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238] dark:hover:text-white'>
                 Open workflow
                 <ExternalLink className='h-3.5 w-3.5' />
             </Link>
@@ -315,7 +315,7 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             )}
             <div className='mt-4 flex items-center justify-between gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f]'>
                 <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{row.integrationProbeHint}</p>
-                <Link href={row.href} className='inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg border border-[#d9e2ef] px-2.5 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+                <Link href={row.href} className='inline-flex min-h-9 min-w-24 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
                     Open
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>

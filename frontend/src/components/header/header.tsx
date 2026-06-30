@@ -144,12 +144,12 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
                             <Code2 className='h-4 w-4 text-[#7a8493]' />
                         </Link>
                         <PublicDropdown label='Resources' items={resourceItems} />
-                        <Link href={pricingHref} className='inline-flex h-10 items-center rounded-lg px-2 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
+                        <Link href={pricingHref} className='inline-flex h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Pricing</Link>
                     </nav>
 
                     <div className='flex items-center justify-end gap-2'>
                         <ThemeSwitch />
-                        <Link href='/support' className='hidden h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#2f3540] transition hover:bg-[#f1f4f8] md:inline-flex dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Support</Link>
+                        <Link href='/support' className='hidden h-10 min-w-20 items-center justify-center rounded-lg px-3 text-sm font-semibold text-[#2f3540] transition hover:bg-[#f1f4f8] md:inline-flex dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Support</Link>
                         <Link href={token ? '/dashboard/overview' : '/login'} className='inline-flex h-11 items-center gap-2 rounded-lg bg-[#22252d] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#111318]'>
                             Go to Console
                         </Link>

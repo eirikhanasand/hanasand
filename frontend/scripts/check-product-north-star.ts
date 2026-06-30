@@ -6,6 +6,8 @@ import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard } from
 const here = new URL('.', import.meta.url)
 const homeSource = readFileSync(new URL('../src/app/page.tsx', here), 'utf8')
 const pageSource = readFileSync(new URL('../src/app/readiness/page.tsx', here), 'utf8')
+const headerSource = readFileSync(new URL('../src/components/header/header.tsx', here), 'utf8')
+const themeSwitchSource = readFileSync(new URL('../src/components/theme/themeSwitch.tsx', here), 'utf8')
 const modelSource = readFileSync(new URL('../src/utils/productProgress/northStar.ts', here), 'utf8')
 const routeSource = readFileSync(new URL('../src/app/api/product-readiness/route.ts', here), 'utf8')
 
@@ -381,6 +383,23 @@ for (const token of [
     'DeployBlockerCard',
 ]) {
     assert.ok(pageSource.includes(token), `Readiness page missing ${token}.`)
+}
+
+for (const token of [
+    'min-w-24',
+    'min-w-32',
+    'min-w-36',
+    'whitespace-nowrap',
+]) {
+    assert.ok(pageSource.includes(token), `Readiness page action controls can regress to narrow targets: ${token}.`)
+}
+
+for (const token of ['min-w-20', 'justify-center']) {
+    assert.ok(headerSource.includes(token), `Header action controls can regress to narrow targets: ${token}.`)
+}
+
+for (const token of ['w-14', 'shrink-0', 'data-testid=\'theme-switch\'', 'aria-label={label}']) {
+    assert.ok(themeSwitchSource.includes(token), `Theme switch can regress to a narrow accessible action target: ${token}.`)
 }
 
 for (const token of [

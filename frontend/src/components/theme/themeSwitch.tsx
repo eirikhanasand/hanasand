@@ -31,7 +31,7 @@ export default function ThemeSwitch() {
     return (
         <button
             type='button'
-            className='group grid h-10 w-10 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 dark:border-[#2b3647] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:focus-visible:ring-offset-[#050914]'
+            className='group grid h-10 w-14 shrink-0 place-items-center rounded-lg border border-[#dfe5ee] text-[#4b5565] transition hover:bg-[#f6f8fb] hover:text-[#111827] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563eb] focus-visible:ring-offset-2 dark:border-[#2b3647] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:focus-visible:ring-offset-[#050914]'
             aria-label={label}
             aria-pressed={theme === 'dark'}
             title={label}
