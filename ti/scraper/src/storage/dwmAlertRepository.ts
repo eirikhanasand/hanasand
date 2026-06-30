@@ -1023,6 +1023,8 @@ export type DwmOrgAlertPipelineProof = {
     workflowStatus: string;
     assignedOwner?: string;
     workflowEventCount: number;
+    workflowTransitionActions: Array<DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"][number]["action"]>;
+    lastWorkflowEventAt?: string;
     caseReady: boolean;
     caseIdCandidate?: string;
     caseId?: string;
@@ -1697,6 +1699,7 @@ export function buildDwmOrgAlertPipelineProof(input: {
       tenantId: input.tenantId,
       organizationId: input.organizationId
     });
+    const transitionEvents = buildDwmAlertCustomerProofWorkflowTransitionEvents(alert);
     return {
       alertId: String(alert.id),
       dedupeKey: handoff.dedupe.alertDedupeKey,
@@ -1711,6 +1714,8 @@ export function buildDwmOrgAlertPipelineProof(input: {
       workflowStatus: handoff.lifecycle.alertStatus,
       assignedOwner: alert.assignedOwner ? String(alert.assignedOwner) : undefined,
       workflowEventCount: handoff.workflowVersion.eventCount,
+      workflowTransitionActions: uniqueStrings(transitionEvents.map((event) => event.action)) as DwmOrgAlertPipelineProof["alerts"][number]["workflowTransitionActions"],
+      lastWorkflowEventAt: transitionEvents.at(-1)?.at,
       caseReady: handoff.caseReadiness.ready,
       caseIdCandidate: handoff.caseReadiness.caseIdCandidate,
       caseId: handoff.caseReadiness.caseId,
@@ -2072,6 +2077,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.evidenceCount",
         "alerts.provenanceGapCodes",
         "alerts.workflowStatus",
+        "alerts.workflowTransitionActions",
         "alerts.casePath",
         "gaps.blockerCodes"
       ];
@@ -2143,6 +2149,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.deliveryReady",
         "alerts.delivered",
         "alerts.workflowStatus",
+        "alerts.workflowTransitionActions",
         "alerts.workflowEventCount",
         "alerts.assignedOwner",
         "proofCommands"
@@ -2153,6 +2160,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.workflowStatus",
         "alerts.assignedOwner",
         "alerts.workflowEventCount",
+        "alerts.workflowTransitionActions",
         "alerts.downstreamBlockerCodes",
         "readiness.zeroAlertProof.watchlistTerms",
         "gaps"

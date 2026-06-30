@@ -346,6 +346,15 @@ describe("dwm org alert pipeline proof", () => {
         actor: "analyst-pipeline",
         toWorkflowStatus: "triaged",
         note: "Reviewed source provenance and linked customer case."
+      }, {
+        id: "evt_pipeline_escalated",
+        at: "2026-06-28T16:05:30.000Z",
+        actor: "analyst-pipeline",
+        fromWorkflowStatus: "triaged",
+        toWorkflowStatus: "investigating",
+        toCaseId: "case_pipeline_acme",
+        toCasePath: "/v1/cases/case_pipeline_acme?alertId=alert_pipeline_acme",
+        rationale: "Escalated into the customer case handoff."
       }]
     };
 
@@ -402,7 +411,9 @@ describe("dwm org alert pipeline proof", () => {
       provenanceGapCodes: ["missing_source_url"],
       workflowStatus: "open",
       assignedOwner: "analyst-pipeline",
-      workflowEventCount: 1,
+      workflowEventCount: 2,
+      workflowTransitionActions: ["reviewed", "escalated"],
+      lastWorkflowEventAt: "2026-06-28T16:05:30.000Z",
       caseReady: true,
       caseIdCandidate: "case_pipeline_acme",
       casePath: "/v1/cases/case_pipeline_acme?alertId=alert_pipeline_acme",
@@ -433,6 +444,7 @@ describe("dwm org alert pipeline proof", () => {
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("readiness.zeroAlertProof");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.provenanceGapCodes");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.workflowStatus");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.workflowTransitionActions");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.casePath");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.deliveryHistoryRefs");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.selectedCaptureIds");
@@ -440,6 +452,7 @@ describe("dwm org alert pipeline proof", () => {
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.provenanceGapCodes");
     expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("readiness.zeroAlertProof.watchlistTerms");
     expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("alerts.workflowEventCount");
+    expect(proof.consumerAdapters.analystPortal.workflowFields).toContain("alerts.workflowTransitionActions");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.caseHandoffIdempotencyKey");
     expect(proof.gaps).toEqual([]);
   });
