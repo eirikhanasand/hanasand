@@ -23,6 +23,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "t
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_activation_audit_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_activation_decision_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_growth_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -1513,6 +1514,89 @@ export type TiSourceProvenanceSourceActivationDecision = {
   };
   alertability: TiSourceProvenanceSourceActivationAuditEvent["alertability"];
   route: TiSourceProvenanceSourceActivationAuditEvent["route"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureGrowthPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourceActivationDecisionReceiptId: string;
+  rows: TiSourceProvenanceSourcePackFixtureGrowthRow[];
+  summary: {
+    rowCount: number;
+    actorEnrichmentUpdates: number;
+    alertReadyCaptures: number;
+    healthySources: number;
+    degradedSources: number;
+    staleSources: number;
+    blockedSources: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+    newestFreshnessAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "sourceOps";
+    ready: boolean;
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+    requiredFields: string[];
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+    crossOrgDataIncluded: false;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureGrowthRow = {
+  rowId: string;
+  rowType: "actor_enrichment_update" | "alert_ready_capture" | "source_blocker";
+  actor: string;
+  publicTiRoute: string;
+  sourceId?: string;
+  candidateId: string;
+  sourceFamily: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  healthState: "healthy" | "degraded" | "stale" | "blocked";
+  freshness: {
+    state: "fresh" | "stale" | "missing";
+    observedAt?: string;
+    nextRetryAt?: string;
+  };
+  retry: {
+    retryable: boolean;
+    nextRetryAt?: string;
+    policyReviewRequired: boolean;
+  };
+  blockerReason?: string;
+  downstreamRoutes: {
+    publicTI: string;
+    alertGeneration: string;
+    sourceOps: string;
+  };
+  provenance: {
+    sourceActivationDecisionReceiptId: string;
+    sourceActivationAuditPacketId: string;
+    sourcePackActivationReadinessId: string;
+    activationActionId: string;
+    sourceHealthProofId: string;
+    captureId: string;
+    contentHash: string;
+    fixtureBacked: true;
+  };
 };
 
 export type TiSourceProvenanceScraperEnrichmentLifecycle = {
@@ -3643,6 +3727,63 @@ export function buildSourceProvenanceSourceActivationDecisionReceipt(input: {
       restrictedMetadataLeaked: false,
       privateTelegramContentExposed: false,
       liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureGrowthPacket(input: {
+  decisionReceipt: TiSourceProvenanceSourceActivationDecisionReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureGrowthPacket {
+  const generatedAt = input.generatedAt ?? input.decisionReceipt.generatedAt;
+  const rows = input.decisionReceipt.decisions.flatMap((decision) => sourcePackFixtureGrowthRows(input.decisionReceipt, decision, generatedAt));
+  const sourceFamilies = uniqueStrings(rows.map((row) => row.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const parserStatuses = uniqueStrings(rows.map((row) => row.parserStatus)) as TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+  const alertReadyCaptures = rows.filter((row) => row.rowType === "alert_ready_capture").length;
+  const actorEnrichmentUpdates = rows.filter((row) => row.rowType === "actor_enrichment_update").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_growth_packet", `${input.decisionReceipt.id}:${generatedAt}:${rows.map((row) => row.rowId).join(",")}`),
+    generatedAt,
+    ok: actorEnrichmentUpdates > 0 && alertReadyCaptures > 0,
+    tenantId: input.decisionReceipt.tenantId,
+    organizationId: input.decisionReceipt.organizationId,
+    actor: input.decisionReceipt.actor,
+    sourceActivationDecisionReceiptId: input.decisionReceipt.id,
+    rows,
+    summary: {
+      rowCount: rows.length,
+      actorEnrichmentUpdates,
+      alertReadyCaptures,
+      healthySources: rows.filter((row) => row.healthState === "healthy").length,
+      degradedSources: rows.filter((row) => row.healthState === "degraded").length,
+      staleSources: rows.filter((row) => row.healthState === "stale").length,
+      blockedSources: rows.filter((row) => row.healthState === "blocked").length,
+      sourceFamilies,
+      parserStatuses,
+      newestFreshnessAt: newestTimestamp(rows.map((row) => row.freshness.observedAt)),
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.retry.nextRetryAt))
+    },
+    consumers: sourcePackFixtureGrowthConsumers(input.decisionReceipt, rows),
+    payloadShape: [
+      "rows[].rowType",
+      "rows[].sourceFamily",
+      "rows[].parserStatus",
+      "rows[].healthState",
+      "rows[].freshness",
+      "rows[].retry",
+      "rows[].blockerReason",
+      "rows[].downstreamRoutes",
+      "rows[].provenance",
+      "summary"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false,
+      crossOrgDataIncluded: false
     }
   };
 }
@@ -7108,6 +7249,128 @@ function sourceActivationDecisionConsumers(
       dryRunSupported: true,
       liveNetworkFetch: false
     }
+  }];
+}
+
+function sourcePackFixtureGrowthRows(
+  receipt: TiSourceProvenanceSourceActivationDecisionReceipt,
+  decision: TiSourceProvenanceSourceActivationDecision,
+  generatedAt: string
+): TiSourceProvenanceSourcePackFixtureGrowthRow[] {
+  const primaryRow = sourcePackFixtureGrowthRow(receipt, decision, generatedAt, decision.status === "accepted" ? "actor_enrichment_update" : "source_blocker");
+  if (!decision.alertability.canGenerateAlertEvidence) return [primaryRow];
+  return [
+    primaryRow,
+    sourcePackFixtureGrowthRow(receipt, decision, generatedAt, "alert_ready_capture")
+  ];
+}
+
+function sourcePackFixtureGrowthRow(
+  receipt: TiSourceProvenanceSourceActivationDecisionReceipt,
+  decision: TiSourceProvenanceSourceActivationDecision,
+  generatedAt: string,
+  rowType: TiSourceProvenanceSourcePackFixtureGrowthRow["rowType"]
+): TiSourceProvenanceSourcePackFixtureGrowthRow {
+  const healthState = sourcePackFixtureGrowthHealthState(decision);
+  const captureId = stableId("ti_source_provenance_fixture_capture", `${receipt.id}:${decision.decisionId}:${rowType}`);
+  const publicTiRoute = `/ti/${encodeURIComponent(receipt.actor)}`;
+  return {
+    rowId: stableId("ti_source_provenance_source_pack_fixture_growth_row", `${receipt.id}:${decision.decisionId}:${rowType}`),
+    rowType,
+    actor: receipt.actor,
+    publicTiRoute,
+    sourceId: decision.sourceId,
+    candidateId: decision.candidateId,
+    sourceFamily: decision.family,
+    parserStatus: decision.parserStatus,
+    healthState,
+    freshness: {
+      state: healthState === "healthy" || healthState === "degraded" ? "fresh" : healthState === "stale" ? "stale" : "missing",
+      observedAt: decision.status === "accepted" ? decision.lastSuccessAt ?? generatedAt : undefined,
+      nextRetryAt: decision.nextRetryAt
+    },
+    retry: {
+      retryable: decision.status === "retry_scheduled",
+      nextRetryAt: decision.nextRetryAt,
+      policyReviewRequired: decision.status === "blocked"
+    },
+    blockerReason: decision.status === "accepted" ? undefined : decision.reason,
+    downstreamRoutes: {
+      publicTI: publicTiRoute,
+      alertGeneration: "/v1/dwm/alerts/rebuild",
+      sourceOps: "/v1/dwm/source-requests"
+    },
+    provenance: {
+      sourceActivationDecisionReceiptId: receipt.id,
+      sourceActivationAuditPacketId: decision.provenance.sourceActivationAuditPacketId,
+      sourcePackActivationReadinessId: decision.provenance.sourcePackActivationReadinessId,
+      activationActionId: decision.provenance.activationActionId,
+      sourceHealthProofId: decision.provenance.sourceHealthProofId,
+      captureId,
+      contentHash: stableId("ti_source_provenance_fixture_capture_hash", `${captureId}:${decision.family}:${decision.parserStatus}:${healthState}`),
+      fixtureBacked: true
+    }
+  };
+}
+
+function sourcePackFixtureGrowthHealthState(
+  decision: TiSourceProvenanceSourceActivationDecision
+): TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"] {
+  if (decision.status === "blocked") return "blocked";
+  if (decision.status === "retry_scheduled") return "stale";
+  if (decision.alertability.canGenerateAlertEvidence) return "healthy";
+  return "degraded";
+}
+
+function sourcePackFixtureGrowthConsumers(
+  receipt: TiSourceProvenanceSourceActivationDecisionReceipt,
+  rows: TiSourceProvenanceSourcePackFixtureGrowthRow[]
+): TiSourceProvenanceSourcePackFixtureGrowthPacket["consumers"] {
+  const hasActorUpdate = rows.some((row) => row.rowType === "actor_enrichment_update");
+  const hasAlertReadyCapture = rows.some((row) => row.rowType === "alert_ready_capture");
+  const hasActionableBlocker = rows.some((row) => row.rowType === "source_blocker");
+  return [{
+    consumer: "publicTI",
+    ready: hasActorUpdate,
+    route: {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(receipt.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["rows[].publicTiRoute", "rows[].freshness", "rows[].provenance.contentHash"]
+  }, {
+    consumer: "alertGeneration",
+    ready: hasAlertReadyCapture,
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: receipt.tenantId,
+        organizationId: receipt.organizationId,
+        actor: receipt.actor,
+        sourceActivationDecisionReceiptId: receipt.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["rows[].rowType", "rows[].provenance.captureId", "rows[].provenance.contentHash"]
+  }, {
+    consumer: "sourceOps",
+    ready: hasActionableBlocker || hasActorUpdate,
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourceActivationDecisionReceiptId: receipt.id,
+        includeFixtureGrowth: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    },
+    requiredFields: ["rows[].healthState", "rows[].retry", "rows[].blockerReason"]
   }];
 }
 

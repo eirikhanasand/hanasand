@@ -12,6 +12,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -48,6 +49,7 @@ import {
   buildSourceProvenanceSourcePackActivationReadiness,
   buildSourceProvenanceSourceActivationAuditPacket,
   buildSourceProvenanceSourceActivationDecisionReceipt,
+  buildSourceProvenanceSourcePackFixtureGrowthPacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -3303,6 +3305,169 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(decisionReceipt)).not.toContain("rawText");
     expect(JSON.stringify(decisionReceipt)).not.toContain("password");
+  });
+
+  test("builds no-network source-pack fixture growth for actor enrichment and alert captures", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+    const receipt = buildSourceProvenanceSourcePackIntakeReceipt({ request });
+    const readiness = buildSourceProvenanceSourcePackActivationReadiness({ receipt });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({ activationReadiness: readiness });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:27:00.000Z"
+    });
+    const packet = buildSourceProvenanceSourcePackFixtureGrowthPacket({
+      decisionReceipt,
+      generatedAt: "2026-06-29T12:28:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
+      ok: true,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      sourceActivationDecisionReceiptId: decisionReceipt.id,
+      summary: {
+        actorEnrichmentUpdates: 4,
+        alertReadyCaptures: 1,
+        healthySources: 2,
+        degradedSources: 3,
+        staleSources: 1,
+        blockedSources: 1,
+        sourceFamilies: expect.arrayContaining(["public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        newestFreshnessAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(packet.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rowType: "actor_enrichment_update",
+        sourceFamily: "public_advisory",
+        parserStatus: "ready",
+        healthState: "healthy",
+        publicTiRoute: "/ti/APT28",
+        freshness: expect.objectContaining({ state: "fresh", observedAt: "2026-06-29T12:27:00.000Z" }),
+        downstreamRoutes: {
+          publicTI: "/ti/APT28",
+          alertGeneration: "/v1/dwm/alerts/rebuild",
+          sourceOps: "/v1/dwm/source-requests"
+        },
+        provenance: expect.objectContaining({
+          sourceActivationDecisionReceiptId: decisionReceipt.id,
+          sourceActivationAuditPacketId: auditPacket.id,
+          sourcePackActivationReadinessId: readiness.id,
+          captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+          contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/),
+          fixtureBacked: true
+        })
+      }),
+      expect.objectContaining({
+        rowType: "alert_ready_capture",
+        sourceFamily: "public_advisory",
+        healthState: "healthy",
+        provenance: expect.objectContaining({
+          captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+          contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/)
+        })
+      }),
+      expect.objectContaining({
+        rowType: "source_blocker",
+        sourceFamily: "telegram_public",
+        parserStatus: "retry_scheduled",
+        healthState: "stale",
+        freshness: expect.objectContaining({ state: "stale", nextRetryAt: "2026-06-29T12:37:00.000Z" }),
+        retry: {
+          retryable: true,
+          nextRetryAt: "2026-06-29T12:37:00.000Z",
+          policyReviewRequired: false
+        },
+        blockerReason: "fixture parser found no campaign timestamp"
+      }),
+      expect.objectContaining({
+        rowType: "source_blocker",
+        sourceFamily: "darkweb_metadata",
+        parserStatus: "blocked",
+        healthState: "blocked",
+        freshness: expect.objectContaining({ state: "missing" }),
+        retry: expect.objectContaining({ retryable: false, policyReviewRequired: true }),
+        blockerReason: "Candidate requires policy approval before intake."
+      })
+    ]));
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        ready: true,
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false }),
+        requiredFields: expect.arrayContaining(["rows[].freshness", "rows[].provenance.contentHash"])
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: true,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ sourceActivationDecisionReceiptId: decisionReceipt.id, dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        requiredFields: expect.arrayContaining(["rows[].healthState", "rows[].retry", "rows[].blockerReason"])
+      })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].healthState",
+      "rows[].downstreamRoutes",
+      "rows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
