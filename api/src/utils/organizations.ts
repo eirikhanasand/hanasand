@@ -1977,6 +1977,7 @@ export type OrganizationReadinessProof = {
             | 'GET /api/organizations/:id/watchlists/alert-terms'
             | 'GET /api/organizations/:id/alert-case-visibility'
             | 'POST|PUT|DELETE /api/organizations/:id/watchlists'
+            | 'POST /v1/dwm/webhooks/deliver'
         >
         noLeakFields: Array<'activeTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'member.userId' | 'destination.secret'>
         auditActions: Array<'organization_watchlist_alert_terms_export_denied' | 'organization_member_removed' | 'organization_invite_revoked'>
@@ -4947,6 +4948,7 @@ export function organizationReadinessProof(input: {
                 'GET /api/organizations/:id/watchlists/alert-terms',
                 'GET /api/organizations/:id/alert-case-visibility',
                 'POST|PUT|DELETE /api/organizations/:id/watchlists',
+                'POST /v1/dwm/webhooks/deliver',
             ],
             noLeakFields: [
                 'activeTerms[]',
