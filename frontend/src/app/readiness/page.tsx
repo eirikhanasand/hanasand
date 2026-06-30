@@ -110,6 +110,9 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
             data-north-star-readiness-ledger-row-count={source.rowCount}
             data-north-star-readiness-ledger-customer-visible-blocked-count={source.customerVisibleBlockedCount}
             data-north-star-readiness-ledger-deploy-risk={source.deployRisk}
+            data-north-star-readiness-ledger-stale={source.stale ? 'true' : 'false'}
+            data-north-star-readiness-ledger-age-seconds={source.ageSeconds}
+            data-north-star-readiness-ledger-stale-after-seconds={source.staleAfterSeconds}
             data-north-star-readiness-ledger-unavailable-reason={source.unavailableReason || ''}
         >
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]'>
@@ -126,6 +129,8 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                         <p className='mt-1 text-sm font-semibold'>{stateLabel(source.state)}</p>
                     </div>
                     <SummaryBox label='Blocked rows' value={`${source.customerVisibleBlockedCount}/${source.rowCount}`} />
+                    <SummaryBox label='Age' value={source.checkedAt ? formatDuration(source.ageSeconds) : 'not loaded'} />
+                    <SummaryBox label='Stale after' value={formatDuration(source.staleAfterSeconds)} />
                 </div>
             </div>
             {source.unavailableReason && (

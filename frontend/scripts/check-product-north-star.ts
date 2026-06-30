@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { buildProductProgressPayload } from '../src/utils/productProgress/readiness'
 import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard } from '../src/utils/productProgress/northStar'
-import { parseProductReadinessAggregate } from '../src/utils/productProgress/productReadinessAggregate'
+import { loadProductReadinessAggregate, parseProductReadinessAggregate } from '../src/utils/productProgress/productReadinessAggregate'
 
 const here = new URL('.', import.meta.url)
 const homeSource = readFileSync(new URL('../src/app/page.tsx', here), 'utf8')
@@ -389,6 +389,9 @@ const aggregateScoreboard = buildProductNorthStarScoreboard(partialPayload, {
         rowCount: aggregate!.rowCount,
         customerVisibleBlockedCount: aggregate!.customerVisibleBlockedCount,
         deployRisk: aggregate!.deployRisk,
+        staleAfterSeconds: 7200,
+        ageSeconds: 0,
+        stale: false,
         unavailableReason: 'product_readiness_aggregate_blocked',
         blockingRows: [{
             id: aggregate!.rows[0]!.id,
@@ -415,6 +418,40 @@ assert.equal(aggregateScoreboard.productReadinessAggregate.state, 'blocked')
 assert.equal(aggregateScoreboard.productReadinessAggregate.blockingRows[0]?.id, 'source_activation')
 assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.requiredNextAction, 'activate_source_policy')
 assert.equal(parseProductNorthStarScoreboard(aggregateScoreboard)?.productReadinessAggregate.blockingRows[0]?.workflowExpectedAdapter, 'buildDwmSourceReadinessArtifact')
+
+const staleAggregate = await loadProductReadinessAggregate({
+    PRODUCT_READINESS_AGGREGATE_STALE_AFTER_SECONDS: '1',
+    PRODUCT_READINESS_AGGREGATE_JSON: JSON.stringify({
+        schemaVersion: 'hanasand.product_readiness.v1',
+        checkedAt: generatedAt,
+        ok: true,
+        rowCount: 1,
+        customerVisibleBlockedCount: 0,
+        deployRisk: 'none',
+        rows: [{
+            id: 'source_activation',
+            ownerLane: 'source',
+            capabilityLabel: 'Source activation and provenance',
+            proofArtifact: {
+                schemaVersion: 'dwm.source_worker_readiness.v1',
+                artifactId: 'dwm.source_worker_readiness',
+                route: 'GET /v1/dwm/source-requests/readiness',
+                probeId: 'dwm.source_worker_readiness',
+            },
+            lastCheckedAt: generatedAt,
+            customerVisible: true,
+            customerVisibleState: 'ready',
+            blockers: [],
+            requiredNextAction: 'none',
+            deployRisk: 'none',
+            uiQualityProofExists: true,
+        }],
+    }),
+})
+assert.equal(staleAggregate.state, 'needs_action')
+assert.equal(staleAggregate.stale, true)
+assert.equal(staleAggregate.unavailableReason, 'product_readiness_aggregate_stale')
+assert.equal(staleAggregate.customerVisibleBlockedCount, 0)
 
 const readyPayload = {
     ...partialPayload,
@@ -549,6 +586,9 @@ for (const token of [
     'data-north-star-readiness-ledger-row-count',
     'data-north-star-readiness-ledger-customer-visible-blocked-count',
     'data-north-star-readiness-ledger-deploy-risk',
+    'data-north-star-readiness-ledger-stale',
+    'data-north-star-readiness-ledger-age-seconds',
+    'data-north-star-readiness-ledger-stale-after-seconds',
     'data-north-star-readiness-ledger-unavailable-reason',
     'data-north-star-readiness-ledger-blocker-id',
     'data-north-star-readiness-ledger-blocker-owner-lane',
@@ -589,6 +629,8 @@ for (const token of [
     'row.uiQualityProofExists',
     'row.workflowExpectedAdapter',
     'row.workflowProofCommand',
+    'source.stale',
+    'source.ageSeconds',
     'Open workflow',
     'Stale after',
     'scoreboard.deployGate.blockingProofRows',
@@ -638,6 +680,9 @@ for (const token of [
     'missingProductReadinessAggregateSource',
     'blockingRows',
     'customerVisibleBlockedCount',
+    'staleAfterSeconds',
+    'ageSeconds',
+    'product_readiness_aggregate_stale',
     'uiQualityProofExists',
     'workflowExpectedAdapter',
     'workflowProofCommand',

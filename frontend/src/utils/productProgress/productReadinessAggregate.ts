@@ -13,6 +13,8 @@ const FILE_LEDGER_KEYS = [
     'HANASAND_PRODUCT_READINESS_PATH',
 ] as const
 
+const DEFAULT_AGGREGATE_STALE_AFTER_SECONDS = 2 * 60 * 60
+
 export type ProductReadinessAggregateState = 'ready' | 'needs_action' | 'blocked' | 'unavailable'
 
 export type ProductReadinessAggregate = {
@@ -60,6 +62,9 @@ export type ProductReadinessAggregateSource = {
     rowCount: number
     customerVisibleBlockedCount: number
     deployRisk: string
+    staleAfterSeconds: number
+    ageSeconds: number
+    stale: boolean
     unavailableReason?: string
     blockingRows: ProductReadinessAggregateSourceRow[]
 }
@@ -87,7 +92,7 @@ export type ProductReadinessAggregateSourceRow = {
 export async function loadProductReadinessAggregate(env: Record<string, string | undefined> = process.env): Promise<ProductReadinessAggregateSource> {
     const inlineLedger = firstValue(INLINE_LEDGER_KEYS, env)
     const parsedInline = parseJsonAggregate(inlineLedger)
-    if (parsedInline) return toProductReadinessAggregateSource(parsedInline, 'env:PRODUCT_READINESS_AGGREGATE_JSON')
+    if (parsedInline) return toProductReadinessAggregateSource(parsedInline, 'env:PRODUCT_READINESS_AGGREGATE_JSON', env)
 
     const filePath = firstValue(FILE_LEDGER_KEYS, env)
     if (!filePath) return missingProductReadinessAggregateSource('product_readiness_aggregate_not_configured')
@@ -95,7 +100,7 @@ export async function loadProductReadinessAggregate(env: Record<string, string |
     try {
         const parsedFile = parseJsonAggregate(await readFile(filePath, 'utf8'))
         return parsedFile
-            ? toProductReadinessAggregateSource(parsedFile, filePath)
+            ? toProductReadinessAggregateSource(parsedFile, filePath, env)
             : missingProductReadinessAggregateSource('product_readiness_aggregate_schema_invalid', filePath)
     } catch {
         return missingProductReadinessAggregateSource('product_readiness_aggregate_file_unavailable', filePath)
@@ -134,6 +139,9 @@ export function isProductReadinessAggregateSource(input: unknown): input is Prod
         && typeof input.rowCount === 'number'
         && typeof input.customerVisibleBlockedCount === 'number'
         && typeof input.deployRisk === 'string'
+        && typeof input.staleAfterSeconds === 'number'
+        && typeof input.ageSeconds === 'number'
+        && typeof input.stale === 'boolean'
         && (typeof input.unavailableReason === 'string' || input.unavailableReason === undefined)
         && Array.isArray(input.blockingRows)
         && input.blockingRows.every(isProductReadinessAggregateSourceRow)
@@ -150,12 +158,19 @@ export function missingProductReadinessAggregateSource(reason: string, source = 
         rowCount: 0,
         customerVisibleBlockedCount: 0,
         deployRisk: 'unknown',
+        staleAfterSeconds: DEFAULT_AGGREGATE_STALE_AFTER_SECONDS,
+        ageSeconds: 0,
+        stale: false,
         unavailableReason: reason,
         blockingRows: [],
     }
 }
 
-function toProductReadinessAggregateSource(aggregate: ProductReadinessAggregate, source: string): ProductReadinessAggregateSource {
+function toProductReadinessAggregateSource(
+    aggregate: ProductReadinessAggregate,
+    source: string,
+    env: Record<string, string | undefined>,
+): ProductReadinessAggregateSource {
     const blockingRows = aggregate.rows
         .filter(row => row.customerVisible && row.customerVisibleState !== 'ready')
         .map(row => ({
@@ -177,7 +192,10 @@ function toProductReadinessAggregateSource(aggregate: ProductReadinessAggregate,
             workflowExpectedAdapter: row.workflowContract?.expectedAdapter || '',
             workflowProofCommand: row.workflowContract?.proofCommand || '',
         }))
-    const state = aggregate.ok && blockingRows.length === 0
+    const staleAfterSeconds = staleAfterSecondsFromEnv(env)
+    const ageSeconds = ageSecondsSince(aggregate.checkedAt)
+    const stale = ageSeconds > staleAfterSeconds
+    const state = aggregate.ok && blockingRows.length === 0 && !stale
         ? 'ready'
         : aggregate.deployRisk === 'high' || blockingRows.some(row => row.state === 'blocked')
             ? 'blocked'
@@ -191,7 +209,10 @@ function toProductReadinessAggregateSource(aggregate: ProductReadinessAggregate,
         rowCount: aggregate.rowCount,
         customerVisibleBlockedCount: aggregate.customerVisibleBlockedCount,
         deployRisk: aggregate.deployRisk,
-        unavailableReason: state === 'ready' ? undefined : 'product_readiness_aggregate_blocked',
+        staleAfterSeconds,
+        ageSeconds,
+        stale,
+        unavailableReason: state === 'ready' ? undefined : stale ? 'product_readiness_aggregate_stale' : 'product_readiness_aggregate_blocked',
         blockingRows,
     }
 }
@@ -275,6 +296,17 @@ function firstValue(keys: readonly string[], env: Record<string, string | undefi
         if (value?.trim()) return value.trim()
     }
     return undefined
+}
+
+function staleAfterSecondsFromEnv(env: Record<string, string | undefined>) {
+    const configured = Number(env.PRODUCT_READINESS_AGGREGATE_STALE_AFTER_SECONDS || env.HANASAND_PRODUCT_READINESS_STALE_AFTER_SECONDS || '')
+    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_AGGREGATE_STALE_AFTER_SECONDS
+}
+
+function ageSecondsSince(value: string) {
+    const checked = new Date(value).getTime()
+    if (!value || Number.isNaN(checked)) return 0
+    return Math.max(0, Math.floor((Date.now() - checked) / 1000))
 }
 
 function isAggregateState(input: unknown): input is ProductReadinessAggregateState {
