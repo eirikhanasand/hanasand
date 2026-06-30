@@ -5523,6 +5523,7 @@ export function buildDwmWebhookDestinationTestContract({
     const latestTestStatus = latestTest?.status || persistedLastTest?.status || null
     const expectedIdempotencyKey = destination ? buildIdempotencyKey('dwm.alert.test', destination.orgId, destination.id, 'webhook_test') : null
     const testRoute = destinationId ? `POST /api/dwm/webhook-destinations/${destinationId}/test` : 'POST /api/dwm/webhook-destinations/:id/test'
+    const expectedPayloadHash = testPayload ? hashValue('payload', JSON.stringify(testPayload)) : null
     const canSendDryRunTest = Boolean(
         canManage
         && destination
@@ -5580,6 +5581,46 @@ export function buildDwmWebhookDestinationTestContract({
             }
             : null,
         dryRunPayloadPreview,
+        dryRunTestReceipt: {
+            schemaVersion: 'dwm.webhook.destination_test_receipt.v1',
+            noNetwork: true,
+            externalSendEnabled: false,
+            destinationId,
+            orgId: destination?.orgId || null,
+            status: 'dry_run',
+            dryRun: true,
+            live: false,
+            eventType: 'dwm.alert.test' as DwmAlertEventType,
+            idempotencyKey: expectedIdempotencyKey,
+            payloadHash: expectedPayloadHash,
+            redactedDestination: {
+                id: destinationId,
+                label: destination?.name || null,
+                type: destination?.kind || null,
+                endpointHint: destination?.endpointHint ? redactDeliveryEvidenceText(destination.endpointHint) : null,
+                endpointHash: destination?.endpointHash || null,
+                endpointExposed: false,
+            },
+            expected: {
+                deliveryStatus: 'dry_run',
+                auditAction: 'delivery.tested',
+                persistedAttempt: true,
+                responseSummary: 'Dry-run delivery payload prepared without external network.',
+            },
+            retry: {
+                attemptCount: 1,
+                retryable: false,
+                nextRetryAt: null,
+                errorClass: null,
+            },
+            timestamps: {
+                attemptedAt: null,
+                createdAt: null,
+                updatedAt: null,
+            },
+            payloadPreview: dryRunPayloadPreview,
+            blockers: uniqueBlockers,
+        },
         dryRunTestRequest: {
             method: 'POST',
             route: testRoute,

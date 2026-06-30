@@ -3070,7 +3070,10 @@ expect(replayDestinationTest.dryRunPayloadPreview?.context.orgId === 'org_contra
 expect(replayDestinationTest.dryRunPayloadPreview?.redaction.safeForCustomerDisplay === true && replayDestinationTest.dryRunPayloadPreview.redaction.endpointExposed === false, 'Destination test payload preview should prove redaction and avoid endpoint leakage.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunTestRequest.canSend === true && replayDestinationTest.dryRunTestRequest.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && replayDestinationTest.dryRunTestRequest.body?.idempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test', 'Destination test contract should expose the exact no-network dry-run test request.', replayDestinationTest.dryRunTestRequest)
 expect(replayDestinationTest.dryRunTestRequest.expected.auditAction === 'delivery.tested' && replayDestinationTest.dryRunTestRequest.expected.persistedAttempt === true && replayDestinationTest.dryRunTestRequest.payloadPreview?.redaction.endpointExposed === false, 'Destination dry-run test request should prove persisted delivery/audit outcome without exposing endpoint secrets.', replayDestinationTest.dryRunTestRequest)
+expect(replayDestinationTest.dryRunTestReceipt.schemaVersion === 'dwm.webhook.destination_test_receipt.v1' && replayDestinationTest.dryRunTestReceipt.expected.auditAction === 'delivery.tested' && replayDestinationTest.dryRunTestReceipt.payloadHash?.startsWith('payload_'), 'Destination test receipt should expose expected persisted dry-run delivery proof.', replayDestinationTest.dryRunTestReceipt)
+expect(replayDestinationTest.dryRunTestReceipt.redactedDestination.endpointExposed === false && replayDestinationTest.dryRunTestReceipt.redactedDestination.endpointHash === 'endpoint_replay_hash' && replayDestinationTest.dryRunTestReceipt.payloadPreview?.discord.fieldNames.includes('Watchlist'), 'Destination test receipt should carry redacted destination metadata and Discord preview.', replayDestinationTest.dryRunTestReceipt)
 expect(disabledDestinationTest.dryRunTestRequest.canSend === false && disabledDestinationTest.dryRunTestRequest.blockers.some(item => item.code === 'destination_disabled'), 'Destination dry-run test request should block disabled destinations.', disabledDestinationTest.dryRunTestRequest)
+expect(disabledDestinationTest.dryRunTestReceipt.blockers.some(item => item.code === 'destination_disabled') && disabledDestinationTest.dryRunTestReceipt.redactedDestination.endpointExposed === false, 'Destination test receipt should carry disabled destination blockers without exposing secrets.', disabledDestinationTest.dryRunTestReceipt)
 expect(disabledDestinationTest.status === 'disabled' && disabledDestinationTest.blockers.some(item => item.code === 'destination_disabled'), 'Destination test contract should block disabled destinations.', disabledDestinationTest)
 expect(failedDestinationTest.status === 'test_failed' && failedDestinationTest.blockers.some(item => item.code === 'test_failed'), 'Destination test contract should expose failed test state.', failedDestinationTest)
 expect(memberReplayDestinationTest.access.memberSafe === true && memberReplayDestinationTest.access.canTest === false && memberReplayDestinationTest.audit.auditEventContracts.length === 0, 'Destination test contract should keep member views read-only and audit-safe.', memberReplayDestinationTest)
@@ -3443,6 +3446,7 @@ console.log(JSON.stringify({
         'destination test contract dry-run proof',
         'destination test contract no-network payload preview',
         'destination test contract Discord preview/audit linkage',
+        'destination test contract dry-run receipt proof',
         'destination test contract disabled/failed blockers',
         'destination test contract member-safe redaction',
         'destination delivery matrix route hints',
@@ -3663,6 +3667,9 @@ console.log(JSON.stringify({
             'destinationTests[].dryRunTestRequest.body',
             'destinationTests[].dryRunTestRequest.expected.auditAction',
             'destinationTests[].dryRunTestRequest.payloadPreview.discord.fieldNames',
+            'destinationTests[].dryRunTestReceipt.expected.auditAction',
+            'destinationTests[].dryRunTestReceipt.redactedDestination.endpointHash',
+            'destinationTests[].dryRunTestReceipt.payloadPreview.discord.fieldNames',
             'destinationTests[].audit.latestAuditEventId',
             'destinationTests[].blockers[].code',
             'destinationDeliveryMatrix.schemaVersion',
