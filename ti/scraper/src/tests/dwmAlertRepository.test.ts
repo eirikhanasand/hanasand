@@ -1664,6 +1664,16 @@ describe("dwm alert repository", () => {
     });
     expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("evidenceFreshness");
     expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.gapFields).toContain("evidenceFreshness.blockerCodes");
+    const staleEvidenceReceiptRows = new Map(staleEvidenceProof.consumerReceiptMatrix.rows.map((row) => [row.ownerLane, row]));
+    expect(staleEvidenceReceiptRows.get("alert_generation")).toMatchObject({
+      blockerCodes: expect.arrayContaining(["stale_capture_evidence"]),
+      missingContract: false
+    });
+    expect(staleEvidenceReceiptRows.get("public_ti")).toMatchObject({
+      blockerCodes: ["stale_capture_evidence"],
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.evidenceFreshness"]),
+      missingContract: true
+    });
 
     const deniedStore = new InMemoryScraperStore();
     deniedStore.saveSource(telegramSource);

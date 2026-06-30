@@ -2032,6 +2032,7 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     ...input.alertRows.flatMap((alert) => [
       ...alert.downstreamBlockerCodes,
       ...alert.sourceHandoffReadiness.provenanceGapCodes,
+      ...alert.sourceHandoffReadiness.evidenceFreshness.blockerCodes,
       ...alert.sourceHandoffReadiness.webhookConsumer.blockerCodes,
       ...alert.sourceHandoffReadiness.caseConsumer.blockerCodes
     ])
@@ -2091,8 +2092,11 @@ function buildDwmOrgAlertConsumerReceiptMatrix(input: {
     contractIds: ["dwm.alert_source_handoff_readiness.v1", "ti.public_actor.alert_rebuild_handoff.v1"],
     schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
     receiptSchemaIds: ["dwm.org_alert_consumer_receipt_matrix.v1"],
-    blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.publicTiConsumer.gapFields.includes("provenanceGapCodes") ? alert.sourceHandoffReadiness.provenanceGapCodes : [])),
-    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression", "alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"],
+    blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => [
+      ...(alert.sourceHandoffReadiness.publicTiConsumer.gapFields.includes("provenanceGapCodes") ? alert.sourceHandoffReadiness.provenanceGapCodes : []),
+      ...alert.sourceHandoffReadiness.evidenceFreshness.blockerCodes
+    ])),
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression", "alerts.sourceHandoffReadiness.evidenceFreshness", "alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"],
     downstreamOwners: ["public_ti", "dashboard"],
     missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.publicTiConsumer.ready),
     safeOutput: metadataOnlyAlertReceiptSafeOutput()
