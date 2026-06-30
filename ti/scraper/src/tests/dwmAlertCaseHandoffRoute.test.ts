@@ -1254,12 +1254,64 @@ describe("DWM alert case handoff route", () => {
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
         auditTimelineRowCount: 7,
+        alertReasonReady: true,
         organizationAccessReady: true,
         publicTiHandoffReady: true,
         sourceHandoffReady: true,
         supportRecoveryReady: true,
         replayable: true,
         blockerCodes: []
+      },
+      alertReasonContext: {
+        schemaVersion: "dwm.case_alert_reason_context.v1",
+        caseId: "case_alert_acme",
+        tenantId: "tenant_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme",
+        ready: true,
+        alert: {
+          id: "alert_acme",
+          severity: "high",
+          confidence: 0.92,
+          company: "Acme",
+          sourceFamily: "telegram_public",
+          dedupeKey: "dwm_alert_acme"
+        },
+        watchlistMatch: {
+          value: "acme.com",
+          kind: "domain",
+          watchlistIds: ["watch_acme"],
+          watchlistItemIds: ["watch_item_acme_domain"],
+          matchBasis: "watchlist_capture_text"
+        },
+        source: {
+          sourceFamily: "telegram_public",
+          selectedCaptureIds: ["cap_acme_1"],
+          evidenceCount: 1,
+          evidenceObservedAt: ["2026-06-29T14:01:00.000Z"]
+        },
+        evidence: [expect.objectContaining({
+          id: "ev_acme_1",
+          sourceId: "src_acme_tg",
+          sourceFamily: "telegram_public",
+          observedAt: "2026-06-29T14:01:00.000Z",
+          contentHash: "hash_acme_1",
+          captureId: "cap_acme_1"
+        })],
+        provenance: {
+          captureIds: ["cap_acme_1"],
+          sourceIds: ["src_acme_tg"],
+          contentHashes: ["hash_acme_1"],
+          sourceFamilies: ["telegram_public"],
+          evidenceCount: 1,
+          blockers: []
+        },
+        blockerCodes: [],
+        auditSafety: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false
+        }
       },
       organizationAccessReadiness: {
         schemaVersion: "dwm.case_org_access_replay_readiness.v1",
@@ -1685,6 +1737,7 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         organizationAccessReady: true,
+        alertReasonReady: false,
         publicTiHandoffReady: false,
         sourceHandoffReady: false,
         supportRecoveryReady: false,
@@ -1696,6 +1749,19 @@ describe("DWM alert case handoff route", () => {
         ready: false,
         publicRoute: "/ti",
         blockerCodes: ["missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready"]
+      },
+      alertReasonContext: {
+        ready: false,
+        caseId: "case_missing_alert",
+        alertId: "alert_missing",
+        evidence: [],
+        provenance: {
+          captureIds: [],
+          sourceIds: [],
+          contentHashes: [],
+          evidenceCount: 0
+        },
+        blockerCodes: expect.arrayContaining(["missing_case_alert", "missing_watchlist_match", "missing_watchlist_id", "missing_source_evidence", "missing_alert_source_handoff_readiness"])
       },
       supportRecoveryReadiness: {
         ready: false,
@@ -1898,6 +1964,7 @@ function provenancedAlert() {
       id: "ev_acme_1",
       sourceId: "src_acme_tg",
       sourceFamily: "telegram_public",
+      observedAt: "2026-06-29T14:01:00.000Z",
       contentHash: "hash_acme_1",
       provenance: { captureId: "cap_acme_1", sourceId: "src_acme_tg" }
     }],

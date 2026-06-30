@@ -1583,6 +1583,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     access
   });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
+  const alertReasonContext = caseAlertReasonContext({ alert, caseRecord, sourceHandoffReadiness });
   const publicTiHandoffReadiness = casePublicTiHandoffReadiness({ alert, caseRecord, sourceHandoffReadiness });
   const organizationAccessReadiness = caseOrganizationAccessReadiness({ caseRecord, access });
   const supportRecoveryReadiness = caseSupportRecoveryReadiness({
@@ -1632,6 +1633,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     },
     workflowTransitions,
     customerNotifications,
+    alertReasonContext,
     auditTimeline,
     organizationAccessReadiness,
     publicTiHandoffReadiness,
@@ -1648,6 +1650,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       deliveredWebhookReceiptCount: customerNotificationReadiness.deliveryReceipts.length,
       customerNotificationRecorded: customerNotificationReadiness.notificationRecorded,
+      alertReasonReady: alertReasonContext.ready,
       organizationAccessReady: organizationAccessReadiness.ready,
       publicTiHandoffReady: publicTiHandoffReadiness.ready,
       sourceHandoffReady: sourceHandoffReadiness.ready,
@@ -1823,6 +1826,90 @@ function caseReplayAuditTimeline(input: {
       rowTypes: uniqueCaseStrings(rows.map((row) => row.rowType))
     },
     rows,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseAlertReasonContext(input: {
+  alert: any;
+  caseRecord: AnalystCase;
+  sourceHandoffReadiness: any;
+}) {
+  const evidence = Array.isArray(input.alert?.evidence) ? input.alert.evidence : [];
+  const provenance = input.alert ? alertCaseHandoffProvenance(input.alert) : undefined;
+  const watchlistIds = uniqueCaseStrings([
+    ...(input.alert?.watchlistIds ?? []),
+    ...(input.alert?.workflowContext?.watchlistIds ?? []),
+    ...(input.alert?.provenance?.watchlistIds ?? [])
+  ]);
+  const watchlistItemIds = uniqueCaseStrings([
+    ...caseWatchlistItemIds(input.alert),
+    ...(input.alert?.provenance?.watchlistItemIds ?? [])
+  ]);
+  const matchedTermValue = String(input.alert?.matchedTerm?.value ?? "").trim();
+  const matchedTermKind = String(input.alert?.matchedTerm?.kind ?? "").trim();
+  const evidenceRows = evidence.map((item: any) => ({
+    id: item.id,
+    sourceId: item.sourceId ?? item.provenance?.sourceId,
+    sourceName: item.sourceName,
+    sourceFamily: item.sourceFamily ?? input.alert?.sourceFamily ?? input.sourceHandoffReadiness.sourceFamily,
+    observedAt: item.observedAt ?? item.firstSeenAt ?? item.capturedAt,
+    contentHash: item.contentHash,
+    captureId: item.provenance?.captureId ?? item.captureId,
+    redactionState: item.redactionState ?? (item.sensitive ? "raw_sensitive" : "metadata_only")
+  }));
+  const blockerCodes = uniqueCaseStrings([
+    ...(!input.alert ? ["missing_case_alert"] : []),
+    ...(!matchedTermValue ? ["missing_watchlist_match"] : []),
+    ...(!watchlistIds.length ? ["missing_watchlist_id"] : []),
+    ...(!evidenceRows.length ? ["missing_source_evidence"] : []),
+    ...((provenance?.blockers ?? []).map((blocker: any) => blocker.code)),
+    ...(input.sourceHandoffReadiness.ready ? [] : input.sourceHandoffReadiness.blockerCodes ?? ["missing_alert_source_handoff_readiness"])
+  ]);
+  return {
+    schemaVersion: "dwm.case_alert_reason_context.v1",
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    ready: blockerCodes.length === 0,
+    alert: input.alert ? {
+      id: input.alert.id,
+      severity: input.alert.severity,
+      confidence: input.alert.confidence,
+      company: input.alert.company,
+      actor: input.alert.actor ?? input.alert.threatActor,
+      claimSummary: input.alert.claimSummary,
+      sourceFamily: input.alert.sourceFamily ?? input.sourceHandoffReadiness.sourceFamily,
+      dedupeKey: input.alert.dedupeKey ?? input.alert.workflowContext?.dedupeKey
+    } : undefined,
+    watchlistMatch: {
+      value: matchedTermValue || undefined,
+      kind: matchedTermKind || undefined,
+      watchlistIds,
+      watchlistItemIds,
+      matchBasis: input.alert?.provenance?.matchBasis
+    },
+    source: {
+      sourceFamily: input.sourceHandoffReadiness.sourceFamily ?? input.alert?.sourceFamily,
+      selectedCaptureIds: input.sourceHandoffReadiness.selectedCaptureIds ?? [],
+      evidenceCount: evidenceRows.length,
+      evidenceObservedAt: uniqueCaseStrings(evidenceRows.map((item: any) => item.observedAt))
+    },
+    evidence: evidenceRows,
+    provenance: {
+      captureIds: provenance?.captureIds ?? [],
+      sourceIds: provenance?.sourceIds ?? [],
+      contentHashes: provenance?.contentHashes ?? [],
+      sourceFamilies: provenance?.sourceFamilies ?? [],
+      evidenceCount: provenance?.evidenceCount ?? 0,
+      blockers: provenance?.blockers ?? []
+    },
+    blockerCodes,
     auditSafety: {
       metadataOnly: true,
       rawEvidenceExposed: false,
