@@ -175,6 +175,23 @@ describe("api regression sentinel", () => {
         crossOrgDataExposed: false
       }
     });
+    expect(rows.get("hanasand.product_readiness.receipt_matrix.v1")).toMatchObject({
+      contractId: "product_readiness_receipt_matrix",
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "capabilityId", "ownerLane"]),
+      blockerCodes: expect.arrayContaining(["missing_contract_reference", "missing_contract_ids", "unsafe_receipt_matrix_row"]),
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" }),
+        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" })
+      ]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
     expect(rows.get("dwm.org_alert_case_action_receipt.v1")).toMatchObject({
       contractId: "org_alert_case_action_receipt",
       ownerLane: "case",
@@ -217,6 +234,126 @@ describe("api regression sentinel", () => {
     const serialized = JSON.stringify(contract.schemaLookup);
     expect(serialized).not.toContain("https://discord.com");
     expect(serialized).not.toContain("authorization:");
+    expect(serialized).not.toContain("rawText");
+    expect(serialized).not.toContain("password");
+  });
+
+  test("publishes product readiness receipt matrix discoverability", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const matrixSurface = contract.surfaces.find((surface: any) => surface.id === "product_readiness_receipt_matrix");
+    const matrix = contract.productReadinessReceiptMatrix;
+    const matrixRows = JSON.parse(JSON.stringify(matrix.rows));
+    const rows = new Map(matrixRows.map((row: any) => [row.capabilityId, row]));
+    const knownSchemaIds = new Set<string>([
+      ...contract.schemaLookup.rows.map((row: any) => row.schemaId),
+      ...contract.receiptSchemas.flatMap((receipt: any) => Object.values(receipt.schemas)),
+      ...matrixRows.flatMap((row: any) => row.schemaIds)
+    ]);
+
+    expect(matrixSurface).toMatchObject({
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      schemas: {
+        matrix: "hanasand.product_readiness.receipt_matrix.v1",
+        aggregate: "hanasand.product_readiness.v1"
+      },
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "capabilityId"]),
+      recordFields: expect.arrayContaining(["contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "downstreamOwners", "safeOutput"]),
+      blockerCodes: expect.arrayContaining(["missing_contract_reference", "missing_contract_ids", "unsafe_receipt_matrix_row"]),
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" }),
+        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
+        expect.objectContaining({ ownerLane: "support", route: "/api/admin/support/readiness" })
+      ]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(matrix).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.receipt_matrix.v1",
+      aggregateSchemaVersion: "hanasand.product_readiness.v1",
+      route: "/v1/contracts",
+      reportField: "productReadinessReceiptMatrix",
+      producer: "buildProductReadinessReceiptMatrix",
+      validator: "validateProductReadinessReceiptMatrix"
+    });
+    expect(matrixRows.map((row: any) => row.capabilityId).sort()).toEqual([
+      "alert_case_workflow",
+      "dashboard_operator_workspace",
+      "organization_lifecycle",
+      "public_ti_actor_handoff",
+      "shared_watchlists",
+      "source_activation",
+      "support_controls",
+      "webhook_delivery",
+      "website_product_surface"
+    ]);
+    for (const row of matrixRows) {
+      expect(Array.isArray(row.contractIds)).toBe(true);
+      expect(row.contractIds).not.toHaveLength(0);
+      expect(Array.isArray(row.schemaIds)).toBe(true);
+      expect(row.schemaIds).not.toHaveLength(0);
+      expect(Array.isArray(row.scopeFields)).toBe(true);
+      expect(row.scopeFields).not.toHaveLength(0);
+      expect(Array.isArray(row.downstreamConsumers)).toBe(true);
+      expect(row.downstreamConsumers).not.toHaveLength(0);
+      expect(row.missingContract).toBe(false);
+      expect(row.safeOutput).toEqual({
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      });
+      for (const schemaId of [...row.schemaIds, ...row.receiptSchemaIds]) {
+        expect(knownSchemaIds.has(schemaId)).toBe(true);
+      }
+    }
+    expect(rows.get("shared_watchlists")).toMatchObject({
+      ownerLane: "watchlist",
+      readinessRoute: "GET /api/organizations/:id/watchlists/alert-terms",
+      contractIds: expect.arrayContaining(["shared_watchlist_alert_export", "shared_watchlist_alert_generation"]),
+      schemaIds: expect.arrayContaining([
+        "organization.shared_watchlist_alert_generation_export.v1",
+        "organization.shared_watchlist_alert_generation_consumers.v1",
+        "organization.shared_watchlist_readiness_proof.v1"
+      ]),
+      blockerCodes: expect.arrayContaining(["not_member", "role_not_allowed", "no_active_watchlist_terms"]),
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "watchlistItemIds"]),
+      downstreamOwners: expect.arrayContaining(["alert", "webhook", "dashboard"])
+    });
+    expect(rows.get("alert_case_workflow")).toMatchObject({
+      ownerLane: "alert",
+      contractIds: expect.arrayContaining(["org_scoped_alert_case_workflow", "org_alert_case_workflow", "org_alert_case_action_receipt"]),
+      receiptSchemaIds: expect.arrayContaining(["dwm.org_alert_case_action_receipt.v1", "dwm.org_alert_case_action_audit_event.v1"]),
+      downstreamOwners: expect.arrayContaining(["case", "webhook", "dashboard"])
+    });
+    expect(rows.get("webhook_delivery")).toMatchObject({
+      ownerLane: "webhook",
+      contractIds: expect.arrayContaining(["webhook_delivery_receipts"]),
+      receiptSchemaIds: expect.arrayContaining(["dwm.webhook_event_contract.v1", "dwm.webhook_support_action_request.v1", "dwm.webhook_dispatch_retry_audit.v1"]),
+      downstreamOwners: expect.arrayContaining(["dashboard", "support"])
+    });
+    expect(rows.get("source_activation")).toMatchObject({
+      ownerLane: "source",
+      receiptSchemaIds: expect.arrayContaining([
+        "ti.source_provenance_alert_rebuild_receipt.v1",
+        "ti.source_provenance_actor_enrichment_gap_receipt.v1",
+        "ti.source_provenance_source_pack_intake_receipt.v1",
+        "ti.source_provenance_source_activation_decision_receipt.v1"
+      ]),
+      downstreamOwners: expect.arrayContaining(["alert", "publicTI"])
+    });
+    const serialized = JSON.stringify(matrix);
+    expect(serialized).not.toContain("https://discord.com");
+    expect(serialized).not.toContain("authorization:");
+    expect(serialized).not.toContain("webhookUrl");
     expect(serialized).not.toContain("rawText");
     expect(serialized).not.toContain("password");
   });
@@ -316,14 +453,15 @@ describe("api regression sentinel", () => {
         receipt: "dwm.case_handoff_action_receipt.v1",
         history: "dwm.case_handoff_action_history.v1",
         replayExport: "dwm.case_action_replay_export.v1",
+        webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
         readiness: "dwm.case_handoff_action_readiness.v1",
         detail: "analyst.case_detail.v1"
       },
       scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId", "actionId"]),
       writeFields: expect.arrayContaining(["actionId", "note", "idempotencyKey"]),
       queryFields: expect.arrayContaining(["actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"]),
-      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes"]),
-      blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination"])
+      recordFields: expect.arrayContaining(["receiptId", "caseId", "alertId", "actionId", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash"]),
+      blockerCodes: expect.arrayContaining(["case_not_found", "missing_case_alert", "handoff_action_not_ready", "case_read_only_member", "missing_webhook_destination", "missing_webhook_dry_run_receipt"])
     });
     expect(JSON.stringify(receiptSurface)).not.toContain("https://discord.com");
   });

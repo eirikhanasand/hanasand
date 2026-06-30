@@ -11,6 +11,11 @@ import {
   DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION
 } from "../product/webhookEventContract.ts";
 import {
+  ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
+  ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
+  ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION,
+  PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
+  PRODUCT_READINESS_SCHEMA_VERSION,
   SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
   SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
 } from "../product/analystHandoffConsumer.ts";
@@ -116,14 +121,15 @@ export function contractIndex() {
           receipt: "dwm.case_handoff_action_receipt.v1",
           history: "dwm.case_handoff_action_history.v1",
           replayExport: "dwm.case_action_replay_export.v1",
+          webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
           readiness: "dwm.case_handoff_action_readiness.v1",
           detail: "analyst.case_detail.v1"
         },
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
         queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"],
-        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes"],
-        blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash"],
+        blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination", "missing_webhook_dry_run_receipt"],
         safeOutput: {
           metadataOnly: true,
           rawEvidenceExposed: false,
@@ -147,6 +153,30 @@ export function contractIndex() {
           metadataOnly: true,
           rawEvidenceExposed: false,
           webhookSecretExposed: false
+        }
+      },
+      {
+        id: "product_readiness_receipt_matrix",
+        ownerLane: "integration",
+        route: "/v1/contracts",
+        methods: ["GET"],
+        schemas: {
+          matrix: PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
+          aggregate: PRODUCT_READINESS_SCHEMA_VERSION
+        },
+        scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "capabilityId", "ownerLane"],
+        recordFields: ["id", "contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "readinessRoute", "scopeFields", "downstreamOwners", "safeOutput"],
+        blockerCodes: ["missing_contract_reference", "missing_contract_ids", "missing_schema_ids", "missing_scope_fields", "unsafe_receipt_matrix_row"],
+        downstreamConsumers: [
+          { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["productReadinessReceiptMatrix.rows", "schemaLookup.rows", "receiptSchemas"] },
+          { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["id", "customerVisibleState", "blockerCodes", "readinessRoute"] },
+          { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "ownerLane", "blockerCodes", "scopeFields"] }
+        ],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false,
+          crossOrgDataExposed: false
         }
       },
       {
@@ -263,6 +293,18 @@ export function contractIndex() {
       schemaVersion: "ti.api_contract_schema_lookup.v1",
       rows: [
         schemaLookupRow({
+          schemaId: PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
+          contractId: "product_readiness_receipt_matrix",
+          ownerLane: "integration",
+          route: "/v1/contracts",
+          scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "capabilityId", "ownerLane"],
+          blockerCodes: ["missing_contract_reference", "missing_contract_ids", "missing_schema_ids", "missing_scope_fields", "unsafe_receipt_matrix_row"],
+          downstreamConsumers: [
+            { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["productReadinessReceiptMatrix.rows", "schemaLookup.rows", "receiptSchemas"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["id", "customerVisibleState", "blockerCodes"] }
+          ]
+        }),
+        schemaLookupRow({
           schemaId: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
           contractId: "org_alert_case_action_receipt",
           ownerLane: "case",
@@ -318,6 +360,158 @@ export function contractIndex() {
         crossOrgDataExposed: false
       }
     },
+    productReadinessReceiptMatrix: {
+      schemaVersion: PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
+      aggregateSchemaVersion: PRODUCT_READINESS_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      reportField: "productReadinessReceiptMatrix",
+      producer: "buildProductReadinessReceiptMatrix",
+      validator: "validateProductReadinessReceiptMatrix",
+      rows: [
+        productReadinessReceiptMatrixRow({
+          capabilityId: "organization_lifecycle",
+          ownerLane: "org",
+          readinessRoute: "GET /api/organizations/:id/readiness-lifecycle",
+          contractIds: ["organization_lifecycle", "organization_lifecycle_readiness"],
+          schemaIds: ["organization.lifecycle_readiness.v1"],
+          blockerCodes: ["org_missing", "missing_active_owner", "member_inactive"],
+          scopeFields: ["tenantId", "organizationId", "member.role", "member.status"],
+          downstreamConsumers: [
+            { ownerLane: "watchlist", route: "GET /api/organizations/:id/watchlists/alert-terms", requiredFields: ["organizationId", "tenantId", "member.role", "member.status"] },
+            { ownerLane: "support", route: "POST /api/admin/support/organizations/:id/access-recovery", requiredFields: ["organizationId", "actorId", "audit.reason"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "shared_watchlists",
+          ownerLane: "watchlist",
+          readinessRoute: "GET /api/organizations/:id/watchlists/alert-terms",
+          contractIds: ["shared_watchlist_alert_export", "shared_watchlist_alert_generation"],
+          schemaIds: [
+            ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
+            ORG_SHARED_WATCHLIST_ALERT_CONSUMERS_SCHEMA_VERSION,
+            ORG_SHARED_WATCHLIST_READINESS_PROOF_SCHEMA_VERSION
+          ],
+          blockerCodes: ["not_member", "member_inactive", "role_not_allowed", "term_org_mismatch", "no_active_watchlist_terms"],
+          scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "watchlistId", "watchlistItemIds"],
+          downstreamConsumers: [
+            { ownerLane: "alert", route: "/v1/dwm/alerts/generation-readiness", requiredFields: ["runtimeWatchlists", "termExport.alertGeneratorKeys", "termExport.watchlistItemIds"] },
+            { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["runtimeWatchlists[].webhookDestinationId", "termExport.alertGeneratorKeys"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["state", "member.role", "termExport", "blockers.code"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "source_activation",
+          ownerLane: "source",
+          readinessRoute: "GET /v1/dwm/source-requests/readiness",
+          contractIds: ["source_activation_and_provenance", "source_provenance_readiness", "source_provenance_receipts"],
+          schemaIds: ["dwm.source_worker_readiness.v1", "dwm.source_pack_action_contract.v1"],
+          receiptSchemaIds: [
+            TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+            TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+            TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+            TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION
+          ],
+          blockerCodes: ["source_inactive", "source_policy_inactive", "source_worker_not_ready", "missing_source_provenance"],
+          scopeFields: ["tenantId", "organizationId", "sourceIds", "sourceFamily", "provenance.refs"],
+          downstreamConsumers: [
+            { ownerLane: "alert", route: "POST /v1/dwm/alerts/rebuild", requiredFields: ["sourceIds", "captureIds", "freshProvenance"] },
+            { ownerLane: "publicTI", route: "/ti", requiredFields: ["artifactId", "provenance", "backedIds.sourceIds"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "alert_case_workflow",
+          ownerLane: "alert",
+          readinessRoute: "POST /v1/dwm/alerts/rebuild -> POST /v1/cases",
+          contractIds: ["org_scoped_alert_case_workflow", "org_alert_case_workflow", "org_alert_case_action_receipt"],
+          schemaIds: ["organization.watchlist_alert_readiness.v1", "dwm.alert_case_handoff.v1", "analyst.case_detail.v1"],
+          receiptSchemaIds: [DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION, DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION],
+          blockerCodes: ["missing_alert_provenance", "missing_alert_id", "case_closed", "organization_visibility_denied", "case_read_only_member"],
+          scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "casePath", "watchlistItemIds"],
+          downstreamConsumers: [
+            { ownerLane: "case", route: "PATCH /v1/cases/:caseId", requiredFields: ["alertId", "casePath", "workflowState", "timeline"] },
+            { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["alertId", "casePath", "webhookDestinationIds"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["alertId", "casePath", "nextAllowedActions"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "webhook_delivery",
+          ownerLane: "webhook",
+          readinessRoute: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
+          contractIds: ["webhook_destination", "webhook_delivery_receipts"],
+          schemaIds: ["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"],
+          receiptSchemaIds: [
+            DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+            DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+            DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+            DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
+          ],
+          blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
+          scopeFields: ["tenantId", "organizationId", "destinationId", "webhookDestinationIds", "alertId", "casePath"],
+          downstreamConsumers: [
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["deliveryId", "destination.status", "lastAttempt.status"] },
+            { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "destinationId", "auditEventId"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "support_controls",
+          ownerLane: "support",
+          readinessRoute: "POST /api/admin/support/organizations/:id/access-recovery",
+          contractIds: ["support_executor", "support_recovery_receipts", "support_action_receipts"],
+          schemaIds: [SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION],
+          receiptSchemaIds: [SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION],
+          blockerCodes: ["support_executor_unavailable", "helpdesk_audit_unavailable", "missing_invite_teammate_executor"],
+          scopeFields: ["tenantId", "organizationId", "actorId", "action", "audit.reason", "idempotencyKey"],
+          downstreamConsumers: [
+            { ownerLane: "org", route: "GET /api/organizations/:id/members", requiredFields: ["member.status", "invite.status", "auditEventId"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["organizationId", "supportAction.status"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "dashboard_operator_workspace",
+          ownerLane: "dashboard",
+          readinessRoute: "/dashboard",
+          contractIds: ["dashboard_operator_workspace"],
+          schemaIds: ["hanasand.ui_quality_proof.v1", "analyst.case_detail.v1"],
+          blockerCodes: ["missing_dashboard_ui_quality_proof", "case_read_only_member", "organization_visibility_denied"],
+          scopeFields: ["tenantId", "organizationId", "member.role", "alertId", "caseId"],
+          downstreamConsumers: [
+            { ownerLane: "alert", route: "PATCH /v1/cases/:caseId", requiredFields: ["status", "assignedOwner", "rationale"] },
+            { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "caseId", "auditEventId"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "public_ti_actor_handoff",
+          ownerLane: "publicTI",
+          readinessRoute: "/ti",
+          contractIds: ["public_ti_actor_handoff"],
+          schemaIds: ["ti.public_actor.authenticated_bridge.v1", "ti.public_actor.readiness.v1"],
+          blockerCodes: ["public_ti_contract_mismatch", "missing_source_provenance", "source_coverage_required_for_ti"],
+          scopeFields: ["tenantId", "organizationId", "artifactId", "query", "provenance.refs"],
+          downstreamConsumers: [
+            { ownerLane: "watchlist", route: "GET /api/organizations/:id/watchlists/alert-terms", requiredFields: ["watchlistTerms", "actorAliases", "provenance"] },
+            { ownerLane: "case", route: "POST /v1/cases", requiredFields: ["actorId", "casePath", "sourceRefs"] }
+          ]
+        }),
+        productReadinessReceiptMatrixRow({
+          capabilityId: "website_product_surface",
+          ownerLane: "website",
+          readinessRoute: "/",
+          contractIds: ["website_product_surface"],
+          schemaIds: ["hanasand.ui_quality_proof.v1", PRODUCT_READINESS_SCHEMA_VERSION],
+          blockerCodes: ["missing_website_ui_quality_proof"],
+          scopeFields: ["route", "checkedAt", "proofArtifactId"],
+          downstreamConsumers: [
+            { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["routeInventory", "surfaces", "publicCompatibility"] }
+          ]
+        })
+      ],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    },
     semantics: { safeMetadataOnly: true, noCredentialCollection: true, noThreatActorInteraction: true },
     publicCompatibility: { canonicalSearchRoute: "/api/ti/search", unknownQueryCopy: "searching", noDefaultActor: true }
   };
@@ -348,10 +542,35 @@ function receiptSchema(input: {
   };
 }
 
+function productReadinessReceiptMatrixRow(input: {
+  capabilityId: string;
+  ownerLane: "org" | "watchlist" | "source" | "alert" | "webhook" | "support" | "dashboard" | "publicTI" | "website";
+  readinessRoute: string;
+  contractIds: string[];
+  schemaIds: string[];
+  receiptSchemaIds?: string[];
+  blockerCodes: string[];
+  scopeFields: string[];
+  downstreamConsumers: Array<{ ownerLane: string; route: string; requiredFields: string[] }>;
+}) {
+  return {
+    ...input,
+    receiptSchemaIds: input.receiptSchemaIds || [],
+    downstreamOwners: [...new Set(input.downstreamConsumers.map((consumer) => consumer.ownerLane))],
+    missingContract: false,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
 function schemaLookupRow(input: {
   schemaId: string;
   contractId: string;
-  ownerLane: "case" | "webhook" | "source" | "support";
+  ownerLane: "case" | "webhook" | "source" | "support" | "integration";
   route: string;
   scopeFields: string[];
   blockerCodes: string[];
