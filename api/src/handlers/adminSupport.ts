@@ -6155,10 +6155,41 @@ function supportOrganizationCaseHandoff(input: {
     const deliveryHistoryDiagnostic = isPlainObject(input.webhookDestinationReadiness.deliveryHistoryDiagnostic)
         ? input.webhookDestinationReadiness.deliveryHistoryDiagnostic as Record<string, any>
         : null
+    const alertReadinessDiagnostic = {
+        schemaVersion: 'support.organization.alert_readiness.case_diagnostic.v1',
+        generatedAt: new Date().toISOString(),
+        organizationId: input.organizationId,
+        requestId: input.requestId,
+        sourceWorkflow: 'alert',
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        expectedConsumer: 'case.replay',
+        watchlistItemCount: input.watchlistItems.length,
+        alertReferenceCount: input.alertReferences.length,
+        alertReferenceIds: uniqueTimelineValues(input.alertReferences.map(reference => reference.id || reference.alertId || reference.watchlistItemId)),
+        replayFilters: {
+            alerts: auditFilterQuery({ org: input.organizationId, workflow: 'alert', action: 'alert', source: 'admin', service: 'hanasand-api' }),
+            watchlists: auditFilterQuery({ org: input.organizationId, workflow: 'watchlist', action: 'watchlist', source: 'admin', service: 'hanasand-api' }),
+            denied: auditFilterQuery({ org: input.organizationId, workflow: 'alert', outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+        },
+        blockers: uniqueTimelineValues([
+            input.watchlistItems.length ? '' : 'missing_watchlist_evidence',
+            input.alertReferences.length ? '' : 'missing_alert_reference',
+        ]),
+        safeHandoff: {
+            noLiveAccessGrant: true,
+            noLiveWebhookDelivery: true,
+            noSecretExposure: true,
+            noCrossOrgLeakage: true,
+            redactionRequired: true,
+        },
+    }
     const recoveryBlockers = uniqueTimelineValues([
         ...(Array.isArray(input.accessRecoveryPlan.blockers) ? input.accessRecoveryPlan.blockers : []),
         ...(Array.isArray(input.webhookDestinationReadiness.caseReadiness?.blockers) ? input.webhookDestinationReadiness.caseReadiness.blockers : []),
         ...(Array.isArray(deliveryHistoryDiagnostic?.blockers) ? deliveryHistoryDiagnostic.blockers : []),
+        ...alertReadinessDiagnostic.blockers,
     ])
     return {
         schemaVersion: 'support.organization.case_handoff.v1',
@@ -6181,6 +6212,7 @@ function supportOrganizationCaseHandoff(input: {
             caseTimeline: supportCaseTimelineEntries(input.timeline),
             caseAccessReadiness: input.caseAccessReadiness,
             deliveryHistoryDiagnostic,
+            alertReadinessDiagnostic,
         },
         recovery: {
             accessRecoveryAvailable: Boolean(input.accessRecoveryPlan.available || input.accessRecoveryPlan.items?.length),
@@ -6192,6 +6224,7 @@ function supportOrganizationCaseHandoff(input: {
             current: auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' }),
             alerts: auditFilterQuery({ org: input.organizationId, action: 'alert', source: 'admin', service: 'hanasand-api' }),
             watchlists: auditFilterQuery({ org: input.organizationId, action: 'watchlist', source: 'admin', service: 'hanasand-api' }),
+            alertReadiness: alertReadinessDiagnostic.replayFilters,
             webhooks: auditFilterQuery({ org: input.organizationId, action: 'webhook', source: 'admin', service: 'hanasand-api' }),
             webhookDeliveries: Array.isArray(deliveryHistoryDiagnostic?.deliveryHistoryLinks) ? deliveryHistoryDiagnostic.deliveryHistoryLinks : [],
             webhookDeliveryAudit: deliveryHistoryDiagnostic?.auditFilters || null,
@@ -6219,6 +6252,8 @@ function supportOrganizationCaseHandoff(input: {
             'missing_support_reason',
             'wrong_org_scope',
             'missing_case_evidence',
+            'missing_watchlist_evidence',
+            'missing_alert_reference',
             'missing_webhook_delivery_history',
             'webhook_destination_test_failed',
             'denied_recovery_approval',
@@ -6233,6 +6268,7 @@ function supportOrganizationCaseHandoff(input: {
             `Support case handoff org=${input.organizationId}`,
             `Request: ${input.requestId}`,
             `Evidence: watchlists=${input.watchlistItems.length} alerts=${input.alertReferences.length} webhooks=${input.webhookDestinations.length}`,
+            `Alert readiness blockers: ${alertReadinessDiagnostic.blockers.join(', ') || 'none'}`,
             `Webhook deliveries observed: ${deliveryHistoryDiagnostic?.deliveryObservedCount ?? 0}`,
             `Audit events: ${auditEventIds.join(', ') || 'none'}`,
             `Replay: ${auditFilterQuery({ org: input.organizationId, request: input.requestId, source: 'admin', service: 'hanasand-api' })}`,
