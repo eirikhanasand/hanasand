@@ -70,6 +70,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"],
         writeFields: ["organizationId", "assignedOwner", "note", "idempotencyKey"],
         recordFields: ["alertId", "caseId", "casePath", "webhookDestinationIds", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "deliveryDedupeKey", "replayState", "readiness", "consumerActions"],
+        caseDetailFields: ["alertCaseHandoffContext", "handoffActionReadiness", "handoffActionReadiness.readyActionIds", "handoffActionReadiness.actions.alertReplay", "handoffActionReadiness.actions.webhookDryRun"],
         consumerActions: [
           { id: "alertReplay", route: "/v1/dwm/alerts/:alertId/replay", method: "POST", bodyFields: ["organizationId", "caseId", "casePath", "expectedWorkflowEventCount"] },
           { id: "webhookDryRun", route: "/v1/dwm/webhooks/deliver", method: "POST", bodyFields: ["organizationId", "alertId", "caseId", "casePath", "webhookDestinationId", "webhookDestinationIds", "dryRun", "limit"] }

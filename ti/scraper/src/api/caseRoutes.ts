@@ -424,6 +424,13 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
   const watchlists = caseWatchlists(options, alert, caseRecord);
   const caseActionLedger = buildCaseActionLedgerTimeline(caseRecord, options, alert);
   const timeline = buildCaseTimeline(caseRecord, alert, deliveries, caseActionLedger.rows);
+  const alertCaseHandoffContext = alert ? buildAlertCaseHandoff({
+    caseRecord,
+    alert,
+    route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
+    replayState: "reused",
+    provenance: alertCaseHandoffProvenance(alert)
+  }) : undefined;
 
   return {
     schemaVersion: "analyst.case_detail.v1",
@@ -432,12 +439,12 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     access: caseAccessSummary(access),
     case: caseRecord,
     workflowState: caseWorkflowSummary(caseRecord),
-    alertCaseHandoffContext: alert ? buildAlertCaseHandoff({
+    alertCaseHandoffContext,
+    handoffActionReadiness: alertCaseHandoffContext ? buildCaseHandoffActionReadiness({
       caseRecord,
-      alert,
-      route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
-      replayState: "reused",
-      provenance: alertCaseHandoffProvenance(alert)
+      handoff: alertCaseHandoffContext,
+      deliveries,
+      access
     }) : undefined,
     alert,
     alertContext: alert ? {
@@ -1413,6 +1420,77 @@ function buildAlertCaseHandoff(input: {
       evidenceCount: input.provenance.evidenceCount,
       blockers: input.provenance.blockers
     }
+  };
+}
+
+function buildCaseHandoffActionReadiness(input: {
+  caseRecord: AnalystCase;
+  handoff: any;
+  deliveries: any[];
+  access?: CaseAccessResult;
+}) {
+  const readOnlyBlockers = input.access?.readOnly === true ? [{
+    code: "case_read_only_member",
+    message: "Viewer members can inspect case handoff state but cannot replay alerts or send webhook deliveries.",
+    path: "access.readOnly"
+  }] : [];
+  const handoffBlockers = Array.isArray(input.handoff?.readiness?.blockers) ? input.handoff.readiness.blockers : [];
+  const replayBlockers = [
+    ...readOnlyBlockers,
+    ...handoffBlockers.filter((blocker: any) => blocker?.code !== "missing_webhook_destination")
+  ];
+  const webhookBlockers = [
+    ...readOnlyBlockers,
+    ...handoffBlockers
+  ];
+  const latestDryRunDelivery = [...input.deliveries]
+    .filter((delivery: any) => delivery.status === "dry_run")
+    .sort((a: any, b: any) => String(b.attemptedAt ?? "").localeCompare(String(a.attemptedAt ?? "")))[0];
+  const replayAction = input.handoff?.consumerActions?.alertReplay;
+  const webhookAction = input.handoff?.consumerActions?.webhookDryRun;
+  const replayReady = Boolean(input.handoff?.readiness?.replayReady && replayAction && replayBlockers.length === 0);
+  const webhookDryRunReady = Boolean(input.handoff?.readiness?.webhookDryRunReady && webhookAction && webhookBlockers.length === 0);
+  return {
+    schemaVersion: "dwm.case_handoff_action_readiness.v1",
+    generatedFrom: input.handoff?.schemaVersion,
+    caseId: input.caseRecord.id,
+    alertId: input.handoff?.alertId,
+    organizationId: input.caseRecord.organizationId,
+    workflowState: input.handoff?.workflowState,
+    provenance: {
+      captureIds: input.handoff?.provenance?.captureIds ?? [],
+      sourceIds: input.handoff?.provenance?.sourceIds ?? [],
+      contentHashes: input.handoff?.provenance?.contentHashes ?? [],
+      evidenceCount: input.handoff?.provenance?.evidenceCount ?? 0
+    },
+    readyActionIds: [
+      ...(replayReady ? ["alertReplay"] : []),
+      ...(webhookDryRunReady ? ["webhookDryRun"] : [])
+    ],
+    actions: {
+      alertReplay: readinessAction("alertReplay", replayReady, replayAction, replayBlockers),
+      webhookDryRun: {
+        ...readinessAction("webhookDryRun", webhookDryRunReady, webhookAction, webhookBlockers),
+        latestDryRunDeliveryId: latestDryRunDelivery?.id,
+        latestDryRunAt: latestDryRunDelivery?.attemptedAt,
+        latestDryRunStatus: latestDryRunDelivery?.status
+      }
+    },
+    blockerCodes: uniqueCaseStrings([...replayBlockers, ...webhookBlockers].map((blocker: any) => blocker?.code))
+  };
+}
+
+function readinessAction(id: string, ready: boolean, action: any, blockers: any[]) {
+  return {
+    id,
+    ready,
+    route: action?.route,
+    method: action?.method,
+    idempotencyKey: action?.idempotencyKey,
+    dedupeKey: action?.dedupeKey,
+    body: action?.body,
+    blockerCodes: uniqueCaseStrings(blockers.map((blocker: any) => blocker?.code)),
+    blockers
   };
 }
 

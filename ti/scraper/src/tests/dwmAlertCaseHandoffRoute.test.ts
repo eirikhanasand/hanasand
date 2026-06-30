@@ -143,6 +143,92 @@ describe("DWM alert case handoff route", () => {
         blockers: []
       }
     });
+    expect(detailPayload.handoffActionReadiness).toMatchObject({
+      schemaVersion: "dwm.case_handoff_action_readiness.v1",
+      generatedFrom: "dwm.alert_case_handoff.v1",
+      caseId: "case_alert_acme",
+      alertId: "alert_acme",
+      organizationId: "org_acme",
+      readyActionIds: ["alertReplay", "webhookDryRun"],
+      actions: {
+        alertReplay: {
+          ready: true,
+          route: "/v1/dwm/alerts/alert_acme/replay",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            caseId: "case_alert_acme",
+            expectedWorkflowEventCount: 2
+          },
+          blockerCodes: []
+        },
+        webhookDryRun: {
+          ready: true,
+          route: "/v1/dwm/webhooks/deliver",
+          method: "POST",
+          body: {
+            organizationId: "org_acme",
+            alertId: "alert_acme",
+            caseId: "case_alert_acme",
+            webhookDestinationId: "webhook_acme_discord",
+            dryRun: true
+          },
+          blockerCodes: []
+        }
+      },
+      provenance: {
+        captureIds: ["cap_acme_1"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_1"],
+        evidenceCount: 1
+      },
+      blockerCodes: []
+    });
+    (store as any).saveDwmWebhookDelivery({
+      id: "delivery_dry_run_case_alert_acme",
+      organizationId: "org_acme",
+      tenantId: "tenant_acme",
+      alertId: "alert_acme",
+      watchlistId: "watch_acme",
+      webhookDestinationId: "webhook_acme_discord",
+      endpointHash: "endpoint_hash",
+      dedupeKey: "delivery_alert_acme_webhook",
+      attemptedAt: "2026-06-29T14:03:00.000Z",
+      dryRun: true,
+      payloadHash: "payload_hash",
+      deliveryKind: "discord",
+      status: "dry_run",
+      httpStatus: 0
+    });
+    const receiptDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const receiptDetailPayload = await receiptDetail.json() as any;
+    expect(receiptDetail.status).toBe(200);
+    expect(receiptDetailPayload.handoffActionReadiness.actions.webhookDryRun).toMatchObject({
+      latestDryRunDeliveryId: "delivery_dry_run_case_alert_acme",
+      latestDryRunAt: "2026-06-29T14:03:00.000Z",
+      latestDryRunStatus: "dry_run"
+    });
+    const viewerDetail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "viewer@acme.com" }
+    }), options);
+    const viewerDetailPayload = await viewerDetail.json() as any;
+    expect(viewerDetail.status).toBe(200);
+    expect(viewerDetailPayload.handoffActionReadiness).toMatchObject({
+      readyActionIds: [],
+      actions: {
+        alertReplay: {
+          ready: false,
+          blockerCodes: ["case_read_only_member"]
+        },
+        webhookDryRun: {
+          ready: false,
+          blockerCodes: ["case_read_only_member"]
+        }
+      },
+      blockerCodes: ["case_read_only_member"]
+    });
     expect(duplicate.status).toBe(200);
     expect(duplicatePayload.alertCaseHandoff).toMatchObject({
       caseId: "case_alert_acme",
@@ -228,6 +314,28 @@ describe("DWM alert case handoff route", () => {
       webhookDryRunReady: false,
       blockerCodes: ["missing_webhook_destination"]
     });
+    expect(detailPayload.handoffActionReadiness).toMatchObject({
+      readyActionIds: ["alertReplay"],
+      actions: {
+        alertReplay: {
+          ready: true,
+          route: "/v1/dwm/alerts/alert_no_destination/replay",
+          blockerCodes: []
+        },
+        webhookDryRun: {
+          ready: false,
+          route: "/v1/dwm/webhooks/deliver",
+          blockerCodes: ["missing_webhook_destination"],
+          body: {
+            organizationId: "org_acme",
+            alertId: "alert_no_destination",
+            caseId: "case_alert_no_destination",
+            webhookDestinationIds: []
+          }
+        }
+      },
+      blockerCodes: ["missing_webhook_destination"]
+    });
     expect((store as any).getCase("case_alert_no_destination").organizationId).toBe("org_acme");
   });
 
@@ -257,6 +365,10 @@ describe("DWM alert case handoff route", () => {
       body: JSON.stringify({ organizationId: "org_acme", note: "Viewer cannot open cases." })
     }), options);
     const viewerPayload = await viewer.json() as any;
+    const missingCase = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_missing?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const missingCasePayload = await missingCase.json() as any;
 
     expect(missingProvenance.status).toBe(409);
     expect(missingPayload.error).toMatchObject({ code: "missing_alert_provenance" });
@@ -265,6 +377,8 @@ describe("DWM alert case handoff route", () => {
     expect(wrongOrgPayload.error).toMatchObject({ code: "alert_not_found" });
     expect(viewer.status).toBe(403);
     expect(viewerPayload.error).toMatchObject({ code: "case_read_only_member" });
+    expect(missingCase.status).toBe(404);
+    expect(missingCasePayload.error).toMatchObject({ code: "case_not_found" });
     expect((store as any).listCases()).toEqual([]);
   });
 });

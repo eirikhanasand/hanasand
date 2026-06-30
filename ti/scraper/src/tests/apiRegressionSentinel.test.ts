@@ -125,6 +125,7 @@ describe("api regression sentinel", () => {
       scopeFields: expect.arrayContaining(["organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"]),
       writeFields: expect.arrayContaining(["assignedOwner", "note", "idempotencyKey"]),
       recordFields: expect.arrayContaining(["alertId", "caseId", "casePath", "webhookDestinationIds", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "deliveryDedupeKey", "replayState", "readiness", "consumerActions"]),
+      caseDetailFields: expect.arrayContaining(["alertCaseHandoffContext", "handoffActionReadiness", "handoffActionReadiness.actions.alertReplay", "handoffActionReadiness.actions.webhookDryRun"]),
       consumerActions: expect.arrayContaining([
         expect.objectContaining({ id: "alertReplay", route: "/v1/dwm/alerts/:alertId/replay" }),
         expect.objectContaining({ id: "webhookDryRun", route: "/v1/dwm/webhooks/deliver" })
