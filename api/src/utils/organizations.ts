@@ -1202,6 +1202,39 @@ export type OrganizationWatchlistAlertTermsExport = {
             removedMember: 'member_revoked'
             noLeakFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'otherOrg.watchlistItemIds'>
         }
+        matchingInputReceipt: {
+            schemaVersion: 'organization.watchlist_alert_matching_input.v1'
+            organizationId: string
+            tenantId: string
+            sourceFamily: 'organization_watchlist'
+            matchingRoute: 'organization_watchlist'
+            termCount: number
+            requiredMatcherFields: Array<'organizationId' | 'tenantId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm' | 'alertGeneratorKey' | 'alertGenerationRef'>
+            dedupeKeyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
+            terms: Array<{
+                organizationId: string
+                tenantId: string
+                watchlistItemId: string
+                termFamily: WatchlistKind
+                normalizedTerm: string
+                alertGeneratorKey: string
+                status: 'active'
+                alertGenerationRef: OrganizationWatchlistAlertGenerationRef
+            }>
+            lifecycleExclusions: {
+                pausedItemIds: string[]
+                archivedItemIds: string[]
+                deletedTermIds: string[]
+                excludedStatuses: Array<'paused' | 'archived'>
+            }
+            scopeGuardrails: {
+                partitionKey: 'organizationId'
+                crossOrgReadAllowed: false
+                userLocalFallbackAllowed: false
+                nonmemberEnumeration: false
+            }
+            noLeakFields: Array<'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'destination.secret'>
+        }
         canGenerateAlerts: boolean
         blockerCodes: string[]
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
@@ -6469,6 +6502,51 @@ export function organizationWatchlistAlertTermsExport(
                 'activeWatchlistTerms[]',
                 'watchlistScope.alertGeneratorKeys',
                 'otherOrg.watchlistItemIds',
+            ],
+        },
+        matchingInputReceipt: {
+            schemaVersion: 'organization.watchlist_alert_matching_input.v1',
+            organizationId: organization.id,
+            tenantId: organization.id,
+            sourceFamily: 'organization_watchlist',
+            matchingRoute: 'organization_watchlist',
+            termCount: activeTerms.length,
+            requiredMatcherFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemId',
+                'termFamily',
+                'normalizedTerm',
+                'alertGeneratorKey',
+                'alertGenerationRef',
+            ],
+            dedupeKeyFields: ['organizationId', 'watchlistItemId', 'termFamily', 'normalizedTerm'],
+            terms: activeTerms.map(term => ({
+                organizationId: term.organizationId,
+                tenantId: term.tenantId,
+                watchlistItemId: term.watchlistItemId,
+                termFamily: term.termFamily,
+                normalizedTerm: term.alertGenerationRef.normalizedTerm,
+                alertGeneratorKey: term.alertGeneratorKey,
+                status: 'active',
+                alertGenerationRef: term.alertGenerationRef,
+            })),
+            lifecycleExclusions: {
+                pausedItemIds: termLifecycle.pausedItemIds,
+                archivedItemIds: termLifecycle.archivedItemIds,
+                deletedTermIds: termLifecycle.deletedTermIds,
+                excludedStatuses: ['paused', 'archived'],
+            },
+            scopeGuardrails: {
+                partitionKey: 'organizationId',
+                crossOrgReadAllowed: false,
+                userLocalFallbackAllowed: false,
+                nonmemberEnumeration: false,
+            },
+            noLeakFields: [
+                'otherOrg.watchlistItemIds',
+                'otherOrg.alertGeneratorKeys',
+                'destination.secret',
             ],
         },
         canGenerateAlerts: alertGeneration.canGenerateAlerts,
