@@ -351,6 +351,76 @@ export async function putOrganizationSettings(req: FastifyRequest<{ Params: Orga
         settings: updated ? organizationSettingsFromRow(updated) : null,
         permissions: organizationSettingsPermissions(updated?.role),
         lifecycleReadiness: updated ? organizationLifecycleReadiness(updated) : null,
+        settingsMutationReceipt: updated ? {
+            schemaVersion: 'organization.lifecycle_settings_mutation_receipt.v1',
+            organizationId: req.params.id,
+            tenantId: req.params.id,
+            actorId: userId,
+            actorRole: organization.role,
+            previousLifecycleStatus: organization.status ?? 'active',
+            lifecycleStatus: updated.status ?? 'active',
+            lifecycleChanged: (organization.status ?? 'active') !== (updated.status ?? 'active'),
+            mutatedFields: Object.entries({
+                name: input.name,
+                slug,
+                defaultWebhookPolicy: input.defaultWebhookPolicy,
+                alertVisibilityPolicy: input.alertVisibilityPolicy,
+                lifecycleStatus: input.lifecycleStatus,
+                retentionDays: input.retentionDays,
+                auditSafeMetadata: input.auditSafeMetadata === undefined ? undefined : Object.keys(input.auditSafeMetadata),
+            }).filter(([, value]) => value !== undefined).map(([key]) => key),
+            blockerReason: updated.status === 'deleted'
+                ? 'org_deleted' as const
+                : updated.status === 'archived'
+                    ? 'org_archived' as const
+                    : null,
+            downstreamReadiness: {
+                inviteMutationAllowed: updated.status === 'active',
+                watchlistMutationAllowed: updated.status === 'active',
+                alertGenerationReady: updated.status === 'active',
+                caseVisibilityReady: updated.status === 'active',
+                webhookDeliveryReady: updated.status === 'active',
+                dashboardReadinessReady: updated.status === 'active',
+                supportRedactedReadReady: true,
+            },
+            downstreamRoutes: {
+                invites: 'POST /api/organizations/:id/invites',
+                sharedWatchlists: 'GET /api/organizations/:id/watchlists',
+                alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+                alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+                alertReadiness: 'GET /api/organizations/:id/alert-readiness',
+                webhookDelivery: 'POST /v1/dwm/webhooks/deliver',
+            },
+            downstreamContracts: [
+                'organization.watchlist_alert_generation_consumer.v1',
+                'organization.case_visibility_consumer.v1',
+                'organization.webhook_destination_delivery_consumer.v1',
+                'organization.shared_watchlist_readiness_export.v1',
+                'organization.lifecycle_downstream_receipt.v1',
+            ],
+            lifecycleCleanup: {
+                activeMembershipRequired: true,
+                archivedBlocker: 'org_archived' as const,
+                deletedBlocker: 'org_deleted' as const,
+                noOrphanedWatchlistAlerts: true,
+                noCrossOrgLeakage: true,
+                cleanupRoute: 'POST /api/organizations/:id/watchlists/cleanup' as const,
+            },
+            destinationReadiness: {
+                destinationOwnerField: 'destination.org_id' as const,
+                selectedDestinationIdField: 'webhookDestinationIds[]' as const,
+                deliveryBlockedByLifecycle: updated.status !== 'active',
+                crossOrgDestinationAllowed: false,
+                nonmemberDestinationEnumeration: false,
+            },
+            noLeakFields: [
+                'activeTerms[]',
+                'watchlistScope.alertGeneratorKeys',
+                'destination.secret',
+                'case.evidence.rawContent',
+                'otherOrg.watchlistItemIds',
+            ],
+        } : null,
     })
 }
 
