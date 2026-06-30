@@ -17,6 +17,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -58,6 +59,7 @@ import {
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
   buildSourceProvenanceActorSourceCoveragePortfolio,
+  buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -4156,6 +4158,141 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(portfolio)).not.toContain("rawText");
     expect(JSON.stringify(portfolio)).not.toContain("password");
+  });
+
+  test("bridges actor source coverage into alert prerequisite packet without network fetches", () => {
+    const aptReceipt = buildActorValidationReceiptFixture({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_alert_prereq",
+      captureId: "cap_actor_page_apt29_alert_prereq",
+      contentHash: "hash_actor_page_apt29_alert_prereq",
+      provenance: "Actor page fixture gives APT29 source coverage with parser and policy follow-up.",
+      relationship: "actor_activity"
+    });
+    const ransomwareReceipt = buildActorValidationReceiptFixture({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_alert_prereq",
+      captureId: "cap_public_advisory_akira_alert_prereq",
+      contentHash: "hash_public_advisory_akira_alert_prereq",
+      provenance: "Public advisory fixture gives Akira source coverage with alertable victimology metadata.",
+      relationship: "targeting"
+    });
+    const portfolio = buildSourceProvenanceActorSourceCoveragePortfolio({
+      validationReceipts: [aptReceipt, ransomwareReceipt],
+      generatedAt: "2026-06-29T12:45:00.000Z"
+    });
+    const packet = buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket({
+      portfolio,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+
+    expect(packet).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      summary: {
+        actorCount: 2,
+        readyActors: 0,
+        partialActors: 2,
+        blockedActors: 0,
+        alertReadyActors: 2,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        prerequisiteCodes: expect.arrayContaining([
+          "parser_retry_required",
+          "policy_review_required",
+          "parser_health_inspection_required"
+        ]),
+        newestFreshnessAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(typeof packet.summary.prerequisiteCount).toBe("number");
+    expect(packet.summary.prerequisiteCount >= 6).toBe(true);
+    const aptRow = packet.actorRows.find((row) => row.actor === "APT29");
+    const ransomwareRow = packet.actorRows.find((row) => row.actor === "Akira");
+    expect(aptRow).toMatchObject({
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      alertReadiness: "partial",
+      coverageCounts: expect.objectContaining({ alertReady: 1 }),
+      sourceFamilies: expect.arrayContaining(["actor_page", "telegram_public", "darkweb_metadata"]),
+      downstreamRoutes: expect.objectContaining({
+        publicTI: "/ti/APT29",
+        alertGeneration: "/v1/dwm/alerts/rebuild"
+      })
+    });
+    expect(aptRow?.missingPrerequisites).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "parser_retry_required",
+        ownerLane: "parser",
+        sourceFamily: "telegram_public",
+        nextAction: expect.objectContaining({
+          action: "retry_parser",
+          route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+        })
+      }),
+      expect.objectContaining({
+        code: "policy_review_required",
+        ownerLane: "policy",
+        sourceFamily: "darkweb_metadata",
+        nextAction: expect.objectContaining({
+          action: "request_policy_review",
+          route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+        })
+      }),
+      expect.objectContaining({
+        code: "parser_health_inspection_required",
+        ownerLane: "source",
+        nextAction: expect.objectContaining({
+          action: "inspect_parser_health",
+          route: expect.objectContaining({ method: "GET", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+        })
+      })
+    ]));
+    expect((aptRow?.provenance.captureIds.length ?? 0) >= 1).toBe(true);
+    expect((aptRow?.provenance.contentHashes.length ?? 0) >= 1).toBe(true);
+    expect(ransomwareRow).toMatchObject({
+      actor: "Akira",
+      publicTiRoute: "/ti/Akira",
+      alertReadiness: "partial",
+      sourceFamilies: expect.arrayContaining(["public_advisory", "telegram_public", "darkweb_metadata"])
+    });
+    expect(ransomwareRow?.missingPrerequisites).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "parser_retry_required", ownerLane: "parser" }),
+      expect.objectContaining({ code: "policy_review_required", ownerLane: "policy" }),
+      expect.objectContaining({ code: "parser_health_inspection_required", ownerLane: "source" })
+    ]));
+    expect((ransomwareRow?.provenance.captureIds.length ?? 0) >= 1).toBe(true);
+    expect((ransomwareRow?.provenance.contentHashes.length ?? 0) >= 1).toBe(true);
+    expect(packet.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, requiredFields: expect.arrayContaining(["actorRows[].missingPrerequisites"]) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, route: expect.objectContaining({ path: "/v1/dwm/source-requests", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["actorRows[].provenance", "actorRows[].missingPrerequisites"]) })
+    ]));
+    expect(packet.payloadShape).toEqual(expect.arrayContaining([
+      "actorRows[].alertReadiness",
+      "actorRows[].missingPrerequisites",
+      "actorRows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(packet)).not.toContain("rawText");
+    expect(JSON.stringify(packet)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {

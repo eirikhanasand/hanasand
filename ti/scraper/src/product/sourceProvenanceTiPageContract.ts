@@ -28,6 +28,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VE
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION = "ti.source_provenance_actor_source_coverage_portfolio.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_alert_prerequisite_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -1887,6 +1888,82 @@ export type TiSourceProvenanceActorSourceCoveragePortfolioRow = {
     captureIds: string[];
     contentHashes: string[];
     sourceHealthProofIds: string[];
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentAlertPrerequisitePacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  actorRows: TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow[];
+  summary: {
+    actorCount: number;
+    readyActors: number;
+    partialActors: number;
+    blockedActors: number;
+    alertReadyActors: number;
+    prerequisiteCount: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+    healthStates: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+    prerequisiteCodes: TiSourceProvenanceActorEnrichmentAlertPrerequisite["code"][];
+    newestFreshnessAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceActorSourceCoveragePortfolio["safeOutput"];
+};
+
+export type TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow = {
+  actor: string;
+  publicTiRoute: string;
+  sourceCandidateValidationReceiptId: string;
+  alertReadiness: "ready" | "partial" | "blocked";
+  readiness: TiSourceProvenanceActorSourceCoveragePortfolioRow["readiness"];
+  coverageCounts: TiSourceProvenanceActorSourceCoveragePortfolioRow["coverageCounts"];
+  sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  parserStatuses: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+  healthStates: TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+  freshness: TiSourceProvenanceActorSourceCoveragePortfolioRow["freshness"];
+  missingPrerequisites: TiSourceProvenanceActorEnrichmentAlertPrerequisite[];
+  downstreamRoutes: TiSourceProvenanceActorSourceCoveragePortfolioRow["downstreamRoutes"];
+  provenance: TiSourceProvenanceActorSourceCoveragePortfolioRow["provenance"];
+};
+
+export type TiSourceProvenanceActorEnrichmentAlertPrerequisite = {
+  code:
+    | "parser_retry_required"
+    | "policy_review_required"
+    | "parser_health_inspection_required"
+    | "watchlist_materialization_required";
+  ownerLane: "parser" | "policy" | "source" | "org";
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  reason: string;
+  nextAction: {
+    action: "retry_parser" | "request_policy_review" | "inspect_parser_health" | "materialize_watchlist_terms";
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
   };
 };
 
@@ -4338,6 +4415,65 @@ export function buildSourceProvenanceActorSourceCoveragePortfolio(input: {
       liveNetworkScrapeStarted: false,
       crossOrgDataIncluded: false
     }
+  };
+}
+
+export function buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket(input: {
+  portfolio: TiSourceProvenanceActorSourceCoveragePortfolio;
+  generatedAt?: string;
+}): TiSourceProvenanceActorEnrichmentAlertPrerequisitePacket {
+  const generatedAt = input.generatedAt ?? input.portfolio.generatedAt;
+  const actorRows = input.portfolio.actorRows.map(actorEnrichmentAlertPrerequisiteRow);
+  const readyActors = actorRows.filter((row) => row.alertReadiness === "ready").length;
+  const partialActors = actorRows.filter((row) => row.alertReadiness === "partial").length;
+  const blockedActors = actorRows.filter((row) => row.alertReadiness === "blocked").length;
+  const alertReadyActors = actorRows.filter((row) => row.coverageCounts.alertReady > 0).length;
+  const prerequisiteCount = actorRows.reduce((sum, row) => sum + row.missingPrerequisites.length, 0);
+  const sourceFamilies = uniqueStrings(actorRows.flatMap((row) => row.sourceFamilies)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const parserStatuses = uniqueStrings(actorRows.flatMap((row) => row.parserStatuses)) as TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"][];
+  const healthStates = uniqueStrings(actorRows.flatMap((row) => row.healthStates)) as TiSourceProvenanceSourcePackFixtureGrowthRow["healthState"][];
+  const prerequisiteCodes = uniqueStrings(actorRows.flatMap((row) => row.missingPrerequisites.map((prerequisite) => prerequisite.code))) as TiSourceProvenanceActorEnrichmentAlertPrerequisite["code"][];
+  const status = actorRows.length === 0 ? "blocked" : blockedActors === 0 && partialActors === 0 ? "ready" : alertReadyActors > 0 || partialActors > 0 ? "partial" : "blocked";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_enrichment_alert_prerequisite_packet", `${generatedAt}:${input.portfolio.id}:${actorRows.map((row) => `${row.actor}:${row.alertReadiness}:${row.missingPrerequisites.map((prerequisite) => prerequisite.code).join("|")}`).join(",")}`),
+    generatedAt,
+    ok: alertReadyActors > 0,
+    status,
+    tenantId: input.portfolio.tenantId,
+    organizationId: input.portfolio.organizationId,
+    actorRows,
+    summary: {
+      actorCount: actorRows.length,
+      readyActors,
+      partialActors,
+      blockedActors,
+      alertReadyActors,
+      prerequisiteCount,
+      sourceFamilies,
+      parserStatuses,
+      healthStates,
+      prerequisiteCodes,
+      newestFreshnessAt: newestTimestamp(actorRows.map((row) => row.freshness.newestFreshnessAt)),
+      nextRetryAt: earliestTimestamp(actorRows.map((row) => row.freshness.nextRetryAt))
+    },
+    consumers: actorEnrichmentAlertPrerequisiteConsumers(actorRows),
+    payloadShape: [
+      "actorRows[].actor",
+      "actorRows[].publicTiRoute",
+      "actorRows[].alertReadiness",
+      "actorRows[].coverageCounts",
+      "actorRows[].sourceFamilies",
+      "actorRows[].parserStatuses",
+      "actorRows[].healthStates",
+      "actorRows[].freshness",
+      "actorRows[].missingPrerequisites",
+      "actorRows[].downstreamRoutes",
+      "actorRows[].provenance",
+      "summary"
+    ],
+    safeOutput: input.portfolio.safeOutput
   };
 }
 
@@ -8511,6 +8647,193 @@ function actorSourceCoveragePortfolioConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationProof: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function actorEnrichmentAlertPrerequisiteRow(
+  row: TiSourceProvenanceActorSourceCoveragePortfolioRow
+): TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow {
+  const missingPrerequisites = actorEnrichmentAlertPrerequisites(row);
+  const alertReadiness: TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow["alertReadiness"] = row.coverageCounts.alertReady === 0
+    ? "blocked"
+    : missingPrerequisites.length > 0
+      ? "partial"
+      : "ready";
+  return {
+    actor: row.actor,
+    publicTiRoute: row.publicTiRoute,
+    sourceCandidateValidationReceiptId: row.sourceCandidateValidationReceiptId,
+    alertReadiness,
+    readiness: row.readiness,
+    coverageCounts: row.coverageCounts,
+    sourceFamilies: row.sourceFamilies,
+    parserStatuses: row.parserStatuses,
+    healthStates: row.healthStates,
+    freshness: row.freshness,
+    missingPrerequisites,
+    downstreamRoutes: row.downstreamRoutes,
+    provenance: row.provenance
+  };
+}
+
+function actorEnrichmentAlertPrerequisites(
+  row: TiSourceProvenanceActorSourceCoveragePortfolioRow
+): TiSourceProvenanceActorEnrichmentAlertPrerequisite[] {
+  const prerequisites: TiSourceProvenanceActorEnrichmentAlertPrerequisite[] = [];
+  for (const blocker of row.blockers) {
+    if (blocker.code === "parser_retry_scheduled") {
+      prerequisites.push({
+        code: "parser_retry_required",
+        ownerLane: "parser",
+        sourceFamily: blocker.sourceFamily,
+        reason: blocker.reason,
+        nextAction: {
+          action: "retry_parser",
+          route: {
+            method: "POST",
+            path: "/v1/dwm/source-requests",
+            body: {
+              actor: row.actor,
+              sourceFamily: blocker.sourceFamily,
+              action: "retry_parser",
+              dryRun: true
+            },
+            dryRunSupported: true,
+            liveNetworkFetch: false
+          }
+        }
+      });
+    } else if (blocker.code === "policy_review_required") {
+      prerequisites.push({
+        code: "policy_review_required",
+        ownerLane: "policy",
+        sourceFamily: blocker.sourceFamily,
+        reason: blocker.reason,
+        nextAction: {
+          action: "request_policy_review",
+          route: {
+            method: "POST",
+            path: "/v1/dwm/source-requests",
+            body: {
+              actor: row.actor,
+              sourceFamily: blocker.sourceFamily,
+              action: "request_policy_review",
+              metadataOnly: true,
+              dryRun: true
+            },
+            dryRunSupported: true,
+            liveNetworkFetch: false
+          }
+        }
+      });
+    } else if (blocker.code === "degraded_parser") {
+      prerequisites.push({
+        code: "parser_health_inspection_required",
+        ownerLane: "source",
+        sourceFamily: blocker.sourceFamily,
+        reason: blocker.reason,
+        nextAction: {
+          action: "inspect_parser_health",
+          route: {
+            method: "GET",
+            path: "/v1/dwm/source-requests",
+            body: {
+              actor: row.actor,
+              sourceFamily: blocker.sourceFamily,
+              includeSourceHealth: true,
+              dryRun: true
+            },
+            dryRunSupported: true,
+            liveNetworkFetch: false
+          }
+        }
+      });
+    }
+  }
+  if (row.coverageCounts.alertReady === 0) {
+    prerequisites.push({
+      code: "watchlist_materialization_required",
+      ownerLane: "org",
+      reason: "No validated source row can produce alert-ready watchlist matches for this actor yet.",
+      nextAction: {
+        action: "materialize_watchlist_terms",
+        route: {
+          method: "POST",
+          path: "/v1/organizations/watchlists/terms",
+          body: {
+            actor: row.actor,
+            publicTiRoute: row.publicTiRoute,
+            dryRun: true
+          },
+          dryRunSupported: true,
+          liveNetworkFetch: false
+        }
+      }
+    });
+  }
+  return prerequisites;
+}
+
+function actorEnrichmentAlertPrerequisiteConsumers(
+  actorRows: TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow[]
+): TiSourceProvenanceActorEnrichmentAlertPrerequisitePacket["consumers"] {
+  const publicTiReady = actorRows.some((row) => row.readiness.publicTI);
+  const alertReady = actorRows.some((row) => row.coverageCounts.alertReady > 0);
+  const dashboardReady = actorRows.length > 0 && actorRows.every((row) => row.readiness.dashboard);
+  const integrationReady = actorRows.length > 0 && actorRows.every((row) => row.readiness.integration);
+  return [{
+    consumer: "publicTI",
+    ready: publicTiReady,
+    requiredFields: ["actorRows[].publicTiRoute", "actorRows[].sourceFamilies", "actorRows[].freshness", "actorRows[].missingPrerequisites"],
+    route: {
+      method: "GET",
+      path: "/ti/:query",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: alertReady,
+    requiredFields: ["actorRows[].coverageCounts.alertReady", "actorRows[].provenance.captureIds", "actorRows[].missingPrerequisites", "actorRows[].downstreamRoutes.alertGeneration"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        actors: actorRows.map((row) => row.actor),
+        includePrerequisites: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: dashboardReady,
+    requiredFields: ["actorRows[].alertReadiness", "actorRows[].missingPrerequisites", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeActorAlertPrerequisites: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: integrationReady,
+    requiredFields: ["schemaVersion", "safeOutput", "actorRows[].provenance", "actorRows[].missingPrerequisites", "consumers[]"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeActorAlertPrerequisitePacket: true,
         dryRun: true
       },
       dryRunSupported: true,
