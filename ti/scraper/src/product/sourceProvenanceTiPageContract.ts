@@ -15,6 +15,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VE
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_activation_audit_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -924,6 +925,71 @@ export type TiSourceProvenanceSourcePackActivationAction = {
     };
     dryRunSupported: true;
     liveNetworkFetch: false;
+  };
+};
+
+export type TiSourceProvenanceSourceActivationAuditPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourcePackActivationReadinessId: string;
+  events: TiSourceProvenanceSourceActivationAuditEvent[];
+  summary: {
+    eventCount: number;
+    readyToTest: number;
+    retryScheduled: number;
+    policyBlocked: number;
+    parserReady: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "sourceOps" | "publicTI" | "alertGeneration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourceActivationAuditEvent = {
+  eventId: string;
+  candidateId: string;
+  sourceId?: string;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  status: "ready_to_test" | "retry_scheduled" | "policy_blocked";
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"];
+  decision: "queue_activation_test" | "retry_parser" | "request_policy_review";
+  reason: string;
+  nextRetryAt?: string;
+  provenance: {
+    sourcePackActivationReadinessId: string;
+    activationActionId: string;
+    sourceHealthProofId: string;
+    fixtureBacked: true;
+  };
+  route: TiSourceProvenanceSourcePackActivationAction["route"];
+  alertability: {
+    canGenerateAlertEvidence: boolean;
+    blockedByPolicy: boolean;
+    blockedByParser: boolean;
   };
 };
 
@@ -2470,6 +2536,58 @@ export function buildSourceProvenanceSourcePackActivationReadiness(input: {
       "actions[].route",
       "actions[].nextRetryAt",
       "sourceHealth"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceSourceActivationAuditPacket(input: {
+  activationReadiness: TiSourceProvenanceSourcePackActivationReadiness;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceActivationAuditPacket {
+  const generatedAt = input.generatedAt ?? input.activationReadiness.generatedAt;
+  const events = input.activationReadiness.actions.map((action) => sourceActivationAuditEvent(input.activationReadiness, action));
+  const sourceFamilies = uniqueStrings(events.map((event) => event.family)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const readyToTest = events.filter((event) => event.status === "ready_to_test").length;
+  const retryScheduled = events.filter((event) => event.status === "retry_scheduled").length;
+  const policyBlocked = events.filter((event) => event.status === "policy_blocked").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_activation_audit_packet", `${input.activationReadiness.id}:${generatedAt}:${events.map((event) => `${event.candidateId}:${event.status}`).join(",")}`),
+    generatedAt,
+    ok: events.length > 0 && readyToTest > 0,
+    tenantId: input.activationReadiness.tenantId,
+    organizationId: input.activationReadiness.organizationId,
+    actor: input.activationReadiness.actor,
+    sourcePackActivationReadinessId: input.activationReadiness.id,
+    events,
+    summary: {
+      eventCount: events.length,
+      readyToTest,
+      retryScheduled,
+      policyBlocked,
+      parserReady: events.filter((event) => event.parserStatus === "ready").length,
+      sourceFamilies,
+      nextRetryAt: earliestTimestamp(events.map((event) => event.nextRetryAt))
+    },
+    consumers: sourceActivationAuditConsumers(input.activationReadiness, events),
+    payloadShape: [
+      "events[].candidateId",
+      "events[].family",
+      "events[].status",
+      "events[].decision",
+      "events[].parserStatus",
+      "events[].provenance",
+      "events[].route",
+      "events[].alertability",
+      "summary.sourceFamilies",
+      "summary.nextRetryAt"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -5003,6 +5121,99 @@ function sourcePackActivationReason(row: TiSourceProvenanceSourcePackIntakeRecei
   if (row.status === "queued_for_review") return "Candidate has a queued source row and can run fixture-backed parser/source health test.";
   if (row.status === "retry_scheduled") return row.failureReason ?? "Parser retry is scheduled before candidate can be tested again.";
   return row.failureReason ?? "Policy approval is required before this source can be activated.";
+}
+
+function sourceActivationAuditEvent(
+  readiness: TiSourceProvenanceSourcePackActivationReadiness,
+  action: TiSourceProvenanceSourcePackActivationAction
+): TiSourceProvenanceSourceActivationAuditEvent {
+  const status = action.action === "test_source"
+    ? "ready_to_test"
+    : action.action === "retry_parser"
+      ? "retry_scheduled"
+      : "policy_blocked";
+  const decision = action.action === "test_source"
+    ? "queue_activation_test"
+    : action.action === "retry_parser"
+      ? "retry_parser"
+      : "request_policy_review";
+
+  return {
+    eventId: stableId("ti_source_provenance_source_activation_audit_event", `${readiness.id}:${action.actionId}:${status}`),
+    candidateId: action.candidateId,
+    sourceId: action.sourceId,
+    family: action.family,
+    status,
+    parserStatus: action.parserStatus,
+    activationState: action.activationState,
+    decision,
+    reason: action.reason,
+    nextRetryAt: action.nextRetryAt,
+    provenance: {
+      sourcePackActivationReadinessId: readiness.id,
+      activationActionId: action.actionId,
+      sourceHealthProofId: stableId("ti_source_provenance_source_activation_health", `${readiness.id}:${action.family}`),
+      fixtureBacked: true
+    },
+    route: action.route,
+    alertability: {
+      canGenerateAlertEvidence: status === "ready_to_test" && action.parserStatus === "ready",
+      blockedByPolicy: status === "policy_blocked",
+      blockedByParser: status === "retry_scheduled" || action.parserStatus === "failed" || action.parserStatus === "retry_scheduled"
+    }
+  };
+}
+
+function sourceActivationAuditConsumers(
+  readiness: TiSourceProvenanceSourcePackActivationReadiness,
+  events: TiSourceProvenanceSourceActivationAuditEvent[]
+): TiSourceProvenanceSourceActivationAuditPacket["consumers"] {
+  const hasReadyEvent = events.some((event) => event.status === "ready_to_test");
+  const hasPolicyBlocker = events.some((event) => event.status === "policy_blocked");
+  const hasRetry = events.some((event) => event.status === "retry_scheduled");
+  return [{
+    consumer: "sourceOps",
+    ready: events.length > 0,
+    requiredFields: ["events[].candidateId", "events[].status", "events[].route", "summary.nextRetryAt"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourcePackActivationReadinessId: readiness.id,
+        includeAuditEvents: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "publicTI",
+    ready: hasReadyEvent && !hasPolicyBlocker,
+    requiredFields: ["events[].family", "events[].alertability", "events[].provenance"],
+    route: {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(readiness.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasReadyEvent && !hasPolicyBlocker && !hasRetry,
+    requiredFields: ["events[].sourceId", "events[].alertability.canGenerateAlertEvidence", "events[].parserStatus"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: readiness.tenantId,
+        organizationId: readiness.organizationId,
+        actor: readiness.actor,
+        sourcePackActivationReadinessId: readiness.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
 }
 
 function rowsForActorProfileField(
