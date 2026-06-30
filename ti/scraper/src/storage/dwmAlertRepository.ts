@@ -1105,6 +1105,11 @@ export type DwmOrgAlertPipelineProof = {
         deliveryReady: boolean;
         delivered: boolean;
         deliveryDedupeKey?: string;
+        selectedWebhookDestinationId?: string;
+        webhookDestinationIds: string[];
+        createdEventDispatchReady: boolean;
+        createdEventId?: string;
+        createdEventDispatchIdempotencyKey?: string;
         deliveryHistoryRefs: string[];
         blockerCodes: string[];
       };
@@ -1115,6 +1120,14 @@ export type DwmOrgAlertPipelineProof = {
         casePath?: string;
         idempotencyKey?: string;
         blockerCodes: string[];
+      };
+      publicTiConsumer: {
+        ready: boolean;
+        redacted: true;
+        alertGenerationRefCount: number;
+        sourceFamily?: string;
+        stableFields: string[];
+        gapFields: string[];
       };
       stableFields: string[];
       gapFields: string[];
@@ -1948,6 +1961,11 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       deliveryReady: input.handoff.deliveryReadiness.ready,
       delivered,
       deliveryDedupeKey: input.handoff.updateReceipt?.deliveryDedupeKey ?? input.handoff.replayReceipt.deliveryDedupeKey,
+      selectedWebhookDestinationId: input.handoff.deliverySelection.selectedWebhookDestinationId,
+      webhookDestinationIds: input.handoff.deliverySelection.webhookDestinationIds,
+      createdEventDispatchReady: input.handoff.createdEventDispatch.ready,
+      createdEventId: input.handoff.createdEventDispatch.eventId,
+      createdEventDispatchIdempotencyKey: input.handoff.createdEventDispatch.idempotencyKey,
       deliveryHistoryRefs: input.handoff.deliveryReadiness.deliveryHistoryRefs,
       blockerCodes: deliveryBlockerCodes
     },
@@ -1959,6 +1977,19 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       idempotencyKey: input.handoff.caseReadiness.idempotencyKey,
       blockerCodes: caseBlockerCodes
     },
+    publicTiConsumer: {
+      ready: input.handoff.watchlist.alertGenerationRefs.length > 0 && sourceReady,
+      redacted: true,
+      alertGenerationRefCount: input.handoff.watchlist.alertGenerationRefs.length,
+      sourceFamily: input.handoff.sourceFamily,
+      stableFields: [
+        "sourceFamily",
+        "provenanceCaptureIds",
+        "provenanceGapCodes",
+        "alertGenerationRefCount"
+      ],
+      gapFields: ["state", "provenanceGapCodes"]
+    },
     stableFields: [
       "sourceFamily",
       "selectedCaptureIds",
@@ -1966,6 +1997,8 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "provenanceCaptureIds",
       "provenanceSourceIds",
       "webhookConsumer.deliveryDedupeKey",
+      "webhookConsumer.selectedWebhookDestinationId",
+      "webhookConsumer.createdEventDispatchReady",
       "caseConsumer.casePath"
     ],
     gapFields: [

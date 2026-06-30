@@ -2920,16 +2920,29 @@ describe("dwm alert repository", () => {
       ready: true,
       deliveryReady: true,
       delivered: false,
+      selectedWebhookDestinationId: "webhook_delta_ops",
+      webhookDestinationIds: ["webhook_delta_ops"],
+      createdEventDispatchReady: true,
       deliveryHistoryRefs: [],
       blockerCodes: []
     });
+    expect(telegramProof?.sourceHandoffReadiness.webhookConsumer.createdEventId).toBeDefined();
+    expect(telegramProof?.sourceHandoffReadiness.webhookConsumer.createdEventDispatchIdempotencyKey).toContain("dwm_alert_created_dispatch");
     expect(telegramProof?.sourceHandoffReadiness.caseConsumer).toMatchObject({
       ready: true,
       caseId: "case_delta_acme",
       casePath: `/v1/cases/case_delta_acme?alertId=${initialTelegramAlert.id}`,
       blockerCodes: []
     });
-    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "webhookConsumer.deliveryDedupeKey", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.publicTiConsumer).toMatchObject({
+      ready: true,
+      redacted: true,
+      alertGenerationRefCount: 2,
+      sourceFamily: "telegram_public",
+      stableFields: expect.arrayContaining(["provenanceCaptureIds", "alertGenerationRefCount"]),
+      gapFields: expect.arrayContaining(["provenanceGapCodes"])
+    });
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "webhookConsumer.blockerCodes"]));
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
     expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
@@ -2946,8 +2959,17 @@ describe("dwm alert repository", () => {
         ready: true,
         deliveryReady: true,
         delivered: false,
+        selectedWebhookDestinationId: "webhook_delta_ops",
+        webhookDestinationIds: ["webhook_delta_ops"],
+        createdEventDispatchReady: true,
         deliveryHistoryRefs: [],
         blockerCodes: []
+      },
+      publicTiConsumer: {
+        ready: true,
+        redacted: true,
+        alertGenerationRefCount: 2,
+        sourceFamily: "darkweb_metadata"
       }
     });
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness");
