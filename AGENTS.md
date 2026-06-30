@@ -13,6 +13,19 @@ Default to ship mode:
 
 If a task would only add metadata, receipts, proof ledgers, compatibility fixtures, or readiness rows, stop and instead implement the visible customer or analyst workflow those artifacts were supposed to support. The final result should be something a user can open and immediately feel is better.
 
+## One-Prompt Product Shipping Bar
+Do not give agents small work-sized packets. Codex can make broad, coherent product changes in one prompt. A ship-mode prompt should ask for a complete visible product surface, not one receipt, one schema, one card, or one copy fix.
+
+Hanasand should feel closer to Microsoft Defender for Endpoint or Wiz: dense, operator-grade, scannable, action-first, and visually disciplined. It should not feel like a text-bloated wall, a status essay, a receipt ledger, or a loose collection of cards.
+
+For the three priority surfaces, ship the full workflow shape in one pass:
+
+- `/dashboard`: a Defender/Wiz-style operator console with a left queue, severity and ownership, selected alert/case detail, evidence timeline, source/provenance, org/watchlist context, workflow actions, delivery/case timeline, and compact source health.
+- `/ti/<query>`: an actor intelligence workspace with compact actor facts, aliases, TTPs, infrastructure, tools/malware, observed sources, evidence rows, watchlist relevance, enrichment gaps, and alert/case handoff. Ban teaser/example/signal language.
+- Organization/watchlist/settings: a SaaS settings workflow for org creation, invites, member roles, shared watchlists, webhook destinations/test delivery, permissions, and audit trail.
+
+A one-prompt ship must include real API wiring where available, loading/empty/error states, responsive desktop/mobile behavior, screenshots or render proof, focused checks, and deploy or deploy-ready handoff. If backend support is missing, implement the missing hook in the same prompt when reasonable; otherwise ask exactly one narrow blocker agent.
+
 ## Default Bar
 Hanasand work should feel finished, integrated, and product-grade. Do not treat user requests as tiny literal patches when the surrounding product behavior clearly needs more. Expand the ask into the adjacent obvious work that a user would reasonably expect, then ship that complete slice.
 
