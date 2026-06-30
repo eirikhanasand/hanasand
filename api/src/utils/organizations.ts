@@ -5249,6 +5249,7 @@ export function organizationAccessDenial(input: {
         | 'GET /api/organizations/:id/watchlists'
         | 'GET /api/organizations/:id/alert-readiness'
         | 'GET /api/organizations/:id/watchlists/alert-terms'
+        | 'GET /api/organizations/:id/alert-case-visibility'
     requestId?: string | null
 }) {
     return {
@@ -5282,6 +5283,7 @@ export function organizationAccessDenial(input: {
             watchlists: 'GET /api/organizations/:id/watchlists',
             alertReadiness: 'GET /api/organizations/:id/alert-readiness',
             alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+            alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
         },
         serviceLogAction: 'organization_access_denied' as const,
         requestId: input.requestId ?? null,

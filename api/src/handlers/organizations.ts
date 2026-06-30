@@ -580,6 +580,38 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
                     'destination.secret',
                 ],
             },
+            consumerAccessRecovery: {
+                schemaVersion: 'organization.member_consumer_access_recovery.v1',
+                organizationId: req.params.id,
+                tenantId: req.params.id,
+                targetUserId: req.params.userId,
+                targetRoleBeforeRemoval: target.role,
+                currentMemberStatus: 'removed' as const,
+                automaticRegrantAllowed: false,
+                requiredSteps: [
+                    'owner_or_admin_review',
+                    'create_new_invite',
+                    'target_accepts_invite',
+                    'new_membership_role_applied',
+                ],
+                blockedUntilAcceptedMembership: [
+                    'GET /api/organizations/:id/watchlists',
+                    'GET /api/organizations/:id/watchlists/alert-terms',
+                    'GET /api/organizations/:id/alert-case-visibility',
+                    'GET /api/organizations/:id/alert-readiness',
+                ],
+                recoveryRoutes: {
+                    createInvite: 'POST /api/organizations/:id/invites',
+                    acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
+                    memberList: 'GET /api/organizations/:id/members',
+                },
+                recoveryReceipts: [
+                    'organization.invite_consumer_visibility_receipt.v1',
+                    'organization.member_role_consumer_visibility_receipt.v1',
+                ],
+                blockerCode: 'member_revoked' as const,
+                nonmemberEnumeration: false,
+            },
         },
     })
 }
@@ -1781,7 +1813,19 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
 
     const organization = await loadOrganizationForMember(req.params.id, userId)
     if (!organization) {
-        return res.status(404).send({ error: 'Organization not found.' })
+        const denial = organizationAccessDenial({
+            organizationId: req.params.id,
+            actorId: userId,
+            route: 'GET /api/organizations/:id/alert-case-visibility',
+            requestId: req.query?.requestId ?? req.query?.request_id ?? (req.headers['x-request-id'] ? String(req.headers['x-request-id']) : null),
+        })
+        logOrganizationEvent(req, denial.serviceLogAction, req.params.id, userId, {
+            requestId: denial.requestId,
+            route: denial.route,
+            blockerCode: denial.blockerCode,
+            denialReason: denial.denialReason,
+        })
+        return res.status(denial.statusCode).send({ error: denial.message, organizationAccessDenial: denial })
     }
 
     const result = await run(`
