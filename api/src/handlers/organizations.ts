@@ -1934,6 +1934,15 @@ export async function getOrganizationAlertCaseVisibility(req: FastifyRequest<{ P
                     'member.userId',
                 ],
                 blockerCodes: [visibility.reason ?? 'role_not_allowed'],
+                readinessRefs: {
+                    sharedWatchlistReadiness: 'organization.shared_watchlist_readiness_export.v1',
+                    alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1',
+                    alertCasePersistence: 'organization.alert_case_bridge_persistence_receipt.v1',
+                    caseVisibilityConsumer: 'organization.case_visibility_consumer.v1',
+                    webhookDestinationReadiness: 'organization.webhook_destination_readiness_bridge.v1',
+                },
+                deniedReadDoesNotAffectCases: true,
+                deniedReadDoesNotAffectActiveTerms: true,
                 nonmemberEnumeration: false,
                 analystPortalAdapter: {
                     schemaVersion: 'organization.analyst_portal_visibility_denial_adapter.v1',
