@@ -15,6 +15,7 @@ export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION = 
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_EXPORT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_coverage_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_COVERAGE_HANDOFF_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_coverage_handoff.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_CONSUMER_READINESS_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_consumer_readiness_receipt.v1" as const;
+export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_ALERT_READINESS_BRIDGE_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_source_alert_readiness_bridge.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_PROFILE_SOURCE_UPDATE_WORKFLOW_SCHEMA_VERSION = "ti.source_provenance_actor_profile_source_update_workflow.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_request.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
@@ -1012,6 +1013,65 @@ export type TiSourceProvenanceActorEnrichmentConsumerReadinessBlocker = {
   field: TiSourceProvenanceActorProfileGap["field"];
   ownerLane: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["ownerLane"];
   action: TiSourceProvenanceActorEnrichmentCoverageHandoffAction["action"];
+  nextRetryAt?: string;
+  provenanceRef: string;
+};
+
+export type TiSourceProvenanceActorEnrichmentSourceAlertReadinessBridge = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_ALERT_READINESS_BRIDGE_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  publicTiRoute: string;
+  consumerReadinessReceiptId: string;
+  readiness: {
+    state: "ready" | "partial" | "blocked";
+    publicTI: boolean;
+    alertGeneration: boolean;
+    sourceOpsActionRequired: boolean;
+  };
+  publicTi: {
+    ready: boolean;
+    route?: string;
+    coverageCounts: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["coverageCounts"];
+    blockerCodes: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][];
+    provenanceIds: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["provenanceIds"];
+  };
+  alertGeneration: {
+    ready: boolean;
+    route?: string;
+    matchableFieldCount: number;
+    retryable: boolean;
+    nextRetryAt?: string;
+    blockerCodes: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"][];
+    provenanceIds: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["provenanceIds"];
+  };
+  sourceHealth: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt["sourceHealth"];
+  operatorActions: TiSourceProvenanceActorEnrichmentSourceAlertReadinessAction[];
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "sourceOps";
+    ready: boolean;
+    requiredFields: string[];
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+    crossOrgDataIncluded: false;
+  };
+};
+
+export type TiSourceProvenanceActorEnrichmentSourceAlertReadinessAction = {
+  action: TiSourceProvenanceActorEnrichmentCoverageHandoffAction["action"];
+  consumer: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["consumer"];
+  field: TiSourceProvenanceActorProfileGap["field"];
+  blockerCode: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["code"];
+  ownerLane: TiSourceProvenanceActorEnrichmentCoverageExportBlocker["ownerLane"];
   nextRetryAt?: string;
   provenanceRef: string;
 };
@@ -3074,6 +3134,83 @@ export function buildSourceProvenanceActorEnrichmentConsumerReadinessReceipt(inp
       "rows[].provenanceIds",
       "blockerSummary[]",
       "sourceHealth"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false,
+      crossOrgDataIncluded: false
+    }
+  };
+}
+
+export function buildSourceProvenanceActorEnrichmentSourceAlertReadinessBridge(input: {
+  receipt: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt;
+  generatedAt?: string;
+}): TiSourceProvenanceActorEnrichmentSourceAlertReadinessBridge {
+  const generatedAt = input.generatedAt ?? input.receipt.generatedAt;
+  const publicTiRow = actorEnrichmentConsumerRow(input.receipt, "publicTI");
+  const alertRow = actorEnrichmentConsumerRow(input.receipt, "alertGeneration");
+  const sourceOpsRow = actorEnrichmentConsumerRow(input.receipt, "sourceOps");
+  const operatorActions = input.receipt.blockerSummary.map(actorEnrichmentSourceAlertReadinessAction);
+  const state = publicTiRow.ready && alertRow.ready
+    ? "ready"
+    : (publicTiRow.ready || alertRow.ready || sourceOpsRow.ready ? "partial" : "blocked");
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_ALERT_READINESS_BRIDGE_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_actor_enrichment_source_alert_readiness_bridge", `${input.receipt.id}:${generatedAt}:${state}`),
+    generatedAt,
+    ok: state === "ready" && operatorActions.length === 0,
+    tenantId: input.receipt.tenantId,
+    organizationId: input.receipt.organizationId,
+    actor: input.receipt.actor,
+    publicTiRoute: input.receipt.publicTiRoute,
+    consumerReadinessReceiptId: input.receipt.id,
+    readiness: {
+      state,
+      publicTI: publicTiRow.ready,
+      alertGeneration: alertRow.ready,
+      sourceOpsActionRequired: sourceOpsRow.ready && operatorActions.length > 0
+    },
+    publicTi: {
+      ready: publicTiRow.ready,
+      route: publicTiRow.route,
+      coverageCounts: publicTiRow.coverageCounts,
+      blockerCodes: publicTiRow.blockerCodes,
+      provenanceIds: publicTiRow.provenanceIds
+    },
+    alertGeneration: {
+      ready: alertRow.ready,
+      route: alertRow.route,
+      matchableFieldCount: alertRow.coverageCounts.alertable,
+      retryable: alertRow.retry.retryable,
+      nextRetryAt: alertRow.retry.nextRetryAt,
+      blockerCodes: alertRow.blockerCodes,
+      provenanceIds: alertRow.provenanceIds
+    },
+    sourceHealth: input.receipt.sourceHealth,
+    operatorActions,
+    consumers: [{
+      consumer: "publicTI",
+      ready: publicTiRow.ready,
+      requiredFields: ["publicTi.coverageCounts", "publicTi.provenanceIds", "readiness.publicTI"]
+    }, {
+      consumer: "alertGeneration",
+      ready: alertRow.ready,
+      requiredFields: ["alertGeneration.matchableFieldCount", "alertGeneration.provenanceIds", "readiness.alertGeneration"]
+    }, {
+      consumer: "sourceOps",
+      ready: sourceOpsRow.ready,
+      requiredFields: ["operatorActions[]", "sourceHealth", "readiness.sourceOpsActionRequired"]
+    }],
+    payloadShape: [
+      "readiness",
+      "publicTi",
+      "alertGeneration",
+      "sourceHealth",
+      "operatorActions[]"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -6299,6 +6436,51 @@ function actorEnrichmentConsumerReadinessBlockers(
     nextRetryAt: action.nextRetryAt ?? readinessByConsumer.get(consumer)?.retry.nextRetryAt,
     provenanceRef: action.provenanceRef
   })));
+}
+
+function actorEnrichmentConsumerRow(
+  receipt: TiSourceProvenanceActorEnrichmentConsumerReadinessReceipt,
+  consumer: TiSourceProvenanceActorEnrichmentConsumerReadinessRow["consumer"]
+): TiSourceProvenanceActorEnrichmentConsumerReadinessRow {
+  return receipt.rows.find((row) => row.consumer === consumer) ?? {
+    consumer,
+    ready: false,
+    state: "blocked",
+    sourceFamilies: [],
+    parserStatuses: [],
+    coverageCounts: {
+      covered: 0,
+      pending: 0,
+      retryable: 0,
+      blocked: 0,
+      alertable: 0
+    },
+    retry: {
+      retryable: false,
+      retryFields: []
+    },
+    blockerCodes: ["coverage_pending"],
+    provenanceIds: {
+      actorEnrichmentCoverageHandoffId: receipt.actorEnrichmentCoverageHandoffId,
+      coverageExportId: receipt.actorEnrichmentCoverageHandoffId,
+      sourceHealthProofIds: [],
+      activationDecisionIds: []
+    }
+  };
+}
+
+function actorEnrichmentSourceAlertReadinessAction(
+  blocker: TiSourceProvenanceActorEnrichmentConsumerReadinessBlocker
+): TiSourceProvenanceActorEnrichmentSourceAlertReadinessAction {
+  return {
+    action: blocker.action,
+    consumer: blocker.consumer,
+    field: blocker.field,
+    blockerCode: blocker.code,
+    ownerLane: blocker.ownerLane,
+    nextRetryAt: blocker.nextRetryAt,
+    provenanceRef: blocker.provenanceRef
+  };
 }
 
 function actorProfileSourceUpdateTask(
