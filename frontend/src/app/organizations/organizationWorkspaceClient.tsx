@@ -69,6 +69,10 @@ type WatchlistItem = {
     updatedAt?: string
     archivedAt?: string | null
     alertGenerationRef?: string
+    webhookDestinationId?: string
+    webhookUrlConfigured?: boolean
+    webhookEndpointHash?: string
+    webhookEndpointHint?: string
 }
 
 type AlertTerm = {
@@ -102,6 +106,8 @@ type ScopedAlert = {
     status?: string
     severity?: string
     watchlistItemId?: string
+    watchlistIds?: string[]
+    watchlistItemIds?: string[]
     organizationId?: string
     updatedAt?: string
 }
@@ -124,8 +130,43 @@ type OrgBundle = {
     alerts: ScopedAlert[]
     cases: ScopedCase[]
     webhooks: WebhookDestination[]
+    deliveries: DeliveryRow[]
     alertCaseVisibility: Record<string, unknown> | null
     loadErrors: string[]
+}
+
+type DeliveryRow = {
+    id: string
+    organizationId?: string
+    tenantId?: string
+    alertId?: string
+    watchlistId?: string
+    watchlistItemId?: string
+    watchlistItemIds?: string[]
+    webhookDestinationId?: string
+    endpointHash?: string
+    endpointHint?: string
+    deliveryKind?: string
+    status?: string
+    attemptedAt?: string
+    createdAt?: string
+    updatedAt?: string
+    dryRun?: boolean
+    error?: string
+}
+
+type DeliveryResult = {
+    ok?: boolean
+    dryRun?: boolean
+    deliveredAt?: string
+    attemptedCount?: number
+    delivery?: DeliveryRow
+    deliveries?: DeliveryRow[]
+}
+
+type DestinationDraft = {
+    kind: 'discord' | 'webhook'
+    url: string
 }
 
 type ActivityItem = {
@@ -147,15 +188,18 @@ const initialBundle: OrgBundle = {
     alerts: [],
     cases: [],
     webhooks: [],
+    deliveries: [],
     alertCaseVisibility: null,
     loadErrors: [],
 }
 
 const roleOptions: OrganizationRole[] = ['admin', 'member', 'viewer']
 const watchlistKinds: WatchlistKind[] = ['company', 'domain', 'vendor', 'actor', 'keyword']
+const destinationKinds: DestinationDraft['kind'][] = ['discord', 'webhook']
 const webhookPolicies = ['active_destinations', 'manual_selection', 'disabled']
 const alertPolicies = ['members', 'admins', 'owners']
 const lifecycleStatuses = ['active', 'archived']
+const liveDwmAlertId = 'dwm_alert_c6ef012afc7016b5'
 
 export default function OrganizationWorkspaceClient() {
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
@@ -171,6 +215,8 @@ export default function OrganizationWorkspaceClient() {
     const [watchlistDraft, setWatchlistDraft] = useState({ kind: 'domain' as WatchlistKind, value: '', notes: '' })
     const [settingsDraft, setSettingsDraft] = useState<OrganizationSettings>({})
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
+    const [destinationDrafts, setDestinationDrafts] = useState<Record<string, DestinationDraft>>({})
+    const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
 
     const selectedOrganization = useMemo(
@@ -218,6 +264,7 @@ export default function OrganizationWorkspaceClient() {
             ['alerts', `/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`],
             ['cases', `/api/cases?organizationId=${encodeURIComponent(organizationId)}`],
             ['webhooks', `/api/organizations/${encodeURIComponent(organizationId)}/webhooks`],
+            ['deliveries', `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organizationId)}`],
         ] as const
         const results = await Promise.allSettled(endpoints.map(([, url]) => requestJson<Record<string, unknown>>(url)))
         const nextBundle: OrgBundle = { ...initialBundle, loadErrors: [] }
@@ -256,6 +303,9 @@ export default function OrganizationWorkspaceClient() {
             }
             if (key === 'webhooks') {
                 nextBundle.webhooks = arrayValue<WebhookDestination>(payload.destinations ?? payload.webhooks)
+            }
+            if (key === 'deliveries') {
+                nextBundle.deliveries = arrayValue<DeliveryRow>(payload.deliveries ?? payload.items ?? payload.results)
             }
             void url
         })
@@ -432,6 +482,41 @@ export default function OrganizationWorkspaceClient() {
         return 'Watchlist term archived.'
     })
 
+    const testWatchlistDestination = (item: WatchlistItem, mode: 'save' | 'replay') => selectedOrganization && runAction(mode === 'save' ? 'save-destination' : 'replay-destination', async () => {
+        const draft = destinationDrafts[item.id] || { kind: 'discord', url: '' }
+        const withUrl = mode === 'save'
+        const url = draft.url.trim()
+        if (withUrl && !url) throw new Error('Enter a destination URL before testing.')
+        const alert = alertForWatchlist(item, bundle.alerts)
+        const payload: Record<string, unknown> = {
+            alertId: alert?.id || liveDwmAlertId,
+            organizationId: selectedOrganization.id,
+            tenantId: item.tenantId || selectedOrganization.tenantId || 'default',
+            watchlistId: item.id,
+            watchlistItemId: item.id,
+            dryRun: true,
+            limit: 1,
+            requestId: `org-ui-${Date.now()}`,
+        }
+        if (withUrl) {
+            payload.webhookUrl = url
+            payload.destinationType = draft.kind
+            payload.attachToWatchlist = true
+        }
+        const result = await requestJson<DeliveryResult>('/api/dwm/webhooks/deliver', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+        const delivery = firstDelivery(result)
+        if (delivery) {
+            setDeliveryResults(current => ({ ...current, [item.id]: delivery }))
+        }
+        if (withUrl) {
+            setDestinationDrafts(current => ({ ...current, [item.id]: { ...draft, url: '' } }))
+        }
+        return withUrl ? 'Destination tested and saved.' : 'Saved route tested.'
+    })
+
     return (
         <section className='min-h-full bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
             <div className='mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
@@ -442,9 +527,7 @@ export default function OrganizationWorkspaceClient() {
                             Organizations
                         </div>
                         <h1 className='text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white sm:text-4xl'>Team monitoring workspace</h1>
-                        <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#a8b3c5]'>
-                            Create the customer workspace, invite teammates, manage member roles, maintain shared watchlists, and inspect the alert, case, and destination scope backed by the organization API.
-                        </p>
+                        <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#a8b3c5]'>Manage team access, shared watchlists, and destination delivery.</p>
                     </div>
                     <button
                         type='button'
@@ -542,6 +625,13 @@ export default function OrganizationWorkspaceClient() {
                                             onSave={item => void saveWatchlistEdit(item)}
                                             onAction={(item, action) => void watchlistAction(item, action)}
                                             onDelete={item => void deleteWatchlist(item)}
+                                            organization={selectedOrganization}
+                                            alerts={bundle.alerts}
+                                            deliveries={bundle.deliveries}
+                                            destinationDrafts={destinationDrafts}
+                                            deliveryResults={deliveryResults}
+                                            setDestinationDrafts={setDestinationDrafts}
+                                            onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
                                         />
                                     </div>
                                     <div className='grid gap-5 content-start'>
@@ -712,10 +802,10 @@ function MemberPanel({ members, canManage, busy, onRoleChange, onRemove }: { mem
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void }) {
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Terms are organization-scoped and visible to active members.' />
+            <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Org-scoped terms and saved delivery routes.' />
             <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522] md:grid-cols-[9rem_1fr]'>
                 <SelectField label='Type' value={draft.kind} options={watchlistKinds} disabled={!canManage} onChange={value => setDraft({ ...draft, kind: value as WatchlistKind })} />
                 <Field label='Term' value={draft.value} disabled={!canManage} onChange={value => setDraft({ ...draft, value })} placeholder='example.com, vendor name, company, actor' />
@@ -781,6 +871,17 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                             </div>
                                         )}
                                     </div>
+                                    <DestinationControls
+                                        item={item}
+                                        organization={organization}
+                                        alert={alertForWatchlist(item, alerts)}
+                                        delivery={deliveryResults[item.id] || latestDeliveryForWatchlist(item, deliveries)}
+                                        draft={destinationDrafts[item.id] || { kind: 'discord', url: '' }}
+                                        canManage={canManage}
+                                        busy={busy}
+                                        onDraftChange={next => setDestinationDrafts(current => ({ ...current, [item.id]: next }))}
+                                        onTest={mode => onTestDestination(item, mode)}
+                                    />
                                 </div>
                             )}
                         </div>
@@ -792,6 +893,55 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 <strong>{activeTerms.length}</strong> active exported term{activeTerms.length === 1 ? '' : 's'} available to alert generation.
             </div>
         </section>
+    )
+}
+
+function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onTest: (mode: 'save' | 'replay') => void }) {
+    const configured = destinationConfigured(item)
+    const endpointHint = item.webhookEndpointHint || delivery?.endpointHint || 'Not configured'
+    const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No route hash'
+    const selectedAlertId = alert?.id || liveDwmAlertId
+    const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
+    return (
+        <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
+            <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
+                <div className='min-w-0'>
+                    <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>
+                        <Webhook className='h-4 w-4 text-[#3056d3]' />
+                        Destination
+                        <StatusPill status={configured ? 'configured' : 'not configured'} />
+                    </p>
+                    <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{endpointHint} · {endpointHash}</p>
+                </div>
+                <div className='grid grid-cols-2 gap-2 sm:flex'>
+                    <button type='button' className={secondaryButtonClass} disabled={!configured || Boolean(busy)} onClick={() => onTest('replay')}>
+                        <Play className='h-4 w-4' />
+                        Replay
+                    </button>
+                    <a href={`/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`} className={secondaryButtonClass}>
+                        <ExternalLink className='h-4 w-4' />
+                        History
+                    </a>
+                </div>
+            </div>
+            <div className='grid gap-2 md:grid-cols-[8rem_minmax(12rem,1fr)_auto]'>
+                <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
+                <Field label='URL' value={draft.url} disabled={!canManage || Boolean(busy)} onChange={url => onDraftChange({ ...draft, url })} placeholder='https://discord.com/api/webhooks/...' />
+                <label className='grid content-end'>
+                    <span className='sr-only'>Test destination</span>
+                    <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.url.trim() || Boolean(busy)} onClick={() => onTest('save')}>
+                        <CheckCircle2 className='h-4 w-4' />
+                        Test and save
+                    </button>
+                </label>
+            </div>
+            <div className='grid gap-2 text-xs text-[#667085] dark:text-[#a8b3c5] sm:grid-cols-3'>
+                <span className='truncate'>Selected alert: {selectedAlertId}</span>
+                <span className='truncate'>Last delivery: {deliveryStatus}</span>
+                <span className='truncate'>Tenant: {item.tenantId || organization.tenantId || 'default'}</span>
+            </div>
+            {delivery?.error && <p className='rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-medium text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>{delivery.error}</p>}
+        </div>
     )
 }
 
@@ -1026,6 +1176,35 @@ function visibilityRows(payload: Record<string, unknown> | null) {
         primary: String(label),
         secondary: value === undefined || value === null ? 'Not returned' : String(value),
     }))
+}
+
+function destinationConfigured(item: WatchlistItem) {
+    return Boolean(item.webhookUrlConfigured || item.webhookDestinationId || item.webhookEndpointHash || item.webhookEndpointHint)
+}
+
+function alertForWatchlist(item: WatchlistItem, alerts: ScopedAlert[]) {
+    return alerts.find(alert => {
+        if (alert.watchlistItemId === item.id) return true
+        if (alert.watchlistItemIds?.includes(item.id)) return true
+        if (alert.watchlistIds?.includes(item.id)) return true
+        return false
+    }) || alerts[0]
+}
+
+function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow[]) {
+    return deliveries
+        .filter(delivery => delivery.watchlistId === item.id || delivery.watchlistItemId === item.id || delivery.watchlistItemIds?.includes(item.id))
+        .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+}
+
+function firstDelivery(result: DeliveryResult) {
+    return result.deliveries?.[0] || result.delivery || null
+}
+
+function deliveryTime(delivery: DeliveryRow) {
+    const value = delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || ''
+    const time = Date.parse(value)
+    return Number.isFinite(time) ? time : 0
 }
 
 const inputClass = 'h-10 w-full rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#3056d3] focus:ring-2 focus:ring-[#3056d3]/15 disabled:cursor-not-allowed disabled:bg-[#eef2f7] disabled:text-[#667085] dark:border-[#344258] dark:bg-[#0d1522] dark:text-[#f5f7fb] dark:placeholder:text-[#69778c] dark:focus:border-[#8fb2ff] dark:disabled:bg-[#182131]'
