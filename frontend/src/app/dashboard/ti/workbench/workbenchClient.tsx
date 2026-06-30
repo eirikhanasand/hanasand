@@ -2870,6 +2870,14 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 </div>
             </div>
 
+            <SelectedWorkflowHandoff
+                item={item}
+                caseDetail={caseDetail}
+                alertDetail={alertDetail}
+                actionDeliveries={actionDeliveries}
+                orgContext={orgContext}
+            />
+
             <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
@@ -3086,6 +3094,143 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
 
         </div>
     )
+}
+
+function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveries, orgContext }: {
+    item: WorkbenchCase
+    caseDetail?: CaseDetailState
+    alertDetail?: AlertDetailState
+    actionDeliveries: WorkbenchDeliveryEvidence[]
+    orgContext?: WorkbenchOrgContext
+}) {
+    const steps = selectedWorkflowHandoffSteps(item, caseDetail, alertDetail, actionDeliveries, orgContext)
+    const readyCount = steps.filter(step => step.status === 'ready').length
+    const blockedCount = steps.filter(step => step.status === 'blocked').length
+    const nextBlocked = steps.find(step => step.status === 'blocked' || step.status === 'needs_action')
+
+    return (
+        <section data-selected-workflow-handoff='true' className='rounded-lg border border-[#dbe3ee] bg-white dark:border-[#26384f] dark:bg-[#0f1722]'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 dark:border-[#20314a]'>
+                <div className='min-w-0'>
+                    <h3 className='text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>Selected workflow</h3>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#667085] dark:text-[#9fb0c8]'>
+                        Alert, case, source, watchlist, and delivery handoff for the selected queue item.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center gap-2 text-xs'>
+                    <span className={workflowStatusClass(blockedCount ? 'blocked' : readyCount === steps.length ? 'ready' : 'needs_action')}>{readyCount}/{steps.length} ready</span>
+                    {nextBlocked ? <span className='wrap-break-word text-[#667085] dark:text-[#9fb0c8]'>Next: {nextBlocked.label}</span> : null}
+                </div>
+            </div>
+            <div className='grid min-w-0 gap-2 p-3 md:grid-cols-2'>
+                {steps.map(step => (
+                    <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-[#e0e7f0] bg-[#fbfcfe] p-3 dark:border-[#26384f] dark:bg-[#121d2b]'>
+                        <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                            <h4 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>{step.label}</h4>
+                            <span className={`${workflowStatusClass(step.status)} shrink-0`}>{label(step.status)}</span>
+                        </div>
+                        <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b4c0d2]'>{step.detail}</p>
+                        <p className='wrap-break-word text-[11px] text-[#667085] dark:text-[#9fb0c8]'><span className='font-semibold text-[#475467] dark:text-[#c7d4e8]'>Source:</span> {step.source}</p>
+                        {step.href ? (
+                            <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff] dark:border-[#2a4160] dark:bg-[#172338] dark:text-[#d7e6fb] dark:hover:bg-[#20314a]'>
+                                <span className='truncate'>{step.actionLabel}</span>
+                                <ExternalLink className='h-3.5 w-3.5 shrink-0' />
+                            </Link>
+                        ) : (
+                            <span className='wrap-break-word rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#9a3412] dark:border-[#7c3f1d] dark:bg-[#2a1d14] dark:text-[#fed7aa]'>{step.blockedReason}</span>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </section>
+    )
+}
+
+function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetailState | undefined, alertDetail: AlertDetailState | undefined, actionDeliveries: WorkbenchDeliveryEvidence[], orgContext: WorkbenchOrgContext | undefined): Array<{
+    id: string
+    label: string
+    status: WorkbenchWorkflowStep['status']
+    detail: string
+    source: string
+    href?: string
+    actionLabel: string
+    blockedReason: string
+}> {
+    const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
+    const caseHref = item.caseDetailHref
+    const alertHref = item.kind === 'dwm_alert' && item.persistent ? `/api/dwm/alerts/${encodeURIComponent(item.id)}` : undefined
+    const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
+    const sourceHref = alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined) || relatedLinkHref(item, 'Open source') || relatedLinkHref(item, 'Review sources')
+    const delivery = latestDeliveryForActionRail(item, caseDetail, actionDeliveries, orgContext)
+    const deliveryHref = deliveryLedgerHref(orgContext, item, delivery)
+    const watchlistCount = detail?.watchlists?.length || orgContext?.watchlists.length || 0
+    const activeWatchlistCount = (detail?.watchlists || orgContext?.watchlists || []).filter(watchlist => watchlist.status === 'active').length
+    const delivered = delivery?.status === 'delivered' || detail?.deliveryContext?.delivered
+    const activeDestination = orgContext?.webhookDestinations.find(destination => destination.status === 'active')
+    const caseStatus: WorkbenchWorkflowStep['status'] = caseDetail?.status === 'loading'
+        ? 'needs_action'
+        : detail?.case
+            ? 'ready'
+            : caseHref
+                ? 'needs_action'
+                : 'blocked'
+    const evidenceCount = (detail?.evidence?.length || 0) + item.evidence.length + (alertRecord?.evidence?.length || 0)
+    const evidenceStatus: WorkbenchWorkflowStep['status'] = evidenceCount ? 'ready' : sourceHref ? 'needs_action' : 'blocked'
+    const watchlistStatus: WorkbenchWorkflowStep['status'] = activeWatchlistCount ? 'ready' : watchlistCount ? 'needs_action' : 'blocked'
+    const deliveryStatus: WorkbenchWorkflowStep['status'] = delivered ? 'ready' : delivery ? 'needs_action' : activeDestination ? 'needs_action' : 'blocked'
+
+    return [
+        {
+            id: 'alert',
+            label: 'Alert',
+            status: alertHref || alertRecord ? 'ready' : item.kind === 'dwm_alert' ? 'blocked' : 'needs_action',
+            detail: alertRecord ? `${label(alertRecord.reviewState || item.status)}; ${alertRecord.sourceCount ?? item.sourceLabel} source${alertRecord.sourceCount === 1 ? '' : 's'}.` : item.persistent ? 'Open the persisted alert detail before customer routing.' : 'Fallback alert rows cannot load persisted alert detail.',
+            source: item.persistent ? 'GET /api/dwm/alerts/:id' : 'selected queue row',
+            href: alertHref,
+            actionLabel: 'Open alert',
+            blockedReason: 'Persisted alert ID required',
+        },
+        {
+            id: 'case',
+            label: 'Case',
+            status: caseStatus,
+            detail: detail?.case ? `${label(detail.case.status || item.status)}; owner ${detail.case.assignedOwner || item.owner || 'unassigned'}.` : caseHref ? 'Case route exists; detail is still loading or unavailable.' : item.missingDependency || 'No backed case route is linked to this alert.',
+            source: 'GET /api/cases/:id',
+            href: caseHref,
+            actionLabel: 'Open case',
+            blockedReason: 'Case route required',
+        },
+        {
+            id: 'evidence',
+            label: 'Evidence',
+            status: evidenceStatus,
+            detail: `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'} loaded${sourceHref ? '; source drill-in available.' : '.'}`,
+            source: detail?.evidence?.length ? 'GET /api/cases/:id' : alertRecord?.evidence?.length ? 'GET /api/dwm/alerts/:id' : 'selected queue evidence',
+            href: sourceHref || alertHref || caseHref,
+            actionLabel: sourceHref ? 'Inspect source' : 'Open evidence',
+            blockedReason: 'Evidence source route required',
+        },
+        {
+            id: 'watchlist',
+            label: 'Watchlist',
+            status: watchlistStatus,
+            detail: activeWatchlistCount ? `${activeWatchlistCount} active watchlist${activeWatchlistCount === 1 ? '' : 's'} in scope.` : watchlistCount ? `${watchlistCount} watchlist${watchlistCount === 1 ? '' : 's'} loaded but not active.` : 'No scoped watchlist returned for this case.',
+            source: detail?.watchlists?.length ? 'GET /api/cases/:id watchlists' : 'GET /api/dwm/watchlists',
+            href: watchlistLedgerHref(orgContext),
+            actionLabel: 'Open watchlists',
+            blockedReason: 'Watchlist scope required',
+        },
+        {
+            id: 'delivery',
+            label: 'Delivery',
+            status: deliveryStatus,
+            detail: delivery ? `${label(delivery.status)} delivery ${delivery.id}.` : activeDestination ? `Destination ${activeDestination.id} is active; send or test to create delivery evidence.` : 'No active destination or delivery row is loaded.',
+            source: 'GET /api/dwm/webhooks/deliveries',
+            href: deliveryHref,
+            actionLabel: 'Open delivery',
+            blockedReason: 'Delivery route required',
+        },
+    ]
 }
 
 function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgContext }: { item: WorkbenchCase, decision?: LocalDecision, caseDetail?: CaseDetailState, actionMessage: WorkbenchActionOutcome | null, orgContext?: WorkbenchOrgContext }) {
