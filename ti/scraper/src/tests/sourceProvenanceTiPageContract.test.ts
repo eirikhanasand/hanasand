@@ -24,9 +24,11 @@ import {
   TI_SOURCE_PROVENANCE_PROJECTION_WATCHLIST_RELEVANCE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_WATCHLIST_ALERT_BRIDGE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PAGE_CONTRACT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
   buildSourceProvenanceAlertabilityBridge,
   buildSourceProvenanceActorProfileContract,
   buildSourceProvenanceActorProfileGapSourcePlan,
+  buildSourceProvenanceActorEnrichmentGapReceipt,
   buildSourceProvenanceActorProfileSourceUpdateWorkflow,
   buildSourceProvenanceActorEnrichmentCaseHandoff,
   buildSourceProvenanceAlertEnrichmentPacket,
@@ -1162,6 +1164,214 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(plan)).not.toContain("rawText");
     expect(JSON.stringify(plan)).not.toContain("password");
+  });
+
+  test("records actor enrichment gap receipt with parser source health provenance", () => {
+    const { contract, readiness, lifecycle } = buildBlockedSourceLifecycle();
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({
+      profile,
+      generatedAt: "2026-06-29T12:05:00.000Z"
+    });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({
+      activationReadiness: readiness,
+      generatedAt: "2026-06-29T12:45:00.000Z"
+    });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:46:00.000Z"
+    });
+    const parserHealthPacket = buildSourceProvenanceParserHealthAlertPacket({
+      lifecycle,
+      generatedAt: "2026-06-29T12:47:00.000Z"
+    });
+    const parserSummary = buildSourceProvenanceParserHealthProvenanceSummary({
+      parserHealthPacket,
+      activationDecisionReceipt: decisionReceipt,
+      generatedAt: "2026-06-29T12:48:00.000Z"
+    });
+    const receipt = buildSourceProvenanceActorEnrichmentGapReceipt({
+      profile,
+      sourcePlan: plan,
+      parserHealthSummary: parserSummary,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+
+    expect(receipt).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+      ok: false,
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      publicTiRoute: "/ti/APT28",
+      actorProfileContractId: profile.id,
+      sourcePlanId: plan.id,
+      parserHealthProvenanceSummaryId: parserSummary.id,
+      coverage: {
+        totalGaps: 6,
+        candidateBackedGaps: 6,
+        readyFamilies: 4,
+        blockedFamilies: 1,
+        retryableGaps: 1,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "darkweb_metadata", "telegram_public"]),
+        lastSuccessAt: "2026-06-29T12:46:00.000Z",
+        lastFailureAt: "2026-06-29T12:47:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(receipt.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        gapCode: "missing_campaigns",
+        field: "campaigns",
+        status: "parser_retry",
+        sourceFamily: "telegram_public",
+        parserState: "retry_scheduled",
+        parserStatus: "retry_scheduled",
+        nextAction: "retry_parser",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        coverageCounts: expect.objectContaining({
+          parserRetriesQueued: 1,
+          alertableCandidates: 0
+        }),
+        provenance: expect.objectContaining({
+          actorProfileContractId: profile.id,
+          sourcePlanId: plan.id,
+          parserHealthProvenanceSummaryId: parserSummary.id,
+          sourceHealthProofIds: expect.any(Array),
+          activationDecisionIds: expect.any(Array),
+          fixtureBacked: true
+        })
+      }),
+      expect.objectContaining({
+        gapCode: "missing_infrastructure",
+        field: "infrastructure",
+        status: "policy_blocked",
+        ownerLane: "policy",
+        sourceFamily: "darkweb_metadata",
+        nextAction: "request_policy_approval",
+        coverageCounts: expect.objectContaining({
+          policyReviewsRequired: 1
+        })
+      }),
+      expect.objectContaining({
+        gapCode: "missing_sectors",
+        field: "sectors",
+        status: "source_ready",
+        sourceFamily: "public_advisory",
+        parserState: "ready",
+        nextAction: "inspect_source_health",
+        lastSuccessAt: "2026-06-29T12:46:00.000Z",
+        coverageCounts: expect.objectContaining({
+          activationTestsQueued: 3,
+          alertableCandidates: 1
+        })
+      })
+    ]));
+    expect(receipt.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        consumer: "publicTI",
+        ready: true,
+        route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false })
+      }),
+      expect.objectContaining({
+        consumer: "alertGeneration",
+        ready: false,
+        route: expect.objectContaining({
+          path: "/v1/dwm/alerts/rebuild",
+          body: expect.objectContaining({ dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        consumer: "sourceOps",
+        ready: true,
+        requiredFields: expect.arrayContaining(["rows[].provenance.sourceHealthProofIds"])
+      })
+    ]));
+    expect(receipt.payloadShape).toEqual(expect.arrayContaining([
+      "rows[].status",
+      "rows[].coverageCounts",
+      "rows[].provenance",
+      "coverage.nextRetryAt"
+    ]));
+    expect(JSON.stringify(receipt)).not.toContain("rawText");
+    expect(JSON.stringify(receipt)).not.toContain("password");
+  });
+
+  test("keeps actor enrichment gap receipt ready when profile has backed coverage", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT29",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow(), {
+        ...sourceRow(),
+        sourceId: "src_public_advisory",
+        sourceFamily: "public_advisory",
+        captureId: "cap_public_advisory_apt29",
+        contentHash: "hash_public_advisory_apt29",
+        provenance: "Public advisory links APT29 to phishing infrastructure and defense evasion techniques.",
+        relationship: "targeting",
+        confidence: 0.8
+      }, {
+        ...sourceRow(),
+        sourceId: "src_actor_page",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt29",
+        contentHash: "hash_actor_page_apt29",
+        provenance: "Actor page records Nobelium aliases, espionage motivation, and campaign history.",
+        relationship: "tooling",
+        confidence: 0.74
+      }]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: {
+        aliases: ["APT29", "Nobelium"],
+        motivations: ["espionage"],
+        sectors: ["government", "technology"],
+        regions: ["North America", "Europe"],
+        infrastructure: ["example.com"],
+        techniques: ["phishing", "defense evasion"],
+        campaigns: ["diplomatic phishing"]
+      }
+    });
+    const receipt = buildSourceProvenanceActorEnrichmentGapReceipt({
+      profile,
+      generatedAt: "2026-06-29T12:49:00.000Z"
+    });
+
+    expect(receipt).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+      ok: true,
+      actor: "APT29",
+      publicTiRoute: "/ti/APT29",
+      rows: [],
+      coverage: {
+        totalGaps: 0,
+        candidateBackedGaps: 0,
+        readyFamilies: 0,
+        blockedFamilies: 0,
+        retryableGaps: 0,
+        sourceFamilies: []
+      },
+      safeOutput: {
+        liveNetworkScrapeStarted: false
+      }
+    });
+    expect(receipt.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true }),
+      expect.objectContaining({ consumer: "sourceOps", ready: false })
+    ]));
   });
 
   test("builds offline source update workflow with parser health retry and policy blockers", () => {
