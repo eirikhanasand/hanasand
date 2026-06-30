@@ -29,6 +29,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_READINESS_PACKET_SCH
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_DEDUPE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_alert_dedupe_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_health_drilldown_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_intelligence_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_operator_remediation_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -2048,6 +2049,66 @@ export type TiSourceProvenanceSourcePackFixtureIntelligenceGap = {
     body?: Record<string, unknown>;
     dryRunSupported: true;
     liveNetworkFetch: false;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureIntelligencePacketId: string;
+  actions: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction[];
+  summary: {
+    actionCount: number;
+    retryParser: number;
+    policyReviews: number;
+    watchlistMaterialization: number;
+    sourceInspections: number;
+    actors: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    priorityStates: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"][];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "dashboard" | "sourceOps" | "support" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureIntelligencePacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureOperatorRemediationAction = {
+  actionId: string;
+  actor: string;
+  publicTiRoute: string;
+  action: "retry_parser" | "request_policy_review" | "materialize_watchlist_terms" | "inspect_source_health";
+  ownerLane: "parser" | "policy" | "org" | "source";
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  gapCode: TiSourceProvenanceSourcePackFixtureIntelligenceGap["code"];
+  priority: "high" | "medium" | "low";
+  reason: string;
+  retry: {
+    retryable: boolean;
+    nextRetryAt?: string;
+  };
+  route: TiSourceProvenanceSourcePackFixtureIntelligenceGap["route"];
+  provenance: {
+    sourcePackFixtureIntelligencePacketId: string;
+    captureIds: string[];
+    contentHashes: string[];
+    fixtureBacked: true;
   };
 };
 
@@ -5111,6 +5172,54 @@ export function buildSourceProvenanceSourcePackFixtureIntelligencePacket(input: 
       "summary"
     ],
     safeOutput: input.drilldown.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureOperatorRemediationPacket(input: {
+  intelligence: TiSourceProvenanceSourcePackFixtureIntelligencePacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket {
+  const generatedAt = input.generatedAt ?? input.intelligence.generatedAt;
+  const actions = sourcePackFixtureOperatorRemediationActions(input.intelligence);
+  const sourceFamilies = uniqueStrings(actions.flatMap((action) => action.sourceFamily ? [action.sourceFamily] : [])) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const priorityStates = uniqueStrings(actions.map((action) => action.priority)) as TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"][];
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_operator_remediation_packet", `${input.intelligence.id}:${generatedAt}:${actions.map((action) => action.actionId).join(",")}`),
+    generatedAt,
+    ok: actions.length > 0,
+    status: actions.length > 0 ? "ready" : "blocked",
+    tenantId: input.intelligence.tenantId,
+    organizationId: input.intelligence.organizationId,
+    sourcePackFixtureIntelligencePacketId: input.intelligence.id,
+    actions,
+    summary: {
+      actionCount: actions.length,
+      retryParser: actions.filter((action) => action.action === "retry_parser").length,
+      policyReviews: actions.filter((action) => action.action === "request_policy_review").length,
+      watchlistMaterialization: actions.filter((action) => action.action === "materialize_watchlist_terms").length,
+      sourceInspections: actions.filter((action) => action.action === "inspect_source_health").length,
+      actors: uniqueStrings(actions.map((action) => action.actor)),
+      sourceFamilies,
+      priorityStates,
+      nextRetryAt: earliestTimestamp(actions.map((action) => action.retry.nextRetryAt))
+    },
+    consumers: sourcePackFixtureOperatorRemediationConsumers(actions),
+    payloadShape: [
+      "actions[].actor",
+      "actions[].publicTiRoute",
+      "actions[].action",
+      "actions[].ownerLane",
+      "actions[].sourceFamily",
+      "actions[].gapCode",
+      "actions[].priority",
+      "actions[].retry",
+      "actions[].route",
+      "actions[].provenance",
+      "summary"
+    ],
+    safeOutput: input.intelligence.safeOutput
   };
 }
 
@@ -10278,6 +10387,154 @@ function sourcePackFixtureIntelligenceConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationFixtureIntelligence: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureOperatorRemediationActions(
+  packet: TiSourceProvenanceSourcePackFixtureIntelligencePacket
+): TiSourceProvenanceSourcePackFixtureOperatorRemediationAction[] {
+  const actions = new Map<string, TiSourceProvenanceSourcePackFixtureOperatorRemediationAction>();
+  for (const actorRow of packet.actorRows) {
+    for (const gap of actorRow.gaps) {
+      if (gap.nextAction === "queue_alert_rebuild" || gap.nextAction === "suppress_duplicate") continue;
+      const key = `${actorRow.actor}:${gap.sourceFamily ?? ""}:${gap.code}:${gap.nextAction}`;
+      const existing = actions.get(key);
+      const action = sourcePackFixtureOperatorRemediationAction(packet, actorRow, gap);
+      if (!existing) {
+        actions.set(key, action);
+        continue;
+      }
+      actions.set(key, {
+        ...existing,
+        provenance: {
+          ...existing.provenance,
+          captureIds: uniqueStrings([...existing.provenance.captureIds, ...action.provenance.captureIds]),
+          contentHashes: uniqueStrings([...existing.provenance.contentHashes, ...action.provenance.contentHashes])
+        }
+      });
+    }
+  }
+  return [...actions.values()].sort((a, b) => sourcePackFixtureOperatorRemediationPriorityRank(a.priority) - sourcePackFixtureOperatorRemediationPriorityRank(b.priority) || a.actor.localeCompare(b.actor));
+}
+
+function sourcePackFixtureOperatorRemediationAction(
+  packet: TiSourceProvenanceSourcePackFixtureIntelligencePacket,
+  actorRow: TiSourceProvenanceSourcePackFixtureIntelligenceActorRow,
+  gap: TiSourceProvenanceSourcePackFixtureIntelligenceGap
+): TiSourceProvenanceSourcePackFixtureOperatorRemediationAction {
+  const action = sourcePackFixtureOperatorRemediationActionName(gap.nextAction);
+  const priority = sourcePackFixtureOperatorRemediationPriority(gap.code, action);
+  return {
+    actionId: stableId("ti_source_provenance_source_pack_fixture_operator_remediation_action", `${packet.id}:${actorRow.actor}:${gap.sourceFamily ?? ""}:${gap.code}:${action}`),
+    actor: actorRow.actor,
+    publicTiRoute: actorRow.publicTiRoute,
+    action,
+    ownerLane: gap.ownerLane === "alert" ? "source" : gap.ownerLane,
+    sourceFamily: gap.sourceFamily,
+    gapCode: gap.code,
+    priority,
+    reason: gap.reason,
+    retry: {
+      retryable: action === "retry_parser",
+      nextRetryAt: action === "retry_parser" ? actorRow.freshness.nextRetryAt : undefined
+    },
+    route: gap.route,
+    provenance: {
+      sourcePackFixtureIntelligencePacketId: packet.id,
+      captureIds: actorRow.provenance.captureIds,
+      contentHashes: actorRow.provenance.contentHashes,
+      fixtureBacked: true
+    }
+  };
+}
+
+function sourcePackFixtureOperatorRemediationActionName(
+  nextAction: TiSourceProvenanceSourcePackFixtureIntelligenceGap["nextAction"]
+): TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["action"] {
+  if (nextAction === "retry_parser") return "retry_parser";
+  if (nextAction === "request_policy_review") return "request_policy_review";
+  if (nextAction === "materialize_watchlist_terms") return "materialize_watchlist_terms";
+  return "inspect_source_health";
+}
+
+function sourcePackFixtureOperatorRemediationPriority(
+  code: TiSourceProvenanceSourcePackFixtureIntelligenceGap["code"],
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["action"]
+): TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"] {
+  if (action === "request_policy_review" || code === "policy_review_required") return "high";
+  if (action === "retry_parser" || code === "parser_retry_required") return "high";
+  if (action === "materialize_watchlist_terms") return "medium";
+  return "low";
+}
+
+function sourcePackFixtureOperatorRemediationPriorityRank(
+  priority: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"]
+): number {
+  if (priority === "high") return 0;
+  if (priority === "medium") return 1;
+  return 2;
+}
+
+function sourcePackFixtureOperatorRemediationConsumers(
+  actions: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction[]
+): TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket["consumers"] {
+  const hasActions = actions.length > 0;
+  return [{
+    consumer: "dashboard",
+    ready: hasActions,
+    requiredFields: ["actions[].actor", "actions[].action", "actions[].priority", "actions[].route", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeFixtureOperatorRemediation: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasActions,
+    requiredFields: ["actions[].ownerLane", "actions[].retry", "actions[].provenance", "actions[].gapCode"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeSourceOpsRemediationQueue: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "support",
+    ready: hasActions,
+    requiredFields: ["actions[].publicTiRoute", "actions[].reason", "actions[].route", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeSupportRemediationQueue: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasActions,
+    requiredFields: ["schemaVersion", "sourcePackFixtureIntelligencePacketId", "actions[].actionId", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeIntegrationFixtureOperatorRemediation: true,
         dryRun: true
       },
       dryRunSupported: true,
