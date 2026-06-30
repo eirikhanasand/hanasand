@@ -465,6 +465,8 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     return json({ error: { code: "archived_org", message: "Organization lifecycle is not active; webhook delivery is disabled." } }, 409);
   }
   const dryRun = body.dryRun === true;
+  const explicitWebhookUrl = body.webhookUrl === undefined ? undefined : normalizeWebhookUrl(body.webhookUrl);
+  if (body.webhookUrl && !explicitWebhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." }, visibilityDecision: access.visibilityDecision }, 400);
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const orgDestinations = organizationWebhookDestinations(options, scope.organizationId);
@@ -475,11 +477,13 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   for (const alert of alerts.slice(0, Math.max(1, Math.min(Number(body.limit ?? 25), 100)))) {
     const alertWatchlistIds = new Set((alert.watchlistIds ?? alert.workflowContext?.watchlistIds ?? []).map(String));
     const watchlist = watchlists.find((row: DwmWatchlist) => alertWatchlistIds.has(row.id)) ?? (!alertWatchlistIds.size ? watchlists[0] : undefined);
+    const deliveryOrgId = scope.organizationId ?? alert.organizationId ?? alert.workflowContext?.organizationId ?? watchlist?.organizationId;
+    const deliveryOrgDestinations = deliveryOrgId && deliveryOrgId !== scope.organizationId ? organizationWebhookDestinations(options, deliveryOrgId) : orgDestinations;
     const existingDeliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === alert.id);
     const downstreamHandoff = buildDwmAlertDownstreamHandoff({
       alert,
       deliveries: existingDeliveries,
-      organizationId: scope.organizationId,
+      organizationId: deliveryOrgId,
       ...downstreamLifecycleForAlert(options, alert, scope),
       generatedAt
     });
@@ -498,7 +502,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${hardSelectionBlocker}:${generatedAt}`);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
-        organizationId: scope.organizationId,
+        organizationId: deliveryOrgId,
         tenantId,
         alertId: alert.id,
         watchlistId: alert.watchlistIds?.[0] ?? watchlist?.id ?? "delivery_selection_blocked",
@@ -514,17 +518,17 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         error: `Delivery selection blocked by ${String(hardSelectionBlocker).replaceAll("_", " ")}.`
       });
       deliveries.push(delivery);
-      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
       continue;
     }
     const requestedDestinationId = body.webhookDestinationId ? String(body.webhookDestinationId) : downstreamHandoff.deliverySelection.selectedWebhookDestinationId;
-    const destination = selectWebhookDestination(options, orgDestinations, watchlist, requestedDestinationId);
+    const destination = selectWebhookDestination(options, deliveryOrgDestinations, watchlist, requestedDestinationId);
     const disabledDestination = findDisabledWebhookDestination(options, requestedDestinationId ?? watchlist?.webhookDestinationId);
     if (!watchlist || disabledDestination) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${disabledDestination ? "disabled-destination" : "retired-watchlist"}:${generatedAt}`);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
-        organizationId: scope.organizationId,
+        organizationId: deliveryOrgId,
         tenantId,
         alertId: alert.id,
         watchlistId: alert.watchlistIds?.[0] ?? "retired_watchlist",
@@ -540,16 +544,16 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         error: disabledDestination ? "Webhook destination is disabled for this organization." : "No active watchlist remains for this alert."
       });
       deliveries.push(delivery);
-      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
       continue;
     }
-    const webhookUrl = normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
+    const webhookUrl = explicitWebhookUrl ?? normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
     const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl ?? "");
     if (!webhookUrl) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
         id: deliveryId,
-        organizationId: scope.organizationId,
+        organizationId: deliveryOrgId,
         tenantId,
         alertId: alert.id,
         watchlistId: alert.watchlistIds?.[0] ?? "missing_watchlist",
@@ -565,15 +569,18 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
         error: "No webhook URL configured for the active watchlist."
       });
       deliveries.push(delivery);
-      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
       continue;
+    }
+    if (explicitWebhookUrl && body.attachToWatchlist === true) {
+      (options.store as any).saveDwmWatchlist?.({ ...watchlist, webhookUrl: explicitWebhookUrl, updatedAt: generatedAt });
     }
     const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff);
     const requestBody = buildWebhookRequestBody(deliveryKind, payload);
     const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
     const baseDelivery = {
       id: deliveryId,
-      organizationId: scope.organizationId,
+      organizationId: deliveryOrgId,
       tenantId,
       alertId: alert.id,
       watchlistId: watchlist.id,
@@ -589,7 +596,7 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     if (dryRun) {
       const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "dry_run", httpStatus: 0 });
       deliveries.push(delivery);
-      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
       continue;
     }
 
@@ -603,11 +610,11 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: ok ? "delivered" : "failed", httpStatus: response.status });
       deliveries.push(delivery);
       const nextAlert = ok ? { ...alert, deliveryState: "delivered", deliveredAt: generatedAt } : alert;
-      refreshAlertDeliveryReadiness(options, nextAlert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, nextAlert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
     } catch (error) {
       const delivery = (options.store as any).saveDwmWebhookDelivery({ ...baseDelivery, status: "failed", httpStatus: 0, error: error instanceof Error ? error.message : String(error) });
       deliveries.push(delivery);
-      refreshAlertDeliveryReadiness(options, alert, scope, [delivery], generatedAt);
+      refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
     }
   }
 
@@ -1102,8 +1109,12 @@ function buildDwmWatchlistDetail(watchlist: DwmWatchlist, options: ApiServerOpti
     .filter((row: any) => row.tenantId === watchlist.tenantId && Array.isArray(row.watchlistIds) && row.watchlistIds.includes(watchlist.id));
   const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? [])
     .filter((row: any) => row.tenantId === watchlist.tenantId && (row.watchlistId === watchlist.id || alerts.some((alert: any) => alert.id === row.alertId)));
+  const { webhookUrl: _webhookUrl, ...safeWatchlist } = watchlist;
   return {
-    ...watchlist,
+    ...safeWatchlist,
+    webhookUrlConfigured: Boolean(watchlist.webhookUrl),
+    webhookEndpointHash: watchlist.webhookUrl ? stableId("endpoint", watchlist.webhookUrl) : undefined,
+    webhookEndpointHint: watchlist.webhookUrl ? redactWebhookEndpointForWatchlist(watchlist.webhookUrl) : undefined,
     visibilityDecision: access?.visibilityDecision,
     workflowContext: {
       alertCount: alerts.length,
@@ -1113,6 +1124,17 @@ function buildDwmWatchlistDetail(watchlist: DwmWatchlist, options: ApiServerOpti
       activeForAlertGeneration: watchlist.status === "active"
     }
   };
+}
+
+function redactWebhookEndpointForWatchlist(value: string): string {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const visiblePath = parts.length ? `/${parts.slice(0, Math.min(parts.length, 3)).join("/")}` : "";
+    return `${url.origin}${visiblePath}/...`;
+  } catch {
+    return "redacted_webhook_endpoint";
+  }
 }
 
 function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { organization?: any; organizationId?: string; tenantId: string }): { watchlist?: DwmWatchlist; termValues: string[]; reason: string } {

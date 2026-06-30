@@ -441,4 +441,73 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.test");
     expect((store as any).listDwmWebhookDeliveries()).toHaveLength(1);
   });
+
+  test("attaches a dry-run Discord route to the matched watchlist for real alert replay", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    let externalSendCount = 0;
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async () => {
+        externalSendCount += 1;
+        return new Response("should not send", { status: 500 });
+      }
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_attach", terms: ["acme.com"] })
+    }), options);
+    const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_attach" })
+    }), options);
+    const rebuild = await rebuildResponse.json() as any;
+
+    const attachResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_attach",
+        alertId: rebuild.alerts[0].id,
+        webhookUrl: "https://discord.com/api/webhooks/attach/token",
+        dryRun: true,
+        attachToWatchlist: true
+      })
+    }), options);
+    const attached = await attachResponse.json() as any;
+
+    expect(attachResponse.status).toBe(200);
+    expect(attached.deliveries[0]).toMatchObject({
+      alertId: rebuild.alerts[0].id,
+      status: "dry_run",
+      deliveryKind: "discord"
+    });
+    expect(attached.deliveries[0].endpointHash).not.toContain("attach/token");
+    expect((store as any).listDwmWatchlists()[0].webhookUrl).toBe("https://discord.com/api/webhooks/attach/token");
+
+    const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists?tenantId=tenant_attach"), options);
+    const watchlistPayload = await watchlistResponse.json() as any;
+    expect(watchlistPayload.watchlists[0].webhookUrl).toBeUndefined();
+    expect(watchlistPayload.watchlists[0]).toMatchObject({
+      webhookUrlConfigured: true,
+      webhookEndpointHint: "https://discord.com/api/webhooks/attach/..."
+    });
+    expect(JSON.stringify(watchlistPayload)).not.toContain("attach/token");
+
+    const replayResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_attach", alertId: rebuild.alerts[0].id, dryRun: true })
+    }), options);
+    const replay = await replayResponse.json() as any;
+
+    expect(replayResponse.status).toBe(200);
+    expect(replay.deliveries[0]).toMatchObject({
+      alertId: rebuild.alerts[0].id,
+      status: "dry_run",
+      deliveryKind: "discord"
+    });
+    expect(externalSendCount).toBe(0);
+  });
 });
