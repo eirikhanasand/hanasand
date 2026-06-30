@@ -1342,6 +1342,20 @@ export type OrganizationWatchlistAlertTermsExport = {
             alertGeneratorKeys: string[]
             crossTenantCollisionAllowed: false
         }
+        userLocalIsolation: {
+            schemaVersion: 'organization.user_local_watchlist_isolation.v1'
+            sourceOfTruth: 'organization_watchlist_items'
+            organizationScopeField: 'organization_id'
+            requiredQueryFields: Array<'organizationId'>
+            excludedSources: Array<'user_local_watchlists' | 'session_watchlists' | 'demo_watchlists'>
+            forbiddenFallbacks: Array<'userId_only' | 'session_only' | 'missing_organization_id'>
+            activeWatchlistItemIds: string[]
+            alertGeneratorKeys: string[]
+            crossOrgDedupeAllowed: false
+            nonmemberEnumeration: false
+            noLeakFields: Array<'otherOrg.watchlistItemIds' | 'otherOrg.alertGeneratorKeys' | 'userLocal.watchlistItems' | 'session.watchlistItems'>
+            proofAssertions: Array<'requires_org_id' | 'two_org_overlapping_terms_distinct_keys' | 'nonmember_cannot_enumerate_terms' | 'removed_member_cannot_export_terms'>
+        }
         downstreamRefs: {
             alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1'
             alertPersistenceReceipt: 'organization.alert_case_bridge_persistence_receipt.v1'
@@ -7387,6 +7401,30 @@ export function organizationWatchlistAlertTermsExport(
             archivedItemIds: termLifecycle.archivedItemIds,
             alertGeneratorKeys: consumerReadiness.watchlists.alertGeneratorKeys,
             crossTenantCollisionAllowed: false,
+        },
+        userLocalIsolation: {
+            schemaVersion: 'organization.user_local_watchlist_isolation.v1',
+            sourceOfTruth: 'organization_watchlist_items',
+            organizationScopeField: 'organization_id',
+            requiredQueryFields: ['organizationId'],
+            excludedSources: ['user_local_watchlists', 'session_watchlists', 'demo_watchlists'],
+            forbiddenFallbacks: ['userId_only', 'session_only', 'missing_organization_id'],
+            activeWatchlistItemIds: termLifecycle.activeItemIds,
+            alertGeneratorKeys: consumerReadiness.watchlists.alertGeneratorKeys,
+            crossOrgDedupeAllowed: false,
+            nonmemberEnumeration: false,
+            noLeakFields: [
+                'otherOrg.watchlistItemIds',
+                'otherOrg.alertGeneratorKeys',
+                'userLocal.watchlistItems',
+                'session.watchlistItems',
+            ],
+            proofAssertions: [
+                'requires_org_id',
+                'two_org_overlapping_terms_distinct_keys',
+                'nonmember_cannot_enumerate_terms',
+                'removed_member_cannot_export_terms',
+            ],
         },
         downstreamRefs: {
             alertGenerationConsumer: alertGenerationConsumer.schemaVersion,
