@@ -3059,6 +3059,8 @@ describe("dwm alert repository", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);
     store.saveCapture(telegramCapture);
+    store.saveCapture(telegramDuplicateCapture);
+    (store as any).captures.set(telegramDuplicateCapture.id, telegramDuplicateCapture);
     const options = { store, frontier: new FocusedFrontier() };
 
     const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
@@ -3096,6 +3098,14 @@ describe("dwm alert repository", () => {
       primaryCaptureId: "cap_repo_tg_acme",
       evidenceCount: 1,
       recommendedRoute: "identity_response",
+      duplicateEvidenceSuppression: {
+        schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+        suppressedCount: 1,
+        suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+        duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+        duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+        reasons: ["duplicate_content_hash"]
+      },
       hasWebhookRoute: false
     });
     expect(rebuild.alerts[0].workflowContext.watchlistItemIds[0]).toContain("acme.com");
@@ -3104,10 +3114,83 @@ describe("dwm alert repository", () => {
       sourceFamily: "telegram_public",
       captureIds: ["cap_repo_tg_acme"],
       evidenceCount: 1,
-      recommendedRoute: "identity_response"
+      recommendedRoute: "identity_response",
+      duplicateEvidenceSuppression: {
+        schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+        suppressedCount: 1,
+        suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+        duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+        duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+        reasons: ["duplicate_content_hash"]
+      }
     });
+    expect(rebuild.alerts[0].evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
+    expect(rebuild.alerts[0].provenance.captureIds).not.toContain("cap_repo_tg_acme_duplicate");
     expect(rebuild.alerts[0].caseIdCandidate).toMatch(/^case_/);
     expect(rebuild.alerts[0].casePath).toContain(`/v1/cases/${rebuild.alerts[0].caseIdCandidate}`);
+
+    store.saveDwmAlert({
+      ...rebuild.alerts[0],
+      workflowStatus: "triaged",
+      reviewState: "triaged",
+      deliveryState: "pending_review",
+      assignedOwner: "api-analyst-1",
+      workflowNote: "API queue triaged before new evidence arrived.",
+      workflowEvents: [{
+        id: "evt_api_triage",
+        at: "2026-06-28T13:10:00.000Z",
+        fromReviewState: "new",
+        toReviewState: "triaged",
+        fromDeliveryState: "pending_review",
+        toDeliveryState: "pending_review",
+        toOwner: "api-analyst-1",
+        note: "API queue triaged before new evidence arrived."
+      }]
+    });
+    store.saveCapture(telegramFollowupCapture);
+
+    const updateResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_api_acme" })
+    }), options);
+    const update = await updateResponse.json() as any;
+
+    expect(updateResponse.status).toBe(200);
+    expect(update.savedAlertCount).toBe(1);
+    expect(update.alerts[0].id).toBe(rebuild.alerts[0].id);
+    expect(update.alerts[0].assignedOwner).toBe("api-analyst-1");
+    expect(update.alerts[0].workflowStatus).toBe("triaged");
+    expect(update.alerts[0].workflowNote).toBe("API queue triaged before new evidence arrived.");
+    expect(update.alerts[0].workflowEvents).toHaveLength(1);
+    expect(update.alerts[0].evidence.map((item: any) => item.id)).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
+    expect(update.alerts[0].evidence.map((item: any) => item.id)).not.toContain("cap_repo_tg_acme_duplicate");
+    expect(update.alerts[0].workflowContext.evidenceCount).toBe(2);
+    expect(update.alerts[0].workflowContext.generationEvidenceWindow.captureIds).toContain("cap_repo_tg_acme_followup");
+    expect(update.alerts[0].workflowContext.generationEvidenceWindow.captureIds).not.toContain("cap_repo_tg_acme_duplicate");
+    expect(update.alerts[0].alertUpdatedEvent).toMatchObject({
+      schemaVersion: "dwm.alert_updated_event.v1",
+      eventType: "dwm.alert.updated",
+      alertId: rebuild.alerts[0].id,
+      addedCaptureIds: ["cap_repo_tg_acme_followup"],
+      previousEvidenceCount: 1,
+      evidenceCount: 2,
+      consumerPayload: {
+        schemaVersion: "dwm.alert_event_consumer_payload.v1",
+        eventType: "dwm.alert.updated",
+        captureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
+        addedCaptureIds: ["cap_repo_tg_acme_followup"],
+        workflowEventCount: 1,
+        duplicateEvidenceSuppression: {
+          schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+          suppressedCount: 1,
+          suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+          duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+          duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+          reasons: ["duplicate_content_hash"]
+        }
+      }
+    });
 
     const listResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme"), options);
     const list = await listResponse.json() as any;
@@ -3115,10 +3198,28 @@ describe("dwm alert repository", () => {
     expect(listResponse.status).toBe(200);
     expect(list.alerts).toHaveLength(1);
     expect(list.alerts[0].watchlistIds).toHaveLength(1);
+    expect(list.alerts[0].assignedOwner).toBe("api-analyst-1");
+    expect(list.alerts[0].workflowStatus).toBe("triaged");
+    expect(list.alerts[0].workflowSummary.eventCount).toBe(1);
+    expect(list.alerts[0].workflowContext.evidenceCount).toBe(2);
+    expect(list.alerts[0].workflowContext.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
+    expect(list.alerts[0].workflowContext.duplicateEvidenceSuppression.suppressedCaptureIds).toEqual(["cap_repo_tg_acme_duplicate"]);
+    expect(list.alerts[0].alertUpdatedEvent.consumerPayload.duplicateEvidenceSuppression.suppressedCount).toBe(1);
     expect(list.alerts[0].webhookDelivery.dedupeKey).toBe(list.alerts[0].dedupeKey);
     expect(list.alerts[0].workflowContext.casePath).toBe(list.alerts[0].casePath);
     expect(list.alerts[0].workflowContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
     expect(list.alerts[0].webhookContext.caseIdCandidate).toBe(list.alerts[0].caseIdCandidate);
     expect(list.alerts[0].webhookContext.dedupeKey).toBe(list.alerts[0].dedupeKey);
+
+    const detailResponse = await handleApiRequest(new Request(`http://127.0.0.1${list.alerts[0].alertDetailPath}`), options);
+    const detail = await detailResponse.json() as any;
+
+    expect(detailResponse.status).toBe(200);
+    expect(detail.alert.workflowContext.duplicateEvidenceSuppression.suppressedCaptureIds).toEqual(["cap_repo_tg_acme_duplicate"]);
+    expect(detail.alert.alertUpdatedEvent.consumerPayload.addedCaptureIds).toEqual(["cap_repo_tg_acme_followup"]);
+    expect(detail.workflowSummary.eventCount).toBe(1);
+    expect(detail.downstreamHandoff.evidence.generationEvidenceWindow.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
+    expect(detail.consumerContract.evidence.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
+    expect(detail.consumerContract.persistedReadModel.captureIds).toEqual(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]);
   });
 });
