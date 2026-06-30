@@ -2812,6 +2812,8 @@ describe("dwm alert repository", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);
     store.saveCapture(telegramCapture);
+    store.saveCapture(telegramDuplicateCapture);
+    (store as any).captures.set(telegramDuplicateCapture.id, telegramDuplicateCapture);
 
     const initialWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
       schemaVersion: "organization.watchlist_alert_generation.v1",
@@ -2952,6 +2954,14 @@ describe("dwm alert repository", () => {
     expect(telegramProof?.sourceHandoffReadiness.sourceFamily).toBe("telegram_public");
     expect(telegramProof?.sourceHandoffReadiness.selectedCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(telegramProof?.sourceHandoffReadiness.evidenceCount).toBe(2);
+    expect(telegramProof?.sourceHandoffReadiness.duplicateEvidenceSuppression).toMatchObject({
+      schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+      suppressedCount: 1,
+      suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+      duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+      duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+      reasons: ["duplicate_content_hash"]
+    });
     expect(telegramProof?.sourceHandoffReadiness.provenanceCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(telegramProof?.sourceHandoffReadiness.provenanceSourceIds).toEqual(["src_repo_tg"]);
     expect(telegramProof?.sourceHandoffReadiness.provenanceGapCodes).toEqual([]);
@@ -2981,7 +2991,7 @@ describe("dwm alert repository", () => {
       stableFields: expect.arrayContaining(["provenanceCaptureIds", "alertGenerationRefCount"]),
       gapFields: expect.arrayContaining(["provenanceGapCodes"])
     });
-    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "duplicateEvidenceSuppression", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "webhookConsumer.blockerCodes"]));
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
     expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
@@ -2991,6 +3001,14 @@ describe("dwm alert repository", () => {
       sourceFamily: "darkweb_metadata",
       selectedCaptureIds: ["cap_repo_darkweb_acme"],
       evidenceCount: 1,
+      duplicateEvidenceSuppression: {
+        schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+        suppressedCount: 0,
+        suppressedCaptureIds: [],
+        duplicateOfCaptureIds: [],
+        duplicateIdentities: [],
+        reasons: []
+      },
       provenanceCaptureIds: ["cap_repo_darkweb_acme"],
       provenanceSourceIds: ["src_repo_darkweb"],
       provenanceGapCodes: [],

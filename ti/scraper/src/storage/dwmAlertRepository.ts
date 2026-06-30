@@ -505,6 +505,7 @@ export type DwmAlertDownstreamHandoff = {
     selectedCaptureIds: string[];
     captureIds: string[];
     sourceIds: string[];
+    duplicateEvidenceSuppression?: DwmDuplicateEvidenceSuppressionSummary;
     provenanceGeneratedAt?: string;
     matchBasis?: string;
     generationEvidenceWindow?: {
@@ -1142,6 +1143,7 @@ export type DwmOrgAlertPipelineProof = {
       sourceFamily?: string;
       selectedCaptureIds: string[];
       evidenceCount: number;
+      duplicateEvidenceSuppression?: DwmDuplicateEvidenceSuppressionSummary;
       provenanceCaptureIds: string[];
       provenanceSourceIds: string[];
       provenanceGapCodes: string[];
@@ -2110,6 +2112,10 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     sourceFamily: input.handoff.sourceFamily,
     selectedCaptureIds: input.handoff.evidence.selectedCaptureIds,
     evidenceCount: input.handoff.evidence.evidenceCount,
+    duplicateEvidenceSuppression: duplicateEvidenceSuppressionForSourceHandoff(
+      input.handoff.evidence.duplicateEvidenceSuppression,
+      input.handoff.sourceFamily
+    ),
     provenanceCaptureIds: input.sourceProvenanceSummary.captureIds,
     provenanceSourceIds: input.sourceProvenanceSummary.sourceIds,
     provenanceGapCodes,
@@ -2151,6 +2157,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "sourceFamily",
       "selectedCaptureIds",
       "evidenceCount",
+      "duplicateEvidenceSuppression",
       "provenanceCaptureIds",
       "provenanceSourceIds",
       "webhookConsumer.deliveryDedupeKey",
@@ -2164,6 +2171,29 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "webhookConsumer.blockerCodes",
       "caseConsumer.blockerCodes"
     ]
+  };
+}
+
+function duplicateEvidenceSuppressionForSourceHandoff(summary: DwmDuplicateEvidenceSuppressionSummary | undefined, sourceFamily: string | undefined): DwmDuplicateEvidenceSuppressionSummary | undefined {
+  if (!summary) return undefined;
+  const family = String(sourceFamily ?? "").trim();
+  if (!family || !summary.duplicateIdentities.length) return summary;
+  const familyIdentities = summary.duplicateIdentities.filter((identity) => identity.startsWith(`${family}:`));
+  if (!familyIdentities.length) {
+    return {
+      schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+      suppressedCount: 0,
+      suppressedCaptureIds: [],
+      duplicateOfCaptureIds: [],
+      duplicateIdentities: [],
+      reasons: []
+    };
+  }
+  if (familyIdentities.length === summary.duplicateIdentities.length) return summary;
+  return {
+    ...summary,
+    duplicateIdentities: familyIdentities,
+    suppressedCount: familyIdentities.length
   };
 }
 
@@ -3204,6 +3234,7 @@ export function buildDwmAlertDownstreamHandoff(input: {
       selectedCaptureIds,
       captureIds,
       sourceIds,
+      duplicateEvidenceSuppression: context.duplicateEvidenceSuppression ?? webhook.duplicateEvidenceSuppression,
       provenanceGeneratedAt: alert?.provenance?.generatedAt,
       matchBasis: alert?.provenance?.matchBasis,
       generationEvidenceWindow
