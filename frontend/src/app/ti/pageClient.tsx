@@ -4245,7 +4245,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                 <EvidenceMetric label='Sources' value={`${request.sourceRows.length}`} />
                 <EvidenceMetric label='Terms' value={`${request.refs.watchTerms.length}`} />
             </div>
-            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {request.request.path}</p>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {consumerRequestPathLabel(request.request.path)}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.nextAction}</p>
             <div data-ti-selected-case-actor-context='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
