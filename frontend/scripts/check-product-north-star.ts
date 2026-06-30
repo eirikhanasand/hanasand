@@ -40,6 +40,7 @@ const partialPayload = buildProductProgressPayload({
         endpoints: {
             sourceInventory: { ok: true, status: 200 },
             sourcePacks: { ok: true, status: 200 },
+            contracts: { ok: true, status: 200 },
         },
         sourceInventory: {
             schemaVersion: 'dwm.source_inventory.v1',
@@ -94,6 +95,22 @@ const partialPayload = buildProductProgressPayload({
             },
             sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
             lastRun: { status: 'completed', completedAt: generatedAt },
+        },
+        contracts: {
+            schemaLookup: {
+                schemaVersion: 'ti.api_contract_schema_lookup.v1',
+                rows: [{
+                    schemaId: 'dwm.webhook_event_contract.v1',
+                    contractId: 'webhook_delivery_receipts',
+                    ownerLane: 'webhook',
+                    route: '/v1/dwm/webhooks/deliver',
+                    scopeFields: ['tenantId', 'organizationId', 'alertId'],
+                    blockerCodes: ['missing_webhook_destination'],
+                    downstreamConsumers: [{ ownerLane: 'case', route: '/v1/cases/:caseId', requiredFields: ['webhookDeliveryId'] }],
+                    safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+                }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            },
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
@@ -157,6 +174,8 @@ assert.ok(partialScoreboard.deployGate.blockingProofRows.some(row => row.rowId =
 assert.equal(partialScoreboard.direction.length, 5)
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.state === 'needs_action'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('ti.api_contract_schema_lookup.v1')))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.integrationProbeHint.includes('schemaLookup')))
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
 assert.ok(partialScoreboard.rows.every(row => row.proofSource && row.detail))
 assert.ok(partialScoreboard.rows.every(row => row.expectedDashboardRowId && row.staleAfterSeconds > 0 && row.proofTimestamp))

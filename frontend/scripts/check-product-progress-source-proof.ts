@@ -54,13 +54,19 @@ assert.equal(shallowSourceGrowth?.sourceOperationsReady, false)
 assert.equal(shallowSourceGrowth?.sourceCustomerConfigReady, false)
 assert.equal(shallowSourceGrowth?.sourceReadinessArtifactReady, false)
 assert.equal(shallowSourceGrowth?.sourceProxyVerificationReady, false)
+assert.equal(shallowSourceGrowth?.schemaLookupReady, false)
 assert.ok(shallowSourceGrowth?.blockers?.some(blocker => blocker.includes('Source operations readiness proof is missing')), 'Shallow proxy must not pass without source operations proof.')
 assert.ok(shallowSourceGrowth?.backendProofContractVersion?.includes('dwm.source_pack_worker_proxy_verification.v1'), 'Source proof contract stack must name proxy verification.')
+assert.ok(shallowSourceGrowth?.backendProofContractVersion?.includes('ti.api_contract_schema_lookup.v1'), 'Source proof contract stack must name schema lookup.')
 
 const backedPayload: ProductProgressReadinessPayload = {
     ...shallowPayload,
     sourceProxy: {
         ...shallowPayload.sourceProxy!,
+        endpoints: {
+            ...shallowPayload.sourceProxy!.endpoints!,
+            contracts: { ok: true, status: 200 },
+        },
         sourcePacks: {
             ...shallowPayload.sourceProxy!.sourcePacks!,
             sourceOperationsReadiness: {
@@ -94,6 +100,22 @@ const backedPayload: ProductProgressReadinessPayload = {
             },
             sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
         },
+        contracts: {
+            schemaLookup: {
+                schemaVersion: 'ti.api_contract_schema_lookup.v1',
+                rows: [{
+                    schemaId: 'dwm.webhook_event_contract.v1',
+                    contractId: 'webhook_delivery_receipts',
+                    ownerLane: 'webhook',
+                    route: '/v1/dwm/webhooks/deliver',
+                    scopeFields: ['tenantId', 'organizationId', 'alertId'],
+                    blockerCodes: ['missing_webhook_destination'],
+                    downstreamConsumers: [{ ownerLane: 'case', route: '/v1/cases/:caseId', requiredFields: ['webhookDeliveryId'] }],
+                    safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+                }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            },
+        },
     },
 }
 
@@ -103,6 +125,9 @@ assert.equal(backedSourceGrowth?.sourceOperationsReady, true)
 assert.equal(backedSourceGrowth?.sourceCustomerConfigReady, true)
 assert.equal(backedSourceGrowth?.sourceReadinessArtifactReady, true)
 assert.equal(backedSourceGrowth?.sourceProxyVerificationReady, true)
+assert.equal(backedSourceGrowth?.schemaLookupReady, true)
+assert.equal(backedSourceGrowth?.schemaLookupSafe, true)
+assert.equal(backedSourceGrowth?.contractLookupRows, 1)
 assert.equal(backedSourceGrowth?.sourceFamilyCount, 2)
 assert.equal(backedSourceGrowth?.unavailableReason, undefined)
 

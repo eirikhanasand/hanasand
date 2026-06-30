@@ -259,6 +259,9 @@ export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     activeSourceRows?: number
     collectionReadyRows?: number
     latestInventoryAt?: string
+    schemaLookupReady?: boolean
+    schemaLookupSafe?: boolean
+    contractLookupRows?: number
 }
 
 export type ProductReadinessExternalState = {
@@ -291,6 +294,33 @@ export type DashboardSourceProofProxyPayload = {
     endpoints?: {
         sourceInventory?: { ok?: boolean, status?: number, error?: string }
         sourcePacks?: { ok?: boolean, status?: number, error?: string }
+        contracts?: { ok?: boolean, status?: number, error?: string }
+    }
+    contracts?: {
+        schemaLookup?: {
+            schemaVersion?: string
+            rows?: Array<{
+                schemaId?: string
+                contractId?: string
+                ownerLane?: string
+                route?: string
+                scopeFields?: unknown[]
+                blockerCodes?: unknown[]
+                downstreamConsumers?: unknown[]
+                safeOutput?: {
+                    metadataOnly?: boolean
+                    rawEvidenceExposed?: boolean
+                    webhookSecretExposed?: boolean
+                    crossOrgDataExposed?: boolean
+                }
+            }>
+            safeOutput?: {
+                metadataOnly?: boolean
+                rawEvidenceExposed?: boolean
+                webhookSecretExposed?: boolean
+                crossOrgDataExposed?: boolean
+            }
+        }
     }
     sourceInventory?: {
         schemaVersion?: string
@@ -888,9 +918,28 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
     const sourceProxyVerificationReady = input.sourcePacks?.proxyVerification?.schemaVersion === 'dwm.source_pack_worker_proxy_verification.v1'
         && input.sourcePacks.proxyVerification.state === 'ready'
         && (input.sourcePacks.proxyVerification.checks || []).some(check => check.id === 'safe_output_no_live_network' && check.status === 'pass')
+    const schemaLookup = input.contracts?.schemaLookup
+    const schemaLookupRows = schemaLookup?.rows || []
+    const schemaLookupSafe = Boolean(
+        schemaLookup?.safeOutput?.metadataOnly === true
+        && schemaLookup.safeOutput.rawEvidenceExposed === false
+        && schemaLookup.safeOutput.webhookSecretExposed === false
+        && schemaLookup.safeOutput.crossOrgDataExposed === false
+        && schemaLookupRows.every(row => row.safeOutput?.metadataOnly === true
+            && row.safeOutput.rawEvidenceExposed === false
+            && row.safeOutput.webhookSecretExposed === false
+            && row.safeOutput.crossOrgDataExposed === false),
+    )
+    const schemaLookupReady = Boolean(
+        input.endpoints?.contracts?.ok === true
+        && schemaLookup?.schemaVersion === 'ti.api_contract_schema_lookup.v1'
+        && schemaLookupRows.length > 0
+        && schemaLookupRows.every(row => row.schemaId && row.contractId && row.ownerLane && row.route)
+        && schemaLookupSafe,
+    )
     const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
     const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
-    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && sourceFamilyCount > 0)
+    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && sourceFamilyCount > 0)
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
@@ -902,6 +951,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         sourceCustomerConfigReady ? '' : 'Source customer configuration proof is missing, incomplete, or not redacted.',
         sourceReadinessArtifactReady ? '' : 'Source readiness artifact is missing ledger, trust, or safe-output proof.',
         sourceProxyVerificationReady ? '' : 'Source proxy verification proof is missing or not ready.',
+        schemaLookupReady ? '' : 'Safe contract schema lookup is not loaded from the source proxy.',
         sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
         ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
@@ -919,6 +969,9 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         sourceCustomerConfigReady,
         sourceReadinessArtifactReady,
         sourceProxyVerificationReady,
+        schemaLookupReady,
+        schemaLookupSafe,
+        contractLookupRows: schemaLookupRows.length,
         sourceFamilyCount,
         registeredTotal: counts?.registeredTotal,
         activeSourceCount: counts?.registeredActiveOrCanary,
@@ -944,7 +997,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         staleAfterSeconds: staleAfterMinutes * 60,
         proofTimestamp: workerLastRunAt || input.sourceInventory?.generatedAt || input.generatedAt || options.checkedAt,
         expectedDashboardRowId: 'source_inventory_probe',
-        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, and sourceFamilyCounts.',
+        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, schemaLookup, and sourceFamilyCounts.',
         backendProofContractVersion: [
             input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
             input.sourcePacks?.schemaVersion || 'dwm.source_packs.v1',
@@ -952,6 +1005,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             input.sourcePacks?.sourceCustomerConfig?.schemaVersion || 'dwm.source_pack_customer_config.v1',
             input.sourcePacks?.sourceReadinessArtifact?.schemaVersion || 'dwm.source_readiness_artifact.v1',
             input.sourcePacks?.proxyVerification?.schemaVersion || 'dwm.source_pack_worker_proxy_verification.v1',
+            schemaLookup?.schemaVersion || 'ti.api_contract_schema_lookup.v1',
         ].join(' + '),
     }
 }

@@ -46,6 +46,7 @@ const sourceProxy = {
     endpoints: {
         sourceInventory: { ok: true, status: 200 },
         sourcePacks: { ok: true, status: 200 },
+        contracts: { ok: true, status: 200 },
     },
     sourceInventory: {
         schemaVersion: 'dwm.source_inventory.v1',
@@ -101,6 +102,22 @@ const sourceProxy = {
         sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
         lastRun: { status: 'completed', completedAt: generatedAt },
     },
+    contracts: {
+        schemaLookup: {
+            schemaVersion: 'ti.api_contract_schema_lookup.v1',
+            rows: [{
+                schemaId: 'dwm.webhook_event_contract.v1',
+                contractId: 'webhook_delivery_receipts',
+                ownerLane: 'webhook',
+                route: '/v1/dwm/webhooks/deliver',
+                scopeFields: ['tenantId', 'organizationId', 'alertId'],
+                blockerCodes: ['missing_webhook_destination'],
+                downstreamConsumers: [{ ownerLane: 'case', route: '/v1/cases/:caseId', requiredFields: ['webhookDeliveryId'] }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            }],
+            safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+        },
+    },
 }
 
 const partialPayload = buildProductProgressPayload({
@@ -138,6 +155,8 @@ assert.ok(northStar.rows.every(row => row.ownerLane && row.href && row.backendPr
 assert.ok(northStar.rows.find(row => row.id === 'webhook_delivery')?.state !== 'unavailable', 'Webhook delivery row should distinguish lifecycle/action work from missing proof.')
 assert.equal(buildProductNorthStarScoreboard(null, { generatedAt }).firstBlocker?.length ? true : false, true)
 assert.equal(partialPayload.sourceProxy?.sourceInventory?.schemaVersion, 'dwm.source_inventory.v1')
+assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.schemaVersion, 'ti.api_contract_schema_lookup.v1')
+assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.safeOutput?.metadataOnly, true)
 assert.equal(partialPayload.dashboardEvidence?.visibleInDashboard, true)
 assert.equal(partialPayload.dashboardEvidence?.deliveryEvidenceMatched, true)
 assert.equal(partialPayload.dashboardEvidence?.sourceProxyReady, true)
@@ -296,6 +315,10 @@ assert.equal(partialExternal.sourceGrowth?.sourceOperationsReady, true)
 assert.equal(partialExternal.sourceGrowth?.sourceCustomerConfigReady, true)
 assert.equal(partialExternal.sourceGrowth?.sourceReadinessArtifactReady, true)
 assert.equal(partialExternal.sourceGrowth?.sourceProxyVerificationReady, true)
+assert.equal(partialExternal.sourceGrowth?.schemaLookupReady, true)
+assert.equal(partialExternal.sourceGrowth?.schemaLookupSafe, true)
+assert.equal(partialExternal.sourceGrowth?.contractLookupRows, 1)
+assert.ok(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('ti.api_contract_schema_lookup.v1'), 'Source proof contract stack must name safe schema lookup.')
 assert.equal(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('dwm.source_readiness_artifact.v1'), true)
 assert.equal(partialExternal.sourceGrowth?.workerStatus, 'ready')
 assert.equal(partialExternal.sourceGrowth?.collectionReadyRows, 349)
