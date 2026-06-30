@@ -13,6 +13,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_GROWTH_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -50,6 +51,7 @@ import {
   buildSourceProvenanceSourceActivationAuditPacket,
   buildSourceProvenanceSourceActivationDecisionReceipt,
   buildSourceProvenanceSourcePackFixtureGrowthPacket,
+  buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -3468,6 +3470,194 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(packet)).not.toContain("rawText");
     expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("exports source-pack fixture readiness for dashboard integration and alerts", () => {
+    const contract = buildSourceProvenanceTiPageContract({
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      generatedAt: "2026-06-29T12:00:00.000Z",
+      rows: [sourceRow({
+        actor: "APT28",
+        sourceId: "src_actor_page_apt28",
+        sourceFamily: "actor_page",
+        captureId: "cap_actor_page_apt28",
+        contentHash: "hash_actor_page_apt28",
+        provenance: "Actor page fixture confirms APT28 alias only.",
+        relationship: "actor_activity",
+        confidence: 0.7
+      })]
+    });
+    const profile = buildSourceProvenanceActorProfileContract({
+      contract,
+      values: { aliases: ["APT28", "Fancy Bear"] }
+    });
+    const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+    const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+    const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+    expect(campaignCandidate).toBeDefined();
+    expect(sectorCandidate).toBeDefined();
+    const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+      plan,
+      health: [{
+        candidateId: campaignCandidate!.candidateId,
+        parserStatus: "retry_scheduled",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        failureReason: "fixture parser found no campaign timestamp"
+      }, {
+        candidateId: sectorCandidate!.candidateId,
+        parserStatus: "ready"
+      }]
+    });
+    const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+    const receipt = buildSourceProvenanceSourcePackIntakeReceipt({ request });
+    const readiness = buildSourceProvenanceSourcePackActivationReadiness({ receipt });
+    const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({ activationReadiness: readiness });
+    const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+      auditPacket,
+      generatedAt: "2026-06-29T12:27:00.000Z"
+    });
+    const growthPacket = buildSourceProvenanceSourcePackFixtureGrowthPacket({
+      decisionReceipt,
+      generatedAt: "2026-06-29T12:28:00.000Z"
+    });
+    const readinessExport = buildSourceProvenanceSourcePackFixtureReadinessExport({
+      packet: growthPacket,
+      generatedAt: "2026-06-29T12:29:00.000Z"
+    });
+
+    expect(readinessExport).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      actor: "APT28",
+      sourcePackFixtureGrowthPacketId: growthPacket.id,
+      readiness: {
+        publicTI: true,
+        alertGeneration: true,
+        dashboard: true,
+        sourceOps: true,
+        integration: true
+      },
+      summary: {
+        rowCount: growthPacket.rows.length,
+        readyRows: 2,
+        degradedRows: 3,
+        staleRows: 1,
+        blockedRows: 1,
+        alertReadyCaptures: 1,
+        sourceFamilies: expect.arrayContaining(["public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        freshnessStates: expect.arrayContaining(["fresh", "stale", "missing"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        newestFreshnessAt: "2026-06-29T12:28:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(readinessExport.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceFamily: "public_advisory",
+        parserStatus: "ready",
+        healthState: "healthy",
+        freshnessState: "fresh",
+        retryable: false,
+        readyFor: expect.arrayContaining(["publicTI", "dashboard", "sourceOps", "integration"]),
+        downstreamConsumerRoutes: {
+          publicTI: "/ti/APT28",
+          alertGeneration: "/v1/dwm/alerts/rebuild",
+          sourceOps: "/v1/dwm/source-requests"
+        },
+        provenance: expect.objectContaining({
+          captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+          contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/)
+        })
+      }),
+      expect.objectContaining({
+        sourceFamily: "public_advisory",
+        parserStatus: "ready",
+        healthState: "healthy",
+        freshnessState: "fresh",
+        retryable: false,
+        readyFor: expect.arrayContaining(["alertGeneration", "dashboard", "sourceOps", "integration"]),
+        provenance: expect.objectContaining({
+          captureId: expect.stringMatching(/^ti_source_provenance_fixture_capture_/),
+          contentHash: expect.stringMatching(/^ti_source_provenance_fixture_capture_hash_/)
+        })
+      }),
+      expect.objectContaining({
+        sourceFamily: "telegram_public",
+        parserStatus: "retry_scheduled",
+        healthState: "stale",
+        freshnessState: "stale",
+        retryable: true,
+        blockerReason: "fixture parser found no campaign timestamp"
+      }),
+      expect.objectContaining({
+        sourceFamily: "darkweb_metadata",
+        parserStatus: "blocked",
+        healthState: "blocked",
+        freshnessState: "missing",
+        blockerReason: "Candidate requires policy approval before intake."
+      }),
+      expect.objectContaining({
+        healthState: "degraded",
+        parserStatus: "not_tested",
+        readyFor: expect.arrayContaining(["publicTI", "dashboard", "sourceOps", "integration"])
+      })
+    ]));
+    expect(readinessExport.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: "parser_retry_scheduled",
+        ownerLane: "parser",
+        sourceFamily: "telegram_public",
+        nextAction: "retry_parser",
+        nextRetryAt: "2026-06-29T12:37:00.000Z",
+        route: expect.objectContaining({
+          path: "/v1/dwm/source-requests",
+          liveNetworkFetch: false,
+          body: expect.objectContaining({ action: "retry", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        code: "policy_review_required",
+        ownerLane: "policy",
+        sourceFamily: "darkweb_metadata",
+        nextAction: "request_policy_approval",
+        route: expect.objectContaining({
+          body: expect.objectContaining({ action: "request_approval", dryRun: true })
+        })
+      }),
+      expect.objectContaining({
+        code: "degraded_parser",
+        ownerLane: "source",
+        nextAction: "inspect_source_health"
+      })
+    ]));
+    expect(readinessExport.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/APT28", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["readiness", "summary", "blockers[]"]) }),
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["blockers[].nextAction", "blockers[].route"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["schemaVersion", "safeOutput", "consumers[]", "rows[].provenance"]) })
+    ]));
+    expect(readinessExport.payloadShape).toEqual(expect.arrayContaining([
+      "readiness",
+      "rows[].downstreamConsumerRoutes",
+      "rows[].provenance",
+      "blockers[]",
+      "summary"
+    ]));
+    expect(JSON.stringify(readinessExport)).not.toContain("rawText");
+    expect(JSON.stringify(readinessExport)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
