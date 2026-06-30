@@ -2976,6 +2976,43 @@ describe("dwm alert repository", () => {
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.webhookConsumer");
     expect(proof.consumerAdapters.publicTI.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(proof.consumerAdapters.analystPortal.stableFields).toContain("alerts.sourceHandoffReadiness");
+    expect(proof.consumerReceiptMatrix).toMatchObject({
+      schemaVersion: "dwm.org_alert_consumer_receipt_matrix.v1",
+      checkedAt: "2026-06-28T13:40:00.000Z",
+      ok: true,
+      rowCount: 4
+    });
+    const receiptRows = new Map(proof.consumerReceiptMatrix.rows.map((row) => [row.ownerLane, row]));
+    expect(receiptRows.get("alert_generation")).toMatchObject({
+      readinessRoute: "/v1/dwm/alerts/generation-readiness",
+      contractIds: expect.arrayContaining(["dwm.org_alert_pipeline_proof.v1", "dwm.alert_generation_readiness.v1"]),
+      scopeFields: expect.arrayContaining(["organizationId", "alerts.watchlistItemIds", "alerts.alertGenerationRefs"]),
+      downstreamOwners: expect.arrayContaining(["dashboard", "analyst_portal", "public_ti"]),
+      missingContract: false
+    });
+    expect(receiptRows.get("webhook_delivery")).toMatchObject({
+      readinessRoute: "/v1/dwm/webhooks/deliver",
+      contractIds: expect.arrayContaining(["dwm.alert_source_handoff_readiness.v1", "dwm.webhook.alert_source_handoff_readiness_consumer.v1"]),
+      receiptSchemaIds: expect.arrayContaining(["dwm.webhook.alert_source_handoff_readiness_consumer.v1", "dwm.alert_created_event_dispatch.v1"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.webhookConsumer.selectedWebhookDestinationId"]),
+      downstreamOwners: expect.arrayContaining(["webhook"]),
+      missingContract: false
+    });
+    expect(receiptRows.get("case_workflow")).toMatchObject({
+      readinessRoute: "/v1/cases",
+      receiptSchemaIds: expect.arrayContaining(["dwm.alert_replay_receipt.v1"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.caseConsumer.casePath"]),
+      downstreamOwners: expect.arrayContaining(["case", "analyst_portal"]),
+      missingContract: false
+    });
+    expect(receiptRows.get("public_ti")).toMatchObject({
+      readinessRoute: "/v1/dwm/alerts/generation-readiness",
+      contractIds: expect.arrayContaining(["dwm.alert_source_handoff_readiness.v1", "ti.public_actor.alert_rebuild_handoff.v1"]),
+      scopeFields: expect.arrayContaining(["alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"]),
+      downstreamOwners: expect.arrayContaining(["public_ti"]),
+      missingContract: false
+    });
+    expect(proof.consumerReceiptMatrix.rows.every((row) => row.safeOutput.metadataOnly && !row.safeOutput.rawEvidenceExposed && !row.safeOutput.webhookSecretExposed && !row.safeOutput.crossOrgDataExposed)).toBe(true);
     expect(JSON.stringify(proof)).not.toContain("org_repo_other");
   });
 

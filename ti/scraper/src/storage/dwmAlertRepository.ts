@@ -1046,6 +1046,31 @@ export type DwmOrgAlertPipelineProof = {
       gapFields: string[];
     };
   };
+  consumerReceiptMatrix: {
+    schemaVersion: "dwm.org_alert_consumer_receipt_matrix.v1";
+    checkedAt: string;
+    ok: boolean;
+    rowCount: number;
+    rows: Array<{
+      id: string;
+      ownerLane: "alert_generation" | "case_workflow" | "webhook_delivery" | "public_ti";
+      customerVisibleState: DwmOrgAlertPipelineProof["state"];
+      readinessRoute: string;
+      contractIds: string[];
+      schemaIds: string[];
+      receiptSchemaIds: string[];
+      blockerCodes: string[];
+      scopeFields: string[];
+      downstreamOwners: Array<"dashboard" | "webhook" | "case" | "public_ti" | "analyst_portal">;
+      missingContract: boolean;
+      safeOutput: {
+        metadataOnly: true;
+        rawEvidenceExposed: false;
+        webhookSecretExposed: false;
+        crossOrgDataExposed: false;
+      };
+    }>;
+  };
   candidates: Array<{
     candidateId: string;
     normalizedTerm: string;
@@ -1913,6 +1938,12 @@ export function buildDwmOrgAlertPipelineProof(input: {
       gaps,
       state
     }),
+    consumerReceiptMatrix: buildDwmOrgAlertConsumerReceiptMatrix({
+      alertRows,
+      gaps,
+      state,
+      generatedAt
+    }),
     candidates,
     alerts: alertRows,
     gaps,
@@ -1920,6 +1951,101 @@ export function buildDwmOrgAlertPipelineProof(input: {
       "bun test src/tests/dwmAlertRepository.test.ts src/tests/dwmOrgAlertPipelineProof.test.ts",
       "bun test src/tests/dwmWorkflowPersistence.test.ts"
     ]
+  };
+}
+
+function buildDwmOrgAlertConsumerReceiptMatrix(input: {
+  alertRows: DwmOrgAlertPipelineProof["alerts"];
+  gaps: DwmOrgAlertPipelineProof["gaps"];
+  state: DwmOrgAlertPipelineProof["state"];
+  generatedAt: string;
+}): DwmOrgAlertPipelineProof["consumerReceiptMatrix"] {
+  const hasAlerts = input.alertRows.length > 0;
+  const blockerCodes = uniqueStrings([
+    ...input.gaps.flatMap((gap) => gap.blockerCodes ?? []),
+    ...input.alertRows.flatMap((alert) => [
+      ...alert.downstreamBlockerCodes,
+      ...alert.sourceHandoffReadiness.provenanceGapCodes,
+      ...alert.sourceHandoffReadiness.webhookConsumer.blockerCodes,
+      ...alert.sourceHandoffReadiness.caseConsumer.blockerCodes
+    ])
+  ].map(String));
+  const baseScopeFields = [
+    "tenantId",
+    "organizationId",
+    "alerts.alertId",
+    "alerts.watchlistIds",
+    "alerts.watchlistItemIds",
+    "alerts.alertGenerationRefs"
+  ];
+  const rows: DwmOrgAlertPipelineProof["consumerReceiptMatrix"]["rows"] = [{
+    id: "dwm_org_alert_receipt_matrix_alert_generation",
+    ownerLane: "alert_generation",
+    customerVisibleState: input.state,
+    readinessRoute: "/v1/dwm/alerts/generation-readiness",
+    contractIds: ["dwm.org_alert_pipeline_proof.v1", "dwm.alert_generation_readiness.v1"],
+    schemaIds: ["dwm.org_alert_pipeline_proof.v1", "dwm.alert_generation_readiness.v1"],
+    receiptSchemaIds: ["dwm.org_alert_consumer_receipt_matrix.v1"],
+    blockerCodes,
+    scopeFields: [...baseScopeFields, "candidates.alertGeneratorKeys"],
+    downstreamOwners: ["dashboard", "analyst_portal", "public_ti"],
+    missingContract: !hasAlerts,
+    safeOutput: metadataOnlyAlertReceiptSafeOutput()
+  }, {
+    id: "dwm_org_alert_receipt_matrix_webhook_delivery",
+    ownerLane: "webhook_delivery",
+    customerVisibleState: input.state,
+    readinessRoute: "/v1/dwm/webhooks/deliver",
+    contractIds: ["dwm.alert_source_handoff_readiness.v1", "dwm.webhook.alert_source_handoff_readiness_consumer.v1"],
+    schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
+    receiptSchemaIds: ["dwm.webhook.alert_source_handoff_readiness_consumer.v1", "dwm.alert_created_event_dispatch.v1"],
+    blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.webhookConsumer.blockerCodes)),
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.webhookConsumer.selectedWebhookDestinationId"],
+    downstreamOwners: ["webhook", "dashboard"],
+    missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.webhookConsumer.ready),
+    safeOutput: metadataOnlyAlertReceiptSafeOutput()
+  }, {
+    id: "dwm_org_alert_receipt_matrix_case_workflow",
+    ownerLane: "case_workflow",
+    customerVisibleState: input.state,
+    readinessRoute: "/v1/cases",
+    contractIds: ["dwm.alert_source_handoff_readiness.v1", "dwm.alert_replay_receipt.v1"],
+    schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
+    receiptSchemaIds: ["dwm.alert_replay_receipt.v1"],
+    blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.caseConsumer.blockerCodes)),
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.caseConsumer.casePath"],
+    downstreamOwners: ["case", "analyst_portal"],
+    missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.caseConsumer.ready),
+    safeOutput: metadataOnlyAlertReceiptSafeOutput()
+  }, {
+    id: "dwm_org_alert_receipt_matrix_public_ti",
+    ownerLane: "public_ti",
+    customerVisibleState: input.state,
+    readinessRoute: "/v1/dwm/alerts/generation-readiness",
+    contractIds: ["dwm.alert_source_handoff_readiness.v1", "ti.public_actor.alert_rebuild_handoff.v1"],
+    schemaIds: ["dwm.alert_source_handoff_readiness.v1"],
+    receiptSchemaIds: ["dwm.org_alert_consumer_receipt_matrix.v1"],
+    blockerCodes: uniqueStrings(input.alertRows.flatMap((alert) => alert.sourceHandoffReadiness.publicTiConsumer.gapFields.includes("provenanceGapCodes") ? alert.sourceHandoffReadiness.provenanceGapCodes : [])),
+    scopeFields: [...baseScopeFields, "alerts.sourceHandoffReadiness.publicTiConsumer.alertGenerationRefCount"],
+    downstreamOwners: ["public_ti", "dashboard"],
+    missingContract: !input.alertRows.some((alert) => alert.sourceHandoffReadiness.publicTiConsumer.ready),
+    safeOutput: metadataOnlyAlertReceiptSafeOutput()
+  }];
+  return {
+    schemaVersion: "dwm.org_alert_consumer_receipt_matrix.v1",
+    checkedAt: input.generatedAt,
+    ok: rows.every((row) => !row.missingContract),
+    rowCount: rows.length,
+    rows
+  };
+}
+
+function metadataOnlyAlertReceiptSafeOutput(): DwmOrgAlertPipelineProof["consumerReceiptMatrix"]["rows"][number]["safeOutput"] {
+  return {
+    metadataOnly: true,
+    rawEvidenceExposed: false,
+    webhookSecretExposed: false,
+    crossOrgDataExposed: false
   };
 }
 
