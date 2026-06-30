@@ -190,6 +190,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
+    const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -453,6 +454,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 caseOwnership={selectedCaseOwnership}
                                 watchlistPlan={selectedWatchlistPlan}
                                 alertPlan={selectedAlertPlan}
+                                deliveryPlan={selectedDeliveryPlan}
                                 enrichmentTriage={selectedEnrichmentTriage}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
@@ -743,11 +745,69 @@ type SelectedCaseOwnershipPlan = {
             title?: string
         }>
     }
+    sourceRefs: {
+        alertIds: string[]
+        captureIds: string[]
+        casePaths: string[]
+        sourceIds: string[]
+    }
     consumerStage?: {
         id: string
         state: string
         request?: string
         blockers: string[]
+    }
+    blockers: string[]
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
+}
+
+type SelectedDeliveryReadinessPlan = {
+    schemaVersion: 'ti.public_actor.selected_delivery_readiness.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    state: 'ready' | 'review' | 'blocked'
+    route: string
+    nextAction: string
+    summary: {
+        alerts: number
+        captures: number
+        destinations: number
+        caseRoutes: number
+        blockers: number
+    }
+    alerts: Array<{
+        id: string
+        title: string
+        status: string
+        ready: boolean
+        casePath?: string
+        captureIds: string[]
+        destinationIds: string[]
+        blockers: string[]
+        recommendedRoute?: string
+    }>
+    handoff: {
+        ready: boolean
+        endpoint: string
+        route?: string
+        missing: string[]
+        request?: string
+    }
+    sourceRefs: {
+        alertIds: string[]
+        captureIds: string[]
+        destinationIds: string[]
+        casePaths: string[]
+        sourceIds: string[]
     }
     blockers: string[]
     safeOutput: {
@@ -3655,7 +3715,7 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, watchlistPlan, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, watchlistPlan, alertPlan, deliveryPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
@@ -3665,6 +3725,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
     caseOwnership: SelectedCaseOwnershipPlan | null
     watchlistPlan: SelectedWatchlistPlan | null
     alertPlan: SelectedAlertActionPlan | null
+    deliveryPlan: SelectedDeliveryReadinessPlan | null
     enrichmentTriage: SelectedEnrichmentTriage | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
@@ -3727,6 +3788,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 {caseOwnership ? <SelectedCaseOwnershipPanel plan={caseOwnership} /> : null}
                 {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
                 {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
+                {deliveryPlan ? <SelectedDeliveryReadinessPanel plan={deliveryPlan} /> : null}
                 {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
                 {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
                 <button
@@ -3966,6 +4028,70 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 3).map(blocker => blocker.detail))}</p>
             ) : (
                 <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Alert rebuild has the required watchlist, capture, and source context.</p>
+            )}
+        </div>
+    )
+}
+
+function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadinessPlan }) {
+    return (
+        <div data-ti-selected-delivery-readiness='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Delivery readiness</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence mapped to alert, capture, destination, and case route readiness.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
+                    <CopyPayloadButton label='Delivery readiness' payload={plan} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Alerts' value={`${plan.summary.alerts}`} />
+                <EvidenceMetric label='Captures' value={`${plan.summary.captures}`} />
+                <EvidenceMetric label='Destinations' value={`${plan.summary.destinations}`} />
+                <EvidenceMetric label='Case routes' value={`${plan.summary.caseRoutes}`} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.handoff.route || plan.route}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <div className='mt-2 grid gap-2'>
+                {plan.alerts.slice(0, 3).map(alert => (
+                    <div key={alert.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{alert.title}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    alert {alert.id} · {formatLabel(alert.status)}
+                                </p>
+                            </div>
+                            <span className={sourceHealthChipClass(alert.ready ? 'ready' : 'blocked')}>{alert.ready ? 'ready' : 'blocked'}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {alert.captureIds.length ? `${alert.captureIds.length} capture${alert.captureIds.length === 1 ? '' : 's'}` : 'Capture needed'}
+                            {alert.destinationIds.length ? ` · ${alert.destinationIds.length} destination${alert.destinationIds.length === 1 ? '' : 's'}` : ' · destination needed'}
+                            {alert.casePath ? ` · ${alert.casePath}` : ' · case route pending'}
+                        </p>
+                        {alert.blockers.length ? (
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(alert.blockers.slice(0, 3))}</p>
+                        ) : null}
+                    </div>
+                ))}
+                {!plan.alerts.length ? (
+                    <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-[11px] leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No related alert is attached to the selected evidence yet.</p>
+                ) : null}
+            </div>
+            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                {plan.sourceRefs.destinationIds.slice(0, 3).map(id => (
+                    <span key={id} className={sourceHealthChipClass('ready')}>destination {id}</span>
+                ))}
+                {plan.handoff.request ? <span className={sourceHealthChipClass(plan.handoff.ready ? 'ready' : 'blocked')}>{plan.handoff.request}</span> : null}
+            </div>
+            {plan.blockers.length ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 4))}</p>
+            ) : (
+                <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Alert, capture, destination, and case route refs are ready for authenticated dry-run delivery.</p>
             )}
         </div>
     )
@@ -4733,6 +4859,12 @@ function selectedCaseOwnershipFor(
                 title: item.title,
             })),
         },
+        sourceRefs: {
+            alertIds: unique([...itemAlertIds, ...activeReplayRows.flatMap(row => row.alertIds)]),
+            captureIds: unique([...activeCaseItems.flatMap(item => item.captureIds), ...activeReplayRows.flatMap(row => row.captureIds)]),
+            casePaths: unique([...itemCasePaths, ...relatedCases.map(item => item.path).filter((value): value is string => Boolean(value))]),
+            sourceIds: unique([...selectedSourceIds, ...activeCaseItems.flatMap(item => item.sourceIds), ...activeReplayRows.flatMap(row => row.sourceIds)]),
+        },
         consumerStage: caseStage ? {
             id: caseStage.id,
             state: caseStage.state,
@@ -4919,6 +5051,133 @@ function selectedAlertActionPlanFor(
             webhookSecretExposed: false,
         },
     }
+}
+
+function selectedDeliveryReadinessPlanFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    alertPlan: SelectedAlertActionPlan | null,
+    caseOwnership: SelectedCaseOwnershipPlan | null
+): SelectedDeliveryReadinessPlan {
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const selectedAlertIds = selected.priority?.alertIds ?? []
+    const selectedCaptureIds = selected.priority?.captureIds ?? []
+    const selectedCasePaths = selected.priority?.casePaths ?? []
+    const text = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
+    const matchedAlerts = actionability.relatedAlerts.filter(alert =>
+        selectedAlertIds.includes(alert.id)
+        || text.includes(alert.id.toLowerCase())
+        || (alert.captureIds ?? []).some(captureId => selectedCaptureIds.includes(captureId) || text.includes(captureId.toLowerCase()))
+        || Boolean(alert.casePath && (selectedCasePaths.includes(alert.casePath) || text.includes(alert.casePath.toLowerCase())))
+        || alertPlan?.sourceRefs.alertIds.includes(alert.id)
+        || caseOwnership?.sourceRefs.alertIds.includes(alert.id)
+    )
+    const activeAlerts = matchedAlerts.length ? matchedAlerts : actionability.relatedAlerts.slice(0, 3)
+    const deliveryStage = actionability.consumerReadiness.stages.find(stage => stage.id === 'webhookTrigger')
+    const alertRows = activeAlerts.map(alert => {
+        const context = alert.deliveryReadinessContext
+        const captureIds = unique([...(alert.captureIds ?? []), ...(context?.selectedCaptureIds ?? [])])
+        const destinationIds = unique([...(alert.webhookDestinationIds ?? []), ...(context?.webhookDestinationIds ?? [])])
+        const blockers = unique([
+            ...(context?.blockerCodes ?? []).map(deliveryBlockerLabel),
+            ...(captureIds.length ? [] : ['Capture evidence is required before delivery review.']),
+            ...(destinationIds.length ? [] : ['Active webhook destination is required before delivery review.']),
+            ...(alert.casePath || context?.casePath ? [] : ['Case route is required before delivery review.']),
+        ]).slice(0, 8)
+        return {
+            id: alert.id,
+            title: alert.title,
+            status: alert.status,
+            ready: Boolean(context?.ready) && blockers.length === 0,
+            casePath: alert.casePath ?? context?.casePath,
+            captureIds,
+            destinationIds,
+            blockers,
+            recommendedRoute: alert.recommendedRoute,
+        }
+    })
+    const sourceRefs = {
+        alertIds: unique([...activeAlerts.map(alert => alert.id), ...(alertPlan?.sourceRefs.alertIds ?? [])]),
+        captureIds: unique([
+            ...activeAlerts.flatMap(alert => [...(alert.captureIds ?? []), ...(alert.deliveryReadinessContext?.selectedCaptureIds ?? [])]),
+            ...(alertPlan?.sourceRefs.captureIds ?? []),
+        ]),
+        destinationIds: unique([
+            ...actionability.readiness.backedIds.webhookDestinationIds,
+            ...activeAlerts.flatMap(alert => [...(alert.webhookDestinationIds ?? []), ...(alert.deliveryReadinessContext?.webhookDestinationIds ?? [])]),
+        ]),
+        casePaths: unique([
+            ...activeAlerts.flatMap(alert => [alert.casePath, alert.deliveryReadinessContext?.casePath]),
+            ...(caseOwnership?.sourceRefs.casePaths ?? []),
+        ].filter((value): value is string => Boolean(value))),
+        sourceIds: unique([
+            ...selectedSourceIds,
+            ...actionability.sourceProvenance.map(row => row.sourceId).filter((value): value is string => Boolean(value)),
+        ]),
+    }
+    const blockers = unique([
+        ...actionability.webhookDeliveryHandoff.missing,
+        ...actionability.actionPayloads.payloads.webhookDelivery.blockedBy.map(blocker => blocker.detail),
+        ...alertRows.flatMap(alert => alert.blockers),
+        ...(deliveryStage?.missing ?? []),
+        ...(deliveryStage && deliveryStage.state === 'blocked' ? [deliveryStage.detail] : []),
+    ]).slice(0, 10)
+    const ready = actionability.webhookDeliveryHandoff.ready
+        && actionability.actionPayloads.payloads.webhookDelivery.ready
+        && deliveryStage?.state === 'ready'
+        && alertRows.some(alert => alert.ready)
+        && sourceRefs.destinationIds.length > 0
+        && blockers.length === 0
+    const state: SelectedDeliveryReadinessPlan['state'] = ready ? 'ready' : blockers.length || alertRows.some(alert => !alert.ready) ? 'blocked' : 'review'
+    const route = actionability.webhookDeliveryHandoff.backedRoute
+        || actionability.actionPayloads.payloads.webhookDelivery.backedRoute
+        || actionability.webhookDeliveryHandoff.endpoint
+    return {
+        schemaVersion: 'ti.public_actor.selected_delivery_readiness.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: new Date().toISOString(),
+        selectedItemId: selected.id,
+        title: selected.title,
+        state,
+        route,
+        nextAction: ready
+            ? 'Open the authenticated delivery workflow with this alert, capture, destination, and case route context.'
+            : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before delivery review.` : 'Review the selected alert and choose an authenticated destination.',
+        summary: {
+            alerts: alertRows.length,
+            captures: sourceRefs.captureIds.length,
+            destinations: sourceRefs.destinationIds.length,
+            caseRoutes: sourceRefs.casePaths.length,
+            blockers: blockers.length,
+        },
+        alerts: alertRows,
+        handoff: {
+            ready,
+            endpoint: actionability.webhookDeliveryHandoff.endpoint,
+            route,
+            missing: actionability.webhookDeliveryHandoff.missing,
+            request: deliveryStage?.request ? `${deliveryStage.request.method} ${deliveryStage.request.path}` : undefined,
+        },
+        sourceRefs,
+        blockers,
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function deliveryBlockerLabel(value: string) {
+    if (value === 'missing_capture_evidence') return 'Capture evidence is required before delivery review.'
+    if (value === 'case_route_unavailable') return 'Case route is required before delivery review.'
+    if (value === 'delivery_disabled') return 'Active destination is required before delivery review.'
+    if (value === 'entitlement_denied') return 'Organization entitlement must allow delivery review.'
+    return formatLabel(value)
 }
 
 function selectedEnrichmentTriageFor(
