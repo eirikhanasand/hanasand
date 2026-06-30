@@ -2160,6 +2160,8 @@ export function buildReadinessCases(input: {
 }): WorkbenchCase[] {
     const now = new Date().toISOString()
     const organization = input.organizationState.selectedOrganization
+    const activeOrgMembers = input.organizationState.members.filter(member => member.status === 'active')
+    const pendingOrgInvites = input.organizationState.pendingInvites.filter(invite => invite.status === 'pending')
     const orgWebhooks = input.organizationState.webhooks.filter(item => item.status === 'active')
     const activeWatchlists = input.watchlists.filter(item => item.status === 'active')
     const watchlistTerms = activeWatchlists.flatMap(item => item.terms || [])
@@ -2224,7 +2226,7 @@ export function buildReadinessCases(input: {
             priority: organization ? 285 : 390,
             confidence: input.backendConfigured ? 94 : 64,
             subtitle: organization
-                ? `${input.organizationState.organizations.length} organization${input.organizationState.organizations.length === 1 ? '' : 's'} loaded. Tenant scope: ${organization.tenantId}.`
+                ? `${activeOrgMembers.length} active member${activeOrgMembers.length === 1 ? '' : 's'}, ${pendingOrgInvites.length} pending invite${pendingOrgInvites.length === 1 ? '' : 's'}, ${orgWebhooks.length} active destination${orgWebhooks.length === 1 ? '' : 's'}.`
                 : input.backendConfigured ? 'The backed organization API is available, but no organization was returned for this workspace.' : 'TI scraper backend is not configured, so organization membership cannot be loaded.',
             recommendedAction: organization ? 'Continue through shared watchlist, alert rebuild, case opening, and webhook delivery under this organization scope.' : 'Create or join an organization through the backed org API before selling shared ownership, shared watchlists, or team routing.',
             evidence: [{
@@ -2234,16 +2236,36 @@ export function buildReadinessCases(input: {
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
                 contentHash: organization?.id || '/api/organizations',
-                excerpt: organization ? `${organization.name} (${organization.slug}) is ${organization.status}; tenantId=${organization.tenantId}.` : 'GET/POST /api/organizations returned no org record for this workspace.',
+                excerpt: organization ? `${organization.name} (${organization.slug}) is ${organization.status}; ${activeOrgMembers.length} active member${activeOrgMembers.length === 1 ? '' : 's'}, ${pendingOrgInvites.length} pending invite${pendingOrgInvites.length === 1 ? '' : 's'}, ${orgWebhooks.length} active webhook destination${orgWebhooks.length === 1 ? '' : 's'}.` : 'GET/POST /api/organizations returned no org record for this workspace.',
                 observedAt: organization?.updatedAt || now,
                 provenance: 'GET /api/organizations -> /v1/organizations',
                 confidence: input.backendConfigured ? 94 : 64,
             }],
-            timeline: [{ id: 'organization_setup_audit', at: organization?.updatedAt || now, title: organization ? 'Organization loaded' : 'Organization required', body: organization ? 'Organization state came from the backed scraper API.' : 'Create or join an organization before claiming shared team ownership.' }],
-            nextTasks: organization ? [`Owner: operator. Scope: ${organization.id}. Review members and pending invites.`, 'Attach or create a shared DWM watchlist in this organization scope.', 'Create/test org webhook destination before customer routing.'] : ['Owner: backend-foundation. POST /api/organizations with name and ownerEmail.', 'Invite analysts through /api/organizations/:id/invites.', 'Create an org webhook destination before customer routing.'],
-            relatedLinks: organization ? [{ href: '/api/organizations', label: 'Organizations API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' }] : [{ href: '/api/organizations', label: 'Create organization API' }],
+            timeline: [{ id: 'organization_setup_audit', at: organization?.updatedAt || now, title: organization ? 'Organization loaded' : 'Organization required', body: organization ? `Organization state includes ${activeOrgMembers.length} active member${activeOrgMembers.length === 1 ? '' : 's'}, ${pendingOrgInvites.length} pending invite${pendingOrgInvites.length === 1 ? '' : 's'}, and ${orgWebhooks.length} active webhook destination${orgWebhooks.length === 1 ? '' : 's'}.` : 'Create or join an organization before claiming shared team ownership.' }],
+            nextTasks: organization ? [`Owner: operator. Scope: ${organization.id}. Inspect members and pending invites.`, 'Open alert-readiness proof before rebuilding alerts.', 'Create or test org webhook destination before customer routing.'] : ['Owner: backend-foundation. POST /api/organizations with name and ownerEmail.', 'Invite analysts through /api/organizations/:id/invites.', 'Create an org webhook destination before customer routing.'],
+            relatedLinks: organization ? [{ href: '/api/organizations', label: 'Organizations API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`, label: 'Alert-readiness API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' }] : [{ href: '/api/organizations', label: 'Create organization API' }],
             workflowPath: path,
-            actions: organization ? [] : [{ id: 'create_organization', label: 'Create org API', method: 'GET', href: '/api/organizations' }],
+            actions: organization ? [{
+                id: 'inspect_org_members',
+                label: 'Inspect members',
+                method: 'GET',
+                href: `/api/organizations/${encodeURIComponent(organization.id)}/members`,
+            }, {
+                id: 'inspect_org_alert_readiness',
+                label: 'Inspect readiness',
+                method: 'GET',
+                href: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`,
+            }, {
+                id: 'inspect_org_webhooks',
+                label: 'Inspect webhooks',
+                method: 'GET',
+                href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`,
+            }, {
+                id: 'invite_org_member',
+                label: 'Invite teammate',
+                method: 'GET',
+                href: `/api/organizations/${encodeURIComponent(organization.id)}/invites`,
+            }] : [{ id: 'create_organization', label: 'Create org API', method: 'GET', href: '/api/organizations' }],
         }),
         readinessCase({
             id: 'watchlist_terms',

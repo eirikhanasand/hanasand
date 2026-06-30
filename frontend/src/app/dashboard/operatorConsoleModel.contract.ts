@@ -1239,6 +1239,16 @@ const zeroCandidateAlertGeneration = expectWorkbenchCase(zeroCandidateAlertGener
 if (zeroCandidateAlertGeneration.status === 'ready' || !zeroCandidateAlertGeneration.missingDependency?.includes('no alert candidates')) {
     throw new Error('Expected zero-candidate alert generation proof to stay blocked with an explicit reason.')
 }
+const organizationReadinessCase = expectWorkbenchCase(cases, 'setup_organization')
+if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_members')?.href !== '/api/organizations/org_acme/members') {
+    throw new Error('Expected organization readiness to expose the backed members drill-in.')
+}
+if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_alert_readiness')?.href !== '/api/organizations/org_acme/alert-readiness') {
+    throw new Error('Expected organization readiness to expose the alert-readiness drill-in.')
+}
+if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_webhooks')?.href !== '/api/organizations/org_acme/webhooks') {
+    throw new Error('Expected organization readiness to expose the webhook destination drill-in.')
+}
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
 void (liveProofAlertsUrl.searchParams.get('organizationId') satisfies string | null)
