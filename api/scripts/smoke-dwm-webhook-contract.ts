@@ -3178,6 +3178,7 @@ expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Alert URL') 
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Analyst link'), 'Sanitized payload preview should expose the analyst action link field.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.fieldNames.includes('Observed at') && deliveryPreview.sanitizedPayloadPreview.context.eventTimestamp === '2026-06-28T10:45:00.000Z', 'Sanitized payload preview should expose alert event timestamp context.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.sanitizedPayloadPreview.context.casePath === replayWorkflowAlert.casePath && deliveryPreview.sanitizedPayloadPreview.links.includes(replayWorkflowAlert.alertUrl), 'Sanitized payload preview should expose case and alert action links.', deliveryPreview.sanitizedPayloadPreview)
+expect(deliveryPreview.sanitizedPayloadPreview.discordTemplate?.templateId === 'dwm.discord.alert_replay.v1' && deliveryPreview.sanitizedPayloadPreview.discordTemplate.ready === true && deliveryPreview.sanitizedPayloadPreview.discordTemplate.redaction.webhookSecretExposed === false, 'Sanitized payload preview should expose redacted Discord template proof for delivery history consumers.', deliveryPreview.sanitizedPayloadPreview.discordTemplate)
 expect(deliveryPreview.sanitizedPayloadPreview.redaction.safeForCustomerDisplay === true && deliveryPreview.sanitizedPayloadPreview.redaction.endpointExposed === false, 'Sanitized payload preview should prove customer-safe redaction.', deliveryPreview.sanitizedPayloadPreview)
 expect(deliveryPreview.operationLinks.deliveryDetail === 'GET /api/dwm/webhook-deliveries?orgId=org_contract&deliveryId=delivery_replay_contract' && deliveryPreview.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Test preview should expose stable delivery detail and destination test operation links.', deliveryPreview.operationLinks)
 expect(deliveryPreview.operationLinks.destinationDelete === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract' && deliveryPreview.operationLinks.destinationArchive === deliveryPreview.operationLinks.destinationDelete, 'Test preview should expose destination archive/delete remediation links.', deliveryPreview.operationLinks)
@@ -3329,6 +3330,7 @@ expect(replayDestinationTest.preview?.discord.fieldNames.includes('Workflow') &&
 expect(replayDestinationTest.blockers.some(item => item.code === 'live_delivery_disabled' && item.blocking === false) && replayDestinationTest.noNetwork === true && replayDestinationTest.externalSendEnabled === false, 'Destination test contract should keep live sends disabled by default.', replayDestinationTest)
 expect(replayDestinationTest.dryRunPayloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && replayDestinationTest.dryRunPayloadPreview.noNetwork === true && replayDestinationTest.dryRunPayloadPreview.discord.fieldNames.includes('Watchlist'), 'Destination test contract should expose the no-network Discord payload preview for setup screens.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunPayloadPreview?.context.orgId === 'org_contract' && replayDestinationTest.dryRunPayloadPreview.context.sourceFamily === 'dark_web' && replayDestinationTest.dryRunPayloadPreview.context.analystLink === '/dashboard/dwm', 'Destination test payload preview should carry org/source/action-link context.', replayDestinationTest.dryRunPayloadPreview)
+expect(replayDestinationTest.dryRunPayloadPreview?.context.discordTemplate?.templateId === 'dwm.discord.destination_test.v1' && replayDestinationTest.dryRunPayloadPreview.context.discordTemplate.noNetworkDefault === true, 'Destination test payload preview should expose the Discord test template summary.', replayDestinationTest.dryRunPayloadPreview?.context.discordTemplate)
 expect(replayDestinationTest.dryRunPayloadPreview?.redaction.safeForCustomerDisplay === true && replayDestinationTest.dryRunPayloadPreview.redaction.endpointExposed === false, 'Destination test payload preview should prove redaction and avoid endpoint leakage.', replayDestinationTest.dryRunPayloadPreview)
 expect(replayDestinationTest.dryRunTestRequest.canSend === true && replayDestinationTest.dryRunTestRequest.route === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test' && replayDestinationTest.dryRunTestRequest.body?.idempotencyKey === 'dwm.alert.test:org_contract:destination_replay_contract:webhook_test', 'Destination test contract should expose the exact no-network dry-run test request.', replayDestinationTest.dryRunTestRequest)
 expect(replayDestinationTest.dryRunTestRequest.expected.auditAction === 'delivery.tested' && replayDestinationTest.dryRunTestRequest.expected.persistedAttempt === true && replayDestinationTest.dryRunTestRequest.payloadPreview?.redaction.endpointExposed === false, 'Destination dry-run test request should prove persisted delivery/audit outcome without exposing endpoint secrets.', replayDestinationTest.dryRunTestRequest)
@@ -3395,6 +3397,7 @@ expect(deliveryHistoryReplay?.discordPreview?.embedCount === 1 && deliveryHistor
 expect(deliveryHistoryReplay?.alert.casePath === replayWorkflowAlert.casePath && deliveryHistoryReplay.watchlist.id === 'watchlist_item_replay_contract', 'Delivery history should preserve alert/case/watchlist context.', deliveryHistoryReplay)
 expect(deliveryHistoryReplay?.deliveryProof.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryReplay.dedupe.duplicateAttemptCount === 2, 'Delivery history should link replay audit and duplicate replay proof.', deliveryHistoryReplay)
 expect(deliveryHistoryReplay?.deliveryProof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery history should expose persisted delivery updated timestamp.', deliveryHistoryReplay?.deliveryProof)
+expect(deliveryHistoryReplay?.sanitizedPayloadPreview?.discordTemplate?.templateId === 'dwm.discord.alert_replay.v1' && deliveryHistoryReplay.sanitizedPayloadPreview.discordTemplate.requiredFields.includes('Dedupe key'), 'Delivery history should expose Discord template proof in sanitized previews.', deliveryHistoryReplay?.sanitizedPayloadPreview?.discordTemplate)
 expect(deliveryHistoryRetry?.retry.retryable === true && deliveryHistoryRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Delivery history should expose retry/backoff state.', deliveryHistoryRetry)
 expect(deliveryHistoryTerminal?.retry.terminalFailure === true && deliveryHistoryTerminal.retry.lastErrorCategory === 'upstream_4xx', 'Delivery history should expose terminal failure state.', deliveryHistoryTerminal)
 expect(deliveryHistoryMissingDestination?.destination.availability.state === 'missing_destination' && deliveryHistoryMissingDestination.destination.availability.setupRoute === 'POST /api/dwm/webhooks', 'Delivery history should expose setup guidance for missing webhook destination attempts.', deliveryHistoryMissingDestination)
@@ -3432,6 +3435,7 @@ expect(deliveryReceipts.schemaVersion === 'dwm.webhook.delivery_receipts.v1' && 
 expect(deliveryReceiptReplay?.proof.auditEventId === 'audit_replay_duplicate_contract' && deliveryReceiptReplay.proof.noNetwork === true, 'Delivery receipts should link replay delivery proof and preserve no-network dry-run status.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.discordPreview?.fieldNames.includes('Workflow') && deliveryReceiptReplay.discordPreview.fieldNames.includes('Alert URL') && deliveryReceiptReplay.casePath === replayWorkflowAlert.casePath, 'Delivery receipts should carry Discord preview and case/deep-link context.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.sanitizedPayloadPreview?.schemaVersion === 'dwm.webhook.sanitized_payload_preview.v1' && deliveryReceiptReplay.sanitizedPayloadPreview.context.alertId === 'alert_replay_contract', 'Delivery receipts should carry the sanitized payload preview proof for customer-safe history.', deliveryReceiptReplay)
+expect(deliveryReceiptReplay?.sanitizedPayloadPreview?.discordTemplate?.templateId === 'dwm.discord.alert_replay.v1' && deliveryReceiptReplay.sanitizedPayloadPreview.discordTemplate.redaction.endpointExposed === false, 'Delivery receipts should carry redacted Discord template proof for replay inspection.', deliveryReceiptReplay?.sanitizedPayloadPreview?.discordTemplate)
 expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'Delivery receipts should expose persisted delivery updated timestamp.', deliveryReceiptReplay?.proof)
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.operationLinks?.destinationArchive === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract', 'Delivery receipts should expose destination archive/delete remediation links.', deliveryReceiptReplay?.operationLinks)
@@ -3732,6 +3736,7 @@ console.log(JSON.stringify({
         'delivery history customer-safe read model',
         'delivery history Discord preview proof',
         'delivery history sanitized payload preview proof',
+        'delivery history Discord template proof',
         'delivery preview retry/audit proof',
         'delivery history consumer proof',
         'delivery history retry/terminal failure proof',
@@ -3955,6 +3960,7 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].discordPreview.fieldNames',
             'deliveryHistory.entries[].sanitizedPayloadPreview.schemaVersion',
             'deliveryHistory.entries[].sanitizedPayloadPreview.payloadHash',
+            'deliveryHistory.entries[].sanitizedPayloadPreview.discordTemplate.templateId',
             'deliveryHistory.entries[].sanitizedPayloadPreview.context.casePath',
             'deliveryHistory.entries[].deliveryProof.auditEventId',
             'deliveryHistory.entries[].retry.terminalFailure',
@@ -3999,6 +4005,7 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].proof.noNetwork',
             'deliveryReceipts.receipts[].discordPreview.fieldNames',
             'deliveryReceipts.receipts[].sanitizedPayloadPreview.schemaVersion',
+            'deliveryReceipts.receipts[].sanitizedPayloadPreview.discordTemplate.templateId',
             'deliveryReceipts.receipts[].sanitizedPayloadPreview.context.alertId',
             'deliveryReceipts.receipts[].operationLinks.deliveryDetail',
             'deliveryReceipts.receipts[].operationLinks.destinationTest',
@@ -4123,6 +4130,7 @@ console.log(JSON.stringify({
             'destinationTests[].dryRunTestRequest.body',
             'destinationTests[].dryRunTestRequest.expected.auditAction',
             'destinationTests[].dryRunTestRequest.payloadPreview.discord.fieldNames',
+            'destinationTests[].dryRunTestRequest.payloadPreview.context.discordTemplate',
             'destinationTests[].dryRunTestReceipt.expected.auditAction',
             'destinationTests[].dryRunTestReceipt.redactedDestination.endpointHash',
             'destinationTests[].dryRunTestReceipt.payloadPreview.discord.fieldNames',

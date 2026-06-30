@@ -6033,6 +6033,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
     const watchlist = recordOrEmpty(context.watchlist)
     const deliveryContext = recordOrEmpty(context.delivery)
     const org = recordOrEmpty(context.org)
+    const discordTemplate = sanitizeDiscordTemplateProof(context.discordTemplate)
     const firstEmbed = Array.isArray(embeds) ? recordOrEmpty(embeds[0]) : {}
     const fields = Array.isArray(firstEmbed.fields) ? firstEmbed.fields.map(recordOrEmpty) : []
     const content = redactDeliveryEvidenceText(truncate(clean(payload.content), DISCORD_CONTENT_LIMIT))
@@ -6064,6 +6065,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
         descriptionPreview: description || null,
         fieldNames: fieldSummaries.map(field => field.name),
         fields: fieldSummaries,
+        discordTemplate,
         context: {
             orgId: clean(org.id) || delivery.orgId,
             orgName: redactDeliveryEvidenceText(truncate(clean(org.name) || delivery.orgId, 120)),
@@ -6098,6 +6100,7 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
     const delivery = recordOrEmpty(context.delivery)
     const org = recordOrEmpty(context.org)
     const source = recordOrEmpty(context.source)
+    const discordTemplate = sanitizeDiscordTemplateProof(context.discordTemplate)
     const embeds = Array.isArray(record.embeds) ? record.embeds.map(recordOrEmpty).slice(0, 1) : []
     const firstEmbed = embeds[0] || {}
     const fields = Array.isArray(firstEmbed.fields) ? firstEmbed.fields.map(recordOrEmpty).slice(0, DISCORD_EMBED_FIELD_LIMIT) : []
@@ -6137,11 +6140,34 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
             dedupeKey: clean(delivery.dedupeKey) || clean(context.idempotencyKey),
             replay: delivery.replay === true,
             occurredAt: clean(context.occurredAt),
+            discordTemplate,
         },
         redaction: {
             endpointExposed: false,
             secretFields: [],
             safeForCustomerDisplay: true,
+        },
+    }
+}
+
+function sanitizeDiscordTemplateProof(template: unknown) {
+    const record = recordOrEmpty(template)
+    const templateId = clean(record.templateId)
+    if (!templateId) return null
+    const redaction = recordOrEmpty(record.redaction)
+    return {
+        schemaVersion: 'dwm.webhook.discord_payload_template_summary.v1',
+        templateId,
+        ready: record.ready === true,
+        missing: cleanList(record.missing).slice(0, 12),
+        requiredFields: cleanList(record.requiredFields).slice(0, DISCORD_EMBED_FIELD_LIMIT),
+        fieldOrder: cleanList(record.fieldOrder).slice(0, DISCORD_EMBED_FIELD_LIMIT),
+        noNetworkDefault: record.noNetworkDefault === true,
+        redaction: {
+            safeForCustomerDisplay: redaction.safeForCustomerDisplay !== false,
+            endpointExposed: redaction.endpointExposed === true,
+            webhookSecretExposed: redaction.webhookSecretExposed === true,
+            mentionsDisabled: redaction.mentionsDisabled === true,
         },
     }
 }
