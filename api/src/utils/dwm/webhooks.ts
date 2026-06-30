@@ -5132,6 +5132,23 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
         destinationAdminProof,
         auditEventContracts,
     })
+    const organizationConsumerReceipt = buildDwmWebhookOrganizationConsumerReceipt({
+        ownerId,
+        orgId: dispatch.orgId,
+        eventType: dispatch.eventType,
+        dryRun,
+        liveRequested,
+        liveDeliveryEnabled,
+        selectedDestinations: dispatch.selectedDestinations,
+        skippedDestinations: dispatch.skippedDestinations,
+        normalizedAlert,
+        watchlist,
+        alertDestinationReadiness,
+        deliveryOutcome,
+        deliveryReadinessConsumer,
+        alertDeliveryProof,
+        auditEventContracts,
+    })
 
     return {
         schemaVersion: 'dwm.webhook.org_alert_delivery.v1',
@@ -5184,7 +5201,227 @@ export function buildDwmOrgAlertWebhookDeliveryContract({
         deliveryActionPlan,
         deliveryReplayGuard,
         deliveryReadinessConsumer,
+        organizationConsumerReceipt,
         auditEventContracts,
+    }
+}
+
+function buildDwmWebhookOrganizationConsumerReceipt({
+    ownerId,
+    orgId,
+    eventType,
+    dryRun,
+    liveRequested,
+    liveDeliveryEnabled,
+    selectedDestinations,
+    skippedDestinations,
+    normalizedAlert,
+    watchlist,
+    alertDestinationReadiness,
+    deliveryOutcome,
+    deliveryReadinessConsumer,
+    alertDeliveryProof,
+    auditEventContracts,
+}: {
+    ownerId: string
+    orgId: string
+    eventType: DwmAlertEventType
+    dryRun: boolean
+    liveRequested: boolean
+    liveDeliveryEnabled: boolean
+    selectedDestinations: DwmAlertWebhookDispatchPlan['selectedDestinations']
+    skippedDestinations: DwmAlertWebhookDispatchPlan['skippedDestinations']
+    normalizedAlert: ReturnType<typeof normalizeAlert>
+    watchlist: ReturnType<typeof normalizeWatchlist>
+    alertDestinationReadiness: ReturnType<typeof buildDwmAlertWebhookReadinessHandoff>
+    deliveryOutcome: ReturnType<typeof buildDwmOrgAlertWebhookDeliveryOutcome>
+    deliveryReadinessConsumer: ReturnType<typeof buildDwmWebhookDeliveryReadinessConsumerProof>
+    alertDeliveryProof: ReturnType<typeof buildDwmWebhookAlertDeliveryProof>
+    auditEventContracts: ReturnType<typeof buildDwmWebhookAuditEventContracts>
+}) {
+    const idempotencySeed = normalizedAlert.dedupeKey || normalizedAlert.id
+    const readinessRows = new Map(deliveryReadinessConsumer.rows.map(row => [row.destinationId, row]))
+    const latestOutcomeRows = new Map(deliveryOutcome.selectedDestinations.map(destination => [destination.destinationId, destination]))
+    const selectedBlockingCodes = alertDeliveryProof.alertScopedBlockerCodes
+    const skippedBlockerCodes = skippedDestinations.map((destination) => {
+        if (destination.reason === 'disabled') return 'destination_disabled'
+        if (destination.reason === 'org_mismatch') return 'org_mismatch'
+        return destination.reason
+    })
+    const blockerCodes = [...new Set([
+        ...selectedBlockingCodes,
+        ...skippedBlockerCodes,
+        ...(!orgId ? ['missing_org_ref'] : []),
+        ...(selectedDestinations.length === 0 ? ['destination_unavailable'] : []),
+        ...(!liveDeliveryEnabled && liveRequested && !dryRun ? ['live_delivery_disabled'] : []),
+    ])]
+    const destinationDeliveryReady = selectedDestinations.length > 0 && Boolean(orgId)
+    const readyForDelivery = destinationDeliveryReady && selectedBlockingCodes.length === 0
+    const dryRunReady = destinationDeliveryReady && (dryRun || !liveRequested || !liveDeliveryEnabled)
+    const watchedTerms = (watchlist.terms.length ? watchlist.terms : [watchlist.name || watchlist.id])
+        .map(term => clean(term))
+        .filter(Boolean)
+
+    return {
+        schemaVersion: 'dwm.webhook.organization_delivery_consumer_receipt.v1',
+        consumesSchemaVersion: 'organization.webhook_destination_delivery_consumer.v1',
+        ownerId,
+        organizationId: orgId,
+        tenantId: orgId,
+        route: 'POST /api/dwm/webhook-deliveries',
+        upstreamRoute: 'POST /v1/dwm/webhooks/deliver',
+        eventType,
+        readyForDelivery,
+        destinationDeliveryReady,
+        dryRunReady,
+        blockerReason: blockerCodes[0] || null,
+        liveRequested,
+        liveDeliveryEnabled,
+        noNetwork: dryRun || !liveRequested || !liveDeliveryEnabled,
+        externalSendEnabled: liveRequested && !dryRun && liveDeliveryEnabled && readyForDelivery,
+        roleGates: {
+            automaticDelivery: ['owner', 'admin'],
+            manualTrigger: ['owner', 'admin'],
+            readDeliverySummary: ['owner', 'admin', 'member', 'viewer'],
+        },
+        destinationScope: {
+            selectedDestinationOrgField: 'destination.org_id',
+            selectedDestinationIdField: 'webhookDestinationIds[]',
+            crossOrgDestinationAllowed: false,
+            nonmemberDestinationEnumeration: false,
+        },
+        alertContext: {
+            alertId: normalizedAlert.id,
+            title: normalizedAlert.title,
+            severity: normalizedAlert.severity,
+            confidence: normalizedAlert.confidence,
+            sourceFamily: normalizedAlert.sourceFamily,
+            route: normalizedAlert.route,
+            alertUrl: normalizedAlert.alertUrl,
+            caseId: normalizedAlert.caseId,
+            casePath: normalizedAlert.casePath,
+            evidenceCount: normalizedAlert.evidenceCount,
+            provenanceSummary: normalizedAlert.provenanceSummary,
+            dedupeKey: normalizedAlert.dedupeKey,
+        },
+        watchlistMatches: watchedTerms.map((term) => ({
+            organizationId: orgId,
+            tenantId: orgId,
+            watchlistId: watchlist.id,
+            watchlistItemId: watchlist.id,
+            watchedEntity: {
+                type: 'domain',
+                value: term,
+                normalizedValue: term.toLowerCase(),
+            },
+            matchReason: {
+                kind: 'shared_watchlist_term',
+                code: 'organization_watchlist_term_match',
+            },
+            actorRef: {
+                userId: ownerId,
+                role: 'admin',
+                source: 'webhook_delivery_contract',
+            },
+            sourceRefs: {
+                sourceFamily: normalizedAlert.sourceFamily,
+                exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
+                caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility',
+                deliveryRoute: 'POST /api/dwm/webhook-deliveries',
+            },
+            provenanceHash: normalizedAlert.provenanceSummary || normalizedAlert.dedupeKey || normalizedAlert.id,
+            workflowStatus: readyForDelivery ? 'ready_for_delivery' : 'blocked',
+            destinationReadiness: {
+                destinationDeliveryReady: readyForDelivery,
+                dryRunReady,
+                selectedDestinationOrgField: 'destination.org_id',
+                selectedDestinationIdField: 'webhookDestinationIds[]',
+                blockerReason: blockerCodes[0] || null,
+            },
+        })),
+        destinationReceipts: selectedDestinations.map((destination) => {
+            const idempotencyKey = buildIdempotencyKey(eventType, orgId, destination.id, idempotencySeed)
+            const readiness = readinessRows.get(destination.id) || null
+            const outcome = latestOutcomeRows.get(destination.id) || null
+            return {
+                destinationId: destination.id,
+                orgId: destination.org_id,
+                label: destination.name,
+                type: destination.kind,
+                status: outcome?.status || destination.status,
+                idempotencyKey,
+                requestId: outcome?.latestAttempt?.requestId || readiness?.requestId || null,
+                deliveryId: outcome?.latestAttempt?.deliveryId || readiness?.deliveryId || null,
+                auditEventId: outcome?.latestAttempt?.auditEventId || readiness?.audit?.auditEventId || null,
+                retry: {
+                    retryable: Boolean(outcome?.latestAttempt?.retryable || readiness?.readiness.retryableFailure),
+                    nextRetryAt: outcome?.latestAttempt?.nextRetryAt || readiness?.retry.nextRetryAt || null,
+                    attemptCount: outcome?.latestAttempt?.attemptCount || readiness?.retry.attemptCount || 0,
+                    lastErrorCategory: outcome?.latestAttempt?.errorClass || readiness?.retry.lastErrorCategory || null,
+                },
+                readiness: {
+                    success: Boolean(readiness?.readiness.success || outcome?.recorded),
+                    idempotentReplay: Boolean(readiness?.readiness.idempotentReplay),
+                    redactedDryRun: Boolean(readiness?.readiness.redactedDryRun || outcome?.latestAttempt?.dryRun),
+                    auditLinked: Boolean(readiness?.readiness.auditLinked || outcome?.latestAttempt?.auditEventId),
+                    liveBlocked: !liveDeliveryEnabled && Boolean(outcome?.latestAttempt?.live || readiness?.live),
+                },
+                redactedDestination: {
+                    endpointHash: readiness?.destination.endpointHash || null,
+                    endpointHint: readiness?.destination.endpointHint || null,
+                    endpointExposed: false,
+                    webhookSecretExposed: false,
+                },
+                routes: {
+                    deliveryDetail: outcome?.operationLinks?.deliveryDetail || readiness?.operationLinks.deliveryDetail || `GET /api/dwm/webhook-deliveries/${outcome?.latestAttempt?.deliveryId || readiness?.deliveryId || ':deliveryId'}`,
+                    retryDryRun: readiness?.operationLinks.retryDryRun || 'POST /api/dwm/webhook-deliveries',
+                    destinationTest: outcome?.operationLinks?.destinationTest || `POST /api/dwm/webhook-destinations/${destination.id}/test`,
+                },
+            }
+        }),
+        skippedDestinations: skippedDestinations.map(destination => ({
+            destinationId: destination.id,
+            orgId: destination.orgId,
+            status: destination.status,
+            reason: destination.reason,
+            code: destination.reason === 'disabled' ? 'destination_disabled' : destination.reason,
+        })),
+        lifecycleBlockers: blockerCodes.filter(code => [
+            'org_archived',
+            'org_deleted',
+            'member_revoked',
+            'watchlist_paused',
+            'watchlist_archived',
+            'manual_webhook_selection_required',
+            'role_not_allowed',
+            'destination_disabled',
+            'destination_unavailable',
+            'missing_org_ref',
+            'live_delivery_disabled',
+        ].includes(code)),
+        blockerCodes,
+        audit: {
+            auditEventIds: [...new Set(auditEventContracts.map(audit => audit.auditEventId).filter(Boolean))],
+            linked: auditEventContracts.length > 0,
+            expectedActions: [...new Set(auditEventContracts.map(audit => audit.action).filter(Boolean))],
+        },
+        readiness: {
+            alertDestinationReady: alertDestinationReadiness.ready,
+            deliveryReadinessStatus: alertDeliveryProof.alertScopedStatus,
+            recordedDeliveryStatus: alertDeliveryProof.delivery.recordedDeliveryStatus,
+            retryableFailureCount: deliveryReadinessConsumer.counts.retryableFailure,
+            nonRetryableFailureCount: deliveryReadinessConsumer.counts.nonRetryableFailure,
+            idempotentReplayCount: deliveryReadinessConsumer.counts.idempotentReplay,
+            redactedDryRunCount: deliveryReadinessConsumer.counts.redactedDryRun,
+        },
+        noLeakFields: ['destination.secret', 'destination.endpoint', 'otherOrg.destinationIds', 'case.evidence.rawContent'],
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            responseBodyExposed: false,
+            webhookSecretExposed: false,
+            payloadSecretExposed: false,
+        },
     }
 }
 

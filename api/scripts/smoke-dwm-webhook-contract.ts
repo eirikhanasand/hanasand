@@ -3180,6 +3180,8 @@ const orgAlertRetryLifecycle = orgAlertDeliveryContract.destinationLifecycle.fin
 const orgAlertDeliveryProof = orgAlertDeliveryContract.alertDeliveryProof
 const orgAlertDeliveryReadinessConsumer = orgAlertDeliveryContract.deliveryReadinessConsumer
 const orgAlertDeliveryReadinessReplay = orgAlertDeliveryReadinessConsumer.rows.find(item => item.destinationId === 'destination_replay_contract')
+const orgAlertOrganizationConsumerReceipt = orgAlertDeliveryContract.organizationConsumerReceipt
+const orgAlertOrganizationDestinationReceipt = orgAlertOrganizationConsumerReceipt.destinationReceipts.find(item => item.destinationId === 'destination_replay_contract')
 const auditCreated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_created_contract')
 const auditUpdated = auditEventContracts.find(item => item.auditEventId === 'audit_destination_updated_contract')
 const auditArchived = auditEventContracts.find(item => item.auditEventId === 'audit_destination_archived_contract')
@@ -3272,6 +3274,15 @@ expect(orgAlertDeliveryReadinessConsumer.schemaVersion === 'dwm.webhook.delivery
 expect(orgAlertDeliveryReadinessReplay?.readiness.idempotentReplay === true && orgAlertDeliveryReadinessReplay.readiness.redactedDryRun === true && orgAlertDeliveryReadinessReplay.audit.linked === true, 'Org alert delivery readiness consumer should prove replay, dry-run redaction, and audit linkage.', orgAlertDeliveryReadinessReplay)
 expect(orgAlertDeliveryReadinessReplay?.context.casePath === replayWorkflowAlert.casePath && orgAlertDeliveryReadinessReplay.context.sourceFamily === 'telegram_public' && orgAlertDeliveryReadinessReplay.operationLinks.deliveryDetail.includes('delivery_replay_duplicate_contract'), 'Org alert delivery readiness consumer should preserve case/source/deep-link context.', orgAlertDeliveryReadinessReplay)
 expect(orgAlertDeliveryReadinessConsumer.redaction.webhookSecretExposed === false && !JSON.stringify(orgAlertDeliveryReadinessConsumer).includes(secret), 'Org alert delivery readiness consumer should redact webhook secrets.', orgAlertDeliveryReadinessConsumer)
+expect(orgAlertOrganizationConsumerReceipt.schemaVersion === 'dwm.webhook.organization_delivery_consumer_receipt.v1' && orgAlertOrganizationConsumerReceipt.consumesSchemaVersion === 'organization.webhook_destination_delivery_consumer.v1', 'Org alert delivery contract should expose the organization delivery consumer bridge.', orgAlertOrganizationConsumerReceipt)
+expect(orgAlertOrganizationConsumerReceipt.organizationId === 'org_contract' && orgAlertOrganizationConsumerReceipt.destinationScope.crossOrgDestinationAllowed === false && orgAlertOrganizationConsumerReceipt.destinationScope.nonmemberDestinationEnumeration === false, 'Organization consumer receipt should preserve org-scoped destination isolation.', orgAlertOrganizationConsumerReceipt.destinationScope)
+expect(orgAlertOrganizationConsumerReceipt.noNetwork === true && orgAlertOrganizationConsumerReceipt.externalSendEnabled === false && orgAlertOrganizationConsumerReceipt.dryRunReady === true, 'Organization consumer receipt should preserve no-network dry-run readiness.', orgAlertOrganizationConsumerReceipt)
+expect(orgAlertOrganizationConsumerReceipt.watchlistMatches.some(item => item.watchlistId === 'watchlist_item_replay_contract' && item.watchedEntity.value === 'acme-security.com' && item.destinationReadiness.dryRunReady === true), 'Organization consumer receipt should carry watchlist match and delivery readiness context.', orgAlertOrganizationConsumerReceipt.watchlistMatches)
+expect(orgAlertOrganizationDestinationReceipt?.idempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract' && orgAlertOrganizationDestinationReceipt.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertOrganizationDestinationReceipt.auditEventId === 'audit_replay_duplicate_contract', 'Organization consumer receipt should link destination receipt to idempotency, delivery, and audit proof.', orgAlertOrganizationDestinationReceipt)
+expect(orgAlertOrganizationDestinationReceipt?.readiness.idempotentReplay === true && orgAlertOrganizationDestinationReceipt.readiness.redactedDryRun === true && orgAlertOrganizationDestinationReceipt.redactedDestination.endpointExposed === false, 'Organization consumer destination receipt should prove replay safety and endpoint redaction.', orgAlertOrganizationDestinationReceipt)
+expect(orgAlertOrganizationConsumerReceipt.skippedDestinations.some(item => item.destinationId === 'destination_disabled_contract' && item.code === 'destination_disabled') && orgAlertOrganizationConsumerReceipt.blockerCodes.includes('destination_disabled'), 'Organization consumer receipt should expose typed skipped-destination blockers.', orgAlertOrganizationConsumerReceipt)
+expect(orgAlertOrganizationConsumerReceipt.alertContext.casePath === replayWorkflowAlert.casePath && orgAlertOrganizationConsumerReceipt.alertContext.sourceFamily === 'telegram_public' && orgAlertOrganizationConsumerReceipt.readiness.idempotentReplayCount >= 1, 'Organization consumer receipt should expose alert/case/source readiness fields for downstream consumers.', orgAlertOrganizationConsumerReceipt)
+expect(!JSON.stringify(orgAlertOrganizationConsumerReceipt).includes(secret), 'Organization consumer receipt should not leak endpoint or webhook secrets.', orgAlertOrganizationConsumerReceipt)
 expect(orgAlertReplayHealth?.lastDryRun?.deliveryId === 'delivery_replay_duplicate_contract' && orgAlertReplayHealth.idempotencyCoverage.duplicateKeyCount === 1, 'Org alert delivery contract should derive dry-run health mutation and replay dedupe.', orgAlertReplayHealth)
 expect(orgAlertRetryLifecycle?.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && orgAlertRetryLifecycle.retry.lastErrorCategory === 'upstream_5xx', 'Org alert delivery contract should expose retry/backoff state.', orgAlertRetryLifecycle)
 expect(orgAlertDeliveryContract.auditEventContracts.some(item => item.auditEventId === 'audit_replay_duplicate_contract') && orgAlertDeliveryContract.deliveryLedger.some(item => item.deliveryId === 'delivery_replay_duplicate_contract'), 'Org alert delivery contract should link audit ids and delivery ledger rows.', orgAlertDeliveryContract)
@@ -4296,6 +4307,16 @@ console.log(JSON.stringify({
             'orgAlertDelivery.deliveryReadinessConsumer.rows[].context.casePath',
             'orgAlertDelivery.deliveryReadinessConsumer.rows[].operationLinks.deliveryDetail',
             'orgAlertDelivery.deliveryReadinessConsumer.redaction.webhookSecretExposed',
+            'orgAlertDelivery.organizationConsumerReceipt.schemaVersion',
+            'orgAlertDelivery.organizationConsumerReceipt.consumesSchemaVersion',
+            'orgAlertDelivery.organizationConsumerReceipt.destinationScope.crossOrgDestinationAllowed',
+            'orgAlertDelivery.organizationConsumerReceipt.destinationScope.nonmemberDestinationEnumeration',
+            'orgAlertDelivery.organizationConsumerReceipt.watchlistMatches[].destinationReadiness.dryRunReady',
+            'orgAlertDelivery.organizationConsumerReceipt.destinationReceipts[].idempotencyKey',
+            'orgAlertDelivery.organizationConsumerReceipt.destinationReceipts[].auditEventId',
+            'orgAlertDelivery.organizationConsumerReceipt.destinationReceipts[].redactedDestination.endpointExposed',
+            'orgAlertDelivery.organizationConsumerReceipt.skippedDestinations[].code',
+            'orgAlertDelivery.organizationConsumerReceipt.readiness.idempotentReplayCount',
             'orgAlertDelivery.deliveryTimeline.schemaVersion',
             'orgAlertDelivery.deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
             'orgAlertDelivery.deliveryActionPlan.schemaVersion',
