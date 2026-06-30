@@ -43,6 +43,7 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "missing_customer_workflow"
   | "missing_consumer_verification"
   | "stale_consumer_verification"
+  | "missing_stale_threshold"
   | "missing_consumer_proof_command"
   | "prompt_literal_consumer_copy"
   | "missing_workflow_schema_lookup"
@@ -76,6 +77,7 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "missing_customer_workflow",
   "missing_consumer_verification",
   "stale_consumer_verification",
+  "missing_stale_threshold",
   "missing_consumer_proof_command",
   "prompt_literal_consumer_copy",
   "missing_workflow_schema_lookup",
@@ -199,6 +201,12 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
   missing_customer_workflow: ["missing_customer_workflow_ids", "missing_customer_workflow"],
   missing_consumer_verification: ["missing_consumer_verification"],
   stale_consumer_verification: ["stale_consumer_verification"],
+  missing_stale_threshold: [
+    "missing_consumer_stale_threshold",
+    "missing_workflow_stale_threshold",
+    "missing_owner_lane_stale_threshold",
+    "missing_lane_self_validation_stale_threshold"
+  ],
   missing_consumer_proof_command: ["missing_consumer_proof_command"],
   prompt_literal_consumer_copy: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"],
   missing_workflow_schema_lookup: ["missing_workflow_schema_lookup"],
@@ -492,6 +500,9 @@ function mutateConsumerVerificationLedger(ledger: ConsumerVerificationLedger, ki
     case "stale_consumer_verification":
       if (firstConsumer) firstConsumer.verifiedAt = "2026-06-01T00:00:00.000Z";
       break;
+    case "missing_stale_threshold":
+      if (firstConsumer) firstConsumer.staleBefore = "";
+      break;
     case "missing_consumer_proof_command":
       if (firstConsumer) firstConsumer.proofCommand = "";
       break;
@@ -515,7 +526,8 @@ export function productReadinessConsumerVerificationGuard(ledger: ConsumerVerifi
         if (!verification.consumerKind) blockers.push("missing_consumer_kind");
         if (!Array.isArray(verification.requiredFields) || verification.requiredFields.length === 0) blockers.push("missing_consumer_required_fields");
         if (!verification.verifiedAt) blockers.push("missing_consumer_verified_at");
-        if (verification.verifiedAt && verification.verifiedAt < verification.staleBefore) blockers.push("stale_consumer_verification");
+        if (!verification.staleBefore) blockers.push("missing_consumer_stale_threshold");
+        if (verification.verifiedAt && verification.staleBefore && verification.verifiedAt < verification.staleBefore) blockers.push("stale_consumer_verification");
         if (!verification.proofCommand) blockers.push("missing_consumer_proof_command");
         const label = String(verification.consumerLabel || "").toLowerCase();
         for (const term of forbiddenTerms) {
@@ -631,6 +643,9 @@ function mutateWorkflowAcceptanceReceipts(receipts: WorkflowAcceptanceReceipts, 
     case "stale_workflow_acceptance_receipt":
       if (sourceReceipt) sourceReceipt.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
       break;
+    case "missing_stale_threshold":
+      if (sourceReceipt) sourceReceipt.focusedCheck.staleBefore = "";
+      break;
     case "untested_workflow_acceptance_receipt":
       if (sourceReceipt) sourceReceipt.focusedCheck.result = "not_run" as "pass";
       break;
@@ -674,7 +689,8 @@ export function productReadinessWorkflowAcceptanceGuard(receipts: WorkflowAccept
       ...(!receipt.focusedCheck?.command ? ["missing_workflow_check_command"] : []),
       ...(receipt.focusedCheck?.result !== "pass" ? ["untested_workflow_acceptance_receipt"] : []),
       ...(!receipt.focusedCheck?.checkedAt ? ["missing_workflow_verified_at"] : []),
-      ...(receipt.focusedCheck?.checkedAt && receipt.focusedCheck.checkedAt < receipt.focusedCheck.staleBefore ? ["stale_workflow_acceptance_receipt"] : []),
+      ...(!receipt.focusedCheck?.staleBefore ? ["missing_workflow_stale_threshold"] : []),
+      ...(receipt.focusedCheck?.checkedAt && receipt.focusedCheck.staleBefore && receipt.focusedCheck.checkedAt < receipt.focusedCheck.staleBefore ? ["stale_workflow_acceptance_receipt"] : []),
       ...missingExpectedCustomerWorkflows.map(() => "cross_workflow_inconsistency"),
       ...copyBlockers,
       ...unsafeFields.map(() => "unsafe_workflow_acceptance_receipt")
@@ -818,7 +834,8 @@ export function productReadinessOwnerLaneReceiptExamplesGuard(examples: OwnerLan
       ...(!example.focusedCheck?.command ? ["missing_owner_lane_check_command"] : []),
       ...(example.focusedCheck?.result !== "pass" ? ["untested_owner_lane_receipt_example"] : []),
       ...(!example.focusedCheck?.checkedAt ? ["missing_owner_lane_verified_at"] : []),
-      ...(example.focusedCheck?.checkedAt && example.focusedCheck.checkedAt < example.focusedCheck.staleBefore ? ["stale_owner_lane_receipt_example"] : []),
+      ...(!example.focusedCheck?.staleBefore ? ["missing_owner_lane_stale_threshold"] : []),
+      ...(example.focusedCheck?.checkedAt && example.focusedCheck.staleBefore && example.focusedCheck.checkedAt < example.focusedCheck.staleBefore ? ["stale_owner_lane_receipt_example"] : []),
       ...(!example.selfValidateCommand ? ["missing_owner_lane_self_validate_command"] : []),
       ...(!requiredPayloadFields.length ? ["missing_owner_lane_payload_shape"] : []),
       ...copyBlockers,
@@ -945,6 +962,9 @@ function mutateLaneSelfValidationExamples(examples: LaneSelfValidationExamples, 
     case "stale_lane_self_validation_example":
       if (dashboardExample) dashboardExample.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
       break;
+    case "missing_stale_threshold":
+      if (dashboardExample) dashboardExample.focusedCheck.staleBefore = "";
+      break;
     case "missing_lane_self_validation_route":
       if (dashboardExample) dashboardExample.routeRefs = [];
       break;
@@ -988,7 +1008,8 @@ export function productReadinessLaneSelfValidationGuard(examples: LaneSelfValida
       ...(!example.focusedCheck?.command ? ["missing_lane_self_validation_check_command"] : []),
       ...(example.focusedCheck?.result !== "pass" ? ["untested_lane_self_validation_example"] : []),
       ...(!example.focusedCheck?.checkedAt ? ["missing_lane_self_validation_verified_at"] : []),
-      ...(example.focusedCheck?.checkedAt && example.focusedCheck.checkedAt < example.focusedCheck.staleBefore ? ["stale_lane_self_validation_example"] : []),
+      ...(!example.focusedCheck?.staleBefore ? ["missing_lane_self_validation_stale_threshold"] : []),
+      ...(example.focusedCheck?.checkedAt && example.focusedCheck.staleBefore && example.focusedCheck.checkedAt < example.focusedCheck.staleBefore ? ["stale_lane_self_validation_example"] : []),
       ...(!example.selfValidateCommand ? ["missing_lane_self_validation_command"] : []),
       ...(!requiredPayloadFields.length ? ["missing_lane_self_validation_payload_shape"] : []),
       ...copyBlockers,

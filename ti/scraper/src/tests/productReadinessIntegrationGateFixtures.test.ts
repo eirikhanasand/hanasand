@@ -288,6 +288,57 @@ describe("product readiness integration gate fixtures", () => {
         ])
       }
     });
+    expect(byKind.get("missing_stale_threshold")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: [
+        "missing_consumer_stale_threshold",
+        "missing_workflow_stale_threshold",
+        "missing_owner_lane_stale_threshold",
+        "missing_lane_self_validation_stale_threshold"
+      ],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_consumer_stale_threshold",
+        "missing_workflow_stale_threshold",
+        "missing_owner_lane_stale_threshold",
+        "missing_lane_self_validation_stale_threshold"
+      ]),
+      consumerVerification: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            capabilityId: "source_activation",
+            blockerCodes: expect.arrayContaining(["missing_consumer_stale_threshold"])
+          })
+        ])
+      },
+      workflowAcceptance: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            workflowId: "source_health",
+            blockerCodes: expect.arrayContaining(["missing_workflow_stale_threshold"])
+          })
+        ])
+      },
+      ownerLaneReceiptExamples: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            workflowId: "source_health",
+            blockerCodes: expect.arrayContaining(["missing_owner_lane_stale_threshold"])
+          })
+        ])
+      },
+      laneSelfValidation: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            laneId: "dashboard",
+            blockerCodes: expect.arrayContaining(["missing_lane_self_validation_stale_threshold"])
+          })
+        ])
+      }
+    });
     expect(byKind.get("missing_consumer_proof_command")).toMatchObject({
       passed: true,
       expectedBlockerCodes: ["missing_consumer_proof_command"],
