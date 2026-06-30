@@ -2367,6 +2367,36 @@ export type OrganizationReadinessProof = {
         downstreamConsumers: Array<'alert_queue' | 'case_workflow' | 'webhook_delivery' | 'dashboard_readiness' | 'support_timeline'>
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
     }
+    auditTimelineProof: {
+        schemaVersion: 'organization.audit_timeline_readiness.v1'
+        organizationId: string
+        tenantId: string
+        source: 'service_logs'
+        supportRoute: '/api/admin/support/organizations/:id'
+        logQuery: 'GET /api/logs?service=api&message=organization'
+        requiredEventActions: Array<
+            | 'organization_settings_updated'
+            | 'organization_invites_created'
+            | 'organization_invite_accepted'
+            | 'organization_invite_revoked'
+            | 'organization_invite_resent'
+            | 'organization_member_removed'
+            | 'organization_member_role_updated'
+            | 'organization_watchlist_upserted'
+            | 'organization_watchlist_updated'
+            | 'organization_watchlist_archived'
+            | 'organization_watchlist_alert_terms_exported'
+            | 'organization_watchlist_alert_terms_export_denied'
+            | 'organization_lifecycle_mutation_blocked'
+        >
+        requiredMetadataFields: Array<'organizationId' | 'actorId' | 'actorRole' | 'requestId' | 'targetUserId' | 'inviteId' | 'watchlistItemId' | 'reason' | 'blockerCode'>
+        downstreamCorrelationFields: Array<'organizationId' | 'tenantId' | 'watchlistItemIds' | 'alertGeneratorKeys' | 'casePath' | 'webhookDestinationIds'>
+        lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'member_revoked' | 'invite_expired' | 'watchlist_archived' | 'watchlist_paused'>
+        supportReadMode: 'redacted_summary_only'
+        noLeakFields: Array<'activeTerms[].term' | 'destination.secret' | 'case.evidence.rawContent' | 'otherOrg.auditEvents'>
+        nonmemberEnumeration: false
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     blockers: string[]
 }
 
@@ -5869,6 +5899,65 @@ export function organizationReadinessProof(input: {
                 'dashboard_readiness',
                 'support_timeline',
             ],
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+        },
+        auditTimelineProof: {
+            schemaVersion: 'organization.audit_timeline_readiness.v1',
+            organizationId: input.downstreamAuthorization.organizationId,
+            tenantId: input.downstreamAuthorization.tenantId,
+            source: 'service_logs',
+            supportRoute: '/api/admin/support/organizations/:id',
+            logQuery: 'GET /api/logs?service=api&message=organization',
+            requiredEventActions: [
+                'organization_settings_updated',
+                'organization_invites_created',
+                'organization_invite_accepted',
+                'organization_invite_revoked',
+                'organization_invite_resent',
+                'organization_member_removed',
+                'organization_member_role_updated',
+                'organization_watchlist_upserted',
+                'organization_watchlist_updated',
+                'organization_watchlist_archived',
+                'organization_watchlist_alert_terms_exported',
+                'organization_watchlist_alert_terms_export_denied',
+                'organization_lifecycle_mutation_blocked',
+            ],
+            requiredMetadataFields: [
+                'organizationId',
+                'actorId',
+                'actorRole',
+                'requestId',
+                'targetUserId',
+                'inviteId',
+                'watchlistItemId',
+                'reason',
+                'blockerCode',
+            ],
+            downstreamCorrelationFields: [
+                'organizationId',
+                'tenantId',
+                'watchlistItemIds',
+                'alertGeneratorKeys',
+                'casePath',
+                'webhookDestinationIds',
+            ],
+            lifecycleBlockers: [
+                'org_archived',
+                'org_deleted',
+                'member_revoked',
+                'invite_expired',
+                'watchlist_archived',
+                'watchlist_paused',
+            ],
+            supportReadMode: 'redacted_summary_only',
+            noLeakFields: [
+                'activeTerms[].term',
+                'destination.secret',
+                'case.evidence.rawContent',
+                'otherOrg.auditEvents',
+            ],
+            nonmemberEnumeration: false,
             proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         blockers,
