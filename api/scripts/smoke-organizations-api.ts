@@ -104,6 +104,25 @@ assert.equal(createdLifecycleReadiness.memberRoleReadiness.nonmemberEnumeration,
 assert.equal(createdLifecycleReadiness.memberRoleReadiness.revokedMemberDenial, 'member_revoked')
 assert.equal(createdLifecycleReadiness.memberRoleReadiness.expiredInviteDenial, 'invite_expired')
 assert.equal(createdLifecycleReadiness.supportVisibility.redactionBlocker, 'support_redaction_required')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.schemaVersion, 'organization.workspace_boundary_readiness.v1')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.organizationId, organization.id)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.tenantId, organization.id)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.actorRole, 'owner')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.lifecycleStatus, 'active')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.routes.updateSettings, 'PUT /api/organizations/:id/settings')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.routes.listMembers, 'GET /api/organizations/:id/members')
+assert.deepEqual(createdLifecycleReadiness.workspaceBoundaryProof.roleGates.updateSettings, ['owner', 'admin'])
+assert.deepEqual(createdLifecycleReadiness.workspaceBoundaryProof.roleGates.readSharedWatchlists, ['owner', 'admin', 'member', 'viewer'])
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.actorPermissions.canUpdateSettings, true)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.actorPermissions.canArchiveOrganization, true)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.actorPermissions.canManageInvites, true)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.actorPermissions.canMutateWatchlists, true)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.lifecycleMutationAllowed, true)
+assert.deepEqual(createdLifecycleReadiness.workspaceBoundaryProof.blockedWhenInactive, [])
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.blockerCode, null)
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.supportInspection.mode, 'redacted_summary_only')
+assert.equal(createdLifecycleReadiness.workspaceBoundaryProof.nonmemberEnumeration, false)
+assert.ok(createdLifecycleReadiness.workspaceBoundaryProof.noLeakFields.includes('otherOrg.members'))
 assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_missing'))
 assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_archived'))
 assert.ok(createdLifecycleReadiness.blockerCatalog.includes('org_deleted'))
@@ -122,6 +141,8 @@ assert.equal(ownerReadOrganization.role, 'owner')
 assert.equal(ownerReadOrganization.memberCount, 1)
 assert.equal(ownerReadOrganization.settings.defaultWebhookPolicy, 'active_destinations')
 assert.deepEqual(parseBody(ownerReadOrganizationResponse.body).lifecycleReadiness.typedBlockers, ['watchlist_setup_required', 'alert_export_unavailable'])
+assert.equal(parseBody(ownerReadOrganizationResponse.body).lifecycleReadiness.workspaceBoundaryProof.actorPermissions.canArchiveOrganization, true)
+assert.equal(parseBody(ownerReadOrganizationResponse.body).lifecycleReadiness.workspaceBoundaryProof.routes.readOrganization, 'GET /api/organizations/:id')
 
 const ownerDefaultSettingsResponse = await app.inject({
     method: 'GET',
@@ -3411,6 +3432,13 @@ assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycle
 assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.caseVisibilityAllowed, false)
 assert.equal(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, false)
 assert.ok(archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.lifecycleStatus, 'archived')
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.blockerCode, 'org_archived')
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.lifecycleMutationAllowed, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.actorPermissions.canManageInvites, false)
+assert.equal(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.actorPermissions.canMutateWatchlists, false)
+assert.ok(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.blockedWhenInactive.includes('POST /api/organizations/:id/invites'))
+assert.ok(archivedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.noLeakFields.includes('otherOrg.watchlistItemIds'))
 assert.equal(
     archivedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.downstreamRefs.alertGenerationFixture,
     'organization.watchlist_alert_generation_fixture.v1',
@@ -3540,6 +3568,12 @@ assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleR
 assert.equal(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.webhookDeliveryAllowed, false)
 assert.ok(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.blockedRoutes.includes('POST /v1/dwm/webhooks/deliver'))
 assert.ok(deletedOrganizationSettings.lifecycleReadiness.downstreamLifecycleReceipt.noLeakFields.includes('destination.secret'))
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.lifecycleStatus, 'deleted')
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.blockerCode, 'org_deleted')
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.lifecycleMutationAllowed, false)
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.actorPermissions.canDeleteOrganization, false)
+assert.ok(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.blockedWhenInactive.includes('POST /api/organizations/:id/ownership-transfer'))
+assert.equal(deletedOrganizationSettings.lifecycleReadiness.workspaceBoundaryProof.nonmemberEnumeration, false)
 
 const deletedOrgAlertTermsResponse = await app.inject({
     method: 'GET',
