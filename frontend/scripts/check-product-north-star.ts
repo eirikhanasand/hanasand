@@ -94,6 +94,7 @@ const partialPayload = buildProductProgressPayload({
                 checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
             },
             sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
+            parserSourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
             lastRun: { status: 'completed', completedAt: generatedAt },
         },
         contracts: {
