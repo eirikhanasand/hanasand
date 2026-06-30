@@ -1160,6 +1160,52 @@ export type OrganizationWatchlistAlertTermsExport = {
     webhookDestinationOwnership: OrganizationWebhookDestinationOwnershipContract
     webhookDestinationAccessDecision: OrganizationWebhookDestinationAccessDecision
     consumerReadiness: OrganizationSharedWatchlistConsumerReadiness
+    alertGenerationConsumer: {
+        schemaVersion: 'organization.watchlist_alert_generation_consumer.v1'
+        organizationId: string
+        tenantId: string
+        repositoryAdapter: 'organizationWatchlistAlertTermsExport'
+        sourceFamily: 'organization_watchlist'
+        route: 'GET /api/organizations/:id/watchlists/alert-terms'
+        requiredQueryFields: Array<'organizationId'>
+        requiredPersistedFields: Array<'organizationId' | 'tenantId' | 'watchlistItemId' | 'watchlistItemIds' | 'workflowContext.organizationId' | 'workflowContext.alertGeneratorKeys' | 'workflowContext.visibilityDecision'>
+        activeTerms: Array<{
+            organizationId: string
+            tenantId: string
+            watchlistItemId: string
+            itemId: string
+            termFamily: WatchlistKind
+            category: WatchlistKind
+            term: string
+            normalizedTerm: string
+            status: 'active'
+            alertGeneratorKey: string
+            alertGenerationRef: OrganizationWatchlistAlertGenerationRef
+        }>
+        lifecycleExclusions: OrganizationWatchlistAlertTermsExport['termLifecycle']
+        scopeGuardrails: {
+            partitionKey: 'organizationId'
+            tenantIdField: 'tenantId'
+            watchlistScope: 'organization_owned'
+            crossOrgReadAllowed: false
+            userLocalFallbackAllowed: false
+            nonmemberEnumeration: false
+        }
+        roleGates: {
+            exportTerms: OrganizationRole[]
+            mutateWatchlists: Array<'owner' | 'admin'>
+            readSharedWatchlists: OrganizationRole[]
+        }
+        denialContract: {
+            nonmember: 'organization.access_denial.v1'
+            roleDenied: 'organization.watchlist_alert_terms_export_denial.v1'
+            removedMember: 'member_revoked'
+            noLeakFields: Array<'activeTerms[]' | 'activeWatchlistTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'otherOrg.watchlistItemIds'>
+        }
+        canGenerateAlerts: boolean
+        blockerCodes: string[]
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     activeTerms: Array<OrganizationWatchlistTerm & {
         source: 'organization_shared_watchlist'
         alertGeneratorKey: string
@@ -5752,6 +5798,68 @@ export function organizationWatchlistAlertTermsExport(
         ],
         proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
     }
+    const alertGenerationConsumer: OrganizationWatchlistAlertTermsExport['alertGenerationConsumer'] = {
+        schemaVersion: 'organization.watchlist_alert_generation_consumer.v1',
+        organizationId: organization.id,
+        tenantId: organization.id,
+        repositoryAdapter: 'organizationWatchlistAlertTermsExport',
+        sourceFamily: 'organization_watchlist',
+        route: 'GET /api/organizations/:id/watchlists/alert-terms',
+        requiredQueryFields: ['organizationId'],
+        requiredPersistedFields: [
+            'organizationId',
+            'tenantId',
+            'watchlistItemId',
+            'watchlistItemIds',
+            'workflowContext.organizationId',
+            'workflowContext.alertGeneratorKeys',
+            'workflowContext.visibilityDecision',
+        ],
+        activeTerms: activeTerms.map(term => ({
+            organizationId: term.organizationId,
+            tenantId: term.tenantId,
+            watchlistItemId: term.watchlistItemId,
+            itemId: term.itemId,
+            termFamily: term.termFamily,
+            category: term.category,
+            term: term.term,
+            normalizedTerm: term.alertGenerationRef.normalizedTerm,
+            status: 'active',
+            alertGeneratorKey: term.alertGeneratorKey,
+            alertGenerationRef: term.alertGenerationRef,
+        })),
+        lifecycleExclusions: termLifecycle,
+        scopeGuardrails: {
+            partitionKey: 'organizationId',
+            tenantIdField: 'tenantId',
+            watchlistScope: 'organization_owned',
+            crossOrgReadAllowed: false,
+            userLocalFallbackAllowed: false,
+            nonmemberEnumeration: false,
+        },
+        roleGates: {
+            exportTerms: sharedWatchlistAlertQueueVisibility.visibility.allowedRoles,
+            mutateWatchlists: ['owner', 'admin'],
+            readSharedWatchlists: ['owner', 'admin', 'member', 'viewer'],
+        },
+        denialContract: {
+            nonmember: 'organization.access_denial.v1',
+            roleDenied: 'organization.watchlist_alert_terms_export_denial.v1',
+            removedMember: 'member_revoked',
+            noLeakFields: [
+                'activeTerms[]',
+                'activeWatchlistTerms[]',
+                'watchlistScope.alertGeneratorKeys',
+                'otherOrg.watchlistItemIds',
+            ],
+        },
+        canGenerateAlerts: alertGeneration.canGenerateAlerts,
+        blockerCodes: Array.from(new Set([
+            ...alertGeneration.blockedReasons,
+            ...termLifecycle.excludedFromAlertMatching.map(item => item.blockerCode),
+        ])),
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
+    }
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
         organizationId: organization.id,
@@ -5935,6 +6043,7 @@ export function organizationWatchlistAlertTermsExport(
         webhookDestinationOwnership,
         webhookDestinationAccessDecision,
         consumerReadiness,
+        alertGenerationConsumer,
         activeWatchlistTerms: alertGeneration.activeWatchlistTerms,
         termFamilies: alertGeneration.termFamilies,
         excluded: {
