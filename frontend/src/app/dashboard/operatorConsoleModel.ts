@@ -2362,15 +2362,23 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'watchlist_state_at', at: activeWatchlists[0]?.updatedAt || now, title: activeWatchlists.length ? 'Watchlist loaded' : 'Watchlist required', body: activeWatchlists.length ? 'Watchlist data came from the DWM backend.' : 'Alert rebuild is blocked until watchlist terms exist.' }],
             nextTasks: activeWatchlists.length ? [`Owner: operator. Watchlist IDs: ${activeWatchlists.map(item => item.id).join(', ')}.`, `Terms: ${watchlistTerms.length}. Rebuild alerts for ${input.scope.organizationId || input.scope.tenantId}.`, 'Open generated DWM alerts as analyst cases before delivery.'] : ['Owner: operator. Open DWM console and save watchlist terms.', 'Run alert rebuild.', 'Confirm the watchlist has an organization owner.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Edit watchlist' }, { href: '/api/dwm/watchlists', label: 'Watchlists API' }],
+            relatedLinks: [{ href: '/dashboard/dwm', label: 'Edit watchlist' }, { href: watchlistCoverageHref(input.scope, organization), label: 'Watchlist coverage' }, { href: watchlistsHref(input.scope), label: 'Watchlists API' }],
             workflowPath: path,
-            actions: activeWatchlists.length ? [{
-                id: 'rebuild_alerts',
-                label: 'Rebuild alerts',
-                method: 'POST',
-                href: '/api/dwm/alerts/rebuild',
-                body: actionScope(input.scope),
-            }] : [],
+            actions: [
+                {
+                    id: 'inspect_watchlist_coverage',
+                    label: 'Inspect coverage',
+                    method: 'GET',
+                    href: watchlistCoverageHref(input.scope, organization),
+                },
+                ...(activeWatchlists.length ? [{
+                    id: 'rebuild_alerts',
+                    label: 'Rebuild alerts',
+                    method: 'POST' as const,
+                    href: '/api/dwm/alerts/rebuild',
+                    body: actionScope(input.scope),
+                }] : []),
+            ],
         }),
         readinessCase({
             id: 'delivery_route',
@@ -2864,6 +2872,23 @@ function sourceInventoryHref(scope: OperatorScope) {
         params.set('tenantId', scope.tenantId)
     }
     return `/api/ti/scraper/control?${params.toString()}`
+}
+
+function watchlistCoverageHref(scope: OperatorScope, organization?: DwmOrganizationSummary) {
+    if (organization) {
+        return `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`
+    }
+    return watchlistsHref(scope)
+}
+
+function watchlistsHref(scope: OperatorScope) {
+    const params = new URLSearchParams()
+    if (scope.organizationId) {
+        params.set('organizationId', scope.organizationId)
+    } else {
+        params.set('tenantId', scope.tenantId)
+    }
+    return `/api/dwm/watchlists?${params.toString()}`
 }
 
 function actionScope(scope: OperatorScope) {

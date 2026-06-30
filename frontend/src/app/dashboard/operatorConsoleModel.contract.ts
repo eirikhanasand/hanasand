@@ -1267,6 +1267,13 @@ if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org
 if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_webhooks')?.href !== '/api/organizations/org_acme/webhooks') {
     throw new Error('Expected organization readiness to expose the webhook destination drill-in.')
 }
+const watchlistReadinessCase = expectWorkbenchCase(cases, 'watchlist_terms')
+if (watchlistReadinessCase.actions?.find(action => action.id === 'inspect_watchlist_coverage')?.href !== '/api/organizations/org_acme/alert-readiness') {
+    throw new Error('Expected watchlist readiness to expose the organization alert-readiness coverage drill-in.')
+}
+if (watchlistReadinessCase.relatedLinks.find(link => link.href === '/api/dwm/watchlists?organizationId=org_acme')?.label !== 'Watchlists API') {
+    throw new Error('Expected watchlist readiness links to include the scoped watchlists API.')
+}
 const sourceCoverageCase = expectWorkbenchCase(cases, 'source_coverage')
 const sourceInventoryHref = '/api/ti/scraper/control?q=org_acme&organizationId=org_acme'
 if (sourceCoverageCase.actions?.find(action => action.id === 'inspect_source_inventory')?.href !== sourceInventoryHref) {
