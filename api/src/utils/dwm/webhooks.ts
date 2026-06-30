@@ -5237,6 +5237,18 @@ export function buildDwmAlertWebhookReadinessHandoff({
     const selectedDestinationIds = new Set(dispatch.selectedDestinations.map(destination => destination.id))
     const selectedRetryKeys = retryPersistence.deliveryKeys
         .filter(key => key.destinationId && selectedDestinationIds.has(key.destinationId))
+    const alertEventExpectedAuditAction = deliveryAuditActionForEvent(eventType)
+    const alertEventAuditContracts = buildDwmWebhookAuditEventContracts({
+        destinations: orgDestinations,
+        deliveries: orgDeliveries,
+        auditEvents: orgAuditEvents,
+    })
+    const selectedAlertEventAuditContracts = alertEventAuditContracts.filter((audit) => {
+        const auditDestinationSelected = audit.destinationId ? selectedDestinationIds.has(audit.destinationId) : false
+        const auditAlertMatches = audit.delivery?.alertId === normalizedAlert.id
+        const auditDedupeMatches = Boolean(normalizedAlert.dedupeKey && audit.delivery?.idempotencyKey?.includes(normalizedAlert.dedupeKey))
+        return audit.orgId === dispatch.orgId && (auditDestinationSelected || auditAlertMatches || auditDedupeMatches)
+    })
     const firstSelectedDestination = dispatch.selectedDestinations[0] || null
     const alertEventPreviewPayload = firstSelectedDestination
         ? buildDwmAlertDeliveryPayload({
@@ -5390,6 +5402,28 @@ export function buildDwmAlertWebhookReadinessHandoff({
                 idempotencyKey: firstSelectedDestination
                     ? buildIdempotencyKey(eventType, dispatch.orgId, firstSelectedDestination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
                     : null,
+            },
+            auditReadiness: {
+                schemaVersion: 'dwm.webhook.alert_event_audit_readiness.v1',
+                expectedNextAction: alertEventExpectedAuditAction,
+                expectedFailureAction: 'delivery.failed',
+                expectedSkippedAction: 'delivery.skipped',
+                expectedRetryAction: 'delivery.retry_scheduled',
+                linkedAuditEventIds: selectedAlertEventAuditContracts.map(audit => audit.auditEventId),
+                linkedActions: [...new Set(selectedAlertEventAuditContracts.map(audit => audit.action))],
+                latestAuditEventId: selectedAlertEventAuditContracts[0]?.auditEventId || null,
+                auditLinked: selectedAlertEventAuditContracts.length > 0,
+                auditMissing: selectedAlertEventAuditContracts.length === 0,
+                retryAuditLinked: selectedAlertEventAuditContracts.some(audit => audit.action === 'delivery.retry_scheduled'),
+                failureAuditLinked: selectedAlertEventAuditContracts.some(audit => audit.action === 'delivery.failed'),
+                skippedAuditLinked: selectedAlertEventAuditContracts.some(audit => audit.action === 'delivery.skipped'),
+                contracts: selectedAlertEventAuditContracts.slice(0, 5),
+                redaction: {
+                    safeForCustomerDisplay: true,
+                    endpointExposed: false,
+                    webhookSecretExposed: false,
+                    metadataRedacted: true,
+                },
             },
             payloadPreview: alertEventPreviewPayload && firstSelectedDestination
                 ? {
