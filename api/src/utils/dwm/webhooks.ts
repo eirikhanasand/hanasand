@@ -6115,6 +6115,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
             matchReason: redactDeliveryEvidenceText(truncate(clean(alert.matchReason), 180)) || null,
             deliveryState: clean(alert.deliveryState) || clean(deliveryContext.deliveryState),
             sourceFamily: clean(alert.sourceFamily),
+            evidenceTimestamp: clean(alert.evidenceTimestamp),
             eventTimestamp: clean(alert.eventTimestamp) || clean(deliveryContext.eventTimestamp) || clean(context.occurredAt),
             evidenceCount: parseCount(alert.evidenceCount),
             watchlistId: clean(watchlist.id) || delivery.watchlistId,
@@ -6175,6 +6176,7 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
             matchReason: redactDeliveryEvidenceText(truncate(clean(alert.matchReason), 180)) || null,
             deliveryState: clean(alert.deliveryState) || clean(delivery.deliveryState),
             sourceFamily: clean(alert.sourceFamily) || clean(source.family),
+            evidenceTimestamp: clean(alert.evidenceTimestamp),
             evidenceCount: parseCount(alert.evidenceCount),
             watchlistId: clean(watchlist.id),
             watchlistName: redactDeliveryEvidenceText(truncate(clean(watchlist.name), 120)) || null,
@@ -7615,6 +7617,7 @@ export function buildDwmAlertDeliveryPayload({
                     discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
                     normalizedAlert.confidence.label ? discordField('Confidence', [normalizedAlert.confidence.label, normalizedAlert.confidence.reason].filter(Boolean).join(' | '), true) : null,
                     discordField('Evidence count', String(normalizedAlert.evidenceCount), true),
+                    discordField('Evidence timestamp', normalizedAlert.evidenceTimestamp, true),
                     normalizedAlert.evidenceSummary ? discordField('Evidence summary', normalizedAlert.evidenceSummary, false) : null,
                     discordField('Route', normalizedAlert.route, true),
                     discordField('Workflow', workflowSummary(normalizedAlert, eventType), false),
@@ -7678,6 +7681,7 @@ function buildDwmDiscordPayloadTemplateProof({
         'Watchlist',
         'Source family',
         'Evidence count',
+        'Evidence timestamp',
         'Workflow',
         'Delivery state',
         'Dedupe key',
@@ -7692,6 +7696,7 @@ function buildDwmDiscordPayloadTemplateProof({
         watchlist: Boolean(watchlist.name || watchlist.terms.length || watchlist.id),
         sourceFamily: Boolean(normalizedAlert.sourceFamily),
         evidence: normalizedAlert.evidenceCount > 0,
+        evidenceTimestamp: Boolean(normalizedAlert.evidenceTimestamp),
         workflow: Boolean(eventType),
         deliveryState: Boolean(normalizedAlert.deliveryState),
         dedupeKey: Boolean(normalizedAlert.dedupeKey || idempotencyKey),
@@ -7717,6 +7722,7 @@ function buildDwmDiscordPayloadTemplateProof({
             'Source family',
             'Confidence',
             'Evidence count',
+            'Evidence timestamp',
             'Evidence summary',
             'Route',
             'Workflow',
@@ -8514,6 +8520,13 @@ function normalizeAlert(alert: Record<string, unknown>) {
         alert.firstSeenAt,
         alert.createdAt
     )
+    const evidenceTimestamp = firstClean(
+        alert.evidenceTimestamp,
+        webhookContext.evidenceTimestamp,
+        workflowContext.evidenceTimestamp,
+        evidence.find(item => item.capturedAt)?.capturedAt,
+        eventTimestamp
+    )
 
     return {
         id,
@@ -8530,6 +8543,7 @@ function normalizeAlert(alert: Record<string, unknown>) {
         artifactType: firstClean(alert.artifactType, alert.type, webhookContext.artifactType, workflowContext.artifactType) || 'mention',
         firstSeenAt: clean(alert.firstSeenAt) || clean(alert.createdAt) || eventTimestamp || new Date().toISOString(),
         eventTimestamp: eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
+        evidenceTimestamp: evidenceTimestamp || eventTimestamp || clean(alert.firstSeenAt) || clean(alert.createdAt) || new Date().toISOString(),
         savedAt: clean(alert.savedAt) || null,
         reviewState: clean(alert.reviewState) || 'needs_review',
         deliveryState: clean(alert.deliveryState) || 'pending_review',
