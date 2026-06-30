@@ -2333,7 +2333,7 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'webhook_route_at', at: orgWebhooks[0]?.lastTestedAt || latestDelivery?.attemptedAt || now, title: hasWebhookDestination ? 'Webhook destination loaded' : 'Webhook destination required', body: orgWebhooks[0]?.lastTestStatus ? `${orgWebhooks[0].id} last test ${orgWebhooks[0].lastTestStatus}.` : latestDelivery ? `${latestDelivery.id}: ${latestDelivery.status}${latestDelivery.error ? `: ${latestDelivery.error}` : ''}` : 'No delivery destination is configured for organization or watchlist routing.' }],
             nextTasks: hasWebhookDestination ? [`Owner: operator. Destination IDs: ${orgWebhooks.map(item => item.id).join(', ') || webhookWatchlists.map(item => item.webhookDestinationId || item.id).join(', ')}.`, 'Run a webhook test.', 'Send queued alerts and inspect delivery failures.'] : ['Owner: operator. Create a Discord or generic organization webhook destination.', 'Run webhook test.', 'Send queued alerts and inspect delivery failures.'],
-            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }] : [{ href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }],
+            relatedLinks: organization ? [{ href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Org webhooks API' }, { href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure watchlist webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }] : [{ href: deliveryLedgerHref(input.scope, latestDelivery), label: 'Delivery history' }, { href: '/dashboard/dwm', label: 'Configure webhook' }, { href: '/dashboard/automations?setup=dwm', label: 'Delivery routes' }],
             workflowPath: path,
             deliveryEvidence: input.deliveries.map(delivery => ({
                 id: delivery.id,
@@ -2348,7 +2348,7 @@ export function buildReadinessCases(input: {
                 error: delivery.error,
             })),
             missingDependency: input.deliveries.length ? undefined : 'No webhook delivery rows returned from /api/dwm/webhooks/deliveries. Run Test org webhook or Send queued alerts to create DB delivery evidence.',
-            actions: webhookActions(input.scope, organization, orgWebhooks, hasWebhookDestination),
+            actions: webhookActions(input.scope, organization, orgWebhooks, hasWebhookDestination, latestDelivery),
         }),
         readinessCase({
             id: 'support_admin_readiness',
@@ -2739,8 +2739,13 @@ function operatorPath(input: {
     ]
 }
 
-function webhookActions(scope: OperatorScope, organization: DwmOrganizationSummary | undefined, orgWebhooks: DwmOrganizationWebhookDestination[], hasWebhookDestination: boolean): WorkbenchAction[] {
-    const actions: WorkbenchAction[] = []
+function webhookActions(scope: OperatorScope, organization: DwmOrganizationSummary | undefined, orgWebhooks: DwmOrganizationWebhookDestination[], hasWebhookDestination: boolean, latestDelivery?: DwmDeliveryItem): WorkbenchAction[] {
+    const actions: WorkbenchAction[] = [{
+        id: 'open_delivery_history',
+        label: 'Open delivery history',
+        method: 'GET',
+        href: deliveryLedgerHref(scope, latestDelivery),
+    }]
     const destination = orgWebhooks[0]
     if (organization && destination) {
         actions.push({
@@ -2761,6 +2766,19 @@ function webhookActions(scope: OperatorScope, organization: DwmOrganizationSumma
         })
     }
     return actions
+}
+
+function deliveryLedgerHref(scope: OperatorScope, latestDelivery?: DwmDeliveryItem) {
+    const params = new URLSearchParams()
+    if (scope.organizationId) {
+        params.set('organizationId', scope.organizationId)
+    } else {
+        params.set('tenantId', scope.tenantId)
+    }
+    if (latestDelivery?.alertId) {
+        params.set('alertId', latestDelivery.alertId)
+    }
+    return `/api/dwm/webhooks/deliveries?${params.toString()}`
 }
 
 function actionScope(scope: OperatorScope) {

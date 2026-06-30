@@ -1249,6 +1249,14 @@ if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org
 if (organizationReadinessCase.actions?.find(action => action.id === 'inspect_org_webhooks')?.href !== '/api/organizations/org_acme/webhooks') {
     throw new Error('Expected organization readiness to expose the webhook destination drill-in.')
 }
+const deliveryRouteCase = expectWorkbenchCase(cases, 'delivery_route')
+const deliveryHistoryHref = '/api/dwm/webhooks/deliveries?organizationId=org_acme&alertId=alert_acme_1'
+if (deliveryRouteCase.actions?.find(action => action.id === 'open_delivery_history')?.href !== deliveryHistoryHref) {
+    throw new Error('Expected delivery readiness to expose the scoped delivery history drill-in.')
+}
+if (deliveryRouteCase.relatedLinks.find(link => link.href === deliveryHistoryHref)?.label !== 'Delivery history') {
+    throw new Error('Expected delivery readiness links to include the scoped delivery history.')
+}
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
 void (liveProofAlertsUrl.searchParams.get('organizationId') satisfies string | null)
