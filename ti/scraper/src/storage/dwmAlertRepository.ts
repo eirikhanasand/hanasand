@@ -2135,13 +2135,16 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       : undefined
   ].filter(Boolean).map(String));
   const evidenceFreshness = buildDwmAlertEvidenceFreshness(input.handoff);
+  const sourceHandoffBlockerCodes = uniqueStrings([
+    ...provenanceGapCodes,
+    ...evidenceFreshness.blockerCodes
+  ]);
   const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered"
     || input.handoff.deliveryReadiness.deliveryHistoryRefs.length > 0;
   const webhookReady = input.handoff.deliveryReadiness.ready || delivered;
   const sourceReady = input.handoff.evidence.evidenceCount > 0
     && input.handoff.evidence.selectedCaptureIds.length > 0
-    && provenanceGapCodes.length === 0
-    && evidenceFreshness.blockerCodes.length === 0;
+    && sourceHandoffBlockerCodes.length === 0;
   const ready = sourceReady && input.handoff.caseReadiness.ready && webhookReady;
   const state: DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["state"] = ready
     ? "ready_for_consumers"
@@ -2169,7 +2172,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     provenanceGapCodes,
     evidenceFreshness,
     webhookConsumer: {
-      ready: webhookReady,
+      ready: webhookReady && sourceReady,
       deliveryReady: input.handoff.deliveryReadiness.ready,
       delivered,
       deliveryDedupeKey: input.handoff.updateReceipt?.deliveryDedupeKey ?? input.handoff.replayReceipt.deliveryDedupeKey,
@@ -2179,7 +2182,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       createdEventId: input.handoff.createdEventDispatch.eventId,
       createdEventDispatchIdempotencyKey: input.handoff.createdEventDispatch.idempotencyKey,
       deliveryHistoryRefs: input.handoff.deliveryReadiness.deliveryHistoryRefs,
-      blockerCodes: deliveryBlockerCodes
+      blockerCodes: uniqueStrings([...deliveryBlockerCodes, ...sourceHandoffBlockerCodes])
     },
     caseConsumer: {
       ready: input.handoff.caseReadiness.ready,

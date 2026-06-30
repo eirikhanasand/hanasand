@@ -1660,6 +1660,11 @@ describe("dwm alert repository", () => {
         captureIds: ["cap_repo_old_evidence_acme"],
         sourceFamilies: ["telegram_public"],
         blockerCodes: ["stale_capture_evidence"]
+      },
+      webhookConsumer: {
+        ready: false,
+        deliveryReady: true,
+        blockerCodes: ["stale_capture_evidence"]
       }
     });
     expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("evidenceFreshness");
@@ -1668,6 +1673,10 @@ describe("dwm alert repository", () => {
     expect(staleEvidenceReceiptRows.get("alert_generation")).toMatchObject({
       blockerCodes: expect.arrayContaining(["stale_capture_evidence"]),
       missingContract: false
+    });
+    expect(staleEvidenceReceiptRows.get("webhook_delivery")).toMatchObject({
+      blockerCodes: ["stale_capture_evidence"],
+      missingContract: true
     });
     expect(staleEvidenceReceiptRows.get("public_ti")).toMatchObject({
       blockerCodes: ["stale_capture_evidence"],
