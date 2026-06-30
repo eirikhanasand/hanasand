@@ -5,9 +5,10 @@ export const PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION 
 export const PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION = "hanasand.product_readiness.end_to_end_workflow_packet.v1" as const;
 export const PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION = "hanasand.product_readiness.customer_workflow_envelope.v1" as const;
 export const PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION = "hanasand.product_readiness.customer_workflow_envelope_compatibility.v1" as const;
+export const PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION = "hanasand.product_readiness.customer_workflow_consumer_fixture.v1" as const;
 
 export type ProductReadinessConsumerState = "ready" | "partial" | "blocked" | "unsupported";
-export type ProductReadinessConsumerLane = "org" | "dashboard" | "publicTI" | "alert" | "webhook" | "case" | "helpdesk" | "website";
+export type ProductReadinessConsumerLane = "org" | "dashboard" | "publicTI" | "alert" | "webhook" | "case" | "helpdesk" | "website" | "integration";
 
 type SafeOutput = {
   metadataOnly?: boolean;
@@ -112,7 +113,8 @@ export type ProductReadinessEndToEndWorkflowStepId =
   | "analyst_case"
   | "webhook_destination"
   | "delivery_outcome"
-  | "support_audit";
+  | "support_audit"
+  | "deploy_eligibility";
 
 export type ProductReadinessEndToEndWorkflowField = {
   alias: string;
@@ -135,7 +137,7 @@ export type ProductReadinessEndToEndWorkflowStep = {
 };
 
 export type ProductReadinessConsumerImplementationNote = {
-  consumerLane: ProductReadinessConsumerLane | "integration";
+  consumerLane: ProductReadinessConsumerLane;
   route: string;
   consumesSchemaVersion: typeof PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION;
   requiredFields: string[];
@@ -291,6 +293,25 @@ const consumerDefinitions: ProductReadinessConsumerDefinition[] = [
       owningLane: "ownerLane",
       proofLink: "proofLink"
     }
+  },
+  {
+    laneId: "integration",
+    ownerLane: "integration",
+    route: "/v1/contracts",
+    orgCapabilityIds: ["organization_membership", "shared_watchlist_scope", "org_scoped_alert_bridge", "destination_delivery_state", "case_workflow_state", "source_coverage_state", "public_ti_handoff"],
+    requiredTypedFields: {
+      orgId: "organizationId",
+      watchlistId: "watchlistId",
+      alertId: "alertId",
+      caseId: "caseId",
+      provenanceHash: "provenanceHash",
+      sourceCoverage: "sourceCoverageState",
+      workflowState: "workflowState",
+      destinationDeliveryState: "destinationDeliveryState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink"
+    }
   }
 ];
 
@@ -325,6 +346,7 @@ const endToEndWorkflowDefinitions: ProductReadinessWorkflowStepDefinition[] = [
     consumerLane: "publicTI",
     requiredFields: {
       orgId: "organizationId",
+      sourceCoverageId: "sourceIds[0]",
       sourceCoverageIds: "sourceIds",
       provenanceHash: "provenanceHash",
       sourceCoverage: "sourceCoverageState",
@@ -342,6 +364,7 @@ const endToEndWorkflowDefinitions: ProductReadinessWorkflowStepDefinition[] = [
       watchlistId: "watchlistId",
       alertId: "alertId",
       caseId: "caseId",
+      sourceCoverageId: "sourceIds[0]",
       provenanceHash: "provenanceHash",
       sourceCoverage: "sourceCoverageState",
       workflowStatus: "workflowState",
@@ -408,16 +431,38 @@ const endToEndWorkflowDefinitions: ProductReadinessWorkflowStepDefinition[] = [
       proofLink: "proofLink",
       lastVerifiedAt: "lastVerifiedAt"
     }
+  },
+  {
+    stepId: "deploy_eligibility",
+    consumerLane: "integration",
+    requiredFields: {
+      orgId: "organizationId",
+      version: "schemaVersion",
+      watchlistId: "watchlistId",
+      alertId: "alertId",
+      caseId: "caseId",
+      provenanceHash: "provenanceHash",
+      sourceCoverage: "sourceCoverageState",
+      workflowStatus: "workflowState",
+      destinationDeliveryState: "destinationDeliveryState",
+      supportAuditStatus: "supportAction.status",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
   }
 ];
 
 const requiredEnvelopeFieldAliases = [
+  "version",
   "orgId",
   "memberRef",
   "inviteRef",
   "watchlistId",
   "alertId",
   "caseId",
+  "sourceCoverageId",
   "sourceCoverageIds",
   "provenanceHash",
   "workflowStatus",
@@ -429,6 +474,8 @@ const requiredEnvelopeFieldAliases = [
   "proofLink",
   "lastVerifiedAt"
 ];
+
+const workflowConsumerFixtureLanes: ProductReadinessConsumerLane[] = ["dashboard", "website", "integration"];
 
 const consumerImplementationNotes: ProductReadinessConsumerImplementationNote[] = [
   {
@@ -603,13 +650,70 @@ export function buildProductReadinessCustomerWorkflowEnvelope(
     sourceSchemas: consumerGuidance.sourceSchemas,
     workflowPacket,
     consumerGuidance,
-    consumerImplementationNotes,
+    consumerImplementationNotes: cloneConsumerImplementationNotes(),
     safeOutput: safeMetadataOnly
   };
   return {
     ...envelope,
     compatibility: validateProductReadinessCustomerWorkflowEnvelope(envelope)
   };
+}
+
+export function buildProductReadinessCustomerWorkflowConsumerFixture(
+  envelope: ReturnType<typeof buildProductReadinessCustomerWorkflowEnvelope>
+) {
+  const availableFields = new Set(envelope.workflowPacket.typedFields);
+  const stepsByLane = new Map<ProductReadinessConsumerLane, ProductReadinessEndToEndWorkflowStep[]>();
+  for (const step of envelope.workflowPacket.steps) {
+    stepsByLane.set(step.consumerLane, [...(stepsByLane.get(step.consumerLane) || []), step]);
+  }
+  const consumers = workflowConsumerFixtureLanes.map((laneId) => {
+    const note = envelope.consumerImplementationNotes.find((candidate) => candidate.consumerLane === laneId);
+    const requiredFields = Array.isArray(note?.requiredFields) ? note.requiredFields : [];
+    const missingRequiredFields = requiredFields.filter((field) => !availableFields.has(field));
+    const steps = stepsByLane.get(laneId) || [];
+    const states = steps.map((step) => step.state);
+    const state = missingRequiredFields.length > 0
+      ? "blocked"
+      : states.includes("blocked")
+        ? "blocked"
+        : states.includes("unsupported")
+          ? "unsupported"
+          : states.includes("partial")
+            ? "partial"
+            : "ready";
+    return {
+      laneId,
+      route: note?.route || "/v1/contracts",
+      state,
+      consumesSchemaVersion: note?.consumesSchemaVersion || PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+      requiredFields,
+      missingRequiredFields,
+      stepIds: steps.map((step) => step.stepId),
+      proofLinks: steps.map((step) => step.proofLink),
+      canReadEnvelope: Boolean(note) && missingRequiredFields.length === 0,
+      safeOutput: safeMetadataOnly
+    };
+  });
+  return {
+    schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    producer: "buildProductReadinessCustomerWorkflowConsumerFixture",
+    envelopeSchemaVersion: envelope.schemaVersion,
+    workflowPacketSchemaVersion: envelope.workflowPacket.schemaVersion,
+    state: consumers.every((consumer) => consumer.state === "ready" && consumer.canReadEnvelope) ? "ready" : "blocked",
+    consumers,
+    compatibility: envelope.compatibility,
+    safeOutput: safeMetadataOnly
+  };
+}
+
+function cloneConsumerImplementationNotes(): ProductReadinessConsumerImplementationNote[] {
+  return consumerImplementationNotes.map((note) => ({
+    ...note,
+    requiredFields: [...note.requiredFields],
+    expectedStates: [...note.expectedStates]
+  }));
 }
 
 export function validateProductReadinessCustomerWorkflowEnvelope(envelope: {
@@ -662,6 +766,7 @@ export function validateProductReadinessCustomerWorkflowEnvelope(envelope: {
     workflowPacketSchemaVersion: envelope.workflowPacket?.schemaVersion,
     consumerGuidanceSchemaVersion: envelope.consumerGuidance?.schemaVersion,
     requiredFieldAliases: requiredEnvelopeFieldAliases,
+    acceptedFutureFields: (envelope.workflowPacket?.typedFields || []).filter((field) => !requiredEnvelopeFieldAliases.includes(field)),
     missingRequiredFields,
     requiredStepIds,
     missingStepIds,
@@ -793,7 +898,8 @@ function buildSyntheticWorkflowFields(
   lastVerifiedAt: string
 ) {
   const fields: Record<string, string> = {
-    lastVerifiedAt: lastVerifiedAt ? "lastVerifiedAt" : ""
+    lastVerifiedAt: lastVerifiedAt ? "lastVerifiedAt" : "",
+    version: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION
   };
   if (!guidanceRow) {
     return fields;
@@ -809,9 +915,13 @@ function buildSyntheticWorkflowFields(
     }
   }
   if (definition.stepId === "source_coverage" && proofContractIds.has("source_provenance_receipts")) {
+    fields.sourceCoverageId = "sourceIds[0]";
     fields.sourceCoverageIds = "sourceIds";
   }
-  if (definition.stepId === "matched_alert" || definition.stepId === "analyst_case" || definition.stepId === "delivery_outcome") {
+  if ((definition.stepId === "matched_alert" || definition.stepId === "deploy_eligibility") && proofContractIds.has("source_provenance_receipts")) {
+    fields.sourceCoverageId = "sourceIds[0]";
+  }
+  if (definition.stepId === "matched_alert" || definition.stepId === "analyst_case" || definition.stepId === "delivery_outcome" || definition.stepId === "deploy_eligibility") {
     const workflowField = guidanceRow.typedFields.find((field) => field.alias === "workflowState" && field.present);
     if (workflowField) {
       fields.workflowStatus = workflowField.sourceField;
@@ -822,7 +932,7 @@ function buildSyntheticWorkflowFields(
   if ((definition.stepId === "webhook_destination" || definition.stepId === "delivery_outcome") && proofContractIds.has("webhook_delivery_receipts")) {
     fields.deliveryStatus = "destinationDeliveryState";
   }
-  if (definition.stepId === "support_audit" && proofContractIds.has("support_action_receipts")) {
+  if ((definition.stepId === "support_audit" || definition.stepId === "deploy_eligibility") && proofContractIds.has("support_action_receipts")) {
     fields.supportAuditStatus = "supportAction.status";
   }
   return Object.fromEntries(Object.entries(fields).filter(([, value]) => Boolean(value)));

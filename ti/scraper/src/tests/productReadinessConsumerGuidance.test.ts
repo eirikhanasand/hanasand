@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { contractIndex } from "../api/contractsRoute.ts";
 import {
   PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION,
+  PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION,
   PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
   PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
   PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
   PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION,
   buildProductReadinessConsumerGuidance,
+  buildProductReadinessCustomerWorkflowConsumerFixture,
   buildProductReadinessCustomerWorkflowEnvelope,
   buildProductReadinessEndToEndWorkflowPacket,
   buildProductReadinessOrgAlertConsumerPacketFixture,
@@ -23,7 +25,7 @@ describe("product readiness consumer guidance", () => {
       schemaVersion: PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION,
       route: "/v1/contracts",
       producer: "buildProductReadinessConsumerGuidance",
-      requiredLaneIds: ["org", "dashboard", "publicTI", "alert", "webhook", "case", "helpdesk", "website"],
+      requiredLaneIds: ["org", "dashboard", "publicTI", "alert", "webhook", "case", "helpdesk", "website", "integration"],
       safeOutput: {
         metadataOnly: true,
         rawEvidenceExposed: false,
@@ -75,6 +77,19 @@ describe("product readiness consumer guidance", () => {
       state: "ready",
       ownerLane: "support",
       route: "/api/admin/support/readiness"
+    });
+    expect(rows.get("integration")).toMatchObject({
+      state: "ready",
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      typedFields: expect.arrayContaining([
+        expect.objectContaining({ alias: "orgId", sourceField: "organizationId", present: true }),
+        expect.objectContaining({ alias: "watchlistId", sourceField: "watchlistId", present: true }),
+        expect.objectContaining({ alias: "alertId", sourceField: "alertId", present: true }),
+        expect.objectContaining({ alias: "caseId", sourceField: "caseId", present: true }),
+        expect.objectContaining({ alias: "provenanceHash", sourceField: "provenanceHash", present: true }),
+        expect.objectContaining({ alias: "destinationDeliveryState", sourceField: "destinationDeliveryState", present: true })
+      ])
     });
     expect(JSON.stringify(guidance)).not.toContain("https://discord.com");
     expect(JSON.stringify(guidance)).not.toContain("rawEvidenceDump");
@@ -170,15 +185,18 @@ describe("product readiness consumer guidance", () => {
         "analyst_case",
         "webhook_destination",
         "delivery_outcome",
-        "support_audit"
+        "support_audit",
+        "deploy_eligibility"
       ],
       typedFields: expect.arrayContaining([
+        "version",
         "orgId",
         "memberRef",
         "inviteRef",
         "watchlistId",
         "alertId",
         "caseId",
+        "sourceCoverageId",
         "sourceCoverageIds",
         "provenanceHash",
         "workflowStatus",
@@ -234,6 +252,21 @@ describe("product readiness consumer guidance", () => {
       consumerLane: "helpdesk",
       typedFields: expect.arrayContaining([
         expect.objectContaining({ alias: "supportAuditStatus", sourceField: "supportAction.status", present: true })
+      ])
+    });
+    expect(steps.get("deploy_eligibility")).toMatchObject({
+      state: "ready",
+      consumerLane: "integration",
+      ownerLane: "integration",
+      route: "/v1/contracts",
+      typedFields: expect.arrayContaining([
+        expect.objectContaining({ alias: "version", sourceField: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION, present: true }),
+        expect.objectContaining({ alias: "orgId", present: true }),
+        expect.objectContaining({ alias: "watchlistId", present: true }),
+        expect.objectContaining({ alias: "alertId", present: true }),
+        expect.objectContaining({ alias: "caseId", present: true }),
+        expect.objectContaining({ alias: "destinationDeliveryState", present: true }),
+        expect.objectContaining({ alias: "supportAuditStatus", present: true })
       ])
     });
     expect(JSON.stringify(packet)).not.toContain("https://discord.com");
@@ -297,6 +330,10 @@ describe("product readiness consumer guidance", () => {
       state: "blocked"
     });
     expect(steps.get("delivery_outcome")?.blockerCodes).toContain("unsafe_org_capability_output");
+    expect(steps.get("deploy_eligibility")).toMatchObject({
+      state: "blocked",
+      blockerCodes: expect.arrayContaining(["unsafe_org_capability_output"])
+    });
   });
 
   test("builds a customer workflow readiness envelope with consumer notes", () => {
@@ -334,12 +371,14 @@ describe("product readiness consumer guidance", () => {
       }
     });
     expect(envelope.workflowPacket.typedFields).toEqual(expect.arrayContaining([
+      "version",
       "orgId",
       "memberRef",
       "inviteRef",
       "watchlistId",
       "alertId",
       "caseId",
+      "sourceCoverageId",
       "sourceCoverageIds",
       "provenanceHash",
       "workflowStatus",
@@ -384,7 +423,7 @@ describe("product readiness consumer guidance", () => {
     });
     expect(notes.get("integration")).toMatchObject({
       route: "/v1/contracts",
-      requiredFields: expect.arrayContaining(["orgId", "lastVerifiedAt", "proofLink"])
+      requiredFields: expect.arrayContaining(["version", "orgId", "sourceCoverageId", "lastVerifiedAt", "proofLink"])
     });
     expect(JSON.stringify(envelope)).not.toContain("https://discord.com");
     expect(JSON.stringify(envelope)).not.toContain("rawEvidenceDump");
@@ -393,7 +432,7 @@ describe("product readiness consumer guidance", () => {
   test("validates customer workflow envelope compatibility failures", () => {
     const envelope = buildProductReadinessCustomerWorkflowEnvelope(contractIndex());
     const broken = JSON.parse(JSON.stringify(envelope));
-    broken.workflowPacket.typedFields = broken.workflowPacket.typedFields.filter((field: string) => field !== "inviteRef" && field !== "supportAuditStatus");
+    broken.workflowPacket.typedFields = broken.workflowPacket.typedFields.filter((field: string) => field !== "version" && field !== "inviteRef" && field !== "supportAuditStatus");
     broken.workflowPacket.steps = broken.workflowPacket.steps.filter((step: any) => step.stepId !== "support_audit");
     broken.consumerImplementationNotes = broken.consumerImplementationNotes.filter((note: any) => note.consumerLane !== "helpdesk");
     broken.workflowPacket.steps.find((step: any) => step.stepId === "matched_alert").proofLink.contractIds = [];
@@ -405,7 +444,7 @@ describe("product readiness consumer guidance", () => {
       schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_COMPATIBILITY_SCHEMA_VERSION,
       ok: false,
       state: "blocked",
-      missingRequiredFields: expect.arrayContaining(["inviteRef", "supportAuditStatus"]),
+      missingRequiredFields: expect.arrayContaining(["version", "inviteRef", "supportAuditStatus"]),
       missingStepIds: expect.arrayContaining(["support_audit"]),
       missingConsumerNotes: expect.arrayContaining(["helpdesk"]),
       missingProofSteps: expect.arrayContaining(["matched_alert"]),
@@ -417,5 +456,61 @@ describe("product readiness consumer guidance", () => {
         "unsafe_customer_workflow_output"
       ])
     });
+  });
+
+  test("allows future envelope fields while requiring current compatibility fields", () => {
+    const envelope = buildProductReadinessCustomerWorkflowEnvelope(contractIndex());
+    const futureEnvelope = JSON.parse(JSON.stringify(envelope));
+    futureEnvelope.workflowPacket.typedFields.push("futureConsumerChecksum");
+
+    const compatibility = validateProductReadinessCustomerWorkflowEnvelope(futureEnvelope);
+
+    expect(compatibility).toMatchObject({
+      ok: true,
+      state: "ready",
+      missingRequiredFields: [],
+      acceptedFutureFields: expect.arrayContaining(["futureConsumerChecksum"])
+    });
+  });
+
+  test("builds a customer workflow consumer fixture for dashboard website and integration", () => {
+    const envelope = buildProductReadinessCustomerWorkflowEnvelope(contractIndex(), { lastVerifiedAt: "2026-06-30T14:00:00.000Z" });
+    const fixture = buildProductReadinessCustomerWorkflowConsumerFixture(envelope);
+    const consumers = new Map(fixture.consumers.map((consumer) => [consumer.laneId, consumer]));
+
+    expect(fixture).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_CONSUMER_FIXTURE_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      producer: "buildProductReadinessCustomerWorkflowConsumerFixture",
+      envelopeSchemaVersion: PRODUCT_READINESS_CUSTOMER_WORKFLOW_ENVELOPE_SCHEMA_VERSION,
+      state: "ready",
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(consumers.get("dashboard")).toMatchObject({
+      route: "/dashboard",
+      state: "ready",
+      canReadEnvelope: true,
+      stepIds: []
+    });
+    expect(consumers.get("website")).toMatchObject({
+      route: "/",
+      state: "ready",
+      canReadEnvelope: true,
+      stepIds: []
+    });
+    expect(consumers.get("integration")).toMatchObject({
+      route: "/v1/contracts",
+      state: "ready",
+      canReadEnvelope: true,
+      stepIds: ["deploy_eligibility"],
+      requiredFields: expect.arrayContaining(["version", "orgId", "sourceCoverageId", "lastVerifiedAt"])
+    });
+    expect(JSON.stringify(fixture)).not.toContain("https://discord.com");
+    expect(JSON.stringify(fixture)).not.toContain("rawEvidenceDump");
   });
 });
