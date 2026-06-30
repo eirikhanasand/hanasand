@@ -25,6 +25,7 @@ import {
     buildDwmWebhookDestinationLifecycle,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDestinationContracts,
+    buildDwmWebhookDestinationLookupContract,
     buildDwmWebhookDestinationTestContract,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryHistory,
@@ -131,6 +132,20 @@ export async function getDwmWebhookDestinations(req: FastifyRequest<{ Querystrin
                 : null,
         }),
         destinationLifecycle: buildDwmWebhookDestinationLifecycle({ destinations, deliveries, auditEvents, ...lifecycleAccess }),
+        destinationLookup: buildDwmWebhookDestinationLookupContract({
+            destinations,
+            deliveries,
+            auditEvents,
+            ...lifecycleAccess,
+            visibility: orgId && orgId !== userId
+                ? {
+                    role: membership?.role,
+                    status: 'active',
+                    userActive: true,
+                    alertVisibilityPolicy: membership?.alert_visibility_policy,
+                }
+                : null,
+        }),
         destinationTests: destinations.map(destination => buildDwmWebhookDestinationTestContract({
             destination,
             deliveries,

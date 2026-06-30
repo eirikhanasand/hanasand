@@ -17,6 +17,7 @@ import {
     buildDwmWebhookDestinationHealth,
     buildDwmWebhookDestinationTestContract,
     buildDwmWebhookDestinationLifecycle,
+    buildDwmWebhookDestinationLookupContract,
     buildDwmWebhookDeliveryPreview,
     buildDwmWebhookDeliveryEvidence,
     buildDwmWebhookDeliveryHistory,
@@ -2454,6 +2455,15 @@ const destinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
     canManage: true,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const destinationLookup = buildDwmWebhookDestinationLookupContract({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: 'admin',
+    canManage: true,
+    visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const memberDestinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -2463,7 +2473,25 @@ const memberDestinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix
     canManage: false,
     visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const memberDestinationLookup = buildDwmWebhookDestinationLookupContract({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: 'member',
+    canManage: false,
+    visibility: { role: 'member', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
+})
 const nonmemberDestinationDeliveryMatrix = buildDwmWebhookDestinationDeliveryMatrix({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: undefined, status: undefined, userActive: true, alertVisibilityPolicy: 'members' },
+})
+const nonmemberDestinationLookup = buildDwmWebhookDestinationLookupContract({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
     deliveries: auditDeliveryRows,
@@ -2990,6 +3018,9 @@ const memberAuditTrailRetry = memberDeliveryAuditTrail.entries.find(item => item
 const matrixReplayDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const matrixRetryDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_live_contract')
 const matrixDisabledDestination = destinationDeliveryMatrix.destinations.find(item => item.destinationId === 'destination_disabled_contract')
+const lookupReplayDestination = destinationLookup.destinations.find(item => item.destinationId === 'destination_replay_contract')
+const lookupRetryDestination = destinationLookup.destinations.find(item => item.destinationId === 'destination_live_contract')
+const lookupDisabledDestination = destinationLookup.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 expect(deliveryRetryPersistence.schemaVersion === 'dwm.webhook.delivery_retry_persistence.v1' && deliveryRetryPersistence.counts.retryable >= 1, 'Delivery retry persistence should expose grouped retry proof.', deliveryRetryPersistence)
 expect(persistedRetryKey?.retry.retryable === true && persistedRetryKey.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && persistedRetryKey.retry.persistedAttemptCount === 2, 'Delivery retry persistence should keep retry/backoff attempts by idempotency key.', persistedRetryKey)
 expect(persistedReplayKey?.replay === true && persistedReplayKey.dedupe.duplicate === true && persistedReplayKey.dedupe.duplicateAttemptCount === 2, 'Delivery retry persistence should expose duplicate replay/dedupe proof.', persistedReplayKey)
@@ -3052,6 +3083,14 @@ expect(matrixDisabledDestination?.enabled === false && matrixDisabledDestination
 expect(memberDestinationDeliveryMatrix.access.memberSafe === true && memberDestinationDeliveryMatrix.destinations.some(item => item.audit.auditEventContracts.length === 0), 'Destination delivery matrix should keep member views audit-safe.', memberDestinationDeliveryMatrix)
 expect(nonmemberDestinationDeliveryMatrix.destinations.length === 0 && nonmemberDestinationDeliveryMatrix.blockers.some(item => item.code === 'permission_denied'), 'Destination delivery matrix should deny nonmembers without leaking destination metadata.', nonmemberDestinationDeliveryMatrix)
 expect(!JSON.stringify(destinationDeliveryMatrix).includes(secret), 'Destination delivery matrix should redact endpoint, response, and audit secrets.', destinationDeliveryMatrix)
+expect(destinationLookup.schemaVersion === 'dwm.webhook.destination_lookup.v1' && destinationLookup.routeContract.list.requiredQuery.includes('orgId') && destinationLookup.routeContract.test.noNetworkDefault === true, 'Destination lookup should expose stable org-scoped route contracts.', destinationLookup.routeContract)
+expect(lookupReplayDestination?.redactedDestination.endpointExposed === false && lookupReplayDestination.redactedDestination.endpointHash === 'endpoint_replay_hash' && lookupReplayDestination.routes.destinationDetail.includes('destination_replay_contract'), 'Destination lookup should expose redacted destination metadata and detail routes.', lookupReplayDestination)
+expect(lookupReplayDestination?.delivery.lastReplayId === 'delivery_replay_duplicate_contract' && lookupReplayDestination.audit.latestAuditEventId === 'audit_replay_duplicate_contract', 'Destination lookup should expose replay delivery and audit linkage.', lookupReplayDestination)
+expect(lookupRetryDestination?.retry.ready === true && lookupRetryDestination.retry.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Destination lookup should expose retry/backoff state.', lookupRetryDestination)
+expect(lookupDisabledDestination?.enabled === false && lookupDisabledDestination.blockers.some(item => item.code === 'destination_disabled'), 'Destination lookup should expose disabled destination blockers.', lookupDisabledDestination)
+expect(memberDestinationLookup.access.memberSafe === true && memberDestinationLookup.destinations.every(item => item.audit.contracts.length === 0), 'Destination lookup should keep member rows audit-safe.', memberDestinationLookup)
+expect(nonmemberDestinationLookup.destinations.length === 0 && nonmemberDestinationLookup.blockers.some(item => item.code === 'permission_denied'), 'Destination lookup should deny nonmembers without destination leakage.', nonmemberDestinationLookup)
+expect(!JSON.stringify(destinationLookup).includes(secret), 'Destination lookup should redact endpoint, response, and audit secrets.', destinationLookup)
 const dashboardVerified = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_replay_contract')
 const dashboardDisabled = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_disabled_contract')
 const dashboardSecretMissing = dashboardReadiness.destinations.find(item => item.destinationId === 'destination_missing_url_contract')
@@ -3412,6 +3451,10 @@ console.log(JSON.stringify({
         'destination delivery matrix retry/disabled blockers',
         'destination delivery matrix member/nonmember gates',
         'destination delivery matrix secret redaction',
+        'destination lookup org-scoped route contract',
+        'destination lookup retry/audit proof',
+        'destination lookup member/nonmember gates',
+        'destination lookup secret redaction',
         'dashboard readiness verified delivery proof',
         'dashboard readiness failed test-send state',
         'dashboard readiness disabled/secret-missing blockers',
@@ -3629,6 +3672,13 @@ console.log(JSON.stringify({
             'destinationDeliveryMatrix.destinations[].deliveryProof.lastReplayed.requestId',
             'destinationDeliveryMatrix.destinations[].retry.nextRetryAt',
             'destinationDeliveryMatrix.destinations[].blockers[].code',
+            'destinationLookup.schemaVersion',
+            'destinationLookup.routeContract.list.requiredQuery',
+            'destinationLookup.destinations[].redactedDestination.endpointHash',
+            'destinationLookup.destinations[].delivery.lastReplayId',
+            'destinationLookup.destinations[].retry.nextRetryAt',
+            'destinationLookup.destinations[].audit.latestAuditEventId',
+            'destinationLookup.destinations[].routes.destinationDetail',
             'dashboardReadiness.schemaVersion',
             'dashboardReadiness.destinations[].healthStates',
             'dashboardReadiness.destinations[].latestDeliveryProof.auditEventId',
