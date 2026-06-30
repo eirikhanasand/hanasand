@@ -98,6 +98,30 @@ export function listCases(url: URL, options: ApiServerOptions, request?: Request
 
 export async function createCase(request: Request, options: ApiServerOptions): Promise<Response> {
   const body = await readJson<any>(request);
+  return createCaseFromBody(body, request, options);
+}
+
+export async function createCaseFromDwmAlert(request: Request, options: ApiServerOptions, alertId: string | undefined): Promise<Response> {
+  const body = await readJson<any>(request);
+  const routeAlertId = String(alertId ?? "").trim();
+  if (!routeAlertId) return json({ error: { code: "missing_alert_id", message: "A DWM alert ID is required to open a case." } }, 400);
+  const requestedAlertId = String(body.alertId ?? body.sourceId ?? routeAlertId).trim();
+  if (requestedAlertId !== routeAlertId) {
+    return json({ error: { code: "alert_id_mismatch", message: "Case handoff alert id must match the route alert id." } }, 400);
+  }
+  return createCaseFromBody({ ...body, alertId: routeAlertId, sourceId: routeAlertId }, request, options, {
+    includeHandoff: true,
+    requireAlertProvenance: true,
+    route: `/v1/dwm/alerts/${encodeURIComponent(routeAlertId)}/case-handoff`
+  });
+}
+
+async function createCaseFromBody(
+  body: any,
+  request: Request,
+  options: ApiServerOptions,
+  handoffOptions: { includeHandoff?: boolean; requireAlertProvenance?: boolean; route?: string } = {}
+): Promise<Response> {
   const scope = resolveOrganizationScope({ body, request }, options);
   if (scope.error) return scope.error;
   const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
@@ -111,10 +135,35 @@ export async function createCase(request: Request, options: ApiServerOptions): P
   if (!alert || alert.tenantId !== scope.tenantId || !alertMatchesOrganizationScope(alert, scope.organizationId)) {
     return json({ error: { code: "alert_not_found", message: "DWM alert not found for this organization." } }, 404);
   }
+  const provenance = alertCaseHandoffProvenance(alert);
+  if (handoffOptions.requireAlertProvenance && provenance.blockers.length) {
+    return json({
+      error: { code: "missing_alert_provenance", message: "Alert case handoff requires source provenance." },
+      alertId: alert.id,
+      organizationId: scope.organizationId,
+      blockers: provenance.blockers
+    }, 409);
+  }
 
-  const id = String(body.id ?? stableId("case", `${scope.tenantId}:${alert.id}`));
+  const id = String(body.id ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate ?? stableId("case", `${scope.tenantId}:${alert.id}`));
   const existing = (options.store as any).getCase?.(id) ?? findCaseByAlert(options, scope.tenantId, alert.id);
-  if (existing && body.reopen !== true) return json({ organization: scope.organization, access: caseAccessSummary(access), case: existing, alert }, 200);
+  const idempotencyKey = normalizeNote(body.idempotencyKey ?? request.headers.get("idempotency-key") ?? request.headers.get("x-idempotency-key"));
+  if (existing && body.reopen !== true) {
+    return json({
+      organization: scope.organization,
+      access: caseAccessSummary(access),
+      case: existing,
+      alert,
+      alertCaseHandoff: handoffOptions.includeHandoff ? buildAlertCaseHandoff({
+        caseRecord: existing,
+        alert,
+        route: handoffOptions.route,
+        idempotencyKey,
+        replayState: "reused",
+        provenance
+      }) : undefined
+    }, 200);
+  }
 
   const assignedOwner = normalizeOwner(body.assignedOwner ?? body.owner);
   const ownerValidation = validateAssignedOwner(options, scope.organizationId, assignedOwner);
@@ -127,6 +176,7 @@ export async function createCase(request: Request, options: ApiServerOptions): P
     generatedAt,
     actor,
     action: existing ? "reopen" : "open",
+    idempotencyKey,
     fromStatus: existing?.status,
     toStatus: "open",
     fromOwner: existing?.assignedOwner,
@@ -153,7 +203,22 @@ export async function createCase(request: Request, options: ApiServerOptions): P
   };
   const saved = (options.store as any).saveCase(caseRecord);
   syncAlertForCase(options, alert, saved, event);
-  return json({ organization: scope.organization, access: caseAccessSummary(access), case: saved, alert }, existing ? 200 : 201);
+  const syncedAlert = findDwmAlert(options, alert.id);
+  return json({
+    organization: scope.organization,
+    access: caseAccessSummary(access),
+    case: saved,
+    alert: syncedAlert,
+    alertCaseHandoff: handoffOptions.includeHandoff ? buildAlertCaseHandoff({
+      caseRecord: saved,
+      alert: syncedAlert ?? alert,
+      route: handoffOptions.route,
+      idempotencyKey,
+      replayState: "recorded",
+      event,
+      provenance
+    }) : undefined
+  }, existing ? 200 : 201);
 }
 
 export function getCaseDetail(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
@@ -1187,6 +1252,90 @@ function customerNotificationContext(caseRecord: AnalystCase) {
     latest,
     notified: Boolean(latest),
     modes: [...new Set(receipts.map((receipt) => receipt.deliveryMode))]
+  };
+}
+
+function alertCaseHandoffProvenance(alert: any) {
+  const evidence = Array.isArray(alert?.evidence) ? alert.evidence : [];
+  const captureIds = uniqueCaseStrings([
+    ...(alert?.provenance?.captureIds ?? []),
+    ...(alert?.workflowContext?.captureIds ?? []),
+    ...evidence.map((item: any) => item.provenance?.captureId ?? item.captureId).filter(Boolean)
+  ]);
+  const sourceIds = uniqueCaseStrings([
+    ...(alert?.provenance?.sourceIds ?? []),
+    ...(alert?.workflowContext?.sourceIds ?? []),
+    ...evidence.map((item: any) => item.sourceId ?? item.provenance?.sourceId).filter(Boolean)
+  ]);
+  const contentHashes = uniqueCaseStrings([
+    ...(alert?.provenance?.contentHashes ?? []),
+    ...evidence.map((item: any) => item.contentHash).filter(Boolean)
+  ]);
+  const sourceFamilies = uniqueCaseStrings([
+    ...(alert?.provenance?.sourceFamilies ?? []),
+    ...evidence.map((item: any) => item.sourceFamily).filter(Boolean)
+  ]);
+  const blockers = [
+    captureIds.length ? undefined : { code: "missing_capture_provenance", path: "alert.provenance.captureIds" },
+    sourceIds.length ? undefined : { code: "missing_source_provenance", path: "alert.provenance.sourceIds" },
+    contentHashes.length ? undefined : { code: "missing_content_hash", path: "alert.provenance.contentHashes" }
+  ].filter(Boolean) as Array<{ code: string; path: string }>;
+  return {
+    captureIds,
+    sourceIds,
+    contentHashes,
+    sourceFamilies,
+    evidenceCount: evidence.length,
+    blockers
+  };
+}
+
+function buildAlertCaseHandoff(input: {
+  caseRecord: AnalystCase;
+  alert: any;
+  route?: string;
+  idempotencyKey?: string;
+  replayState: "recorded" | "reused";
+  event?: AnalystCaseEvent;
+  provenance: ReturnType<typeof alertCaseHandoffProvenance>;
+}) {
+  const casePath = input.alert?.casePath ?? input.alert?.workflowContext?.casePath ?? `/v1/cases/${input.caseRecord.id}?alertId=${input.caseRecord.alertId ?? input.alert?.id}`;
+  return {
+    schemaVersion: "dwm.alert_case_handoff.v1",
+    route: input.route ?? "/v1/cases",
+    method: "POST",
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.alert?.id ?? input.caseRecord.alertId,
+    caseId: input.caseRecord.id,
+    casePath,
+    watchlistIds: uniqueCaseStrings([
+      ...(input.alert?.watchlistIds ?? []),
+      ...(input.alert?.workflowContext?.watchlistIds ?? [])
+    ]),
+    watchlistItemIds: caseWatchlistItemIds(input.alert),
+    assignedOwner: input.caseRecord.assignedOwner,
+    workflowState: {
+      caseStatus: input.caseRecord.status,
+      alertReviewState: input.alert?.reviewState,
+      alertWorkflowStatus: input.alert?.workflowStatus,
+      replayState: input.replayState,
+      idempotencyKey: input.idempotencyKey,
+      dedupeKey: stableId("dwm_alert_case_handoff", `${input.caseRecord.tenantId}:${input.caseRecord.organizationId ?? ""}:${input.alert?.id ?? input.caseRecord.alertId}:${input.idempotencyKey ?? input.caseRecord.id}`)
+    },
+    provenance: {
+      source: "dwm_alert",
+      alertId: input.alert?.id ?? input.caseRecord.alertId,
+      caseId: input.caseRecord.id,
+      auditEventId: input.event?.auditEventId,
+      workflowEventId: input.event?.id,
+      captureIds: input.provenance.captureIds,
+      sourceIds: input.provenance.sourceIds,
+      contentHashes: input.provenance.contentHashes,
+      sourceFamilies: input.provenance.sourceFamilies,
+      evidenceCount: input.provenance.evidenceCount,
+      blockers: input.provenance.blockers
+    }
   };
 }
 

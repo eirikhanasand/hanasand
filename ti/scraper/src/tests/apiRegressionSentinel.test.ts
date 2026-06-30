@@ -15,6 +15,7 @@ describe("api regression sentinel", () => {
       "/api/ti/search",
       "/v1/darkweb/search",
       "/v1/ops/product-slo",
+      "/v1/dwm/alerts/:alertId/case-handoff",
       "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
       "/v1/dwm/org-alert-case-actions/timeline"
@@ -58,6 +59,30 @@ describe("api regression sentinel", () => {
     });
     expect(JSON.stringify(contract)).not.toContain("https://discord.com");
     expect(JSON.stringify(contract)).not.toContain("authorization:");
+  });
+
+  test("publishes the alert case handoff contract for workflow consumers", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const handoffSurface = contract.surfaces.find((surface: any) => surface.id === "alert_case_handoff");
+
+    expect(handoffSurface).toMatchObject({
+      ownerLane: "case",
+      route: "/v1/dwm/alerts/:alertId/case-handoff",
+      methods: ["POST"],
+      schemas: {
+        handoff: "dwm.alert_case_handoff.v1",
+        case: "analyst.case_detail.v1"
+      },
+      scopeFields: expect.arrayContaining(["organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"]),
+      writeFields: expect.arrayContaining(["assignedOwner", "note", "idempotencyKey"]),
+      recordFields: expect.arrayContaining(["alertId", "caseId", "casePath", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "replayState"]),
+      blockerCodes: expect.arrayContaining(["alert_not_found", "missing_alert_provenance", "case_read_only_member"])
+    });
+    expect(JSON.stringify(handoffSurface)).not.toContain("https://discord.com");
   });
 
   test("publishes the case workflow transition contract for workflow consumers", async () => {

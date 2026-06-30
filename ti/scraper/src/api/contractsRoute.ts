@@ -18,6 +18,7 @@ export function contractIndex() {
     route("GET", "/v1/quality/evaluate"),
     route("GET", "/v1/ops/product-slo"),
     route("GET", "/v1/contracts"),
+    route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
     route("PATCH", "/v1/cases/:caseId"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
     route("POST", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
@@ -28,6 +29,25 @@ export function contractIndex() {
     schemaVersion: "ti.api_contract_index.compact.v4",
     routeInventory: { count: routes.length, routes },
     surfaces: [
+      {
+        id: "alert_case_handoff",
+        ownerLane: "case",
+        route: "/v1/dwm/alerts/:alertId/case-handoff",
+        methods: ["POST"],
+        schemas: {
+          handoff: "dwm.alert_case_handoff.v1",
+          case: "analyst.case_detail.v1"
+        },
+        scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "watchlistIds", "watchlistItemIds"],
+        writeFields: ["organizationId", "assignedOwner", "note", "idempotencyKey"],
+        recordFields: ["alertId", "caseId", "casePath", "captureIds", "sourceIds", "contentHashes", "auditEventId", "workflowEventId", "dedupeKey", "replayState"],
+        blockerCodes: ["alert_not_found", "missing_alert_provenance", "organization_visibility_denied", "case_read_only_member", "invalid_case_owner_role"],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false
+        }
+      },
       {
         id: "case_workflow_transition",
         ownerLane: "case",
