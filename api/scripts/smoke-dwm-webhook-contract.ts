@@ -3380,10 +3380,15 @@ expect(orgAlertDeliveryProof.dashboardProof.productProgress.schemaVersion === 'd
 const proofDryRunRequest = orgAlertDeliveryProof.actionRequests.dryRunDeliveries.find(item => item.destinationId === 'destination_replay_contract')
 const proofLiveRequest = orgAlertDeliveryProof.actionRequests.liveDeliveries.find(item => item.destinationId === 'destination_replay_contract')
 const proofTestRequest = orgAlertDeliveryProof.actionRequests.destinationTests.find(item => item.destinationId === 'destination_replay_contract')
+const proofAlertEventReadiness = orgAlertDeliveryProof.actionRequests.alertEventReadiness
 expect(proofDryRunRequest?.route === 'POST /api/dwm/webhook-deliveries' && proofDryRunRequest.noNetwork === true && proofDryRunRequest.body.dryRun === true && proofDryRunRequest.body.live === false, 'Alert delivery proof should include a safe dry-run delivery request.', proofDryRunRequest)
 expect(proofDryRunRequest?.expectedIdempotencyKey === 'dwm.alert.replayed:org_contract:destination_replay_contract:dwm_dedupe_replay_contract', 'Alert delivery proof dry-run request should expose the replay idempotency key.', proofDryRunRequest)
 expect(proofDryRunRequest?.expectedAuditAction === 'delivery.replayed', 'Alert delivery proof dry-run request should expose expected replay audit action.', proofDryRunRequest)
 expect(proofDryRunRequest?.body.alert.casePath === replayWorkflowAlert.casePath && proofDryRunRequest.body.alert.alertUrl === replayWorkflowAlert.alertUrl && proofDryRunRequest.body.alert.watchlist.id === 'watchlist_item_replay_contract', 'Alert delivery proof dry-run request should preserve alert/watchlist/deep-link context.', proofDryRunRequest?.body)
+expect(proofAlertEventReadiness.schemaVersion === 'dwm.webhook.alert_event_readiness_fixture.v1' && proofAlertEventReadiness.noNetwork === true && proofAlertEventReadiness.consumesSchemaVersion === 'dwm.webhook.alert_event_consumer.v1', 'Alert delivery proof should expose a no-network alert-to-webhook readiness fixture.', proofAlertEventReadiness)
+expect(proofAlertEventReadiness.alertId === 'alert_replay_contract' && proofAlertEventReadiness.casePath === replayWorkflowAlert.casePath && proofAlertEventReadiness.sourceFamily === 'telegram_public' && proofAlertEventReadiness.provenanceSummary.includes('captures'), 'Alert event readiness fixture should preserve alert/case/source/provenance context.', proofAlertEventReadiness)
+expect(proofAlertEventReadiness.expectedDeliveryAttempts.some(item => item.destinationId === 'destination_replay_contract' && item.idempotencyKey === proofDryRunRequest?.expectedIdempotencyKey && item.auditAction === 'delivery.replayed' && item.dryRun === true), 'Alert event readiness fixture should expose expected dry-run attempt idempotency and audit action.', proofAlertEventReadiness.expectedDeliveryAttempts)
+expect(proofAlertEventReadiness.payloadValidation.valid === true && proofAlertEventReadiness.payloadPreview?.redaction.webhookSecretExposed === false && proofAlertEventReadiness.redaction.webhookSecretExposed === false, 'Alert event readiness fixture should include validated redacted Discord payload preview.', proofAlertEventReadiness)
 expect(proofLiveRequest?.externalSendEnabled === false && proofLiveRequest.noNetwork === true && proofLiveRequest.body === null && proofLiveRequest.blockers.some(item => item.code === 'live_delivery_disabled'), 'Alert delivery proof should block live request bodies unless live delivery is enabled and allowed.', proofLiveRequest)
 expect(proofLiveRequest?.expectedIdempotencyKey === proofDryRunRequest?.expectedIdempotencyKey, 'Alert delivery proof live and dry-run requests should share duplicate-send guard keys.', proofLiveRequest)
 expect(proofLiveRequest?.expectedAuditAction === 'delivery.replayed', 'Alert delivery proof live request should expose expected replay audit action even when blocked.', proofLiveRequest)
@@ -3695,6 +3700,8 @@ console.log(JSON.stringify({
         'alert delivery proof setup/readiness bridge',
         'alert delivery proof no-network blockers',
         'alert delivery proof destination test payload preview',
+        'alert delivery proof alert event readiness fixture',
+        'alert delivery proof alert event readiness redaction',
         'alert delivery proof audit/dashboard probe fields',
         'delivery retry eligibility contract',
         'delivery retry typed blockers',
@@ -4036,6 +4043,10 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].body',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].expectedIdempotencyKey',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.dryRunDeliveries[].expectedAuditAction',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.alertEventReadiness.schemaVersion',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.alertEventReadiness.expectedDeliveryAttempts[].idempotencyKey',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.alertEventReadiness.payloadValidation.valid',
+            'orgAlertDelivery.alertDeliveryProof.actionRequests.alertEventReadiness.redaction.webhookSecretExposed',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].blockers[].code',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].expectedIdempotencyKey',
             'orgAlertDelivery.alertDeliveryProof.actionRequests.liveDeliveries[].expectedAuditAction',
