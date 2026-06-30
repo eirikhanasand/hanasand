@@ -556,9 +556,18 @@ function Results({ result }: { result: TiSearchResponse }) {
             </section>
 
             <section className='grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                <Panel title='Watchlist Relevance' description='Company, domain, vendor, brand, product, or portfolio matches from actor claims, leak posts, advisories, or monitored pages.' icon={<Building2 className='h-4 w-4' />}>
-                    <WatchlistWorkflowPanel watchlist={watchlist} actionability={actionability} query={result.query} />
-                </Panel>
+                <WatchlistRelevanceWorkbench
+                    watchlist={watchlist}
+                    actionability={actionability}
+                    query={result.query}
+                    workItems={workItems}
+                    artifacts={actorArtifacts}
+                    selectedId={selected?.id}
+                    selectedArtifactId={selectedArtifact?.id}
+                    onSelectEvidence={setSelectedId}
+                    onSelectArtifact={setSelectedArtifactId}
+                    onMarkRelevant={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                />
 
                 <Panel title='Sources' description='Data families checked for this result, including actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
                     <div id='ti-sources' className='sr-only'>Source coverage</div>
@@ -618,6 +627,24 @@ type WatchlistRelevance = {
     countries: string[]
     domains: string[]
     rationale: string
+}
+
+type WatchlistWorkbenchRow = {
+    id: string
+    kind: string
+    value: string
+    matched: boolean
+    state: 'ready' | 'review' | 'blocked'
+    confidenceValues: number[]
+    newestAt?: string
+    evidenceItems: AnalystWorkItem[]
+    artifactIds: string[]
+    sourceCount: number
+    route?: string
+    casePath?: string
+    detail: string
+    blockers: string[]
+    payload: Record<string, unknown>
 }
 
 type SectionOverviewItem = {
@@ -3051,55 +3078,139 @@ function CustomerAlertFit({ selected, watchlist, alertPacket }: { selected: Anal
     )
 }
 
-function WatchlistWorkflowPanel({ watchlist, actionability, query }: { watchlist: WatchlistRelevance; actionability: TiActionabilityModel; query: string }) {
-    const terms = watchlist.terms.slice(0, 8)
-    const matched = new Set(watchlist.matchedTerms.map(value => value.toLowerCase()))
-    const blocked = actionability.exportPayloads.watchlist.blocked
-
-    if (!terms.length) {
-        return (
-            <div data-ti-watchlist-term-requests='true' className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-3 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
-                No customer-relevant watchlist term is attached yet. Use actor aliases, targets, source domains, campaigns, or tooling only after they are returned with provenance.
-            </div>
-        )
-    }
+function WatchlistRelevanceWorkbench({
+    watchlist,
+    actionability,
+    query,
+    workItems,
+    artifacts,
+    selectedId,
+    selectedArtifactId,
+    onSelectEvidence,
+    onSelectArtifact,
+    onMarkRelevant,
+}: {
+    watchlist: WatchlistRelevance
+    actionability: TiActionabilityModel
+    query: string
+    workItems: AnalystWorkItem[]
+    artifacts: ActorArtifact[]
+    selectedId?: string
+    selectedArtifactId?: string
+    onSelectEvidence: (id: string) => void
+    onSelectArtifact: (id: string) => void
+    onMarkRelevant: () => void
+}) {
+    const rows = useMemo(() => watchlistWorkbenchRowsFor({ watchlist, actionability, query, workItems, artifacts }), [watchlist, actionability, query, workItems, artifacts])
+    const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id ?? '')
+    useEffect(() => {
+        if (!rows.length) return
+        if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
+    }, [rows, selectedRowId])
+    const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
+    const readyCount = rows.filter(row => row.state === 'ready').length
+    const blockedCount = rows.filter(row => row.state === 'blocked').length
+    const selectedArtifact = selectedRow?.artifactIds.find(id => id === selectedArtifactId) ?? selectedRow?.artifactIds[0]
+    const selectedEvidence = selectedRow?.evidenceItems.find(item => item.id === selectedId) ?? selectedRow?.evidenceItems[0]
 
     return (
-        <div data-ti-watchlist-term-requests='true' className='grid min-w-0 gap-2'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+        <section data-ti-watchlist-workbench='true' data-ti-watchlist-term-requests='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
-                    <p className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{terms.length} candidate term{terms.length === 1 ? '' : 's'} for monitoring</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{watchlist.rationale}</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Watchlist workbench</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Actor terms, matching evidence, artifacts, and case routes for organization review.</p>
                 </div>
-                <span className={blocked ? decisionStepStatusClass('blocked') : actionability.watchlistRelevance.matches.length ? decisionStepStatusClass('ready') : decisionStepStatusClass('review')}>
-                    {blocked ? 'blocked' : actionability.watchlistRelevance.matches.length ? 'ready' : 'review'}
-                </span>
+                <div className='flex min-w-0 flex-wrap gap-1.5'>
+                    <span className={sourceHealthChipClass('ready')}>{readyCount} matched</span>
+                    <span className={sourceHealthChipClass(blockedCount ? 'blocked' : 'review')}>{blockedCount} blocked</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy watch row' payload={selectedRow.payload} /> : null}
+                </div>
             </div>
-            {terms.map(term => {
-                const parsed = watchlistTermParts(term)
-                const isMatched = matched.has(term.toLowerCase())
-                    || actionability.watchlistRelevance.terms.some(item => item.matched && item.value.toLowerCase() === parsed.value.toLowerCase())
-                return (
-                    <div key={term} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
-                            <div className='min-w-0'>
-                                <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{parsed.kind}: {parsed.value}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                    {isMatched ? 'Persisted organization watchlist match returned.' : 'Candidate term requires authenticated organization review before monitoring.'}
-                                </p>
+            <div className='grid min-w-0 xl:grid-cols-[minmax(0,1fr)_19rem]'>
+                <div className='min-w-0 overflow-x-auto'>
+                    <table className='min-w-[850px] w-full border-collapse text-left text-xs'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Term</th>
+                                <th className='px-3 py-2 font-semibold'>Evidence</th>
+                                <th className='px-3 py-2 font-semibold'>Newest</th>
+                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Route</th>
+                                <th className='px-3 py-2 font-semibold'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                            {rows.map(row => {
+                                const active = selectedRow?.id === row.id
+                                return (
+                                    <tr key={row.id} className={`${active ? 'bg-[#eef3ff] dark:bg-[#172646]' : 'bg-white dark:bg-[#101722]'} align-top`}>
+                                        <td className='px-3 py-2'>
+                                            <button type='button' onClick={() => setSelectedRowId(row.id)} className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
+                                                <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</span>
+                                                <span className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.kind)}</span>
+                                            </button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <p className='font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.evidenceItems.length} rows · {row.artifactIds.length} artifacts</p>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.evidenceItems[0]?.title ?? row.detail}</p>
+                                        </td>
+                                        <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{row.newestAt ? formatDate(row.newestAt) : 'Not dated'}</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceConfidenceLabel(row.confidenceValues)}</td>
+                                        <td className='px-3 py-2'>
+                                            <span className={sourceHealthChipClass(row.state)}>{row.matched ? 'matched' : row.state}</span>
+                                            <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.casePath || row.route || row.detail)}</p>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                <button type='button' onClick={() => setSelectedRowId(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
+                                                {row.evidenceItems[0] ? <button type='button' onClick={() => onSelectEvidence(row.evidenceItems[0]!.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Evidence</button> : null}
+                                                {row.artifactIds[0] ? <button type='button' onClick={() => onSelectArtifact(row.artifactIds[0]!)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Artifact</button> : null}
+                                                <CopyPayloadButton label='Watchlist term request' payload={row.payload} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No watchlist term returned.</p> : null}
+                </div>
+                <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
+                    {selectedRow ? (
+                        <div className='grid gap-3'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected term</p>
+                                <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.kind}: {selectedRow.value}</h3>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
-                            <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                                <span className={sourceHealthChipClass(isMatched ? 'ready' : blocked ? 'blocked' : 'review')}>{isMatched ? 'matched' : blocked ? 'blocked' : 'candidate'}</span>
-                                <CopyPayloadButton label='Watchlist term request' payload={watchlistTermRequestPayloadFor(term, watchlist, actionability, query)} />
+                            <div className='grid grid-cols-2 gap-2 text-xs'>
+                                <EvidenceMetric label='Evidence' value={String(selectedRow.evidenceItems.length)} />
+                                <EvidenceMetric label='Artifacts' value={String(selectedRow.artifactIds.length)} />
+                                <EvidenceMetric label='Sources' value={String(selectedRow.sourceCount)} />
+                                <EvidenceMetric label='Status' value={selectedRow.matched ? 'Matched' : selectedRow.state} />
                             </div>
+                            <div className='grid grid-cols-2 gap-1.5'>
+                                <button type='button' onClick={onMarkRelevant} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Watch</button>
+                                {selectedEvidence ? <button type='button' onClick={() => onSelectEvidence(selectedEvidence.id)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Review row</button> : null}
+                                {selectedArtifact ? <button type='button' onClick={() => onSelectArtifact(selectedArtifact)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Open artifact</button> : null}
+                                <CopyPayloadButton label='Export' payload={selectedRow.payload} showLabel />
+                            </div>
+                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                {selectedRow.route ? <a href={selectedRow.route} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'><ExternalLink className='h-3.5 w-3.5' />Open route</a> : null}
+                                {selectedRow.casePath ? <a href={selectedRow.casePath} className='inline-flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'><ClipboardList className='h-3.5 w-3.5' />Open case</a> : null}
+                            </div>
+                            {selectedRow.blockers.length ? (
+                                <div className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
+                                    {displayRequirementList(selectedRow.blockers.slice(0, 3))}
+                                </div>
+                            ) : null}
                         </div>
-                    </div>
-                )
-            })}
-            {actionability.watchlistRelevance.blockers.length ? (
-                <p className='wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(actionability.watchlistRelevance.blockers.slice(0, 2))}</p>
-            ) : null}
-        </div>
+                    ) : (
+                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a watchlist term to inspect evidence and handoff context.</p>
+                    )}
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -5804,6 +5915,120 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
                 ? 'Candidate watchlist inputs are present; no persisted organization watchlist match was returned yet.'
                 : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms are present only when returned by the profile or source rows.',
     }
+}
+
+function watchlistWorkbenchRowsFor({
+    watchlist,
+    actionability,
+    query,
+    workItems,
+    artifacts,
+}: {
+    watchlist: WatchlistRelevance
+    actionability: TiActionabilityModel
+    query: string
+    workItems: AnalystWorkItem[]
+    artifacts: ActorArtifact[]
+}): WatchlistWorkbenchRow[] {
+    const terms = unique([
+        ...watchlist.terms,
+        ...watchlist.matchedTerms,
+        ...actionability.watchlistRelevance.terms.map(term => `${term.kind}: ${term.value}`),
+        ...actionability.orgRelevance.candidateTerms.map(term => `${term.kind}: ${term.value}`),
+        ...actionability.orgRelevance.watchlistIntersections.map(term => `${term.kind}: ${term.value}`),
+    ]).slice(0, 16)
+    return terms.map(term => {
+        const parsed = watchlistTermParts(term)
+        const valueKey = parsed.value.toLowerCase()
+        const matchingTerms = actionability.watchlistRelevance.terms.filter(item => item.value.toLowerCase() === valueKey || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase())
+        const candidateTerms = actionability.orgRelevance.candidateTerms.filter(item => item.value.toLowerCase() === valueKey || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase())
+        const intersections = actionability.orgRelevance.watchlistIntersections.filter(item => item.value.toLowerCase() === valueKey || `${item.kind}: ${item.value}`.toLowerCase() === term.toLowerCase())
+        const sourceRefs = unique([...candidateTerms.flatMap(item => item.sourceEvidenceRefs), ...intersections.flatMap(item => item.sourceEvidenceRefs)])
+        const sourceEvidence = actionability.orgRelevance.sourceEvidence.filter(source =>
+            source.supportsTerms.some(supported => supported.toLowerCase() === valueKey || supported.toLowerCase().includes(valueKey))
+            || sourceRefs.some(ref => source.sourceId === ref || source.sourceName.includes(ref) || source.provenance.includes(ref))
+        )
+        const evidenceItems = workItems.filter(item => watchlistRowText(item).includes(valueKey)).slice(0, 8)
+        const artifactMatches = artifacts.filter(artifact => watchlistArtifactText(artifact).includes(valueKey))
+        const confidenceValues = uniqueNumbers([
+            ...evidenceItems.map(item => item.confidence),
+            ...artifactMatches.map(item => item.confidence),
+            ...sourceEvidence.map(item => item.confidence).filter((value): value is number => typeof value === 'number'),
+        ])
+        const newestAt = newestDate([
+            ...evidenceItems.map(item => item.timestamp),
+            ...sourceEvidence.map(item => item.lastCollectedAt || item.reportDate || ''),
+            actionability.orgRelevance.freshness.lastSeen,
+        ])
+        const matched = intersections.length > 0 || matchingTerms.some(item => item.matched) || candidateTerms.some(item => item.matched) || watchlist.matchedTerms.some(item => item.toLowerCase() === term.toLowerCase())
+        const blockers = unique([
+            ...actionability.watchlistRelevance.blockers,
+            ...actionability.exportPayloads.watchlist.missing,
+            ...intersections.flatMap(item => item.blockers.map(blocker => blocker.handoff)),
+        ].map(displayRequirementText)).slice(0, 6)
+        const state: WatchlistWorkbenchRow['state'] = matched ? 'ready' : actionability.exportPayloads.watchlist.blocked || blockers.length ? 'blocked' : 'review'
+        const route = intersections[0]?.route || actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route || '/dashboard/dwm'
+        const casePath = intersections.flatMap(item => [item.casePath, ...item.casePaths]).find((value): value is string => Boolean(value))
+        const intersectionDetail = intersections[0] ? `${watchlistIntersectionActionLabel(intersections[0].recommendedAction)} for ${parsed.value}.` : ''
+        const payload = {
+            ...watchlistTermRequestPayloadFor(term, watchlist, actionability, query),
+            schemaVersion: 'ti.public_actor.watchlist_workbench_row.v1',
+            selectedEvidenceRows: evidenceItems.map(item => ({
+                id: item.id,
+                title: item.title,
+                source: item.source,
+                timestamp: item.timestamp,
+                confidence: item.confidence,
+                provenance: item.provenance,
+            })),
+            selectedArtifacts: artifactMatches.map(artifact => ({
+                id: artifact.id,
+                kind: artifact.kind,
+                label: artifact.label,
+                confidence: artifact.confidence,
+                freshness: artifact.freshness,
+            })),
+            sourceEvidence,
+            intersections,
+            state,
+            casePath,
+        }
+        return {
+            id: `watch:${parsed.kind}:${parsed.value}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            kind: parsed.kind,
+            value: parsed.value,
+            matched,
+            state,
+            confidenceValues,
+            newestAt,
+            evidenceItems,
+            artifactIds: artifactMatches.map(item => item.id),
+            sourceCount: unique([...sourceEvidence.map(item => item.sourceName), ...evidenceItems.map(item => item.source)]).length,
+            route,
+            casePath,
+            detail: candidateTerms[0]?.notes || matchingTerms[0]?.notes || intersectionDetail || watchlist.rationale,
+            blockers,
+            payload,
+        }
+    }).sort((a, b) => Number(b.matched) - Number(a.matched)
+        || sourceCoverageStateRank(a.state) - sourceCoverageStateRank(b.state)
+        || Date.parse(b.newestAt || '') - Date.parse(a.newestAt || '')
+        || b.evidenceItems.length - a.evidenceItems.length
+        || a.value.localeCompare(b.value))
+}
+
+function watchlistRowText(item: AnalystWorkItem) {
+    return `${item.title} ${item.subtitle} ${item.detail} ${item.source} ${item.provenance} ${item.evidence.join(' ')}`.toLowerCase()
+}
+
+function watchlistArtifactText(artifact: ActorArtifact) {
+    return `${artifact.label} ${artifact.subtitle} ${artifact.evidence.join(' ')} ${artifact.provenance.join(' ')} ${artifact.watchlistTerms.map(term => `${term.kind} ${term.value} ${term.notes}`).join(' ')}`.toLowerCase()
+}
+
+function newestDate(values: string[]) {
+    return values
+        .filter(Boolean)
+        .sort((a, b) => Date.parse(b) - Date.parse(a))[0]
 }
 
 function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, watchlist: WatchlistRelevance): AlertPacket {
