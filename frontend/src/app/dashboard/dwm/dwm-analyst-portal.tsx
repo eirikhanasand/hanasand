@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldAlert, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
@@ -185,6 +185,19 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
         })
     }
 
+    async function testDelivery(alertId: string) {
+        await runAction(`test:${alertId}`, async () => {
+            const response = await fetch('/api/dwm/webhooks/test', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ tenantId: 'default', alertId, limit: 1 }),
+            })
+            const payload = await readPayload(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return 'Webhook test completed.'
+        })
+    }
+
     async function runAction(key: string, action: () => Promise<string>) {
         setBusyAction(key)
         setMessage(null)
@@ -204,7 +217,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
             <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
                 <div className='border-b border-[#e8edf5] bg-[#171a21] px-4 py-3 text-white'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <div className='flex flex-wrap items-center gap-2'>
+                        <div className='flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0'>
                             <StatusPill label='Cases' value={String(alerts.length)} tone={alerts.length ? 'warn' : 'neutral'} />
                             <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
@@ -224,7 +237,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                 </div>
 
                 <div className='grid min-h-[680px] xl:grid-cols-[320px_minmax(0,1fr)_360px]'>
-                    <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
+                    <aside className='order-2 border-b border-[#e8edf5] bg-[#f8fafc] xl:order-none xl:border-b-0 xl:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
@@ -286,7 +299,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                         </div>
                     </aside>
 
-                    <main className='min-w-0 bg-white'>
+                    <main className='order-1 min-w-0 bg-white xl:order-none'>
                         {selectedAlert ? (
                             <CaseWorkspace
                                 alert={selectedAlert}
@@ -301,6 +314,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                                 }}
                                 onUpdate={updateAlert}
                                 onReplay={replayAlert}
+                                onTest={testDelivery}
                                 onSend={sendAlert}
                             />
                         ) : (
@@ -308,7 +322,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                         )}
                     </main>
 
-                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:border-l xl:border-t-0'>
+                    <aside className='order-3 border-t border-[#e8edf5] bg-[#fbfcfe] xl:order-none xl:border-l xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <SourcePosture snapshot={snapshot} operations={operations} />
                             <DeliveryPanel alert={selectedAlert} deliveries={deliveries} />
@@ -329,7 +343,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     )
 }
 
-function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onSend }: {
+function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     localState?: LocalCaseState
@@ -337,6 +351,7 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
     onLocalStateChange: (patch: LocalCaseState) => void
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
+    onTest: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
 }) {
     const timeline = buildTimeline(alert, deliveries)
@@ -365,16 +380,18 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     <h2 className='mt-3 text-2xl font-semibold tracking-normal text-[#171a21]'>{alert.company}</h2>
                     <p className='mt-1 text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</p>
                 </div>
-                <div className='flex flex-wrap gap-2'>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                    <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
-                    <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
-                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
-                </div>
             </div>
+
+            <SelectedActionBar
+                alert={alert}
+                deliveries={deliveries}
+                assignee={assignee}
+                busyAction={busyAction}
+                onUpdate={onUpdate}
+                onReplay={onReplay}
+                onTest={onTest}
+                onSend={onSend}
+            />
 
             <section className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:grid-cols-2 xl:grid-cols-5'>
                 <ContextChip label='Org' value={workflowContext.organizationId || 'tenant default'} href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} />
@@ -448,20 +465,11 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                 </CaseButton>
             </section>
 
-            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4'>
-                <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                    <ShieldAlert className='h-4 w-4 text-[#c2410c]' />
-                    Investigation brief
-                </div>
-                <p className='mt-3 text-sm leading-6 text-[#3d4656]'>{alert.claimSummary}</p>
-                <p className='mt-3 text-sm font-semibold leading-6 text-[#3056d3]'>{alert.recommendedAction}</p>
-                {alert.workflowNote && <p className='mt-3 rounded-lg border border-[#dbe5ff] bg-white px-3 py-2 text-sm text-[#3056d3]'>{alert.workflowNote}</p>}
-            </div>
-
-            <section className='grid gap-3 lg:grid-cols-3'>
-                <PlaybookStep done={alert.reviewState === 'reviewing' || alert.deliveryState === 'ready_to_send' || Boolean(alert.deliveredAt)} title='Validate match' body='Confirm watched term, actor context, and source provenance before routing.' />
-                <PlaybookStep done={alert.deliveryState === 'ready_to_send' || Boolean(alert.deliveredAt)} title='Prepare customer route' body={`Recommended route: ${stateLabel(alert.webhookDelivery.recommendedRoute)}.`} />
-                <PlaybookStep done={Boolean(alert.deliveredAt || deliveries.some(delivery => delivery.status === 'delivered'))} title='Notify and monitor' body='Send webhook, preserve dedupe key, and keep source monitoring active.' />
+            <section className='grid gap-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-4 md:grid-cols-2'>
+                <CaseBrief label='Claim' value={alert.claimSummary} />
+                <CaseBrief label='Next action' value={alert.recommendedAction} />
+                {alert.workflowNote && <CaseBrief label='Latest note' value={alert.workflowNote} />}
+                <CaseBrief label='Customer route' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey}`} />
             </section>
 
             <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
@@ -516,6 +524,59 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     </div>
                 </div>
             </section>
+        </div>
+    )
+}
+
+function SelectedActionBar({ alert, deliveries, assignee, busyAction, onUpdate, onReplay, onTest, onSend }: {
+    alert: PortalAlert
+    deliveries: DeliveryItem[]
+    assignee: string
+    busyAction: string | null
+    onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
+    onReplay: (alertId: string) => Promise<void>
+    onTest: (alertId: string) => Promise<void>
+    onSend: (alertId: string) => Promise<void>
+}) {
+    const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
+    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const hasDeliveryRoute = Boolean(alert.webhookContext?.hasWebhookRoute || alert.webhookContext?.webhookDestinationIds?.length || alert.webhookDelivery.dedupeKey)
+    return (
+        <section className='grid gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
+            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+                <ActionStatus label='Owner' value={assignee} />
+                <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
+                <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'route available' : 'route unavailable'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
+                <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'candidate pending'} />
+            </div>
+            <div className='flex flex-wrap gap-2 xl:justify-end'>
+                <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
+                <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
+                <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
+                <CaseButton busy={busyAction === `test:${alert.id}`} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
+                <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
+                <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
+                <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
+                <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+            </div>
+        </section>
+    )
+}
+
+function ActionStatus({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'warn' }) {
+    return (
+        <div className='min-w-0 rounded-lg border border-[#d8e2f0] bg-white px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-[#667085]'>{label}</p>
+            <p className={`mt-1 truncate text-xs font-semibold ${tone === 'warn' ? 'text-[#b45309]' : 'text-[#171a21]'}`} title={value}>{value}</p>
+        </div>
+    )
+}
+
+function CaseBrief({ label, value }: { label: string, value: string }) {
+    return (
+        <div className='min-w-0'>
+            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
+            <p className='mt-1 line-clamp-3 text-sm leading-6 text-[#3d4656]'>{value}</p>
         </div>
     )
 }
@@ -705,7 +766,7 @@ function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
 function StatusPill({ label, value, tone }: { label: string, value: string, tone: 'good' | 'warn' | 'neutral' }) {
     const toneClass = tone === 'good' ? 'border-[#2f8f56]/40 bg-[#163822] text-[#d9f8e5]' : tone === 'warn' ? 'border-[#f97316]/40 bg-[#3a2418] text-[#ffedd5]' : 'border-white/15 bg-white/8 text-[#e7edf8]'
     return (
-        <div className={`rounded-lg border px-3 py-2 ${toneClass}`}>
+        <div className={`shrink-0 rounded-lg border px-3 py-2 ${toneClass}`}>
             <p className='text-[10px] font-semibold uppercase opacity-75'>{label}</p>
             <p className='mt-0.5 text-sm font-semibold'>{value}</p>
         </div>
@@ -802,18 +863,6 @@ function WorkTile({ title, body, state }: { title: string, body: string, state: 
                 <span className={state === 'active' ? 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b]' : 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309]'}>
                     {state}
                 </span>
-            </div>
-            <p className='mt-2 text-xs leading-5 text-[#596170]'>{body}</p>
-        </div>
-    )
-}
-
-function PlaybookStep({ done, title, body }: { done: boolean, title: string, body: string }) {
-    return (
-        <div className={`rounded-lg border p-3 ${done ? 'border-[#d6e9de] bg-[#f4fbf7]' : 'border-[#e0e5ed] bg-white'}`}>
-            <div className='flex items-center gap-2'>
-                {done ? <CheckCircle2 className='h-4 w-4 text-[#147a3b]' /> : <Clock3 className='h-4 w-4 text-[#667085]' />}
-                <h3 className='text-sm font-semibold text-[#171a21]'>{title}</h3>
             </div>
             <p className='mt-2 text-xs leading-5 text-[#596170]'>{body}</p>
         </div>
