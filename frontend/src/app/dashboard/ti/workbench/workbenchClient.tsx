@@ -866,7 +866,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             )}
 
             <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
-                <div className='flex flex-wrap items-center gap-2 border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white'>
+                <div className='flex items-center gap-2 overflow-x-auto border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white sm:flex-wrap'>
                     <StatusPill label='Cases' value={String(initialCases.length)} />
                     <StatusPill label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
                     <StatusPill label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
@@ -3649,7 +3649,7 @@ function StatusPill({ label: statusLabel, value, tone = 'neutral' }: { label: st
             : 'border-[#3a4252] bg-[#222936] text-[#d8deea]'
 
     return (
-        <span className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-2.5 ${toneClass}`}>
+        <span className={`inline-flex min-h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 ${toneClass}`}>
             <span className='font-semibold uppercase text-[#cbd6ee]'>{statusLabel}</span>
             <span className='font-semibold text-white'>{value}</span>
         </span>

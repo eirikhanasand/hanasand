@@ -138,6 +138,17 @@ async function inspectRenderedPage(page, spec) {
 
         const readinessRows = {}
         if (location.pathname === '/dashboard') {
+            const isMobileViewport = window.innerWidth < 640
+            const mobileSidebar = document.querySelector('.dashboard-sidebar-sticky')
+            const mobileSidebarRect = mobileSidebar ? visibleRect(mobileSidebar) : null
+            if (isMobileViewport && mobileSidebarRect) {
+                reasons.push('mobile dashboard renders expanded navigation before the workbench')
+            }
+            const analystQueue = document.querySelector('[role="listbox"][aria-label="Analyst work queue"]')
+            const analystQueueRect = analystQueue ? visibleRect(analystQueue) : null
+            if (isMobileViewport && (!analystQueueRect || analystQueueRect.top > 360)) {
+                reasons.push(`mobile work queue starts too low: ${analystQueueRect ? Math.round(analystQueueRect.top) : 'missing'}`)
+            }
             const detail = document.querySelector('[data-readiness-detail]')
             if (!detail) {
                 reasons.push('missing readiness detail panel')

@@ -136,7 +136,14 @@ function firstParam(value: string | string[] | undefined) {
 function OperatorTopBar({ firstName, caseCount, highPriorityCount, persistentCount }: { firstName: string, caseCount: number, highPriorityCount: number, persistentCount: number }) {
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 shadow-sm'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex items-center justify-between gap-3 sm:hidden'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations</p>
+                    <h1 className='truncate text-base font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
+                </div>
+                <span className='shrink-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#9a3412]'>{highPriorityCount} high</span>
+            </div>
+            <div className='hidden flex-wrap items-center justify-between gap-2 sm:flex'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations workbench</p>
                     <h1 className='truncate text-lg font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
