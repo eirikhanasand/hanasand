@@ -330,6 +330,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <TiCommandBar links={commandLinks} />
                     <SectionOverviewRail items={sectionOverview} />
                 </div>
+                <ActorActionStrip
+                    actor={actorIntel}
+                    actionability={actionability}
+                    selected={selected}
+                    caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
+                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+                    onCase={() => stageSelectedHandoff()}
+                    onEscalate={() => applyDecision('escalated')}
+                    onReview={() => applyDecision('reviewing')}
+                />
 
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
@@ -418,6 +428,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <EvidenceMetric label='Provenance' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
+                                    {selectedSourceDrilldown ? <SelectedEvidenceContextTable drilldown={selectedSourceDrilldown} /> : null}
                                     {selected.priority ? <EvidencePriorityPanel priority={selected.priority} /> : null}
                                     {selectedSourceDrilldown ? <SelectedSourceDrilldownPanel drilldown={selectedSourceDrilldown} /> : null}
 
@@ -1369,6 +1380,87 @@ type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
 type WatchlistIntersectionRow = TiActionabilityModel['orgRelevance']['watchlistIntersections'][number]
 type CaseReviewIntakeItem = TiActionabilityModel['caseReviewIntake']['items'][number]
 
+function ActorActionStrip({
+    actor,
+    actionability,
+    selected,
+    caseAvailable,
+    onWatchlist,
+    onCase,
+    onEscalate,
+    onReview,
+}: {
+    actor: TiActorIntelligenceProfile
+    actionability: TiActionabilityModel
+    selected?: AnalystWorkItem
+    caseAvailable: boolean
+    onWatchlist: () => void
+    onCase: () => void
+    onEscalate: () => void
+    onReview: () => void
+}) {
+    const exportRows = unique([
+        ...actor.indicators,
+        ...actor.infrastructure,
+        ...actor.malwareTools,
+    ]).slice(0, 24)
+    const actionSummary = [
+        `${actionability.watchlistRelevance.terms.length} watch terms`,
+        `${actionability.relatedAlerts.length} alerts`,
+        `${actionability.relatedCases.length} cases`,
+        `${actionability.enrichmentGapQueue.length} gaps`,
+    ]
+    return (
+        <div data-ti-actor-action-strip='true' className='border-b border-[#e8edf5] bg-[#fbfcfe] px-3 py-2 dark:border-[#273244] dark:bg-[#101722]'>
+            <div className='flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'>
+                <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+                    <span className='rounded-md bg-[#eef3ff] px-2 py-1 text-[11px] font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>Actor actions</span>
+                    {actionSummary.map(item => (
+                        <span key={item} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{item}</span>
+                    ))}
+                </div>
+                <div className='grid min-w-0 grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:justify-end'>
+                    <StripActionButton icon={<BellRing className='h-3.5 w-3.5' />} onClick={onWatchlist}>Watch</StripActionButton>
+                    <StripActionButton icon={<ClipboardList className='h-3.5 w-3.5' />} onClick={onCase} disabled={!caseAvailable}>Create case</StripActionButton>
+                    <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
+                    <StripActionButton icon={<CheckCircle2 className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
+                    {exportRows.length ? (
+                        <span className='min-w-0'>
+                            <CopyPayloadButton
+                                label='Export IOCs'
+                                payload={{
+                                    schemaVersion: 'ti.public_actor.ioc_export.v1',
+                                    source: 'public-ti',
+                                    selectedItemId: selected?.id,
+                                    indicators: actor.indicators,
+                                    infrastructure: actor.infrastructure,
+                                    malwareTools: actor.malwareTools,
+                                    sourceCoverage: actor.sourceCoverage,
+                                    provenanceRows: actor.provenanceRows,
+                                }}
+                            />
+                        </span>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function StripActionButton({ icon, children, onClick, disabled = false }: { icon: React.ReactNode; children: string; onClick: () => void; disabled?: boolean }) {
+    return (
+        <button
+            type='button'
+            onClick={onClick}
+            disabled={disabled}
+            className='inline-flex min-h-8 min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:bg-[#f2f4f7] disabled:text-[#98a2b3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131] dark:disabled:bg-[#172131] dark:disabled:text-[#77869a]'
+        >
+            {icon}
+            {children}
+        </button>
+    )
+}
+
 function ActorIntelligenceDossier({ actor, actionability, result, artifacts, selectedArtifactId, onSelectArtifact }: {
     actor: TiActorIntelligenceProfile
     actionability: TiActionabilityModel
@@ -2194,6 +2286,53 @@ function EvidencePriorityPanel({ priority }: { priority: NonNullable<AnalystWork
                         </ul>
                     ) : null}
                 </div>
+            </div>
+        </div>
+    )
+}
+
+function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSourceDrilldown }) {
+    const rows = drilldown.rows.slice(0, 5)
+    if (!rows.length) return null
+    return (
+        <div data-ti-selected-evidence-context='true' className='mt-4 overflow-hidden rounded-lg border border-[#eef1f5] bg-[#fbfcfe] dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Source context</p>
+                    <p className='mt-0.5 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{rows.length} row{rows.length === 1 ? '' : 's'} tied to selected evidence</p>
+                </div>
+                <CopyPayloadButton label='Source context' payload={drilldown} />
+            </div>
+            <div className='overflow-x-auto'>
+                <table className='min-w-[720px] w-full border-collapse text-left text-xs'>
+                    <thead className='bg-white text-[11px] uppercase text-[#667085] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>
+                        <tr>
+                            <th className='px-3 py-2 font-semibold'>Source</th>
+                            <th className='px-3 py-2 font-semibold'>Timestamp</th>
+                            <th className='px-3 py-2 font-semibold'>Confidence</th>
+                            <th className='px-3 py-2 font-semibold'>Capture</th>
+                            <th className='px-3 py-2 font-semibold'>Next action</th>
+                        </tr>
+                    </thead>
+                    <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                        {rows.map(row => (
+                            <tr key={row.rowId} className='bg-[#fbfcfe] align-top dark:bg-[#131c29]'>
+                                <td className='px-3 py-2'>
+                                    <p className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.sourceName}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
+                                </td>
+                                <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{row.reportDate ? formatDate(row.reportDate) : 'Not dated'}</td>
+                                <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}%` : 'Not scored'}</td>
+                                <td className='px-3 py-2'>
+                                    <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'attached' : 'needed'}</span>
+                                </td>
+                                <td className='px-3 py-2'>
+                                    <p className='wrap-break-word text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(row.handoff)}</p>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     )
