@@ -5718,6 +5718,7 @@ export function buildDwmAlertWebhookReadinessHandoff({
         fieldValues: alertEventPreviewFields.every(field => clean(field.value).length <= DISCORD_EMBED_FIELD_VALUE_LIMIT),
     }
     const alertEventSerializedPreview = JSON.stringify(alertEventPreviewPayload || {})
+    const alertEventDiscordTemplate = recordOrEmpty(alertEventPreviewContext.discordTemplate)
     const alertEventRedactionProof = {
         endpointExposed: false,
         webhookSecretExposed: false,
@@ -5890,6 +5891,15 @@ export function buildDwmAlertWebhookReadinessHandoff({
                         dryRun,
                         workflowStatus: workflowSummary(normalizedAlert, eventType),
                         provenanceIds: deliveryProvenanceIds(normalizedAlert.provenance),
+                        discordTemplate: Object.keys(alertEventDiscordTemplate).length > 0
+                            ? {
+                                templateId: clean(alertEventDiscordTemplate.templateId),
+                                ready: alertEventDiscordTemplate.ready === true,
+                                missing: Array.isArray(alertEventDiscordTemplate.missing) ? alertEventDiscordTemplate.missing : [],
+                                requiredFields: Array.isArray(alertEventDiscordTemplate.requiredFields) ? alertEventDiscordTemplate.requiredFields : [],
+                                noNetworkDefault: alertEventDiscordTemplate.noNetworkDefault === true,
+                            }
+                            : null,
                     },
                     redaction: {
                         safeForCustomerDisplay: true,
@@ -7460,10 +7470,18 @@ export function buildDwmAlertDeliveryPayload({
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const displayDedupeKey = normalizedAlert.dedupeKey || idempotencyKey
     const analystLink = normalizedAlert.alertUrl || normalizedAlert.casePath
+    const discordTemplate = buildDwmDiscordPayloadTemplateProof({
+        eventType,
+        normalizedAlert,
+        watchlist,
+        analystLink,
+        idempotencyKey,
+    })
     const context = {
         schemaVersion: 'dwm.webhook.v1',
         eventType,
         occurredAt: normalizedAlert.eventTimestamp,
+        discordTemplate,
         idempotencyKey,
         org: {
             id: destination.org_id,
@@ -7551,6 +7569,107 @@ function discordField(name: string, value: string, inline: boolean) {
 function discordText(value: string, max: number) {
     const text = clean(value) || 'Not provided'
     return truncate(text, max)
+}
+
+function buildDwmDiscordPayloadTemplateProof({
+    eventType,
+    normalizedAlert,
+    watchlist,
+    analystLink,
+    idempotencyKey,
+}: {
+    eventType: DwmAlertEventType
+    normalizedAlert: ReturnType<typeof normalizeAlert>
+    watchlist: ReturnType<typeof normalizeWatchlist>
+    analystLink: string
+    idempotencyKey: string
+}) {
+    const templateId = eventType === 'dwm.alert.replayed'
+        ? 'dwm.discord.alert_replay.v1'
+        : eventType === 'dwm.alert.updated'
+            ? 'dwm.discord.alert_update.v1'
+            : eventType === 'dwm.alert.test'
+                ? 'dwm.discord.destination_test.v1'
+                : 'dwm.discord.alert_created.v1'
+    const requiredFields = [
+        'Organization',
+        'Severity',
+        'Company / domain',
+        'Observed at',
+        'Watchlist',
+        'Source family',
+        'Evidence count',
+        'Workflow',
+        'Dedupe key',
+    ]
+    const requiredPresence = {
+        organization: true,
+        severity: Boolean(normalizedAlert.severity),
+        title: Boolean(normalizedAlert.title),
+        companyOrDomain: Boolean(normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value),
+        observedAt: Boolean(normalizedAlert.eventTimestamp || normalizedAlert.firstSeenAt),
+        watchlist: Boolean(watchlist.name || watchlist.terms.length || watchlist.id),
+        sourceFamily: Boolean(normalizedAlert.sourceFamily),
+        evidence: normalizedAlert.evidenceCount > 0,
+        workflow: Boolean(eventType),
+        dedupeKey: Boolean(normalizedAlert.dedupeKey || idempotencyKey),
+        analystLink: Boolean(analystLink),
+    }
+    const missing = Object.entries(requiredPresence)
+        .filter(([, present]) => !present)
+        .map(([field]) => field)
+
+    return {
+        schemaVersion: 'dwm.webhook.discord_payload_template.v1',
+        templateId,
+        eventType,
+        requiredFields,
+        optionalFields: ['Confidence', 'Evidence summary', 'Case ID', 'Case', 'Alert URL', 'Analyst link', 'Provenance', 'Recommended action'],
+        fieldOrder: [
+            'Organization',
+            'Severity',
+            'Company / domain',
+            'Observed at',
+            'Watchlist',
+            'Source family',
+            'Confidence',
+            'Evidence count',
+            'Evidence summary',
+            'Route',
+            'Workflow',
+            'Dedupe key',
+            'Case ID',
+            'Case',
+            'Alert URL',
+            'Analyst link',
+            'Provenance',
+            'Recommended action',
+        ],
+        requiredPresence,
+        missing,
+        ready: missing.length === 0,
+        workflow: {
+            replay: eventType === 'dwm.alert.replayed',
+            update: eventType === 'dwm.alert.updated',
+            test: eventType === 'dwm.alert.test',
+            dryRunDefault: true,
+        },
+        limits: {
+            content: DISCORD_CONTENT_LIMIT,
+            title: DISCORD_EMBED_TITLE_LIMIT,
+            description: DISCORD_EMBED_DESCRIPTION_LIMIT,
+            fields: DISCORD_EMBED_FIELD_LIMIT,
+            fieldName: DISCORD_EMBED_FIELD_NAME_LIMIT,
+            fieldValue: DISCORD_EMBED_FIELD_VALUE_LIMIT,
+        },
+        noNetworkDefault: true,
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            webhookSecretExposed: false,
+            mentionsDisabled: true,
+        },
+    }
 }
 
 export function redactWebhookEndpoint(endpointUrl: string) {

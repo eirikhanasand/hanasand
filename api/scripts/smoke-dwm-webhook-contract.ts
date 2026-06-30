@@ -125,6 +125,7 @@ const payload = buildDwmAlertDeliveryPayload({
 
 const serialized = JSON.stringify(payload)
 const payloadContext = payload._hanasand as Record<string, unknown>
+const payloadTemplate = payloadContext.discordTemplate as Record<string, unknown>
 const payloadEmbed = (payload.embeds as Array<Record<string, unknown>>)[0]
 const payloadFields = payloadEmbed.fields as Array<Record<string, unknown>>
 expect(Array.isArray(payload.embeds), 'Discord payload should include embeds.', payload)
@@ -147,6 +148,9 @@ expect(serialized.includes('Alert URL') && serialized.includes('https://app.hana
 expect(serialized.includes('Analyst link') && ((payloadContext.delivery as Record<string, unknown>).analystLink === 'https://app.hanasand.local/dashboard/dwm?alert=alert_contract'), 'Payload should include a single analyst action/deep link.', payload)
 expect(serialized.includes('capture_contract') && serialized.includes('source_contract'), 'Payload should include provenance summary.', payload)
 expect(serialized.includes('Workflow') && serialized.includes('replayed') && serialized.includes('tenant_contract'), 'Payload should include workflow and tenant routing context.', payload)
+expect(payloadTemplate.schemaVersion === 'dwm.webhook.discord_payload_template.v1' && payloadTemplate.templateId === 'dwm.discord.alert_replay.v1' && payloadTemplate.ready === true, 'Discord payload should include a ready replay template contract.', payloadTemplate)
+expect(Array.isArray(payloadTemplate.requiredFields) && payloadTemplate.requiredFields.includes('Watchlist') && payloadTemplate.requiredFields.includes('Dedupe key'), 'Discord template should declare customer-useful required fields.', payloadTemplate)
+expect((payloadTemplate.redaction as Record<string, unknown>)?.webhookSecretExposed === false && payloadTemplate.noNetworkDefault === true, 'Discord template should prove no-network redaction defaults.', payloadTemplate)
 expect(!serialized.includes(secret), 'Payload should never include webhook secret.', payload)
 
 expect(redactWebhookEndpoint(endpoint) === 'https://discord.com/api/webhooks/987654321/...', 'Redaction helper should hide Discord token.')
@@ -189,6 +193,7 @@ const longEmbed = (longDiscordPayload.embeds as Array<Record<string, unknown>>)[
 const longFields = longEmbed.fields as Array<Record<string, unknown>>
 const longContext = longDiscordPayload._hanasand as Record<string, unknown>
 const longAlertContext = longContext.alert as Record<string, unknown>
+const longTemplate = longContext.discordTemplate as Record<string, unknown>
 
 expect(String(longDiscordPayload.content).length <= 2000, 'Discord content should respect the 2000 character limit.', longDiscordPayload)
 expect(String(longEmbed.title).length <= 256, 'Discord embed title should respect the 256 character limit.', longEmbed)
@@ -196,6 +201,7 @@ expect(String(longEmbed.description).length <= 4096, 'Discord embed description 
 expect(longFields.length <= 25, 'Discord embed fields should respect the 25 field limit.', longFields)
 expect(longFields.every(field => String(field.name).length <= 256 && String(field.value).length <= 1024), 'Discord embed fields should respect name/value limits.', longFields)
 expect(JSON.stringify(longDiscordPayload).includes('Alert URL') && longAlertContext.alertUrl === 'https://app.hanasand.local/dashboard/dwm?alert=alert_long_contract&case=case_long_contract', 'Long Discord payload should preserve alert deep link context.', longDiscordPayload)
+expect((longTemplate.limits as Record<string, unknown>)?.fields === 25 && longTemplate.templateId === 'dwm.discord.alert_created.v1', 'Discord template should expose enforced Discord limits for created alerts.', longTemplate)
 
 const dispatchPlan = buildDwmAlertWebhookDispatchPlan({
     ownerId: 'owner_contract',
@@ -672,12 +678,15 @@ const updatedPayload = buildDwmAlertDeliveryPayload({
     alert: updatedPlan.alert,
 }) as Record<string, unknown>
 const updatedSerialized = JSON.stringify(updatedPayload)
-const updatedDeliveryContext = (updatedPayload._hanasand as Record<string, unknown>).delivery as Record<string, unknown>
+const updatedContext = updatedPayload._hanasand as Record<string, unknown>
+const updatedDeliveryContext = updatedContext.delivery as Record<string, unknown>
+const updatedTemplate = updatedContext.discordTemplate as Record<string, unknown>
 expect(updatedTriggerInput.eventType === 'dwm.alert.updated' && updatedTriggerInput.dryRun === true && updatedTriggerInput.live === false, 'Alert-updated trigger input should preserve dry-run/no-network delivery mode.', updatedTriggerInput)
 expect(updatedPlan.eventType === 'dwm.alert.updated' && updatedPlan.selectedDestinations.map(item => item.id).join(',') === 'destination_update_contract', 'Alert-updated dispatch should select only destinations subscribed to update events.', updatedPlan)
 expect(updatedPlan.skippedDestinations.some(item => item.id === 'destination_created_contract' && item.reason === 'event_not_subscribed'), 'Alert-updated dispatch should skip destinations that only subscribe to created alerts.', updatedPlan)
 expect(updatedDeliveryContext.replay === false && updatedSerialized.includes('dwm.alert.updated:org_contract:destination_update_contract:dwm_dedupe_replay_contract'), 'Alert-updated Discord payload should use update-scoped idempotency without marking replay.', updatedPayload)
 expect(updatedSerialized.includes('Workflow') && updatedSerialized.includes('updated') && !updatedSerialized.includes(secret), 'Alert-updated Discord payload should expose workflow context without leaking secrets.', updatedPayload)
+expect(updatedTemplate.templateId === 'dwm.discord.alert_update.v1' && updatedTemplate.ready === true && (updatedTemplate.workflow as Record<string, unknown>).update === true, 'Alert-updated Discord payload should expose an update template contract.', updatedTemplate)
 expect(JSON.stringify(replayWorkflowAlert) === replayWorkflowBefore, 'Replay dispatch/payload builders should not mutate alert workflow state.', replayWorkflowAlert)
 
 const duplicateReplayPayload = buildDwmAlertDeliveryPayload({
@@ -923,6 +932,7 @@ expect(overlappingOrgAAlertEventConsumer.persistenceTargets.deliveryAttempt === 
 expect(overlappingOrgAAlertEventConsumer.auditReadiness.expectedNextAction === 'delivery.created' && overlappingOrgAAlertEventConsumer.auditReadiness.failureAuditLinked === true && overlappingOrgAAlertEventConsumer.auditReadiness.linkedAuditEventIds.includes('audit_overlap_a_retry'), 'Alert event consumer should expose linked delivery audit readiness for failed created events.', overlappingOrgAAlertEventConsumer.auditReadiness)
 expect(overlappingOrgAAlertEventConsumer.auditReadiness.redaction.webhookSecretExposed === false && !JSON.stringify(overlappingOrgAAlertEventConsumer.auditReadiness).includes(secret), 'Alert event consumer audit readiness should redact webhook secrets.', overlappingOrgAAlertEventConsumer.auditReadiness)
 expect(overlappingOrgAAlertEventConsumer.payloadPreview?.discord.fieldNames.some(name => name.toLowerCase() === 'source family') && overlappingOrgAAlertEventConsumer.payloadPreview.context.watchlistId === 'watchlist_overlap_a', 'Alert event consumer should expose Discord-ready payload preview context.', overlappingOrgAAlertEventConsumer.payloadPreview)
+expect(overlappingOrgAAlertEventConsumer.payloadPreview?.context.discordTemplate?.templateId === 'dwm.discord.alert_created.v1' && overlappingOrgAAlertEventConsumer.payloadPreview.context.discordTemplate.ready === true && overlappingOrgAAlertEventConsumer.payloadPreview.context.discordTemplate.noNetworkDefault === true, 'Alert event consumer should pass through the Discord payload template contract.', overlappingOrgAAlertEventConsumer.payloadPreview?.context.discordTemplate)
 expect(overlappingOrgAAlertEventConsumer.payloadPreview?.redaction.webhookSecretExposed === false && overlappingOrgAAlertEventConsumer.payloadPreview.redaction.endpointExposed === false, 'Alert event consumer payload preview should redact destination secrets.', overlappingOrgAAlertEventConsumer.payloadPreview)
 expect(overlappingOrgAAlertEventConsumer.payloadValidation.valid === true && overlappingOrgAAlertEventConsumer.payloadValidation.requiredDiscordFields.includes('Dedupe key') && overlappingOrgAAlertEventConsumer.payloadValidation.missingDiscordFields.length === 0, 'Alert event consumer should validate required Discord payload fields.', overlappingOrgAAlertEventConsumer.payloadValidation)
 expect(Object.values(overlappingOrgAAlertEventConsumer.payloadValidation.limits).every(Boolean) && overlappingOrgAAlertEventConsumer.payloadValidation.redaction.mentionsDisabled === true && overlappingOrgAAlertEventConsumer.payloadValidation.redaction.noWebhookUrl === true, 'Alert event consumer payload validation should enforce Discord limits and redaction.', overlappingOrgAAlertEventConsumer.payloadValidation)
@@ -3650,6 +3660,7 @@ console.log(JSON.stringify({
         'Discord payload analyst action link',
         'Discord payload event timestamp context',
         'Discord payload confidence/workflow context',
+        'Discord payload template contract',
         'Discord payload truncation limits',
         'destination selection',
         'disabled destination skip',
@@ -4170,6 +4181,7 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.auditReadiness.redaction',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.discord.fieldNames',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.context',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.context.discordTemplate',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.valid',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.requiredDiscordFields',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.limits',
