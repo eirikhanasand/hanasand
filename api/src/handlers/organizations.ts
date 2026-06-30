@@ -705,6 +705,47 @@ export async function patchOrganizationMemberRole(req: FastifyRequest<{ Params: 
             reason: input.reason,
             requestId: input.requestId ?? null,
             serviceLogAction,
+            consumerVisibilityReceipt: {
+                schemaVersion: 'organization.member_role_consumer_visibility_receipt.v1',
+                organizationId: req.params.id,
+                tenantId: req.params.id,
+                actorId: userId,
+                actorRole: organization.role,
+                targetUserId: req.params.userId,
+                previousRole: target.role,
+                newRole: input.role,
+                membershipStatus: 'active' as const,
+                routes: {
+                    sharedWatchlists: 'GET /api/organizations/:id/watchlists',
+                    alertTermsExport: 'GET /api/organizations/:id/watchlists/alert-terms',
+                    alertCaseVisibility: 'GET /api/organizations/:id/alert-case-visibility',
+                },
+                consumerContracts: [
+                    'organization.watchlist_alert_generation_consumer.v1',
+                    'organization.watchlist_alert_generation_consumer_denial.v1',
+                    'organization.case_visibility_consumer.v1',
+                ],
+                before: {
+                    role: target.role,
+                    canReadSharedWatchlists: true,
+                    canExportAlertTerms: ['owner', 'admin'].includes(target.role),
+                    canMutateSharedWatchlists: ['owner', 'admin'].includes(target.role),
+                    canAssignCases: ['owner', 'admin'].includes(target.role),
+                },
+                after: {
+                    role: input.role,
+                    canReadSharedWatchlists: true,
+                    canExportAlertTerms: ['owner', 'admin'].includes(input.role),
+                    canMutateSharedWatchlists: ['owner', 'admin'].includes(input.role),
+                    canAssignCases: ['owner', 'admin'].includes(input.role),
+                },
+                blockerCodes: {
+                    nonmember: 'nonmember_denied' as const,
+                    removedMember: 'member_revoked' as const,
+                    alertVisibility: 'role_not_allowed' as const,
+                },
+                noEnumeration: true,
+            },
         },
     })
 }
