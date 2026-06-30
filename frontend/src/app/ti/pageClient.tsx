@@ -1940,7 +1940,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
                         <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
-                        <EvidenceMetric label='Readiness' value={artifact.readiness.label} />
+                        <EvidenceMetric label='Workflow state' value={artifact.readiness.label} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
                         <span className={sourceHealthChipClass(artifact.readiness.state === 'ready_for_org_handoff' ? 'ready' : artifact.readiness.state === 'needs_source' || artifact.readiness.state === 'needs_watchlist_term' ? 'blocked' : 'review')}>{formatLabel(artifact.readiness.state)}</span>
@@ -2036,7 +2036,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
             <div data-ti-artifact-workflow-readiness='true' className='mt-4 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected handoff readiness</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected handoff status</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                             Selected artifact handoff state for watchlist, alert, case, and enrichment work.
                         </p>
@@ -2703,7 +2703,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
     const decisionSteps = decisionStepsFor(actionability)
 
     return (
-        <Panel title='Actions' description='Readiness for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
+        <Panel title='Actions' description='Operational state for watchlists, alerts, cases, delivery, and source collection.' icon={<ShieldCheck className='h-4 w-4' />}>
             <div className='grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3'>
                 <DecisionFlow steps={decisionSteps} disposition={actionability.alertDisposition} shouldAlert={actionability.shouldAlert} rationale={actionability.rationale} />
                 <HandoffEvidenceMatrix actionability={actionability} />
@@ -2821,7 +2821,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 </div>
                 <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span data-ti-case-replay-readiness='true' className='inline-flex'>
-                        <CopyPayloadButton label='Case replay readiness' payload={actionability.caseReplayReadiness} />
+                        <CopyPayloadButton label='Case replay status' payload={actionability.caseReplayReadiness} />
                     </span>
                     <CopyPayloadButton label='Related alerts and cases' payload={{ alerts: actionability.relatedAlerts, cases: actionability.relatedCases, caseReplayReadiness: actionability.caseReplayReadiness, blockers: actionability.readiness.blockers }} />
                 </div>
@@ -2858,7 +2858,7 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                             </p>
                         </div>
                         <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
-                            <CopyPayloadButton label='Case replay readiness' payload={actionability.caseReplayReadiness} />
+                            <CopyPayloadButton label='Case replay status' payload={actionability.caseReplayReadiness} />
                             <CopyPayloadButton label='Case review intake' payload={caseIntake} />
                         </div>
                     </div>
@@ -2940,9 +2940,9 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
                     category: 'webhook' as const,
                     ownerLane: 'webhook' as const,
                     field: `relatedAlerts.${record.recordId}.deliveryReadinessContext`,
-                    detail: `Delivery readiness blocker: ${code}.`,
+                    detail: `Delivery status blocker: ${code}.`,
                     route: '/dashboard/dwm',
-                    handoff: 'Resolve delivery readiness before sending or replaying this alert.',
+                    handoff: 'Resolve delivery status before sending or replaying this alert.',
                     source: 'delivery_readiness' as const,
                 })),
             ],
@@ -3294,7 +3294,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Readiness</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Workflow state</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>Backed IDs, blockers, and next handoff owner for this result.</p>
                 </div>
                 <span className={actionability.readiness.state === 'ready' ? decisionStepStatusClass('ready') : actionability.readiness.state === 'blocked' ? decisionStepStatusClass('blocked') : decisionStepStatusClass('review')}>
@@ -3323,7 +3323,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                     ))}
                 </div>
             ) : (
-                <p className='mt-3 text-xs leading-5 text-[#147a3b]'>No blocking readiness issues returned.</p>
+                <p className='mt-3 text-xs leading-5 text-[#147a3b]'>No blocking workflow issues returned.</p>
             )}
         </div>
     )
@@ -3335,12 +3335,12 @@ function ConsumerReadinessPanel({ actionability }: { actionability: TiActionabil
         <div data-ti-consumer-readiness='true' className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff readiness</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Handoff status</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
                         {readyStages} of {actionability.consumerReadiness.stages.length} stages ready for console work.
                     </p>
                 </div>
-                <CopyPayloadButton label='Handoff readiness' payload={actionability.consumerReadiness.bundlePreview} />
+                <CopyPayloadButton label='Handoff status' payload={actionability.consumerReadiness.bundlePreview} />
             </div>
             <div className='mt-3 grid gap-2'>
                 {actionability.consumerReadiness.stages.map(stage => (
@@ -3829,7 +3829,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                             <CopyPayloadButton label='Coverage review' payload={coverage} />
                         </span>
                         <span data-ti-enrichment-consumer-readiness='true' className='inline-flex'>
-                            <CopyPayloadButton label='Consumer readiness' payload={consumerReadiness} />
+                            <CopyPayloadButton label='Consumer status' payload={consumerReadiness} />
                         </span>
                         <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, actorEnrichmentConsumerReadiness: consumerReadiness, enrichmentPayload: payload }} />
                     </div>
@@ -4147,7 +4147,7 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case ownership</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Selected evidence mapped to case candidates, replay readiness, and owner blockers.
+                        Selected evidence mapped to case candidates, replay state, and owner blockers.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -4524,7 +4524,7 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                                 ))}
                             </div>
                         ) : (
-                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>No consumer readiness row is attached to this source yet.</p>
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>No consumer status row is attached to this source yet.</p>
                         )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
@@ -4544,7 +4544,7 @@ function SelectedAlertActionPlanPanel({ plan }: { plan: SelectedAlertActionPlan 
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Alert action plan</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Selected evidence mapped to watchlist terms, source refs, and alert rebuild readiness.
+                        Selected evidence mapped to watchlist terms, source refs, and alert rebuild state.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -4616,14 +4616,14 @@ function SelectedDeliveryReadinessPanel({ plan }: { plan: SelectedDeliveryReadin
         <div data-ti-selected-delivery-readiness='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Delivery readiness</p>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Delivery status</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Selected evidence mapped to alert, capture, destination, and case route readiness.
+                        Selected evidence mapped to alert, capture, destination, and case route status.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
                     <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
-                    <CopyPayloadButton label='Delivery readiness' payload={plan} />
+                    <CopyPayloadButton label='Delivery status' payload={plan} />
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2'>
@@ -4682,7 +4682,7 @@ function CaseActionTrailPanel({ trail }: { trail: CaseActionTrailPayload }) {
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case action trail</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        Metadata-only trail for local decisions, selected evidence, and case replay readiness.
+                        Metadata-only trail for local decisions, selected evidence, and case replay state.
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
@@ -6969,7 +6969,7 @@ function EmptyState() {
                 </div>
 
                 <div className='bg-[#fbfcfe] p-4 dark:bg-[#131c29] lg:border-l lg:border-[#e8edf5] lg:dark:border-[#273244]'>
-                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Handoff readiness</h2>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Handoff status</h2>
                     <div className='mt-3 grid gap-2 text-sm'>
                         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
                             <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Watchlist relevance</p>
