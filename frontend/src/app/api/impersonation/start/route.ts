@@ -10,17 +10,34 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Log in again before impersonating a user.' }, { status: 401 })
     }
 
-    const body = await req.json().catch(() => ({})) as { target_id?: string, reason?: string }
+    const body = await req.json().catch(() => ({})) as {
+        target_id?: string
+        targetId?: string
+        reason?: string
+        durationMinutes?: string | number
+        duration_minutes?: string | number
+        scope?: string[] | string
+        organizationId?: string
+        organization_id?: string
+        supportSessionId?: string
+        support_session_id?: string
+    }
+    const supportSessionId = body.supportSessionId || body.support_session_id || ''
     const response = await fetch(`${config.url.api}/impersonation/start`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
             id: actorId,
+            ...(supportSessionId ? { 'x-support-session-id': supportSessionId } : {}),
         },
         body: JSON.stringify({
-            target_id: body.target_id,
-            reason: body.reason || 'website admin impersonation',
+            target_id: body.target_id || body.targetId,
+            reason: body.reason,
+            durationMinutes: body.durationMinutes ?? body.duration_minutes,
+            scope: body.scope,
+            organizationId: body.organizationId || body.organization_id,
+            supportSessionId,
         }),
         cache: 'no-store',
     })
@@ -29,9 +46,13 @@ export async function POST(req: NextRequest) {
         token?: string
         session?: { target?: { id?: string, name?: string } }
         error?: string
+        detail?: { code?: string, message?: string }
     }
     if (!response.ok || !payload.token || !payload.session?.target?.id) {
-        return NextResponse.json({ error: payload.error || 'Unable to start impersonation.' }, { status: response.status || 502 })
+        return NextResponse.json({
+            error: payload.error || payload.detail?.message || 'Unable to start impersonation.',
+            detail: payload.detail,
+        }, { status: response.status || 502 })
     }
 
     const next = NextResponse.json({
