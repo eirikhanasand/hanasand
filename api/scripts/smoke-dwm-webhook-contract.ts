@@ -3196,6 +3196,14 @@ expect(deliveryReceiptMissingDestination?.transitionReceipt.state.next === 'dest
 expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === null && deliveryReceiptMissingDestination.operationLinks.destinationArchive === null && deliveryReceiptMissingDestination.operationLinks.deliveryHistory.includes('alert_missing_destination_contract'), 'Missing destination receipts should avoid fake destination remediation links and keep alert-scoped history links.', deliveryReceiptMissingDestination)
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
 expect(nonmemberDeliveryReceipts.receipts.length === 0 && nonmemberDeliveryReceipts.blockers.some(item => item.code === 'permission_denied'), 'Delivery receipts should deny nonmembers without leaking transition receipts.', nonmemberDeliveryReceipts)
+expect(deliveryReceipts.historyReplayFilters.schemaVersion === 'dwm.webhook.delivery_receipt_history_filters.v1' && deliveryReceipts.historyReplayFilters.routeContract.replayHistory.requiredQuery.includes('dedupeKey'), 'Delivery receipt filters should expose replay/history route contracts.', deliveryReceipts.historyReplayFilters)
+expect(deliveryReceipts.historyReplayFilters.rows.some(item => item.deliveryId === 'delivery_replay_duplicate_contract' && item.queryKeys.byDedupe?.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery receipt filters should expose replay/dedupe query keys.', deliveryReceipts.historyReplayFilters.rows)
+expect(deliveryReceipts.historyReplayFilters.rows.some(item => item.casePath === replayWorkflowAlert.casePath && item.queryKeys.byCase?.casePath === replayWorkflowAlert.casePath), 'Delivery receipt filters should expose case-path query keys.', deliveryReceipts.historyReplayFilters.rows)
+expect(deliveryReceipts.historyReplayFilters.queryPresets.missingDestination?.alertId === 'alert_missing_destination_contract' && deliveryReceipts.historyReplayFilters.counts.missingDestination >= 1, 'Delivery receipt filters should expose missing-destination history presets.', deliveryReceipts.historyReplayFilters)
+expect(deliveryReceipts.historyReplayFilters.queryPresets.retryable?.dedupeKey === 'dwm_dedupe_live_contract' && deliveryReceipts.historyReplayFilters.counts.retryable >= 1, 'Delivery receipt filters should expose retry/backoff history presets.', deliveryReceipts.historyReplayFilters)
+expect(deliveryReceipts.historyReplayFilters.rows.some(item => item.redactedTarget.endpointExposed === false && item.auditEventIds.length > 0 && item.idempotency.key), 'Delivery receipt filters should carry redacted target, audit, and idempotency proof.', deliveryReceipts.historyReplayFilters.rows)
+expect(nonmemberDeliveryReceipts.historyReplayFilters.rows.length === 0 && nonmemberDeliveryReceipts.historyReplayFilters.blockers.some(item => item.code === 'permission_denied'), 'Delivery receipt filters should deny nonmembers without history leakage.', nonmemberDeliveryReceipts.historyReplayFilters)
+expect(!JSON.stringify(deliveryReceipts.historyReplayFilters).includes(secret), 'Delivery receipt filters should redact endpoint and payload secrets.', deliveryReceipts.historyReplayFilters)
 expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts should redact endpoint, response, and payload secrets.', deliveryReceipts)
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
 expect(deliveryTimelineReplay?.latestReceipt.discordPreview?.fieldNames.includes('Alert URL') && deliveryTimelineReplay.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery timeline should preserve Discord preview and audit proof for replayed alerts.', deliveryTimelineReplay)
@@ -3443,6 +3451,12 @@ console.log(JSON.stringify({
         'delivery receipts missing destination transition blocker',
         'delivery receipts audit/no-network linkage',
         'delivery receipts nonmember denial',
+        'delivery receipts replay/history filter routes',
+        'delivery receipts replay/dedupe filter keys',
+        'delivery receipts case-path filter keys',
+        'delivery receipts missing/disabled filter presets',
+        'delivery receipts filter idempotency/audit proof',
+        'delivery receipts filter nonmember denial',
         'delivery receipts destination archive remediation link',
         'delivery receipts secret redaction',
         'delivery timeline customer history grouping',
@@ -3663,6 +3677,13 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].transitionReceipt.audit.auditEventIds',
             'deliveryReceipts.receipts[].transitionReceipt.redactedTarget.endpointExposed',
             'deliveryReceipts.receipts[].blockers[].code',
+            'deliveryReceipts.historyReplayFilters.schemaVersion',
+            'deliveryReceipts.historyReplayFilters.routeContract.replayHistory.requiredQuery',
+            'deliveryReceipts.historyReplayFilters.rows[].queryKeys.byDedupe',
+            'deliveryReceipts.historyReplayFilters.rows[].queryKeys.byCase',
+            'deliveryReceipts.historyReplayFilters.rows[].redactedTarget.endpointExposed',
+            'deliveryReceipts.historyReplayFilters.queryPresets.retryable',
+            'deliveryReceipts.historyReplayFilters.queryPresets.missingDestination',
             'deliveryTimeline.schemaVersion',
             'deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
             'deliveryTimeline.timelines[].latestReceipt.discordPreview.fieldNames',

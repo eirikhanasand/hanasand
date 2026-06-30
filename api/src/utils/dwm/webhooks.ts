@@ -1338,6 +1338,13 @@ export function buildDwmWebhookDeliveryReceipts({
                 blocked: 1,
             },
             blockers: [permissionBlocker],
+            historyReplayFilters: buildDwmWebhookReceiptHistoryFilters({
+                receipts: [],
+                filters: normalizedFilters,
+                access,
+                liveDeliveryEnabled,
+                blockers: [permissionBlocker],
+            }),
             receipts: [],
         }
     }
@@ -1443,6 +1450,13 @@ export function buildDwmWebhookDeliveryReceipts({
             blocked: receipts.filter(receipt => receipt.blockingCodes.length > 0).length,
         },
         blockers: uniqueRetryQueueBlockers(receipts.flatMap(receipt => receipt.blockers)),
+        historyReplayFilters: buildDwmWebhookReceiptHistoryFilters({
+            receipts,
+            filters: history.filters,
+            access,
+            liveDeliveryEnabled,
+            blockers: uniqueRetryQueueBlockers(receipts.flatMap(receipt => receipt.blockers)),
+        }),
         receipts,
     }
 }
@@ -8187,6 +8201,203 @@ function buildDwmWebhookDeliveryTransitionReceipt({
         redaction: {
             safeForCustomerDisplay: true,
             endpointExposed: false,
+        },
+    }
+}
+
+function buildDwmWebhookReceiptHistoryFilters({
+    receipts,
+    filters,
+    access,
+    liveDeliveryEnabled,
+    blockers = [],
+}: {
+    receipts: Array<{
+        deliveryId: string
+        requestId: string
+        orgId: string
+        destinationId: string | null
+        alertId: string
+        eventType: DwmAlertEventType
+        status: DwmWebhookDeliveryAttemptState
+        rawStatus: string
+        dryRun: boolean
+        live: boolean
+        replay: boolean
+        dedupeKey: string | null
+        casePath: string
+        alertUrl: string
+        watchlist: { id: string, name: string, terms: string[] }
+        destination: {
+            label: string | null
+            type: string | null
+            status: string | null
+            enabled: boolean | null
+            redactedEndpoint: { endpointHint: string | null, endpointHash: string | null }
+        }
+        proof: {
+            auditEventId: string | null
+            auditAction: string | null
+            payloadHash: string | null
+            updatedAt: string | null
+        }
+        retry: {
+            retryable: boolean
+            nextRetryAt: string | null
+            attemptCount: number
+            lastErrorCategory: string | null
+            terminalFailure: boolean
+        }
+        transitionReceipt: ReturnType<typeof buildDwmWebhookDeliveryTransitionReceipt>
+        blockingCodes: string[]
+    }>
+    filters: {
+        orgId?: string | null
+        destinationId?: string | null
+        alertId?: string | null
+        casePath?: string | null
+        dedupeKey?: string | null
+        requestId?: string | null
+    }
+    access: { canRead: boolean, canRetry: boolean, memberSafe: boolean }
+    liveDeliveryEnabled: boolean
+    blockers?: ReturnType<typeof retryQueueBlocker>[]
+}) {
+    const normalizedFilters = {
+        orgId: clean(filters.orgId) || null,
+        destinationId: clean(filters.destinationId) || null,
+        alertId: clean(filters.alertId) || null,
+        casePath: clean(filters.casePath) || null,
+        dedupeKey: clean(filters.dedupeKey) || null,
+        requestId: clean(filters.requestId) || null,
+    }
+    const queryPreview = {
+        orgId: normalizedFilters.orgId || '<org_id>',
+        destinationId: normalizedFilters.destinationId || undefined,
+        alertId: normalizedFilters.alertId || undefined,
+        casePath: normalizedFilters.casePath || undefined,
+        dedupeKey: normalizedFilters.dedupeKey || undefined,
+        deliveryId: normalizedFilters.requestId || undefined,
+    }
+    const rows = receipts.map(receipt => ({
+        schemaVersion: 'dwm.webhook.delivery_receipt_history_filter_row.v1',
+        deliveryId: receipt.deliveryId,
+        requestId: receipt.requestId,
+        orgId: receipt.orgId,
+        destinationId: receipt.destinationId,
+        alertId: receipt.alertId,
+        casePath: receipt.casePath,
+        alertUrl: receipt.alertUrl,
+        dedupeKey: receipt.dedupeKey,
+        eventType: receipt.eventType,
+        status: receipt.status,
+        rawStatus: receipt.rawStatus,
+        dryRun: receipt.dryRun,
+        live: receipt.live,
+        replay: receipt.replay,
+        watchlistTerm: receipt.watchlist.terms[0] || receipt.watchlist.name || null,
+        sourceFamily: receipt.transitionReceipt.alert.sourceFamily,
+        provenanceIds: receipt.transitionReceipt.provenance,
+        workflowStatus: receipt.transitionReceipt.workflow.status,
+        routeUrl: receipt.transitionReceipt.workflow.routeUrl,
+        auditEventId: receipt.proof.auditEventId,
+        auditEventIds: receipt.transitionReceipt.audit.auditEventIds,
+        redactedTarget: receipt.transitionReceipt.redactedTarget,
+        retry: {
+            retryable: receipt.retry.retryable,
+            nextRetryAt: receipt.retry.nextRetryAt,
+            attemptCount: receipt.retry.attemptCount,
+            lastErrorCategory: receipt.retry.lastErrorCategory,
+            terminalFailure: receipt.retry.terminalFailure,
+        },
+        idempotency: {
+            key: receipt.transitionReceipt.workflow.idempotencyKey,
+            dedupeKey: receipt.transitionReceipt.workflow.dedupeKey,
+            replay: receipt.replay,
+        },
+        queryKeys: {
+            byDelivery: { orgId: receipt.orgId, deliveryId: receipt.deliveryId },
+            byDestination: receipt.destinationId ? { orgId: receipt.orgId, destinationId: receipt.destinationId } : null,
+            byAlert: receipt.alertId ? { orgId: receipt.orgId, alertId: receipt.alertId } : null,
+            byCase: receipt.casePath ? { orgId: receipt.orgId, casePath: receipt.casePath } : null,
+            byDedupe: receipt.dedupeKey ? { orgId: receipt.orgId, dedupeKey: receipt.dedupeKey } : null,
+        },
+        blockers: receipt.transitionReceipt.denial.blockers,
+        blockingCodes: receipt.transitionReceipt.denial.blockingCodes,
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            payloadExposed: false,
+        },
+    }))
+    const retryableRows = rows.filter(row => row.retry.retryable)
+    const replayRows = rows.filter(row => row.replay)
+    const missingDestinationRows = rows.filter(row => row.blockingCodes.includes('destination_unavailable'))
+    const disabledRows = rows.filter(row => row.blockingCodes.includes('destination_disabled'))
+
+    return {
+        schemaVersion: 'dwm.webhook.delivery_receipt_history_filters.v1',
+        noNetwork: true,
+        liveDeliveryEnabled,
+        externalSendEnabled: false,
+        access,
+        activeFilters: normalizedFilters,
+        routeContract: {
+            list: {
+                method: 'GET',
+                route: '/api/dwm/webhook-deliveries',
+                requiredQuery: ['orgId'],
+                optionalQuery: ['destinationId', 'alertId', 'casePath', 'dedupeKey', 'deliveryId', 'replay', 'status'],
+                noNetwork: true,
+            },
+            detail: {
+                method: 'GET',
+                route: '/api/dwm/webhook-deliveries',
+                requiredQuery: ['orgId', 'deliveryId'],
+                noNetwork: true,
+            },
+            replayHistory: {
+                method: 'GET',
+                route: '/api/dwm/webhook-deliveries',
+                requiredQuery: ['orgId', 'dedupeKey'],
+                optionalQuery: ['destinationId', 'alertId', 'casePath'],
+                noNetwork: true,
+            },
+            dryRunReplay: {
+                method: 'POST',
+                route: '/api/dwm/webhook-deliveries',
+                requiredBody: ['orgId', 'destinationId', 'alertId', 'dedupeKey', 'dryRun'],
+                noNetworkDefault: true,
+            },
+        },
+        queryPreview,
+        queryPresets: {
+            replayOnly: { ...queryPreview, replay: true },
+            retryable: retryableRows[0]?.queryKeys.byDedupe || retryableRows[0]?.queryKeys.byDelivery || null,
+            missingDestination: missingDestinationRows[0]?.queryKeys.byAlert || missingDestinationRows[0]?.queryKeys.byDelivery || null,
+            disabledDestination: disabledRows[0]?.queryKeys.byDestination || disabledRows[0]?.queryKeys.byDelivery || null,
+            latestReplay: replayRows[0]?.queryKeys.byDedupe || replayRows[0]?.queryKeys.byDelivery || null,
+        },
+        counts: {
+            total: rows.length,
+            replay: replayRows.length,
+            dryRun: rows.filter(row => row.dryRun).length,
+            live: rows.filter(row => row.live).length,
+            failed: rows.filter(row => row.status === 'failed').length,
+            skipped: rows.filter(row => row.status === 'skipped').length,
+            retryable: retryableRows.length,
+            terminalFailure: rows.filter(row => row.retry.terminalFailure).length,
+            missingDestination: missingDestinationRows.length,
+            disabledDestination: disabledRows.length,
+            auditLinked: rows.filter(row => Boolean(row.auditEventId)).length,
+            blocked: rows.filter(row => row.blockingCodes.length > 0).length,
+        },
+        blockers: uniqueRetryQueueBlockers(blockers),
+        rows,
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            payloadExposed: false,
         },
     }
 }
