@@ -193,8 +193,6 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
-    const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
-    const totalHandoffCount = actionability.consumerReadiness.stages.length
     const openGapCount = actionability.enrichmentGapQueue.length
     const sessionEvents = Object.entries(localDecisions).map(([id, decision]) => {
         const item = workItems.find(entry => entry.id === id)
@@ -216,13 +214,20 @@ function Results({ result }: { result: TiSearchResponse }) {
     })
     const queueCounts = queueCountsFor(workItems, localDecisions)
     const profileStats = [
-        { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(result.sources.length) },
-        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Last seen', value: formatDate(result.lastSeen || result.generatedAt) },
-        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Queue', value: `${queueCounts.open} open` },
-        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Handoff', value: `${readyHandoffCount}/${totalHandoffCount} ready` },
+        { icon: <ShieldCheck className='h-3.5 w-3.5' />, label: 'Sources', value: sourceCountLabel(sources.length) },
+        { icon: <Activity className='h-3.5 w-3.5' />, label: 'Freshness', value: formatDate(result.lastSeen || result.generatedAt) },
+        { icon: <Inbox className='h-3.5 w-3.5' />, label: 'Work items', value: `${queueCounts.open} open` },
+        { icon: <BellRing className='h-3.5 w-3.5' />, label: 'Related alerts', value: String(actionability.relatedAlerts.length) },
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
+    const commandLinks = [
+        { href: '#ti-activity', label: 'Activity queue', value: `${workItems.length} rows`, icon: Inbox },
+        { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select row', icon: Eye },
+        { href: '#ti-sources', label: 'Sources', value: `${sources.length} linked`, icon: Database },
+        { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
+        { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
+    ]
 
     useEffect(() => {
         if (!workItems.length) return
@@ -286,11 +291,12 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                         ))}
                     </div>
+                    <TiCommandBar links={commandLinks} />
                     <SectionOverviewRail items={sectionOverview} />
                 </div>
 
                 <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[320px_minmax(0,1fr)_340px]'>
-                    <aside data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
+                    <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
@@ -356,7 +362,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
                                 ) : null}
 
-                                <section data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+                                <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
                                             <div className='flex flex-wrap items-center gap-2'>
@@ -505,6 +511,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                 </Panel>
 
                 <Panel title='Sources' description='Data families checked for this result, including actor profiles, victim claims, public advisories, and watched company or supplier terms.' icon={<Globe2 className='h-4 w-4' />}>
+                    <div id='ti-sources' className='sr-only'>Source coverage</div>
                     {datasets.map(item => (
                         <EvidenceBox key={`${item.type}-${item.name}`} href={item.url}>
                             <div className='flex items-center justify-between gap-3'>
@@ -1515,6 +1522,26 @@ function SectionOverviewRail({ items }: { items: SectionOverviewItem[] }) {
     )
 }
 
+function TiCommandBar({ links }: { links: Array<{ href: string; label: string; value: string; icon: typeof Inbox }> }) {
+    return (
+        <nav data-ti-command-bar='true' className='grid min-w-0 gap-1.5 sm:grid-cols-2 lg:col-span-2 xl:grid-cols-5' aria-label='Threat intelligence workflow'>
+            {links.map(({ href, label, value, icon: Icon }) => (
+                <Link
+                    key={`${label}-${href}`}
+                    href={href}
+                    className='group grid min-h-12 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] px-2.5 py-2 text-left transition hover:border-[#b8c5ff] hover:bg-[#f4f7ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#131c29] dark:hover:bg-[#172131]'
+                >
+                    <Icon className='h-4 w-4 text-[#3056d3] dark:text-[#9db6ff]' />
+                    <span className='min-w-0'>
+                        <span className='block truncate text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{label}</span>
+                        <span className='block truncate text-[11px] font-medium text-[#667085] dark:text-[#9aa8bd]'>{value}</span>
+                    </span>
+                </Link>
+            ))}
+        </nav>
+    )
+}
+
 function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows: TiActorIntelligenceProfile['provenanceRows']; actor: TiActorIntelligenceProfile; actionability: TiActionabilityModel; query: string }) {
     return (
         <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
@@ -2424,7 +2451,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         provenance: result.mode,
         confidence: result.confidence,
         evidence: result.notes.length ? result.notes : ['No evidence rows returned yet.'],
-        nextActions: ['Leave this query open while polling continues.', 'Try an alias, domain, company name, CVE, or supplier term.', 'Open the customer console for persisted queue work.'],
+        nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console for persisted queue work.'],
         priority: priorityByRow.get('collection-searching'),
     }]
 }
@@ -6874,12 +6901,90 @@ function EvidenceBox({ href, children }: { href?: string; children: React.ReactN
 }
 
 function EmptyState() {
+    const launchItems = [
+        { label: 'APT29', detail: 'State-linked actor intelligence', href: '/ti/APT29', icon: <ShieldCheck className='h-4 w-4' /> },
+        { label: 'LockBit', detail: 'Ransomware actor workflow', href: '/ti/LockBit', icon: <ShieldAlert className='h-4 w-4' /> },
+        { label: 'Microsoft', detail: 'Company and vendor exposure', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
+    ]
+    const workflowRows = [
+        { label: 'Actor facts', value: 'Aliases, attribution, freshness, confidence' },
+        { label: 'Evidence', value: 'Source rows, timestamps, provenance, captures' },
+        { label: 'Tradecraft', value: 'TTPs, tooling, infrastructure, campaigns' },
+        { label: 'Targets', value: 'Victims, sectors, regions, map context' },
+        { label: 'Workflow', value: 'Watchlists, alert review, case handoff, gaps' },
+    ]
+
     return (
-        <section className='grid min-h-[48vh] place-items-center border border-[#dfe5ee] bg-white px-5 py-10 text-center'>
-            <div className='grid max-w-xl gap-3'>
-                <Radar className='mx-auto h-8 w-8 text-[#3056d3]' />
-                <h1 className='text-2xl font-semibold text-[#171a21]'>Search company exposure and actor context</h1>
-                <p className='text-sm leading-6 text-[#667085]'>Enter a company, vendor, domain, ransomware group, CVE, or actor name.</p>
+        <section data-ti-empty-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#263244] dark:bg-[#101722]'>
+            <div className='grid gap-4 border-b border-[#e8edf5] bg-[#fbfcfe] p-4 dark:border-[#273244] dark:bg-[#131c29] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2'>
+                        <span className='inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#eef3ff] text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>
+                            <Radar className='h-4 w-4' />
+                        </span>
+                        <h1 className='wrap-break-word text-2xl font-semibold text-[#171a21] dark:text-[#eef4ff]'>Threat intelligence workspace</h1>
+                    </div>
+                    <p className='mt-2 max-w-3xl text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
+                        Search an actor, company, domain, CVE, supplier, or malware family to open the analyst queue with source-backed evidence, watchlist relevance, enrichment gaps, and alert/case handoff.
+                    </p>
+                </div>
+                <Link href='/dashboard/dwm' className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                    <BellRing className='h-3.5 w-3.5' />
+                    Alert queue
+                </Link>
+            </div>
+
+            <div className='grid min-w-0 gap-0 lg:grid-cols-[320px_minmax(0,1fr)_320px]'>
+                <div className='border-b border-[#e8edf5] bg-white p-4 dark:border-[#273244] dark:bg-[#101722] lg:border-b-0 lg:border-r'>
+                    <div className='flex items-center justify-between gap-3'>
+                        <div>
+                            <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Start queue</h2>
+                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Open a real actor or entity workspace.</p>
+                        </div>
+                        <span className='rounded-lg bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#b8c8ff]'>3</span>
+                    </div>
+                    <div className='mt-3 grid gap-2'>
+                        {launchItems.map(item => (
+                            <Link key={item.href} href={item.href} className='grid min-w-0 gap-1 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 text-left transition hover:border-[#b8c5ff] hover:bg-[#eef3ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#131c29] dark:hover:border-[#4a68a8] dark:hover:bg-[#172131]'>
+                                <span className='flex min-w-0 items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>
+                                    <span className='text-[#3056d3] dark:text-[#b8c8ff]'>{item.icon}</span>
+                                    <span className='wrap-break-word'>{item.label}</span>
+                                </span>
+                                <span className='text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>{item.detail}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+
+                <div className='min-w-0 border-b border-[#e8edf5] p-4 dark:border-[#273244] lg:border-b-0'>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Investigation view</h2>
+                    <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                        {workflowRows.map(row => (
+                            <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                                <p className='text-xs font-semibold uppercase tracking-[0.02em] text-[#3056d3] dark:text-[#9ab3ff]'>{row.label}</p>
+                                <p className='mt-1 text-sm leading-5 text-[#344054] dark:text-[#d8e2f2]'>{row.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className='bg-[#fbfcfe] p-4 dark:bg-[#131c29] lg:border-l lg:border-[#e8edf5] lg:dark:border-[#273244]'>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Handoff readiness</h2>
+                    <div className='mt-3 grid gap-2 text-sm'>
+                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Watchlist relevance</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Matched or candidate terms become alert review inputs when organization context exists.</p>
+                        </div>
+                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Case handoff</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Selected evidence carries source IDs, timestamps, confidence, and missing dependencies.</p>
+                        </div>
+                        <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <p className='font-semibold text-[#171a21] dark:text-[#eef4ff]'>Collection gaps</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085] dark:text-[#95a3b8]'>Missing captures, stale reports, and parser status route to source enrichment.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
     )
