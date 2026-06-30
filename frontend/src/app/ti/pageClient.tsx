@@ -8,7 +8,7 @@ import { PUBLIC_TI_HANDOFF_ACTIONS, buildActorArtifactHandoffs, buildActorArtifa
 import { countryCentroids } from '@/utils/monitoring/geo'
 import { clampViewBox, getCountryFocusView, INITIAL_VIEWBOX, MAP_HEIGHT, MAP_WIDTH, project, type ViewBox, zoomViewBox } from '@/utils/monitoring/liveTrafficMap'
 import mapData from '@parent/public/world.json'
-import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, Target, UserPlus, Waypoints, XCircle } from 'lucide-react'
+import { Activity, BellRing, Building2, CheckCircle2, ClipboardList, Clock3, Copy, Database, ExternalLink, Eye, Globe2, HelpCircle, Inbox, Move, Radar, Search, Send, ShieldAlert, ShieldCheck, UserPlus, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -462,39 +462,16 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <ActorArtifactWorkbench artifact={selectedArtifact} handoffs={selectedArtifactHandoffs} />
                                 ) : null}
 
-                                <section className='grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                                    <Panel title='Targeting' description='Country, victim, sector, timeframe, incident, and source basis for the selected actor/query.' icon={<Target className='h-4 w-4' />}>
-                                        {victimObservations.length ? victimObservations.map(item => (
-                                            <VictimObservationRow key={`${item.victim}-${item.timeframe}`} item={item} />
-                                        )) : <EmptyLine text='No country-level victim or target observations returned yet.' />}
-                                    </Panel>
-
-                                    <Panel title='Infrastructure and Tradecraft' description='Reported infrastructure patterns and techniques, usually mapped to ATT&CK where available.' icon={<Waypoints className='h-4 w-4' />}>
-                                        {actorIntel.infrastructure.length ? (
-                                            <div className='mb-3 flex flex-wrap gap-1.5'>
-                                                {actorIntel.infrastructure.slice(0, 8).map(item => (
-                                                    <span key={item} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#344054]'>{item}</span>
-                                                ))}
-                                            </div>
-                                        ) : <EmptyLine text='No infrastructure rows returned yet.' />}
-                                        {result.ttps.length ? result.ttps.map(item => (
-                                            <div key={`${item.attackId}-${item.name}`} className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-                                                <div className='flex flex-wrap items-center gap-2'>
-                                                    <button
-                                                        type='button'
-                                                        onClick={() => selectArtifactBy('technique', item.attackId ? `${item.attackId} ${item.name}` : item.name)}
-                                                        className='inline-flex min-h-8 max-w-full items-center rounded-md px-1 text-left text-sm font-semibold text-[#171a21] transition hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:text-[#eef4ff] dark:hover:text-[#9db6ff]'
-                                                    >
-                                                        {item.name}
-                                                    </button>
-                                                    {item.attackId ? <TechniqueBadge attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} /> : null}
-                                                </div>
-                                                <p className='text-xs text-[#667085]'>{item.tactic} · {Math.round(item.confidence * 100)}% confidence</p>
-                                                <p className='text-sm leading-6 text-[#596170]'>{displayRequirementText(item.detail)}</p>
-                                            </div>
-                                        )) : <EmptyLine text='No tradecraft returned yet.' />}
-                                    </Panel>
-                                </section>
+                                <ActorOperationsMatrix
+                                    result={result}
+                                    actor={actorIntel}
+                                    victimObservations={victimObservations}
+                                    selectedArtifactId={selectedArtifact?.id}
+                                    onSelectArtifact={setSelectedArtifactId}
+                                    onSelectArtifactBy={selectArtifactBy}
+                                    onEscalate={() => applyDecision('escalated')}
+                                    onReview={() => applyDecision('reviewing')}
+                                />
 
                                 <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} />
                             </div>
@@ -1379,6 +1356,21 @@ type EnrichmentTask = {
 type SourceHealthRow = TiActionabilityModel['sourceHealthQueue']['rows'][number]
 type WatchlistIntersectionRow = TiActionabilityModel['orgRelevance']['watchlistIntersections'][number]
 type CaseReviewIntakeItem = TiActionabilityModel['caseReviewIntake']['items'][number]
+type ActorOperationsRow = {
+    id: string
+    type: 'TTP' | 'Infrastructure' | 'Victim'
+    label: string
+    detail: string
+    tactic?: string
+    confidence: number
+    freshness: 'ready' | 'review' | 'blocked'
+    source: string
+    sourceFamily: string
+    timestamp: string
+    artifactKind?: ActorArtifactKind
+    artifactLookup?: string
+    payload: Record<string, unknown>
+}
 
 function ActorActionStrip({
     actor,
@@ -1459,6 +1451,132 @@ function StripActionButton({ icon, children, onClick, disabled = false }: { icon
             {icon}
             {children}
         </button>
+    )
+}
+
+function ActorOperationsMatrix({
+    result,
+    actor,
+    victimObservations,
+    selectedArtifactId,
+    onSelectArtifact,
+    onSelectArtifactBy,
+    onEscalate,
+    onReview,
+}: {
+    result: TiSearchResponse
+    actor: TiActorIntelligenceProfile
+    victimObservations: ReturnType<typeof victimObservationsFor>
+    selectedArtifactId?: string
+    onSelectArtifact: (artifactId: string) => void
+    onSelectArtifactBy: (kind: ActorArtifactKind, value: string) => void
+    onEscalate: () => void
+    onReview: () => void
+}) {
+    const rows = useMemo(() => actorOperationsRowsFor(result, actor, victimObservations), [actor, result, victimObservations])
+    const [selectedRowId, setSelectedRowId] = useState(rows[0]?.id ?? '')
+    useEffect(() => {
+        if (!rows.length) return
+        if (!rows.some(row => row.id === selectedRowId)) setSelectedRowId(rows[0]?.id ?? '')
+    }, [rows, selectedRowId])
+    const selectedRow = rows.find(row => row.id === selectedRowId) ?? rows[0]
+
+    return (
+        <section data-ti-actor-operations-matrix='true' className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white dark:border-[#273244] dark:bg-[#101722]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Operations matrix</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>TTPs, infrastructure, and targeting rows with source context.</p>
+                </div>
+                <div className='flex min-w-0 flex-wrap gap-1.5'>
+                    <span className='rounded-md border border-[#dfe5ee] bg-[#fbfcfe] px-2 py-1 text-[11px] font-semibold text-[#475467] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{rows.length} rows</span>
+                    {selectedRow ? <CopyPayloadButton label='Copy row' payload={selectedRow.payload} /> : null}
+                </div>
+            </div>
+            <div className='grid min-w-0 lg:grid-cols-[minmax(0,1fr)_18rem]'>
+                <div className='min-w-0 overflow-x-auto'>
+                    <table className='min-w-[760px] w-full border-collapse text-left text-xs'>
+                        <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Type</th>
+                                <th className='px-3 py-2 font-semibold'>Name</th>
+                                <th className='px-3 py-2 font-semibold'>Source</th>
+                                <th className='px-3 py-2 font-semibold'>Freshness</th>
+                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#eef1f5] dark:divide-[#273244]'>
+                            {rows.map(row => {
+                                const active = selectedRow?.id === row.id || (row.artifactLookup && selectedArtifactId?.includes(row.artifactLookup.toLowerCase().replace(/[^a-z0-9]+/g, '-')))
+                                return (
+                                    <tr key={row.id} className={`${active ? 'bg-[#eef3ff] dark:bg-[#172646]' : 'bg-white dark:bg-[#101722]'} align-top`}>
+                                        <td className='px-3 py-2'>
+                                            <button type='button' onClick={() => setSelectedRowId(row.id)} className='rounded-md bg-[#f2f4f7] px-2 py-1 text-[11px] font-semibold text-[#475467] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:bg-[#1d2939] dark:text-[#b7c2d4]'>{row.type}</button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <button
+                                                type='button'
+                                                onClick={() => {
+                                                    setSelectedRowId(row.id)
+                                                    if (row.artifactKind && row.artifactLookup) onSelectArtifactBy(row.artifactKind, row.artifactLookup)
+                                                }}
+                                                className='grid min-w-0 text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                                            >
+                                                <span className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.label}</span>
+                                                <span className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{displayRequirementText(row.detail)}</span>
+                                            </button>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <p className='wrap-break-word font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.source}</p>
+                                            <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{row.sourceFamily}</p>
+                                        </td>
+                                        <td className='px-3 py-2'>
+                                            <span className={sourceHealthChipClass(row.freshness)}>{row.freshness}</span>
+                                            <p className='mt-1 text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatDate(row.timestamp)}</p>
+                                        </td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(row.confidence * 100)}%</td>
+                                        <td className='px-3 py-2'>
+                                            <div className='flex min-w-0 flex-wrap gap-1.5'>
+                                                <button type='button' onClick={() => row.artifactKind && row.artifactLookup ? onSelectArtifactBy(row.artifactKind, row.artifactLookup) : onSelectArtifact(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
+                                                <CopyPayloadButton label='Copy' payload={row.payload} />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                    {!rows.length ? <p className='p-4 text-sm text-[#667085] dark:text-[#9aa8bd]'>No TTP, infrastructure, or victim rows returned.</p> : null}
+                </div>
+                <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] lg:border-l lg:border-t-0'>
+                    {selectedRow ? (
+                        <div className='grid gap-2'>
+                            <div>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Selected row</p>
+                                <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selectedRow.label}</h3>
+                                <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.detail)}</p>
+                            </div>
+                            <div className='grid grid-cols-2 gap-2 text-xs'>
+                                <EvidenceMetric label='Confidence' value={`${Math.round(selectedRow.confidence * 100)}%`} />
+                                <EvidenceMetric label='Source' value={selectedRow.source} />
+                            </div>
+                            <div className='grid grid-cols-2 gap-1.5'>
+                                <StripActionButton icon={<Eye className='h-3.5 w-3.5' />} onClick={onReview}>Review</StripActionButton>
+                                <StripActionButton icon={<Send className='h-3.5 w-3.5' />} onClick={onEscalate}>Escalate</StripActionButton>
+                            </div>
+                            {selectedRow.artifactKind && selectedRow.artifactLookup ? (
+                                <button type='button' onClick={() => onSelectArtifactBy(selectedRow.artifactKind!, selectedRow.artifactLookup!)} className='inline-flex min-h-8 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                                    Open artifact
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : (
+                        <p className='text-sm text-[#667085] dark:text-[#9aa8bd]'>Select a row to inspect details.</p>
+                    )}
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -5317,25 +5435,6 @@ function MobileEvidenceWorkbar({
     )
 }
 
-function VictimObservationRow({ item }: { item: ReturnType<typeof victimObservationsFor>[number] }) {
-    return (
-        <div className='grid gap-1 border-b border-[#eef1f5] py-3 last:border-b-0'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
-                <h2 className='text-sm font-semibold text-[#171a21]'>{item.victim}</h2>
-                <span className='rounded-md bg-[#fff1f0] px-2 py-1 text-xs font-semibold text-[#b42318]'>{item.country}</span>
-            </div>
-            <p className='text-xs text-[#667085]'>{item.sector} · {item.timeframe}</p>
-            <p className='text-sm leading-6 text-[#596170]'>{item.incident}</p>
-            <p className='text-xs leading-5 text-[#667085]'>
-                Source basis: {item.source} · {formatDate(item.reportDate)} · {Math.round(item.confidence * 100)}% confidence{item.sourceIds.length ? ` · ${item.sourceIds.map(sourceId => `source ${sourceId}`).join(', ')}` : ''}
-            </p>
-            {item.provenanceRefs.length ? (
-                <p className='wrap-break-word text-[11px] leading-5 text-[#667085]'>Provenance: {item.provenanceRefs.slice(0, 2).join(' · ')}</p>
-            ) : null}
-        </div>
-    )
-}
-
 function timelineFor(result: TiSearchResponse, selected?: AnalystWorkItem) {
     const events = [
         {
@@ -7170,6 +7269,94 @@ function filteredAnalystWorkItems(
         })
 }
 
+function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntelligenceProfile, victimObservations: ReturnType<typeof victimObservationsFor>): ActorOperationsRow[] {
+    const latestDate = actor.sourceCoverage.latestReportDate || actor.lastSeen || result.lastSeen || result.generatedAt
+    const defaultSource = actor.provenanceRows[0]?.sourceName || result.sources[0]?.name || 'Public source'
+    const defaultFamily = actor.sourceCoverage.sourceFamilies[0]?.family ? formatLabel(actor.sourceCoverage.sourceFamilies[0].family) : 'Source coverage'
+    const techniqueRows: ActorOperationsRow[] = actor.techniqueCoverage.map(item => ({
+        id: `ttp:${item.attackId || item.name}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+        type: 'TTP',
+        label: item.attackId ? `${item.attackId} ${item.name}` : item.name,
+        detail: item.detail,
+        tactic: item.tactic,
+        confidence: item.confidence,
+        freshness: item.freshness,
+        source: item.sourceIds[0] ? `source ${item.sourceIds[0]}` : defaultSource,
+        sourceFamily: item.captureIds.length ? 'Capture linked' : item.missing.length ? 'Capture needed' : defaultFamily,
+        timestamp: latestDate,
+        artifactKind: 'technique',
+        artifactLookup: item.attackId ? `${item.attackId} ${item.name}` : item.name,
+        payload: {
+            schemaVersion: 'ti.public_actor.operations_row.v1',
+            rowType: 'technique',
+            query: result.query,
+            attackId: item.attackId,
+            name: item.name,
+            tactic: item.tactic,
+            confidence: item.confidence,
+            freshness: item.freshness,
+            sourceIds: item.sourceIds,
+            captureIds: item.captureIds,
+            provenanceRefs: item.provenanceRefs,
+            missing: item.missing,
+        },
+    }))
+    const infrastructureRows: ActorOperationsRow[] = actor.infrastructure.map((item, index) => ({
+        id: `infra:${item}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+        type: 'Infrastructure',
+        label: item,
+        detail: actor.confidenceReasoning[index % Math.max(1, actor.confidenceReasoning.length)] || 'Infrastructure pattern returned for source collection and alert enrichment.',
+        confidence: Math.max(0.35, actor.confidence - 0.05),
+        freshness: actor.freshness.stale ? 'review' : 'ready',
+        source: defaultSource,
+        sourceFamily: defaultFamily,
+        timestamp: latestDate,
+        artifactKind: 'infrastructure',
+        artifactLookup: item,
+        payload: {
+            schemaVersion: 'ti.public_actor.operations_row.v1',
+            rowType: 'infrastructure',
+            query: result.query,
+            value: item,
+            confidence: actor.confidence,
+            freshness: actor.freshness,
+            sourceCoverage: actor.sourceCoverage,
+            provenanceRows: actor.provenanceRows.slice(0, 4),
+        },
+    }))
+    const victimRows: ActorOperationsRow[] = victimObservations.map(item => ({
+        id: `victim:${item.victim}:${item.country}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+        type: 'Victim',
+        label: item.victim,
+        detail: `${item.sector}. ${item.incident}`,
+        confidence: item.confidence,
+        freshness: item.reportDate ? (isDateStale(item.reportDate, result.generatedAt) ? 'review' : 'ready') : 'blocked',
+        source: item.source,
+        sourceFamily: item.sourceIds.length ? item.sourceIds.map(sourceId => `source ${sourceId}`).join(', ') : 'Victim observation',
+        timestamp: item.reportDate || item.timeframe || latestDate,
+        artifactKind: 'country',
+        artifactLookup: item.country,
+        payload: {
+            schemaVersion: 'ti.public_actor.operations_row.v1',
+            rowType: 'victim',
+            query: result.query,
+            victim: item.victim,
+            sector: item.sector,
+            country: item.country,
+            timeframe: item.timeframe,
+            incident: item.incident,
+            confidence: item.confidence,
+            source: item.source,
+            reportDate: item.reportDate,
+            sourceIds: item.sourceIds,
+            provenanceRefs: item.provenanceRefs,
+        },
+    }))
+    return [...techniqueRows, ...infrastructureRows, ...victimRows]
+        .sort((a, b) => b.confidence - a.confidence || Date.parse(b.timestamp || '') - Date.parse(a.timestamp || ''))
+        .slice(0, 16)
+}
+
 function sourceCountsFor(items: AnalystWorkItem[]) {
     const counts = new Map<string, number>()
     for (const item of items) {
@@ -7178,6 +7365,13 @@ function sourceCountsFor(items: AnalystWorkItem[]) {
     }
     return Array.from(counts, ([source, count]) => ({ source, count }))
         .sort((a, b) => b.count - a.count || a.source.localeCompare(b.source))
+}
+
+function isDateStale(value: string, generatedAt: string) {
+    const freshness = Date.parse(value)
+    const generated = Date.parse(generatedAt)
+    if (!Number.isFinite(freshness) || !Number.isFinite(generated)) return false
+    return generated - freshness > 180 * 24 * 60 * 60 * 1000
 }
 
 function severityScore(severity: AnalystWorkItem['severity']) {
@@ -8021,10 +8215,6 @@ function MapZoomButton({ label, onClick, wide = false }: { label: string; onClic
             {label}
         </button>
     )
-}
-
-function EmptyLine({ text }: { text: string }) {
-    return <p className='py-3 text-sm text-[#667085]'>{text}</p>
 }
 
 function rowToneClass(tone: 'ok' | 'watch' | 'bad') {
