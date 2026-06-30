@@ -202,6 +202,13 @@ assert.equal(partialScoreboard.deployGate.proofDrilldownCount, partialScoreboard
 assert.equal(partialScoreboard.deployGate.linkableProofDrilldownCount, partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.href).length)
 assert.equal(partialScoreboard.deployGate.probeRouteCount, partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').length)
 assert.equal(partialScoreboard.deployGate.probeRouteCount, partialScoreboard.totalRows)
+assert.deepEqual([...partialScoreboard.deployGate.workflowRoutes].sort(), uniqueRoutes(partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'workflow').map(item => item.href)).sort())
+assert.deepEqual([...partialScoreboard.deployGate.proofApiRoutes].sort(), uniqueRoutes(partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'api').map(item => item.href)).sort())
+assert.deepEqual([...partialScoreboard.deployGate.probeRoutes].sort(), uniqueRoutes(partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').map(item => item.href)).sort())
+assert.ok(partialScoreboard.deployGate.workflowRoutes.includes('/dashboard/ti/workbench'))
+assert.ok(partialScoreboard.deployGate.proofApiRoutes.every(route => route.startsWith('/api/')))
+assert.ok(partialScoreboard.deployGate.probeRoutes.includes('/api/dwm/alerts/generation-readiness'))
+assert.ok(partialScoreboard.deployGate.probeRoutes.includes('/api/dwm/webhooks'))
 assert.equal(partialScoreboard.deployGate.blockingProofRows.length, 8)
 assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId), [
     'organizations',
@@ -332,6 +339,18 @@ assert.equal(parseProductNorthStarScoreboard({
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     deployGate: { ...partialScoreboard.deployGate, probeRouteCount: partialScoreboard.deployGate.probeRouteCount + 1 },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, workflowRoutes: partialScoreboard.deployGate.workflowRoutes.filter(route => route !== '/dashboard/ti/workbench') },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, proofApiRoutes: [...partialScoreboard.deployGate.proofApiRoutes, '/api/not-backed'] },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, probeRoutes: [] },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
@@ -622,6 +641,9 @@ for (const token of [
     'data-north-star-deploy-proof-drilldown-count',
     'data-north-star-deploy-linkable-proof-drilldown-count',
     'data-north-star-deploy-probe-route-count',
+    'data-north-star-deploy-workflow-routes',
+    'data-north-star-deploy-proof-api-routes',
+    'data-north-star-deploy-probe-routes',
     'data-north-star-deploy-blocking-rows',
     'data-north-star-progress-source',
     'data-north-star-progress-source-state',
@@ -689,6 +711,9 @@ for (const token of [
     'Proof links',
     'Linked routes',
     'Probe routes',
+    'RouteTargetList',
+    'Proof APIs',
+    '+{hiddenCount} more',
     'Product readiness ledger',
     'hanasand.product_readiness.v1',
     'Open route',
@@ -780,4 +805,8 @@ function rowHrefs(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>
 
 function rowExpectedDashboardIds(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>) {
     return Object.fromEntries(scoreboard.rows.map(row => [row.id, row.expectedDashboardRowId]))
+}
+
+function uniqueRoutes(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean)))
 }

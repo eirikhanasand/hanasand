@@ -89,6 +89,9 @@ export type ProductNorthStarDeployGate = {
     proofDrilldownCount: number
     linkableProofDrilldownCount: number
     probeRouteCount: number
+    workflowRoutes: string[]
+    proofApiRoutes: string[]
+    probeRoutes: string[]
     blockerRows: ProductNorthStarRowId[]
     needsActionRows: ProductNorthStarRowId[]
     unavailableRows: ProductNorthStarRowId[]
@@ -220,6 +223,12 @@ function isProductNorthStarDeployGate(input: unknown): input is ProductNorthStar
         && isNonNegativeNumber(deployGate.proofDrilldownCount)
         && isNonNegativeNumber(deployGate.linkableProofDrilldownCount)
         && isNonNegativeNumber(deployGate.probeRouteCount)
+        && Array.isArray(deployGate.workflowRoutes)
+        && deployGate.workflowRoutes.every(isFilledString)
+        && Array.isArray(deployGate.proofApiRoutes)
+        && deployGate.proofApiRoutes.every(isFilledString)
+        && Array.isArray(deployGate.probeRoutes)
+        && deployGate.probeRoutes.every(isFilledString)
         && Array.isArray(deployGate.blockerRows)
         && deployGate.blockerRows.every(isRowId)
         && Array.isArray(deployGate.needsActionRows)
@@ -299,6 +308,9 @@ function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: Pro
     if (deployGate.proofDrilldownCount !== drilldowns.length) return false
     if (deployGate.linkableProofDrilldownCount !== drilldowns.filter(item => Boolean(item.href)).length) return false
     if (deployGate.probeRouteCount !== drilldowns.filter(item => item.kind === 'probe').length) return false
+    if (!sameStringSet(deployGate.workflowRoutes, proofRoutesByKind(drilldowns, 'workflow'))) return false
+    if (!sameStringSet(deployGate.proofApiRoutes, proofRoutesByKind(drilldowns, 'api'))) return false
+    if (!sameStringSet(deployGate.probeRoutes, proofRoutesByKind(drilldowns, 'probe'))) return false
     if (!deployGate.blockingProofRows.every(blocker => {
         const row = rowById.get(blocker.rowId)
         return Boolean(row)
@@ -480,6 +492,9 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
         proofDrilldownCount: proofDrilldowns.length,
         linkableProofDrilldownCount: proofDrilldowns.filter(item => Boolean(item.href)).length,
         probeRouteCount: proofDrilldowns.filter(item => item.kind === 'probe').length,
+        workflowRoutes: proofRoutesByKind(proofDrilldowns, 'workflow'),
+        proofApiRoutes: proofRoutesByKind(proofDrilldowns, 'api'),
+        probeRoutes: proofRoutesByKind(proofDrilldowns, 'probe'),
         blockerRows: rows.filter(row => row.state === 'blocked').map(row => row.id),
         needsActionRows: rows.filter(row => row.state === 'needs_action').map(row => row.id),
         unavailableRows: rows.filter(row => row.state === 'unavailable').map(row => row.id),
@@ -759,6 +774,12 @@ function latestTimestamp(values: Array<string | undefined>) {
 
 function uniqueStrings(values: Array<string | undefined>) {
     return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim()))))
+}
+
+function proofRoutesByKind(drilldowns: ProductNorthStarProofDrilldown[], kind: ProductNorthStarProofDrilldown['kind']) {
+    return uniqueStrings(drilldowns
+        .filter(item => item.kind === kind)
+        .map(item => item.href))
 }
 
 function withProofFreshness(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | 'proofStale' | 'proofDrilldowns'>): ProductNorthStarRow {

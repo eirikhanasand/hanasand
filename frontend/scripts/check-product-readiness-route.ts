@@ -171,6 +171,9 @@ try {
     assert.equal(payload?.deployGate.proofDrilldownCount, payload?.rows.flatMap(row => row.proofDrilldowns).length)
     assert.equal(payload?.deployGate.linkableProofDrilldownCount, payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.href).length)
     assert.equal(payload?.deployGate.probeRouteCount, payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').length)
+    assert.deepEqual([...(payload?.deployGate.workflowRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'workflow').map(item => item.href) || []).sort())
+    assert.deepEqual([...(payload?.deployGate.proofApiRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'api').map(item => item.href) || []).sort())
+    assert.deepEqual([...(payload?.deployGate.probeRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').map(item => item.href) || []).sort())
     assert.ok(payload?.rows.some(row => row.id === 'real_alert_generation' && row.proofDrilldowns.some(item => item.kind === 'probe' && item.value.includes('/api/dwm/alerts/generation-readiness'))))
     assert.equal(capturedRequests.length, 1)
     assert.equal(capturedRequests[0]?.url.pathname, '/api/product-progress')
@@ -213,6 +216,10 @@ try {
     } else {
         process.env.PRODUCT_READINESS_AGGREGATE_JSON = originalAggregateJson
     }
+}
+
+function uniqueRoutes(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean)))
 }
 
 console.log('product-readiness route contract ok')

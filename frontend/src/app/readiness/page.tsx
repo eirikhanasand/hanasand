@@ -253,6 +253,9 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
             data-north-star-deploy-proof-drilldown-count={scoreboard.deployGate.proofDrilldownCount}
             data-north-star-deploy-linkable-proof-drilldown-count={scoreboard.deployGate.linkableProofDrilldownCount}
             data-north-star-deploy-probe-route-count={scoreboard.deployGate.probeRouteCount}
+            data-north-star-deploy-workflow-routes={scoreboard.deployGate.workflowRoutes.join(',')}
+            data-north-star-deploy-proof-api-routes={scoreboard.deployGate.proofApiRoutes.join(',')}
+            data-north-star-deploy-probe-routes={scoreboard.deployGate.probeRoutes.join(',')}
             data-north-star-deploy-blocking-rows={blockers.map(row => row.rowId).join(',')}
         >
             <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
@@ -268,6 +271,11 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
                 <SummaryBox label='Proof links' value={String(scoreboard.deployGate.proofDrilldownCount)} />
                 <SummaryBox label='Linked routes' value={String(scoreboard.deployGate.linkableProofDrilldownCount)} />
                 <SummaryBox label='Probe routes' value={String(scoreboard.deployGate.probeRouteCount)} />
+            </div>
+            <div className='mt-3 grid gap-2 lg:grid-cols-3'>
+                <RouteTargetList label='Workflows' routes={scoreboard.deployGate.workflowRoutes} />
+                <RouteTargetList label='Proof APIs' routes={scoreboard.deployGate.proofApiRoutes} />
+                <RouteTargetList label='Probes' routes={scoreboard.deployGate.probeRoutes} />
             </div>
             {scoreboard.deployGate.fullChainReady ? (
                 <div className='mt-5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2 text-sm font-semibold text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'>
@@ -335,6 +343,36 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
                 </Link>
             </div>
         </article>
+    )
+}
+
+function RouteTargetList({ label, routes }: { label: string, routes: string[] }) {
+    const visibleRoutes = routes.slice(0, 4)
+    const hiddenCount = Math.max(0, routes.length - visibleRoutes.length)
+    return (
+        <div className='min-w-0 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-2 text-xs dark:border-[#26364f] dark:bg-[#0b1422]'>
+            <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
+            {visibleRoutes.length ? (
+                <div className='mt-2 flex flex-wrap gap-2'>
+                    {visibleRoutes.map(route => (
+                        <Link
+                            key={route}
+                            href={route}
+                            className='inline-flex min-h-8 max-w-full items-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                        >
+                            <span className='min-w-0 wrap-break-word'>{route}</span>
+                        </Link>
+                    ))}
+                    {hiddenCount > 0 && (
+                        <span className='inline-flex min-h-8 items-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#667085] dark:border-[#34445f] dark:text-[#97a6bd]'>
+                            +{hiddenCount} more
+                        </span>
+                    )}
+                </div>
+            ) : (
+                <p className='mt-2 text-[#596170] dark:text-[#b9c4d6]'>not loaded</p>
+            )}
+        </div>
     )
 }
 
