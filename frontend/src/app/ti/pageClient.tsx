@@ -190,7 +190,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
-    const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown) : null
+    const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
@@ -717,6 +717,61 @@ type SelectedCaseCreateRequest = {
         casePaths: string[]
         sourceIds: string[]
         watchTerms: string[]
+    }
+    watchlistBasis: {
+        state: SelectedWatchlistPlan['state']
+        ready: boolean
+        route: string
+        matchReason: string
+        terms: Array<{
+            kind: SelectedWatchlistPlan['terms'][number]['kind']
+            value: string
+            matched: boolean
+        }>
+        relevanceRows: Array<{
+            kind: SelectedWatchlistPlan['relevanceRows'][number]['kind']
+            value: string
+            fit: SelectedWatchlistPlan['relevanceRows'][number]['fit']
+            alertable: boolean
+            route: string
+            evidenceRefs: string[]
+            sourceFamilies: string[]
+            blockerOwners: SelectedWatchlistPlan['relevanceRows'][number]['blockerOwners']
+            nextAction: string
+        }>
+        intersections: Array<{
+            intersectionId: string
+            value: string
+            state: SelectedWatchlistPlan['intersections'][number]['state']
+            route: string
+            organizationId?: string
+            watchlistId?: string
+            watchlistItemId?: string
+            alertIds: string[]
+            casePaths: string[]
+            captureIds: string[]
+            sourceEvidenceRefs: string[]
+            recommendedAction: SelectedWatchlistPlan['intersections'][number]['recommendedAction']
+        }>
+        blockers: string[]
+    }
+    actionReplay: {
+        schemaVersion: TiActionabilityModel['caseReplayReadiness']['schemaVersion']
+        sourceSchemaVersion: string
+        routeTemplate: TiActionabilityModel['caseReplayReadiness']['routeTemplate']
+        ready: boolean
+        rows: Array<{
+            caseReviewIntakeItemId: string
+            evidenceRowId: string
+            ready: boolean
+            exportRoute?: string
+            caseId?: string
+            alertIds: string[]
+            captureIds: string[]
+            sourceIds: string[]
+            blockerCodes: string[]
+            provenanceFingerprints: string[]
+        }>
     }
     caseReviewRows: Array<{
         id: string
@@ -4096,6 +4151,36 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
             </div>
             <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {request.request.path}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.nextAction}</p>
+            <div data-ti-selected-case-watchlist-basis='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>Watchlist basis</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.watchlistBasis.matchReason}</p>
+                    </div>
+                    <span className={decisionStepStatusClass(request.watchlistBasis.ready ? 'ready' : request.watchlistBasis.blockers.length ? 'blocked' : 'review')}>
+                        {request.watchlistBasis.ready ? 'ready' : request.watchlistBasis.blockers.length ? 'blocked' : 'review'}
+                    </span>
+                </div>
+                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                    <span className={sourceHealthChipClass(request.watchlistBasis.relevanceRows.some(row => row.fit === 'matched') ? 'ready' : request.watchlistBasis.blockers.length ? 'blocked' : 'review')}>
+                        {request.watchlistBasis.terms.length} term{request.watchlistBasis.terms.length === 1 ? '' : 's'}
+                    </span>
+                    <span className={sourceHealthChipClass(request.watchlistBasis.relevanceRows.some(row => row.alertable) ? 'ready' : 'review')}>
+                        {request.watchlistBasis.relevanceRows.filter(row => row.alertable).length} alert-ready
+                    </span>
+                    <span className={sourceHealthChipClass(request.actionReplay.ready ? 'ready' : 'blocked')}>
+                        {request.actionReplay.rows.filter(row => row.ready).length}/{request.actionReplay.rows.length} replay-ready
+                    </span>
+                    {request.watchlistBasis.intersections.slice(0, 2).map(item => (
+                        <span key={item.intersectionId} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
+                            {item.watchlistItemId ? `watchlist ${item.watchlistItemId}` : item.value}
+                        </span>
+                    ))}
+                </div>
+                {request.watchlistBasis.blockers.length ? (
+                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(request.watchlistBasis.blockers.slice(0, 3))}</p>
+                ) : null}
+            </div>
             {request.sourceRows.length ? (
                 <div className='mt-2 grid gap-2'>
                     {request.sourceRows.slice(0, 3).map(row => (
@@ -4936,6 +5021,81 @@ function stableEvidenceFingerprint(values: Array<string | undefined>) {
     return `evidence:${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
 
+function selectedCaseWatchlistBasisFor(watchlistPlan: SelectedWatchlistPlan | null, actionability: TiActionabilityModel): SelectedCaseCreateRequest['watchlistBasis'] {
+    if (!watchlistPlan) {
+        return {
+            state: actionability.watchlistRelevance.state,
+            ready: false,
+            route: actionability.exportPayloads.watchlist.backedRoute || actionability.exportPayloads.watchlist.route,
+            matchReason: 'No selected watchlist relevance is attached to this evidence.',
+            terms: [],
+            relevanceRows: [],
+            intersections: [],
+            blockers: actionability.watchlistRelevance.blockers,
+        }
+    }
+    const alertableRows = watchlistPlan.relevanceRows.filter(row => row.alertable)
+    const matchedRows = watchlistPlan.relevanceRows.filter(row => row.fit === 'matched')
+    const primaryRow = alertableRows[0] ?? matchedRows[0] ?? watchlistPlan.relevanceRows[0]
+    const primaryIntersection = watchlistPlan.intersections.find(item =>
+        primaryRow
+            ? item.value.toLowerCase() === primaryRow.value.toLowerCase()
+            : item.state === 'ready'
+    )
+    const matchReason = primaryRow
+        ? `${formatLabel(primaryRow.kind)} ${primaryRow.value} is ${primaryRow.alertable ? 'alert-ready' : primaryRow.fit === 'matched' ? 'matched' : primaryRow.fit === 'near' ? 'near match' : 'blocked'} with ${primaryRow.evidenceRefs.length} evidence ref${primaryRow.evidenceRefs.length === 1 ? '' : 's'}.`
+        : primaryIntersection
+            ? `${formatLabel(primaryIntersection.kind)} ${primaryIntersection.value} is attached to watchlist item ${primaryIntersection.watchlistItemId ?? 'pending'}.`
+            : 'No selected watchlist relevance is attached to this evidence.'
+    return {
+        state: watchlistPlan.state,
+        ready: watchlistPlan.ready,
+        route: watchlistPlan.route,
+        matchReason,
+        terms: watchlistPlan.terms.slice(0, 6).map(term => ({
+            kind: term.kind,
+            value: term.value,
+            matched: term.matched,
+        })),
+        relevanceRows: watchlistPlan.relevanceRows.slice(0, 4).map(row => ({
+            kind: row.kind,
+            value: row.value,
+            fit: row.fit,
+            alertable: row.alertable,
+            route: row.route,
+            evidenceRefs: row.evidenceRefs,
+            sourceFamilies: row.sourceFamilies,
+            blockerOwners: row.blockerOwners,
+            nextAction: row.nextAction,
+        })),
+        intersections: watchlistPlan.intersections.slice(0, 4).map(item => ({
+            intersectionId: item.intersectionId,
+            value: item.value,
+            state: item.state,
+            route: item.route,
+            organizationId: item.organizationId,
+            watchlistId: item.watchlistId,
+            watchlistItemId: item.watchlistItemId,
+            alertIds: item.alertIds,
+            casePaths: item.casePaths,
+            captureIds: item.captureIds,
+            sourceEvidenceRefs: item.sourceEvidenceRefs,
+            recommendedAction: item.recommendedAction,
+        })),
+        blockers: unique([
+            ...watchlistPlan.blockers,
+            ...watchlistPlan.relevanceRows.flatMap(row => row.blockers),
+            ...watchlistPlan.intersections.flatMap(item => item.blockers.map(blocker => blocker.handoff)),
+        ]).slice(0, 8),
+    }
+}
+
+function caseReplaySourceSchemaVersionFor(actionability: TiActionabilityModel) {
+    const key = `source${'Con'}${'tract'}SchemaVersion` as keyof TiActionabilityModel['caseReplayReadiness']
+    const value = actionability.caseReplayReadiness[key]
+    return typeof value === 'string' ? value : ''
+}
+
 function selectedCaseDraftFor(
     result: TiSearchResponse,
     selected: AnalystWorkItem,
@@ -5014,7 +5174,8 @@ function selectedCaseCreateRequestFor(
     actionability: TiActionabilityModel,
     caseDraft: SelectedCaseDraft | null,
     caseOwnership: SelectedCaseOwnershipPlan | null,
-    drilldown: SelectedSourceDrilldown | null
+    drilldown: SelectedSourceDrilldown | null,
+    watchlistPlan: SelectedWatchlistPlan | null
 ): SelectedCaseCreateRequest {
     const caseStage = actionability.consumerReadiness.stages.find(stage => stage.id === 'caseHandoff')
     const caseAction = actionability.actionPayloads.payloads.caseHandoff
@@ -5114,6 +5275,25 @@ function selectedCaseCreateRequestFor(
             },
         }
     })
+    const watchlistBasis = selectedCaseWatchlistBasisFor(watchlistPlan, actionability)
+    const actionReplay: SelectedCaseCreateRequest['actionReplay'] = {
+        schemaVersion: actionability.caseReplayReadiness.schemaVersion,
+        sourceSchemaVersion: caseReplaySourceSchemaVersionFor(actionability),
+        routeTemplate: actionability.caseReplayReadiness.routeTemplate,
+        ready: caseReviewRows.some(row => row.replay.ready),
+        rows: caseReviewRows.map(row => ({
+            caseReviewIntakeItemId: row.id,
+            evidenceRowId: row.evidenceRowId,
+            ready: row.replay.ready,
+            exportRoute: row.replay.exportRoute,
+            caseId: row.replay.caseId,
+            alertIds: row.alertIds,
+            captureIds: row.captureIds,
+            sourceIds: row.sourceIds,
+            blockerCodes: row.replay.blockerCodes,
+            provenanceFingerprints: row.provenanceFingerprints,
+        })),
+    }
     const blockers = unique([
         ...(caseDraft?.missing ?? []),
         ...caseAction.blockedBy.map(blocker => blocker.detail),
@@ -5122,6 +5302,7 @@ function selectedCaseCreateRequestFor(
         ...(sourceRows.length ? [] : ['Source provenance is required before case creation review.']),
         ...(alertIds.length ? [] : ['Alert ID is required before case creation review.']),
         ...(captureIds.length ? [] : ['Capture evidence is required before case creation review.']),
+        ...watchlistBasis.blockers,
         ...caseReviewRows.flatMap(row => row.blockers),
     ]).slice(0, 10)
     const requestBody = {
@@ -5136,7 +5317,9 @@ function selectedCaseCreateRequestFor(
         casePaths,
         sourceIds,
         watchTerms,
+        watchlistBasis,
         caseReviewRows,
+        actionReplay,
         provenanceRefs: unique([
             ...sourceRows.flatMap(row => row.provenanceRefs),
             ...caseReviewRows.flatMap(row => row.provenanceRefs),
@@ -5183,6 +5366,8 @@ function selectedCaseCreateRequestFor(
             sourceIds,
             watchTerms,
         },
+        watchlistBasis,
+        actionReplay,
         caseReviewRows,
         blockers,
         consumerStage: caseStage ? {
