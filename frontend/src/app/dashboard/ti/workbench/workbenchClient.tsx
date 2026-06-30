@@ -199,6 +199,9 @@ export type WorkbenchProductReadinessItem = {
     deliveryReadyCount?: number
     latestDeliveryAt?: string
     latestAuditEventAt?: string
+    deliveryProofLedgerSchemaVersion?: string
+    deliveryProofLedgerSource?: string
+    deliveryProofLedgerPath?: string
     workerStatus?: 'ready' | 'missing' | 'stale' | 'blocked' | 'unavailable'
     workerLastRunAt?: string
     queuedValidationJobs?: number

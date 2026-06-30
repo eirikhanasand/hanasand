@@ -866,6 +866,7 @@ assert.match(adminSupport, /support\.\$\{input\.kind\}\.action_history_receipt\.
 assert.match(adminSupport, /actionHistoryExport/)
 assert.match(adminSupport, /supportOrgUserActionHistoryExportReceipt/)
 assert.match(adminSupport, /support\.\$\{input\.kind\}\.action_history_export\.v1/)
+assert.match(adminSupport, /recoveryReadinessMatrix: supportRecoveryReadinessMatrix/)
 assert.match(adminSupport, /supportOrgCaseRecoveryReadinessFixture/)
 assert.match(adminSupport, /support\.recovery\.org_case_readiness_fixture\.v1/)
 assert.match(adminSupport, /support\.recovery\.org_readiness_bridge\.v1/)

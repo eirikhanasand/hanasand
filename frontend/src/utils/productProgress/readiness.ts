@@ -14,6 +14,13 @@ type DeliveryProofRow = {
     createdAt?: string
 }
 
+type DeliveryProofLedger = {
+    schemaVersion?: string
+    generatedAt?: string
+    source?: string
+    ledgerPath?: string
+}
+
 type AnalystCaseProofRow = {
     id?: string
     alertId?: string
@@ -53,6 +60,7 @@ export type ProductProgressEndpointInput = {
     cases?: AnalystCaseProofRow[]
     caseDetail?: AnalystCaseDetailProofInput
     deliveries?: DeliveryProofRow[]
+    deliveryProofLedger?: DeliveryProofLedger
     deploy?: Partial<DeployProbeReadiness>
     entitlement?: EntitlementReadiness
     publicTiProvenance?: PublicTiProvenanceReadiness
@@ -115,7 +123,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             error: { code: 'source_proxy_unavailable', message: 'Source proxy response is not loaded.' },
         },
         orgAlertExport: input.orgAlertExport || unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
-        webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || []),
+        webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || [], input.deliveryProofLedger),
         entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
         dwmProduct: input.dwmProduct || unavailableDwmProduct(input.routes.dwmProduct || input.routes.productProgress || '/api/product-progress', checkedAt),
         alertGeneration: input.alertGeneration,
@@ -285,13 +293,14 @@ function entitlementReadiness(input: EntitlementReadiness | undefined, source: s
     }
 }
 
-function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveries: DeliveryProofRow[]): WebhookHealthReadiness {
+function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveries: DeliveryProofRow[], proofLedger?: DeliveryProofLedger): WebhookHealthReadiness {
     const deliveryReadyCount = deliveries.filter(row => row.status !== 'failed' && row.status !== 'skipped').length
+    const contractStack = ['dwm.webhook_health.readiness.v1', proofLedger?.schemaVersion].filter(Boolean).join(' + ')
     return {
         schemaVersion: 'dwm.webhook_health.readiness.v1',
         status: 'needs_action',
         checkedAt,
-        source,
+        source: [source, proofLedger?.source].filter(Boolean).join(' + ') || source,
         href: '/dashboard/automations?setup=dwm',
         destinationCount: undefined,
         activeDestinationCount: undefined,
@@ -302,10 +311,13 @@ function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveri
         ownerLane: 'webhook',
         unavailableReason: 'missing_webhook_lifecycle_health_api',
         staleAfterSeconds: 900,
-        proofTimestamp: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1) || checkedAt,
+        proofTimestamp: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1) || proofLedger?.generatedAt || checkedAt,
         expectedDashboardRowId: 'webhook_health',
-        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, not only delivery rows.',
-        backendProofContractVersion: 'dwm.webhook_health.readiness.v1',
+        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, and GET /api/dwm/webhooks/deliveries must return product.webhook_delivery_proof_ledger.v1 when using proof-ledger fallback.',
+        backendProofContractVersion: contractStack || 'dwm.webhook_health.readiness.v1',
+        deliveryProofLedgerSchemaVersion: proofLedger?.schemaVersion,
+        deliveryProofLedgerSource: proofLedger?.source,
+        deliveryProofLedgerPath: proofLedger?.ledgerPath,
     }
 }
 

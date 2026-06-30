@@ -188,6 +188,9 @@ export type WebhookHealthReadiness = ProductReadinessSnapshotBase & {
     deliveryReadyCount?: number
     latestDeliveryAt?: string
     latestAuditEventAt?: string
+    deliveryProofLedgerSchemaVersion?: string
+    deliveryProofLedgerSource?: string
+    deliveryProofLedgerPath?: string
 }
 
 export type DashboardAlertEvidenceReadiness = ProductReadinessSnapshotBase & {
@@ -1687,6 +1690,9 @@ function buildProductReadiness(input: {
             deliveryReadyCount: webhookHealth?.deliveryReadyCount,
             latestDeliveryAt: webhookHealth?.latestDeliveryAt,
             latestAuditEventAt: webhookHealth?.latestAuditEventAt,
+            deliveryProofLedgerSchemaVersion: webhookHealth?.deliveryProofLedgerSchemaVersion,
+            deliveryProofLedgerSource: webhookHealth?.deliveryProofLedgerSource,
+            deliveryProofLedgerPath: webhookHealth?.deliveryProofLedgerPath,
         },
         {
             id: 'dashboard_evidence',
