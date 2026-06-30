@@ -2,12 +2,13 @@ import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
-import { nowIso, stableId } from "../utils.ts";
+import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
+import type { RawCapture, SourceRecord } from "../types.ts";
 
 type DwmWatchlist = {
   id: string;
@@ -151,6 +152,17 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
   const tenantId = scope.tenantId;
+  const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
+  const existingVisibleCount = existingAlerts
+    .filter((row: any) => row.tenantId === tenantId)
+    .filter((row: any) => !scope.organizationId || row.organizationId === scope.organizationId)
+    .length;
+  if (existingVisibleCount === 0) {
+    const bootstrap = ensureSourceMatchedDwmWatchlist(options, scope);
+    if (bootstrap.watchlist) {
+      rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
+    }
+  }
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
     .filter((row: any) => row.tenantId === tenantId)
@@ -430,6 +442,7 @@ export async function rebuildDwmAlerts(request: Request, options: ApiServerOptio
       lifecycleReadiness: buildDwmAlertDownstreamHandoff({ organizationId: scope.organizationId, organizationStatus: (scope.organization as any).status, activeSourceMatch: false })
     }, 409);
   }
+  ensureSourceMatchedDwmWatchlist(options, scope);
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const terms = watchlists.flatMap((watchlist: DwmWatchlist) => watchlist.terms);
   if (!terms.length) return json({ error: { code: "missing_watchlist", message: "Create an active DWM watchlist before rebuilding alerts." } }, 400);
@@ -1099,6 +1112,128 @@ function buildDwmWatchlistDetail(watchlist: DwmWatchlist, options: ApiServerOpti
       activeForAlertGeneration: watchlist.status === "active"
     }
   };
+}
+
+function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { organization?: any; organizationId?: string; tenantId: string }): { watchlist?: DwmWatchlist; termValues: string[]; reason: string } {
+  const store = options.store as any;
+  const watchlists = (store.listDwmWatchlists?.() ?? []) as DwmWatchlist[];
+  const sources: SourceRecord[] = options.store.listSources().filter((source: SourceRecord) => sourceVisibleForScope(source, scope.tenantId));
+  const sourceIds = new Set(sources.map((source: SourceRecord) => String((source as any).id)));
+  const captures: RawCapture[] = options.store.listCaptures().filter((capture: RawCapture) => captureVisibleForScope(capture, scope.tenantId, sourceIds));
+  const readiness = buildDwmAlertGenerationReadiness({
+    watchlists,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization),
+    sources,
+    captures
+  });
+  if (readiness.counts.matchedCandidateCount > 0) {
+    return { termValues: [], reason: "existing_watchlist_matches_capture" };
+  }
+
+  const terms = sourceMatchedWatchlistTerms({ captures, sources }).slice(0, 3);
+  if (!terms.length) return { termValues: [], reason: "no_capture_terms" };
+
+  const generatedAt = nowIso();
+  const webhookDestinationId = organizationWebhookDestinations(options, scope.organizationId)[0]?.id;
+  const id = stableId("dwm_watchlist", `${scope.tenantId}:${scope.organizationId ?? "default"}:source_matched:${terms.map((term) => term.value).join("|")}`);
+  const existing = store.getDwmWatchlist?.(id);
+  if (existing && existing.tenantId !== scope.tenantId) return { termValues: [], reason: "watchlist_id_conflict" };
+
+  const watchlist: DwmWatchlist = {
+    id,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId ?? existing?.organizationId,
+    name: existing?.name ?? "Source-matched exposure watchlist",
+    terms: mergeDwmWatchTerms(existing?.terms ?? [], terms),
+    webhookDestinationId: webhookDestinationId ?? existing?.webhookDestinationId,
+    webhookUrl: existing?.webhookUrl,
+    status: "active",
+    createdAt: existing?.createdAt ?? generatedAt,
+    updatedAt: generatedAt
+  };
+  store.saveDwmWatchlist(watchlist);
+  return { watchlist, termValues: terms.map((term) => term.value), reason: "source_capture_term_bootstrap" };
+}
+
+function sourceMatchedWatchlistTerms(input: { captures: RawCapture[]; sources: SourceRecord[] }): Array<DwmWatchTerm & { id: string }> {
+  const sourceHosts = new Set(input.sources.flatMap((source) => sourceHostCandidates(source)));
+  const byValue = new Map<string, { value: string; kind: DwmWatchTerm["kind"]; captureIds: Set<string>; latestAt: string }>();
+  const captures = [...input.captures].sort((a, b) => String((b as any).collectedAt ?? "").localeCompare(String((a as any).collectedAt ?? ""))).slice(0, 100);
+  for (const capture of captures) {
+    const latestAt = String((capture as any).collectedAt ?? "");
+    const text = sourceMatchedCaptureText(capture);
+    for (const domain of extractWatchableDomains(text)) {
+      if (sourceHosts.has(domain) || isUnhelpfulWatchDomain(domain)) continue;
+      const row = byValue.get(domain) ?? { value: domain, kind: "domain" as const, captureIds: new Set<string>(), latestAt };
+      row.captureIds.add(String((capture as any).id));
+      if (latestAt > row.latestAt) row.latestAt = latestAt;
+      byValue.set(domain, row);
+    }
+  }
+  return [...byValue.values()]
+    .filter((row) => row.captureIds.size > 0)
+    .sort((a, b) => b.captureIds.size - a.captureIds.size || b.latestAt.localeCompare(a.latestAt) || a.value.localeCompare(b.value))
+    .map((row) => ({
+      id: stableId("dwm_watchlist_item", `source_matched:${row.kind}:${row.value}`),
+      value: row.value,
+      kind: row.kind
+    }));
+}
+
+function mergeDwmWatchTerms(existing: DwmWatchTerm[], next: Array<DwmWatchTerm & { id?: string }>): DwmWatchTerm[] {
+  const byKey = new Map<string, DwmWatchTerm>();
+  for (const term of [...existing, ...next]) {
+    const value = String(term.value ?? "").trim().toLowerCase();
+    if (!value) continue;
+    byKey.set(`${term.kind}:${value}`, { ...(term as any), value });
+  }
+  return [...byKey.values()];
+}
+
+function sourceMatchedCaptureText(capture: RawCapture): string {
+  const metadata = (capture as any).metadata ?? {};
+  return [
+    (capture as any).body,
+    (capture as any).rawText,
+    (capture as any).text,
+    metadata.title,
+    metadata.description,
+    metadata.victimName,
+    metadata.actorName,
+    metadata.leakSite ? JSON.stringify(metadata.leakSite) : undefined
+  ].map((value) => String(value ?? "")).filter(Boolean).join(" ");
+}
+
+function extractWatchableDomains(text: string): string[] {
+  return uniqueStrings((text.match(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b/gi) ?? [])
+    .map((domain) => domain.toLowerCase().replace(/^www\./, "")));
+}
+
+function sourceHostCandidates(source: SourceRecord): string[] {
+  try {
+    const host = new URL(String((source as any).url ?? "")).hostname.toLowerCase().replace(/^www\./, "");
+    return host ? [host] : [];
+  } catch {
+    return [];
+  }
+}
+
+function sourceVisibleForScope(source: SourceRecord, tenantId: string): boolean {
+  const sourceTenantId = String((source as any).tenantId ?? "").trim();
+  return !sourceTenantId || sourceTenantId === tenantId;
+}
+
+function captureVisibleForScope(capture: RawCapture, tenantId: string, sourceIds: Set<string>): boolean {
+  const captureTenantId = String((capture as any).tenantId ?? "").trim();
+  if (captureTenantId && captureTenantId !== tenantId) return false;
+  const sourceId = String((capture as any).sourceId ?? "").trim();
+  return !sourceId || sourceIds.has(sourceId);
+}
+
+function isUnhelpfulWatchDomain(domain: string): boolean {
+  return /(^|\.)t\.me$|(^|\.)telegram\.org$|(^|\.)onion$|(^|\.)example\.test$|(^|\.)localhost$/.test(domain);
 }
 
 function normalizeWatchlistStatus(value: unknown, fallback: DwmWatchlist["status"]): DwmWatchlist["status"] {
