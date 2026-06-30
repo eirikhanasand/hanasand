@@ -1565,6 +1565,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     handoffActionReadiness: handoffHistory.handoffActionReadiness
   });
   const sourceHandoffReadiness = caseSourceHandoffReplayReadiness({ alert, caseRecord });
+  const publicTiHandoffReadiness = casePublicTiHandoffReadiness({ alert, caseRecord, sourceHandoffReadiness });
   const organizationAccessReadiness = caseOrganizationAccessReadiness({ caseRecord, access });
   const supportRecoveryReadiness = caseSupportRecoveryReadiness({
     alert,
@@ -1581,6 +1582,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     caseRecord,
     access,
     organizationAccessReadiness,
+    publicTiHandoffReadiness,
     sourceHandoffReadiness,
     webhookDryRunReadiness,
     supportRecoveryReadiness,
@@ -1606,6 +1608,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     workflowTransitions,
     customerNotifications,
     organizationAccessReadiness,
+    publicTiHandoffReadiness,
     webhookDryRunReadiness,
     sourceHandoffReadiness,
     supportRecoveryReadiness,
@@ -1616,6 +1619,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       customerNotificationCount: customerNotifications.length,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       organizationAccessReady: organizationAccessReadiness.ready,
+      publicTiHandoffReady: publicTiHandoffReadiness.ready,
       sourceHandoffReady: sourceHandoffReadiness.ready,
       supportRecoveryReady: supportRecoveryReadiness.ready,
       nextActionCount: nextAnalystActions.length,
@@ -1632,6 +1636,48 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       metadataOnly: true,
       rawEvidenceExposed: false,
       webhookSecretExposed: false
+    }
+  };
+}
+
+function casePublicTiHandoffReadiness(input: {
+  alert: any;
+  caseRecord: AnalystCase;
+  sourceHandoffReadiness: any;
+}) {
+  const publicTi = input.sourceHandoffReadiness.consumers?.publicTi ?? {};
+  const query = String(input.alert?.actor ?? input.alert?.threatActor ?? input.alert?.matchedTerm?.value ?? "").trim() || undefined;
+  const blockerCodes = uniqueCaseStrings([
+    ...(input.sourceHandoffReadiness.ready ? [] : input.sourceHandoffReadiness.blockerCodes ?? ["missing_alert_source_handoff_readiness"]),
+    ...(publicTi.ready ? [] : ["public_ti_handoff_not_ready"])
+  ]);
+  return {
+    schemaVersion: "dwm.case_public_ti_handoff_replay_readiness.v1",
+    route: "/api/ti/search",
+    publicRoute: query ? `/ti/${encodeURIComponent(query)}` : "/ti",
+    available: Boolean(input.sourceHandoffReadiness.available),
+    ready: blockerCodes.length === 0,
+    redacted: publicTi.redacted !== false,
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    query,
+    sourceFamily: publicTi.sourceFamily ?? input.sourceHandoffReadiness.sourceFamily,
+    alertGenerationRefCount: publicTi.alertGenerationRefCount ?? 0,
+    stableFields: publicTi.stableFields ?? [],
+    gapFields: publicTi.gapFields ?? [],
+    provenance: {
+      captureIds: input.sourceHandoffReadiness.provenanceCaptureIds ?? [],
+      sourceIds: input.sourceHandoffReadiness.provenanceSourceIds ?? [],
+      selectedCaptureIds: input.sourceHandoffReadiness.selectedCaptureIds ?? [],
+      evidenceCount: input.sourceHandoffReadiness.evidenceCount ?? 0
+    },
+    blockerCodes,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      publicRawPayloadExposed: false
     }
   };
 }
@@ -1847,6 +1893,7 @@ function caseReplayNextAnalystActions(input: {
   caseRecord: AnalystCase;
   access: CaseAccessResult;
   organizationAccessReadiness: any;
+  publicTiHandoffReadiness: any;
   sourceHandoffReadiness: any;
   webhookDryRunReadiness: any;
   supportRecoveryReadiness: any;
@@ -1871,6 +1918,16 @@ function caseReplayNextAnalystActions(input: {
       blocked: !input.sourceHandoffReadiness.ready,
       blockerCodes: input.sourceHandoffReadiness.blockerCodes ?? [],
       requiredFields: ["sourceFamily", "selectedCaptureIds", "provenanceCaptureIds", "provenanceSourceIds"]
+    },
+    {
+      id: "review_public_ti_handoff",
+      ownerLane: "publicTI",
+      route: input.publicTiHandoffReadiness.route,
+      publicRoute: input.publicTiHandoffReadiness.publicRoute,
+      ready: Boolean(input.publicTiHandoffReadiness.ready),
+      blocked: !input.publicTiHandoffReadiness.ready,
+      blockerCodes: input.publicTiHandoffReadiness.blockerCodes ?? [],
+      requiredFields: ["query", "sourceFamily", "alertGenerationRefCount", "provenance.captureIds"]
     },
     {
       id: "replay_alert",

@@ -123,6 +123,7 @@ export function contractIndex() {
           replayExport: "dwm.case_action_replay_export.v1",
           organizationAccessReadiness: "dwm.case_org_access_replay_readiness.v1",
           webhookReplayFixture: "dwm.case_to_webhook_replay_readiness_fixture.v1",
+          publicTiHandoffReadiness: "dwm.case_public_ti_handoff_replay_readiness.v1",
           webhookDryRunReadiness: "dwm.case_webhook_dry_run_replay_readiness.v1",
           sourceHandoffReadiness: "dwm.case_source_handoff_replay_readiness.v1",
           supportRecoveryReadiness: "dwm.case_support_recovery_readiness.v1",
@@ -132,7 +133,7 @@ export function contractIndex() {
         scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
         writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
         queryFields: ["organizationId", "actionId", "idempotencyKey", "dedupeKey", "actor", "eventAction"],
-        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "organizationAccessReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "nextAnalystActions"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes", "webhookDeliveryId", "webhookDestinationId", "endpointHash", "payloadHash", "organizationAccessReadiness", "publicTiHandoffReadiness", "sourceFamily", "sourceHandoffReadiness", "supportRecoveryReadiness", "nextAnalystActions"],
         blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination", "missing_webhook_dry_run_receipt", "missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready", "missing_case_owner", "missing_organization_scope", "case_closed"],
         safeOutput: {
           metadataOnly: true,

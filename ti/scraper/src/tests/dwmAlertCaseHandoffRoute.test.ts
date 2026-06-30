@@ -618,6 +618,7 @@ describe("DWM alert case handoff route", () => {
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
         organizationAccessReady: true,
+        publicTiHandoffReady: true,
         sourceHandoffReady: true,
         supportRecoveryReady: true,
         replayable: true,
@@ -648,6 +649,29 @@ describe("DWM alert case handoff route", () => {
           allowedRoles: ["owner", "admin", "analyst", "member", "viewer"]
         },
         noEnumeration: true,
+        blockerCodes: []
+      },
+      publicTiHandoffReadiness: {
+        schemaVersion: "dwm.case_public_ti_handoff_replay_readiness.v1",
+        route: "/api/ti/search",
+        publicRoute: "/ti/acme.com",
+        available: true,
+        ready: true,
+        redacted: true,
+        caseId: "case_alert_acme",
+        organizationId: "org_acme",
+        alertId: "alert_acme",
+        query: "acme.com",
+        sourceFamily: "telegram_public",
+        alertGenerationRefCount: 1,
+        stableFields: ["sourceFamily", "provenanceCaptureIds", "alertGenerationRefCount"],
+        gapFields: ["state", "provenanceGapCodes"],
+        provenance: {
+          captureIds: ["cap_acme_1"],
+          sourceIds: ["src_acme_tg"],
+          selectedCaptureIds: ["cap_acme_1"],
+          evidenceCount: 1
+        },
         blockerCodes: []
       },
       sourceHandoffReadiness: {
@@ -733,6 +757,7 @@ describe("DWM alert case handoff route", () => {
     expect(replayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "review_org_access", ownerLane: "org", ready: true, blocked: false }),
       expect.objectContaining({ id: "review_source_handoff", ownerLane: "source", ready: true, blocked: false }),
+      expect.objectContaining({ id: "review_public_ti_handoff", ownerLane: "publicTI", ready: true, blocked: false, publicRoute: "/ti/acme.com" }),
       expect.objectContaining({ id: "replay_alert", ownerLane: "alert", ready: true, blocked: false }),
       expect.objectContaining({ id: "test_webhook_delivery", ownerLane: "webhook", ready: true, blocked: false }),
       expect.objectContaining({ id: "record_customer_notification", ownerLane: "case", ready: false, blocked: true, blockerCodes: ["missing_webhook_dry_run_receipt"] }),
@@ -940,10 +965,17 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         organizationAccessReady: true,
+        publicTiHandoffReady: false,
         sourceHandoffReady: false,
         supportRecoveryReady: false,
         replayable: false,
         blockerCodes: ["missing_case_alert"]
+      },
+      publicTiHandoffReadiness: {
+        available: false,
+        ready: false,
+        publicRoute: "/ti",
+        blockerCodes: ["missing_alert_source_handoff_readiness", "public_ti_handoff_not_ready"]
       },
       supportRecoveryReadiness: {
         ready: false,
