@@ -250,6 +250,9 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
             data-north-star-deploy-state={scoreboard.deployGate.state}
             data-north-star-deploy-ready-rows={scoreboard.deployGate.readyRows}
             data-north-star-deploy-total-rows={scoreboard.deployGate.totalRows}
+            data-north-star-deploy-proof-drilldown-count={scoreboard.deployGate.proofDrilldownCount}
+            data-north-star-deploy-linkable-proof-drilldown-count={scoreboard.deployGate.linkableProofDrilldownCount}
+            data-north-star-deploy-probe-route-count={scoreboard.deployGate.probeRouteCount}
             data-north-star-deploy-blocking-rows={blockers.map(row => row.rowId).join(',')}
         >
             <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
@@ -260,6 +263,11 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
                 <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
                     The release gate is derived from backend contracts. A blocker disappears only when the linked proof row becomes ready.
                 </p>
+            </div>
+            <div className='mt-4 grid gap-2 sm:grid-cols-3'>
+                <SummaryBox label='Proof links' value={String(scoreboard.deployGate.proofDrilldownCount)} />
+                <SummaryBox label='Linked routes' value={String(scoreboard.deployGate.linkableProofDrilldownCount)} />
+                <SummaryBox label='Probe routes' value={String(scoreboard.deployGate.probeRouteCount)} />
             </div>
             {scoreboard.deployGate.fullChainReady ? (
                 <div className='mt-5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2 text-sm font-semibold text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'>

@@ -86,6 +86,9 @@ export type ProductNorthStarDeployGate = {
     fullChainReady: boolean
     readyRows: number
     totalRows: number
+    proofDrilldownCount: number
+    linkableProofDrilldownCount: number
+    probeRouteCount: number
     blockerRows: ProductNorthStarRowId[]
     needsActionRows: ProductNorthStarRowId[]
     unavailableRows: ProductNorthStarRowId[]
@@ -214,6 +217,9 @@ function isProductNorthStarDeployGate(input: unknown): input is ProductNorthStar
         && typeof deployGate.fullChainReady === 'boolean'
         && typeof deployGate.readyRows === 'number'
         && typeof deployGate.totalRows === 'number'
+        && isNonNegativeNumber(deployGate.proofDrilldownCount)
+        && isNonNegativeNumber(deployGate.linkableProofDrilldownCount)
+        && isNonNegativeNumber(deployGate.probeRouteCount)
         && Array.isArray(deployGate.blockerRows)
         && deployGate.blockerRows.every(isRowId)
         && Array.isArray(deployGate.needsActionRows)
@@ -285,10 +291,14 @@ function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: Pro
     const readyRows = rows.filter(row => row.state === 'ready')
     const nonReadyRows = rows.filter(row => row.state !== 'ready')
     const rowById = new Map(rows.map(row => [row.id, row]))
+    const drilldowns = rows.flatMap(row => row.proofDrilldowns)
     if (!sameStringSet(deployGate.blockerRows, rows.filter(row => row.state === 'blocked').map(row => row.id))) return false
     if (!sameStringSet(deployGate.needsActionRows, rows.filter(row => row.state === 'needs_action').map(row => row.id))) return false
     if (!sameStringSet(deployGate.unavailableRows, rows.filter(row => row.state === 'unavailable').map(row => row.id))) return false
     if (!sameStringSet(deployGate.blockingProofRows.map(row => row.rowId), nonReadyRows.map(row => row.id))) return false
+    if (deployGate.proofDrilldownCount !== drilldowns.length) return false
+    if (deployGate.linkableProofDrilldownCount !== drilldowns.filter(item => Boolean(item.href)).length) return false
+    if (deployGate.probeRouteCount !== drilldowns.filter(item => item.kind === 'probe').length) return false
     if (!deployGate.blockingProofRows.every(blocker => {
         const row = rowById.get(blocker.rowId)
         return Boolean(row)
@@ -334,6 +344,10 @@ function isReadinessStatus(input: unknown): input is ReadinessStatus {
 
 function isFilledString(input: unknown): input is string {
     return typeof input === 'string' && input.trim().length > 0
+}
+
+function isNonNegativeNumber(input: unknown): input is number {
+    return typeof input === 'number' && Number.isFinite(input) && input >= 0
 }
 
 type BuildOptions = {
@@ -457,11 +471,15 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
     firstBlocker?: string
 }): ProductNorthStarDeployGate {
     const rowsNeedingAction = rows.filter(row => row.state !== 'ready')
+    const proofDrilldowns = rows.flatMap(row => row.proofDrilldowns)
     return {
         state: summary.fullChainReady ? 'ready' : combineDirectionState(rows.map(row => row.state)),
         fullChainReady: summary.fullChainReady,
         readyRows: summary.readyRows,
         totalRows: rows.length,
+        proofDrilldownCount: proofDrilldowns.length,
+        linkableProofDrilldownCount: proofDrilldowns.filter(item => Boolean(item.href)).length,
+        probeRouteCount: proofDrilldowns.filter(item => item.kind === 'probe').length,
         blockerRows: rows.filter(row => row.state === 'blocked').map(row => row.id),
         needsActionRows: rows.filter(row => row.state === 'needs_action').map(row => row.id),
         unavailableRows: rows.filter(row => row.state === 'unavailable').map(row => row.id),

@@ -198,6 +198,10 @@ assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dash
 assert.ok(partialScoreboard.deployGate.proofContracts.some(contract => contract.includes('dashboard.alert_evidence.readiness.v1')))
 assert.ok(partialScoreboard.deployGate.ownerLanes.includes('dashboard'))
 assert.ok(partialScoreboard.deployGate.expectedDashboardRowIds.includes('dashboard_evidence'))
+assert.equal(partialScoreboard.deployGate.proofDrilldownCount, partialScoreboard.rows.flatMap(row => row.proofDrilldowns).length)
+assert.equal(partialScoreboard.deployGate.linkableProofDrilldownCount, partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.href).length)
+assert.equal(partialScoreboard.deployGate.probeRouteCount, partialScoreboard.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').length)
+assert.equal(partialScoreboard.deployGate.probeRouteCount, partialScoreboard.totalRows)
 assert.equal(partialScoreboard.deployGate.blockingProofRows.length, 8)
 assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId), [
     'organizations',
@@ -316,6 +320,18 @@ assert.equal(parseProductNorthStarScoreboard({
         ...partialScoreboard.deployGate,
         actionNeededWorkflowLinks: partialScoreboard.deployGate.actionNeededWorkflowLinks.filter(href => href !== '/dashboard/ti/workbench'),
     },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, proofDrilldownCount: partialScoreboard.deployGate.proofDrilldownCount + 1 },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, linkableProofDrilldownCount: partialScoreboard.deployGate.linkableProofDrilldownCount + 1 },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: { ...partialScoreboard.deployGate, probeRouteCount: partialScoreboard.deployGate.probeRouteCount + 1 },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
@@ -603,6 +619,9 @@ for (const token of [
     'data-north-star-deploy-state',
     'data-north-star-deploy-ready-rows',
     'data-north-star-deploy-total-rows',
+    'data-north-star-deploy-proof-drilldown-count',
+    'data-north-star-deploy-linkable-proof-drilldown-count',
+    'data-north-star-deploy-probe-route-count',
     'data-north-star-deploy-blocking-rows',
     'data-north-star-progress-source',
     'data-north-star-progress-source-state',
@@ -667,6 +686,9 @@ for (const token of [
     'Readiness source',
     'Release blockers',
     'What still needs proof',
+    'Proof links',
+    'Linked routes',
+    'Probe routes',
     'Product readiness ledger',
     'hanasand.product_readiness.v1',
     'Open route',
