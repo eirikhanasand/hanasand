@@ -3113,7 +3113,15 @@ export function buildDwmAlertDownstreamHandoff(input: {
     : undefined;
   const selectedCaptureIds = uniqueStrings(asStringArray(context.selectedCaptureIds ?? workflow.captureIds ?? webhook.captureIds ?? alert?.provenance?.captureIds));
   const captureIds = uniqueStrings(asStringArray(alert?.provenance?.captureIds ?? selectedCaptureIds));
-  const sourceIds = uniqueStrings(asStringArray(alert?.provenance?.sourceIds ?? (alert?.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId)));
+  const sourceIds = uniqueStrings(asStringArray([
+    ...asStringArray(alert?.provenance?.sourceIds),
+    ...asStringArray(alert?.sourceProvenanceSummary?.sourceIds),
+    ...asStringArray(alert?.alertCreatedEvent?.consumerPayload?.provenance?.sourceIds),
+    ...asStringArray(alert?.alertCreatedEvent?.consumerPayload?.sourceProvenanceSummary?.sourceIds),
+    ...asStringArray(alert?.alertUpdatedEvent?.consumerPayload?.provenance?.sourceIds),
+    ...asStringArray(alert?.alertUpdatedEvent?.consumerPayload?.sourceProvenanceSummary?.sourceIds),
+    ...(alert?.evidence ?? []).map((item: any) => item.sourceId ?? item.provenance?.sourceId).filter(Boolean).map(String)
+  ]));
   const generationEvidenceWindow = normalizeGenerationEvidenceWindow(context.generationEvidenceWindow ?? workflow.generationEvidenceWindow ?? webhook.generationEvidenceWindow);
   const watchlistIds = uniqueStrings(asStringArray(context.watchlistIds ?? workflow.watchlistIds ?? webhook.watchlistIds ?? alert?.watchlistIds));
   const watchlistItemIds = uniqueStrings(asStringArray(context.watchlistItemIds ?? workflow.watchlistItemIds ?? webhook.watchlistItemIds ?? alert?.watchlistItemIds));

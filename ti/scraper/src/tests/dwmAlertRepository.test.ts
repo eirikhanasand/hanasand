@@ -516,14 +516,103 @@ describe("dwm alert repository", () => {
     expect(first.alerts.every((alert) => alert.provenance.matchBasis === "watchlist_capture_text")).toBe(true);
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.recommendedRoute).toBe("identity_response");
     expect(first.alerts.find((alert) => alert.sourceFamily === "darkweb_metadata")?.provenance.metadataOnly).toBe(true);
-    expect(first.alerts.find((alert) => alert.sourceFamily === "public_advisory")).toMatchObject({
+    const publicAdvisoryAlert = first.alerts.find((alert) => alert.sourceFamily === "public_advisory");
+    expect(publicAdvisoryAlert).toMatchObject({
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
       sourceFamily: "public_advisory",
       recommendedRoute: "identity_response",
+      matchedTerm: { value: "acme.com", kind: "domain" },
       provenance: expect.objectContaining({ captureIds: ["cap_repo_public_ti_acme"] }),
       matchContext: expect.objectContaining({
         matchType: "bounded_text_or_metadata",
         matchedFieldHints: expect.arrayContaining(["body", "metadata.title"])
+      }),
+      evidence: [expect.objectContaining({
+        id: "cap_repo_public_ti_acme",
+        sourceFamily: "public_advisory",
+        observedAt: "2026-06-28T13:11:00.000Z",
+        contentHash: "hash-repo-public-ti-acme",
+        provenance: expect.objectContaining({
+          captureId: "cap_repo_public_ti_acme",
+          sourceId: "src_repo_public_ti"
+        })
+      })],
+      sourceProvenanceSummary: expect.objectContaining({
+        schemaVersion: "dwm.alert_source_provenance.v1",
+        tenantId: "tenant_repo_acme",
+        organizationId: "org_repo_acme",
+        sourceFamily: "public_advisory",
+        captureIds: ["cap_repo_public_ti_acme"],
+        sourceIds: ["src_repo_public_ti"],
+        contentHashes: ["hash-repo-public-ti-acme"],
+        evidenceCount: 1,
+        recommendedRoute: "identity_response"
+      }),
+      orgWatchlistScope: expect.objectContaining({
+        schemaVersion: "dwm.alert_org_watchlist_scope.v1",
+        organizationId: "org_repo_acme",
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]
       })
+    });
+    expect(publicAdvisoryAlert?.alertCreatedEvent.consumerPayload).toMatchObject({
+      schemaVersion: "dwm.alert_event_consumer_payload.v1",
+      eventType: "dwm.alert.created",
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      sourceFamily: "public_advisory",
+      captureIds: ["cap_repo_public_ti_acme"],
+      selectedCaptureIds: ["cap_repo_public_ti_acme"],
+      evidenceExcerpts: [expect.objectContaining({
+        evidenceId: "cap_repo_public_ti_acme",
+        captureId: "cap_repo_public_ti_acme",
+        sourceFamily: "public_advisory",
+        observedAt: "2026-06-28T13:11:00.000Z",
+        contentHash: "hash-repo-public-ti-acme",
+        excerpt: expect.stringContaining("acme.com")
+      })],
+      recommendedRoute: "identity_response",
+      provenance: {
+        matchBasis: "watchlist_capture_text",
+        captureIds: ["cap_repo_public_ti_acme"],
+        sourceIds: ["src_repo_public_ti"]
+      }
+    });
+    expect(buildDwmAlertDownstreamHandoff({ alert: publicAdvisoryAlert })).toMatchObject({
+      schemaVersion: "dwm.alert_downstream_handoff.v1",
+      ready: true,
+      organizationId: "org_repo_acme",
+      sourceFamily: "public_advisory",
+      watchlist: {
+        watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"],
+        watchlistItemIds: ["watch_item_acme_domain", "watch_item_acme_duplicate_domain"]
+      },
+      evidence: {
+        selectedCaptureIds: ["cap_repo_public_ti_acme"],
+        captureIds: ["cap_repo_public_ti_acme"],
+        sourceIds: ["src_repo_public_ti"],
+        evidenceCount: 1
+      },
+      deliverySelection: {
+        ready: false,
+        blockerCodes: ["missing_org_ref"],
+        selectedCaptureIds: ["cap_repo_public_ti_acme"],
+        sourceFamily: "public_advisory"
+      },
+      deliveryReadiness: {
+        ready: true,
+        webhookDestinationIds: ["webhook_repo_discord", "webhook_repo_backup"]
+      },
+      createdEventDispatch: {
+        ready: false,
+        blockerCodes: ["missing_org_ref"],
+        selectedCaptureIds: ["cap_repo_public_ti_acme"],
+        sourceFamily: "public_advisory"
+      },
+      caseReadiness: {
+        ready: true
+      }
     });
     expect(JSON.stringify(first.alerts)).not.toContain("cap_repo_tg_notacme_false_positive");
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.sourceCount).toBe(1);
