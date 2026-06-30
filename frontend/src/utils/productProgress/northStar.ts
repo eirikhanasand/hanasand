@@ -99,9 +99,18 @@ export type ProductNorthStarDeployGate = {
     actionNeededWorkflowLinks: string[]
     proofContracts: string[]
     ownerLanes: string[]
+    blockingOwnerLanes: ProductNorthStarOwnerBlocker[]
     expectedDashboardRowIds: string[]
     firstBlocker: string
     blockingProofRows: ProductNorthStarDeployBlocker[]
+}
+
+export type ProductNorthStarOwnerBlocker = {
+    ownerLane: string
+    rowIds: ProductNorthStarRowId[]
+    states: Array<Exclude<ReadinessStatus, 'ready'>>
+    proofContracts: string[]
+    workflowRoutes: string[]
 }
 
 export type ProductNorthStarDeployBlocker = {
@@ -243,12 +252,30 @@ function isProductNorthStarDeployGate(input: unknown): input is ProductNorthStar
         && deployGate.proofContracts.every(isFilledString)
         && Array.isArray(deployGate.ownerLanes)
         && deployGate.ownerLanes.every(isFilledString)
+        && Array.isArray(deployGate.blockingOwnerLanes)
+        && deployGate.blockingOwnerLanes.every(isProductNorthStarOwnerBlocker)
         && Array.isArray(deployGate.expectedDashboardRowIds)
         && deployGate.expectedDashboardRowIds.every(isFilledString)
         && typeof deployGate.firstBlocker === 'string'
         && Array.isArray(deployGate.blockingProofRows)
         && deployGate.blockingProofRows.every(isProductNorthStarDeployBlocker)
         && deployGate.blockingProofRows.length === deployGate.blockerRows.length + deployGate.needsActionRows.length + deployGate.unavailableRows.length
+}
+
+function isProductNorthStarOwnerBlocker(input: unknown): input is ProductNorthStarOwnerBlocker {
+    if (!input || typeof input !== 'object') return false
+    const blocker = input as Partial<ProductNorthStarOwnerBlocker>
+    return isFilledString(blocker.ownerLane)
+        && Array.isArray(blocker.rowIds)
+        && blocker.rowIds.length > 0
+        && blocker.rowIds.every(isRowId)
+        && Array.isArray(blocker.states)
+        && blocker.states.length > 0
+        && blocker.states.every(state => state === 'blocked' || state === 'needs_action' || state === 'unavailable')
+        && Array.isArray(blocker.proofContracts)
+        && blocker.proofContracts.every(isFilledString)
+        && Array.isArray(blocker.workflowRoutes)
+        && blocker.workflowRoutes.every(isFilledString)
 }
 
 function isProductNorthStarDeployBlocker(input: unknown): input is ProductNorthStarDeployBlocker {
@@ -311,6 +338,7 @@ function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: Pro
     if (!sameStringSet(deployGate.workflowRoutes, proofRoutesByKind(drilldowns, 'workflow'))) return false
     if (!sameStringSet(deployGate.proofApiRoutes, proofRoutesByKind(drilldowns, 'api'))) return false
     if (!sameStringSet(deployGate.probeRoutes, proofRoutesByKind(drilldowns, 'probe'))) return false
+    if (!sameOwnerBlockers(deployGate.blockingOwnerLanes, nonReadyRows)) return false
     if (!deployGate.blockingProofRows.every(blocker => {
         const row = rowById.get(blocker.rowId)
         return Boolean(row)
@@ -502,6 +530,7 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
         actionNeededWorkflowLinks: uniqueStrings(rowsNeedingAction.map(row => row.href)),
         proofContracts: uniqueStrings(rows.map(row => row.backendProofContractVersion)),
         ownerLanes: uniqueStrings(rows.map(row => row.ownerLane)),
+        blockingOwnerLanes: buildOwnerBlockers(rowsNeedingAction),
         expectedDashboardRowIds: uniqueStrings(rows.flatMap(row => row.expectedDashboardRowId.split(',').map(id => id.trim()))),
         firstBlocker: summary.firstBlocker || '',
         blockingProofRows: rowsNeedingAction.map(row => ({
@@ -774,6 +803,35 @@ function latestTimestamp(values: Array<string | undefined>) {
 
 function uniqueStrings(values: Array<string | undefined>) {
     return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim()))))
+}
+
+function buildOwnerBlockers(rows: ProductNorthStarRow[]): ProductNorthStarOwnerBlocker[] {
+    const byOwner = new Map<string, ProductNorthStarRow[]>()
+    for (const row of rows) {
+        byOwner.set(row.ownerLane, [...(byOwner.get(row.ownerLane) || []), row])
+    }
+    return Array.from(byOwner.entries())
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([ownerLane, ownerRows]) => ({
+            ownerLane,
+            rowIds: uniqueStrings(ownerRows.map(row => row.id)) as ProductNorthStarRowId[],
+            states: uniqueStrings(ownerRows.map(row => row.state)).filter((state): state is Exclude<ReadinessStatus, 'ready'> => state !== 'ready'),
+            proofContracts: uniqueStrings(ownerRows.flatMap(row => row.backendProofContractVersion.split(' + '))),
+            workflowRoutes: uniqueStrings(ownerRows.map(row => row.href)),
+        }))
+}
+
+function sameOwnerBlockers(blockers: ProductNorthStarOwnerBlocker[], rows: ProductNorthStarRow[]) {
+    const expected = buildOwnerBlockers(rows)
+    if (!sameStringSet(blockers.map(blocker => blocker.ownerLane), expected.map(blocker => blocker.ownerLane))) return false
+    return expected.every(expectedBlocker => {
+        const actual = blockers.find(blocker => blocker.ownerLane === expectedBlocker.ownerLane)
+        return Boolean(actual)
+            && sameStringSet(actual?.rowIds || [], expectedBlocker.rowIds)
+            && sameStringSet(actual?.states || [], expectedBlocker.states)
+            && sameStringSet(actual?.proofContracts || [], expectedBlocker.proofContracts)
+            && sameStringSet(actual?.workflowRoutes || [], expectedBlocker.workflowRoutes)
+    })
 }
 
 function proofRoutesByKind(drilldowns: ProductNorthStarProofDrilldown[], kind: ProductNorthStarProofDrilldown['kind']) {

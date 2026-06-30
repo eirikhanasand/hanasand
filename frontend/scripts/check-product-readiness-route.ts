@@ -174,6 +174,11 @@ try {
     assert.deepEqual([...(payload?.deployGate.workflowRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'workflow').map(item => item.href) || []).sort())
     assert.deepEqual([...(payload?.deployGate.proofApiRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'api').map(item => item.href) || []).sort())
     assert.deepEqual([...(payload?.deployGate.probeRoutes || [])].sort(), uniqueRoutes(payload?.rows.flatMap(row => row.proofDrilldowns).filter(item => item.kind === 'probe').map(item => item.href) || []).sort())
+    assert.deepEqual(
+        Object.fromEntries((payload?.deployGate.blockingOwnerLanes || []).map(item => [item.ownerLane, item.rowIds])),
+        ownerBlockerRows(payload?.rows || []),
+    )
+    assert.ok(payload?.deployGate.blockingOwnerLanes.every(item => item.ownerLane && item.rowIds.length && item.states.length && item.proofContracts.length && item.workflowRoutes.length))
     assert.ok(payload?.rows.some(row => row.id === 'real_alert_generation' && row.proofDrilldowns.some(item => item.kind === 'probe' && item.value.includes('/api/dwm/alerts/generation-readiness'))))
     assert.equal(capturedRequests.length, 1)
     assert.equal(capturedRequests[0]?.url.pathname, '/api/product-progress')
@@ -220,6 +225,14 @@ try {
 
 function uniqueRoutes(values: string[]) {
     return Array.from(new Set(values.filter(Boolean)))
+}
+
+function ownerBlockerRows(rows: Array<{ id: string, state: string, ownerLane: string }>) {
+    const output: Record<string, string[]> = {}
+    for (const row of rows.filter(row => row.state !== 'ready')) {
+        output[row.ownerLane] = [...(output[row.ownerLane] || []), row.id]
+    }
+    return Object.fromEntries(Object.entries(output).map(([owner, rowIds]) => [owner, uniqueRoutes(rowIds)]))
 }
 
 console.log('product-readiness route contract ok')

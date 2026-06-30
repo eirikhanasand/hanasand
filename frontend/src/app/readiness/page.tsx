@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import { AlertCircle, CheckCircle2, CircleDashed, Clock3, ExternalLink } from 'lucide-react'
-import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDeployBlocker, type ProductNorthStarDirection, type ProductNorthStarProgressSource, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
+import { buildProductNorthStarScoreboard, parseProductNorthStarScoreboard, type ProductNorthStarDeployBlocker, type ProductNorthStarDirection, type ProductNorthStarOwnerBlocker, type ProductNorthStarProgressSource, type ProductNorthStarRow, type ProductNorthStarScoreboard } from '@/utils/productProgress/northStar'
 import { buildRouteMetadata } from '../seo'
 
 export const dynamic = 'force-dynamic'
@@ -256,6 +256,7 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
             data-north-star-deploy-workflow-routes={scoreboard.deployGate.workflowRoutes.join(',')}
             data-north-star-deploy-proof-api-routes={scoreboard.deployGate.proofApiRoutes.join(',')}
             data-north-star-deploy-probe-routes={scoreboard.deployGate.probeRoutes.join(',')}
+            data-north-star-deploy-blocking-owner-lanes={scoreboard.deployGate.blockingOwnerLanes.map(item => item.ownerLane).join(',')}
             data-north-star-deploy-blocking-rows={blockers.map(row => row.rowId).join(',')}
         >
             <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
@@ -277,6 +278,13 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
                 <RouteTargetList label='Proof APIs' routes={scoreboard.deployGate.proofApiRoutes} />
                 <RouteTargetList label='Probes' routes={scoreboard.deployGate.probeRoutes} />
             </div>
+            {scoreboard.deployGate.blockingOwnerLanes.length > 0 && (
+                <div className='mt-3 grid gap-2 lg:grid-cols-3'>
+                    {scoreboard.deployGate.blockingOwnerLanes.map(item => (
+                        <OwnerBlockerCard key={item.ownerLane} item={item} />
+                    ))}
+                </div>
+            )}
             {scoreboard.deployGate.fullChainReady ? (
                 <div className='mt-5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2 text-sm font-semibold text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'>
                     All readiness rows are backed by fresh proof.
@@ -346,6 +354,26 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
     )
 }
 
+function OwnerBlockerCard({ item }: { item: ProductNorthStarOwnerBlocker }) {
+    return (
+        <div
+            className='min-w-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+            data-north-star-deploy-owner-blocker={item.ownerLane}
+            data-north-star-deploy-owner-blocker-rows={item.rowIds.join(',')}
+            data-north-star-deploy-owner-blocker-states={item.states.join(',')}
+            data-north-star-deploy-owner-blocker-contracts={item.proofContracts.join(',')}
+            data-north-star-deploy-owner-blocker-workflows={item.workflowRoutes.join(',')}
+        >
+            <p className='font-semibold uppercase tracking-[0.08em]'>{item.ownerLane}</p>
+            <p className='mt-1 wrap-break-word font-semibold text-[#171a21] dark:text-white'>{item.rowIds.join(', ')}</p>
+            <dl className='mt-2 grid gap-1'>
+                <Fact label='States' value={item.states.join(', ')} />
+                <Fact label='Routes' value={item.workflowRoutes.join(', ')} />
+            </dl>
+        </div>
+    )
+}
+
 function RouteTargetList({ label, routes }: { label: string, routes: string[] }) {
     const visibleRoutes = routes.slice(0, 4)
     const hiddenCount = Math.max(0, routes.length - visibleRoutes.length)
@@ -358,7 +386,7 @@ function RouteTargetList({ label, routes }: { label: string, routes: string[] })
                         <Link
                             key={route}
                             href={route}
-                            className='inline-flex min-h-8 max-w-full items-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                            className='inline-flex min-h-8 min-w-[44px] max-w-full items-center justify-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
                         >
                             <span className='min-w-0 wrap-break-word'>{route}</span>
                         </Link>
@@ -517,7 +545,7 @@ function ProofDrilldowns({
                     <dt className='font-semibold text-[#667085] dark:text-[#97a6bd]'>{item.label}</dt>
                     <dd className='min-w-0 wrap-break-word font-medium text-[#171a21] dark:text-[#f5f7fb]'>
                         {item.href ? (
-                            <Link href={item.href} className='inline-flex min-h-8 min-w-9 items-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
+                            <Link href={item.href} className='inline-flex min-h-8 min-w-[44px] items-center justify-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
                                 {item.value}
                             </Link>
                         ) : item.value}

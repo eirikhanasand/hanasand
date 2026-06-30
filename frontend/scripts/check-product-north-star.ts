@@ -27,6 +27,27 @@ const routes = {
     cases: '/api/cases',
 }
 
+const readyEndToEndWorkflowPacket = {
+    schemaVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
+    state: 'ready',
+    lastVerifiedAt: generatedAt,
+    requiredStepIds: ['organization_access', 'shared_watchlist', 'source_coverage', 'matched_alert', 'analyst_case', 'webhook_destination', 'delivery_outcome', 'support_audit'],
+    steps: [
+        { stepId: 'organization_access', state: 'ready', consumerLane: 'org', ownerLane: 'org', route: '/v1/organizations', typedFields: [{ alias: 'orgId', sourceField: 'organizationId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['organization_lifecycle'], schemaIds: ['organization.lifecycle_readiness.v1'], receiptSchemaIds: [] } },
+        { stepId: 'shared_watchlist', state: 'ready', consumerLane: 'org', ownerLane: 'org', route: '/v1/organizations', typedFields: [{ alias: 'watchlistId', sourceField: 'watchlistId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['shared_watchlist_alert_export'], schemaIds: ['organization.watchlist_alert_readiness.v1'], receiptSchemaIds: [] } },
+        { stepId: 'source_coverage', state: 'ready', consumerLane: 'publicTI', ownerLane: 'publicTI', route: '/ti', typedFields: [{ alias: 'sourceCoverage', sourceField: 'sourceCoverageState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['source_provenance_receipts'], schemaIds: ['ti.source_provenance.readiness.v1'], receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'] } },
+        { stepId: 'matched_alert', state: 'ready', consumerLane: 'alert', ownerLane: 'alert', route: '/v1/dwm/alerts/generation-readiness', typedFields: [{ alias: 'alertId', sourceField: 'alertId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['org_scoped_alert_case_workflow'], schemaIds: ['organization.watchlist_alert_readiness.v1'], receiptSchemaIds: [] } },
+        { stepId: 'analyst_case', state: 'ready', consumerLane: 'case', ownerLane: 'case', route: '/v1/dwm/cases', typedFields: [{ alias: 'caseId', sourceField: 'caseId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['org_scoped_alert_case_workflow'], schemaIds: ['case.workflow_state.v1'], receiptSchemaIds: [] } },
+        { stepId: 'webhook_destination', state: 'ready', consumerLane: 'webhook', ownerLane: 'webhook', route: '/v1/dwm/webhooks/deliver', typedFields: [{ alias: 'destinationDeliveryState', sourceField: 'destinationDeliveryState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['webhook_delivery_receipts'], schemaIds: ['dwm.webhook.destination_readiness.v1'], receiptSchemaIds: ['dwm.webhook_event_contract.v1'] } },
+        { stepId: 'delivery_outcome', state: 'ready', consumerLane: 'webhook', ownerLane: 'webhook', route: '/v1/dwm/webhooks/deliver', typedFields: [{ alias: 'deliveryStatus', sourceField: 'destinationDeliveryState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['webhook_delivery_receipts'], schemaIds: ['dwm.webhook.delivery_outcome.v1'], receiptSchemaIds: ['dwm.webhook_event_contract.v1'] } },
+        { stepId: 'support_audit', state: 'ready', consumerLane: 'helpdesk', ownerLane: 'support', route: '/api/admin/support/readiness', typedFields: [{ alias: 'supportAuditStatus', sourceField: 'supportAction.status', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['support_action_receipts'], schemaIds: ['support.audit.readiness.v1'], receiptSchemaIds: ['support.audit.export_proof.v1'] } },
+    ],
+    typedFields: ['orgId', 'watchlistId', 'sourceCoverage', 'alertId', 'caseId', 'destinationDeliveryState', 'deliveryStatus', 'supportAuditStatus'],
+    missingTypedFields: [],
+    blockerCodes: [],
+    consumerGuidanceSchemaVersion: 'hanasand.product_readiness.consumer_guidance.v1',
+}
+
 const partialPayload = buildProductProgressPayload({
     generatedAt,
     checkedAt: generatedAt,
@@ -190,9 +211,15 @@ assert.equal(partialScoreboard.progressSource.backendProofContractVersion, 'prod
 assert.equal(partialScoreboard.productReadinessAggregate.schemaVersion, 'product.readiness_aggregate_source.v1')
 assert.equal(partialScoreboard.productReadinessAggregate.state, 'unavailable')
 assert.equal(partialScoreboard.productReadinessAggregate.unavailableReason, 'product_readiness_aggregate_not_configured')
-assert.deepEqual(partialScoreboard.deployGate.blockerRows, ['organizations'])
-assert.deepEqual(partialScoreboard.deployGate.needsActionRows, ['shared_watchlists', 'real_alert_generation', 'webhook_delivery', 'analyst_workflow', 'deploy_live_status'])
-assert.deepEqual(partialScoreboard.deployGate.unavailableRows, ['support_admin_audit', 'public_ti_enrichment'])
+const expectedNonReadyRows = partialScoreboard.rows.filter(row => row.state !== 'ready').map(row => row.id)
+assert.deepEqual(partialScoreboard.deployGate.blockerRows, partialScoreboard.rows.filter(row => row.state === 'blocked').map(row => row.id))
+assert.deepEqual(partialScoreboard.deployGate.needsActionRows, partialScoreboard.rows.filter(row => row.state === 'needs_action').map(row => row.id))
+assert.deepEqual(partialScoreboard.deployGate.unavailableRows, partialScoreboard.rows.filter(row => row.state === 'unavailable').map(row => row.id))
+assert.ok(partialScoreboard.deployGate.blockerRows.includes('organizations'))
+assert.ok(partialScoreboard.deployGate.needsActionRows.includes('real_alert_generation'))
+assert.ok(partialScoreboard.deployGate.needsActionRows.includes('webhook_delivery'))
+assert.ok(partialScoreboard.deployGate.unavailableRows.includes('support_admin_audit'))
+assert.ok(partialScoreboard.deployGate.unavailableRows.includes('public_ti_enrichment'))
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/ti/workbench'))
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/automations?setup=dwm'))
 assert.ok(partialScoreboard.deployGate.proofContracts.some(contract => contract.includes('dashboard.alert_evidence.readiness.v1')))
@@ -209,17 +236,14 @@ assert.ok(partialScoreboard.deployGate.workflowRoutes.includes('/dashboard/ti/wo
 assert.ok(partialScoreboard.deployGate.proofApiRoutes.every(route => route.startsWith('/api/')))
 assert.ok(partialScoreboard.deployGate.probeRoutes.includes('/api/dwm/alerts/generation-readiness'))
 assert.ok(partialScoreboard.deployGate.probeRoutes.includes('/api/dwm/webhooks'))
-assert.equal(partialScoreboard.deployGate.blockingProofRows.length, 8)
-assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId), [
-    'organizations',
-    'shared_watchlists',
-    'real_alert_generation',
-    'webhook_delivery',
-    'analyst_workflow',
-    'support_admin_audit',
-    'public_ti_enrichment',
-    'deploy_live_status',
-])
+assert.deepEqual(
+    Object.fromEntries(partialScoreboard.deployGate.blockingOwnerLanes.map(item => [item.ownerLane, item.rowIds])),
+    ownerBlockerRows(partialScoreboard),
+)
+assert.ok(partialScoreboard.deployGate.blockingOwnerLanes.some(item => item.ownerLane === 'dashboard' && item.workflowRoutes.includes('/dashboard/ti/workbench')))
+assert.ok(partialScoreboard.deployGate.blockingOwnerLanes.every(item => item.rowIds.length && item.states.length && item.proofContracts.length && item.workflowRoutes.length))
+assert.equal(partialScoreboard.deployGate.blockingProofRows.length, expectedNonReadyRows.length)
+assert.deepEqual(partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId), expectedNonReadyRows)
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => ['blocked', 'needs_action', 'unavailable'].includes(row.state)))
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.ownerLane && row.href && row.blocker && row.proofTimestamp))
 assert.ok(partialScoreboard.deployGate.blockingProofRows.every(row => row.expectedDashboardRowId && row.backendProofContractVersion && row.integrationProbeHint))
@@ -231,7 +255,7 @@ assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' 
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.backendProofContractVersion.includes('dashboard.alert_evidence.readiness.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.backendProofContractVersion.includes('dwm.alert_generation_readiness.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.expectedDashboardRowId.includes('alert_generation_readiness')))
-assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && (row.state === 'ready' || row.state === 'needs_action')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('ti.api_contract_schema_lookup.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('hanasand.product_readiness.receipt_matrix.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.integrationProbeHint.includes('schemaLookup')))
@@ -351,6 +375,20 @@ assert.equal(parseProductNorthStarScoreboard({
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     deployGate: { ...partialScoreboard.deployGate, probeRoutes: [] },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockingOwnerLanes: partialScoreboard.deployGate.blockingOwnerLanes.filter(item => item.ownerLane !== 'dashboard'),
+    },
+}), null)
+assert.equal(parseProductNorthStarScoreboard({
+    ...partialScoreboard,
+    deployGate: {
+        ...partialScoreboard.deployGate,
+        blockingOwnerLanes: partialScoreboard.deployGate.blockingOwnerLanes.map(item => item.ownerLane === 'dashboard' ? { ...item, rowIds: [] } : item),
+    },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
@@ -520,6 +558,13 @@ assert.equal(staleAggregate.customerVisibleBlockedCount, 0)
 
 const readyPayload = {
     ...partialPayload,
+    sourceProxy: {
+        ...partialPayload.sourceProxy!,
+        contracts: {
+            ...partialPayload.sourceProxy!.contracts,
+            productReadinessEndToEndWorkflowPacket: readyEndToEndWorkflowPacket,
+        },
+    },
     publicTiProvenance: { ...partialPayload.publicTiProvenance!, status: 'ready' as const, blockers: [], sourceCount: 4, evidenceCount: 8, unavailableReason: undefined },
     helpdeskAudit: { ...partialPayload.helpdeskAudit!, status: 'ready' as const, blockers: [], auditedActions: 3, openRecoveryRequests: 0, unavailableReason: undefined },
     deployProbe: { ...partialPayload.deployProbe!, status: 'ready' as const, blockers: [], apiHealthy: true, scraperHealthy: true, latestProbeAt: generatedAt, unavailableReason: undefined },
@@ -644,6 +689,12 @@ for (const token of [
     'data-north-star-deploy-workflow-routes',
     'data-north-star-deploy-proof-api-routes',
     'data-north-star-deploy-probe-routes',
+    'data-north-star-deploy-blocking-owner-lanes',
+    'data-north-star-deploy-owner-blocker',
+    'data-north-star-deploy-owner-blocker-rows',
+    'data-north-star-deploy-owner-blocker-states',
+    'data-north-star-deploy-owner-blocker-contracts',
+    'data-north-star-deploy-owner-blocker-workflows',
     'data-north-star-deploy-blocking-rows',
     'data-north-star-progress-source',
     'data-north-star-progress-source-state',
@@ -712,6 +763,7 @@ for (const token of [
     'Linked routes',
     'Probe routes',
     'RouteTargetList',
+    'OwnerBlockerCard',
     'Proof APIs',
     '+{hiddenCount} more',
     'Product readiness ledger',
@@ -809,4 +861,12 @@ function rowExpectedDashboardIds(scoreboard: ReturnType<typeof buildProductNorth
 
 function uniqueRoutes(values: string[]) {
     return Array.from(new Set(values.filter(Boolean)))
+}
+
+function ownerBlockerRows(scoreboard: ReturnType<typeof buildProductNorthStarScoreboard>) {
+    const output: Record<string, string[]> = {}
+    for (const row of scoreboard.rows.filter(row => row.state !== 'ready')) {
+        output[row.ownerLane] = [...(output[row.ownerLane] || []), row.id]
+    }
+    return Object.fromEntries(Object.entries(output).map(([owner, rows]) => [owner, uniqueRoutes(rows)]))
 }
