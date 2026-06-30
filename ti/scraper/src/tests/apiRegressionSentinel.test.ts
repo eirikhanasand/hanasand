@@ -266,7 +266,7 @@ describe("api regression sentinel", () => {
         aggregate: "hanasand.product_readiness.v1"
       },
       scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "capabilityId"]),
-      recordFields: expect.arrayContaining(["contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "downstreamOwners", "safeOutput"]),
+      recordFields: expect.arrayContaining(["customerWorkflowIds", "contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "downstreamOwners", "safeOutput"]),
       blockerCodes: expect.arrayContaining(["missing_contract_reference", "missing_contract_ids", "unsafe_receipt_matrix_row"]),
       downstreamConsumers: expect.arrayContaining([
         expect.objectContaining({ ownerLane: "integration", route: "/v1/contracts" }),
@@ -294,6 +294,15 @@ describe("api regression sentinel", () => {
       route: "/v1/contracts",
       ok: true,
       rowCount: 9,
+      requiredCustomerWorkflowIds: [
+        "org_membership",
+        "shared_watchlists",
+        "alert_generation",
+        "webhook_delivery",
+        "case_workflow",
+        "source_health",
+        "public_ti_handoff"
+      ],
       requiredReceiptCapabilityIds: ["alert_case_workflow", "source_activation", "support_controls", "webhook_delivery"],
       requiredReceiptSchemaIdsByCapability: {
         source_activation: expect.arrayContaining(["ti.source_provenance_alert_rebuild_receipt.v1"]),
@@ -302,6 +311,7 @@ describe("api regression sentinel", () => {
         support_controls: expect.arrayContaining(["support.action_execution_handoff.v1"])
       },
       missingCapabilityIds: [],
+      missingCustomerWorkflowIds: [],
       matrixSchemaLookupPresent: true,
       blockerCodes: [],
       safeOutput: {
@@ -368,6 +378,8 @@ describe("api regression sentinel", () => {
     for (const row of matrixRows) {
       expect(Array.isArray(row.contractIds)).toBe(true);
       expect(row.contractIds).not.toHaveLength(0);
+      expect(Array.isArray(row.customerWorkflowIds)).toBe(true);
+      expect(row.customerWorkflowIds).not.toHaveLength(0);
       expect(Array.isArray(row.schemaIds)).toBe(true);
       expect(row.schemaIds).not.toHaveLength(0);
       expect(Array.isArray(row.scopeFields)).toBe(true);
@@ -387,6 +399,7 @@ describe("api regression sentinel", () => {
     }
     expect(rows.get("shared_watchlists")).toMatchObject({
       ownerLane: "watchlist",
+      customerWorkflowIds: expect.arrayContaining(["shared_watchlists", "alert_generation"]),
       readinessRoute: "GET /api/organizations/:id/watchlists/alert-terms",
       contractIds: expect.arrayContaining(["shared_watchlist_alert_export", "shared_watchlist_alert_generation"]),
       schemaIds: expect.arrayContaining([
@@ -400,18 +413,21 @@ describe("api regression sentinel", () => {
     });
     expect(rows.get("alert_case_workflow")).toMatchObject({
       ownerLane: "alert",
+      customerWorkflowIds: expect.arrayContaining(["alert_generation", "case_workflow", "webhook_delivery"]),
       contractIds: expect.arrayContaining(["org_scoped_alert_case_workflow", "org_alert_case_workflow", "org_alert_case_action_receipt"]),
       receiptSchemaIds: expect.arrayContaining(["dwm.org_alert_case_action_receipt.v1", "dwm.org_alert_case_action_audit_event.v1"]),
       downstreamOwners: expect.arrayContaining(["case", "webhook", "dashboard"])
     });
     expect(rows.get("webhook_delivery")).toMatchObject({
       ownerLane: "webhook",
+      customerWorkflowIds: ["webhook_delivery"],
       contractIds: expect.arrayContaining(["webhook_delivery_receipts"]),
       receiptSchemaIds: expect.arrayContaining(["dwm.webhook_event_contract.v1", "dwm.webhook_support_action_request.v1", "dwm.webhook_dispatch_retry_audit.v1"]),
       downstreamOwners: expect.arrayContaining(["dashboard", "support"])
     });
     expect(rows.get("source_activation")).toMatchObject({
       ownerLane: "source",
+      customerWorkflowIds: expect.arrayContaining(["source_health", "alert_generation", "public_ti_handoff"]),
       receiptSchemaIds: expect.arrayContaining([
         "ti.source_provenance_alert_rebuild_receipt.v1",
         "ti.source_provenance_actor_enrichment_gap_receipt.v1",
@@ -546,6 +562,7 @@ describe("api regression sentinel", () => {
     const brokenMatrix = JSON.parse(JSON.stringify(contract.productReadinessReceiptMatrix));
     brokenMatrix.rows = brokenMatrix.rows.filter((row: any) => row.capabilityId !== "website_product_surface");
     brokenMatrix.rows[0].contractIds = [];
+    brokenMatrix.rows[0].customerWorkflowIds = [];
     brokenMatrix.rows[1].receiptSchemaIds = ["unknown.receipt.v1"];
     brokenMatrix.rows[2].receiptSchemaIds = ["ti.source_provenance_alert_rebuild_receipt.v1"];
     brokenMatrix.rows[2].downstreamConsumers = [];
@@ -566,6 +583,7 @@ describe("api regression sentinel", () => {
       blockerCodes: expect.arrayContaining([
         "missing_capability_row",
         "missing_contract_ids",
+        "missing_customer_workflow_ids",
         "stale_receipt_schema_reference",
         "missing_required_receipt_schema",
         "missing_downstream_consumers",
@@ -583,7 +601,8 @@ describe("api regression sentinel", () => {
     expect(rows.get("organization_lifecycle")).toMatchObject({
       ok: false,
       missingContractIds: ["contractIds"],
-      blockerCodes: expect.arrayContaining(["missing_contract_ids"])
+      missingCustomerWorkflowIds: ["customerWorkflowIds"],
+      blockerCodes: expect.arrayContaining(["missing_contract_ids", "missing_customer_workflow_ids"])
     });
     expect(rows.get("shared_watchlists")).toMatchObject({
       ok: false,

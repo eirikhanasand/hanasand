@@ -169,8 +169,17 @@ export function contractIndex() {
           aggregate: PRODUCT_READINESS_SCHEMA_VERSION
         },
         scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "capabilityId", "ownerLane"],
-        recordFields: ["id", "contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "readinessRoute", "scopeFields", "downstreamOwners", "safeOutput"],
-        blockerCodes: ["missing_contract_reference", "missing_contract_ids", "missing_schema_ids", "missing_scope_fields", "unsafe_receipt_matrix_row"],
+        recordFields: ["id", "customerWorkflowIds", "contractIds", "schemaIds", "receiptSchemaIds", "blockerCodes", "readinessRoute", "scopeFields", "downstreamOwners", "safeOutput"],
+        blockerCodes: [
+          "missing_contract_reference",
+          "missing_customer_workflow",
+          "missing_customer_workflow_ids",
+          "unknown_customer_workflow_id",
+          "missing_contract_ids",
+          "missing_schema_ids",
+          "missing_scope_fields",
+          "unsafe_receipt_matrix_row"
+        ],
         downstreamConsumers: [
           { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["productReadinessReceiptMatrix.rows", "schemaLookup.rows", "receiptSchemas"] },
           { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["id", "customerVisibleState", "blockerCodes", "readinessRoute"] },
@@ -302,7 +311,16 @@ export function contractIndex() {
           ownerLane: "integration",
           route: "/v1/contracts",
           scopeFields: ["tenantId", "organizationId", "member.role", "member.status", "capabilityId", "ownerLane"],
-          blockerCodes: ["missing_contract_reference", "missing_contract_ids", "missing_schema_ids", "missing_scope_fields", "unsafe_receipt_matrix_row"],
+          blockerCodes: [
+            "missing_contract_reference",
+            "missing_customer_workflow",
+            "missing_customer_workflow_ids",
+            "unknown_customer_workflow_id",
+            "missing_contract_ids",
+            "missing_schema_ids",
+            "missing_scope_fields",
+            "unsafe_receipt_matrix_row"
+          ],
           downstreamConsumers: [
             { ownerLane: "integration", route: "/v1/contracts", requiredFields: ["productReadinessReceiptMatrix.rows", "schemaLookup.rows", "receiptSchemas"] },
             { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["id", "customerVisibleState", "blockerCodes"] }
@@ -374,6 +392,7 @@ export function contractIndex() {
       rows: [
         productReadinessReceiptMatrixRow({
           capabilityId: "organization_lifecycle",
+          customerWorkflowIds: ["org_membership"],
           ownerLane: "org",
           readinessRoute: "GET /api/organizations/:id/readiness-lifecycle",
           contractIds: ["organization_lifecycle", "organization_lifecycle_readiness"],
@@ -387,6 +406,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "shared_watchlists",
+          customerWorkflowIds: ["shared_watchlists", "alert_generation"],
           ownerLane: "watchlist",
           readinessRoute: "GET /api/organizations/:id/watchlists/alert-terms",
           contractIds: ["shared_watchlist_alert_export", "shared_watchlist_alert_generation"],
@@ -405,6 +425,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "source_activation",
+          customerWorkflowIds: ["source_health", "alert_generation", "public_ti_handoff"],
           ownerLane: "source",
           readinessRoute: "GET /v1/dwm/source-requests/readiness",
           contractIds: ["source_activation_and_provenance", "source_provenance_readiness", "source_provenance_receipts"],
@@ -424,6 +445,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "alert_case_workflow",
+          customerWorkflowIds: ["alert_generation", "case_workflow", "webhook_delivery"],
           ownerLane: "alert",
           readinessRoute: "POST /v1/dwm/alerts/rebuild -> POST /v1/cases",
           contractIds: ["org_scoped_alert_case_workflow", "org_alert_case_workflow", "org_alert_case_action_receipt"],
@@ -439,6 +461,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "webhook_delivery",
+          customerWorkflowIds: ["webhook_delivery"],
           ownerLane: "webhook",
           readinessRoute: "POST /api/organizations/:id/webhooks -> POST /v1/dwm/webhooks/deliver",
           contractIds: ["webhook_destination", "webhook_delivery_receipts"],
@@ -458,6 +481,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "support_controls",
+          customerWorkflowIds: ["org_membership"],
           ownerLane: "support",
           readinessRoute: "POST /api/admin/support/organizations/:id/access-recovery",
           contractIds: ["support_executor", "support_recovery_receipts", "support_action_receipts"],
@@ -472,6 +496,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "dashboard_operator_workspace",
+          customerWorkflowIds: ["case_workflow"],
           ownerLane: "dashboard",
           readinessRoute: "/dashboard",
           contractIds: ["dashboard_operator_workspace"],
@@ -485,6 +510,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "public_ti_actor_handoff",
+          customerWorkflowIds: ["public_ti_handoff", "shared_watchlists", "case_workflow"],
           ownerLane: "publicTI",
           readinessRoute: "/ti",
           contractIds: ["public_ti_actor_handoff"],
@@ -498,6 +524,7 @@ export function contractIndex() {
         }),
         productReadinessReceiptMatrixRow({
           capabilityId: "website_product_surface",
+          customerWorkflowIds: ["public_ti_handoff"],
           ownerLane: "website",
           readinessRoute: "/",
           contractIds: ["website_product_surface"],
@@ -563,6 +590,7 @@ function receiptSchema(input: {
 
 function productReadinessReceiptMatrixRow(input: {
   capabilityId: string;
+  customerWorkflowIds: Array<"org_membership" | "shared_watchlists" | "alert_generation" | "webhook_delivery" | "case_workflow" | "source_health" | "public_ti_handoff">;
   ownerLane: "org" | "watchlist" | "source" | "alert" | "webhook" | "support" | "dashboard" | "publicTI" | "website";
   readinessRoute: string;
   contractIds: string[];
@@ -591,6 +619,7 @@ export function productReadinessReceiptMatrixCoverage(
     schemaVersion: string;
     rows: Array<{
       capabilityId: string;
+      customerWorkflowIds: string[];
       ownerLane: string;
       readinessRoute: string;
       contractIds: string[];
@@ -617,10 +646,18 @@ export function productReadinessReceiptMatrixCoverage(
     "public_ti_actor_handoff",
     "website_product_surface"
   ];
-  const knownSchemaIds = new Set([
+  const requiredCustomerWorkflowIds = [
+    "org_membership",
+    "shared_watchlists",
+    "alert_generation",
+    "webhook_delivery",
+    "case_workflow",
+    "source_health",
+    "public_ti_handoff"
+  ];
+  const knownReceiptSchemaIds = new Set([
     ...schemaLookupRows.map((row) => row.schemaId),
-    ...receiptSchemas.flatMap((receipt) => Object.values(receipt.schemas)),
-    ...matrix.rows.flatMap((row) => row.schemaIds)
+    ...receiptSchemas.flatMap((receipt) => Object.values(receipt.schemas))
   ]);
   const requiredReceiptSchemaIdsByCapability: Record<string, string[]> = {
     source_activation: [
@@ -646,14 +683,18 @@ export function productReadinessReceiptMatrixCoverage(
   };
   const matrixCapabilityIds = new Set(matrix.rows.map((row) => row.capabilityId));
   const missingCapabilityIds = requiredCapabilityIds.filter((id) => !matrixCapabilityIds.has(id));
+  const matrixCustomerWorkflowIds = new Set(matrix.rows.flatMap((row) => row.customerWorkflowIds || []));
+  const missingCustomerWorkflowIds = requiredCustomerWorkflowIds.filter((id) => !matrixCustomerWorkflowIds.has(id));
   const diffRows = matrix.rows.map((row) => {
     const missingContractIds = !Array.isArray(row.contractIds) || row.contractIds.length === 0 ? ["contractIds"] : [];
     const missingSchemaIds = !Array.isArray(row.schemaIds) || row.schemaIds.length === 0 ? ["schemaIds"] : [];
+    const missingCustomerWorkflowIds = !Array.isArray(row.customerWorkflowIds) || row.customerWorkflowIds.length === 0 ? ["customerWorkflowIds"] : [];
+    const unknownCustomerWorkflowIds = (row.customerWorkflowIds || []).filter((workflowId) => !requiredCustomerWorkflowIds.includes(workflowId));
     const missingScopeFields = !Array.isArray(row.scopeFields) || row.scopeFields.length === 0 ? ["scopeFields"] : [];
     const missingDownstreamConsumers = !Array.isArray(row.downstreamConsumers) || row.downstreamConsumers.length === 0 ? ["downstreamConsumers"] : [];
     const requiredReceiptSchemaIds = requiredReceiptSchemaIdsByCapability[row.capabilityId] || [];
     const missingRequiredReceiptSchemaIds = requiredReceiptSchemaIds.filter((schemaId) => !(row.receiptSchemaIds || []).includes(schemaId));
-    const unindexedReceiptSchemaIds = (row.receiptSchemaIds || []).filter((schemaId) => !knownSchemaIds.has(schemaId));
+    const unindexedReceiptSchemaIds = (row.receiptSchemaIds || []).filter((schemaId) => !knownReceiptSchemaIds.has(schemaId));
     const unsafeFields = [
       !row.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
       row.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
@@ -662,6 +703,8 @@ export function productReadinessReceiptMatrixCoverage(
     ].filter(Boolean);
     const blockerCodes = [
       ...missingContractIds.map(() => "missing_contract_ids"),
+      ...missingCustomerWorkflowIds.map(() => "missing_customer_workflow_ids"),
+      ...unknownCustomerWorkflowIds.map(() => "unknown_customer_workflow_id"),
       ...missingSchemaIds.map(() => "missing_schema_ids"),
       ...missingScopeFields.map(() => "missing_scope_fields"),
       ...missingDownstreamConsumers.map(() => "missing_downstream_consumers"),
@@ -676,6 +719,8 @@ export function productReadinessReceiptMatrixCoverage(
       ok: blockerCodes.length === 0,
       blockerCodes,
       missingContractIds,
+      missingCustomerWorkflowIds,
+      unknownCustomerWorkflowIds,
       missingSchemaIds,
       missingScopeFields,
       missingDownstreamConsumers,
@@ -695,6 +740,7 @@ export function productReadinessReceiptMatrixCoverage(
   const blockerCodes = [
     ...(!matrixSchemaLookupPresent ? ["missing_matrix_schema_lookup"] : []),
     ...missingCapabilityIds.map(() => "missing_capability_row"),
+    ...missingCustomerWorkflowIds.map(() => "missing_customer_workflow"),
     ...unsafeMatrixFields.map(() => "unsafe_receipt_matrix"),
     ...diffRows.flatMap((row) => row.blockerCodes)
   ];
@@ -705,9 +751,11 @@ export function productReadinessReceiptMatrixCoverage(
     ok: blockerCodes.length === 0,
     rowCount: matrix.rows.length,
     requiredCapabilityIds,
+    requiredCustomerWorkflowIds,
     requiredReceiptCapabilityIds: Object.keys(requiredReceiptSchemaIdsByCapability).sort(),
     requiredReceiptSchemaIdsByCapability,
     missingCapabilityIds,
+    missingCustomerWorkflowIds,
     matrixSchemaLookupPresent,
     blockerCodes: [...new Set(blockerCodes)].sort(),
     diffRows,
@@ -802,12 +850,15 @@ export function productReadinessIntegrationGate(input: {
     route: string;
     blockerCodes: string[];
     missingCapabilityIds: string[];
+    missingCustomerWorkflowIds: string[];
     matrixSchemaLookupPresent: boolean;
     diffRows: Array<{
       capabilityId: string;
       ownerLane: string;
       ok: boolean;
       blockerCodes: string[];
+      missingCustomerWorkflowIds: string[];
+      unknownCustomerWorkflowIds: string[];
       missingRequiredReceiptSchemaIds: string[];
       unindexedReceiptSchemaIds: string[];
       unsafeFields: string[];
@@ -832,11 +883,14 @@ export function productReadinessIntegrationGate(input: {
       evidence: {
         schemaVersion: input.coverage.schemaVersion,
         missingCapabilityIds: input.coverage.missingCapabilityIds,
+        missingCustomerWorkflowIds: input.coverage.missingCustomerWorkflowIds,
         matrixSchemaLookupPresent: input.coverage.matrixSchemaLookupPresent,
         failingRows: input.coverage.diffRows.filter((row) => !row.ok).map((row) => ({
           capabilityId: row.capabilityId,
           ownerLane: row.ownerLane,
           blockerCodes: row.blockerCodes,
+          missingCustomerWorkflowIds: row.missingCustomerWorkflowIds,
+          unknownCustomerWorkflowIds: row.unknownCustomerWorkflowIds,
           missingRequiredReceiptSchemaIds: row.missingRequiredReceiptSchemaIds,
           unindexedReceiptSchemaIds: row.unindexedReceiptSchemaIds,
           unsafeFields: row.unsafeFields

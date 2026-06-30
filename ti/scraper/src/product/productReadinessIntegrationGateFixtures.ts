@@ -20,7 +20,8 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "prompt_literal_copy"
   | "unsafe_receipt_output"
   | "malformed_consumer_proof_metadata"
-  | "malformed_schema_lookup_metadata";
+  | "malformed_schema_lookup_metadata"
+  | "missing_customer_workflow";
 
 const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "valid",
@@ -30,7 +31,8 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "prompt_literal_copy",
   "unsafe_receipt_output",
   "malformed_consumer_proof_metadata",
-  "malformed_schema_lookup_metadata"
+  "malformed_schema_lookup_metadata",
+  "missing_customer_workflow"
 ];
 
 function cloneJson<T>(input: T): T {
@@ -107,6 +109,11 @@ function mutateFixtureContract(
       }
       break;
     }
+    case "missing_customer_workflow": {
+      const row = contractLike.productReadinessReceiptMatrix.rows.find((item) => item.capabilityId === "source_activation");
+      if (row) row.customerWorkflowIds = [];
+      break;
+    }
   }
 }
 
@@ -125,7 +132,8 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
     "missing_schema_lookup_consumer_route",
     "missing_schema_lookup_consumer_required_fields",
     "unsafe_schema_lookup_row"
-  ]
+  ],
+  missing_customer_workflow: ["missing_customer_workflow_ids", "missing_customer_workflow"]
 };
 
 export function productReadinessConsumerProofMetadataGuard(contractLike: Pick<ReturnType<typeof contractIndex>, "productReadinessReceiptMatrix">) {
@@ -282,6 +290,8 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
           capabilityId: row.capabilityId,
           ownerLane: row.ownerLane,
           blockerCodes: row.blockerCodes,
+          missingCustomerWorkflowIds: row.missingCustomerWorkflowIds,
+          unknownCustomerWorkflowIds: row.unknownCustomerWorkflowIds,
           missingRequiredReceiptSchemaIds: row.missingRequiredReceiptSchemaIds,
           unindexedReceiptSchemaIds: row.unindexedReceiptSchemaIds,
           unsafeFields: row.unsafeFields

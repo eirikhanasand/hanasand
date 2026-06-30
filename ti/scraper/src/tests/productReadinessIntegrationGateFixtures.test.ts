@@ -42,6 +42,7 @@ describe("product readiness integration gate fixtures", () => {
       ok: true,
       blockerCodes: []
     });
+    expect(fixture.coverage.failingRows).toEqual([]);
   });
 
   test("fails clear canaries for missing, stale, malformed, unsafe, and prompt-literal readiness", () => {
@@ -168,6 +169,21 @@ describe("product readiness integration gate fixtures", () => {
             contractId: "product_readiness_receipt_matrix",
             ok: false,
             unsafeFields: ["safeOutput.rawEvidenceExposed"]
+          })
+        ])
+      }
+    });
+    expect(byKind.get("missing_customer_workflow")).toMatchObject({
+      passed: true,
+      gate: { ok: false, decision: "hold" },
+      expectedBlockerCodes: ["missing_customer_workflow_ids", "missing_customer_workflow"],
+      actualBlockerCodes: expect.arrayContaining(["missing_customer_workflow_ids", "missing_customer_workflow"]),
+      coverage: {
+        failingRows: expect.arrayContaining([
+          expect.objectContaining({
+            capabilityId: "source_activation",
+            missingCustomerWorkflowIds: ["customerWorkflowIds"],
+            blockerCodes: expect.arrayContaining(["missing_customer_workflow_ids"])
           })
         ])
       }
