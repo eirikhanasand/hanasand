@@ -83,6 +83,47 @@ describe("organization shared DWM workflow", () => {
       expect(webhookResponse.status).toBe(201);
       expect(webhookPayload.destination.kind).toBe("discord");
       expect(webhookPayload.destination.organizationId).toBe(organizationId);
+      expect(webhookPayload.destination.url).toBeUndefined();
+      expect(webhookPayload.destination.endpointHint).toBe("https://discord.com/api/webhooks/123/...");
+
+      const updateWebhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks/${webhookPayload.destination.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: "SOC Discord delivery", status: "paused" })
+      }), options);
+      const updateWebhookPayload = await updateWebhookResponse.json() as any;
+      expect(updateWebhookResponse.status).toBe(200);
+      expect(updateWebhookPayload.destination).toMatchObject({
+        id: webhookPayload.destination.id,
+        name: "SOC Discord delivery",
+        status: "paused",
+        endpointHash: webhookPayload.destination.endpointHash
+      });
+      expect(updateWebhookPayload.destination.url).toBeUndefined();
+
+      const pausedListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks`), options);
+      const pausedListPayload = await pausedListResponse.json() as any;
+      expect(pausedListPayload.destinations[0]).toMatchObject({ id: webhookPayload.destination.id, status: "paused" });
+
+      const enableWebhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks/${webhookPayload.destination.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" })
+      }), options);
+      const enableWebhookPayload = await enableWebhookResponse.json() as any;
+      expect(enableWebhookPayload.destination).toMatchObject({ id: webhookPayload.destination.id, status: "active" });
+
+      const testWebhookResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/organizations/${organizationId}/webhooks/test`, {
+        method: "POST",
+        body: JSON.stringify({ webhookDestinationId: webhookPayload.destination.id, dryRun: true })
+      }), options);
+      const testWebhookPayload = await testWebhookResponse.json() as any;
+      expect(testWebhookResponse.status).toBe(200);
+      expect(testWebhookPayload).toMatchObject({ ok: true, dryRun: true });
+      expect(testWebhookPayload.delivery).toMatchObject({
+        organizationId,
+        webhookDestinationId: webhookPayload.destination.id,
+        status: "dry_run",
+        deliveryKind: "discord"
+      });
 
       const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
         method: "POST",

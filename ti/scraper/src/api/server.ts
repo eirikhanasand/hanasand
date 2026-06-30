@@ -13,7 +13,7 @@ import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseE
 import { contractIndex } from "./contractsRoute.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
-import { createOrganization, createOrganizationInvites, createWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook } from "./organizationRoutes.ts";
+import { createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
 import { publicChannelApplyPlan, publicChannelStatus } from "./publicChannelDispatch.ts";
 import { qualityPayload } from "./qualityRoute.ts";
 import { createRun, runResults, runStatus } from "./runRoutes.ts";
@@ -48,6 +48,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "GET") return listWebhookDestinations(url, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks$/.test(url.pathname) && request.method === "POST") return createWebhookDestination(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks\/[^/]+$/.test(url.pathname) && request.method === "PATCH") return updateWebhookDestination(request, options, url.pathname.split("/")[3], url.pathname.split("/")[5]);
+    if (/^\/v1\/organizations\/[^/]+\/webhooks\/[^/]+$/.test(url.pathname) && request.method === "DELETE") return disableWebhookDestination(request, options, url.pathname.split("/")[3], url.pathname.split("/")[5]);
     if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
     if (/^\/v1\/cases\/[^/]+\/action-replay-export$/.test(url.pathname) && request.method === "GET") return exportCaseActionReplay(url, options, url.pathname.split("/")[3], request);

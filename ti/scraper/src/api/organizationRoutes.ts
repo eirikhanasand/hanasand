@@ -63,6 +63,11 @@ export type WebhookDestination = {
   lastTestStatus?: "delivered" | "failed" | "dry_run";
 };
 
+type PublicWebhookDestination = Omit<WebhookDestination, "url"> & {
+  endpointHash: string;
+  endpointHint: string;
+};
+
 export function listOrganizations(_url: URL, options: ApiServerOptions): Response {
   const organizations = (options.store as any).listOrganizations?.() ?? [];
   return json({ organizations });
@@ -153,7 +158,7 @@ export async function createOrganizationInvites(request: Request, options: ApiSe
 export function listWebhookDestinations(_url: URL, options: ApiServerOptions, organizationId: string | undefined): Response {
   const organization = findOrganization(options, organizationId);
   if (!organization) return orgNotFound();
-  const destinations = organizationWebhookDestinations(options, organization.id);
+  const destinations = organizationWebhookDestinationRows(options, organization.id).map(publicWebhookDestination);
   return json({ organization, destinations });
 }
 
@@ -179,7 +184,44 @@ export async function createWebhookDestination(request: Request, options: ApiSer
     createdBy: String(body.createdBy ?? request.headers.get("x-actor-id") ?? "").trim() || undefined
   };
   (options.store as any).saveWebhookDestination(destination);
-  return json({ organization, destination }, 201);
+  return json({ organization, destination: publicWebhookDestination(destination) }, 201);
+}
+
+export async function updateWebhookDestination(request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
+  const organization = findOrganization(options, organizationId);
+  if (!organization) return orgNotFound();
+  const existing = findOrganizationWebhookDestination(options, organization.id, destinationId);
+  if (!existing) return webhookDestinationNotFound();
+
+  const body = await readJson<any>(request);
+  const nextUrl = body.url !== undefined || body.webhookUrl !== undefined
+    ? normalizeWebhookUrl(body.url ?? body.webhookUrl)
+    : existing.url;
+  if (!nextUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." } }, 400);
+
+  const generatedAt = nowIso();
+  const kind = body.kind === "discord" || body.kind === "generic" ? body.kind : inferWebhookKind(nextUrl);
+  const status = body.status === "paused" ? "paused" : body.status === "active" ? "active" : existing.status;
+  const destination: WebhookDestination = {
+    ...existing,
+    name: body.name !== undefined ? String(body.name || existing.name).trim() || existing.name : existing.name,
+    url: nextUrl,
+    kind,
+    status,
+    updatedAt: generatedAt
+  };
+  (options.store as any).saveWebhookDestination(destination);
+  return json({ organization, destination: publicWebhookDestination(destination) });
+}
+
+export async function disableWebhookDestination(_request: Request, options: ApiServerOptions, organizationId: string | undefined, destinationId: string | undefined): Promise<Response> {
+  const organization = findOrganization(options, organizationId);
+  if (!organization) return orgNotFound();
+  const existing = findOrganizationWebhookDestination(options, organization.id, destinationId);
+  if (!existing) return webhookDestinationNotFound();
+  const generatedAt = nowIso();
+  const destination = (options.store as any).saveWebhookDestination({ ...existing, status: "paused", updatedAt: generatedAt });
+  return json({ organization, destination: publicWebhookDestination(destination) });
 }
 
 export async function testOrganizationWebhook(request: Request, options: ApiServerOptions, organizationId: string | undefined): Promise<Response> {
@@ -255,13 +297,33 @@ export function resolveOrganizationScope(input: { body?: any; url?: URL; request
 
 export function organizationWebhookDestinations(options: ApiServerOptions, organizationId: string | undefined): WebhookDestination[] {
   if (!organizationId) return [];
-  return ((options.store as any).listWebhookDestinations?.() ?? [])
+  return organizationWebhookDestinationRows(options, organizationId)
     .filter((row: WebhookDestination) => row.organizationId === organizationId && row.status === "active");
 }
 
 export function findWebhookDestination(options: ApiServerOptions, id: string | undefined): WebhookDestination | undefined {
   if (!id) return undefined;
   return (options.store as any).getWebhookDestination?.(id) ?? ((options.store as any).listWebhookDestinations?.() ?? []).find((row: WebhookDestination) => row.id === id);
+}
+
+function organizationWebhookDestinationRows(options: ApiServerOptions, organizationId: string | undefined): WebhookDestination[] {
+  if (!organizationId) return [];
+  return ((options.store as any).listWebhookDestinations?.() ?? [])
+    .filter((row: WebhookDestination) => row.organizationId === organizationId);
+}
+
+function findOrganizationWebhookDestination(options: ApiServerOptions, organizationId: string, destinationId: string | undefined): WebhookDestination | undefined {
+  const destination = findWebhookDestination(options, destinationId);
+  return destination?.organizationId === organizationId ? destination : undefined;
+}
+
+function publicWebhookDestination(destination: WebhookDestination): PublicWebhookDestination {
+  const { url: _url, ...safeDestination } = destination;
+  return {
+    ...safeDestination,
+    endpointHash: stableId("endpoint", destination.url),
+    endpointHint: redactWebhookUrl(destination.url)
+  };
 }
 
 export function inferWebhookKind(url: string): WebhookKind {
@@ -331,6 +393,10 @@ function orgNotFound(): Response {
   return json({ error: { code: "organization_not_found", message: "Organization not found." } }, 404);
 }
 
+function webhookDestinationNotFound(): Response {
+  return json({ error: { code: "webhook_destination_not_found", message: "Webhook destination not found." } }, 404);
+}
+
 function normalizeSlug(value: unknown): string {
   const slug = String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || "organization";
@@ -359,6 +425,17 @@ function normalizeWebhookUrl(value: unknown): string | undefined {
     return url.toString();
   } catch {
     return undefined;
+  }
+}
+
+function redactWebhookUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const visiblePath = parts.length ? `/${parts.slice(0, Math.min(parts.length, 3)).join("/")}` : "";
+    return `${url.origin}${visiblePath}/...`;
+  } catch {
+    return "redacted_webhook_endpoint";
   }
 }
 
