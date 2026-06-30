@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Send, ShieldAlert, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldAlert, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
 
@@ -84,23 +84,49 @@ type PortalProps = {
     operations: OperationsSnapshot | null
     alerts: PortalAlert[]
     deliveries: DeliveryItem[]
+    dataHealth: DwmDataHealth
 }
 
-export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: PortalProps) {
+type DwmDataHealth = {
+    snapshot: DataHealthItem
+    operations: DataHealthItem
+    alerts: DataHealthItem
+    deliveries: DataHealthItem
+    usingFallbackAlerts: boolean
+}
+
+type DataHealthItem = {
+    state: 'live' | 'fallback' | 'missing' | 'error'
+    label: string
+    detail: string
+}
+
+type QueueFilter = 'active' | 'ready' | 'critical' | 'reviewing' | 'delivered' | 'muted' | 'all'
+
+export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth }: PortalProps) {
     const router = useRouter()
     const [selectedId, setSelectedId] = useState(alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [localCaseState, setLocalCaseState] = useLocalCaseState()
-    const selectedAlert = alerts.find(alert => alert.id === selectedId) ?? alerts[0]
+    const [queueFilter, setQueueFilter] = useState<QueueFilter>('active')
+    const [queueQuery, setQueueQuery] = useState('')
+    const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
+    const selectedAlert = queue.find(alert => alert.id === selectedId) ?? queue[0]
     const selectedDeliveries = selectedAlert ? deliveries.filter(delivery => delivery.alertId === selectedAlert.id) : []
-    const queue = useMemo(() => orderAlerts(alerts), [alerts])
     const criticalCount = alerts.filter(alert => alert.severity === 'critical').length
     const readyCount = alerts.filter(alert => alert.deliveryState === 'ready_to_send').length
+    const activeCount = alerts.filter(alert => alert.deliveryState !== 'muted' && alert.reviewState !== 'resolved').length
     const latestCaptures = operations?.latestCaptures ?? []
     const latestRunLabel = operations?.latestRun ? `${operations.latestRun.captureCount} captures` : 'No run yet'
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliveries.some(delivery => delivery.alertId === 'webhook_test' && (delivery.status === 'dry_run' || delivery.status === 'delivered')) ? 'Tested' : 'Not tested'
+
+    useEffect(() => {
+        if (queue.length && !queue.some(alert => alert.id === selectedId)) {
+            setSelectedId(queue[0].id)
+        }
+    }, [queue, selectedId])
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
@@ -162,6 +188,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusPill label='Cases' value={String(alerts.length)} tone={alerts.length ? 'warn' : 'neutral'} />
+                            <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Ready' value={String(readyCount)} tone={readyCount ? 'good' : 'neutral'} />
                             <StatusPill label='Watchlist' value={`${watchTermCount} terms`} tone={watchTermCount ? 'good' : 'warn'} />
@@ -175,15 +202,40 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
                     </div>
                 </div>
 
+                <DataHealthBanner dataHealth={dataHealth} />
+
                 <div className='grid min-h-[680px] xl:grid-cols-[320px_minmax(0,1fr)_360px]'>
                     <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
                                     <h3 className='text-sm font-semibold text-[#171a21]'>Case queue</h3>
-                                    <p className='mt-1 text-xs text-[#667085]'>{alerts.length ? 'Sorted by delivery state and severity.' : 'No matches for the saved watchlist yet.'}</p>
+                                    <p className='mt-1 text-xs text-[#667085]'>{alerts.length ? `${queue.length}/${alerts.length} visible after filters.` : 'No matches for the saved watchlist yet.'}</p>
                                 </div>
                                 <Radar className='h-4 w-4 text-[#3056d3]' />
+                            </div>
+                            <div className='mt-4 grid gap-2'>
+                                <label className='relative block'>
+                                    <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]' />
+                                    <input
+                                        value={queueQuery}
+                                        onChange={event => setQueueQuery(event.target.value)}
+                                        placeholder='Search company, actor, term, route'
+                                        className='h-10 w-full rounded-lg border border-[#d8dee9] bg-white pl-9 pr-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                                    />
+                                </label>
+                                <div className='grid grid-cols-2 gap-1.5'>
+                                    {queueFilters.map(filter => (
+                                        <button
+                                            key={filter.id}
+                                            type='button'
+                                            onClick={() => setQueueFilter(filter.id)}
+                                            className={`h-8 rounded-lg border px-2 text-xs font-semibold transition ${queueFilter === filter.id ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}
+                                        >
+                                            {filter.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                         <div className='max-h-[610px] overflow-auto p-2'>
@@ -209,7 +261,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries }: P
                                 </button>
                             )) : (
                                 <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm leading-6 text-[#596170]'>
-                                    No open cases. Monitoring is live, but the saved watchlist terms have not matched recent captures.
+                                    {alerts.length ? 'No cases match the current queue filter.' : 'No open cases. Monitoring is live, but the saved watchlist terms have not matched recent captures.'}
                                 </div>
                             )}
                         </div>
@@ -572,6 +624,61 @@ function DeliveryPanel({ alert, deliveries }: { alert?: PortalAlert, deliveries:
     )
 }
 
+const queueFilters: Array<{ id: QueueFilter, label: string }> = [
+    { id: 'active', label: 'Active' },
+    { id: 'ready', label: 'Ready' },
+    { id: 'critical', label: 'Critical' },
+    { id: 'reviewing', label: 'Reviewing' },
+    { id: 'delivered', label: 'Delivered' },
+    { id: 'muted', label: 'Muted' },
+    { id: 'all', label: 'All' },
+]
+
+function DataHealthBanner({ dataHealth }: { dataHealth: DwmDataHealth }) {
+    const items = [
+        { id: 'snapshot', item: dataHealth.snapshot },
+        { id: 'operations', item: dataHealth.operations },
+        { id: 'alerts', item: dataHealth.alerts },
+        { id: 'deliveries', item: dataHealth.deliveries },
+    ]
+    const hasProblem = items.some(({ item }) => item.state === 'error' || item.state === 'fallback' || item.state === 'missing') || dataHealth.usingFallbackAlerts
+    return (
+        <div className={`border-b px-4 py-3 ${hasProblem ? 'border-[#fde2d6] bg-[#fffaf7]' : 'border-[#e7f0e9] bg-[#f7fbf8]'}`}>
+            <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
+                <div className='min-w-0'>
+                    <p className={`text-xs font-semibold uppercase ${hasProblem ? 'text-[#b45309]' : 'text-[#147a3b]'}`}>
+                        {hasProblem ? 'Data source attention' : 'Live data connected'}
+                    </p>
+                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
+                        {dataHealth.usingFallbackAlerts
+                            ? 'Saved workflow alerts were empty, so the queue is using the current product snapshot.'
+                            : hasProblem
+                                ? 'One or more backing APIs are unavailable; actions still use the configured workflow routes.'
+                                : 'Snapshot, operations, alert workflow, and delivery APIs responded.'}
+                    </p>
+                </div>
+                <div className='grid gap-2 sm:grid-cols-2 lg:min-w-[560px] lg:grid-cols-4'>
+                    {items.map(({ id, item }) => <DataHealthSegment key={id} item={item} />)}
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function DataHealthSegment({ item }: { item: DataHealthItem }) {
+    const tone = item.state === 'live'
+        ? 'border-[#d6e9de] bg-white text-[#147a3b]'
+        : item.state === 'error'
+            ? 'border-[#fde2d6] bg-white text-[#9a3412]'
+            : 'border-[#ffe6bd] bg-white text-[#b45309]'
+    return (
+        <div className={`min-w-0 rounded-lg border px-3 py-2 ${tone}`}>
+            <p className='truncate text-xs font-semibold' title={item.label}>{item.label}</p>
+            <p className='mt-1 truncate text-[11px] text-[#667085]' title={item.detail}>{item.detail}</p>
+        </div>
+    )
+}
+
 function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -671,13 +778,16 @@ function fallbackRoutingContext(alert: PortalAlert): NonNullable<PortalAlert['ro
 function shortTime(value: string) {
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return value
-    return new Intl.DateTimeFormat('en', {
+    const parts = new Intl.DateTimeFormat('en', {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'Europe/Oslo',
-    }).format(date)
+        hourCycle: 'h23',
+    }).formatToParts(date)
+    const byType = new Map(parts.map(part => [part.type, part.value]))
+    return `${byType.get('month')} ${byType.get('day')}, ${byType.get('hour')}:${byType.get('minute')}`
 }
 
 function WorkTile({ title, body, state }: { title: string, body: string, state: 'active' | 'pending' }) {
@@ -752,6 +862,36 @@ function orderAlerts(alerts: PortalAlert[]) {
         const severityDelta = (severityWeight[b.severity] ?? 0) - (severityWeight[a.severity] ?? 0)
         if (severityDelta) return severityDelta
         return String(b.firstSeenAt).localeCompare(String(a.firstSeenAt))
+    })
+}
+
+function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string) {
+    const normalizedQuery = query.trim().toLowerCase()
+    return alerts.filter(alert => {
+        const filterMatch = filter === 'all'
+            || (filter === 'active' && alert.deliveryState !== 'muted' && alert.reviewState !== 'resolved')
+            || (filter === 'ready' && alert.deliveryState === 'ready_to_send')
+            || (filter === 'critical' && alert.severity === 'critical')
+            || (filter === 'reviewing' && alert.reviewState === 'reviewing')
+            || (filter === 'delivered' && (alert.deliveryState === 'delivered' || Boolean(alert.deliveredAt)))
+            || (filter === 'muted' && (alert.deliveryState === 'muted' || alert.reviewState === 'false_positive'))
+        if (!filterMatch) return false
+        if (!normalizedQuery) return true
+        const haystack = [
+            alert.company,
+            alert.actor,
+            alert.matchedTerm.value,
+            alert.matchedTerm.kind,
+            alert.sourceFamily,
+            alert.artifactType,
+            alert.severity,
+            alert.reviewState,
+            alert.deliveryState,
+            alert.routingContext?.queue,
+            alert.routingContext?.urgency,
+            alert.claimSummary,
+        ].filter(Boolean).join(' ').toLowerCase()
+        return haystack.includes(normalizedQuery)
     })
 }
 

@@ -7,8 +7,19 @@ import { DwmAnalystPortal } from './dwm-analyst-portal'
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardDwmPage() {
-    const [snapshot, operations, savedAlerts, deliveries] = await Promise.all([loadDwmSnapshot(), loadDwmOperations(), loadDwmAlerts(), loadDwmDeliveries()])
+    const [snapshotResult, operationsResult, alertsResult, deliveriesResult] = await Promise.all([loadDwmSnapshot(), loadDwmOperations(), loadDwmAlerts(), loadDwmDeliveries()])
+    const snapshot = snapshotResult.data
+    const operations = operationsResult.data
+    const savedAlerts = alertsResult.data
+    const deliveries = deliveriesResult.data
     const alerts = savedAlerts.length ? savedAlerts : snapshot.alerts
+    const dataHealth = {
+        snapshot: snapshotResult,
+        operations: operationsResult,
+        alerts: alertsResult,
+        deliveries: deliveriesResult,
+        usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0
+    }
 
     return (
         <DashboardPage>
@@ -29,14 +40,19 @@ export default async function DashboardDwmPage() {
                 )}
             />
 
-            <DwmAnalystPortal snapshot={snapshot} operations={operations} alerts={alerts} deliveries={deliveries} />
+            <DwmAnalystPortal snapshot={snapshot} operations={operations} alerts={alerts} deliveries={deliveries} dataHealth={dataHealth} />
         </DashboardPage>
     )
 }
 
-async function loadDwmSnapshot(): Promise<DwmProductSnapshot> {
+async function loadDwmSnapshot(): Promise<LoadResult<DwmProductSnapshot>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return demoDwmProductSnapshot(new Date().toISOString())
+    if (!base) return {
+        data: demoDwmProductSnapshot(new Date().toISOString()),
+        state: 'fallback',
+        label: 'Demo fallback',
+        detail: 'TI_SCRAPER_API_BASE is not configured for the dashboard process.'
+    }
 
     try {
         const target = new URL('/v1/dwm/product', base)
@@ -44,58 +60,81 @@ async function loadDwmSnapshot(): Promise<DwmProductSnapshot> {
         target.searchParams.set('demo', 'false')
 
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
-        if (!response.ok) return demoDwmProductSnapshot(new Date().toISOString())
-        return await response.json() as DwmProductSnapshot
-    } catch {
-        return demoDwmProductSnapshot(new Date().toISOString())
+        if (!response.ok) return {
+            data: demoDwmProductSnapshot(new Date().toISOString()),
+            state: 'fallback',
+            label: `Snapshot ${response.status}`,
+            detail: 'Live DWM product snapshot was unavailable; showing the safe bundled fallback.'
+        }
+        return {
+            data: await response.json() as DwmProductSnapshot,
+            state: 'live',
+            label: 'Live snapshot',
+            detail: '/v1/dwm/product responded.'
+        }
+    } catch (error) {
+        return {
+            data: demoDwmProductSnapshot(new Date().toISOString()),
+            state: 'error',
+            label: 'Snapshot error',
+            detail: error instanceof Error ? error.message : 'Live DWM product snapshot failed.'
+        }
     }
 }
 
-async function loadDwmOperations(): Promise<DwmOperationsSnapshot | null> {
+async function loadDwmOperations(): Promise<LoadResult<DwmOperationsSnapshot | null>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return null
+    if (!base) return { data: null, state: 'missing', label: 'Operations offline', detail: 'No scraper API base configured.' }
 
     try {
         const target = new URL('/v1/dwm/operations', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return null
-        return await response.json() as DwmOperationsSnapshot
-    } catch {
-        return null
+        if (!response.ok) return { data: null, state: 'error', label: `Operations ${response.status}`, detail: '/v1/dwm/operations did not return a usable response.' }
+        return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Operations live', detail: '/v1/dwm/operations responded.' }
+    } catch (error) {
+        return { data: null, state: 'error', label: 'Operations error', detail: error instanceof Error ? error.message : 'Operations API failed.' }
     }
 }
 
-async function loadDwmAlerts(): Promise<DwmAlertInboxItem[]> {
+async function loadDwmAlerts(): Promise<LoadResult<DwmAlertInboxItem[]>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return []
+    if (!base) return { data: [], state: 'missing', label: 'Saved alerts offline', detail: 'No scraper API base configured.' }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return []
+        if (!response.ok) return { data: [], state: 'error', label: `Alerts ${response.status}`, detail: '/v1/dwm/alerts did not return saved workflow alerts.' }
         const payload = await response.json() as { alerts?: DwmAlertInboxItem[] }
-        return payload.alerts || []
-    } catch {
-        return []
+        return { data: payload.alerts || [], state: 'live', label: 'Alerts live', detail: `${(payload.alerts || []).length} saved workflow alert(s).` }
+    } catch (error) {
+        return { data: [], state: 'error', label: 'Alerts error', detail: error instanceof Error ? error.message : 'Saved alert API failed.' }
     }
 }
 
-async function loadDwmDeliveries(): Promise<DwmDeliveryItem[]> {
+async function loadDwmDeliveries(): Promise<LoadResult<DwmDeliveryItem[]>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return []
+    if (!base) return { data: [], state: 'missing', label: 'Deliveries offline', detail: 'No scraper API base configured.' }
 
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return []
+        if (!response.ok) return { data: [], state: 'error', label: `Deliveries ${response.status}`, detail: '/v1/dwm/webhooks/deliveries did not return delivery attempts.' }
         const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
-        return (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
-    } catch {
-        return []
+        const deliveries = (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
+        return { data: deliveries, state: 'live', label: 'Deliveries live', detail: `${deliveries.length} delivery attempt(s).` }
+    } catch (error) {
+        return { data: [], state: 'error', label: 'Deliveries error', detail: error instanceof Error ? error.message : 'Webhook deliveries API failed.' }
     }
+}
+
+type LoadResult<T> = {
+    data: T
+    state: 'live' | 'fallback' | 'missing' | 'error'
+    label: string
+    detail: string
 }
 
 type DwmOperationsSnapshot = {
