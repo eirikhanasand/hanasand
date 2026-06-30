@@ -2173,10 +2173,15 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Related alerts/cases</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.sourceProvenance.length} provenance row{actionability.sourceProvenance.length === 1 ? '' : 's'} · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery blocked'}
+                        {records.length} linked record{records.length === 1 ? '' : 's'} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {actionability.webhookDeliveryHandoff.ready ? 'delivery ready' : 'delivery blocked'}
                     </p>
                 </div>
-                <CopyPayloadButton label='Related alerts and cases' payload={{ alerts: actionability.relatedAlerts, cases: actionability.relatedCases, blockers: actionability.readiness.blockers }} />
+                <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span data-ti-case-replay-readiness='true' className='inline-flex'>
+                        <CopyPayloadButton label='Case replay readiness' payload={actionability.caseReplayReadiness} />
+                    </span>
+                    <CopyPayloadButton label='Related alerts and cases' payload={{ alerts: actionability.relatedAlerts, cases: actionability.relatedCases, caseReplayReadiness: actionability.caseReplayReadiness, blockers: actionability.readiness.blockers }} />
+                </div>
             </div>
             {records.length ? (
                 <div className='mt-3 grid gap-2'>
@@ -2206,10 +2211,13 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                         <div className='min-w-0'>
                             <p className='text-xs font-semibold uppercase text-[#8a5a00]'>Case review intake</p>
                             <p className='mt-1 wrap-break-word text-xs leading-5 text-[#8a5a00]'>
-                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {caseIntake.summary.alerts} alert{caseIntake.summary.alerts === 1 ? '' : 's'} · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
+                                {caseIntake.summary.total} candidate{caseIntake.summary.total === 1 ? '' : 's'} for {query} · {actionability.caseReplayReadiness.summary.ready} replay-ready · {caseIntake.summary.captures} capture{caseIntake.summary.captures === 1 ? '' : 's'}
                             </p>
                         </div>
-                        <CopyPayloadButton label='Case review intake' payload={caseIntake} />
+                        <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                            <CopyPayloadButton label='Case replay readiness' payload={actionability.caseReplayReadiness} />
+                            <CopyPayloadButton label='Case review intake' payload={caseIntake} />
+                        </div>
                     </div>
                     <div className='mt-2 grid min-w-0 gap-2'>
                         {caseIntake.items.slice(0, 3).map(item => (
@@ -2225,7 +2233,10 @@ function RelatedRecordsPanel({ actionability, query }: { actionability: TiAction
                                 </div>
                                 <div className='mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2'>
                                     <p className='min-w-0 break-all font-mono text-[11px] text-[#8a5a00] dark:text-[#ffd77a]'>{item.casePaths[0] || item.route}</p>
-                                    <CopyPayloadButton label='Case candidate' payload={caseReviewCandidatePayloadFor(item, query)} />
+                                    <div className='flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                                        <CopyPayloadButton label='Replay export' payload={caseReplayCandidatePayloadFor(item, actionability)} />
+                                        <CopyPayloadButton label='Case candidate' payload={caseReviewCandidatePayloadFor(item, query)} />
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -2247,6 +2258,11 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
         || (relatedCase?.path ? item.casePaths.includes(relatedCase.path) : false)
     )
     const deliveryBlockers = alert?.deliveryReadinessContext?.blockerCodes ?? []
+    const replayRows = actionability.caseReplayReadiness.rows.filter(row =>
+        row.alertIds.includes(record.recordId)
+        || row.caseId === record.recordId
+        || row.provenance.casePaths.includes(record.route ?? '')
+    )
     return {
         schemaVersion: 'ti.public_actor.related_record_handoff.v1',
         source: 'public-ti',
@@ -2262,6 +2278,12 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
         alert,
         case: relatedCase,
         caseReviewIntake: matchingCaseItems,
+        caseReplayReadiness: {
+            schemaVersion: actionability.caseReplayReadiness.schemaVersion,
+            routeTemplate: actionability.caseReplayReadiness.routeTemplate,
+            rows: replayRows,
+            safeOutput: actionability.caseReplayReadiness.safeOutput,
+        },
         sourceProvenance: actionability.sourceProvenance,
         readiness: {
             publicTi: actionability.readiness,
@@ -2288,6 +2310,21 @@ function relatedRecordHandoffPayloadFor(record: RelatedRecordRow, actionability:
             sourceEnrichment: actionability.exportPayloads.enrichment.backedRoute,
             webhookDelivery: actionability.webhookDeliveryHandoff.backedRoute,
         },
+    }
+}
+
+function caseReplayCandidatePayloadFor(item: CaseReviewIntakeItem, actionability: TiActionabilityModel) {
+    const replayRow = actionability.caseReplayReadiness.rows.find(row => row.caseReviewIntakeItemId === item.id)
+    return {
+        schemaVersion: 'ti.public_actor.case_replay_candidate_export.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: actionability.caseReplayReadiness.query,
+        generatedAt: actionability.caseReplayReadiness.generatedAt,
+        routeTemplate: actionability.caseReplayReadiness.routeTemplate,
+        candidate: item,
+        replayReadiness: replayRow,
+        safeOutput: actionability.caseReplayReadiness.safeOutput,
     }
 }
 

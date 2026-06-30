@@ -28,6 +28,7 @@ export type TiActionabilityModel = {
     actorEnrichmentConsumerReadiness: PublicTiActorEnrichmentConsumerReadinessReceipt
     alertGenerationReadiness: PublicTiAlertGenerationReadinessExport
     caseReviewIntake: PublicTiCaseReviewIntake
+    caseReplayReadiness: PublicTiCaseReplayReadinessExport
     watchlistRelevance: WatchlistRelevanceContract
     orgRelevance: PublicTiOrgRelevanceProof
     createAlertHandoff: WorkflowHandoffContract
@@ -652,6 +653,58 @@ export type PublicTiCaseReviewIntakeItem = {
     nextAction: string
 }
 
+export type PublicTiCaseReplayReadinessExport = {
+    schemaVersion: 'ti.public_actor.case_action_replay_readiness.v1'
+    sourceContractSchemaVersion: 'dwm.case_action_replay_export.v1'
+    query: string
+    generatedAt: string
+    routeTemplate: '/v1/cases/:caseId/action-replay-export'
+    rows: PublicTiCaseReplayReadinessRow[]
+    summary: {
+        total: number
+        ready: number
+        blocked: number
+        replayable: boolean
+        alertIds: number
+        caseRoutes: number
+        captures: number
+    }
+    safeOutput: {
+        metadataOnly: true
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+        liveMutation: false
+    }
+}
+
+export type PublicTiCaseReplayReadinessRow = {
+    schemaVersion: 'ti.public_actor.case_action_replay_readiness_row.v1'
+    id: string
+    caseReviewIntakeItemId: string
+    evidenceRowId: string
+    title: string
+    ready: boolean
+    state: 'ready' | 'blocked'
+    exportRoute?: string
+    caseId?: string
+    alertIds: string[]
+    captureIds: string[]
+    sourceIds: string[]
+    blockerCodes: Array<'missing_case_route' | 'missing_alert' | 'missing_capture' | 'stale_provenance' | 'missing_source_provenance'>
+    blockedBy: PublicTiReadinessBlocker[]
+    replayPlan: {
+        actionId: 'alertReplay'
+        eventAction: 'handoff_alert_replay'
+        replayable: boolean
+        metadataOnly: true
+    }
+    provenance: {
+        casePaths: string[]
+        watchlistTerms: string[]
+        reasons: string[]
+    }
+}
+
 type WatchlistCandidate = {
     kind: 'company' | 'domain' | 'vendor'
     value: string
@@ -847,6 +900,10 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         evidencePriority,
         readiness,
     })
+    const caseReplayReadiness = buildPublicTiCaseReplayReadiness({
+        result,
+        caseReviewIntake,
+    })
     const actionPayloads = buildPublicTiActionPayloads({
         result,
         actor,
@@ -861,6 +918,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         actorEnrichmentConsumerReadiness,
         alertGenerationReadiness,
         caseReviewIntake,
+        caseReplayReadiness,
     })
 
     return {
@@ -889,6 +947,7 @@ export function buildTiActionability(result: TiSearchResponse, actor: TiActorInt
         actorEnrichmentConsumerReadiness,
         alertGenerationReadiness,
         caseReviewIntake,
+        caseReplayReadiness,
         watchlistRelevance: buildWatchlistRelevance({
             state: matches.length ? 'backed_matches' : candidates.length ? 'candidate_handoff' : 'missing_terms',
             endpoint: watchlistEndpoint,
@@ -1063,6 +1122,7 @@ function buildPublicTiActionPayloads(input: {
     actorEnrichmentConsumerReadiness: PublicTiActorEnrichmentConsumerReadinessReceipt
     alertGenerationReadiness: PublicTiAlertGenerationReadinessExport
     caseReviewIntake: PublicTiCaseReviewIntake
+    caseReplayReadiness: PublicTiCaseReplayReadinessExport
 }): PublicTiActionPayloadSet {
     const actorId = actorIdForQuery(input.result.query)
     const sourceIds = uniqueStrings(input.sourceProvenance.map(source => source.sourceId))
@@ -1125,6 +1185,7 @@ function buildPublicTiActionPayloads(input: {
                     ...input.exportPayloads.case.body,
                     ...commonContext,
                     caseReviewIntake: input.caseReviewIntake,
+                    caseReplayReadiness: input.caseReplayReadiness,
                     source: 'public_ti',
                     noMutation: true,
                 },
@@ -1162,6 +1223,7 @@ function buildPublicTiActionPayloads(input: {
                     actorEnrichmentConsumerReadiness: input.actorEnrichmentConsumerReadiness,
                     alertGenerationReadiness: input.alertGenerationReadiness,
                     caseReviewIntake: input.caseReviewIntake,
+                    caseReplayReadiness: input.caseReplayReadiness,
                     sourceEnrichmentIntake: input.sourceEnrichmentIntake,
                     actionRoutes: {
                         watchlist: '/v1/dwm/watchlists',
@@ -2573,6 +2635,91 @@ function buildPublicTiCaseReviewIntake(input: {
             captures: uniqueStrings(items.flatMap(item => item.captureIds)).length,
         },
     }
+}
+
+function buildPublicTiCaseReplayReadiness(input: {
+    result: TiSearchResponse
+    caseReviewIntake: PublicTiCaseReviewIntake
+}): PublicTiCaseReplayReadinessExport {
+    const rows = input.caseReviewIntake.items.map((item): PublicTiCaseReplayReadinessRow => {
+        const casePath = item.casePaths[0]
+        const alertId = item.alertIds[0]
+        const caseId = caseIdFromPath(casePath)
+        const blockerCodes = uniqueStrings([
+            caseId ? undefined : 'missing_case_route',
+            alertId ? undefined : 'missing_alert',
+            item.captureIds.length ? undefined : 'missing_capture',
+            item.blockedBy.some(blocker => blocker.code === 'stale_provenance') ? 'stale_provenance' : undefined,
+            item.sourceIds.length ? undefined : 'missing_source_provenance',
+        ].filter((value): value is PublicTiCaseReplayReadinessRow['blockerCodes'][number] => Boolean(value))) as PublicTiCaseReplayReadinessRow['blockerCodes']
+        const ready = blockerCodes.length === 0
+        return {
+            schemaVersion: 'ti.public_actor.case_action_replay_readiness_row.v1',
+            id: `case-replay:${item.id}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
+            caseReviewIntakeItemId: item.id,
+            evidenceRowId: item.evidenceRowId,
+            title: item.title,
+            ready,
+            state: ready ? 'ready' : 'blocked',
+            exportRoute: caseId ? caseActionReplayRoute(caseId, alertId) : undefined,
+            caseId,
+            alertIds: item.alertIds,
+            captureIds: item.captureIds,
+            sourceIds: item.sourceIds,
+            blockerCodes,
+            blockedBy: item.blockedBy,
+            replayPlan: {
+                actionId: 'alertReplay',
+                eventAction: 'handoff_alert_replay',
+                replayable: ready,
+                metadataOnly: true,
+            },
+            provenance: {
+                casePaths: item.casePaths,
+                watchlistTerms: item.watchlistTerms,
+                reasons: item.reasons,
+            },
+        }
+    })
+
+    return {
+        schemaVersion: 'ti.public_actor.case_action_replay_readiness.v1',
+        sourceContractSchemaVersion: 'dwm.case_action_replay_export.v1',
+        query: input.result.query,
+        generatedAt: input.result.generatedAt,
+        routeTemplate: '/v1/cases/:caseId/action-replay-export',
+        rows,
+        summary: {
+            total: rows.length,
+            ready: rows.filter(row => row.ready).length,
+            blocked: rows.filter(row => !row.ready).length,
+            replayable: rows.some(row => row.ready),
+            alertIds: uniqueStrings(rows.flatMap(row => row.alertIds)).length,
+            caseRoutes: uniqueStrings(rows.flatMap(row => row.provenance.casePaths)).length,
+            captures: uniqueStrings(rows.flatMap(row => row.captureIds)).length,
+        },
+        safeOutput: {
+            metadataOnly: true,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+            liveMutation: false,
+        },
+    }
+}
+
+function caseIdFromPath(path?: string) {
+    if (!path) return undefined
+    const match = path.match(/\/v1\/cases\/([^/?#]+)/)
+    return match?.[1]
+}
+
+function caseActionReplayRoute(caseId: string, alertId?: string) {
+    const params = new URLSearchParams({
+        actionId: 'alertReplay',
+        eventAction: 'handoff_alert_replay',
+    })
+    if (alertId) params.set('alertId', alertId)
+    return `/v1/cases/${encodeURIComponent(caseId)}/action-replay-export?${params.toString()}`
 }
 
 function caseIntakeBlockers(row: PublicTiEvidencePriority, readiness: PublicTiReadinessContract): PublicTiReadinessBlocker[] {
