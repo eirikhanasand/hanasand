@@ -1397,8 +1397,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({ id: 'open_case', label: 'Open selected case', detail: backedCaseHref, tone: 'ready', href: backedCaseHref })
         rows.push({
             id: 'export_case_evidence',
-            label: 'Export case evidence',
-            detail: `GET ${caseExportHref(backedCaseHref)}.`,
+            label: 'Replay export',
+            detail: `GET ${caseExportHref(backedCaseHref)} returns case evidence, timeline, delivery rows, and next-action payloads for audit replay.`,
             tone: 'ready',
             href: caseExportHref(backedCaseHref),
         })
@@ -2322,7 +2322,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
                             <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                                Case export
+                                Replay export
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
                         </>
@@ -3092,6 +3092,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
     const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
     const caseRecord = detail?.case
     const workflowEvents = [...(caseRecord?.workflowEvents || []), ...(detail?.alertContext?.workflowEvents || [])]
+    const replayExport = caseReplayExportState(item, caseDetail)
     const ownerEvents = workflowEvents
         .filter(event => event.toOwner || event.fromOwner || event.action === 'assign')
         .slice(-4)
@@ -3169,6 +3170,31 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             {actionMessage?.text || 'No action has run in this console session.'}
                         </p>
                         <p className='mt-2 text-xs text-[#667085]'>Refresh: {refreshText}</p>
+                    </ContinuityBlock>
+                    <ContinuityBlock title='Replay export'>
+                        <div data-case-replay-export-state={replayExport.status} className='grid gap-2'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <span className={workflowStatusClass(replayExport.status)}>{label(replayExport.status)}</span>
+                                <span className='text-xs text-[#667085]'>{replayExport.detail}</span>
+                            </div>
+                            <div className='grid gap-1 text-xs text-[#667085] sm:grid-cols-2 xl:grid-cols-1'>
+                                <p><span className='font-semibold text-[#475467]'>Events:</span> {replayExport.workflowEventCount}</p>
+                                <p><span className='font-semibold text-[#475467]'>Timeline:</span> {replayExport.timelineCount}</p>
+                                <p><span className='font-semibold text-[#475467]'>Delivery rows:</span> {replayExport.deliveryCount}</p>
+                                <p><span className='font-semibold text-[#475467]'>Action payloads:</span> {replayExport.nextActionCount}</p>
+                            </div>
+                            {replayExport.href ? (
+                                <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                                    <span className='truncate'>Open replay export</span>
+                                    <ExternalLink className='h-3.5 w-3.5 shrink-0' />
+                                </Link>
+                            ) : null}
+                            {replayExport.blockers.length ? (
+                                <div className='flex flex-wrap gap-2'>
+                                    {replayExport.blockers.map(blocker => <span key={blocker} className={workflowStatusClass('blocked')}>{label(blocker)}</span>)}
+                                </div>
+                            ) : null}
+                        </div>
                     </ContinuityBlock>
                     <ContinuityBlock title='Next allowed actions'>
                         <div className='flex flex-wrap gap-2'>
@@ -3485,6 +3511,49 @@ function caseExportHref(caseDetailHref: string) {
     params.set('evidence', 'true')
     params.set('nextActionPayloads', 'true')
     return `${path.replace(/\/$/, '')}/export?${params.toString()}`
+}
+
+function caseReplayExportState(item: WorkbenchCase, caseDetail: CaseDetailState | undefined): {
+    status: WorkbenchWorkflowStep['status']
+    href?: string
+    detail: string
+    blockers: string[]
+    workflowEventCount: number
+    timelineCount: number
+    deliveryCount: number
+    nextActionCount: number
+} {
+    const href = item.caseDetailHref ? caseExportHref(item.caseDetailHref) : undefined
+    const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
+    const workflowEventCount = detail ? (detail.case?.workflowEvents || []).length + (detail.alertContext?.workflowEvents || []).length : 0
+    const timelineCount = detail?.timeline?.length || 0
+    const deliveryCount = (detail?.deliveries?.length || 0) + (detail?.deliveryContext?.latestDelivery ? 1 : 0)
+    const nextActionCount = detail?.nextAllowedActions?.length || detail?.nextActions?.length || 0
+    const blockers = [
+        href ? '' : 'missing_case_detail_route',
+        detail ? '' : 'case_detail_not_loaded',
+        detail && !workflowEventCount && !timelineCount ? 'missing_replay_timeline' : '',
+        detail && !nextActionCount ? 'missing_next_action_payloads' : '',
+    ].filter(Boolean)
+    const status: WorkbenchWorkflowStep['status'] = !href || blockers.includes('missing_replay_timeline')
+        ? 'blocked'
+        : blockers.length
+            ? 'needs_action'
+            : 'ready'
+    const routeText = href ? `GET ${href}` : 'Case replay export requires a backed /api/cases/:id route.'
+    const detailText = detail
+        ? `${routeText}; ${workflowEventCount} workflow event${workflowEventCount === 1 ? '' : 's'}, ${timelineCount} timeline row${timelineCount === 1 ? '' : 's'}, ${deliveryCount} delivery row${deliveryCount === 1 ? '' : 's'}.`
+        : routeText
+    return {
+        status,
+        href,
+        detail: detailText,
+        blockers,
+        workflowEventCount,
+        timelineCount,
+        deliveryCount,
+        nextActionCount,
+    }
 }
 
 function watchlistLedgerHref(orgContext: WorkbenchOrgContext | undefined) {
