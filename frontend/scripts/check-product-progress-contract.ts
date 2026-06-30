@@ -138,6 +138,26 @@ const sourceProxy = {
             }],
             safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
         },
+        productReadinessEndToEndWorkflowPacket: {
+            schemaVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
+            state: 'ready',
+            lastVerifiedAt: generatedAt,
+            requiredStepIds: ['organization_access', 'shared_watchlist', 'source_coverage', 'matched_alert', 'analyst_case', 'webhook_destination', 'delivery_outcome', 'support_audit'],
+            steps: [
+                { stepId: 'organization_access', state: 'ready', consumerLane: 'org', ownerLane: 'org', route: '/v1/organizations', typedFields: [{ alias: 'orgId', sourceField: 'organizationId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['organization_lifecycle'], schemaIds: ['organization.lifecycle_readiness.v1'], receiptSchemaIds: [] } },
+                { stepId: 'shared_watchlist', state: 'ready', consumerLane: 'org', ownerLane: 'org', route: '/v1/organizations', typedFields: [{ alias: 'watchlistId', sourceField: 'watchlistId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['shared_watchlist_alert_export'], schemaIds: ['organization.watchlist_alert_readiness.v1'], receiptSchemaIds: [] } },
+                { stepId: 'source_coverage', state: 'ready', consumerLane: 'publicTI', ownerLane: 'publicTI', route: '/ti', typedFields: [{ alias: 'sourceCoverage', sourceField: 'sourceCoverageState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['source_provenance_receipts'], schemaIds: ['ti.source_provenance.readiness.v1'], receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'] } },
+                { stepId: 'matched_alert', state: 'ready', consumerLane: 'alert', ownerLane: 'alert', route: '/v1/dwm/alerts/generation-readiness', typedFields: [{ alias: 'alertId', sourceField: 'alertId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['org_scoped_alert_case_workflow'], schemaIds: ['organization.watchlist_alert_readiness.v1'], receiptSchemaIds: [] } },
+                { stepId: 'analyst_case', state: 'ready', consumerLane: 'case', ownerLane: 'case', route: '/v1/dwm/cases', typedFields: [{ alias: 'caseId', sourceField: 'caseId', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['org_scoped_alert_case_workflow'], schemaIds: ['case.workflow_state.v1'], receiptSchemaIds: [] } },
+                { stepId: 'webhook_destination', state: 'ready', consumerLane: 'webhook', ownerLane: 'webhook', route: '/v1/dwm/webhooks/deliver', typedFields: [{ alias: 'destinationDeliveryState', sourceField: 'destinationDeliveryState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['webhook_delivery_receipts'], schemaIds: ['dwm.webhook.destination_readiness.v1'], receiptSchemaIds: ['dwm.webhook_event_contract.v1'] } },
+                { stepId: 'delivery_outcome', state: 'ready', consumerLane: 'webhook', ownerLane: 'webhook', route: '/v1/dwm/webhooks/deliver', typedFields: [{ alias: 'deliveryStatus', sourceField: 'destinationDeliveryState', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['webhook_delivery_receipts'], schemaIds: ['dwm.webhook.delivery_outcome.v1'], receiptSchemaIds: ['dwm.webhook_event_contract.v1'] } },
+                { stepId: 'support_audit', state: 'ready', consumerLane: 'helpdesk', ownerLane: 'support', route: '/api/admin/support/readiness', typedFields: [{ alias: 'supportAuditStatus', sourceField: 'supportAction.status', present: true }], missingTypedFields: [], blockerCodes: [], proofLink: { route: '/v1/contracts', contractIds: ['support_action_receipts'], schemaIds: ['support.audit.readiness.v1'], receiptSchemaIds: ['support.audit.export_proof.v1'] } },
+            ],
+            typedFields: ['orgId', 'watchlistId', 'sourceCoverage', 'alertId', 'caseId', 'destinationDeliveryState', 'deliveryStatus', 'supportAuditStatus'],
+            missingTypedFields: [],
+            blockerCodes: [],
+            consumerGuidanceSchemaVersion: 'hanasand.product_readiness.consumer_guidance.v1',
+        },
     },
 }
 
@@ -212,6 +232,7 @@ assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.schemaVersion,
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.safeOutput?.metadataOnly, true)
 assert.equal(partialPayload.sourceProxy?.contracts?.productReadinessReceiptMatrix?.schemaVersion, 'hanasand.product_readiness.receipt_matrix.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.productReadinessReceiptMatrix?.aggregateSchemaVersion, 'hanasand.product_readiness.v1')
+assert.equal(partialPayload.sourceProxy?.contracts?.productReadinessEndToEndWorkflowPacket?.schemaVersion, 'hanasand.product_readiness.end_to_end_workflow_packet.v1')
 assert.equal(partialPayload.alertGeneration?.schemaVersion, 'dwm.alert_generation_readiness.v1')
 assert.equal(partialPayload.alertGeneration?.candidateCount, 3)
 assert.equal(partialPayload.alertGeneration?.generationEvidenceWindowReady, true)
@@ -388,6 +409,11 @@ assert.equal(partialExternal.sourceGrowth?.receiptMatrixReady, true)
 assert.equal(partialExternal.sourceGrowth?.receiptMatrixSafe, true)
 assert.equal(partialExternal.sourceGrowth?.receiptMatrixRows, 1)
 assert.equal(partialExternal.sourceGrowth?.receiptMatrixBlockedRows, 1)
+assert.equal(partialExternal.sourceGrowth?.endToEndWorkflow?.schemaVersion, 'hanasand.product_readiness.end_to_end_workflow_packet.v1')
+assert.equal(partialExternal.sourceGrowth?.endToEndWorkflow?.status, 'ready')
+assert.equal(partialExternal.sourceGrowth?.endToEndWorkflow?.stepCount, 8)
+assert.equal(partialExternal.sourceGrowth?.endToEndWorkflow?.readyStepCount, 8)
+assert.equal(partialExternal.sourceGrowth?.endToEndWorkflow?.missingFieldCount, 0)
 assert.equal(partialExternal.sourceGrowth?.sourceFamilyCount, 2)
 assert.equal(partialExternal.sourceGrowth?.parserSourceFamilyCount, 2)
 assert.ok(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('ti.api_contract_schema_lookup.v1'), 'Source proof contract stack must name safe schema lookup.')
@@ -399,6 +425,20 @@ assert.equal(partialExternal.sourceGrowth?.workerLastRunAt, generatedAt)
 assert.equal(partialExternal.alertGeneration?.status, 'ready')
 assert.equal(partialExternal.alertGeneration?.candidateCount, 3)
 assert.equal(partialExternal.alertGeneration?.unavailableReason, undefined)
+const missingWorkflowPacketExternal = buildProductProgressExternalState({
+    ...partialPayload,
+    sourceProxy: {
+        ...sourceProxy,
+        contracts: {
+            ...sourceProxy.contracts,
+            productReadinessEndToEndWorkflowPacket: undefined,
+        },
+    },
+}, { checkedAt: generatedAt })
+assert.equal(missingWorkflowPacketExternal.sourceGrowth?.status, 'needs_action')
+assert.equal(missingWorkflowPacketExternal.sourceGrowth?.endToEndWorkflow?.status, 'blocked')
+assert.equal(missingWorkflowPacketExternal.sourceGrowth?.endToEndWorkflow?.missingFieldCount, 1)
+assert.equal(missingWorkflowPacketExternal.sourceGrowth?.endToEndWorkflow?.blockerCodes?.includes('missing_end_to_end_workflow_packet'), true)
 const zeroCandidateExternal = buildProductProgressExternalState({
     ...partialPayload,
     alertGeneration: {
@@ -442,6 +482,10 @@ for (const row of partialContext.readiness.productReadiness) {
 }
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dashboard_evidence')?.href, '/dashboard')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.href, '/dashboard/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.href, '/dashboard/ti/sources')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.status, 'ready')
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowStepCount, 8)
+assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowReadyStepCount, 8)
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.href, '/dashboard/dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.href, '/dashboard/automations?setup=dwm')
 assert.equal(partialContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.href, '/dashboard/dwm')
@@ -740,6 +784,9 @@ assert.equal(degradedContext.readiness.fullChainReady, false)
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'entitlement_readiness')?.status, 'blocked')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_coverage')?.status, 'blocked')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.status, 'needs_action')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.status, 'blocked')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.operatorAction, 'Open workflow blockers')
+assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.unavailableReason, 'missing_end_to_end_workflow_packet')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dashboard_alert')?.status, 'blocked')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'dwm_product_snapshot')?.status, 'unavailable')
 assert.equal(degradedContext.readiness.productReadiness.find(item => item.id === 'webhook_delivery')?.status, 'needs_action')
@@ -812,6 +859,10 @@ assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id ==
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.receiptMatrixRows, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.receiptMatrixBlockedRows, 1)
 assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.actions?.some(action => action.id === 'preview_source_apply_plan'))
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.status, 'ready')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.backendProofContractVersion, 'hanasand.product_readiness.end_to_end_workflow_packet.v1')
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.endToEndWorkflowStepCount, 8)
+assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'end_to_end_workflow')?.actions?.some(action => action.id === 'open_alert_queue'))
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.activeDestinationCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryReadyCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.latestDeliveryAt, generatedAt)
@@ -995,7 +1046,7 @@ assert.ok(workbenchSource.includes('selected.kind === \'alert_readiness\''), 'Al
 assert.ok(workbenchSource.includes('inspect_generated_alerts'), 'Alert readiness should expose the persisted DWM alerts API.')
 assert.ok(workbenchSource.includes('GET /api/dwm/alerts returns the persisted alert queue'), 'Generated alert action should name the backed alerts API contract.')
 assert.ok(workbenchSource.includes('open_dwm_alert_workflow'), 'Alert readiness should deep-link to the DWM workflow for watchlist/rebuild work.')
-assert.ok(workbenchSource.includes('\'dashboard_evidence\', \'analyst_workflow\', \'source_inventory_probe\''), 'Operator action rail should prioritize blocked analyst workflow readiness after dashboard evidence.')
+assert.ok(workbenchSource.includes('\'dashboard_evidence\', \'analyst_workflow\', \'end_to_end_workflow\', \'source_inventory_probe\''), 'Operator action rail should prioritize blocked analyst workflow and customer workflow proof after dashboard evidence.')
 assert.ok(workbenchSource.includes('item.caseDetailTimelineCount'), 'Analyst workflow readiness rail should surface backed case timeline proof.')
 assert.ok(workbenchSource.includes('item.workerStatus'), 'Source inventory readiness rail should surface backed worker status.')
 assert.ok(workbenchSource.includes('item.collectionReadyRows'), 'Source inventory readiness rail should surface backed collection-ready source rows.')

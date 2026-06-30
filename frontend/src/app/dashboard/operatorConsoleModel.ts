@@ -285,6 +285,44 @@ export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     receiptMatrixSafe?: boolean
     receiptMatrixRows?: number
     receiptMatrixBlockedRows?: number
+    endToEndWorkflow?: ProductReadinessEndToEndWorkflowReadiness
+}
+
+type ProductReadinessEndToEndWorkflowState = 'ready' | 'partial' | 'blocked' | 'unsupported'
+
+type ProductReadinessEndToEndWorkflowStep = {
+    stepId?: string
+    state?: ProductReadinessEndToEndWorkflowState | string
+    consumerLane?: string
+    ownerLane?: string
+    route?: string
+    typedFields?: Array<{ alias?: string, sourceField?: string, present?: boolean }>
+    missingTypedFields?: string[]
+    blockerCodes?: string[]
+    proofLink?: {
+        route?: string
+        contractIds?: string[]
+        schemaIds?: string[]
+        receiptSchemaIds?: string[]
+    }
+}
+
+type ProductReadinessEndToEndWorkflowReadiness = {
+    schemaVersion?: string
+    state?: ProductReadinessEndToEndWorkflowState | string
+    status?: ReadinessStatus
+    detail?: string
+    lastVerifiedAt?: string
+    requiredStepIds?: string[]
+    steps?: ProductReadinessEndToEndWorkflowStep[]
+    typedFields?: string[]
+    missingTypedFields?: string[]
+    blockerCodes?: string[]
+    consumerGuidanceSchemaVersion?: string
+    stepCount?: number
+    readyStepCount?: number
+    blockedStepCount?: number
+    missingFieldCount?: number
 }
 
 export type ProductReadinessExternalState = {
@@ -303,11 +341,11 @@ export type ProductReadinessExternalState = {
 
 export const PRODUCT_PROGRESS_SCHEMA_VERSION = 'product.progress.readiness.v1'
 
-export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'dwm_product_snapshot', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'analyst_workflow', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_FULL_CHAIN_GATE_IDS = ['org_members', 'shared_watchlists', 'entitlement_readiness', 'source_coverage', 'source_inventory_probe', 'end_to_end_workflow', 'dwm_product_snapshot', 'dashboard_alert', 'webhook_delivery', 'org_alert_export', 'webhook_health', 'dashboard_evidence', 'analyst_workflow', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'dwm_product_snapshot', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
+export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'end_to_end_workflow', 'dwm_product_snapshot', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe'] as const
 
-export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
+export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'end_to_end_workflow', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
 
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
@@ -373,6 +411,7 @@ export type DashboardSourceProofProxyPayload = {
                 crossOrgDataExposed?: boolean
             }
         }
+        productReadinessEndToEndWorkflowPacket?: ProductReadinessEndToEndWorkflowReadiness
     }
     sourceInventory?: {
         schemaVersion?: string
@@ -1076,11 +1115,16 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             && row.scopeFields.length > 0)
         && receiptMatrixSafe,
     )
+    const endToEndWorkflowFromProxy = normalizeEndToEndWorkflowReadiness(input.contracts?.productReadinessEndToEndWorkflowPacket)
+    const endToEndWorkflow = input.endpoints?.contracts?.ok === true
+        ? endToEndWorkflowFromProxy
+        : { ...endToEndWorkflowFromProxy, status: 'blocked' as const, detail: 'End-to-end workflow proof requires the contracts endpoint to be reachable.' }
+    const endToEndWorkflowReady = endToEndWorkflow.status === 'ready'
     const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
     const parserSourceFamilyNames = Object.keys(input.sourcePacks?.parserSourceFamilyCounts || {}).sort()
     const parserSourceFamilyCount = parserSourceFamilyNames.length
     const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
-    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && sourceFamilyCount > 0 && parserSourceFamilyCount > 0)
+    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && endToEndWorkflowReady && sourceFamilyCount > 0 && parserSourceFamilyCount > 0)
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
@@ -1094,6 +1138,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         sourceProxyVerificationReady ? '' : 'Source proxy verification proof is missing or not ready.',
         schemaLookupReady ? '' : 'Safe contract schema lookup is not loaded from the source proxy.',
         receiptMatrixReady ? '' : 'Product readiness receipt matrix is not loaded from the source proxy.',
+        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow proof packet is not loaded from the source proxy.',
         sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
         parserSourceFamilyCount > 0 ? '' : 'Parser family counts were not returned by the source-pack proof.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
@@ -1119,6 +1164,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         receiptMatrixSafe,
         receiptMatrixRows: receiptMatrixRows.length,
         receiptMatrixBlockedRows: receiptMatrixRows.filter(row => Array.isArray(row.blockerCodes) && row.blockerCodes.length > 0).length,
+        endToEndWorkflow,
         sourceFamilyCount,
         parserSourceFamilyCount,
         parserSourceFamilyNames,
@@ -1156,7 +1202,63 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             input.sourcePacks?.proxyVerification?.schemaVersion || 'dwm.source_pack_worker_proxy_verification.v1',
             schemaLookup?.schemaVersion || 'ti.api_contract_schema_lookup.v1',
             receiptMatrix?.schemaVersion || 'hanasand.product_readiness.receipt_matrix.v1',
+            endToEndWorkflow?.schemaVersion || 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
         ].join(' + '),
+    }
+}
+
+function normalizeEndToEndWorkflowReadiness(input: ProductReadinessEndToEndWorkflowReadiness | undefined): ProductReadinessEndToEndWorkflowReadiness & {
+    status: ReadinessStatus
+    detail: string
+    readyStepCount: number
+    blockedStepCount: number
+    stepCount: number
+    missingFieldCount: number
+} {
+    if (!input || input.schemaVersion !== 'hanasand.product_readiness.end_to_end_workflow_packet.v1') {
+        return {
+            schemaVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
+            state: 'unsupported',
+            status: 'blocked',
+            detail: 'End-to-end customer workflow proof is not exposed by the source contract proxy.',
+            steps: [],
+            typedFields: [],
+            missingTypedFields: ['end_to_end_workflow_packet'],
+            blockerCodes: ['missing_end_to_end_workflow_packet'],
+            stepCount: 0,
+            readyStepCount: 0,
+            blockedStepCount: 1,
+            missingFieldCount: 1,
+        }
+    }
+    const steps = input.steps || []
+    const readyStepCount = steps.filter(step => step.state === 'ready').length
+    const blockedStepCount = steps.filter(step => step.state && step.state !== 'ready').length
+    const missingFieldCount = input.missingTypedFields?.length || steps.reduce((sum, step) => sum + (step.missingTypedFields?.length || 0), 0)
+    const status: ReadinessStatus = input.state === 'ready'
+        ? 'ready'
+        : input.state === 'partial'
+            ? 'needs_action'
+            : 'blocked'
+    const blockerSummary = uniqueStrings([
+        ...(input.blockerCodes || []),
+        ...steps.flatMap(step => step.blockerCodes || []),
+    ])
+    const detail = status === 'ready'
+        ? `${readyStepCount}/${steps.length} workflow steps are backed across org, watchlist, source, alert, case, webhook, and support.`
+        : [
+            `${readyStepCount}/${steps.length || input.requiredStepIds?.length || 0} workflow steps are backed.`,
+            `${blockedStepCount || blockerSummary.length} step${(blockedStepCount || blockerSummary.length) === 1 ? '' : 's'} need proof.`,
+            missingFieldCount ? `${missingFieldCount} typed field${missingFieldCount === 1 ? '' : 's'} missing.` : '',
+        ].filter(Boolean).join(' ')
+    return {
+        ...input,
+        status,
+        detail,
+        stepCount: steps.length,
+        readyStepCount,
+        blockedStepCount,
+        missingFieldCount,
     }
 }
 
@@ -1802,6 +1904,25 @@ function buildProductReadiness(input: {
             receiptMatrixBlockedRows: sourceGrowth?.receiptMatrixBlockedRows,
         },
         {
+            id: 'end_to_end_workflow',
+            label: 'Customer workflow proof',
+            status: sourceGrowth?.endToEndWorkflow?.status || 'blocked',
+            detail: sourceGrowth?.endToEndWorkflow?.detail || 'End-to-end customer workflow proof is not exposed by the source contract proxy.',
+            source: sourceGrowth?.source || 'GET /api/ti/scraper/control contracts',
+            href: '/dashboard/ti/sources',
+            checkedAt: sourceGrowth?.endToEndWorkflow?.lastVerifiedAt || sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
+            staleAfterSeconds: sourceGrowth?.staleAfterSeconds || 900,
+            proofTimestamp: sourceGrowth?.endToEndWorkflow?.lastVerifiedAt || sourceGrowth?.proofTimestamp,
+            unavailableReason: sourceGrowth?.endToEndWorkflow?.status === 'ready' ? undefined : 'missing_end_to_end_workflow_packet',
+            expectedDashboardRowId: 'end_to_end_workflow',
+            integrationProbeHint: 'GET /api/ti/scraper/control must expose contracts.productReadinessEndToEndWorkflowPacket with org, watchlist, source, alert, case, webhook, delivery, and support steps.',
+            backendProofContractVersion: sourceGrowth?.endToEndWorkflow?.schemaVersion || 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
+            endToEndWorkflowStepCount: sourceGrowth?.endToEndWorkflow?.stepCount,
+            endToEndWorkflowReadyStepCount: sourceGrowth?.endToEndWorkflow?.readyStepCount,
+            endToEndWorkflowBlockedStepCount: sourceGrowth?.endToEndWorkflow?.blockedStepCount,
+            endToEndWorkflowMissingFieldCount: sourceGrowth?.endToEndWorkflow?.missingFieldCount,
+        },
+        {
             id: 'public_ti_provenance',
             label: 'Public TI provenance',
             status: publicTiProvenance?.status || 'needs_action',
@@ -1905,6 +2026,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
             break
         case 'source_coverage':
         case 'source_inventory_probe':
+        case 'end_to_end_workflow':
             actions.push({ id: 'inspect_source_inventory', label: 'Inspect inventory', method: 'GET', href: sourceInventoryHref(context.scope) })
             actions.push({
                 id: 'request_source_coverage',
@@ -1945,6 +2067,11 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                 },
                 disabledReason: item.parserSourceFamilyCount ? undefined : 'Preview requires parser-family proof from the source-pack worker.',
             })
+            if (item.id === 'end_to_end_workflow') {
+                actions.push({ id: 'open_watchlists_api', label: 'Watchlists API', method: 'GET', href: watchlistsHref(context.scope) })
+                actions.push({ id: 'open_alert_queue', label: 'Open alerts', method: 'GET', href: alertsHref(context.scope) })
+                actions.push({ id: 'open_delivery_history', label: 'Delivery history', method: 'GET', href: deliveryLedgerHref(context.scope, context.dashboardAlertDelivery || context.latestDelivery) })
+            }
             break
         case 'dashboard_alert':
         case 'dashboard_evidence':
@@ -2129,6 +2256,14 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
                     : 'Alert coverage is incomplete until source inventory and worker health are operator-reachable.',
                 evidenceProvenance,
             }
+        case 'end_to_end_workflow':
+            return {
+                workflowBlocker: 'Workflow proof',
+                customerImpact: item.status === 'ready'
+                    ? 'The customer workflow can be traced from organization scope through alert, case, delivery, and support proof.'
+                    : 'Operators cannot trust the full customer workflow until every org, watchlist, source, alert, case, webhook, and support step is backed.',
+                evidenceProvenance,
+            }
         case 'dashboard_alert':
         case 'dashboard_evidence':
         case 'alert_generation':
@@ -2203,6 +2338,8 @@ function productReadinessWorkflow(item: WorkbenchProductReadinessItem): { ownerL
         case 'source_coverage':
         case 'source_inventory_probe':
             return { ownerLane: 'Source ops', operatorAction: item.status === 'ready' ? 'Review source health' : 'Open source operations' }
+        case 'end_to_end_workflow':
+            return { ownerLane: 'Operator', operatorAction: item.status === 'ready' ? 'Review workflow proof' : 'Open workflow blockers' }
         case 'dashboard_alert':
         case 'dashboard_evidence':
             return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Open alert proof' : 'Open dashboard evidence' }
@@ -2267,6 +2404,13 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
                 integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
                 staleAfterSeconds: 7200,
                 unavailableReason: 'missing_source_proxy_worker_readiness',
+            }
+        case 'end_to_end_workflow':
+            return {
+                backendProofContractVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
+                integrationProbeHint: 'GET /api/ti/scraper/control must expose contracts.productReadinessEndToEndWorkflowPacket with typed workflow steps.',
+                staleAfterSeconds: 900,
+                unavailableReason: 'missing_end_to_end_workflow_packet',
             }
         case 'dashboard_alert':
             return {
@@ -2354,6 +2498,10 @@ function countReadinessBlockers(detail: string) {
         .map(part => part.trim())
         .filter(Boolean)
     return Math.max(1, parts.length)
+}
+
+function uniqueStrings(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean)))
 }
 
 function latestTimestamp(values: Array<string | undefined>) {

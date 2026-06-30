@@ -23,6 +23,11 @@ const readinessRows = {
         backendProbe: 'GET /api/ti/scraper/control + source readiness 930f93af',
         commits: ['930f93af', '178ec078', '342c1fe3'],
     },
+    end_to_end_workflow: {
+        href: '/dashboard/ti/sources',
+        backendProbe: 'GET /api/ti/scraper/control contracts.productReadinessEndToEndWorkflowPacket fb8a2066',
+        commits: ['fb8a2066'],
+    },
     dwm_product_snapshot: {
         href: '/dashboard/dwm',
         backendProbe: 'GET /api/dwm/product?demo=false',

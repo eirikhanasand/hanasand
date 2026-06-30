@@ -243,6 +243,10 @@ export type WorkbenchProductReadinessItem = {
     receiptMatrixSafe?: boolean
     receiptMatrixRows?: number
     receiptMatrixBlockedRows?: number
+    endToEndWorkflowStepCount?: number
+    endToEndWorkflowReadyStepCount?: number
+    endToEndWorkflowBlockedStepCount?: number
+    endToEndWorkflowMissingFieldCount?: number
 }
 
 export type WorkbenchOrgContext = {
@@ -1723,7 +1727,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
 }
 
 function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): OperatorActionRailRow[] {
-    const priority = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
+    const priority = ['dashboard_evidence', 'analyst_workflow', 'end_to_end_workflow', 'source_inventory_probe', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'webhook_delivery', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance']
     return (orgContext?.readiness.productReadiness || [])
         .filter(item => item.status !== 'ready' && priority.includes(item.id))
         .sort((a, b) => priority.indexOf(a.id) - priority.indexOf(b.id))
@@ -1738,13 +1742,16 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
             const sourceWorkerDetail = item.id === 'source_inventory_probe'
                 ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.parserSourceFamilyCount ?? 0} parser families; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
                 : ''
+            const workflowProofDetail = item.id === 'end_to_end_workflow'
+                ? ` Steps ${item.endToEndWorkflowReadyStepCount ?? 0}/${item.endToEndWorkflowStepCount ?? 0} ready; ${item.endToEndWorkflowBlockedStepCount ?? 0} blocked; ${item.endToEndWorkflowMissingFieldCount ?? 0} missing fields.`
+                : ''
             const alertGenerationDetail = item.id === 'dashboard_evidence'
                 ? ` Candidates ${item.candidateCount ?? item.matchedCandidateCount ?? 0}; evidence captures ${item.generationEvidenceWindowCaptureCount ?? item.captureRefCount ?? 0}; missing routes ${item.missingRouteCandidateCount ?? 0}.`
                 : ''
             return {
                 id: `readiness_${item.id}`,
                 label: item.operatorAction || item.label,
-                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}${alertGenerationDetail}`,
+                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}${workflowProofDetail}${alertGenerationDetail}`,
                 tone: productReadinessTone(item.status),
                 href: item.href,
                 disabledReason: item.status === 'unavailable' ? item.source : undefined,
@@ -2181,6 +2188,15 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.receiptMatrixRows === 'number' ? { label: 'Receipt rows', value: String(item.receiptMatrixRows) } : undefined,
             typeof item.receiptMatrixBlockedRows === 'number' ? { label: 'Receipt blockers', value: String(item.receiptMatrixBlockedRows) } : undefined,
             item.workerLastRunAt ? { label: 'Worker run', value: relativeTime(item.workerLastRunAt) } : undefined,
+        ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
+    }
+    if (item.id === 'end_to_end_workflow') {
+        return [
+            typeof item.endToEndWorkflowReadyStepCount === 'number' || typeof item.endToEndWorkflowStepCount === 'number'
+                ? { label: 'Ready steps', value: `${item.endToEndWorkflowReadyStepCount ?? 0}/${item.endToEndWorkflowStepCount ?? 0}` }
+                : undefined,
+            typeof item.endToEndWorkflowBlockedStepCount === 'number' ? { label: 'Blocked steps', value: String(item.endToEndWorkflowBlockedStepCount) } : undefined,
+            typeof item.endToEndWorkflowMissingFieldCount === 'number' ? { label: 'Missing fields', value: String(item.endToEndWorkflowMissingFieldCount) } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
     }
     return []
