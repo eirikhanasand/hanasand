@@ -6112,6 +6112,7 @@ function buildSanitizedDwmWebhookPayloadPreview(
             alertId: clean(alert.id) || delivery.alertId,
             alertTitle: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
             severity: clean(alert.severity),
+            matchReason: redactDeliveryEvidenceText(truncate(clean(alert.matchReason), 180)) || null,
             deliveryState: clean(alert.deliveryState) || clean(deliveryContext.deliveryState),
             sourceFamily: clean(alert.sourceFamily),
             eventTimestamp: clean(alert.eventTimestamp) || clean(deliveryContext.eventTimestamp) || clean(context.occurredAt),
@@ -6171,6 +6172,7 @@ function buildDwmWebhookDestinationTestPayloadPreview(payload: unknown) {
             alertId: clean(alert.id),
             title: redactDeliveryEvidenceText(truncate(clean(alert.title), 160)),
             severity: clean(alert.severity),
+            matchReason: redactDeliveryEvidenceText(truncate(clean(alert.matchReason), 180)) || null,
             deliveryState: clean(alert.deliveryState) || clean(delivery.deliveryState),
             sourceFamily: clean(alert.sourceFamily) || clean(source.family),
             evidenceCount: parseCount(alert.evidenceCount),
@@ -7538,9 +7540,14 @@ export function buildDwmAlertDeliveryPayload({
     const idempotencyKey = buildIdempotencyKey(eventType, destination.org_id, destination.id, normalizedAlert.dedupeKey || normalizedAlert.id)
     const displayDedupeKey = normalizedAlert.dedupeKey || idempotencyKey
     const analystLink = normalizedAlert.alertUrl || normalizedAlert.casePath
+    const matchReason = matchReasonSummary(normalizedAlert)
+    const alertContext = {
+        ...normalizedAlert,
+        matchReason,
+    }
     const discordTemplate = buildDwmDiscordPayloadTemplateProof({
         eventType,
-        normalizedAlert,
+        normalizedAlert: alertContext,
         watchlist,
         analystLink,
         idempotencyKey,
@@ -7561,7 +7568,7 @@ export function buildDwmAlertDeliveryPayload({
             name: destination.name,
             kind: destination.kind,
         },
-        alert: normalizedAlert,
+        alert: alertContext,
         watchlist,
         delivery: {
             id: deliveryId,
@@ -7602,6 +7609,7 @@ export function buildDwmAlertDeliveryPayload({
                     discordField('Organization', context.org.name, true),
                     discordField('Severity', normalizedAlert.severity.toUpperCase(), true),
                     discordField('Company / domain', normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value || 'Not provided', true),
+                    discordField('Match reason', matchReason, false),
                     discordField('Observed at', normalizedAlert.eventTimestamp, true),
                     watchlist.name || watchlist.terms.length ? discordField('Watchlist', [watchlist.name, watchlist.terms[0]].filter(Boolean).join(' | '), true) : null,
                     discordField('Source family', normalizedAlert.sourceFamily || 'Unknown', true),
@@ -7665,6 +7673,7 @@ function buildDwmDiscordPayloadTemplateProof({
         'Organization',
         'Severity',
         'Company / domain',
+        'Match reason',
         'Observed at',
         'Watchlist',
         'Source family',
@@ -7678,6 +7687,7 @@ function buildDwmDiscordPayloadTemplateProof({
         severity: Boolean(normalizedAlert.severity),
         title: Boolean(normalizedAlert.title),
         companyOrDomain: Boolean(normalizedAlert.companyOrDomain || normalizedAlert.matchedTerm.value),
+        matchReason: Boolean(matchReasonSummary(normalizedAlert)),
         observedAt: Boolean(normalizedAlert.eventTimestamp || normalizedAlert.firstSeenAt),
         watchlist: Boolean(watchlist.name || watchlist.terms.length || watchlist.id),
         sourceFamily: Boolean(normalizedAlert.sourceFamily),
@@ -7701,6 +7711,7 @@ function buildDwmDiscordPayloadTemplateProof({
             'Organization',
             'Severity',
             'Company / domain',
+            'Match reason',
             'Observed at',
             'Watchlist',
             'Source family',
@@ -8653,6 +8664,22 @@ function normalizeConfidence(value: unknown, reason: unknown) {
         label,
         reason: truncate(clean(reason), 180),
     }
+}
+
+function matchReasonSummary(alert: ReturnType<typeof normalizeAlert>) {
+    const term = clean(alert.matchedTerm.value)
+    const kind = clean(alert.matchedTerm.kind)
+    const confidenceReason = clean(alert.confidence.reason)
+    const evidenceLead = alert.evidence[0]
+    const evidenceContext = evidenceLead
+        ? [evidenceLead.label, evidenceLead.source || evidenceLead.capturedAt].filter(Boolean).join(' | ')
+        : ''
+    const parts = [
+        term ? `${kind && kind !== 'unknown' ? kind : 'term'} match: ${term}` : '',
+        confidenceReason,
+        evidenceContext,
+    ].filter(Boolean)
+    return truncate(parts.join(' | ') || alert.companyOrDomain || 'Matched watchlist evidence', DISCORD_EMBED_FIELD_VALUE_LIMIT)
 }
 
 function workflowSummary(alert: ReturnType<typeof normalizeAlert>, eventType: DwmAlertEventType) {
