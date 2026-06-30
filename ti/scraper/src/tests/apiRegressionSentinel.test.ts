@@ -292,6 +292,13 @@ describe("api regression sentinel", () => {
       route: "/v1/contracts",
       ok: true,
       rowCount: 9,
+      requiredReceiptCapabilityIds: ["alert_case_workflow", "source_activation", "support_controls", "webhook_delivery"],
+      requiredReceiptSchemaIdsByCapability: {
+        source_activation: expect.arrayContaining(["ti.source_provenance_alert_rebuild_receipt.v1"]),
+        alert_case_workflow: expect.arrayContaining(["dwm.org_alert_case_action_receipt.v1"]),
+        webhook_delivery: expect.arrayContaining(["dwm.webhook_event_contract.v1"]),
+        support_controls: expect.arrayContaining(["support.action_execution_handoff.v1"])
+      },
       missingCapabilityIds: [],
       matrixSchemaLookupPresent: true,
       blockerCodes: [],
@@ -383,6 +390,7 @@ describe("api regression sentinel", () => {
     brokenMatrix.rows = brokenMatrix.rows.filter((row: any) => row.capabilityId !== "website_product_surface");
     brokenMatrix.rows[0].contractIds = [];
     brokenMatrix.rows[1].receiptSchemaIds = ["unknown.receipt.v1"];
+    brokenMatrix.rows[2].receiptSchemaIds = ["ti.source_provenance_alert_rebuild_receipt.v1"];
     brokenMatrix.rows[2].downstreamConsumers = [];
     brokenMatrix.rows[3].safeOutput.rawEvidenceExposed = true;
     brokenMatrix.safeOutput.webhookSecretExposed = true;
@@ -402,6 +410,7 @@ describe("api regression sentinel", () => {
         "missing_capability_row",
         "missing_contract_ids",
         "stale_receipt_schema_reference",
+        "missing_required_receipt_schema",
         "missing_downstream_consumers",
         "unsafe_receipt_matrix_row",
         "unsafe_receipt_matrix",
@@ -426,8 +435,13 @@ describe("api regression sentinel", () => {
     });
     expect(rows.get("source_activation")).toMatchObject({
       ok: false,
+      missingRequiredReceiptSchemaIds: expect.arrayContaining([
+        "ti.source_provenance_actor_enrichment_gap_receipt.v1",
+        "ti.source_provenance_source_pack_intake_receipt.v1",
+        "ti.source_provenance_source_activation_decision_receipt.v1"
+      ]),
       missingDownstreamConsumers: ["downstreamConsumers"],
-      blockerCodes: expect.arrayContaining(["missing_downstream_consumers"])
+      blockerCodes: expect.arrayContaining(["missing_required_receipt_schema", "missing_downstream_consumers"])
     });
     expect(rows.get("alert_case_workflow")).toMatchObject({
       ok: false,

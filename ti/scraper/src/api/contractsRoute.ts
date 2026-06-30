@@ -611,6 +611,28 @@ export function productReadinessReceiptMatrixCoverage(
     ...receiptSchemas.flatMap((receipt) => Object.values(receipt.schemas)),
     ...matrix.rows.flatMap((row) => row.schemaIds)
   ]);
+  const requiredReceiptSchemaIdsByCapability: Record<string, string[]> = {
+    source_activation: [
+      TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+      TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_GAP_RECEIPT_SCHEMA_VERSION,
+      TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION,
+      TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION
+    ],
+    alert_case_workflow: [
+      DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+      DWM_ORG_ALERT_CASE_ACTION_AUDIT_EVENT_SCHEMA_VERSION
+    ],
+    webhook_delivery: [
+      DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+      DWM_WEBHOOK_EVENT_SUPPORT_HANDOFF_SCHEMA_VERSION,
+      DWM_WEBHOOK_SUPPORT_ACTION_REQUEST_SCHEMA_VERSION,
+      DWM_WEBHOOK_DISPATCH_RETRY_AUDIT_SCHEMA_VERSION
+    ],
+    support_controls: [
+      SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+      SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION
+    ]
+  };
   const matrixCapabilityIds = new Set(matrix.rows.map((row) => row.capabilityId));
   const missingCapabilityIds = requiredCapabilityIds.filter((id) => !matrixCapabilityIds.has(id));
   const diffRows = matrix.rows.map((row) => {
@@ -618,6 +640,8 @@ export function productReadinessReceiptMatrixCoverage(
     const missingSchemaIds = !Array.isArray(row.schemaIds) || row.schemaIds.length === 0 ? ["schemaIds"] : [];
     const missingScopeFields = !Array.isArray(row.scopeFields) || row.scopeFields.length === 0 ? ["scopeFields"] : [];
     const missingDownstreamConsumers = !Array.isArray(row.downstreamConsumers) || row.downstreamConsumers.length === 0 ? ["downstreamConsumers"] : [];
+    const requiredReceiptSchemaIds = requiredReceiptSchemaIdsByCapability[row.capabilityId] || [];
+    const missingRequiredReceiptSchemaIds = requiredReceiptSchemaIds.filter((schemaId) => !(row.receiptSchemaIds || []).includes(schemaId));
     const unindexedReceiptSchemaIds = (row.receiptSchemaIds || []).filter((schemaId) => !knownSchemaIds.has(schemaId));
     const unsafeFields = [
       !row.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
@@ -630,6 +654,7 @@ export function productReadinessReceiptMatrixCoverage(
       ...missingSchemaIds.map(() => "missing_schema_ids"),
       ...missingScopeFields.map(() => "missing_scope_fields"),
       ...missingDownstreamConsumers.map(() => "missing_downstream_consumers"),
+      ...missingRequiredReceiptSchemaIds.map(() => "missing_required_receipt_schema"),
       ...unindexedReceiptSchemaIds.map(() => "stale_receipt_schema_reference"),
       ...unsafeFields.map(() => "unsafe_receipt_matrix_row")
     ];
@@ -643,6 +668,8 @@ export function productReadinessReceiptMatrixCoverage(
       missingSchemaIds,
       missingScopeFields,
       missingDownstreamConsumers,
+      requiredReceiptSchemaIds,
+      missingRequiredReceiptSchemaIds,
       unindexedReceiptSchemaIds,
       unsafeFields
     };
@@ -667,6 +694,8 @@ export function productReadinessReceiptMatrixCoverage(
     ok: blockerCodes.length === 0,
     rowCount: matrix.rows.length,
     requiredCapabilityIds,
+    requiredReceiptCapabilityIds: Object.keys(requiredReceiptSchemaIdsByCapability).sort(),
+    requiredReceiptSchemaIdsByCapability,
     missingCapabilityIds,
     matrixSchemaLookupPresent,
     blockerCodes: [...new Set(blockerCodes)].sort(),
