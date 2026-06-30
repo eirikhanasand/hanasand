@@ -1122,6 +1122,29 @@ describe("dwm alert repository", () => {
       decidedAt: "2026-06-28T13:12:30.000Z",
       decidedBy: "analyst-1"
     });
+    const preservedPipelineProof = buildDwmOrgAlertPipelineProof({
+      watchlists: (store as any).listDwmWatchlists(),
+      alerts: [preserved],
+      tenantId: "tenant_repo_acme",
+      organizationId: "org_repo_acme",
+      sources: store.listSources(),
+      captures: store.listCaptures(),
+      generatedAt: "2026-06-28T13:20:00.000Z"
+    });
+    expect(preservedPipelineProof.alerts[0].sourceHandoffReadiness.analystWorkflowConsumer).toMatchObject({
+      ready: true,
+      workflowStatus: "suppressed",
+      assignedOwner: "analyst-1",
+      decisionValue: "false_positive",
+      decisionRationale: "Duplicate customer-domain exposure already reviewed.",
+      falsePositiveReason: "Known duplicate alert from the same watchlist term.",
+      suppressionReason: "Do not page customer twice for the same evidence cluster.",
+      decidedAt: "2026-06-28T13:12:30.000Z",
+      decidedBy: "analyst-1",
+      workflowEventCount: 1,
+      blockerCodes: []
+    });
+    expect(preservedPipelineProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("analystWorkflowConsumer.decisionValue");
     expect(buildDwmAlertWorkflowExecutionReadiness({
       alert: preserved,
       organizationId: "org_repo_acme",

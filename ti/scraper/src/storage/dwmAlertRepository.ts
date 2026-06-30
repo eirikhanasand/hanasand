@@ -1195,6 +1195,12 @@ export type DwmOrgAlertPipelineProof = {
         ready: boolean;
         workflowStatus: string;
         assignedOwner?: string;
+        decisionValue?: string;
+        decisionRationale?: string;
+        falsePositiveReason?: string;
+        suppressionReason?: string;
+        decidedAt?: string;
+        decidedBy?: string;
         workflowEventCount: number;
         transitionActions: Array<DwmAlertCustomerProofHandoffRow["workflow"]["transitionEvents"][number]["action"]>;
         lastWorkflowEventAt?: string;
@@ -2196,6 +2202,12 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       ready: analystWorkflowBlockerCodes.length === 0,
       workflowStatus: input.handoff.lifecycle.alertStatus,
       assignedOwner: input.handoff.lifecycle.assignedOwner,
+      decisionValue: input.handoff.workflowDecision.value,
+      decisionRationale: input.handoff.workflowDecision.rationale,
+      falsePositiveReason: input.handoff.workflowDecision.falsePositiveReason,
+      suppressionReason: input.handoff.workflowDecision.suppressionReason,
+      decidedAt: input.handoff.workflowDecision.decidedAt,
+      decidedBy: input.handoff.workflowDecision.decidedBy,
       workflowEventCount: input.handoff.workflowVersion.eventCount,
       transitionActions: input.handoff.workflowTransitions.actions,
       lastWorkflowEventAt: input.handoff.workflowTransitions.lastEventAt,
@@ -2217,6 +2229,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "webhookConsumer.createdEventDispatchReady",
       "caseConsumer.casePath",
       "analystWorkflowConsumer.workflowStatus",
+      "analystWorkflowConsumer.decisionValue",
       "analystWorkflowConsumer.transitionActions",
       "analystWorkflowConsumer.caseLinked"
     ],
