@@ -126,6 +126,8 @@ export default async function Page({
                 orgContext={orgContext}
             />
 
+            <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} initialSelectedId={initialSelectedId} />
+
             <WebhookDeliveryConsole
                 organization={organizationState.selectedOrganization ? {
                     id: organizationState.selectedOrganization.id,
@@ -137,8 +139,6 @@ export default async function Page({
                 initialDeliveries={deliveries}
                 alertOptions={webhookAlertOptions}
             />
-
-            <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} initialSelectedId={initialSelectedId} />
         </DashboardPage>
     )
 }

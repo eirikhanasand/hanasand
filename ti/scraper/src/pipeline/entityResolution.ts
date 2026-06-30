@@ -9,7 +9,7 @@ export type EntityResolutionCorrectionAction = "accept_merge" | "split_entity" |
 export type EntityResolutionProvenanceDto = { evidenceId: string; sourceId: string; captureId: string; collectedAt: string; evidenceStage: EvidenceStage; extractorVersion?: string; confidence: number };
 export type EntityResolutionCandidateDto = any; export type EntityResolutionWorkbenchDto = any; type Draft = any;
 const RANSOMWARE = new Set(["akira", "lockbit", "clop", "alphv", "blackcat", "black cat"]);
-const MALWARE: Record<string, string> = { "cobalt strike": "Cobalt Strike", emotet: "Emotet", trickbot: "TrickBot", qakbot: "QakBot", plugx: "PlugX", sliver: "Sliver", carbanak: "Carbanak", mimikatz: "Mimikatz", icedid: "IcedID", rclone: "Rclone", anydesk: "AnyDesk", snake: "Snake", powgoop: "POWGOOP", wellmess: "WellMess" };
+const MALWARE: Record<string, string> = { "cobalt strike": "Cobalt Strike", emotet: "Emotet", trickbot: "TrickBot", qakbot: "QakBot", plugx: "PlugX", sliver: "Sliver", carbanak: "Carbanak", mimikatz: "Mimikatz", icedid: "IcedID", rclone: "Rclone", anydesk: "AnyDesk", snake: "Snake", powgoop: "POWGOOP", wellmess: "WellMess", ngrok: "Ngrok", cloudflared: "Cloudflared", meshagent: "MeshAgent", screenconnect: "ScreenConnect", akira: "Akira", lockbit: "LockBit", alphv: "ALPHV", blackcat: "BlackCat", "black cat": "BlackCat", clop: "Clop" };
 
 export function buildEntityResolutionWorkbenchDto(input: { query: string; evidence: StagedEvidenceInput[]; generatedAt?: string }): EntityResolutionWorkbenchDto {
   const drafts = new Map<string, Draft>();

@@ -5,10 +5,10 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/invites`, { method: 'GET' })
+    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/watchlists`, { method: 'GET' })
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/invites`, { method: 'POST' })
+    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/watchlists`, { method: 'POST' })
 }

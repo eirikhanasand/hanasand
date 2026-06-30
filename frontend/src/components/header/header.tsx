@@ -16,6 +16,7 @@ import BrandLogo from '@/components/brand/brandLogo'
 import { useState } from 'react'
 
 const productItems = [
+    { title: 'Organizations', detail: 'Manage members, shared watchlists, alert scope, and destinations.', href: '/organizations', icon: ShieldCheck },
     { title: 'Threat Intelligence', detail: 'Search companies, actors, claims, and alert context.', href: '/ti', icon: Radar },
     { title: 'Onion Sessions', detail: 'Short-span isolated onion workspaces with remote-session controls.', href: '/solutions/onion-session', icon: Network },
     { title: 'Dark Web Monitoring', detail: 'Telegram, dark web, actor-page, identity, and vendor exposure alerts.', href: '/solutions/dwm', icon: BellRing },
@@ -65,6 +66,7 @@ function PublicDropdown({ label, items }: { label: string, items: Array<{ title:
 }
 
 const mobilePublicLinks = [
+    { label: 'Organizations', href: '/organizations' },
     { label: 'Threat search', href: '/ti' },
     { label: 'Onion sessions', href: '/solutions/onion-session' },
     { label: 'Dark web monitoring', href: '/solutions/dwm' },
@@ -126,7 +128,8 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
     const isProfile = pathname.startsWith('/profile')
     const isPublicProduct = isPublicProductPath(pathname)
     const isLoggedInConsoleProduct = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
-    const isAppSurface = isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile))
+    const isOrganizations = pathname.startsWith('/organizations')
+    const isAppSurface = isLoggedInConsoleProduct || (!isPublicProduct && (isShare || isAI || isDashboard || isProfile || isOrganizations))
     const darkWebHref = token ? '/dashboard/dwm' : '/solutions/dwm'
     const pricingHref = token ? '/dashboard/subscription' : '/pricing'
 
@@ -168,7 +171,7 @@ export default function Header({ token, path: serverPath }: { token: boolean, pa
             <div className='mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4'>
                 <div className='flex min-w-0 items-center gap-4'>
                     <BrandLogo />
-                    {!isDashboard && !isProfile && (
+                    {!isDashboard && !isProfile && !isOrganizations && (
                         <nav className='hidden items-center gap-1 lg:flex'>
                             {token ? (
                                 <Link href='/dashboard' className='inline-flex h-10 items-center rounded-lg px-3 text-sm font-semibold text-[#3a404b] transition hover:bg-[#f1f4f8] hover:text-[#16181d] dark:text-[#d9e2f2] dark:hover:bg-white/8 dark:hover:text-white'>Console</Link>

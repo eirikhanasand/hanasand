@@ -12,10 +12,11 @@ export default function RouteFrame({ children, serverPath, token }: { children: 
     const isShare = isSharePath(pathname)
     const isDashboard = pathname.startsWith('/dashboard')
     const isProfile = pathname.startsWith('/profile')
+    const isOrganizations = pathname.startsWith('/organizations')
     const isAiWorkbench = pathname.startsWith('/ai') && pathname !== '/ai/window'
     const isPublicProduct = isPublicProductPath(pathname)
     const isLoggedInTi = token && (pathname === '/ti' || pathname.startsWith('/ti/'))
-    const isAppSurface = isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile))
+    const isAppSurface = isLoggedInTi || (!isPublicProduct && (isShare || pathname.startsWith('/ai') || isDashboard || isProfile || isOrganizations))
 
     const frameSizing = isAppSurface
         ? 'mt-[7.5vh] h-[92.5vh]'

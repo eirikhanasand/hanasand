@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 type ProxyOptions = {
-    method?: 'GET' | 'POST' | 'PATCH'
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
     timeoutMs?: number
 }
 
@@ -12,6 +13,10 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
     }
 
     try {
+        const cookieStore = await cookies()
+        const token = cookieStore.get('access_token')?.value || bearerToken(request.headers.get('authorization')) || ''
+        const id = cookieStore.get('id')?.value || request.headers.get('id') || ''
+        const impersonationToken = cookieStore.get('impersonation_token')?.value || request.headers.get('x-impersonation-token') || ''
         const target = new URL(path, base)
         for (const [key, value] of request.nextUrl.searchParams.entries()) {
             target.searchParams.set(key, value)
@@ -25,6 +30,9 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
                 'content-type': 'application/json',
                 'x-tenant-id': request.headers.get('x-tenant-id') || 'default',
                 'x-organization-id': request.headers.get('x-organization-id') || '',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                ...(id ? { id } : {}),
+                ...(impersonationToken ? { 'x-impersonation-token': impersonationToken } : {}),
             },
             signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
         }
@@ -45,4 +53,12 @@ export async function proxyTiRequest(request: NextRequest, path: string, options
             },
         }, { status: 502 })
     }
+}
+
+function bearerToken(value: string | null) {
+    if (!value?.startsWith('Bearer ')) {
+        return ''
+    }
+
+    return value.slice('Bearer '.length).trim()
 }
