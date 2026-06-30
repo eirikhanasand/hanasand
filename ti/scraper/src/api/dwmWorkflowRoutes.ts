@@ -745,6 +745,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
       observedAt: item.observedAt ?? item.firstSeenAt,
       captureMode: item.captureMode,
       redactionState: item.redactionState,
+      excerpt: item.excerpt,
       contentHash: item.contentHash,
       provenance: item.provenance
     })),

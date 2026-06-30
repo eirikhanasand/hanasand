@@ -333,23 +333,40 @@ export function inferWebhookKind(url: string): WebhookKind {
 
 export function buildWebhookRequestBody(kind: WebhookKind, payload: any): any {
   if (kind !== "discord") return payload;
+  const isAlert = payload.eventType === "darkweb.monitoring.match";
+  const evidenceCount = Number(payload.evidenceCount ?? payload.evidenceSummary?.evidenceCount ?? payload.evidence?.length ?? 0);
+  const evidenceTimestamp = payload.evidenceSummary?.lastObservedAt
+    ?? payload.generationEvidenceWindow?.lastObservedAt
+    ?? payload.evidence?.[0]?.observedAt
+    ?? payload.lastSeenAt
+    ?? payload.firstSeenAt
+    ?? payload.generatedAt;
+  const route = payload.recommendedRoute ?? payload.routingContext?.queue ?? payload.workflowStatus;
+  const caseLink = payload.casePath ?? payload.alertDetailPath;
   const title = payload.eventType === "darkweb.monitoring.match"
     ? `${payload.severity?.toUpperCase?.() ?? "ALERT"}: ${payload.company ?? payload.matchedTerm ?? "watchlist match"}`
     : "Hanasand webhook test";
   return {
-    content: payload.eventType === "darkweb.monitoring.match"
+    content: isAlert
       ? `Hanasand alert for ${payload.company ?? payload.matchedTerm ?? "watchlist match"}`
       : "Hanasand organization webhook test.",
     embeds: [{
       title,
       description: payload.claimSummary ?? payload.message ?? "Webhook route is configured.",
-      timestamp: payload.generatedAt,
+      timestamp: evidenceTimestamp,
       color: payload.severity === "critical" ? 13_938_440 : payload.severity === "high" ? 15_813_888 : 3_168_467,
       fields: [
+        field("Organization", payload.organizationId ?? payload.tenantId),
         field("Matched term", payload.matchedTerm),
         field("Actor", payload.actor),
         field("Source family", payload.sourceFamily),
+        field("Evidence", evidenceCount ? `${evidenceCount} item${evidenceCount === 1 ? "" : "s"}; latest ${evidenceTimestamp}` : undefined),
+        field("Evidence excerpt", discordEvidenceExcerpt(payload)),
+        field("Confidence", typeof payload.confidence === "number" ? `${payload.confidence}%${firstString(payload.confidenceReasoning) ? ` - ${firstString(payload.confidenceReasoning)}` : ""}` : undefined),
+        field("Case", caseLink),
+        field("Route", route),
         field("Review state", payload.reviewState),
+        field("Replay", payload.replayMarker ?? payload.deliveryReadinessContext?.replayMarker),
         field("Recommended action", payload.recommendedAction)
       ].filter(Boolean)
     }],
@@ -442,4 +459,20 @@ function redactWebhookUrl(value: string): string {
 function field(name: string, value: unknown) {
   if (value === undefined || value === null || String(value).trim() === "") return undefined;
   return { name, value: String(value).slice(0, 1024), inline: true };
+}
+
+function discordEvidenceExcerpt(payload: any): string | undefined {
+  const evidence = Array.isArray(payload.evidence) ? payload.evidence : [];
+  const first = evidence.find((item: any) => typeof item?.excerpt === "string" && item.excerpt.trim())
+    ?? evidence.find((item: any) => typeof item?.contentHash === "string" && item.contentHash.trim());
+  if (!first) return undefined;
+  const source = first.sourceName || first.sourceFamily || "Evidence";
+  const excerpt = first.excerpt || first.contentHash;
+  return `${source}: ${String(excerpt).replace(/\s+/g, " ").slice(0, 500)}`;
+}
+
+function firstString(value: unknown): string | undefined {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).find(Boolean);
+  const text = String(value ?? "").trim();
+  return text || undefined;
 }

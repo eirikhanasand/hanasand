@@ -201,7 +201,16 @@ describe("organization shared DWM workflow", () => {
       expect(seen[0].url).toBe("https://discord.com/api/webhooks/123/token");
       expect(seen[0].headers.get("x-hanasand-event")).toBe("darkweb.monitoring.match");
       expect(seen[0].body.content).toContain("Hanasand alert");
-      expect(seen[0].body.embeds[0].fields.some((field: any) => field.name === "Matched term" && field.value === "acme.com")).toBe(true);
+      const discordFields = seen[0].body.embeds[0].fields;
+      expect(discordFields.find((field: any) => field.name === "Matched term")).toMatchObject({ value: "acme.com" });
+      expect(discordFields.find((field: any) => field.name === "Organization")).toMatchObject({ value: organizationId });
+      expect(discordFields.find((field: any) => field.name === "Source family")).toMatchObject({ value: "telegram_public" });
+      expect(discordFields.find((field: any) => field.name === "Evidence")).toMatchObject({ value: "1 item; latest 2026-06-28T12:05:00.000Z" });
+      expect(discordFields.find((field: any) => field.name === "Evidence excerpt")?.value).toContain("Lumma C2");
+      expect(discordFields.find((field: any) => field.name === "Confidence")?.value).toStartWith("92%");
+      expect(discordFields.find((field: any) => field.name === "Case")?.value).toContain("/v1/cases/");
+      expect(discordFields.find((field: any) => field.name === "Route")).toMatchObject({ value: "identity_response" });
+      expect(JSON.stringify(seen[0].body)).not.toContain("123/token");
       expect(seen[0].body.hanasand.organizationId).toBe(organizationId);
       expect(seen[0].body.hanasand).toMatchObject({
         watchlistId: watchlistPayload.watchlist.id,
