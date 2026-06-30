@@ -142,12 +142,30 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             data-north-star-readiness-ledger-blocker-id={row.id}
                             data-north-star-readiness-ledger-blocker-owner-lane={row.ownerLane}
                             data-north-star-readiness-ledger-blocker-state={row.state}
+                            data-north-star-readiness-ledger-blocker-proof-schema-version={row.proofArtifactSchemaVersion}
                             data-north-star-readiness-ledger-blocker-proof-artifact-id={row.proofArtifactId}
                             data-north-star-readiness-ledger-blocker-route={row.route}
+                            data-north-star-readiness-ledger-blocker-probe-id={row.probeId}
                             data-north-star-readiness-ledger-blocker-action={row.requiredNextAction}
+                            data-north-star-readiness-ledger-blocker-deploy-risk={row.deployRisk}
                         >
                             <p className='font-semibold text-[#171a21] dark:text-white'>{row.label}</p>
                             <p className='mt-1 wrap-break-word'>{row.blockers.join(', ') || row.requiredNextAction}</p>
+                            <dl className='mt-3 grid gap-2 rounded-lg border border-[#fed7aa] bg-white/55 px-3 py-2 text-[11px] leading-4 dark:border-[#7c3b16] dark:bg-black/10'>
+                                <Fact label='Contract' value={row.proofArtifactSchemaVersion} />
+                                <Fact label='Artifact' value={row.proofArtifactId} />
+                                <Fact label='Probe' value={row.probeId || 'not loaded'} />
+                                <Fact label='Risk' value={row.deployRisk || 'not loaded'} />
+                            </dl>
+                            <div className='mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                <p className='min-w-0 wrap-break-word text-[11px] leading-4'>{row.route || 'No backed route returned.'}</p>
+                                {localRoute(row.route) ? (
+                                    <Link href={row.route} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#fed7aa] px-3 py-1.5 text-xs font-semibold text-[#9a3412] transition hover:bg-[#ffedd5] focus:outline-none focus:ring-2 focus:ring-[#fdba74] dark:border-[#7c3b16] dark:text-[#fdba74] dark:hover:bg-[#3a1d0c]'>
+                                        Open route
+                                        <ExternalLink className='h-3.5 w-3.5' />
+                                    </Link>
+                                ) : null}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -442,6 +460,13 @@ function stateLabel(state: ProductNorthStarRow['state']) {
 
 function readableId(value: string) {
     return value.replaceAll('_', ' ')
+}
+
+function localRoute(value: string) {
+    return value.startsWith('/api/')
+        || value.startsWith('/dashboard')
+        || value.startsWith('/ti')
+        || value.startsWith('/status')
 }
 
 function formatChecked(value: string) {
