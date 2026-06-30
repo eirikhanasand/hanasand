@@ -190,6 +190,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
+    const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
@@ -452,6 +453,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 caseDraft={selectedCaseDraft}
                                 caseActionTrail={selectedCaseActionTrail}
                                 caseOwnership={selectedCaseOwnership}
+                                caseCreateRequest={selectedCaseCreateRequest}
                                 watchlistPlan={selectedWatchlistPlan}
                                 alertPlan={selectedAlertPlan}
                                 deliveryPlan={selectedDeliveryPlan}
@@ -674,8 +676,56 @@ type SelectedCaseDraft = {
     route?: string
     missing: string[]
     watchTerms: string[]
-    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'confidence' | 'state' | 'missing'>>
+    sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'reportDate' | 'confidence' | 'state' | 'missing'>>
     body: Record<string, unknown>
+}
+
+type SelectedCaseCreateRequest = {
+    schemaVersion: 'ti.public_actor.selected_case_create_request.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    ready: boolean
+    state: 'ready' | 'review' | 'blocked'
+    route: string
+    nextAction: string
+    request: {
+        method: 'POST'
+        path: string
+        body: Record<string, unknown>
+    }
+    sourceRows: Array<{
+        sourceName: string
+        sourceId?: string
+        provenance: string
+        captureId?: string
+        reportDate?: string
+        confidence?: number
+        state: SelectedSourceDrilldownRow['state']
+        missing: string[]
+    }>
+    refs: {
+        alertIds: string[]
+        captureIds: string[]
+        casePaths: string[]
+        sourceIds: string[]
+        watchTerms: string[]
+    }
+    blockers: string[]
+    consumerStage?: {
+        state: string
+        request?: string
+        missing: string[]
+    }
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
 }
 
 type SelectedCaseOwnershipPlan = {
@@ -3715,7 +3765,7 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, watchlistPlan, alertPlan, deliveryPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, caseCreateRequest, watchlistPlan, alertPlan, deliveryPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
@@ -3723,6 +3773,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
     caseDraft: SelectedCaseDraft | null
     caseActionTrail: CaseActionTrailPayload | null
     caseOwnership: SelectedCaseOwnershipPlan | null
+    caseCreateRequest: SelectedCaseCreateRequest | null
     watchlistPlan: SelectedWatchlistPlan | null
     alertPlan: SelectedAlertActionPlan | null
     deliveryPlan: SelectedDeliveryReadinessPlan | null
@@ -3786,6 +3837,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
                 {caseOwnership ? <SelectedCaseOwnershipPanel plan={caseOwnership} /> : null}
+                {caseCreateRequest ? <SelectedCaseCreateRequestPanel request={caseCreateRequest} /> : null}
                 {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
                 {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
                 {deliveryPlan ? <SelectedDeliveryReadinessPanel plan={deliveryPlan} /> : null}
@@ -3902,6 +3954,61 @@ function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan 
                 <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 4))}</p>
             ) : (
                 <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Case route, alert, capture, and source references are ready for authenticated review.</p>
+            )}
+        </div>
+    )
+}
+
+function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCreateRequest }) {
+    return (
+        <div data-ti-selected-case-create-request='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case create request</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence shaped for authenticated case creation with provenance and blockers attached.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(request.state)}>{decisionStepStatusLabel(request.state)}</span>
+                    <CopyPayloadButton label='Case create request' payload={request} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Alerts' value={`${request.refs.alertIds.length}`} />
+                <EvidenceMetric label='Captures' value={`${request.refs.captureIds.length}`} />
+                <EvidenceMetric label='Sources' value={`${request.sourceRows.length}`} />
+                <EvidenceMetric label='Terms' value={`${request.refs.watchTerms.length}`} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {request.request.path}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.nextAction}</p>
+            {request.sourceRows.length ? (
+                <div className='mt-2 grid gap-2'>
+                    {request.sourceRows.slice(0, 3).map(row => (
+                        <div key={`${row.sourceId ?? row.sourceName}:${row.provenance}:${row.captureId ?? 'pending'}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}{row.sourceId ? ` · source ${row.sourceId}` : ''}</p>
+                                    <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.provenance}</p>
+                                </div>
+                                <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
+                            </div>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${Math.round(row.confidence * 100)}% confidence` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
+            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                {request.refs.alertIds.slice(0, 3).map(id => <span key={id} className={sourceHealthChipClass('ready')}>alert {id}</span>)}
+                {request.refs.casePaths.slice(0, 2).map(path => <span key={path} className={sourceHealthChipClass('ready')}>{path}</span>)}
+                {request.consumerStage?.request ? <span className={sourceHealthChipClass(request.ready ? 'ready' : 'blocked')}>{request.consumerStage.request}</span> : null}
+            </div>
+            {request.blockers.length ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(request.blockers.slice(0, 4))}</p>
+            ) : (
+                <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Case creation has the selected evidence, alert, capture, source, and watchlist refs required for authenticated review.</p>
             )}
         </div>
     )
@@ -4542,6 +4649,7 @@ function selectedCaseDraftFor(
         sourceId: row.sourceId,
         provenance: row.provenance,
         captureId: row.captureId,
+        reportDate: row.reportDate,
         confidence: row.confidence,
         state: row.state,
         missing: row.missing,
@@ -4572,7 +4680,7 @@ function selectedCaseDraftFor(
         sourceRows,
         alertId: actionability.readiness.backedIds.alertIds[0],
         captureIds: unique(sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value))),
-        provenance: drilldown.rows.map(row => ({ sourceName: row.sourceName, sourceId: row.sourceId, provenance: row.provenance, captureId: row.captureId, confidence: row.confidence })),
+        provenance: drilldown.rows.map(row => ({ sourceName: row.sourceName, sourceId: row.sourceId, provenance: row.provenance, captureId: row.captureId, reportDate: row.reportDate, confidence: row.confidence })),
         requiredBeforePost: missing,
     }
 
@@ -4593,6 +4701,125 @@ function selectedCaseDraftFor(
         watchTerms,
         sourceRows,
         body,
+    }
+}
+
+function selectedCaseCreateRequestFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    caseDraft: SelectedCaseDraft | null,
+    caseOwnership: SelectedCaseOwnershipPlan | null,
+    drilldown: SelectedSourceDrilldown | null
+): SelectedCaseCreateRequest {
+    const caseStage = actionability.consumerReadiness.stages.find(stage => stage.id === 'caseHandoff')
+    const caseAction = actionability.actionPayloads.payloads.caseHandoff
+    const sourceRows = (caseDraft?.sourceRows.length ? caseDraft.sourceRows : drilldown?.rows ?? []).map(row => ({
+        sourceName: row.sourceName,
+        sourceId: row.sourceId,
+        provenance: row.provenance,
+        captureId: row.captureId,
+        reportDate: row.reportDate,
+        confidence: row.confidence,
+        state: row.state,
+        missing: row.missing,
+    }))
+    const alertIds = unique([
+        ...actionability.readiness.backedIds.alertIds,
+        ...(caseOwnership?.sourceRefs.alertIds ?? []),
+        ...readStringArray(caseAction.body.alertId),
+    ])
+    const captureIds = unique([
+        ...actionability.readiness.backedIds.captureIds,
+        ...(caseOwnership?.sourceRefs.captureIds ?? []),
+        ...sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)),
+        ...readStringArray(caseAction.body.captureIds),
+    ])
+    const casePaths = unique([
+        ...actionability.readiness.backedIds.casePaths,
+        ...(caseOwnership?.sourceRefs.casePaths ?? []),
+        ...(caseDraft?.route ? [caseDraft.route] : []),
+    ])
+    const sourceIds = unique([
+        ...(caseOwnership?.sourceRefs.sourceIds ?? []),
+        ...sourceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)),
+    ])
+    const watchTerms = unique([
+        ...(caseDraft?.watchTerms ?? []),
+        ...readStringArray(caseAction.body.watchTerms),
+        ...readStringArray(caseAction.body.terms),
+    ])
+    const blockers = unique([
+        ...(caseDraft?.missing ?? []),
+        ...caseAction.blockedBy.map(blocker => blocker.detail),
+        ...(caseStage?.missing ?? []),
+        ...(caseStage && caseStage.state === 'blocked' ? [caseStage.detail] : []),
+        ...(sourceRows.length ? [] : ['Source provenance is required before case creation review.']),
+        ...(alertIds.length ? [] : ['Alert ID is required before case creation review.']),
+        ...(captureIds.length ? [] : ['Capture evidence is required before case creation review.']),
+    ]).slice(0, 10)
+    const requestBody = {
+        ...caseAction.body,
+        ...(caseDraft?.body ?? {}),
+        query: result.query,
+        selectedItemId: selected.id,
+        selectedItemTitle: selected.title,
+        sourceRows,
+        alertIds,
+        captureIds,
+        casePaths,
+        sourceIds,
+        watchTerms,
+        noMutation: true,
+    }
+    const ready = Boolean(caseDraft?.ready)
+        && caseAction.ready
+        && caseStage?.state === 'ready'
+        && sourceRows.length > 0
+        && alertIds.length > 0
+        && captureIds.length > 0
+        && blockers.length === 0
+    const state: SelectedCaseCreateRequest['state'] = ready ? 'ready' : blockers.length ? 'blocked' : 'review'
+    const route = caseDraft?.route || caseAction.backedRoute || caseAction.route || actionability.caseHandoff.endpoint
+    return {
+        schemaVersion: 'ti.public_actor.selected_case_create_request.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: new Date().toISOString(),
+        selectedItemId: selected.id,
+        title: selected.title,
+        ready,
+        state,
+        route,
+        nextAction: ready
+            ? 'Open the authenticated case workflow with the selected evidence and provenance attached.'
+            : blockers.length ? `Resolve ${displayRequirementList(blockers.slice(0, 2))} before case creation review.` : 'Review the selected evidence before opening the authenticated case workflow.',
+        request: {
+            method: 'POST',
+            path: caseStage?.request?.path ?? actionability.caseHandoff.endpoint,
+            body: requestBody,
+        },
+        sourceRows,
+        refs: {
+            alertIds,
+            captureIds,
+            casePaths,
+            sourceIds,
+            watchTerms,
+        },
+        blockers,
+        consumerStage: caseStage ? {
+            state: caseStage.state,
+            request: caseStage.request ? `${caseStage.request.method} ${caseStage.request.path}` : undefined,
+            missing: caseStage.missing,
+        } : undefined,
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
     }
 }
 
@@ -5555,6 +5782,13 @@ function unique(values: string[]) {
         seen.add(key)
         return true
     })
+}
+
+function readStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value.flatMap(item => readStringArray(item))
+    if (typeof value === 'string' && value.trim()) return [value.trim()]
+    if (value && typeof value === 'object' && 'value' in value) return readStringArray((value as { value?: unknown }).value)
+    return []
 }
 
 function uniqueBy<T>(values: T[], keyFor: (value: T) => string) {
