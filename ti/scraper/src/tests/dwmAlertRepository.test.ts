@@ -1594,6 +1594,54 @@ describe("dwm alert repository", () => {
     expect(staleRebuild.savedAlertCount).toBe(0);
     expect((staleStore as any).listDwmAlerts()).toEqual([]);
 
+    const staleEvidenceStore = new InMemoryScraperStore();
+    staleEvidenceStore.saveSource(telegramSource);
+    staleEvidenceStore.saveCapture({
+      ...telegramCapture,
+      id: "cap_repo_old_evidence_acme",
+      collectedAt: "2026-05-01T13:04:00.000Z",
+      contentHash: "hash-repo-old-evidence-acme"
+    } as RawCapture);
+    (staleEvidenceStore as any).saveDwmWatchlist({
+      id: "watch_repo_old_evidence",
+      tenantId: "tenant_repo_old_evidence",
+      organizationId: "org_repo_old_evidence",
+      terms: [{ id: "watch_item_old_evidence", value: "acme.com", kind: "domain" }],
+      webhookDestinationId: "webhook_repo_old_evidence",
+      status: "active"
+    });
+    const staleEvidenceRebuild = rebuildDwmRuntimeAlerts({
+      store: staleEvidenceStore as any,
+      tenantId: "tenant_repo_old_evidence",
+      organizationId: "org_repo_old_evidence"
+    });
+    expect(staleEvidenceRebuild.savedAlertCount).toBe(1);
+    const staleEvidenceProof = buildDwmOrgAlertPipelineProof({
+      watchlists: (staleEvidenceStore as any).listDwmWatchlists(),
+      alerts: (staleEvidenceStore as any).listDwmAlerts(),
+      tenantId: "tenant_repo_old_evidence",
+      organizationId: "org_repo_old_evidence",
+      sources: staleEvidenceStore.listSources(),
+      captures: staleEvidenceStore.listCaptures(),
+      generatedAt: "2026-06-28T13:40:00.000Z"
+    });
+    expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness).toMatchObject({
+      ready: false,
+      state: "source_freshness_gap",
+      evidenceFreshness: {
+        schemaVersion: "dwm.alert_evidence_freshness.v1",
+        state: "stale",
+        firstObservedAt: "2026-05-01T13:04:00.000Z",
+        lastObservedAt: "2026-05-01T13:04:00.000Z",
+        latestEvidenceAgeHours: 1393,
+        captureIds: ["cap_repo_old_evidence_acme"],
+        sourceFamilies: ["telegram_public"],
+        blockerCodes: ["stale_capture_evidence"]
+      }
+    });
+    expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.stableFields).toContain("evidenceFreshness");
+    expect(staleEvidenceProof.alerts[0].sourceHandoffReadiness.gapFields).toContain("evidenceFreshness.blockerCodes");
+
     const deniedStore = new InMemoryScraperStore();
     deniedStore.saveSource(telegramSource);
     deniedStore.saveCapture(telegramCapture);
@@ -3129,6 +3177,17 @@ describe("dwm alert repository", () => {
     expect(telegramProof?.sourceHandoffReadiness.provenanceCaptureIds).toEqual(expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]));
     expect(telegramProof?.sourceHandoffReadiness.provenanceSourceIds).toEqual(["src_repo_tg"]);
     expect(telegramProof?.sourceHandoffReadiness.provenanceGapCodes).toEqual([]);
+    expect(telegramProof?.sourceHandoffReadiness.evidenceFreshness).toMatchObject({
+      schemaVersion: "dwm.alert_evidence_freshness.v1",
+      state: "fresh",
+      generatedAt: "2026-06-28T13:40:00.000Z",
+      firstObservedAt: "2026-06-28T13:04:00.000Z",
+      lastObservedAt: "2026-06-28T13:16:00.000Z",
+      latestEvidenceAgeHours: 0,
+      captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
+      sourceFamilies: expect.arrayContaining(["telegram_public", "darkweb_metadata"]),
+      blockerCodes: []
+    });
     expect(telegramProof?.sourceHandoffReadiness.webhookConsumer).toMatchObject({
       ready: true,
       deliveryReady: true,
@@ -3167,9 +3226,9 @@ describe("dwm alert repository", () => {
       stableFields: expect.arrayContaining(["provenanceCaptureIds", "alertGenerationRefCount"]),
       gapFields: expect.arrayContaining(["provenanceGapCodes"])
     });
-    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "duplicateEvidenceSuppression", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
+    expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["selectedCaptureIds", "duplicateEvidenceSuppression", "evidenceFreshness", "webhookConsumer.deliveryDedupeKey", "webhookConsumer.selectedWebhookDestinationId", "webhookConsumer.createdEventDispatchReady", "caseConsumer.casePath"]));
     expect(telegramProof?.sourceHandoffReadiness.stableFields).toEqual(expect.arrayContaining(["analystWorkflowConsumer.workflowStatus", "analystWorkflowConsumer.transitionActions", "analystWorkflowConsumer.caseLinked"]));
-    expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "webhookConsumer.blockerCodes"]));
+    expect(telegramProof?.sourceHandoffReadiness.gapFields).toEqual(expect.arrayContaining(["provenanceGapCodes", "evidenceFreshness.blockerCodes", "webhookConsumer.blockerCodes"]));
     expect(telegramProof?.sourceHandoffReadiness.gapFields).toContain("analystWorkflowConsumer.blockerCodes");
     expect(darkwebProof?.selectedCaptureIds).toEqual(["cap_repo_darkweb_acme"]);
     expect(darkwebProof?.sourceHandoffReadiness).toMatchObject({
@@ -3209,6 +3268,7 @@ describe("dwm alert repository", () => {
     });
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");
+    expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.evidenceFreshness");
     expect(proof.consumerAdapters.dashboard.stableFields).toContain("alerts.sourceHandoffReadiness.analystWorkflowConsumer");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.webhookConsumer");
     expect(proof.consumerAdapters.webhook.stableFields).toContain("alerts.sourceHandoffReadiness.duplicateEvidenceSuppression");

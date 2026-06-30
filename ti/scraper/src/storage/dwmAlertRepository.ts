@@ -1139,6 +1139,7 @@ export type DwmOrgAlertPipelineProof = {
       state:
         | "ready_for_consumers"
         | "source_provenance_gap"
+        | "source_freshness_gap"
         | "case_handoff_gap"
         | "delivery_handoff_gap";
       sourceFamily?: string;
@@ -1148,6 +1149,19 @@ export type DwmOrgAlertPipelineProof = {
       provenanceCaptureIds: string[];
       provenanceSourceIds: string[];
       provenanceGapCodes: string[];
+      evidenceFreshness: {
+        schemaVersion: "dwm.alert_evidence_freshness.v1";
+        state: "fresh" | "current" | "stale" | "unknown";
+        generatedAt: string;
+        firstObservedAt?: string;
+        lastObservedAt?: string;
+        latestEvidenceAgeHours?: number;
+        maxFreshAgeHours: number;
+        maxCurrentAgeHours: number;
+        captureIds: string[];
+        sourceFamilies: string[];
+        blockerCodes: string[];
+      };
       webhookConsumer: {
         ready: boolean;
         deliveryReady: boolean;
@@ -2110,17 +2124,21 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       ? "stale_workflow"
       : undefined
   ].filter(Boolean).map(String));
+  const evidenceFreshness = buildDwmAlertEvidenceFreshness(input.handoff);
   const delivered = input.handoff.deliveryReadiness.lastDeliveryStatus === "delivered"
     || input.handoff.deliveryReadiness.deliveryHistoryRefs.length > 0;
   const webhookReady = input.handoff.deliveryReadiness.ready || delivered;
   const sourceReady = input.handoff.evidence.evidenceCount > 0
     && input.handoff.evidence.selectedCaptureIds.length > 0
-    && provenanceGapCodes.length === 0;
+    && provenanceGapCodes.length === 0
+    && evidenceFreshness.blockerCodes.length === 0;
   const ready = sourceReady && input.handoff.caseReadiness.ready && webhookReady;
   const state: DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["state"] = ready
     ? "ready_for_consumers"
     : !sourceReady
-      ? "source_provenance_gap"
+      ? evidenceFreshness.blockerCodes.length > 0
+        ? "source_freshness_gap"
+        : "source_provenance_gap"
       : !input.handoff.caseReadiness.ready
         ? "case_handoff_gap"
         : "delivery_handoff_gap";
@@ -2139,6 +2157,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     provenanceCaptureIds: input.sourceProvenanceSummary.captureIds,
     provenanceSourceIds: input.sourceProvenanceSummary.sourceIds,
     provenanceGapCodes,
+    evidenceFreshness,
     webhookConsumer: {
       ready: webhookReady,
       deliveryReady: input.handoff.deliveryReadiness.ready,
@@ -2192,6 +2211,7 @@ function buildDwmAlertSourceHandoffReadiness(input: {
       "duplicateEvidenceSuppression",
       "provenanceCaptureIds",
       "provenanceSourceIds",
+      "evidenceFreshness",
       "webhookConsumer.deliveryDedupeKey",
       "webhookConsumer.selectedWebhookDestinationId",
       "webhookConsumer.createdEventDispatchReady",
@@ -2203,10 +2223,49 @@ function buildDwmAlertSourceHandoffReadiness(input: {
     gapFields: [
       "state",
       "provenanceGapCodes",
+      "evidenceFreshness.blockerCodes",
       "webhookConsumer.blockerCodes",
       "caseConsumer.blockerCodes",
       "analystWorkflowConsumer.blockerCodes"
     ]
+  };
+}
+
+function buildDwmAlertEvidenceFreshness(handoff: DwmAlertDownstreamHandoff): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["evidenceFreshness"] {
+  const maxFreshAgeHours = 72;
+  const maxCurrentAgeHours = 168;
+  const firstObservedAt = handoff.evidence.generationEvidenceWindow?.firstObservedAt;
+  const lastObservedAt = handoff.evidence.generationEvidenceWindow?.lastObservedAt;
+  const generatedAt = handoff.generatedAt;
+  const generatedTime = Date.parse(generatedAt);
+  const lastObservedTime = lastObservedAt ? Date.parse(lastObservedAt) : Number.NaN;
+  const latestEvidenceAgeHours = Number.isFinite(generatedTime) && Number.isFinite(lastObservedTime)
+    ? Math.max(0, Math.round((generatedTime - lastObservedTime) / 36e5))
+    : undefined;
+  const state = latestEvidenceAgeHours === undefined
+    ? "unknown"
+    : latestEvidenceAgeHours <= maxFreshAgeHours
+      ? "fresh"
+      : latestEvidenceAgeHours <= maxCurrentAgeHours
+        ? "current"
+        : "stale";
+  const blockerCodes = state === "stale"
+    ? ["stale_capture_evidence"]
+    : state === "unknown"
+      ? ["unknown_capture_freshness"]
+      : [];
+  return {
+    schemaVersion: "dwm.alert_evidence_freshness.v1",
+    state,
+    generatedAt,
+    firstObservedAt,
+    lastObservedAt,
+    latestEvidenceAgeHours,
+    maxFreshAgeHours,
+    maxCurrentAgeHours,
+    captureIds: handoff.evidence.generationEvidenceWindow?.captureIds ?? handoff.evidence.captureIds,
+    sourceFamilies: handoff.evidence.generationEvidenceWindow?.sourceFamilies ?? (handoff.sourceFamily ? [handoff.sourceFamily] : []),
+    blockerCodes
   };
 }
 
@@ -2541,6 +2600,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
     "alerts.selectedCaptureIds",
     "alerts.evidenceCount",
     "alerts.sourceHandoffReadiness.duplicateEvidenceSuppression",
+    "alerts.sourceHandoffReadiness.evidenceFreshness",
     "alerts.provenanceGapCodes",
     "alerts.workflowStatus",
     "alerts.workflowTransitionActions",
