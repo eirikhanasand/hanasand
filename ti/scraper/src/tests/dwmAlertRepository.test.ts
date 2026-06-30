@@ -717,6 +717,13 @@ describe("dwm alert repository", () => {
         generationEvidenceWindow: expect.objectContaining({
           captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_darkweb_acme", "cap_repo_public_ti_acme"]),
           sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
+        }),
+        evidenceFreshness: expect.objectContaining({
+          schemaVersion: "dwm.alert_evidence_freshness.v1",
+          state: "fresh",
+          firstObservedAt: "2026-06-28T13:04:00.000Z",
+          lastObservedAt: "2026-06-28T13:11:00.000Z",
+          blockerCodes: []
         })
       }
     });
@@ -1093,6 +1100,13 @@ describe("dwm alert repository", () => {
         generationEvidenceWindow: expect.objectContaining({
           captureIds: expect.arrayContaining(["cap_repo_tg_acme", "cap_repo_tg_acme_followup"]),
           sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
+        }),
+        evidenceFreshness: expect.objectContaining({
+          schemaVersion: "dwm.alert_evidence_freshness.v1",
+          state: "fresh",
+          firstObservedAt: "2026-06-28T13:04:00.000Z",
+          lastObservedAt: "2026-06-28T13:16:00.000Z",
+          blockerCodes: []
         })
       }
     });
@@ -1639,6 +1653,14 @@ describe("dwm alert repository", () => {
       organizationId: "org_repo_old_evidence"
     });
     expect(staleEvidenceRebuild.savedAlertCount).toBe(1);
+    expect(staleEvidenceRebuild.alerts[0].alertCreatedEvent.consumerPayload.evidenceFreshness).toMatchObject({
+      schemaVersion: "dwm.alert_evidence_freshness.v1",
+      state: "stale",
+      firstObservedAt: "2026-05-01T13:04:00.000Z",
+      lastObservedAt: "2026-05-01T13:04:00.000Z",
+      latestEvidenceAgeHours: expect.any(Number),
+      blockerCodes: ["stale_capture_evidence"]
+    });
     const staleEvidenceProof = buildDwmOrgAlertPipelineProof({
       watchlists: (staleEvidenceStore as any).listDwmWatchlists(),
       alerts: (staleEvidenceStore as any).listDwmAlerts(),

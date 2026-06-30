@@ -2252,11 +2252,24 @@ function buildDwmAlertSourceHandoffReadiness(input: {
 }
 
 function buildDwmAlertEvidenceFreshness(handoff: DwmAlertDownstreamHandoff): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["evidenceFreshness"] {
+  return buildDwmAlertEvidenceFreshnessForWindow(
+    handoff.evidence.generationEvidenceWindow,
+    handoff.generatedAt,
+    handoff.evidence.captureIds,
+    handoff.sourceFamily ? [handoff.sourceFamily] : []
+  );
+}
+
+function buildDwmAlertEvidenceFreshnessForWindow(
+  window: DwmAlertDownstreamHandoff["evidence"]["generationEvidenceWindow"] | undefined,
+  generatedAt: string,
+  fallbackCaptureIds: string[] = [],
+  fallbackSourceFamilies: string[] = []
+): DwmOrgAlertPipelineProof["alerts"][number]["sourceHandoffReadiness"]["evidenceFreshness"] {
   const maxFreshAgeHours = 72;
   const maxCurrentAgeHours = 168;
-  const firstObservedAt = handoff.evidence.generationEvidenceWindow?.firstObservedAt;
-  const lastObservedAt = handoff.evidence.generationEvidenceWindow?.lastObservedAt;
-  const generatedAt = handoff.generatedAt;
+  const firstObservedAt = window?.firstObservedAt;
+  const lastObservedAt = window?.lastObservedAt;
   const generatedTime = Date.parse(generatedAt);
   const lastObservedTime = lastObservedAt ? Date.parse(lastObservedAt) : Number.NaN;
   const latestEvidenceAgeHours = Number.isFinite(generatedTime) && Number.isFinite(lastObservedTime)
@@ -2283,8 +2296,8 @@ function buildDwmAlertEvidenceFreshness(handoff: DwmAlertDownstreamHandoff): Dwm
     latestEvidenceAgeHours,
     maxFreshAgeHours,
     maxCurrentAgeHours,
-    captureIds: handoff.evidence.generationEvidenceWindow?.captureIds ?? handoff.evidence.captureIds,
-    sourceFamilies: handoff.evidence.generationEvidenceWindow?.sourceFamilies ?? (handoff.sourceFamily ? [handoff.sourceFamily] : []),
+    captureIds: window?.captureIds ?? fallbackCaptureIds,
+    sourceFamilies: window?.sourceFamilies ?? fallbackSourceFamilies,
     blockerCodes
   };
 }
@@ -4347,6 +4360,7 @@ function buildDwmAlertEventConsumerPayload(input: {
       sourceIds: input.alert.provenance?.sourceIds ?? []
     },
     generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
+    evidenceFreshness: buildDwmAlertEvidenceFreshnessForWindow(input.workflowContext.generationEvidenceWindow, input.at),
     duplicateEvidenceSuppression: input.workflowContext.duplicateEvidenceSuppression
   };
 }
