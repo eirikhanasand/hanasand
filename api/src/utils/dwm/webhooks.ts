@@ -166,6 +166,8 @@ export type DwmWebhookDeliveryEvidenceFilters = {
     destinationId?: unknown
     alertId?: unknown
     casePath?: unknown
+    caseActionId?: unknown
+    caseActionPath?: unknown
     dedupeKey?: unknown
     requestId?: unknown
     deliveryId?: unknown
@@ -570,6 +572,8 @@ export function buildDwmWebhookDeliveryEvidence({
         destinationId: clean(filters.destinationId),
         alertId: clean(filters.alertId),
         casePath: clean(filters.casePath),
+        caseActionId: clean(filters.caseActionId),
+        caseActionPath: clean(filters.caseActionPath),
         dedupeKey: clean(filters.dedupeKey),
         requestId: clean(filters.requestId) || clean(filters.deliveryId),
         idempotencyKey: clean(filters.idempotencyKey),
@@ -598,6 +602,8 @@ export function buildDwmWebhookDeliveryEvidence({
                 || clean(payloadAlert.dedupeKey)
                 || dedupeFromIdempotencyKey(delivery.idempotencyKey)
             const casePath = delivery.casePath || clean(payloadDelivery.casePath) || clean(payloadAlert.casePath)
+            const caseActionId = clean(payloadDelivery.caseActionId) || clean(payloadAlert.caseActionId)
+            const caseActionPath = clean(payloadDelivery.caseActionPath) || clean(payloadAlert.caseActionPath)
             const replay = delivery.eventType === 'dwm.alert.replayed' || payloadDelivery.replay === true
             const liveRequested = !delivery.dryRun
             const live = liveRequested && delivery.status !== 'skipped'
@@ -618,6 +624,8 @@ export function buildDwmWebhookDeliveryEvidence({
                 replayCount: parseCount(payloadAlert.replayCount),
                 route: delivery.route || clean(payloadDelivery.route) || clean(payloadAlert.route),
                 casePath,
+                caseActionId,
+                caseActionPath,
                 dedupeKey,
                 idempotencyKey: delivery.idempotencyKey,
                 watchlistId: delivery.watchlistId || clean(payloadWatchlist.id),
@@ -647,6 +655,8 @@ export function buildDwmWebhookDeliveryEvidence({
             if (normalizedFilters.destinationId && evidence.destinationId !== normalizedFilters.destinationId) return false
             if (normalizedFilters.alertId && evidence.alertId !== normalizedFilters.alertId) return false
             if (normalizedFilters.casePath && evidence.casePath !== normalizedFilters.casePath) return false
+            if (normalizedFilters.caseActionId && evidence.caseActionId !== normalizedFilters.caseActionId) return false
+            if (normalizedFilters.caseActionPath && evidence.caseActionPath !== normalizedFilters.caseActionPath) return false
             if (normalizedFilters.dedupeKey && evidence.dedupeKey !== normalizedFilters.dedupeKey && evidence.idempotencyKey !== normalizedFilters.dedupeKey) return false
             if (normalizedFilters.requestId && evidence.requestId !== normalizedFilters.requestId && evidence.deliveryId !== normalizedFilters.requestId) return false
             if (normalizedFilters.idempotencyKey && evidence.idempotencyKey !== normalizedFilters.idempotencyKey) return false
@@ -723,6 +733,8 @@ export function buildDwmWebhookDeliveryLedger({
             watchlistName: item.watchlistName,
             route: item.route,
             casePath: item.casePath,
+            caseActionId: item.caseActionId,
+            caseActionPath: item.caseActionPath,
             redactedEndpointLabel: item.redactedDestination.endpointHint,
             redactedDestination: item.redactedDestination,
             responseStatus: item.response.httpStatus,
@@ -788,6 +800,8 @@ export function buildDwmWebhookDeliveryOperations({
             watchlistName: attempt.watchlistName,
             route: attempt.route,
             casePath: attempt.casePath,
+            caseActionId: attempt.caseActionId,
+            caseActionPath: attempt.caseActionPath,
             destination: {
                 id: attempt.destinationId,
                 label: destination?.name || availability.label,
@@ -828,6 +842,8 @@ export function buildDwmWebhookDeliveryOperations({
             destinationId: clean(filters.destinationId) || null,
             alertId: clean(filters.alertId) || null,
             casePath: clean(filters.casePath) || null,
+            caseActionId: clean(filters.caseActionId) || null,
+            caseActionPath: clean(filters.caseActionPath) || null,
             dedupeKey: clean(filters.dedupeKey) || null,
             requestId: clean(filters.requestId) || clean(filters.deliveryId) || null,
             idempotencyKey: clean(filters.idempotencyKey) || null,
@@ -909,6 +925,8 @@ export function buildDwmWebhookDeliveryHistory({
                 casePath: operation.casePath || clean(alert?.casePath),
                 alertUrl: clean(alert?.alertUrl),
                 caseId: clean(alert?.caseId),
+                caseActionId: operation.caseActionId || clean(alert?.caseActionId),
+                caseActionPath: operation.caseActionPath || clean(alert?.caseActionPath),
                 provenance,
                 provenanceIds: deliveryProvenanceIds(provenance),
                 provenanceSummary: provenanceSummary(provenance),
@@ -1034,6 +1052,8 @@ export function buildDwmWebhookDeliveryHistoryConsumerProof({
                 evidenceCount: entry.alert.evidenceCount,
                 casePath: entry.alert.casePath,
                 alertUrl: entry.alert.alertUrl,
+                caseActionId: entry.alert.caseActionId,
+                caseActionPath: entry.alert.caseActionPath,
             },
             retry: {
                 retryable: entry.retry.retryable,
@@ -1644,6 +1664,8 @@ export function buildDwmWebhookDeliveryReceipts({
             dedupeKey: entry.alert.dedupeKey,
             route: retryKey?.route || null,
             casePath: entry.alert.casePath,
+            caseActionId: entry.alert.caseActionId,
+            caseActionPath: entry.alert.caseActionPath,
             alertUrl: entry.alert.alertUrl,
             watchlist: entry.watchlist,
             destination: entry.destination,
@@ -6028,6 +6050,8 @@ export function buildDwmWebhookDeliveryPreview(delivery: DwmWebhookDeliveryPubli
                 casePath: clean(payloadAlert.casePath) || clean(payloadDelivery.casePath) || delivery.casePath,
                 alertUrl: clean(payloadAlert.alertUrl) || clean(payloadDelivery.alertUrl),
                 caseId: clean(payloadAlert.caseId) || clean(payloadAlert.caseIdCandidate),
+                caseActionId: clean(payloadAlert.caseActionId) || clean(payloadDelivery.caseActionId),
+                caseActionPath: clean(payloadAlert.caseActionPath) || clean(payloadDelivery.caseActionPath),
             },
             delivery: payloadDelivery,
             links: {
@@ -9735,6 +9759,8 @@ function buildDwmWebhookReceiptHistoryFilters({
         replay: boolean
         dedupeKey: string | null
         casePath: string
+        caseActionId?: string | null
+        caseActionPath?: string | null
         alertUrl: string
         watchlist: { id: string, name: string, terms: string[] }
         destination: {
@@ -9765,6 +9791,8 @@ function buildDwmWebhookReceiptHistoryFilters({
         destinationId?: string | null
         alertId?: string | null
         casePath?: string | null
+        caseActionId?: string | null
+        caseActionPath?: string | null
         dedupeKey?: string | null
         requestId?: string | null
         idempotencyKey?: string | null
@@ -9784,6 +9812,8 @@ function buildDwmWebhookReceiptHistoryFilters({
         destinationId: clean(filters.destinationId) || null,
         alertId: clean(filters.alertId) || null,
         casePath: clean(filters.casePath) || null,
+        caseActionId: clean(filters.caseActionId) || null,
+        caseActionPath: clean(filters.caseActionPath) || null,
         dedupeKey: clean(filters.dedupeKey) || null,
         requestId: clean(filters.requestId) || null,
         idempotencyKey: clean(filters.idempotencyKey) || null,
@@ -9799,6 +9829,8 @@ function buildDwmWebhookReceiptHistoryFilters({
         destinationId: normalizedFilters.destinationId || undefined,
         alertId: normalizedFilters.alertId || undefined,
         casePath: normalizedFilters.casePath || undefined,
+        caseActionId: normalizedFilters.caseActionId || undefined,
+        caseActionPath: normalizedFilters.caseActionPath || undefined,
         dedupeKey: normalizedFilters.dedupeKey || undefined,
         deliveryId: normalizedFilters.requestId || undefined,
         idempotencyKey: normalizedFilters.idempotencyKey || undefined,
@@ -9817,6 +9849,8 @@ function buildDwmWebhookReceiptHistoryFilters({
         destinationId: receipt.destinationId,
         alertId: receipt.alertId,
         casePath: receipt.casePath,
+        caseActionId: receipt.caseActionId || null,
+        caseActionPath: receipt.caseActionPath || null,
         alertUrl: receipt.alertUrl,
         dedupeKey: receipt.dedupeKey,
         eventType: receipt.eventType,
@@ -9851,6 +9885,11 @@ function buildDwmWebhookReceiptHistoryFilters({
             byDestination: receipt.destinationId ? { orgId: receipt.orgId, destinationId: receipt.destinationId } : null,
             byAlert: receipt.alertId ? { orgId: receipt.orgId, alertId: receipt.alertId } : null,
             byCase: receipt.casePath ? { orgId: receipt.orgId, casePath: receipt.casePath } : null,
+            byCaseAction: receipt.caseActionId || receipt.caseActionPath ? {
+                orgId: receipt.orgId,
+                ...(receipt.caseActionId ? { caseActionId: receipt.caseActionId } : {}),
+                ...(receipt.caseActionPath ? { caseActionPath: receipt.caseActionPath } : {}),
+            } : null,
             byDedupe: receipt.dedupeKey ? { orgId: receipt.orgId, dedupeKey: receipt.dedupeKey } : null,
         },
         blockers: receipt.transitionReceipt.denial.blockers,
@@ -9878,7 +9917,7 @@ function buildDwmWebhookReceiptHistoryFilters({
                 method: 'GET',
                 route: '/api/dwm/webhook-deliveries',
                 requiredQuery: ['orgId'],
-                optionalQuery: ['destinationId', 'alertId', 'casePath', 'dedupeKey', 'deliveryId', 'idempotencyKey', 'action', 'status', 'timeFrom', 'timeTo', 'retryState', 'actorId', 'replay'],
+                optionalQuery: ['destinationId', 'alertId', 'casePath', 'caseActionId', 'caseActionPath', 'dedupeKey', 'deliveryId', 'idempotencyKey', 'action', 'status', 'timeFrom', 'timeTo', 'retryState', 'actorId', 'replay'],
                 noNetwork: true,
             },
             detail: {
@@ -9891,7 +9930,7 @@ function buildDwmWebhookReceiptHistoryFilters({
                 method: 'GET',
                 route: '/api/dwm/webhook-deliveries',
                 requiredQuery: ['orgId', 'dedupeKey'],
-                optionalQuery: ['destinationId', 'alertId', 'casePath', 'idempotencyKey', 'action', 'status', 'timeFrom', 'timeTo', 'retryState', 'actorId'],
+                optionalQuery: ['destinationId', 'alertId', 'casePath', 'caseActionId', 'caseActionPath', 'idempotencyKey', 'action', 'status', 'timeFrom', 'timeTo', 'retryState', 'actorId'],
                 noNetwork: true,
             },
             dryRunReplay: {
@@ -9908,6 +9947,7 @@ function buildDwmWebhookReceiptHistoryFilters({
             missingDestination: missingDestinationRows[0]?.queryKeys.byAlert || missingDestinationRows[0]?.queryKeys.byDelivery || null,
             disabledDestination: disabledRows[0]?.queryKeys.byDestination || disabledRows[0]?.queryKeys.byDelivery || null,
             latestReplay: replayRows[0]?.queryKeys.byDedupe || replayRows[0]?.queryKeys.byDelivery || null,
+            latestCaseActionReplay: replayRows.find(row => row.queryKeys.byCaseAction)?.queryKeys.byCaseAction || null,
         },
         counts: {
             total: rows.length,
