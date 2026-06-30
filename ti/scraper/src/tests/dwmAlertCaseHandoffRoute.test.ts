@@ -553,6 +553,92 @@ describe("DWM alert case handoff route", () => {
     })]);
     expect(wrongOrgHistory.status).toBe(404);
     expect(wrongOrgHistoryPayload.error).toMatchObject({ code: "case_not_found" });
+
+    const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme");
+    const replayExportPayload = await replayExport.json() as any;
+    const filteredReplayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&idempotencyKey=case-action-replay-001");
+    const filteredReplayExportPayload = await filteredReplayExport.json() as any;
+    const viewerReplayExport = await getActionReplayExport(options, "case_alert_acme", "viewer@acme.com", "organizationId=org_acme&actionId=webhookDryRun");
+    const viewerReplayExportPayload = await viewerReplayExport.json() as any;
+    const wrongOrgReplayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_other");
+    const wrongOrgReplayExportPayload = await wrongOrgReplayExport.json() as any;
+
+    expect(replayExport.status).toBe(200);
+    expect(replayExportPayload).toMatchObject({
+      schemaVersion: "dwm.case_action_replay_export.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      replayPlan: {
+        workflowTransitionCount: 4,
+        handoffReceiptCount: 3,
+        customerNotificationCount: 0,
+        replayable: true,
+        blockerCodes: []
+      },
+      provenance: {
+        captureIds: ["cap_acme_1"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_1"],
+        evidenceCount: 1
+      },
+      auditSafety: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(replayExportPayload.workflowTransitions.map((transition: any) => transition.action)).toEqual([
+      "open",
+      "handoff_alert_replay",
+      "handoff_webhook_dry_run",
+      "handoff_alert_replay"
+    ]);
+    expect(replayExportPayload.handoffActionHistory.receipts).toHaveLength(3);
+    expect(JSON.stringify(replayExportPayload)).not.toContain("rawText");
+    expect(filteredReplayExport.status).toBe(200);
+    expect(filteredReplayExportPayload).toMatchObject({
+      filters: {
+        idempotencyKey: "case-action-replay-001"
+      },
+      replayPlan: {
+        workflowTransitionCount: 1,
+        handoffReceiptCount: 1
+      }
+    });
+    expect(filteredReplayExportPayload.workflowTransitions[0]).toMatchObject({
+      action: "handoff_alert_replay",
+      workflowState: {
+        idempotencyKey: "case-action-replay-001"
+      }
+    });
+    expect(viewerReplayExport.status).toBe(200);
+    expect(viewerReplayExportPayload).toMatchObject({
+      access: {
+        role: "viewer",
+        readOnly: true
+      },
+      filters: {
+        actionId: "webhookDryRun"
+      },
+      replayPlan: {
+        handoffReceiptCount: 1,
+        replayable: false,
+        blockerCodes: ["case_read_only_member"]
+      },
+      handoffActionReadiness: {
+        readyActionIds: [],
+        actions: {
+          webhookDryRun: {
+            ready: false,
+            blockerCodes: ["case_read_only_member"]
+          }
+        }
+      }
+    });
+    expect(wrongOrgReplayExport.status).toBe(404);
+    expect(wrongOrgReplayExportPayload.error).toMatchObject({ code: "case_not_found" });
   });
 
   test("blocks handoff action receipts for missing alert, missing destination, and unsupported actions", async () => {
@@ -630,6 +716,25 @@ describe("DWM alert case handoff route", () => {
     expect(unsupported.status).toBe(400);
     expect(unsupportedPayload.error).toMatchObject({ code: "unsupported_handoff_action" });
     expect((store as any).getCase("case_alert_no_destination").handoffActionReceipts ?? []).toEqual([]);
+    const missingAlertReplayExport = await getActionReplayExport(options, "case_missing_alert", "owner@acme.com", "organizationId=org_acme");
+    const missingAlertReplayExportPayload = await missingAlertReplayExport.json() as any;
+    expect(missingAlertReplayExport.status).toBe(200);
+    expect(missingAlertReplayExportPayload).toMatchObject({
+      schemaVersion: "dwm.case_action_replay_export.v1",
+      caseId: "case_missing_alert",
+      alertId: "alert_missing",
+      replayPlan: {
+        replayable: false,
+        blockerCodes: ["missing_case_alert"]
+      },
+      provenance: {
+        captureIds: [],
+        sourceIds: [],
+        contentHashes: [],
+        evidenceCount: 0
+      }
+    });
+    expect(missingAlertReplayExportPayload.handoffActionReadiness).toBeUndefined();
   });
 
   test("blocks missing provenance, wrong org, and read-only members", async () => {
@@ -694,6 +799,12 @@ async function postHandoffAction(options: ReturnType<typeof fixtureRuntime>["opt
 
 async function getHandoffActions(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
   return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/handoff-actions?${query}`, {
+    headers: { "x-user-email": email }
+  }), options);
+}
+
+async function getActionReplayExport(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, query: string) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/action-replay-export?${query}`, {
     headers: { "x-user-email": email }
   }), options);
 }

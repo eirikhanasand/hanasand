@@ -277,6 +277,20 @@ export function listCaseHandoffActions(url: URL, options: ApiServerOptions, case
   }));
 }
 
+export function exportCaseActionReplay(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
+  const scope = resolveOrganizationScope({ url, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, url, mode: "read" });
+  if (access.error) return access.error;
+  const caseRecord = findCase(options, caseId);
+  if (!caseRecord || caseRecord.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(caseRecord, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  return json(buildCaseActionReplayExport(caseRecord, options, scope.organization, access, {
+    actionId: normalizeHandoffActionId(url.searchParams.get("actionId") ?? url.searchParams.get("action")),
+    idempotencyKey: normalizeNote(url.searchParams.get("idempotencyKey") ?? url.searchParams.get("idempotency")),
+    eventAction: normalizeNote(url.searchParams.get("eventAction") ?? url.searchParams.get("workflowAction"))
+  }));
+}
+
 export function exportCaseEvidence(url: URL, options: ApiServerOptions, caseId: string | undefined, request?: Request): Response {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
@@ -1503,6 +1517,81 @@ function buildCaseHandoffActionHistory(caseRecord: AnalystCase, options: ApiServ
     },
     handoffActionReadiness,
     receipts,
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access: CaseAccessResult, filters: {
+  actionId?: "alertReplay" | "webhookDryRun";
+  idempotencyKey?: string;
+  eventAction?: string;
+}) {
+  const alert = findDwmAlert(options, caseRecord.alertId);
+  const handoffHistory = buildCaseHandoffActionHistory(caseRecord, options, organization, access, {
+    actionId: filters.actionId,
+    idempotencyKey: filters.idempotencyKey
+  });
+  const workflowTransitions = (caseRecord.workflowEvents ?? [])
+    .filter((event) => !filters.eventAction || event.action === filters.eventAction)
+    .filter((event) => !filters.idempotencyKey || event.idempotencyKey === filters.idempotencyKey)
+    .map((event) => caseWorkflowTransition(caseRecord, event));
+  const customerNotifications = (caseRecord.customerNotifications ?? [])
+    .filter((receipt) => !filters.idempotencyKey || receipt.idempotencyKey === filters.idempotencyKey)
+    .map((receipt) => ({
+      id: receipt.id,
+      schemaVersion: receipt.schemaVersion,
+      caseId: receipt.caseId,
+      alertId: receipt.alertId,
+      at: receipt.at,
+      actor: receipt.actor,
+      deliveryMode: receipt.deliveryMode,
+      idempotencyKey: receipt.idempotencyKey,
+      webhookDeliveryId: receipt.webhookDeliveryId,
+      webhookDestinationId: receipt.webhookDestinationId,
+      webhookStatus: receipt.webhookStatus,
+      externalReference: receipt.externalReference,
+      evidence: receipt.evidence
+    }));
+  const blockerCodes = uniqueCaseStrings([
+    ...(alert ? [] : ["missing_case_alert"]),
+    ...(handoffHistory.handoffActionReadiness?.blockerCodes ?? [])
+  ]);
+  return {
+    schemaVersion: "dwm.case_action_replay_export.v1",
+    generatedAt: nowIso(),
+    organization,
+    access: caseAccessSummary(access),
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    filters,
+    workflowState: caseWorkflowSummary(caseRecord),
+    handoffActionReadiness: handoffHistory.handoffActionReadiness,
+    handoffActionHistory: {
+      schemaVersion: handoffHistory.schemaVersion,
+      summary: handoffHistory.summary,
+      receipts: handoffHistory.receipts
+    },
+    workflowTransitions,
+    customerNotifications,
+    replayPlan: {
+      workflowTransitionCount: workflowTransitions.length,
+      handoffReceiptCount: handoffHistory.receipts.length,
+      customerNotificationCount: customerNotifications.length,
+      replayable: blockerCodes.length === 0,
+      blockerCodes
+    },
+    provenance: {
+      captureIds: handoffHistory.handoffActionReadiness?.provenance?.captureIds ?? [],
+      sourceIds: handoffHistory.handoffActionReadiness?.provenance?.sourceIds ?? [],
+      contentHashes: handoffHistory.handoffActionReadiness?.provenance?.contentHashes ?? [],
+      evidenceCount: handoffHistory.handoffActionReadiness?.provenance?.evidenceCount ?? 0
+    },
     auditSafety: {
       metadataOnly: true,
       rawEvidenceExposed: false,

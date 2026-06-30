@@ -9,7 +9,7 @@ import { buildDwmSeedCatalog, buildDwmSourceInventory } from "../product/dwmSour
 import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
-import { createCase, createCaseFromDwmAlert, exportCaseEvidence, getCaseDetail, listCaseHandoffActions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
+import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, listCaseHandoffActions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
@@ -50,6 +50,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/organizations\/[^/]+\/webhooks\/test$/.test(url.pathname) && request.method === "POST") return testOrganizationWebhook(request, options, url.pathname.split("/")[3]);
     if (url.pathname === "/v1/cases" && request.method === "GET") return listCases(url, options, request);
     if (url.pathname === "/v1/cases" && request.method === "POST") return createCase(request, options);
+    if (/^\/v1\/cases\/[^/]+\/action-replay-export$/.test(url.pathname) && request.method === "GET") return exportCaseActionReplay(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+\/export$/.test(url.pathname) && request.method === "GET") return exportCaseEvidence(url, options, url.pathname.split("/")[3], request);
     if (/^\/v1\/cases\/[^/]+\/customer-notification$/.test(url.pathname) && request.method === "POST") return recordCaseCustomerNotification(request, options, url.pathname.split("/")[3]);
     if (/^\/v1\/cases\/[^/]+\/handoff-actions$/.test(url.pathname) && request.method === "GET") return listCaseHandoffActions(url, options, url.pathname.split("/")[3], request);
