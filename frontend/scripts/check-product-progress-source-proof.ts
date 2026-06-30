@@ -55,9 +55,11 @@ assert.equal(shallowSourceGrowth?.sourceCustomerConfigReady, false)
 assert.equal(shallowSourceGrowth?.sourceReadinessArtifactReady, false)
 assert.equal(shallowSourceGrowth?.sourceProxyVerificationReady, false)
 assert.equal(shallowSourceGrowth?.schemaLookupReady, false)
+assert.equal(shallowSourceGrowth?.receiptMatrixReady, false)
 assert.ok(shallowSourceGrowth?.blockers?.some(blocker => blocker.includes('Source operations readiness proof is missing')), 'Shallow proxy must not pass without source operations proof.')
 assert.ok(shallowSourceGrowth?.backendProofContractVersion?.includes('dwm.source_pack_worker_proxy_verification.v1'), 'Source proof contract stack must name proxy verification.')
 assert.ok(shallowSourceGrowth?.backendProofContractVersion?.includes('ti.api_contract_schema_lookup.v1'), 'Source proof contract stack must name schema lookup.')
+assert.ok(shallowSourceGrowth?.backendProofContractVersion?.includes('hanasand.product_readiness.receipt_matrix.v1'), 'Source proof contract stack must name product readiness receipt matrix.')
 
 const backedPayload: ProductProgressReadinessPayload = {
     ...shallowPayload,
@@ -115,6 +117,24 @@ const backedPayload: ProductProgressReadinessPayload = {
                 }],
                 safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
             },
+            productReadinessReceiptMatrix: {
+                schemaVersion: 'hanasand.product_readiness.receipt_matrix.v1',
+                aggregateSchemaVersion: 'hanasand.product_readiness.v1',
+                route: '/v1/contracts',
+                rows: [{
+                    capabilityId: 'source_activation',
+                    ownerLane: 'source',
+                    readinessRoute: 'GET /v1/dwm/source-requests/readiness',
+                    contractIds: ['source_activation_and_provenance', 'source_provenance_readiness'],
+                    schemaIds: ['dwm.source_worker_readiness.v1', 'dwm.source_pack_action_contract.v1'],
+                    receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'],
+                    blockerCodes: ['source_inactive', 'source_worker_not_ready'],
+                    scopeFields: ['tenantId', 'organizationId', 'sourceIds'],
+                    downstreamConsumers: [{ ownerLane: 'alert', route: 'POST /v1/dwm/alerts/rebuild', requiredFields: ['sourceIds', 'captureIds'] }],
+                    safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+                }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            },
         },
     },
 }
@@ -128,6 +148,10 @@ assert.equal(backedSourceGrowth?.sourceProxyVerificationReady, true)
 assert.equal(backedSourceGrowth?.schemaLookupReady, true)
 assert.equal(backedSourceGrowth?.schemaLookupSafe, true)
 assert.equal(backedSourceGrowth?.contractLookupRows, 1)
+assert.equal(backedSourceGrowth?.receiptMatrixReady, true)
+assert.equal(backedSourceGrowth?.receiptMatrixSafe, true)
+assert.equal(backedSourceGrowth?.receiptMatrixRows, 1)
+assert.equal(backedSourceGrowth?.receiptMatrixBlockedRows, 1)
 assert.equal(backedSourceGrowth?.sourceFamilyCount, 2)
 assert.equal(backedSourceGrowth?.unavailableReason, undefined)
 

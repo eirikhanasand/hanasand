@@ -111,6 +111,24 @@ const partialPayload = buildProductProgressPayload({
                 }],
                 safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
             },
+            productReadinessReceiptMatrix: {
+                schemaVersion: 'hanasand.product_readiness.receipt_matrix.v1',
+                aggregateSchemaVersion: 'hanasand.product_readiness.v1',
+                route: '/v1/contracts',
+                rows: [{
+                    capabilityId: 'source_activation',
+                    ownerLane: 'source',
+                    readinessRoute: 'GET /v1/dwm/source-requests/readiness',
+                    contractIds: ['source_activation_and_provenance', 'source_provenance_readiness'],
+                    schemaIds: ['dwm.source_worker_readiness.v1', 'dwm.source_pack_action_contract.v1'],
+                    receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'],
+                    blockerCodes: ['source_inactive', 'source_worker_not_ready'],
+                    scopeFields: ['tenantId', 'organizationId', 'sourceIds'],
+                    downstreamConsumers: [{ ownerLane: 'alert', route: 'POST /v1/dwm/alerts/rebuild', requiredFields: ['sourceIds', 'captureIds'] }],
+                    safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+                }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            },
         },
     },
     alerts: [{ id: 'alert_acme_1', updatedAt: generatedAt }],
@@ -201,7 +219,9 @@ assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' 
 assert.ok(partialScoreboard.rows.some(row => row.id === 'real_alert_generation' && row.expectedDashboardRowId.includes('alert_generation_readiness')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.state === 'ready'))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('ti.api_contract_schema_lookup.v1')))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.backendProofContractVersion.includes('hanasand.product_readiness.receipt_matrix.v1')))
 assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.integrationProbeHint.includes('schemaLookup')))
+assert.ok(partialScoreboard.rows.some(row => row.id === 'source_coverage' && row.integrationProbeHint.includes('productReadinessReceiptMatrix')))
 assert.ok(partialScoreboard.rows.every(row => row.ownerLane && row.href && row.backendProofContractVersion && row.integrationProbeHint))
 assert.ok(partialScoreboard.rows.every(row => row.proofSource && row.detail))
 assert.ok(partialScoreboard.rows.every(row => row.expectedDashboardRowId && row.staleAfterSeconds > 0 && row.proofTimestamp))

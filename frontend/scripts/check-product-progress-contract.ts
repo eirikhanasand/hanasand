@@ -118,6 +118,24 @@ const sourceProxy = {
             }],
             safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
         },
+        productReadinessReceiptMatrix: {
+            schemaVersion: 'hanasand.product_readiness.receipt_matrix.v1',
+            aggregateSchemaVersion: 'hanasand.product_readiness.v1',
+            route: '/v1/contracts',
+            rows: [{
+                capabilityId: 'source_activation',
+                ownerLane: 'source',
+                readinessRoute: 'GET /v1/dwm/source-requests/readiness',
+                contractIds: ['source_activation_and_provenance', 'source_provenance_readiness'],
+                schemaIds: ['dwm.source_worker_readiness.v1', 'dwm.source_pack_action_contract.v1'],
+                receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'],
+                blockerCodes: ['source_inactive', 'source_worker_not_ready'],
+                scopeFields: ['tenantId', 'organizationId', 'sourceIds'],
+                downstreamConsumers: [{ ownerLane: 'alert', route: 'POST /v1/dwm/alerts/rebuild', requiredFields: ['sourceIds', 'captureIds'] }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            }],
+            safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+        },
     },
 }
 
@@ -183,6 +201,8 @@ assert.equal(buildProductNorthStarScoreboard(null, { generatedAt }).firstBlocker
 assert.equal(partialPayload.sourceProxy?.sourceInventory?.schemaVersion, 'dwm.source_inventory.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.schemaVersion, 'ti.api_contract_schema_lookup.v1')
 assert.equal(partialPayload.sourceProxy?.contracts?.schemaLookup?.safeOutput?.metadataOnly, true)
+assert.equal(partialPayload.sourceProxy?.contracts?.productReadinessReceiptMatrix?.schemaVersion, 'hanasand.product_readiness.receipt_matrix.v1')
+assert.equal(partialPayload.sourceProxy?.contracts?.productReadinessReceiptMatrix?.aggregateSchemaVersion, 'hanasand.product_readiness.v1')
 assert.equal(partialPayload.alertGeneration?.schemaVersion, 'dwm.alert_generation_readiness.v1')
 assert.equal(partialPayload.alertGeneration?.candidateCount, 3)
 assert.equal(partialPayload.alertGeneration?.generationEvidenceWindowReady, true)
@@ -351,7 +371,12 @@ assert.equal(partialExternal.sourceGrowth?.sourceProxyVerificationReady, true)
 assert.equal(partialExternal.sourceGrowth?.schemaLookupReady, true)
 assert.equal(partialExternal.sourceGrowth?.schemaLookupSafe, true)
 assert.equal(partialExternal.sourceGrowth?.contractLookupRows, 1)
+assert.equal(partialExternal.sourceGrowth?.receiptMatrixReady, true)
+assert.equal(partialExternal.sourceGrowth?.receiptMatrixSafe, true)
+assert.equal(partialExternal.sourceGrowth?.receiptMatrixRows, 1)
+assert.equal(partialExternal.sourceGrowth?.receiptMatrixBlockedRows, 1)
 assert.ok(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('ti.api_contract_schema_lookup.v1'), 'Source proof contract stack must name safe schema lookup.')
+assert.ok(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('hanasand.product_readiness.receipt_matrix.v1'), 'Source proof contract stack must name product readiness receipt matrix.')
 assert.equal(partialExternal.sourceGrowth?.backendProofContractVersion?.includes('dwm.source_readiness_artifact.v1'), true)
 assert.equal(partialExternal.sourceGrowth?.workerStatus, 'ready')
 assert.equal(partialExternal.sourceGrowth?.collectionReadyRows, 349)
