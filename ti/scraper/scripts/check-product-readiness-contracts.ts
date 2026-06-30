@@ -1,7 +1,9 @@
 import { contractIndex } from "../src/api/contractsRoute.ts";
 import {
+  buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixtures,
   productReadinessConsumerProofMetadataGuard,
+  productReadinessConsumerVerificationGuard,
   productReadinessSchemaLookupMetadataGuard
 } from "../src/product/productReadinessIntegrationGateFixtures.ts";
 
@@ -9,6 +11,7 @@ const contract = contractIndex();
 const gate = contract.productReadinessIntegrationGate;
 const consumerProofMetadata = productReadinessConsumerProofMetadataGuard(contract);
 const schemaLookupMetadata = productReadinessSchemaLookupMetadataGuard(contract);
+const consumerVerification = productReadinessConsumerVerificationGuard(buildProductReadinessConsumerVerificationLedger(contract));
 const consumerProofMetadataSummary = {
   schemaVersion: consumerProofMetadata.schemaVersion,
   route: consumerProofMetadata.route,
@@ -41,6 +44,23 @@ const schemaLookupMetadataSummary = {
   })),
   safeOutput: schemaLookupMetadata.safeOutput
 };
+const consumerVerificationSummary = {
+  schemaVersion: consumerVerification.schemaVersion,
+  route: consumerVerification.route,
+  ok: consumerVerification.ok,
+  rowCount: consumerVerification.rowCount,
+  verifiedAt: consumerVerification.verifiedAt,
+  staleBefore: consumerVerification.staleBefore,
+  proofCommand: consumerVerification.proofCommand,
+  blockerCodes: consumerVerification.blockerCodes,
+  failingRows: consumerVerification.rows.filter((row) => !row.ok).map((row) => ({
+    capabilityId: row.capabilityId,
+    ownerLane: row.ownerLane,
+    blockerCodes: row.blockerCodes,
+    consumerVerificationCount: row.consumerVerificationCount
+  })),
+  safeOutput: consumerVerification.safeOutput
+};
 const fixtures = buildProductReadinessIntegrationGateFixtures();
 const fixtureChecks = fixtures.map((fixture) => ({
   kind: fixture.kind,
@@ -49,10 +69,11 @@ const fixtureChecks = fixtures.map((fixture) => ({
   actualBlockerCodes: fixture.actualBlockerCodes,
   gateDecision: fixture.gate.decision,
   consumerProofMetadataOk: fixture.consumerProofMetadata.ok,
-  schemaLookupMetadataOk: fixture.schemaLookupMetadata.ok
+  schemaLookupMetadataOk: fixture.schemaLookupMetadata.ok,
+  consumerVerificationOk: fixture.consumerVerification.ok
 }));
 const fixturesOk = fixtureChecks.every((fixture) => fixture.passed);
-const ok = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && fixturesOk;
+const ok = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && fixturesOk;
 
 console.log(JSON.stringify({
   ok,
@@ -72,6 +93,7 @@ console.log(JSON.stringify({
   })),
   consumerProofMetadata: consumerProofMetadataSummary,
   schemaLookupMetadata: schemaLookupMetadataSummary,
+  consumerVerification: consumerVerificationSummary,
   fixtureSchemaVersion: fixtures[0]?.schemaVersion,
   fixtureChecks,
   safeOutput: gate.safeOutput

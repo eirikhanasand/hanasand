@@ -11,6 +11,13 @@ export const PRODUCT_READINESS_CONSUMER_PROOF_METADATA_GUARD_SCHEMA_VERSION =
   "hanasand.product_readiness.consumer_proof_metadata_guard.v1" as const;
 export const PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION =
   "hanasand.product_readiness.schema_lookup_metadata_guard.v1" as const;
+export const PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION =
+  "hanasand.product_readiness.consumer_verification_ledger.v1" as const;
+export const PRODUCT_READINESS_CONSUMER_VERIFICATION_GUARD_SCHEMA_VERSION =
+  "hanasand.product_readiness.consumer_verification_guard.v1" as const;
+const PRODUCT_READINESS_CONSUMER_VERIFIED_AT = "2026-06-30T00:00:00.000Z";
+const PRODUCT_READINESS_CONSUMER_STALE_BEFORE = "2026-06-23T00:00:00.000Z";
+const PRODUCT_READINESS_CONSUMER_PROOF_COMMAND = "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun run check:product-readiness-contracts";
 
 export type ProductReadinessIntegrationGateFixtureKind =
   | "valid"
@@ -21,7 +28,11 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "unsafe_receipt_output"
   | "malformed_consumer_proof_metadata"
   | "malformed_schema_lookup_metadata"
-  | "missing_customer_workflow";
+  | "missing_customer_workflow"
+  | "missing_consumer_verification"
+  | "stale_consumer_verification"
+  | "missing_consumer_proof_command"
+  | "prompt_literal_consumer_copy";
 
 const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "valid",
@@ -32,7 +43,11 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "unsafe_receipt_output",
   "malformed_consumer_proof_metadata",
   "malformed_schema_lookup_metadata",
-  "missing_customer_workflow"
+  "missing_customer_workflow",
+  "missing_consumer_verification",
+  "stale_consumer_verification",
+  "missing_consumer_proof_command",
+  "prompt_literal_consumer_copy"
 ];
 
 function cloneJson<T>(input: T): T {
@@ -133,8 +148,25 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
     "missing_schema_lookup_consumer_required_fields",
     "unsafe_schema_lookup_row"
   ],
-  missing_customer_workflow: ["missing_customer_workflow_ids", "missing_customer_workflow"]
+  missing_customer_workflow: ["missing_customer_workflow_ids", "missing_customer_workflow"],
+  missing_consumer_verification: ["missing_consumer_verification"],
+  stale_consumer_verification: ["stale_consumer_verification"],
+  missing_consumer_proof_command: ["missing_consumer_proof_command"],
+  prompt_literal_consumer_copy: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"]
 };
+
+type ConsumerVerificationLedger = ReturnType<typeof buildProductReadinessConsumerVerificationLedger>;
+
+function consumerKind(route: string, ownerLane: string): "ui" | "api" | "workflow" {
+  if (route === "/" || route.startsWith("/dashboard") || route.startsWith("/ti")) return "ui";
+  if (ownerLane === "alert" || ownerLane === "case" || ownerLane === "webhook" || ownerLane === "source") return "workflow";
+  return "api";
+}
+
+function consumerLabel(ownerLane: string, route: string) {
+  const routeKind = consumerKind(route, ownerLane);
+  return `${ownerLane}_${routeKind}_consumer`;
+}
 
 export function productReadinessConsumerProofMetadataGuard(contractLike: Pick<ReturnType<typeof contractIndex>, "productReadinessReceiptMatrix">) {
   const rows = contractLike.productReadinessReceiptMatrix.rows.map((row) => {
@@ -243,20 +275,131 @@ export function productReadinessSchemaLookupMetadataGuard(contractLike: Pick<Ret
   };
 }
 
+export function buildProductReadinessConsumerVerificationLedger(contractLike: Pick<ReturnType<typeof contractIndex>, "productReadinessReceiptMatrix">) {
+  return {
+    schemaVersion: PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    verifiedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+    staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE,
+    proofCommand: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+    rows: contractLike.productReadinessReceiptMatrix.rows.map((row) => ({
+      capabilityId: row.capabilityId,
+      ownerLane: row.ownerLane,
+      customerWorkflowIds: row.customerWorkflowIds || [],
+      consumerVerifications: (row.downstreamConsumers || []).map((consumer) => ({
+        ownerLane: consumer.ownerLane,
+        route: consumer.route,
+        consumerKind: consumerKind(consumer.route, consumer.ownerLane),
+        consumerLabel: consumerLabel(consumer.ownerLane, consumer.route),
+        requiredFields: consumer.requiredFields || [],
+        verifiedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+        staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE,
+        proofCommand: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND
+      }))
+    })),
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+function mutateConsumerVerificationLedger(ledger: ConsumerVerificationLedger, kind: ProductReadinessIntegrationGateFixtureKind) {
+  const firstSourceRow = ledger.rows.find((row) => row.capabilityId === "source_activation");
+  const firstConsumer = firstSourceRow?.consumerVerifications[0];
+  switch (kind) {
+    case "missing_consumer_verification":
+      if (firstSourceRow) firstSourceRow.consumerVerifications = [];
+      break;
+    case "stale_consumer_verification":
+      if (firstConsumer) firstConsumer.verifiedAt = "2026-06-01T00:00:00.000Z";
+      break;
+    case "missing_consumer_proof_command":
+      if (firstConsumer) firstConsumer.proofCommand = "";
+      break;
+    case "prompt_literal_consumer_copy":
+      if (firstConsumer) firstConsumer.consumerLabel = "control room signal";
+      break;
+  }
+}
+
+export function productReadinessConsumerVerificationGuard(ledger: ConsumerVerificationLedger) {
+  const forbiddenTerms = ["control room", "how this feeds", "dashboard slop", "named examples", "signal", "acceptance criteria", "acceptance-criteria"];
+  const rows = ledger.rows.map((row) => {
+    const verifications = Array.isArray(row.consumerVerifications) ? row.consumerVerifications : [];
+    const blockerCodes = [
+      ...(!Array.isArray(row.customerWorkflowIds) || row.customerWorkflowIds.length === 0 ? ["missing_customer_workflow_ids"] : []),
+      ...(!verifications.length ? ["missing_consumer_verification"] : []),
+      ...verifications.flatMap((verification) => {
+        const blockers: string[] = [];
+        if (!verification.ownerLane) blockers.push("missing_consumer_owner");
+        if (!hasConsumerRouteShape(verification.route)) blockers.push("missing_consumer_route");
+        if (!verification.consumerKind) blockers.push("missing_consumer_kind");
+        if (!Array.isArray(verification.requiredFields) || verification.requiredFields.length === 0) blockers.push("missing_consumer_required_fields");
+        if (!verification.verifiedAt) blockers.push("missing_consumer_verified_at");
+        if (verification.verifiedAt && verification.verifiedAt < verification.staleBefore) blockers.push("stale_consumer_verification");
+        if (!verification.proofCommand) blockers.push("missing_consumer_proof_command");
+        const label = String(verification.consumerLabel || "").toLowerCase();
+        for (const term of forbiddenTerms) {
+          if (label.includes(term)) blockers.push(`consumer_copy_guard_${term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`);
+        }
+        return blockers;
+      })
+    ];
+    return {
+      capabilityId: row.capabilityId,
+      ownerLane: row.ownerLane,
+      ok: blockerCodes.length === 0,
+      blockerCodes: [...new Set(blockerCodes)].sort(),
+      customerWorkflowIds: row.customerWorkflowIds,
+      consumerVerificationCount: verifications.length,
+      consumerVerifications: verifications.map((verification) => ({
+        ownerLane: verification.ownerLane,
+        route: verification.route,
+        consumerKind: verification.consumerKind,
+        consumerLabel: verification.consumerLabel,
+        requiredFieldCount: Array.isArray(verification.requiredFields) ? verification.requiredFields.length : 0,
+        verifiedAt: verification.verifiedAt,
+        staleBefore: verification.staleBefore,
+        proofCommand: verification.proofCommand
+      }))
+    };
+  });
+  const blockerCodes = [...new Set(rows.flatMap((row) => row.blockerCodes))].sort();
+  return {
+    schemaVersion: PRODUCT_READINESS_CONSUMER_VERIFICATION_GUARD_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    ok: blockerCodes.length === 0,
+    rowCount: rows.length,
+    verifiedAt: ledger.verifiedAt,
+    staleBefore: ledger.staleBefore,
+    proofCommand: ledger.proofCommand,
+    blockerCodes,
+    rows,
+    safeOutput: ledger.safeOutput
+  };
+}
+
 export function buildProductReadinessIntegrationGateFixture(kind: ProductReadinessIntegrationGateFixtureKind) {
   const contractLike = cloneJson(contractIndex());
   mutateFixtureContract(contractLike, kind);
   const { coverage, copyGuard, gate } = buildGateFromContractLike(contractLike);
   const consumerProofMetadata = productReadinessConsumerProofMetadataGuard(contractLike);
   const schemaLookupMetadata = productReadinessSchemaLookupMetadataGuard(contractLike);
+  const consumerVerificationLedger = buildProductReadinessConsumerVerificationLedger(contractLike);
+  mutateConsumerVerificationLedger(consumerVerificationLedger, kind);
+  const consumerVerification = productReadinessConsumerVerificationGuard(consumerVerificationLedger);
   const expectedBlockerCodes = EXPECTED_BLOCKERS[kind];
   const actualBlockerCodes = [...new Set([
     ...gate.blockerCodes,
     ...consumerProofMetadata.blockerCodes,
-    ...schemaLookupMetadata.blockerCodes
+    ...schemaLookupMetadata.blockerCodes,
+    ...consumerVerification.blockerCodes
   ])].sort();
   const expectedBlockersPresent = expectedBlockerCodes.every((code) => actualBlockerCodes.includes(code));
-  const liveOk = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok;
+  const liveOk = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok;
   const passed = kind === "valid" ? liveOk : !liveOk && expectedBlockersPresent;
 
   return {
@@ -311,6 +454,7 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
     },
     consumerProofMetadata,
     schemaLookupMetadata,
+    consumerVerification,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,
