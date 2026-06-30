@@ -189,6 +189,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedWatchlistPlan = selected ? selectedWatchlistPlanFor(result, selected, actionability, watchlist, selectedRelevance) : null
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
+    const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -449,6 +450,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 reviewHandoff={reviewHandoff}
                                 caseDraft={selectedCaseDraft}
                                 caseActionTrail={selectedCaseActionTrail}
+                                caseOwnership={selectedCaseOwnership}
                                 watchlistPlan={selectedWatchlistPlan}
                                 alertPlan={selectedAlertPlan}
                                 enrichmentTriage={selectedEnrichmentTriage}
@@ -672,6 +674,88 @@ type SelectedCaseDraft = {
     watchTerms: string[]
     sourceRows: Array<Pick<SelectedSourceDrilldownRow, 'sourceName' | 'sourceId' | 'provenance' | 'captureId' | 'confidence' | 'state' | 'missing'>>
     body: Record<string, unknown>
+}
+
+type SelectedCaseOwnershipPlan = {
+    schemaVersion: 'ti.public_actor.selected_case_ownership.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    state: 'ready' | 'review' | 'blocked'
+    route: string
+    nextAction: string
+    owner: {
+        lane: string
+        label: string
+    }
+    summary: {
+        caseCandidates: number
+        replayReady: number
+        relatedAlerts: number
+        relatedCases: number
+        captures: number
+        blockers: number
+    }
+    caseReviewItems: Array<{
+        id: string
+        evidenceRowId: string
+        title: string
+        priority: CaseReviewIntakeItem['priority']
+        state: CaseReviewIntakeItem['state']
+        route: string
+        alertIds: string[]
+        casePaths: string[]
+        captureIds: string[]
+        sourceIds: string[]
+        watchlistTerms: string[]
+        reasons: string[]
+        recommendedAction: CaseReviewIntakeItem['recommendedAction']
+        nextAction: string
+        blockers: string[]
+    }>
+    replayRows: Array<{
+        id: string
+        evidenceRowId: string
+        ready: boolean
+        state: TiActionabilityModel['caseReplayReadiness']['rows'][number]['state']
+        exportRoute?: string
+        caseId?: string
+        alertIds: string[]
+        captureIds: string[]
+        sourceIds: string[]
+        blockerCodes: string[]
+    }>
+    related: {
+        alerts: Array<{
+            id: string
+            status?: string
+            casePath?: string
+            captureIds: string[]
+            recommendedRoute?: string
+        }>
+        cases: Array<{
+            id: string
+            path?: string
+            status?: string
+            title?: string
+        }>
+    }
+    consumerStage?: {
+        id: string
+        state: string
+        request?: string
+        blockers: string[]
+    }
+    blockers: string[]
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
 }
 
 type CaseActionTrailPayload = {
@@ -3571,13 +3655,14 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, watchlistPlan, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, watchlistPlan, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
     reviewHandoff: SelectedReviewHandoff | null
     caseDraft: SelectedCaseDraft | null
     caseActionTrail: CaseActionTrailPayload | null
+    caseOwnership: SelectedCaseOwnershipPlan | null
     watchlistPlan: SelectedWatchlistPlan | null
     alertPlan: SelectedAlertActionPlan | null
     enrichmentTriage: SelectedEnrichmentTriage | null
@@ -3639,6 +3724,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                     </div>
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
+                {caseOwnership ? <SelectedCaseOwnershipPanel plan={caseOwnership} /> : null}
                 {watchlistPlan ? <SelectedWatchlistPlanPanel plan={watchlistPlan} /> : null}
                 {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
                 {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
@@ -3681,6 +3767,81 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function SelectedCaseOwnershipPanel({ plan }: { plan: SelectedCaseOwnershipPlan }) {
+    return (
+        <div data-ti-selected-case-ownership='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Case ownership</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence mapped to case candidates, replay readiness, and owner blockers.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(plan.state)}>{decisionStepStatusLabel(plan.state)}</span>
+                    <CopyPayloadButton label='Case ownership' payload={plan} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Candidates' value={`${plan.summary.caseCandidates}`} />
+                <EvidenceMetric label='Replay ready' value={`${plan.summary.replayReady}`} />
+                <EvidenceMetric label='Alerts' value={`${plan.summary.relatedAlerts}`} />
+                <EvidenceMetric label='Captures' value={`${plan.summary.captures}`} />
+            </div>
+            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                <span className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                    owner {plan.owner.label}
+                </span>
+                {plan.consumerStage ? (
+                    <span className={decisionStepStatusClass(plan.consumerStage.state === 'ready' ? 'ready' : plan.consumerStage.state === 'blocked' ? 'blocked' : 'review')}>
+                        case stage {plan.consumerStage.state}
+                    </span>
+                ) : null}
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{plan.route}</p>
+            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{plan.nextAction}</p>
+            <div className='mt-2 grid gap-2'>
+                {plan.caseReviewItems.slice(0, 3).map(item => (
+                    <div key={item.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{item.title}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    {formatLabel(item.priority)} · {formatLabel(item.recommendedAction)} · {item.sourceIds.length} source ref{item.sourceIds.length === 1 ? '' : 's'}
+                                </p>
+                            </div>
+                            <span className={decisionStepStatusClass(item.state)}>{decisionStepStatusLabel(item.state)}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.nextAction}</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                            {item.alertIds.length ? `Alerts ${item.alertIds.slice(0, 2).join(', ')}` : 'Alert ID pending'}
+                            {item.casePaths.length ? ` · cases ${item.casePaths.slice(0, 2).join(', ')}` : ''}
+                            {item.captureIds.length ? ` · captures ${item.captureIds.slice(0, 2).join(', ')}` : ''}
+                        </p>
+                        {item.blockers.length ? (
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(item.blockers.slice(0, 3))}</p>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
+            {plan.replayRows.length ? (
+                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                    {plan.replayRows.slice(0, 3).map(row => (
+                        <span key={row.id} className={sourceHealthChipClass(row.ready ? 'ready' : 'blocked')}>
+                            {row.caseId ? `case ${row.caseId}` : row.blockerCodes.slice(0, 2).join(', ') || 'case route pending'}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
+            {plan.blockers.length ? (
+                <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(plan.blockers.slice(0, 4))}</p>
+            ) : (
+                <p className='mt-2 text-[11px] leading-5 text-[#147a3b] dark:text-[#83d9a1]'>Case route, alert, capture, and source references are ready for authenticated review.</p>
+            )}
+        </div>
     )
 }
 
@@ -4427,6 +4588,158 @@ function selectedCaseActionTrailFor(
             sessionLocal: true,
             replayable: activeReplayRows.some(row => row.ready),
         },
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function selectedCaseOwnershipFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    caseDraft: SelectedCaseDraft | null,
+    caseActionTrail: CaseActionTrailPayload | null
+): SelectedCaseOwnershipPlan {
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const selectedAlertIds = selected.priority?.alertIds ?? []
+    const selectedCasePaths = selected.priority?.casePaths ?? []
+    const selectedCaptureIds = selected.priority?.captureIds ?? []
+    const selectedRowId = selected.priority?.rowId
+    const text = [selected.title, selected.subtitle, selected.source, selected.provenance, ...selected.evidence].join(' ').toLowerCase()
+    const caseItems = actionability.caseReviewIntake.items.filter(item =>
+        item.evidenceRowId === selectedRowId
+        || item.sourceIds.some(sourceId => selectedSourceIds.includes(sourceId) || text.includes(sourceId.toLowerCase()))
+        || item.alertIds.some(alertId => selectedAlertIds.includes(alertId) || text.includes(alertId.toLowerCase()))
+        || item.casePaths.some(path => selectedCasePaths.includes(path) || text.includes(path.toLowerCase()))
+        || item.captureIds.some(captureId => selectedCaptureIds.includes(captureId) || text.includes(captureId.toLowerCase()))
+    )
+    const activeCaseItems = caseItems.length ? caseItems : actionability.caseReviewIntake.items.slice(0, 3)
+    const activeItemIds = new Set(activeCaseItems.map(item => item.id))
+    const activeEvidenceIds = new Set(activeCaseItems.map(item => item.evidenceRowId))
+    const replayRows = actionability.caseReplayReadiness.rows.filter(row =>
+        activeItemIds.has(row.caseReviewIntakeItemId)
+        || activeEvidenceIds.has(row.evidenceRowId)
+        || row.sourceIds.some(sourceId => selectedSourceIds.includes(sourceId))
+        || row.alertIds.some(alertId => selectedAlertIds.includes(alertId))
+        || row.captureIds.some(captureId => selectedCaptureIds.includes(captureId))
+    )
+    const activeReplayRows = replayRows.length ? replayRows : actionability.caseReplayReadiness.rows.slice(0, 3)
+    const itemAlertIds = unique(activeCaseItems.flatMap(item => item.alertIds))
+    const itemCasePaths = unique(activeCaseItems.flatMap(item => item.casePaths))
+    const relatedAlerts = actionability.relatedAlerts.filter(alert =>
+        itemAlertIds.includes(alert.id)
+        || Boolean(alert.casePath && itemCasePaths.includes(alert.casePath))
+        || (alert.captureIds ?? []).some(captureId => selectedCaptureIds.includes(captureId))
+    )
+    const relatedCases = actionability.relatedCases.filter(item =>
+        itemCasePaths.includes(item.path ?? '')
+        || activeReplayRows.some(row => row.caseId === item.id)
+    )
+    const caseStage = actionability.consumerReadiness.stages.find(stage => stage.id === 'caseHandoff')
+    const blockerDetails = unique([
+        ...(caseDraft?.missing ?? []),
+        ...activeCaseItems.flatMap(item => item.blockedBy.map(blocker => blocker.detail)),
+        ...activeReplayRows.flatMap(row => row.blockedBy.map(blocker => blocker.detail)),
+        ...(caseActionTrail?.events.flatMap(event => event.blockers) ?? []),
+        ...(caseStage?.missing ?? []),
+        ...(caseStage && caseStage.state === 'blocked' ? [caseStage.detail] : []),
+    ]).slice(0, 10)
+    const firstOwnerLane = activeCaseItems.flatMap(item => item.blockedBy.map(blocker => blocker.ownerLane))[0]
+        ?? activeReplayRows.flatMap(row => row.blockedBy.map(blocker => blocker.ownerLane))[0]
+        ?? actionability.actionPayloads.payloads.caseHandoff.blockedBy[0]?.ownerLane
+        ?? (caseStage?.state === 'blocked' ? 'case' : 'case')
+    const ready = Boolean(caseDraft?.ready)
+        && activeReplayRows.some(row => row.ready)
+        && (caseStage?.state === 'ready' || actionability.actionPayloads.payloads.caseHandoff.ready)
+        && blockerDetails.length === 0
+    const state: SelectedCaseOwnershipPlan['state'] = ready ? 'ready' : blockerDetails.length || activeCaseItems.some(item => item.state === 'blocked') ? 'blocked' : 'review'
+    const route = caseDraft?.route
+        || caseStage?.request?.path
+        || actionability.actionPayloads.payloads.caseHandoff.backedRoute
+        || actionability.actionPayloads.payloads.caseHandoff.route
+        || actionability.caseHandoff.backedRoute
+        || actionability.caseHandoff.endpoint
+
+    return {
+        schemaVersion: 'ti.public_actor.selected_case_ownership.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: new Date().toISOString(),
+        selectedItemId: selected.id,
+        title: selected.title,
+        state,
+        route,
+        nextAction: ready
+            ? 'Open the authenticated case workflow with this selected evidence and replay-ready references.'
+            : blockerDetails.length ? `Resolve ${displayRequirementList(blockerDetails.slice(0, 2))} before assigning this evidence to a case.` : 'Review the selected case candidate and choose the authenticated owner.',
+        owner: {
+            lane: firstOwnerLane,
+            label: actionOwnerLabel(firstOwnerLane),
+        },
+        summary: {
+            caseCandidates: activeCaseItems.length,
+            replayReady: activeReplayRows.filter(row => row.ready).length,
+            relatedAlerts: relatedAlerts.length,
+            relatedCases: relatedCases.length,
+            captures: unique([...activeCaseItems.flatMap(item => item.captureIds), ...activeReplayRows.flatMap(row => row.captureIds)]).length,
+            blockers: blockerDetails.length,
+        },
+        caseReviewItems: activeCaseItems.slice(0, 4).map(item => ({
+            id: item.id,
+            evidenceRowId: item.evidenceRowId,
+            title: item.title,
+            priority: item.priority,
+            state: item.state,
+            route: item.route,
+            alertIds: item.alertIds,
+            casePaths: item.casePaths,
+            captureIds: item.captureIds,
+            sourceIds: item.sourceIds,
+            watchlistTerms: item.watchlistTerms,
+            reasons: item.reasons,
+            recommendedAction: item.recommendedAction,
+            nextAction: item.nextAction,
+            blockers: item.blockedBy.map(blocker => blocker.detail),
+        })),
+        replayRows: activeReplayRows.slice(0, 4).map(row => ({
+            id: row.id,
+            evidenceRowId: row.evidenceRowId,
+            ready: row.ready,
+            state: row.state,
+            exportRoute: row.exportRoute,
+            caseId: row.caseId,
+            alertIds: row.alertIds,
+            captureIds: row.captureIds,
+            sourceIds: row.sourceIds,
+            blockerCodes: row.blockerCodes,
+        })),
+        related: {
+            alerts: relatedAlerts.slice(0, 4).map(alert => ({
+                id: alert.id,
+                status: alert.status,
+                casePath: alert.casePath,
+                captureIds: alert.captureIds ?? [],
+                recommendedRoute: alert.recommendedRoute,
+            })),
+            cases: relatedCases.slice(0, 4).map(item => ({
+                id: item.id,
+                path: item.path,
+                status: item.status,
+                title: item.title,
+            })),
+        },
+        consumerStage: caseStage ? {
+            id: caseStage.id,
+            state: caseStage.state,
+            request: caseStage.request ? `${caseStage.request.method} ${caseStage.request.path}` : undefined,
+            blockers: caseStage.missing,
+        } : undefined,
+        blockers: blockerDetails,
         safeOutput: {
             metadataOnly: true,
             liveMutation: false,
