@@ -1039,9 +1039,13 @@ type SelectedEnrichmentTriage = {
     rows: Array<{
         id: string
         sourceName: string
-        sourceFamily: string
+        sourceFamily: SourceHealthRow['sourceFamily']
         state: SourceHealthRow['state']
         route: string
+        ownerLane: SourceHealthRow['ownerLane']
+        remediationPath: string
+        lastChecked: string
+        recommendedAction: string
         sourceId?: string
         sourceRequestId?: string
         captureId?: string
@@ -1055,6 +1059,15 @@ type SelectedEnrichmentTriage = {
             confidence?: number
             parserStatus?: string
         }
+        consumerReadiness: Array<{
+            consumer: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['consumer']
+            state: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['state']
+            ready: boolean
+            route: string
+            blockerCodes: string[]
+            retryable: boolean
+            nextRetryAt?: string
+        }>
     }>
     safeOutput: {
         metadataOnly: true
@@ -4120,11 +4133,32 @@ function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentT
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}</p>
-                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.sourceFamily)} · {row.matchingIntakeItemIds.length} intake item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                    {formatLabel(row.sourceFamily)} · {formatDate(row.lastChecked)} · {row.evidence.parserStatus ?? 'parser status pending'}
+                                </p>
                             </div>
                             <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
                         </div>
-                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                        <div className='mt-2 flex min-w-0 flex-wrap gap-1.5' data-ti-selected-enrichment-readiness='true'>
+                            <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
+                            <span className={sourceHealthChipClass(row.matchingIntakeItemIds.length ? 'review' : 'blocked')}>{row.matchingIntakeItemIds.length} intake item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</span>
+                            {row.captureId ? <span className={sourceHealthChipClass('ready')}>capture linked</span> : <span className={sourceHealthChipClass('blocked')}>capture needed</span>}
+                            {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
+                        </div>
+                        <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.recommendedAction}</p>
+                        <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{sourceRequestRouteLabel(row.remediationPath)} · {row.remediationPath}</p>
+                        {row.consumerReadiness.length ? (
+                            <div className='mt-2 grid gap-1.5'>
+                                {row.consumerReadiness.slice(0, 3).map(readiness => (
+                                    <div key={`${row.id}-${readiness.consumer}`} className='flex min-w-0 flex-wrap items-center justify-between gap-1.5 rounded-md border border-[#eef1f5] bg-[#fbfcfe] px-2 py-1.5 dark:border-[#273244] dark:bg-[#131c29]'>
+                                        <span className='min-w-0 wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{actorEnrichmentConsumerLabel(readiness.consumer)}</span>
+                                        <span className={sourceHealthChipClass(actorEnrichmentConsumerState(readiness.state))}>{readiness.ready ? 'ready' : readiness.retryable ? 'retry queued' : readiness.blockerCodes.length ? `${readiness.blockerCodes.length} blocker${readiness.blockerCodes.length === 1 ? '' : 's'}` : formatLabel(readiness.state)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>No consumer readiness row is attached to this source yet.</p>
+                        )}
                         {row.requestedFields.length ? (
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
                         ) : null}
@@ -5529,12 +5563,23 @@ function selectedEnrichmentTriageFor(
             || item.sourceId === row.sourceId
             || item.captureId === row.captureId
         )
+        const consumerReadiness = actionability.actorEnrichmentConsumerReadiness.rows.filter(consumer =>
+            consumer.sourceFamilies.includes(row.sourceFamily)
+            || consumer.parserStatuses.includes(row.parserStatus)
+            || consumer.provenanceIds.sourceHealthProofIds.includes(row.id)
+            || matchingIntakeItems.some(item => consumer.provenanceIds.sourceEnrichmentIntakeItemIds.includes(item.id))
+        )
+        const primaryIntakeItem = matchingIntakeItems[0]
         return {
             id: row.id,
             sourceName: row.sourceName,
             sourceFamily: row.sourceFamily,
             state: row.state,
             route: row.route,
+            ownerLane: primaryIntakeItem?.ownerLane ?? row.ownerLane,
+            remediationPath: primaryIntakeItem?.route ?? row.route,
+            lastChecked: primaryIntakeItem?.evidence.timestamp ?? row.timestamp,
+            recommendedAction: primaryIntakeItem?.nextAction ?? row.nextAction,
             sourceId: row.sourceId,
             sourceRequestId: row.sourceRequestId,
             captureId: row.captureId,
@@ -5548,6 +5593,15 @@ function selectedEnrichmentTriageFor(
                 confidence: row.confidence,
                 parserStatus: row.parserStatus,
             },
+            consumerReadiness: consumerReadiness.map(consumer => ({
+                consumer: consumer.consumer,
+                state: consumer.state,
+                ready: consumer.ready,
+                route: consumer.route,
+                blockerCodes: consumer.blockerCodes,
+                retryable: consumer.retry.retryable,
+                nextRetryAt: consumer.retry.nextRetryAt,
+            })),
         }
     })
     const blockers = triageRows.reduce((count, row) => count + row.requestedFields.length + row.blockers.length, 0)
