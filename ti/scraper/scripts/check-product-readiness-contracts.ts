@@ -2,9 +2,11 @@ import { contractIndex } from "../src/api/contractsRoute.ts";
 import {
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
-  productReadinessSchemaLookupMetadataGuard
+  productReadinessSchemaLookupMetadataGuard,
+  productReadinessWorkflowAcceptanceGuard
 } from "../src/product/productReadinessIntegrationGateFixtures.ts";
 
 const contract = contractIndex();
@@ -12,6 +14,7 @@ const gate = contract.productReadinessIntegrationGate;
 const consumerProofMetadata = productReadinessConsumerProofMetadataGuard(contract);
 const schemaLookupMetadata = productReadinessSchemaLookupMetadataGuard(contract);
 const consumerVerification = productReadinessConsumerVerificationGuard(buildProductReadinessConsumerVerificationLedger(contract));
+const workflowAcceptance = productReadinessWorkflowAcceptanceGuard(buildProductReadinessWorkflowAcceptanceReceipts(contract));
 const consumerProofMetadataSummary = {
   schemaVersion: consumerProofMetadata.schemaVersion,
   route: consumerProofMetadata.route,
@@ -61,6 +64,26 @@ const consumerVerificationSummary = {
   })),
   safeOutput: consumerVerification.safeOutput
 };
+const workflowAcceptanceSummary = {
+  schemaVersion: workflowAcceptance.schemaVersion,
+  route: workflowAcceptance.route,
+  ok: workflowAcceptance.ok,
+  rowCount: workflowAcceptance.rowCount,
+  requiredWorkflowIds: workflowAcceptance.requiredWorkflowIds,
+  missingWorkflowIds: workflowAcceptance.missingWorkflowIds,
+  verifiedAt: workflowAcceptance.verifiedAt,
+  staleBefore: workflowAcceptance.staleBefore,
+  proofCommand: workflowAcceptance.proofCommand,
+  blockerCodes: workflowAcceptance.blockerCodes,
+  failingRows: workflowAcceptance.rows.filter((row) => !row.ok).map((row) => ({
+    workflowId: row.workflowId,
+    blockerCodes: row.blockerCodes,
+    customerWorkflowIds: row.customerWorkflowIds,
+    schemaLookupRefCount: row.schemaLookupRefCount,
+    consumerCount: row.consumerCount
+  })),
+  safeOutput: workflowAcceptance.safeOutput
+};
 const fixtures = buildProductReadinessIntegrationGateFixtures();
 const fixtureChecks = fixtures.map((fixture) => ({
   kind: fixture.kind,
@@ -70,10 +93,11 @@ const fixtureChecks = fixtures.map((fixture) => ({
   gateDecision: fixture.gate.decision,
   consumerProofMetadataOk: fixture.consumerProofMetadata.ok,
   schemaLookupMetadataOk: fixture.schemaLookupMetadata.ok,
-  consumerVerificationOk: fixture.consumerVerification.ok
+  consumerVerificationOk: fixture.consumerVerification.ok,
+  workflowAcceptanceOk: fixture.workflowAcceptance.ok
 }));
 const fixturesOk = fixtureChecks.every((fixture) => fixture.passed);
-const ok = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && fixturesOk;
+const ok = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && workflowAcceptance.ok && fixturesOk;
 
 console.log(JSON.stringify({
   ok,
@@ -94,6 +118,7 @@ console.log(JSON.stringify({
   consumerProofMetadata: consumerProofMetadataSummary,
   schemaLookupMetadata: schemaLookupMetadataSummary,
   consumerVerification: consumerVerificationSummary,
+  workflowAcceptance: workflowAcceptanceSummary,
   fixtureSchemaVersion: fixtures[0]?.schemaVersion,
   fixtureChecks,
   safeOutput: gate.safeOutput

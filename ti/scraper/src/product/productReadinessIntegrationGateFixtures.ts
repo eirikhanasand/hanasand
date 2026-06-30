@@ -15,6 +15,10 @@ export const PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION =
   "hanasand.product_readiness.consumer_verification_ledger.v1" as const;
 export const PRODUCT_READINESS_CONSUMER_VERIFICATION_GUARD_SCHEMA_VERSION =
   "hanasand.product_readiness.consumer_verification_guard.v1" as const;
+export const PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_RECEIPTS_SCHEMA_VERSION =
+  "hanasand.product_readiness.workflow_acceptance_receipts.v1" as const;
+export const PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION =
+  "hanasand.product_readiness.workflow_acceptance_guard.v1" as const;
 const PRODUCT_READINESS_CONSUMER_VERIFIED_AT = "2026-06-30T00:00:00.000Z";
 const PRODUCT_READINESS_CONSUMER_STALE_BEFORE = "2026-06-23T00:00:00.000Z";
 const PRODUCT_READINESS_CONSUMER_PROOF_COMMAND = "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun run check:product-readiness-contracts";
@@ -32,7 +36,13 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "missing_consumer_verification"
   | "stale_consumer_verification"
   | "missing_consumer_proof_command"
-  | "prompt_literal_consumer_copy";
+  | "prompt_literal_consumer_copy"
+  | "missing_workflow_schema_lookup"
+  | "stale_workflow_acceptance_receipt"
+  | "untested_workflow_acceptance_receipt"
+  | "missing_workflow_consumer"
+  | "prompt_literal_workflow_copy"
+  | "cross_workflow_inconsistency";
 
 const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "valid",
@@ -47,7 +57,13 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "missing_consumer_verification",
   "stale_consumer_verification",
   "missing_consumer_proof_command",
-  "prompt_literal_consumer_copy"
+  "prompt_literal_consumer_copy",
+  "missing_workflow_schema_lookup",
+  "stale_workflow_acceptance_receipt",
+  "untested_workflow_acceptance_receipt",
+  "missing_workflow_consumer",
+  "prompt_literal_workflow_copy",
+  "cross_workflow_inconsistency"
 ];
 
 function cloneJson<T>(input: T): T {
@@ -152,10 +168,101 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
   missing_consumer_verification: ["missing_consumer_verification"],
   stale_consumer_verification: ["stale_consumer_verification"],
   missing_consumer_proof_command: ["missing_consumer_proof_command"],
-  prompt_literal_consumer_copy: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"]
+  prompt_literal_consumer_copy: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"],
+  missing_workflow_schema_lookup: ["missing_workflow_schema_lookup"],
+  stale_workflow_acceptance_receipt: ["stale_workflow_acceptance_receipt"],
+  untested_workflow_acceptance_receipt: ["untested_workflow_acceptance_receipt"],
+  missing_workflow_consumer: ["missing_workflow_consumer"],
+  prompt_literal_workflow_copy: ["workflow_copy_guard_how_this_feeds", "workflow_copy_guard_signal"],
+  cross_workflow_inconsistency: ["cross_workflow_inconsistency"]
 };
 
 type ConsumerVerificationLedger = ReturnType<typeof buildProductReadinessConsumerVerificationLedger>;
+type WorkflowAcceptanceReceipts = ReturnType<typeof buildProductReadinessWorkflowAcceptanceReceipts>;
+
+const REQUIRED_WORKFLOW_ACCEPTANCE_IDS = [
+  "org_setup",
+  "shared_watchlists",
+  "source_health",
+  "alert_generation",
+  "webhook_delivery",
+  "case_workflow",
+  "public_ti_handoff",
+  "support_recovery",
+  "website_readiness"
+] as const;
+
+const WORKFLOW_ACCEPTANCE_SPECS: Array<{
+  workflowId: typeof REQUIRED_WORKFLOW_ACCEPTANCE_IDS[number];
+  customerWorkflowIds: string[];
+  capabilityIds: string[];
+  schemaLookupContractIds: string[];
+  producer: string;
+}> = [
+  {
+    workflowId: "org_setup",
+    customerWorkflowIds: ["org_membership"],
+    capabilityIds: ["organization_lifecycle", "support_controls"],
+    schemaLookupContractIds: ["product_readiness_receipt_matrix", "support_action_receipts"],
+    producer: "contractIndex.productReadinessReceiptMatrix.organization_lifecycle"
+  },
+  {
+    workflowId: "shared_watchlists",
+    customerWorkflowIds: ["shared_watchlists"],
+    capabilityIds: ["shared_watchlists"],
+    schemaLookupContractIds: ["product_readiness_receipt_matrix"],
+    producer: "contractIndex.productReadinessReceiptMatrix.shared_watchlists"
+  },
+  {
+    workflowId: "source_health",
+    customerWorkflowIds: ["source_health"],
+    capabilityIds: ["source_activation"],
+    schemaLookupContractIds: ["source_provenance_receipts"],
+    producer: "contractIndex.productReadinessReceiptMatrix.source_activation"
+  },
+  {
+    workflowId: "alert_generation",
+    customerWorkflowIds: ["alert_generation"],
+    capabilityIds: ["shared_watchlists", "source_activation", "alert_case_workflow"],
+    schemaLookupContractIds: ["product_readiness_receipt_matrix", "source_provenance_receipts"],
+    producer: "contractIndex.productReadinessReceiptMatrix.alert_case_workflow"
+  },
+  {
+    workflowId: "webhook_delivery",
+    customerWorkflowIds: ["webhook_delivery"],
+    capabilityIds: ["alert_case_workflow", "webhook_delivery"],
+    schemaLookupContractIds: ["webhook_delivery_receipts"],
+    producer: "contractIndex.productReadinessReceiptMatrix.webhook_delivery"
+  },
+  {
+    workflowId: "case_workflow",
+    customerWorkflowIds: ["case_workflow"],
+    capabilityIds: ["alert_case_workflow", "dashboard_operator_workspace", "public_ti_actor_handoff"],
+    schemaLookupContractIds: ["org_alert_case_action_receipt"],
+    producer: "contractIndex.productReadinessReceiptMatrix.alert_case_workflow"
+  },
+  {
+    workflowId: "public_ti_handoff",
+    customerWorkflowIds: ["public_ti_handoff"],
+    capabilityIds: ["source_activation", "public_ti_actor_handoff", "website_product_surface"],
+    schemaLookupContractIds: ["source_provenance_receipts", "product_readiness_receipt_matrix"],
+    producer: "contractIndex.productReadinessReceiptMatrix.public_ti_actor_handoff"
+  },
+  {
+    workflowId: "support_recovery",
+    customerWorkflowIds: ["org_membership"],
+    capabilityIds: ["support_controls"],
+    schemaLookupContractIds: ["support_action_receipts"],
+    producer: "contractIndex.productReadinessReceiptMatrix.support_controls"
+  },
+  {
+    workflowId: "website_readiness",
+    customerWorkflowIds: ["public_ti_handoff"],
+    capabilityIds: ["website_product_surface"],
+    schemaLookupContractIds: ["product_readiness_receipt_matrix"],
+    producer: "contractIndex.productReadinessReceiptMatrix.website_product_surface"
+  }
+];
 
 function consumerKind(route: string, ownerLane: string): "ui" | "api" | "workflow" {
   if (route === "/" || route.startsWith("/dashboard") || route.startsWith("/ti")) return "ui";
@@ -382,6 +489,149 @@ export function productReadinessConsumerVerificationGuard(ledger: ConsumerVerifi
   };
 }
 
+export function buildProductReadinessWorkflowAcceptanceReceipts(contractLike: Pick<ReturnType<typeof contractIndex>, "productReadinessReceiptMatrix" | "schemaLookup">) {
+  const matrixRows = contractLike.productReadinessReceiptMatrix.rows;
+  const schemaLookupRows = contractLike.schemaLookup.rows;
+  return {
+    schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_RECEIPTS_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    verifiedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+    staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE,
+    proofCommand: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+    receipts: WORKFLOW_ACCEPTANCE_SPECS.map((spec) => {
+      const capabilityRows = matrixRows.filter((row) => spec.capabilityIds.includes(row.capabilityId));
+      const schemaLookupRefs = schemaLookupRows
+        .filter((row) => spec.schemaLookupContractIds.includes(row.contractId))
+        .map((row) => ({
+          contractId: row.contractId,
+          schemaId: row.schemaId,
+          route: row.route,
+          ownerLane: row.ownerLane
+        }));
+      const consumers = capabilityRows.flatMap((row) => row.downstreamConsumers || []).map((consumer) => ({
+        ownerLane: consumer.ownerLane,
+        route: consumer.route,
+        consumerKind: consumerKind(consumer.route, consumer.ownerLane),
+        requiredFields: consumer.requiredFields || []
+      }));
+      return {
+        workflowId: spec.workflowId,
+        customerWorkflowIds: spec.customerWorkflowIds,
+        capabilityIds: spec.capabilityIds,
+        schemaLookupContractIds: spec.schemaLookupContractIds,
+        schemaLookupRefs,
+        producer: spec.producer,
+        consumers,
+        focusedCheck: {
+          command: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+          result: "pass" as const,
+          checkedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+          staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE
+        },
+        uiCopyLabel: `${spec.workflowId}_workflow_acceptance`,
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false,
+          crossOrgDataExposed: false
+        }
+      };
+    }),
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+function mutateWorkflowAcceptanceReceipts(receipts: WorkflowAcceptanceReceipts, kind: ProductReadinessIntegrationGateFixtureKind) {
+  const sourceReceipt = receipts.receipts.find((receipt) => receipt.workflowId === "source_health");
+  switch (kind) {
+    case "missing_workflow_schema_lookup":
+      if (sourceReceipt) sourceReceipt.schemaLookupRefs = [];
+      break;
+    case "stale_workflow_acceptance_receipt":
+      if (sourceReceipt) sourceReceipt.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
+      break;
+    case "untested_workflow_acceptance_receipt":
+      if (sourceReceipt) sourceReceipt.focusedCheck.result = "not_run" as "pass";
+      break;
+    case "missing_workflow_consumer":
+      if (sourceReceipt) sourceReceipt.consumers = [];
+      break;
+    case "prompt_literal_workflow_copy":
+      if (sourceReceipt) sourceReceipt.uiCopyLabel = "how this feeds signal";
+      break;
+    case "cross_workflow_inconsistency":
+      if (sourceReceipt) sourceReceipt.customerWorkflowIds = ["webhook_delivery"];
+      break;
+  }
+}
+
+export function productReadinessWorkflowAcceptanceGuard(receipts: WorkflowAcceptanceReceipts) {
+  const forbiddenTerms = ["control room", "how this feeds", "dashboard slop", "named examples", "signal", "acceptance criteria", "acceptance-criteria"];
+  const receiptWorkflowIds = new Set(receipts.receipts.map((receipt) => receipt.workflowId));
+  const missingWorkflowIds = REQUIRED_WORKFLOW_ACCEPTANCE_IDS.filter((workflowId) => !receiptWorkflowIds.has(workflowId));
+  const rows = receipts.receipts.map((receipt) => {
+    const expectedSpec = WORKFLOW_ACCEPTANCE_SPECS.find((spec) => spec.workflowId === receipt.workflowId);
+    const missingExpectedCustomerWorkflows = (expectedSpec?.customerWorkflowIds || []).filter((workflowId) => !receipt.customerWorkflowIds.includes(workflowId));
+    const unsafeFields = [
+      !receipt.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
+      receipt.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
+      receipt.safeOutput?.webhookSecretExposed ? "safeOutput.webhookSecretExposed" : "",
+      receipt.safeOutput?.crossOrgDataExposed ? "safeOutput.crossOrgDataExposed" : ""
+    ].filter(Boolean);
+    const label = String(receipt.uiCopyLabel || "").toLowerCase();
+    const copyBlockers = forbiddenTerms
+      .filter((term) => label.includes(term))
+      .map((term) => `workflow_copy_guard_${term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`);
+    const blockerCodes = [
+      ...(!receipt.schemaLookupRefs.length ? ["missing_workflow_schema_lookup"] : []),
+      ...(!receipt.producer ? ["missing_workflow_producer"] : []),
+      ...(!receipt.consumers.length ? ["missing_workflow_consumer"] : []),
+      ...(!receipt.focusedCheck?.command ? ["missing_workflow_check_command"] : []),
+      ...(receipt.focusedCheck?.result !== "pass" ? ["untested_workflow_acceptance_receipt"] : []),
+      ...(!receipt.focusedCheck?.checkedAt ? ["missing_workflow_verified_at"] : []),
+      ...(receipt.focusedCheck?.checkedAt && receipt.focusedCheck.checkedAt < receipt.focusedCheck.staleBefore ? ["stale_workflow_acceptance_receipt"] : []),
+      ...missingExpectedCustomerWorkflows.map(() => "cross_workflow_inconsistency"),
+      ...copyBlockers,
+      ...unsafeFields.map(() => "unsafe_workflow_acceptance_receipt")
+    ];
+    return {
+      workflowId: receipt.workflowId,
+      ok: blockerCodes.length === 0,
+      blockerCodes: [...new Set(blockerCodes)].sort(),
+      customerWorkflowIds: receipt.customerWorkflowIds,
+      missingExpectedCustomerWorkflows,
+      capabilityIds: receipt.capabilityIds,
+      schemaLookupRefCount: receipt.schemaLookupRefs.length,
+      consumerCount: receipt.consumers.length,
+      focusedCheck: receipt.focusedCheck,
+      unsafeFields
+    };
+  });
+  const blockerCodes = [...new Set([
+    ...missingWorkflowIds.map(() => "missing_workflow_acceptance_receipt"),
+    ...rows.flatMap((row) => row.blockerCodes)
+  ])].sort();
+  return {
+    schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    ok: blockerCodes.length === 0,
+    rowCount: rows.length,
+    requiredWorkflowIds: [...REQUIRED_WORKFLOW_ACCEPTANCE_IDS],
+    missingWorkflowIds,
+    verifiedAt: receipts.verifiedAt,
+    staleBefore: receipts.staleBefore,
+    proofCommand: receipts.proofCommand,
+    blockerCodes,
+    rows,
+    safeOutput: receipts.safeOutput
+  };
+}
+
 export function buildProductReadinessIntegrationGateFixture(kind: ProductReadinessIntegrationGateFixtureKind) {
   const contractLike = cloneJson(contractIndex());
   mutateFixtureContract(contractLike, kind);
@@ -391,15 +641,19 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
   const consumerVerificationLedger = buildProductReadinessConsumerVerificationLedger(contractLike);
   mutateConsumerVerificationLedger(consumerVerificationLedger, kind);
   const consumerVerification = productReadinessConsumerVerificationGuard(consumerVerificationLedger);
+  const workflowAcceptanceReceipts = buildProductReadinessWorkflowAcceptanceReceipts(contractLike);
+  mutateWorkflowAcceptanceReceipts(workflowAcceptanceReceipts, kind);
+  const workflowAcceptance = productReadinessWorkflowAcceptanceGuard(workflowAcceptanceReceipts);
   const expectedBlockerCodes = EXPECTED_BLOCKERS[kind];
   const actualBlockerCodes = [...new Set([
     ...gate.blockerCodes,
     ...consumerProofMetadata.blockerCodes,
     ...schemaLookupMetadata.blockerCodes,
-    ...consumerVerification.blockerCodes
+    ...consumerVerification.blockerCodes,
+    ...workflowAcceptance.blockerCodes
   ])].sort();
   const expectedBlockersPresent = expectedBlockerCodes.every((code) => actualBlockerCodes.includes(code));
-  const liveOk = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok;
+  const liveOk = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && workflowAcceptance.ok;
   const passed = kind === "valid" ? liveOk : !liveOk && expectedBlockersPresent;
 
   return {
@@ -455,6 +709,7 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
     consumerProofMetadata,
     schemaLookupMetadata,
     consumerVerification,
+    workflowAcceptance,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,

@@ -5,12 +5,16 @@ import {
   PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION,
   PRODUCT_READINESS_INTEGRATION_GATE_FIXTURE_SCHEMA_VERSION,
   PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
+  PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
+  PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_RECEIPTS_SCHEMA_VERSION,
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixture,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
-  productReadinessSchemaLookupMetadataGuard
+  productReadinessSchemaLookupMetadataGuard,
+  productReadinessWorkflowAcceptanceGuard
 } from "../product/productReadinessIntegrationGateFixtures.ts";
 import { contractIndex } from "../api/contractsRoute.ts";
 
@@ -51,6 +55,22 @@ describe("product readiness integration gate fixtures", () => {
       ok: true,
       blockerCodes: [],
       proofCommand: expect.stringContaining("check:product-readiness-contracts")
+    });
+    expect(fixture.workflowAcceptance).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
+      ok: true,
+      blockerCodes: [],
+      requiredWorkflowIds: [
+        "org_setup",
+        "shared_watchlists",
+        "source_health",
+        "alert_generation",
+        "webhook_delivery",
+        "case_workflow",
+        "public_ti_handoff",
+        "support_recovery",
+        "website_readiness"
+      ]
     });
     expect(fixture.coverage.failingRows).toEqual([]);
   });
@@ -237,6 +257,50 @@ describe("product readiness integration gate fixtures", () => {
       expectedBlockerCodes: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"],
       actualBlockerCodes: expect.arrayContaining(["consumer_copy_guard_control_room", "consumer_copy_guard_signal"])
     });
+    expect(byKind.get("missing_workflow_schema_lookup")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_workflow_schema_lookup"],
+      actualBlockerCodes: expect.arrayContaining(["missing_workflow_schema_lookup"]),
+      workflowAcceptance: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({ workflowId: "source_health", schemaLookupRefCount: 0 })
+        ])
+      }
+    });
+    expect(byKind.get("stale_workflow_acceptance_receipt")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["stale_workflow_acceptance_receipt"],
+      actualBlockerCodes: expect.arrayContaining(["stale_workflow_acceptance_receipt"])
+    });
+    expect(byKind.get("untested_workflow_acceptance_receipt")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["untested_workflow_acceptance_receipt"],
+      actualBlockerCodes: expect.arrayContaining(["untested_workflow_acceptance_receipt"])
+    });
+    expect(byKind.get("missing_workflow_consumer")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_workflow_consumer"],
+      actualBlockerCodes: expect.arrayContaining(["missing_workflow_consumer"])
+    });
+    expect(byKind.get("prompt_literal_workflow_copy")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["workflow_copy_guard_how_this_feeds", "workflow_copy_guard_signal"],
+      actualBlockerCodes: expect.arrayContaining(["workflow_copy_guard_how_this_feeds", "workflow_copy_guard_signal"])
+    });
+    expect(byKind.get("cross_workflow_inconsistency")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["cross_workflow_inconsistency"],
+      actualBlockerCodes: expect.arrayContaining(["cross_workflow_inconsistency"]),
+      workflowAcceptance: {
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            workflowId: "source_health",
+            missingExpectedCustomerWorkflows: ["source_health"]
+          })
+        ])
+      }
+    });
   });
 
   test("keeps fixture output metadata-only for integration logs", () => {
@@ -392,6 +456,68 @@ describe("product readiness integration gate fixtures", () => {
         "missing_consumer_proof_command",
         "consumer_copy_guard_named_examples",
         "consumer_copy_guard_signal"
+      ])
+    });
+  });
+
+  test("validates workflow acceptance receipts for the full customer path", () => {
+    const contract = JSON.parse(JSON.stringify(contractIndex())) as ReturnType<typeof contractIndex>;
+    const receipts = buildProductReadinessWorkflowAcceptanceReceipts(contract);
+    const guard = productReadinessWorkflowAcceptanceGuard(receipts);
+
+    expect(receipts).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_RECEIPTS_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      proofCommand: expect.stringContaining("check:product-readiness-contracts"),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(receipts.receipts.map((receipt) => receipt.workflowId)).toEqual([
+      "org_setup",
+      "shared_watchlists",
+      "source_health",
+      "alert_generation",
+      "webhook_delivery",
+      "case_workflow",
+      "public_ti_handoff",
+      "support_recovery",
+      "website_readiness"
+    ]);
+    expect(guard).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_WORKFLOW_ACCEPTANCE_GUARD_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      ok: true,
+      blockerCodes: [],
+      missingWorkflowIds: [],
+      proofCommand: expect.stringContaining("check:product-readiness-contracts")
+    });
+
+    const broken = JSON.parse(JSON.stringify(receipts)) as typeof receipts;
+    const source = broken.receipts.find((receipt) => receipt.workflowId === "source_health");
+    if (!source) throw new Error("source_health workflow acceptance receipt missing");
+    source.schemaLookupRefs = [];
+    source.consumers = [];
+    source.focusedCheck.result = "not_run" as "pass";
+    source.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
+    source.uiCopyLabel = "how this feeds signal";
+    source.customerWorkflowIds = ["webhook_delivery"];
+
+    const brokenGuard = productReadinessWorkflowAcceptanceGuard(broken);
+
+    expect(brokenGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_workflow_schema_lookup",
+        "missing_workflow_consumer",
+        "untested_workflow_acceptance_receipt",
+        "stale_workflow_acceptance_receipt",
+        "workflow_copy_guard_how_this_feeds",
+        "workflow_copy_guard_signal",
+        "cross_workflow_inconsistency"
       ])
     });
   });
