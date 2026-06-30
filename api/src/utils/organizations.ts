@@ -1894,6 +1894,7 @@ export type OrganizationReadinessProof = {
             | 'GET /api/organizations/:id/watchlists'
             | 'GET /api/organizations/:id/alert-readiness'
             | 'GET /api/organizations/:id/watchlists/alert-terms'
+            | 'GET /api/organizations/:id/alert-case-visibility'
             | 'POST|PUT|DELETE /api/organizations/:id/watchlists'
         >
         noLeakFields: Array<'activeTerms[]' | 'watchlistScope.alertGeneratorKeys' | 'member.userId' | 'destination.secret'>
@@ -1904,6 +1905,23 @@ export type OrganizationReadinessProof = {
             cleanupField: 'memberRemovalCleanup.revokedInviteIds'
             staleInviteAcceptanceBlocker: 'member_revoked'
             serviceLogAction: 'organization_member_removed'
+        }
+        memberAccessRecovery: {
+            responseSchema: 'organization.member_consumer_access_recovery.v1'
+            automaticRegrantAllowed: false
+            blockerCode: 'member_revoked'
+            recoveryReceipts: Array<'organization.invite_consumer_visibility_receipt.v1' | 'organization.member_role_consumer_visibility_receipt.v1'>
+            recoveryRoutes: {
+                createInvite: 'POST /api/organizations/:id/invites'
+                acceptInvite: 'POST /api/organizations/invites/:inviteId/accept'
+                memberList: 'GET /api/organizations/:id/members'
+            }
+            blockedUntilAcceptedMembership: Array<
+                | 'GET /api/organizations/:id/watchlists'
+                | 'GET /api/organizations/:id/watchlists/alert-terms'
+                | 'GET /api/organizations/:id/alert-case-visibility'
+                | 'GET /api/organizations/:id/alert-readiness'
+            >
         }
         nonmemberEnumeration: false
     }
@@ -4769,6 +4787,7 @@ export function organizationReadinessProof(input: {
                 'GET /api/organizations/:id/watchlists',
                 'GET /api/organizations/:id/alert-readiness',
                 'GET /api/organizations/:id/watchlists/alert-terms',
+                'GET /api/organizations/:id/alert-case-visibility',
                 'POST|PUT|DELETE /api/organizations/:id/watchlists',
             ],
             noLeakFields: [
@@ -4788,6 +4807,26 @@ export function organizationReadinessProof(input: {
                 cleanupField: 'memberRemovalCleanup.revokedInviteIds',
                 staleInviteAcceptanceBlocker: 'member_revoked',
                 serviceLogAction: 'organization_member_removed',
+            },
+            memberAccessRecovery: {
+                responseSchema: 'organization.member_consumer_access_recovery.v1',
+                automaticRegrantAllowed: false,
+                blockerCode: 'member_revoked',
+                recoveryReceipts: [
+                    'organization.invite_consumer_visibility_receipt.v1',
+                    'organization.member_role_consumer_visibility_receipt.v1',
+                ],
+                recoveryRoutes: {
+                    createInvite: 'POST /api/organizations/:id/invites',
+                    acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
+                    memberList: 'GET /api/organizations/:id/members',
+                },
+                blockedUntilAcceptedMembership: [
+                    'GET /api/organizations/:id/watchlists',
+                    'GET /api/organizations/:id/watchlists/alert-terms',
+                    'GET /api/organizations/:id/alert-case-visibility',
+                    'GET /api/organizations/:id/alert-readiness',
+                ],
             },
             nonmemberEnumeration: false,
         },
