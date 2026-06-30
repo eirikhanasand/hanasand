@@ -187,6 +187,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedCaseDraft = selected && alertPacket && selectedSourceDrilldown ? selectedCaseDraftFor(result, selected, watchlist, alertPacket, actionability, selectedSourceDrilldown, selectedRelevance, selectedNote) : null
     const selectedCaseActionTrail = selected ? selectedCaseActionTrailFor(result, selected, actionability, reviewHandoff, selectedCaseDraft, selectedDecision, selectedRelevance, selectedNote) : null
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
+    const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
     const totalHandoffCount = actionability.consumerReadiness.stages.length
@@ -448,6 +449,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 caseDraft={selectedCaseDraft}
                                 caseActionTrail={selectedCaseActionTrail}
                                 alertPlan={selectedAlertPlan}
+                                enrichmentTriage={selectedEnrichmentTriage}
                                 onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
                                 onDecision={applyDecision}
                                 onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
@@ -747,6 +749,51 @@ type SelectedAlertActionPlan = {
         route?: string
         missing: string[]
     }
+    safeOutput: {
+        metadataOnly: true
+        liveMutation: false
+        rawEvidenceExposed: false
+        webhookSecretExposed: false
+    }
+}
+
+type SelectedEnrichmentTriage = {
+    schemaVersion: 'ti.public_actor.selected_enrichment_triage.v1'
+    source: 'public-ti'
+    sessionLocal: true
+    query: string
+    generatedAt: string
+    selectedItemId: string
+    title: string
+    route: string
+    state: 'ready' | 'review' | 'blocked'
+    summary: {
+        sourceRows: number
+        intakeItems: number
+        blockers: number
+        sourceRequests: number
+        captures: number
+    }
+    rows: Array<{
+        id: string
+        sourceName: string
+        sourceFamily: string
+        state: SourceHealthRow['state']
+        route: string
+        sourceId?: string
+        sourceRequestId?: string
+        captureId?: string
+        requestedFields: string[]
+        nextAction: string
+        matchingIntakeItemIds: string[]
+        blockers: string[]
+        evidence: {
+            provenance: string
+            timestamp: string
+            confidence?: number
+            parserStatus?: string
+        }
+    }>
     safeOutput: {
         metadataOnly: true
         liveMutation: false
@@ -3467,7 +3514,7 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
     }
 }
 
-function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, alertPlan, onNoteChange, onDecision, onRelevance, onStage }: {
+function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, alertPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
     note: string
     decision?: LocalDecision
     relevance?: LocalRelevanceMark
@@ -3475,6 +3522,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
     caseDraft: SelectedCaseDraft | null
     caseActionTrail: CaseActionTrailPayload | null
     alertPlan: SelectedAlertActionPlan | null
+    enrichmentTriage: SelectedEnrichmentTriage | null
     onNoteChange: (value: string) => void
     onDecision: (status: LocalDecision['status']) => void
     onRelevance: (state: LocalRelevanceMark['state']) => void
@@ -3534,6 +3582,7 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 </div>
                 {caseDraft ? <SelectedCaseDraftPanel draft={caseDraft} /> : null}
                 {alertPlan ? <SelectedAlertActionPlanPanel plan={alertPlan} /> : null}
+                {enrichmentTriage ? <SelectedEnrichmentTriagePanel triage={enrichmentTriage} /> : null}
                 {caseActionTrail ? <CaseActionTrailPanel trail={caseActionTrail} /> : null}
                 <button
                     type='button'
@@ -3573,6 +3622,49 @@ function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, case
                 ) : null}
             </div>
         </Panel>
+    )
+}
+
+function SelectedEnrichmentTriagePanel({ triage }: { triage: SelectedEnrichmentTriage }) {
+    return (
+        <div data-ti-selected-enrichment-triage='true' className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Enrichment triage</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        Selected evidence mapped to source health, intake items, and capture/source-request blockers.
+                    </p>
+                </div>
+                <div className='flex flex-wrap items-center justify-end gap-1.5 sm:shrink-0'>
+                    <span className={decisionStepStatusClass(triage.state)}>{decisionStepStatusLabel(triage.state)}</span>
+                    <CopyPayloadButton label='Enrichment triage' payload={triage} />
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2'>
+                <EvidenceMetric label='Sources' value={`${triage.summary.sourceRows}`} />
+                <EvidenceMetric label='Intake' value={`${triage.summary.intakeItems}`} />
+                <EvidenceMetric label='Requests' value={`${triage.summary.sourceRequests}`} />
+                <EvidenceMetric label='Captures' value={`${triage.summary.captures}`} />
+            </div>
+            <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{triage.route}</p>
+            <div className='mt-2 grid gap-2'>
+                {triage.rows.slice(0, 3).map(row => (
+                    <div key={row.id} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                            <div className='min-w-0'>
+                                <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.sourceName}</p>
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(row.sourceFamily)} · {row.matchingIntakeItemIds.length} intake item{row.matchingIntakeItemIds.length === 1 ? '' : 's'}</p>
+                            </div>
+                            <span className={sourceHealthChipClass(row.state)}>{row.state}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                        {row.requestedFields.length ? (
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>Needs {row.requestedFields.map(sourceHealthFieldLabel).slice(0, 3).join(', ')}.</p>
+                        ) : null}
+                    </div>
+                ))}
+            </div>
+        </div>
     )
 }
 
@@ -4310,6 +4402,89 @@ function selectedAlertActionPlanFor(
             route: actionability.createAlertHandoff.backedRoute,
             missing,
         },
+        safeOutput: {
+            metadataOnly: true,
+            liveMutation: false,
+            rawEvidenceExposed: false,
+            webhookSecretExposed: false,
+        },
+    }
+}
+
+function selectedEnrichmentTriageFor(
+    result: TiSearchResponse,
+    selected: AnalystWorkItem,
+    actionability: TiActionabilityModel,
+    drilldown: SelectedSourceDrilldown | null
+): SelectedEnrichmentTriage {
+    const selectedSourceIds = selected.priority?.sourceIds ?? []
+    const drilldownSourceIds = drilldown?.rows.map(row => row.sourceId).filter((value): value is string => Boolean(value)) ?? []
+    const sourceIds = unique([...selectedSourceIds, ...drilldownSourceIds])
+    const rows = actionability.sourceHealthQueue.rows.filter(row =>
+        (row.sourceId ? sourceIds.includes(row.sourceId) : false)
+        || (row.captureId ? selected.evidence.some(line => line.includes(row.captureId ?? '')) : false)
+        || selected.source.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.provenance.toLowerCase().includes(row.sourceName.toLowerCase())
+        || selected.evidence.some(line => line.toLowerCase().includes(row.sourceName.toLowerCase()))
+    )
+    const selectedRows = rows.length ? rows : actionability.sourceHealthQueue.rows.slice(0, 3)
+    const selectedRowIds = new Set(selectedRows.map(row => row.id))
+    const selectedRequestIds = new Set(selectedRows.map(row => row.sourceRequestId).filter(Boolean))
+    const selectedCaptureIds = new Set(selectedRows.map(row => row.captureId).filter(Boolean))
+    const selectedIntakeItems = actionability.sourceEnrichmentIntake.items.filter(item =>
+        selectedRowIds.has(item.sourceHealthRowId)
+        || (item.sourceRequestId ? selectedRequestIds.has(item.sourceRequestId) : false)
+        || (item.captureId ? selectedCaptureIds.has(item.captureId) : false)
+        || (item.sourceId ? sourceIds.includes(item.sourceId) : false)
+    )
+    const triageRows = selectedRows.map(row => {
+        const matchingIntakeItems = selectedIntakeItems.filter(item =>
+            item.sourceHealthRowId === row.id
+            || item.sourceRequestId === row.sourceRequestId
+            || item.sourceId === row.sourceId
+            || item.captureId === row.captureId
+        )
+        return {
+            id: row.id,
+            sourceName: row.sourceName,
+            sourceFamily: row.sourceFamily,
+            state: row.state,
+            route: row.route,
+            sourceId: row.sourceId,
+            sourceRequestId: row.sourceRequestId,
+            captureId: row.captureId,
+            requestedFields: row.requestedFields,
+            nextAction: row.nextAction,
+            matchingIntakeItemIds: matchingIntakeItems.map(item => item.id),
+            blockers: matchingIntakeItems.flatMap(item => item.blockedBy.map(blocker => blocker.detail)),
+            evidence: {
+                provenance: row.provenance,
+                timestamp: row.timestamp,
+                confidence: row.confidence,
+                parserStatus: row.parserStatus,
+            },
+        }
+    })
+    const blockers = triageRows.reduce((count, row) => count + row.requestedFields.length + row.blockers.length, 0)
+    const state: SelectedEnrichmentTriage['state'] = triageRows.some(row => row.state === 'blocked') || blockers ? 'blocked' : triageRows.some(row => row.state === 'review') ? 'review' : 'ready'
+    return {
+        schemaVersion: 'ti.public_actor.selected_enrichment_triage.v1',
+        source: 'public-ti',
+        sessionLocal: true,
+        query: result.query,
+        generatedAt: actionability.sourceEnrichmentIntake.generatedAt,
+        selectedItemId: selected.id,
+        title: selected.title,
+        route: actionability.sourceEnrichmentIntake.route,
+        state,
+        summary: {
+            sourceRows: triageRows.length,
+            intakeItems: selectedIntakeItems.length,
+            blockers,
+            sourceRequests: selectedIntakeItems.filter(item => Boolean(item.sourceRequestId)).length,
+            captures: selectedIntakeItems.filter(item => Boolean(item.captureId)).length,
+        },
+        rows: triageRows,
         safeOutput: {
             metadataOnly: true,
             liveMutation: false,
