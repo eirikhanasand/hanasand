@@ -2886,6 +2886,20 @@ function sendWatchlistLookupDenial(
         statusCode: 404,
         nonmemberEnumeration: false as const,
         crossOrgEnumerationAllowed: false as const,
+        deniedReadDoesNotAffectActiveTerms: true as const,
+        readinessRefs: {
+            sharedWatchlistReadiness: 'organization.shared_watchlist_readiness_export.v1' as const,
+            alertGenerationConsumer: 'organization.watchlist_alert_generation_consumer.v1' as const,
+            alertCasePersistence: 'organization.alert_case_bridge_persistence_receipt.v1' as const,
+            caseVisibilityConsumer: 'organization.case_visibility_consumer.v1' as const,
+            webhookDestinationReadiness: 'organization.webhook_destination_readiness_bridge.v1' as const,
+        },
+        blockedConsumerContracts: [
+            'organization.shared_watchlist_readiness_export.v1',
+            'organization.watchlist_alert_generation_consumer.v1',
+            'organization.case_visibility_consumer.v1',
+            'organization.webhook_destination_access_decision.v1',
+        ],
         message: 'Watchlist item not found.',
         safeFields: [
             'schemaVersion',
@@ -2900,6 +2914,8 @@ function sendWatchlistLookupDenial(
         noLeakFields: [
             'otherOrg.watchlistItemIds',
             'otherOrg.alertGeneratorKeys',
+            'otherOrg.webhookDestinationIds',
+            'otherOrg.caseIds',
             'activeTerms[]',
         ],
         serviceLogAction: 'organization_watchlist_lookup_denied' as const,
