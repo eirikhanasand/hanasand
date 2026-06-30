@@ -91,6 +91,7 @@ const workflowAcceptanceSummary = {
     workflowId: row.workflowId,
     blockerCodes: row.blockerCodes,
     customerWorkflowIds: row.customerWorkflowIds,
+    missingExpectedSchemaLookupContractIds: row.missingExpectedSchemaLookupContractIds,
     schemaLookupRefCount: row.schemaLookupRefCount,
     consumerCount: row.consumerCount
   })),
@@ -112,6 +113,7 @@ const ownerLaneReceiptExamplesSummary = {
     workflowId: row.workflowId,
     ownerLane: row.ownerLane,
     blockerCodes: row.blockerCodes,
+    missingExpectedSchemaLookupContractIds: row.missingExpectedSchemaLookupContractIds,
     schemaLookupRefCount: row.schemaLookupRefCount,
     consumerOwnerLanes: row.consumerOwnerLanes,
     payloadShapeRequiredFieldCount: row.payloadShapeRequiredFieldCount
@@ -134,6 +136,7 @@ const laneSelfValidationSummary = {
     ownerLane: row.ownerLane,
     blockerCodes: row.blockerCodes,
     workflowIds: row.workflowIds,
+    missingExpectedSchemaLookupContractIds: row.missingExpectedSchemaLookupContractIds,
     routeRefs: row.routeRefs,
     payloadShapeRequiredFieldCount: row.payloadShapeRequiredFieldCount
   })),

@@ -309,6 +309,24 @@ describe("product readiness integration gate fixtures", () => {
         ])
       }
     });
+    expect(byKind.get("partial_workflow_schema_lookup")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_expected_workflow_schema_lookup"],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_expected_workflow_schema_lookup",
+        "missing_expected_owner_lane_schema_lookup",
+        "missing_expected_lane_schema_lookup"
+      ]),
+      workflowAcceptance: {
+        ok: false,
+        rows: expect.arrayContaining([
+          expect.objectContaining({
+            workflowId: "alert_generation",
+            missingExpectedSchemaLookupContractIds: ["source_provenance_receipts"]
+          })
+        ])
+      }
+    });
     expect(byKind.get("stale_workflow_acceptance_receipt")).toMatchObject({
       passed: true,
       expectedBlockerCodes: ["stale_workflow_acceptance_receipt"],
@@ -614,7 +632,24 @@ describe("product readiness integration gate fixtures", () => {
     });
 
     const broken = JSON.parse(JSON.stringify(receipts)) as typeof receipts;
-    const source = broken.receipts.find((receipt) => receipt.workflowId === "source_health");
+    const alert = broken.receipts.find((receipt) => receipt.workflowId === "alert_generation");
+    if (!alert) throw new Error("alert_generation workflow acceptance receipt missing");
+    alert.schemaLookupRefs = alert.schemaLookupRefs.filter((ref) => ref.contractId !== "source_provenance_receipts");
+
+    const partialGuard = productReadinessWorkflowAcceptanceGuard(broken);
+    expect(partialGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining(["missing_expected_workflow_schema_lookup"]),
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          workflowId: "alert_generation",
+          missingExpectedSchemaLookupContractIds: ["source_provenance_receipts"]
+        })
+      ])
+    });
+
+    const missingEverything = JSON.parse(JSON.stringify(receipts)) as typeof receipts;
+    const source = missingEverything.receipts.find((receipt) => receipt.workflowId === "source_health");
     if (!source) throw new Error("source_health workflow acceptance receipt missing");
     source.schemaLookupRefs = [];
     source.consumers = [];
@@ -623,7 +658,7 @@ describe("product readiness integration gate fixtures", () => {
     source.uiCopyLabel = "how this feeds signal";
     source.customerWorkflowIds = ["webhook_delivery"];
 
-    const brokenGuard = productReadinessWorkflowAcceptanceGuard(broken);
+    const brokenGuard = productReadinessWorkflowAcceptanceGuard(missingEverything);
 
     expect(brokenGuard).toMatchObject({
       ok: false,
@@ -669,6 +704,7 @@ describe("product readiness integration gate fixtures", () => {
     ]);
     expect(examples.examples.every((example) => example.selfValidateCommand.includes("check:product-readiness-contracts"))).toBe(true);
     expect(examples.examples.every((example) => example.payloadShape.requiredFields.includes("ownerLane"))).toBe(true);
+    expect(examples.examples.every((example) => example.payloadShape.requiredFields.includes("schemaLookupContractIds"))).toBe(true);
     expect(guard).toMatchObject({
       schemaVersion: PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION,
       route: "/v1/contracts",
@@ -678,7 +714,24 @@ describe("product readiness integration gate fixtures", () => {
     });
 
     const broken = JSON.parse(JSON.stringify(examples)) as typeof examples;
-    const source = broken.examples.find((example) => example.workflowId === "source_health");
+    const alert = broken.examples.find((example) => example.workflowId === "alert_generation");
+    if (!alert) throw new Error("alert_generation owner-lane example missing");
+    alert.schemaLookupRefs = alert.schemaLookupRefs.filter((ref) => ref.contractId !== "source_provenance_receipts");
+
+    const partialGuard = productReadinessOwnerLaneReceiptExamplesGuard(broken);
+    expect(partialGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining(["missing_expected_owner_lane_schema_lookup"]),
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          workflowId: "alert_generation",
+          missingExpectedSchemaLookupContractIds: ["source_provenance_receipts"]
+        })
+      ])
+    });
+
+    const missingEverything = JSON.parse(JSON.stringify(examples)) as typeof examples;
+    const source = missingEverything.examples.find((example) => example.workflowId === "source_health");
     if (!source) throw new Error("source_health owner-lane example missing");
     source.ownerLane = "";
     source.schemaLookupRefs = [];
@@ -689,7 +742,7 @@ describe("product readiness integration gate fixtures", () => {
     source.payloadShape.requiredFields = [];
     source.uiCopyLabel = "control room signal";
 
-    const brokenGuard = productReadinessOwnerLaneReceiptExamplesGuard(broken);
+    const brokenGuard = productReadinessOwnerLaneReceiptExamplesGuard(missingEverything);
 
     expect(brokenGuard).toMatchObject({
       ok: false,
@@ -745,6 +798,7 @@ describe("product readiness integration gate fixtures", () => {
       selfValidateCommand: expect.stringContaining("check:product-readiness-contracts")
     });
     expect(dashboard?.payloadShape.requiredFields).toContain("routeRefs");
+    expect(dashboard?.payloadShape.requiredFields).toContain("schemaLookupContractIds");
     expect(guard).toMatchObject({
       schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION,
       route: "/v1/contracts",
@@ -755,7 +809,24 @@ describe("product readiness integration gate fixtures", () => {
     });
 
     const broken = JSON.parse(JSON.stringify(laneExamples)) as typeof laneExamples;
-    const brokenDashboard = broken.examples.find((example) => example.laneId === "dashboard");
+    const alert = broken.examples.find((example) => example.laneId === "alert");
+    if (!alert) throw new Error("alert lane self-validation example missing");
+    alert.schemaLookupRefs = alert.schemaLookupRefs.filter((ref) => ref.contractId !== "source_provenance_receipts");
+
+    const partialGuard = productReadinessLaneSelfValidationGuard(broken);
+    expect(partialGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining(["missing_expected_lane_schema_lookup"]),
+      rows: expect.arrayContaining([
+        expect.objectContaining({
+          laneId: "alert",
+          missingExpectedSchemaLookupContractIds: ["source_provenance_receipts"]
+        })
+      ])
+    });
+
+    const missingEverything = JSON.parse(JSON.stringify(laneExamples)) as typeof laneExamples;
+    const brokenDashboard = missingEverything.examples.find((example) => example.laneId === "dashboard");
     if (!brokenDashboard) throw new Error("dashboard lane self-validation example missing");
     brokenDashboard.ownerLane = "" as typeof brokenDashboard.ownerLane;
     brokenDashboard.routeRefs = [];
@@ -764,7 +835,7 @@ describe("product readiness integration gate fixtures", () => {
     brokenDashboard.payloadShape.requiredFields = [];
     brokenDashboard.uiCopyLabel = "dashboard slop signal";
 
-    const brokenGuard = productReadinessLaneSelfValidationGuard(broken);
+    const brokenGuard = productReadinessLaneSelfValidationGuard(missingEverything);
 
     expect(brokenGuard).toMatchObject({
       ok: false,

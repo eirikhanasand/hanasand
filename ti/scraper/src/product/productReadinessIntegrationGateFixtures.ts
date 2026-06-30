@@ -46,6 +46,7 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "missing_consumer_proof_command"
   | "prompt_literal_consumer_copy"
   | "missing_workflow_schema_lookup"
+  | "partial_workflow_schema_lookup"
   | "stale_workflow_acceptance_receipt"
   | "untested_workflow_acceptance_receipt"
   | "missing_workflow_consumer"
@@ -78,6 +79,7 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "missing_consumer_proof_command",
   "prompt_literal_consumer_copy",
   "missing_workflow_schema_lookup",
+  "partial_workflow_schema_lookup",
   "stale_workflow_acceptance_receipt",
   "untested_workflow_acceptance_receipt",
   "missing_workflow_consumer",
@@ -200,6 +202,7 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
   missing_consumer_proof_command: ["missing_consumer_proof_command"],
   prompt_literal_consumer_copy: ["consumer_copy_guard_control_room", "consumer_copy_guard_signal"],
   missing_workflow_schema_lookup: ["missing_workflow_schema_lookup"],
+  partial_workflow_schema_lookup: ["missing_expected_workflow_schema_lookup"],
   stale_workflow_acceptance_receipt: ["stale_workflow_acceptance_receipt"],
   untested_workflow_acceptance_receipt: ["untested_workflow_acceptance_receipt"],
   missing_workflow_consumer: ["missing_workflow_consumer"],
@@ -615,9 +618,15 @@ export function buildProductReadinessWorkflowAcceptanceReceipts(contractLike: Pi
 
 function mutateWorkflowAcceptanceReceipts(receipts: WorkflowAcceptanceReceipts, kind: ProductReadinessIntegrationGateFixtureKind) {
   const sourceReceipt = receipts.receipts.find((receipt) => receipt.workflowId === "source_health");
+  const alertReceipt = receipts.receipts.find((receipt) => receipt.workflowId === "alert_generation");
   switch (kind) {
     case "missing_workflow_schema_lookup":
       if (sourceReceipt) sourceReceipt.schemaLookupRefs = [];
+      break;
+    case "partial_workflow_schema_lookup":
+      if (alertReceipt) {
+        alertReceipt.schemaLookupRefs = alertReceipt.schemaLookupRefs.filter((ref) => ref.contractId !== "source_provenance_receipts");
+      }
       break;
     case "stale_workflow_acceptance_receipt":
       if (sourceReceipt) sourceReceipt.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
@@ -644,6 +653,8 @@ export function productReadinessWorkflowAcceptanceGuard(receipts: WorkflowAccept
   const rows = receipts.receipts.map((receipt) => {
     const expectedSpec = WORKFLOW_ACCEPTANCE_SPECS.find((spec) => spec.workflowId === receipt.workflowId);
     const missingExpectedCustomerWorkflows = (expectedSpec?.customerWorkflowIds || []).filter((workflowId) => !receipt.customerWorkflowIds.includes(workflowId));
+    const presentSchemaLookupContractIds = new Set(receipt.schemaLookupRefs.map((ref) => ref.contractId).filter(Boolean));
+    const missingExpectedSchemaLookupContractIds = receipt.schemaLookupContractIds.filter((contractId) => !presentSchemaLookupContractIds.has(contractId));
     const unsafeFields = [
       !receipt.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
       receipt.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
@@ -657,6 +668,7 @@ export function productReadinessWorkflowAcceptanceGuard(receipts: WorkflowAccept
     const blockerCodes = [
       ...(!receipt.ownerLane ? ["missing_workflow_owner_lane"] : []),
       ...(!receipt.schemaLookupRefs.length ? ["missing_workflow_schema_lookup"] : []),
+      ...missingExpectedSchemaLookupContractIds.map(() => "missing_expected_workflow_schema_lookup"),
       ...(!receipt.producer ? ["missing_workflow_producer"] : []),
       ...(!receipt.consumers.length ? ["missing_workflow_consumer"] : []),
       ...(!receipt.focusedCheck?.command ? ["missing_workflow_check_command"] : []),
@@ -675,6 +687,8 @@ export function productReadinessWorkflowAcceptanceGuard(receipts: WorkflowAccept
       customerWorkflowIds: receipt.customerWorkflowIds,
       missingExpectedCustomerWorkflows,
       capabilityIds: receipt.capabilityIds,
+      schemaLookupContractIds: receipt.schemaLookupContractIds,
+      missingExpectedSchemaLookupContractIds,
       schemaLookupRefCount: receipt.schemaLookupRefs.length,
       consumerCount: receipt.consumers.length,
       focusedCheck: receipt.focusedCheck,
@@ -714,6 +728,7 @@ export function buildProductReadinessOwnerLaneReceiptExamples(workflowReceipts: 
       ownerLane: receipt.ownerLane,
       customerWorkflowIds: receipt.customerWorkflowIds,
       capabilityIds: receipt.capabilityIds,
+      schemaLookupContractIds: receipt.schemaLookupContractIds,
       schemaLookupRefs: receipt.schemaLookupRefs,
       producer: receipt.producer,
       consumerOwnerLanes: [...new Set(receipt.consumers.map((consumer) => consumer.ownerLane).filter(Boolean))].sort(),
@@ -727,6 +742,7 @@ export function buildProductReadinessOwnerLaneReceiptExamples(workflowReceipts: 
           "ownerLane",
           "customerWorkflowIds",
           "capabilityIds",
+          "schemaLookupContractIds",
           "schemaLookupRefs",
           "producer",
           "consumers",
@@ -791,9 +807,12 @@ export function productReadinessOwnerLaneReceiptExamplesGuard(examples: OwnerLan
       .filter((term) => label.includes(term))
       .map((term) => `owner_lane_copy_guard_${term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`);
     const requiredPayloadFields = Array.isArray(example.payloadShape?.requiredFields) ? example.payloadShape.requiredFields : [];
+    const presentSchemaLookupContractIds = new Set(example.schemaLookupRefs.map((ref) => ref.contractId).filter(Boolean));
+    const missingExpectedSchemaLookupContractIds = example.schemaLookupContractIds.filter((contractId) => !presentSchemaLookupContractIds.has(contractId));
     const blockerCodes = [
       ...(!example.ownerLane ? ["missing_owner_lane"] : []),
       ...(!example.schemaLookupRefs.length ? ["missing_owner_lane_schema_lookup"] : []),
+      ...missingExpectedSchemaLookupContractIds.map(() => "missing_expected_owner_lane_schema_lookup"),
       ...(!example.producer ? ["missing_owner_lane_producer"] : []),
       ...(!example.consumerOwnerLanes.length ? ["missing_owner_lane_consumer"] : []),
       ...(!example.focusedCheck?.command ? ["missing_owner_lane_check_command"] : []),
@@ -813,6 +832,8 @@ export function productReadinessOwnerLaneReceiptExamplesGuard(examples: OwnerLan
       blockerCodes: [...new Set(blockerCodes)].sort(),
       customerWorkflowIds: example.customerWorkflowIds,
       capabilityIds: example.capabilityIds,
+      schemaLookupContractIds: example.schemaLookupContractIds,
+      missingExpectedSchemaLookupContractIds,
       schemaLookupRefCount: example.schemaLookupRefs.length,
       consumerOwnerLanes: example.consumerOwnerLanes,
       consumerRouteCount: example.consumerRoutes.length,
@@ -871,6 +892,7 @@ export function buildProductReadinessLaneSelfValidationExamples(ownerLaneExample
         workflowIds: uniqueSorted(related.map((example) => example.workflowId)),
         customerWorkflowIds: uniqueSorted(related.flatMap((example) => example.customerWorkflowIds)),
         capabilityIds: uniqueSorted(related.flatMap((example) => example.capabilityIds)),
+        schemaLookupContractIds: uniqueSorted(related.flatMap((example) => example.schemaLookupContractIds)),
         schemaLookupRefs: related.flatMap((example) => example.schemaLookupRefs),
         routeRefs,
         focusedCheck: {
@@ -887,6 +909,7 @@ export function buildProductReadinessLaneSelfValidationExamples(ownerLaneExample
             "ownerLane",
             "workflowIds",
             "customerWorkflowIds",
+            "schemaLookupContractIds",
             "schemaLookupRefs",
             "routeRefs",
             "focusedCheck",
@@ -954,10 +977,13 @@ export function productReadinessLaneSelfValidationGuard(examples: LaneSelfValida
       .filter((term) => label.includes(term))
       .map((term) => `lane_self_validation_copy_guard_${term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`);
     const requiredPayloadFields = Array.isArray(example.payloadShape?.requiredFields) ? example.payloadShape.requiredFields : [];
+    const presentSchemaLookupContractIds = new Set(example.schemaLookupRefs.map((ref) => ref.contractId).filter(Boolean));
+    const missingExpectedSchemaLookupContractIds = example.schemaLookupContractIds.filter((contractId) => !presentSchemaLookupContractIds.has(contractId));
     const blockerCodes = [
       ...(!example.ownerLane ? ["missing_lane_self_validation_owner"] : []),
       ...(!example.workflowIds.length ? ["missing_lane_self_validation_workflow"] : []),
       ...(!example.schemaLookupRefs.length ? ["missing_lane_self_validation_schema_lookup"] : []),
+      ...missingExpectedSchemaLookupContractIds.map(() => "missing_expected_lane_schema_lookup"),
       ...(!example.routeRefs.length ? ["missing_lane_self_validation_route"] : []),
       ...(!example.focusedCheck?.command ? ["missing_lane_self_validation_check_command"] : []),
       ...(example.focusedCheck?.result !== "pass" ? ["untested_lane_self_validation_example"] : []),
@@ -977,6 +1003,8 @@ export function productReadinessLaneSelfValidationGuard(examples: LaneSelfValida
       consumerWorkflowIds: example.consumerWorkflowIds,
       workflowIds: example.workflowIds,
       customerWorkflowIds: example.customerWorkflowIds,
+      schemaLookupContractIds: example.schemaLookupContractIds,
+      missingExpectedSchemaLookupContractIds,
       schemaLookupRefCount: example.schemaLookupRefs.length,
       routeRefs: example.routeRefs,
       focusedCheck: example.focusedCheck,
