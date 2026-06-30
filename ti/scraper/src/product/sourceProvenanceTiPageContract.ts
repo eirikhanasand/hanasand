@@ -16,6 +16,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_REQUEST_SCHEMA_VERSION = "t
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_INTAKE_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_pack_intake_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_ACTIVATION_READINESS_SCHEMA_VERSION = "ti.source_provenance_source_pack_activation_readiness.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_AUDIT_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_activation_audit_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_activation_decision_receipt.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -991,6 +992,80 @@ export type TiSourceProvenanceSourceActivationAuditEvent = {
     blockedByPolicy: boolean;
     blockedByParser: boolean;
   };
+};
+
+export type TiSourceProvenanceSourceActivationDecisionReceipt = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  sourceActivationAuditPacketId: string;
+  decisions: TiSourceProvenanceSourceActivationDecision[];
+  familyCoverage: Array<{
+    family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+    activationTestsQueued: number;
+    parserRetriesQueued: number;
+    policyReviewsRequired: number;
+    alertableCandidates: number;
+  }>;
+  summary: {
+    decisionCount: number;
+    activationTestsQueued: number;
+    parserRetriesQueued: number;
+    policyReviewsRequired: number;
+    alertableCandidates: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    lastSuccessAt?: string;
+    lastFailureAt?: string;
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "sourceOps" | "publicTI" | "alertGeneration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
+};
+
+export type TiSourceProvenanceSourceActivationDecision = {
+  decisionId: string;
+  eventId: string;
+  candidateId: string;
+  sourceId?: string;
+  family: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  outcome: "activation_test_queued" | "parser_retry_queued" | "policy_review_required";
+  status: "accepted" | "retry_scheduled" | "blocked";
+  parserStatus: TiSourceProvenanceActorProfileSourceUpdateTask["parserStatus"];
+  activationState: TiSourceProvenanceActorProfileSourceUpdateTask["activationState"];
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  nextRetryAt?: string;
+  reason: string;
+  provenance: {
+    sourceActivationAuditPacketId: string;
+    sourcePackActivationReadinessId: string;
+    activationActionId: string;
+    sourceHealthProofId: string;
+    fixtureBacked: true;
+  };
+  alertability: TiSourceProvenanceSourceActivationAuditEvent["alertability"];
+  route: TiSourceProvenanceSourceActivationAuditEvent["route"];
 };
 
 export type TiSourceProvenanceScraperEnrichmentLifecycle = {
@@ -2588,6 +2663,63 @@ export function buildSourceProvenanceSourceActivationAuditPacket(input: {
       "events[].alertability",
       "summary.sourceFamilies",
       "summary.nextRetryAt"
+    ],
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    }
+  };
+}
+
+export function buildSourceProvenanceSourceActivationDecisionReceipt(input: {
+  auditPacket: TiSourceProvenanceSourceActivationAuditPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceActivationDecisionReceipt {
+  const generatedAt = input.generatedAt ?? input.auditPacket.generatedAt;
+  const decisions = input.auditPacket.events.map((event) => sourceActivationDecision(input.auditPacket, event, generatedAt));
+  const familyCoverage = sourceActivationDecisionFamilyCoverage(decisions);
+  const sourceFamilies = uniqueStrings(decisions.map((decision) => decision.family)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const activationTestsQueued = decisions.filter((decision) => decision.outcome === "activation_test_queued").length;
+  const parserRetriesQueued = decisions.filter((decision) => decision.outcome === "parser_retry_queued").length;
+  const policyReviewsRequired = decisions.filter((decision) => decision.outcome === "policy_review_required").length;
+  const alertableCandidates = decisions.filter((decision) => decision.alertability.canGenerateAlertEvidence).length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_ACTIVATION_DECISION_RECEIPT_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_activation_decision_receipt", `${input.auditPacket.id}:${generatedAt}:${decisions.map((decision) => `${decision.candidateId}:${decision.outcome}`).join(",")}`),
+    generatedAt,
+    ok: activationTestsQueued > 0,
+    tenantId: input.auditPacket.tenantId,
+    organizationId: input.auditPacket.organizationId,
+    actor: input.auditPacket.actor,
+    sourceActivationAuditPacketId: input.auditPacket.id,
+    decisions,
+    familyCoverage,
+    summary: {
+      decisionCount: decisions.length,
+      activationTestsQueued,
+      parserRetriesQueued,
+      policyReviewsRequired,
+      alertableCandidates,
+      sourceFamilies,
+      lastSuccessAt: newestTimestamp(decisions.map((decision) => decision.lastSuccessAt)),
+      lastFailureAt: newestTimestamp(decisions.map((decision) => decision.lastFailureAt)),
+      nextRetryAt: earliestTimestamp(decisions.map((decision) => decision.nextRetryAt))
+    },
+    consumers: sourceActivationDecisionConsumers(input.auditPacket, decisions),
+    payloadShape: [
+      "decisions[].candidateId",
+      "decisions[].outcome",
+      "decisions[].parserStatus",
+      "decisions[].activationState",
+      "decisions[].lastSuccessAt",
+      "decisions[].lastFailureAt",
+      "decisions[].nextRetryAt",
+      "decisions[].provenance",
+      "familyCoverage[]",
+      "summary.alertableCandidates"
     ],
     safeOutput: {
       rawTargetsExposed: false,
@@ -5208,6 +5340,116 @@ function sourceActivationAuditConsumers(
         organizationId: readiness.organizationId,
         actor: readiness.actor,
         sourcePackActivationReadinessId: readiness.id,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourceActivationDecision(
+  auditPacket: TiSourceProvenanceSourceActivationAuditPacket,
+  event: TiSourceProvenanceSourceActivationAuditEvent,
+  generatedAt: string
+): TiSourceProvenanceSourceActivationDecision {
+  const outcome = event.status === "ready_to_test"
+    ? "activation_test_queued"
+    : event.status === "retry_scheduled"
+      ? "parser_retry_queued"
+      : "policy_review_required";
+  const status = outcome === "activation_test_queued"
+    ? "accepted"
+    : outcome === "parser_retry_queued"
+      ? "retry_scheduled"
+      : "blocked";
+  return {
+    decisionId: stableId("ti_source_provenance_source_activation_decision", `${auditPacket.id}:${event.eventId}:${outcome}`),
+    eventId: event.eventId,
+    candidateId: event.candidateId,
+    sourceId: event.sourceId,
+    family: event.family,
+    outcome,
+    status,
+    parserStatus: event.parserStatus,
+    activationState: event.activationState,
+    lastSuccessAt: event.alertability.canGenerateAlertEvidence ? generatedAt : undefined,
+    lastFailureAt: event.alertability.blockedByParser || event.alertability.blockedByPolicy ? generatedAt : undefined,
+    nextRetryAt: event.nextRetryAt,
+    reason: event.reason,
+    provenance: {
+      sourceActivationAuditPacketId: auditPacket.id,
+      sourcePackActivationReadinessId: event.provenance.sourcePackActivationReadinessId,
+      activationActionId: event.provenance.activationActionId,
+      sourceHealthProofId: event.provenance.sourceHealthProofId,
+      fixtureBacked: true
+    },
+    alertability: event.alertability,
+    route: event.route
+  };
+}
+
+function sourceActivationDecisionFamilyCoverage(
+  decisions: TiSourceProvenanceSourceActivationDecision[]
+): TiSourceProvenanceSourceActivationDecisionReceipt["familyCoverage"] {
+  const families = uniqueStrings(decisions.map((decision) => decision.family)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  return families.map((family) => {
+    const familyDecisions = decisions.filter((decision) => decision.family === family);
+    return {
+      family,
+      activationTestsQueued: familyDecisions.filter((decision) => decision.outcome === "activation_test_queued").length,
+      parserRetriesQueued: familyDecisions.filter((decision) => decision.outcome === "parser_retry_queued").length,
+      policyReviewsRequired: familyDecisions.filter((decision) => decision.outcome === "policy_review_required").length,
+      alertableCandidates: familyDecisions.filter((decision) => decision.alertability.canGenerateAlertEvidence).length
+    };
+  });
+}
+
+function sourceActivationDecisionConsumers(
+  auditPacket: TiSourceProvenanceSourceActivationAuditPacket,
+  decisions: TiSourceProvenanceSourceActivationDecision[]
+): TiSourceProvenanceSourceActivationDecisionReceipt["consumers"] {
+  const hasAccepted = decisions.some((decision) => decision.status === "accepted");
+  const hasAlertable = decisions.some((decision) => decision.alertability.canGenerateAlertEvidence);
+  const hasBlockingPolicy = decisions.some((decision) => decision.status === "blocked");
+  const hasRetry = decisions.some((decision) => decision.status === "retry_scheduled");
+  return [{
+    consumer: "sourceOps",
+    ready: decisions.length > 0,
+    requiredFields: ["decisions[].outcome", "decisions[].route", "familyCoverage[]", "summary.nextRetryAt"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        sourceActivationAuditPacketId: auditPacket.id,
+        includeDecisionReceipt: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "publicTI",
+    ready: hasAccepted,
+    requiredFields: ["decisions[].family", "decisions[].provenance", "familyCoverage[].alertableCandidates"],
+    route: {
+      method: "GET",
+      path: `/ti/${encodeURIComponent(auditPacket.actor)}`,
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasAlertable && !hasBlockingPolicy && !hasRetry,
+    requiredFields: ["decisions[].sourceId", "decisions[].alertability", "decisions[].lastSuccessAt"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        tenantId: auditPacket.tenantId,
+        organizationId: auditPacket.organizationId,
+        actor: auditPacket.actor,
+        sourceActivationAuditPacketId: auditPacket.id,
         dryRun: true
       },
       dryRunSupported: true,
