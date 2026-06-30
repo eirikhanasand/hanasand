@@ -3095,6 +3095,44 @@ describe("dwm alert repository", () => {
     }), options);
     expect(watchlistResponse.status).toBe(201);
 
+    const readinessResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/generation-readiness?tenantId=tenant_api_acme"), options);
+    const readiness = await readinessResponse.json() as any;
+
+    expect(readinessResponse.status).toBe(200);
+    expect(readiness.readiness).toMatchObject({
+      schemaVersion: "dwm.alert_generation_readiness.v1",
+      tenantId: "tenant_api_acme",
+      readyForRebuild: true,
+      readyForCustomerDelivery: false,
+      counts: {
+        candidateCount: 1,
+        captureRefCount: 1,
+        duplicateCaptureCollapseCount: 1,
+        matchedCandidateCount: 1,
+        unmatchedCandidateCount: 0
+      },
+      zeroAlertProof: {
+        schemaVersion: "dwm.zero_alert_proof.v1",
+        zeroAlert: false,
+        state: "blocked_route",
+        nextAction: "Configure case and webhook delivery routes for matched alert candidates."
+      }
+    });
+    expect(readiness.readiness.blockerCodes).toEqual(["case_route_unavailable"]);
+    expect(readiness.readiness.webhookReadiness).toMatchObject({
+      ready: false,
+      missingRouteCandidateCount: 1,
+      webhookDestinationIds: []
+    });
+    expect(readiness.readiness.sourceFamilyCoverage).toEqual([expect.objectContaining({
+      sourceFamily: "telegram_public",
+      candidateCount: 1,
+      captureRefCount: 1
+    })]);
+    expect(readiness.readiness.plan.candidates[0].captureRefs.map((ref: any) => ref.captureId)).toEqual(["cap_repo_tg_acme"]);
+    expect(readiness.readiness.plan.candidates[0].suppressedDuplicateCaptureRefs.map((ref: any) => ref.captureId)).toEqual(["cap_repo_tg_acme_duplicate"]);
+    expect(readiness.readiness.plan.candidates[0].duplicateCaptureCollapseCount).toBe(1);
+
     const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
       method: "POST",
       body: JSON.stringify({ tenantId: "tenant_api_acme" })
