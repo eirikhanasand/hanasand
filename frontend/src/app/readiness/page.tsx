@@ -295,6 +295,7 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
             data-north-star-blocker-proof-stale={row.proofStale ? 'true' : 'false'}
             data-north-star-blocker-contract={row.backendProofContractVersion}
             data-north-star-blocker-dashboard-row-id={row.expectedDashboardRowId}
+            data-north-star-blocker-proof-drilldowns={row.proofDrilldowns.map(item => `${item.kind}:${item.value}`).join('|')}
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
@@ -317,6 +318,7 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
                 <Fact label='Stale after' value={formatDuration(row.staleAfterSeconds)} />
                 <Fact label='Row id' value={row.expectedDashboardRowId} />
             </dl>
+            <ProofDrilldowns items={row.proofDrilldowns} scope={`blocker-${row.rowId}`} />
             <div className='mt-4 flex flex-col gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f] sm:flex-row sm:items-center sm:justify-between'>
                 <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{row.integrationProbeHint}</p>
                 <Link href={row.href} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
@@ -406,6 +408,7 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             data-north-star-href={row.href}
             data-north-star-integration-probe-hint={row.integrationProbeHint}
             data-north-star-detail={row.detail}
+            data-north-star-proof-drilldowns={row.proofDrilldowns.map(item => `${item.kind}:${item.value}`).join('|')}
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
@@ -427,6 +430,7 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
                 <Fact label='Row id' value={row.expectedDashboardRowId} />
                 <Fact label='Source' value={row.proofSource} />
             </dl>
+            <ProofDrilldowns items={row.proofDrilldowns} scope={row.id} />
             {row.blocker && (
                 <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
                     {row.blocker}
@@ -440,6 +444,41 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
                 </Link>
             </div>
         </article>
+    )
+}
+
+function ProofDrilldowns({
+    items,
+    scope,
+}: {
+    items: Array<{ kind: string, label: string, value: string, href: string }>
+    scope: string
+}) {
+    return (
+        <dl
+            className='mt-3 grid gap-2 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-2 text-xs dark:border-[#26364f] dark:bg-[#0b1422]'
+            data-north-star-proof-drilldown-group={scope}
+        >
+            {items.map(item => (
+                <div
+                    key={`${item.kind}-${item.label}`}
+                    className='grid grid-cols-[88px_minmax(0,1fr)] gap-2'
+                    data-north-star-proof-drilldown-kind={item.kind}
+                    data-north-star-proof-drilldown-label={item.label}
+                    data-north-star-proof-drilldown-value={item.value}
+                    data-north-star-proof-drilldown-href={item.href}
+                >
+                    <dt className='font-semibold text-[#667085] dark:text-[#97a6bd]'>{item.label}</dt>
+                    <dd className='min-w-0 wrap-break-word font-medium text-[#171a21] dark:text-[#f5f7fb]'>
+                        {item.href ? (
+                            <Link href={item.href} className='inline-flex min-h-8 min-w-9 items-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
+                                {item.value}
+                            </Link>
+                        ) : item.value}
+                    </dd>
+                </div>
+            ))}
+        </dl>
     )
 }
 

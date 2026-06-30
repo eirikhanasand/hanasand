@@ -52,6 +52,14 @@ export type ProductNorthStarRow = {
     backendProofContractVersion: string
     blocker: string
     integrationProbeHint: string
+    proofDrilldowns: ProductNorthStarProofDrilldown[]
+}
+
+export type ProductNorthStarProofDrilldown = {
+    kind: 'workflow' | 'api' | 'probe' | 'contract' | 'dashboard_row'
+    label: string
+    value: string
+    href: string
 }
 
 export type ProductNorthStarDirectionId =
@@ -103,6 +111,7 @@ export type ProductNorthStarDeployBlocker = {
     expectedDashboardRowId: string
     backendProofContractVersion: string
     integrationProbeHint: string
+    proofDrilldowns: ProductNorthStarProofDrilldown[]
 }
 
 export type ProductNorthStarProgressSource = {
@@ -175,6 +184,9 @@ function isProductNorthStarRow(input: unknown): input is ProductNorthStarRow {
         && isFilledString(row.backendProofContractVersion)
         && typeof row.blocker === 'string'
         && isFilledString(row.integrationProbeHint)
+        && Array.isArray(row.proofDrilldowns)
+        && row.proofDrilldowns.length >= 4
+        && row.proofDrilldowns.every(isProductNorthStarProofDrilldown)
         && (row.state === 'ready' || Boolean(row.blocker))
 }
 
@@ -241,6 +253,18 @@ function isProductNorthStarDeployBlocker(input: unknown): input is ProductNorthS
         && isFilledString(blocker.expectedDashboardRowId)
         && isFilledString(blocker.backendProofContractVersion)
         && isFilledString(blocker.integrationProbeHint)
+        && Array.isArray(blocker.proofDrilldowns)
+        && blocker.proofDrilldowns.length >= 4
+        && blocker.proofDrilldowns.every(isProductNorthStarProofDrilldown)
+}
+
+function isProductNorthStarProofDrilldown(input: unknown): input is ProductNorthStarProofDrilldown {
+    if (!input || typeof input !== 'object') return false
+    const drilldown = input as Partial<ProductNorthStarProofDrilldown>
+    return (drilldown.kind === 'workflow' || drilldown.kind === 'api' || drilldown.kind === 'probe' || drilldown.kind === 'contract' || drilldown.kind === 'dashboard_row')
+        && isFilledString(drilldown.label)
+        && isFilledString(drilldown.value)
+        && typeof drilldown.href === 'string'
 }
 
 function isProductNorthStarProgressSource(input: unknown): input is ProductNorthStarProgressSource {
@@ -279,6 +303,7 @@ function deployGateMatchesRows(deployGate: ProductNorthStarDeployGate, rows: Pro
             && row.expectedDashboardRowId === blocker.expectedDashboardRowId
             && row.backendProofContractVersion === blocker.backendProofContractVersion
             && row.integrationProbeHint === blocker.integrationProbeHint
+            && sameDrilldowns(row.proofDrilldowns, blocker.proofDrilldowns)
     })) return false
     if (!sameStringSet(deployGate.readyWorkflowLinks, readyRows.map(row => row.href))) return false
     if (!sameStringSet(deployGate.actionNeededWorkflowLinks, nonReadyRows.map(row => row.href))) return false
@@ -289,6 +314,10 @@ function sameStringSet(left: string[], right: string[]) {
     const cleanLeft = Array.from(new Set(left.filter(Boolean))).sort()
     const cleanRight = Array.from(new Set(right.filter(Boolean))).sort()
     return cleanLeft.length === cleanRight.length && cleanLeft.every((value, index) => value === cleanRight[index])
+}
+
+function sameDrilldowns(left: ProductNorthStarProofDrilldown[], right: ProductNorthStarProofDrilldown[]) {
+    return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function isRowId(input: unknown): input is ProductNorthStarRowId {
@@ -455,6 +484,7 @@ function buildDeployGate(rows: ProductNorthStarRow[], summary: {
             expectedDashboardRowId: row.expectedDashboardRowId,
             backendProofContractVersion: row.backendProofContractVersion,
             integrationProbeHint: row.integrationProbeHint,
+            proofDrilldowns: row.proofDrilldowns,
         })),
     }
 }
@@ -713,12 +743,13 @@ function uniqueStrings(values: Array<string | undefined>) {
     return Array.from(new Set(values.filter((value): value is string => Boolean(value?.trim()))))
 }
 
-function withProofFreshness(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | 'proofStale'>): ProductNorthStarRow {
+function withProofFreshness(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | 'proofStale' | 'proofDrilldowns'>): ProductNorthStarRow {
     const proofAgeSeconds = ageSecondsSince(row.proofTimestamp)
     return {
         ...row,
         proofAgeSeconds,
         proofStale: proofAgeSeconds > row.staleAfterSeconds,
+        proofDrilldowns: proofDrilldownsFor(row),
     }
 }
 
@@ -726,4 +757,58 @@ function ageSecondsSince(value: string) {
     const timestamp = new Date(value).getTime()
     if (!value || Number.isNaN(timestamp)) return 0
     return Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+}
+
+function proofDrilldownsFor(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | 'proofStale' | 'proofDrilldowns'>): ProductNorthStarProofDrilldown[] {
+    const apiRoute = firstLocalRoute(row.proofSource)
+    const probeRoute = firstLocalRoute(row.integrationProbeHint)
+    return [
+        {
+            kind: 'workflow',
+            label: 'Workflow',
+            value: row.href,
+            href: linkableRoute(row.href) ? row.href : '',
+        },
+        {
+            kind: 'api',
+            label: 'Proof API',
+            value: apiRoute || row.proofSource || row.integrationProbeHint,
+            href: linkableRoute(apiRoute) ? apiRoute : '',
+        },
+        {
+            kind: 'probe',
+            label: 'Probe route',
+            value: probeRoute || row.integrationProbeHint,
+            href: linkableRoute(probeRoute) ? probeRoute : '',
+        },
+        {
+            kind: 'contract',
+            label: 'Contract',
+            value: row.backendProofContractVersion,
+            href: '',
+        },
+        {
+            kind: 'dashboard_row',
+            label: 'Dashboard row',
+            value: row.expectedDashboardRowId,
+            href: '',
+        },
+    ]
+}
+
+function firstLocalRoute(...values: string[]) {
+    for (const value of values) {
+        const routes = value.match(/\/(?:api|dashboard|ti|status)[^\s,;'"`)]+/g) || []
+        const route = routes.map(cleanRoute).find(Boolean)
+        if (route) return route
+    }
+    return ''
+}
+
+function cleanRoute(value: string) {
+    return value.replace(/[.。]+$/g, '')
+}
+
+function linkableRoute(value: string | undefined) {
+    return Boolean(value && value.startsWith('/') && !value.includes(':') && !value.includes('<') && !value.includes('>'))
 }
