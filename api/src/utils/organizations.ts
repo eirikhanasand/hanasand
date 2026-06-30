@@ -2264,6 +2264,51 @@ export type OrganizationReadinessProof = {
         requiredMetadataFields: Array<'requestId' | 'role' | 'recipientCount' | 'submittedRecipientCount' | 'duplicateRecipientCount' | 'invitedCount' | 'skippedCount' | 'inviteId' | 'action' | 'previousStatus' | 'newStatus'>
         nonmemberEnumeration: false
     }
+    lifecycleCleanupProof: {
+        schemaVersion: 'organization.lifecycle_cleanup_readiness.v1'
+        organizationId: string
+        tenantId: string
+        cleanupRoutes: {
+            revokeInvite: 'POST /api/organizations/:id/invites/:inviteId/actions'
+            removeMember: 'DELETE /api/organizations/:id/members/:userId'
+            cleanupWatchlists: 'POST /api/organizations/:id/watchlists/cleanup'
+            acceptInvite: 'POST /api/organizations/invites/:inviteId/accept'
+        }
+        idempotentActions: Array<'invite_revoke' | 'invite_resend' | 'watchlist_cleanup' | 'watchlist_archive' | 'watchlist_restore'>
+        cleanupEffects: {
+            removedMemberRevokesPendingInvites: true
+            removedMemberLosesWatchlistAccess: true
+            removedMemberLosesAlertExportAccess: true
+            removedMemberLosesCaseVisibility: true
+            removedMemberLosesWebhookAccess: true
+            revokedInviteCannotGrantAccess: true
+            expiredInviteCannotGrantAccess: true
+            archivedWatchlistsExcludedFromMatching: true
+            pausedWatchlistsExcludedFromMatching: true
+        }
+        blockedUntilAcceptedMembership: Array<
+            | 'GET /api/organizations/:id/watchlists'
+            | 'GET /api/organizations/:id/watchlists/alert-terms'
+            | 'GET /api/organizations/:id/alert-case-visibility'
+            | 'POST /v1/dwm/webhooks/deliver'
+        >
+        affectedConsumerContracts: Array<
+            | 'organization.watchlist_alert_generation_consumer.v1'
+            | 'organization.case_visibility_consumer.v1'
+            | 'organization.webhook_destination_access_decision.v1'
+            | 'organization.shared_watchlist_readiness_export.v1'
+            | 'organization.audit_timeline_readiness.v1'
+        >
+        requiredAuditActions: Array<'organization_invite_revoked' | 'organization_member_removed' | 'organization_watchlist_cleanup_archived' | 'organization_watchlist_archived' | 'organization_watchlist_restored'>
+        lifecycleBlockers: Array<'member_revoked' | 'invite_expired' | 'watchlist_archived' | 'watchlist_paused' | 'cleanup_required'>
+        cleanupRequired: boolean
+        pendingInviteCount: number
+        pausedWatchlistCount: number
+        archivedWatchlistCount: number
+        noLeakFields: Array<'activeTerms[]' | 'otherOrg.watchlistItemIds' | 'otherOrg.invites' | 'destination.secret'>
+        nonmemberEnumeration: false
+        proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts'
+    }
     tenMemberWorkspaceProof: {
         schemaVersion: 'organization.ten_member_workspace_proof.v1'
         targetMemberCount: 10
@@ -5675,6 +5720,74 @@ export function organizationReadinessProof(input: {
                 'newStatus',
             ],
             nonmemberEnumeration: false,
+        },
+        lifecycleCleanupProof: {
+            schemaVersion: 'organization.lifecycle_cleanup_readiness.v1',
+            organizationId: input.downstreamAuthorization.organizationId,
+            tenantId: input.downstreamAuthorization.tenantId,
+            cleanupRoutes: {
+                revokeInvite: 'POST /api/organizations/:id/invites/:inviteId/actions',
+                removeMember: 'DELETE /api/organizations/:id/members/:userId',
+                cleanupWatchlists: 'POST /api/organizations/:id/watchlists/cleanup',
+                acceptInvite: 'POST /api/organizations/invites/:inviteId/accept',
+            },
+            idempotentActions: [
+                'invite_revoke',
+                'invite_resend',
+                'watchlist_cleanup',
+                'watchlist_archive',
+                'watchlist_restore',
+            ],
+            cleanupEffects: {
+                removedMemberRevokesPendingInvites: true,
+                removedMemberLosesWatchlistAccess: true,
+                removedMemberLosesAlertExportAccess: true,
+                removedMemberLosesCaseVisibility: true,
+                removedMemberLosesWebhookAccess: true,
+                revokedInviteCannotGrantAccess: true,
+                expiredInviteCannotGrantAccess: true,
+                archivedWatchlistsExcludedFromMatching: true,
+                pausedWatchlistsExcludedFromMatching: true,
+            },
+            blockedUntilAcceptedMembership: [
+                'GET /api/organizations/:id/watchlists',
+                'GET /api/organizations/:id/watchlists/alert-terms',
+                'GET /api/organizations/:id/alert-case-visibility',
+                'POST /v1/dwm/webhooks/deliver',
+            ],
+            affectedConsumerContracts: [
+                'organization.watchlist_alert_generation_consumer.v1',
+                'organization.case_visibility_consumer.v1',
+                'organization.webhook_destination_access_decision.v1',
+                'organization.shared_watchlist_readiness_export.v1',
+                'organization.audit_timeline_readiness.v1',
+            ],
+            requiredAuditActions: [
+                'organization_invite_revoked',
+                'organization_member_removed',
+                'organization_watchlist_cleanup_archived',
+                'organization_watchlist_archived',
+                'organization_watchlist_restored',
+            ],
+            lifecycleBlockers: [
+                'member_revoked',
+                'invite_expired',
+                'watchlist_archived',
+                'watchlist_paused',
+                'cleanup_required',
+            ],
+            cleanupRequired,
+            pendingInviteCount: input.lifecycleReadiness.counts.pendingInviteCount,
+            pausedWatchlistCount: watchlists.pausedCount,
+            archivedWatchlistCount: watchlists.archivedCount,
+            noLeakFields: [
+                'activeTerms[]',
+                'otherOrg.watchlistItemIds',
+                'otherOrg.invites',
+                'destination.secret',
+            ],
+            nonmemberEnumeration: false,
+            proofCommand: 'cd api && bun scripts/smoke-organizations-api.ts',
         },
         tenMemberWorkspaceProof: {
             schemaVersion: 'organization.ten_member_workspace_proof.v1',
