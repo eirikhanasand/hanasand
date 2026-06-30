@@ -5,6 +5,7 @@ import type { RuntimeDwmWatchlist } from "./dwmAlertRepository.ts";
 export type OrgWatchlistTermFamily = "company" | "domain" | "vendor" | "actor" | "keyword";
 export type OrgWatchlistStatus = "active" | "paused" | "archived";
 export type OrgAlertVisibilityPolicy = "members" | "admins" | "owners";
+export type OrgWatchlistExportRole = "owner" | "admin" | "analyst" | "member" | "viewer" | "support" | "nonmember";
 
 export type OrgWatchlistContractTerm = {
   watchlistId?: string;
@@ -111,6 +112,88 @@ export type OrgWatchlistAlertGenerationContractLike = {
   canGenerateAlerts?: boolean;
 };
 
+export type OrgWatchlistExportMember = {
+  id?: string;
+  memberId?: string;
+  userId?: string;
+  email?: string;
+  role?: OrgWatchlistExportRole | string;
+  status?: "active" | "invited" | "removed" | "disabled" | string;
+  userActive?: boolean;
+};
+
+export type OrgSharedWatchlistAlertGenerationExport = {
+  schemaVersion: "organization.shared_watchlist_alert_generation_export.v1";
+  id: string;
+  generatedAt: string;
+  organizationId: string;
+  tenantId: string;
+  state: "ready" | "blocked";
+  ownerLane: "org_foundation" | "watchlist" | "alert_generation";
+  visibilityPolicy: OrgAlertVisibilityPolicy;
+  member: {
+    role: OrgWatchlistExportRole;
+    status: "active" | "invited" | "removed" | "disabled" | "unknown";
+    userId?: string;
+    email?: string;
+    allowed: boolean;
+    readOnly: boolean;
+  };
+  termExport: {
+    activeTermCount: number;
+    exportedWatchlistCount: number;
+    duplicateCollapseCount: number;
+    skippedTermCount: number;
+    watchlistIds: string[];
+    watchlistItemIds: string[];
+    alertGeneratorKeys: string[];
+  };
+  blockers: Array<{
+    code:
+      | "missing_org_scope"
+      | "not_member"
+      | "member_inactive"
+      | "role_not_allowed"
+      | "visibility_denied"
+      | "org_lifecycle_blocked"
+      | "alert_generation_export_blocked"
+      | "term_org_mismatch"
+      | "no_active_watchlist_terms";
+    ownerLane: "org_foundation" | "watchlist" | "alert_generation";
+    path: string;
+    detail: string;
+    recoverable: boolean;
+    watchlistItemId?: string;
+  }>;
+  runtimeWatchlists: RuntimeDwmWatchlist[];
+  consumerContracts: {
+    schemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1";
+    alertGeneration: {
+      canConsume: boolean;
+      route: "/v1/dwm/alerts/generation-readiness";
+      stableFields: string[];
+      blockerFields: string[];
+    };
+    dashboard: {
+      canConsume: boolean;
+      route: "/v1/dwm/watchlists";
+      stableFields: string[];
+      blockerFields: string[];
+    };
+    webhook: {
+      canConsume: boolean;
+      route: "/v1/dwm/webhooks/deliver";
+      stableFields: string[];
+      blockerFields: string[];
+    };
+  };
+  safeOutput: {
+    nonmemberEnumeration: false;
+    rawTargetsExposed: false;
+    privateSourceContentExposed: false;
+  };
+};
+
 export type RuntimeOrgWatchlistTermContext = {
   watchlistId: string;
   watchlistItemId: string;
@@ -188,6 +271,108 @@ export function orgWatchlistContractToRuntimeDwmWatchlists(contract: OrgWatchlis
   });
 }
 
+export function buildOrgSharedWatchlistAlertGenerationExport(input: {
+  contract: OrgWatchlistAlertGenerationContractLike;
+  member?: OrgWatchlistExportMember | null;
+  generatedAt?: string;
+}): OrgSharedWatchlistAlertGenerationExport {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const membershipContext = orgMembershipContext(input.contract);
+  const member = normalizeExportMember(input.member);
+  const termExportRows = orgWatchlistTermsFromContract(input.contract)
+    .map((term) => orgWatchlistTermContext(term, membershipContext));
+  const activeTerms = termExportRows.filter((term) => term.status === "active");
+  const scopedTerms = activeTerms.filter((term) => term.organizationId === membershipContext.organizationId && term.tenantId === membershipContext.tenantId);
+  const duplicateCollapsedTerms = uniqueOrgWatchlistTermContexts(scopedTerms);
+  const termBlockers = activeTerms
+    .filter((term) => term.organizationId !== membershipContext.organizationId || term.tenantId !== membershipContext.tenantId)
+    .map((term) => orgWatchlistExportBlocker(
+      "term_org_mismatch",
+      "watchlist",
+      "watchlistTerms[].organizationId",
+      "Watchlist term belongs to a different organization or tenant.",
+      true,
+      term.watchlistItemId
+    ));
+  const blockers = uniqueOrgWatchlistExportBlockers([
+    !membershipContext.organizationId ? orgWatchlistExportBlocker("missing_org_scope", "org_foundation", "organizationId", "Organization scope is required for shared watchlist alert export.", true) : undefined,
+    member.role === "nonmember" ? orgWatchlistExportBlocker("not_member", "org_foundation", "member", "An active organization member is required to export shared watchlist terms.", true) : undefined,
+    member.role !== "nonmember" && member.status !== "active" ? orgWatchlistExportBlocker("member_inactive", "org_foundation", "member.status", "Inactive or invited members cannot export shared watchlist terms.", true) : undefined,
+    !orgWatchlistExportRoleAllowed(member.role) ? orgWatchlistExportBlocker("role_not_allowed", "org_foundation", "member.role", "This organization role cannot export shared watchlist terms for alert generation.", true) : undefined,
+    input.contract.downstreamAuthorization?.visibility?.allowed === false ? orgWatchlistExportBlocker("visibility_denied", "org_foundation", "downstreamAuthorization.visibility", "Organization visibility policy denied this member.", true) : undefined,
+    membershipContext.organizationLifecycleState !== "active" ? orgWatchlistExportBlocker("org_lifecycle_blocked", "org_foundation", "organization.status", "Organization lifecycle is not active.", membershipContext.organizationLifecycleState !== "deleted") : undefined,
+    membershipContext.canGenerateAlerts === false ? orgWatchlistExportBlocker("alert_generation_export_blocked", "alert_generation", "downstreamAuthorization.downstream.alertGeneration", "Downstream alert generation export is blocked.", true) : undefined,
+    !duplicateCollapsedTerms.length ? orgWatchlistExportBlocker("no_active_watchlist_terms", "watchlist", "watchlistTerms", "No active shared watchlist terms are exportable for this organization.", true) : undefined,
+    ...termBlockers
+  ]);
+  const canExport = blockers.length === 0;
+  const runtimeWatchlists = canExport
+    ? orgWatchlistContractToRuntimeDwmWatchlists({
+      ...input.contract,
+      activeTerms: duplicateCollapsedTerms,
+      activeWatchlistTerms: [],
+      watchlistTerms: [],
+      terms: []
+    }).filter((watchlist) => watchlist.status === "active")
+    : [];
+  const state: OrgSharedWatchlistAlertGenerationExport["state"] = canExport ? "ready" : "blocked";
+  return {
+    schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+    id: stableId("organization_shared_watchlist_alert_export", `${membershipContext.tenantId}:${membershipContext.organizationId}:${member.userId ?? member.email ?? member.role}:${generatedAt}:${state}`),
+    generatedAt,
+    organizationId: membershipContext.organizationId,
+    tenantId: membershipContext.tenantId,
+    state,
+    ownerLane: blockers[0]?.ownerLane ?? "alert_generation",
+    visibilityPolicy: membershipContext.visibilityPolicy,
+    member: {
+      role: member.role,
+      status: member.status,
+      userId: member.userId,
+      email: member.email,
+      allowed: canExport,
+      readOnly: member.role === "viewer" || member.role === "support"
+    },
+    termExport: {
+      activeTermCount: activeTerms.length,
+      exportedWatchlistCount: runtimeWatchlists.length,
+      duplicateCollapseCount: Math.max(0, scopedTerms.length - duplicateCollapsedTerms.length),
+      skippedTermCount: termExportRows.length - duplicateCollapsedTerms.length,
+      watchlistIds: uniqueStrings(runtimeWatchlists.map((watchlist) => watchlist.id)),
+      watchlistItemIds: uniqueStrings(duplicateCollapsedTerms.map((term) => term.watchlistItemId)),
+      alertGeneratorKeys: uniqueStrings(duplicateCollapsedTerms.map((term) => term.alertGeneratorKey))
+    },
+    blockers,
+    runtimeWatchlists,
+    consumerContracts: {
+      schemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+      alertGeneration: {
+        canConsume: canExport,
+        route: "/v1/dwm/alerts/generation-readiness",
+        stableFields: ["runtimeWatchlists", "termExport.alertGeneratorKeys", "termExport.watchlistItemIds"],
+        blockerFields: ["blockers.code", "blockers.path", "blockers.watchlistItemId"]
+      },
+      dashboard: {
+        canConsume: true,
+        route: "/v1/dwm/watchlists",
+        stableFields: ["state", "member.role", "termExport"],
+        blockerFields: ["blockers.code", "blockers.detail"]
+      },
+      webhook: {
+        canConsume: canExport,
+        route: "/v1/dwm/webhooks/deliver",
+        stableFields: ["runtimeWatchlists[].webhookDestinationId", "termExport.alertGeneratorKeys"],
+        blockerFields: ["blockers.code", "blockers.ownerLane"]
+      }
+    },
+    safeOutput: {
+      nonmemberEnumeration: false,
+      rawTargetsExposed: false,
+      privateSourceContentExposed: false
+    }
+  };
+}
+
 export function orgWatchlistTermsFromContract(contract: OrgWatchlistAlertGenerationContractLike): OrgWatchlistContractTerm[] {
   const terms = [
     ...(contract.activeTerms ?? []),
@@ -200,6 +385,73 @@ export function orgWatchlistTermsFromContract(contract: OrgWatchlistAlertGenerat
     const key = String(term.alertGenerationRef?.watchlistItemId ?? term.alertGenerationReference?.watchlistItemId ?? term.watchlistItemId ?? term.itemId ?? `${normalizeOrgTermKind(term.termFamily ?? term.category ?? term.kind ?? term.family)}:${normalizeTermValue(term).toLowerCase()}`);
     const existing = byKey.get(key);
     if (!existing || (!existing.alertGenerationRef && term.alertGenerationRef)) byKey.set(key, term);
+  }
+  return [...byKey.values()];
+}
+
+function normalizeExportMember(member: OrgWatchlistExportMember | null | undefined): {
+  role: OrgWatchlistExportRole;
+  status: OrgSharedWatchlistAlertGenerationExport["member"]["status"];
+  userId?: string;
+  email?: string;
+} {
+  const role = normalizeExportRole(member?.role);
+  const status = normalizeExportMemberStatus(member);
+  return {
+    role,
+    status,
+    userId: member?.userId ? String(member.userId) : member?.id ? String(member.id) : member?.memberId ? String(member.memberId) : undefined,
+    email: member?.email ? String(member.email).toLowerCase() : undefined
+  };
+}
+
+function normalizeExportRole(value: unknown): OrgWatchlistExportRole {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "owner" || normalized === "admin" || normalized === "analyst" || normalized === "member" || normalized === "viewer" || normalized === "support") return normalized;
+  return "nonmember";
+}
+
+function normalizeExportMemberStatus(member: OrgWatchlistExportMember | null | undefined): OrgSharedWatchlistAlertGenerationExport["member"]["status"] {
+  if (!member) return "unknown";
+  if (member.userActive === false) return "disabled";
+  const normalized = String(member.status ?? "active").trim().toLowerCase();
+  if (normalized === "active" || normalized === "invited" || normalized === "removed" || normalized === "disabled") return normalized;
+  return "unknown";
+}
+
+function orgWatchlistExportRoleAllowed(role: OrgWatchlistExportRole): boolean {
+  return role === "owner" || role === "admin" || role === "analyst" || role === "member";
+}
+
+function orgWatchlistExportBlocker(
+  code: OrgSharedWatchlistAlertGenerationExport["blockers"][number]["code"],
+  ownerLane: OrgSharedWatchlistAlertGenerationExport["blockers"][number]["ownerLane"],
+  path: string,
+  detail: string,
+  recoverable: boolean,
+  watchlistItemId?: string
+): OrgSharedWatchlistAlertGenerationExport["blockers"][number] {
+  return { code, ownerLane, path, detail, recoverable, watchlistItemId };
+}
+
+function uniqueOrgWatchlistExportBlockers(
+  blockers: Array<OrgSharedWatchlistAlertGenerationExport["blockers"][number] | undefined>
+): OrgSharedWatchlistAlertGenerationExport["blockers"] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker): blocker is OrgSharedWatchlistAlertGenerationExport["blockers"][number] => {
+    if (!blocker) return false;
+    const key = `${blocker.code}:${blocker.path}:${blocker.watchlistItemId ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueOrgWatchlistTermContexts(terms: RuntimeOrgWatchlistTermContext[]): RuntimeOrgWatchlistTermContext[] {
+  const byKey = new Map<string, RuntimeOrgWatchlistTermContext>();
+  for (const term of terms) {
+    const key = term.alertGenerationRef.dedupe.key;
+    if (!byKey.has(key)) byKey.set(key, term);
   }
   return [...byKey.values()];
 }

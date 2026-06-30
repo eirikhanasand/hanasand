@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleApiRequest } from "../api/server.ts";
 import { FocusedFrontier } from "../frontier/frontier.ts";
 import { buildDwmAlertGenerationReadiness } from "../storage/dwmAlertRepository.ts";
-import { orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
+import { buildOrgSharedWatchlistAlertGenerationExport, orgWatchlistContractToRuntimeDwmWatchlists } from "../storage/dwmOrgWatchlistBridge.ts";
 import { InMemoryScraperStore } from "../storage/memoryStore.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
 
@@ -111,6 +111,284 @@ const nonmatchCapture: RawCapture = {
 } as RawCapture;
 
 describe("DWM org watchlist bridge", () => {
+  test("exports shared watchlist terms for alert generation only for eligible org members", () => {
+    const exportContract = buildOrgSharedWatchlistAlertGenerationExport({
+      member: {
+        id: "member_export_analyst",
+        userId: "analyst-export",
+        email: "analyst-export@org-bridge.example",
+        role: "analyst",
+        status: "active"
+      },
+      generatedAt: "2026-06-29T10:00:00.000Z",
+      contract: {
+        schemaVersion: "organization.watchlist_alert_generation.v1",
+        organizationId: "org_export_acme",
+        tenantId: "org_export_acme",
+        ownerOrganizationId: "org_export_acme",
+        visibilityPolicy: "members",
+        allowedViewerRoles: ["owner", "admin", "analyst", "member", "viewer"],
+        entitlementStatus: "active",
+        canGenerateAlerts: true,
+        downstreamAuthorization: {
+          schemaVersion: "organization.downstream_authorization_export.v1",
+          organizationLifecycleState: "active",
+          visibility: { allowed: true, allowedRoles: ["owner", "admin", "analyst", "member", "viewer"] },
+          downstream: { alertGeneration: { canExportActiveTerms: true, blockerCodes: [] } }
+        },
+        activeTerms: [{
+          watchlistId: "watch_export_acme",
+          watchlistItemId: "watch_item_export_acme",
+          organizationId: "org_export_acme",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          termFamily: "domain",
+          category: "domain",
+          term: "acme.com",
+          status: "active",
+          createdBy: "analyst-export",
+          alertGeneratorKey: "org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com",
+          alertGenerationRef: alertGenerationRef({
+            organizationId: "org_export_acme",
+            watchlistItemId: "watch_item_export_acme",
+            term: "acme.com",
+            termFamily: "domain",
+            createdBy: "analyst-export",
+            updatedBy: null,
+            reason: null,
+            requestId: "req-export-acme"
+          })
+        }, {
+          watchlistId: "watch_export_acme_duplicate",
+          watchlistItemId: "watch_item_export_acme_duplicate",
+          organizationId: "org_export_acme",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          term: "acme.com",
+          status: "active",
+          alertGeneratorKey: "org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"
+        }, {
+          watchlistId: "watch_export_paused",
+          watchlistItemId: "watch_item_export_paused",
+          organizationId: "org_export_acme",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          term: "paused.example",
+          status: "paused"
+        }, {
+          watchlistId: "watch_export_other_org",
+          watchlistItemId: "watch_item_export_other_org",
+          organizationId: "org_export_other",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          term: "other.example",
+          status: "active"
+        }]
+      }
+    });
+
+    expect(exportContract).toMatchObject({
+      schemaVersion: "organization.shared_watchlist_alert_generation_export.v1",
+      organizationId: "org_export_acme",
+      tenantId: "org_export_acme",
+      state: "blocked",
+      ownerLane: "watchlist",
+      visibilityPolicy: "members",
+      member: {
+        role: "analyst",
+        status: "active",
+        allowed: false,
+        readOnly: false
+      },
+      termExport: {
+        activeTermCount: 3,
+        exportedWatchlistCount: 0,
+        duplicateCollapseCount: 1,
+        skippedTermCount: 3,
+        watchlistIds: [],
+        watchlistItemIds: ["watch_item_export_acme"],
+        alertGeneratorKeys: ["org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"]
+      },
+      safeOutput: {
+        nonmemberEnumeration: false,
+        rawTargetsExposed: false,
+        privateSourceContentExposed: false
+      }
+    });
+    expect(exportContract.blockers).toEqual([expect.objectContaining({
+      code: "term_org_mismatch",
+      ownerLane: "watchlist",
+      path: "watchlistTerms[].organizationId",
+      watchlistItemId: "watch_item_export_other_org"
+    })]);
+    expect(exportContract.consumerContracts).toMatchObject({
+      schemaVersion: "organization.shared_watchlist_alert_generation_consumers.v1",
+      alertGeneration: {
+        canConsume: false,
+        route: "/v1/dwm/alerts/generation-readiness"
+      },
+      dashboard: {
+        canConsume: true,
+        route: "/v1/dwm/watchlists"
+      },
+      webhook: {
+        canConsume: false,
+        route: "/v1/dwm/webhooks/deliver"
+      }
+    });
+    expect(JSON.stringify(exportContract)).not.toContain("rawText");
+    expect(JSON.stringify(exportContract)).not.toContain("password");
+
+    const cleanExport = buildOrgSharedWatchlistAlertGenerationExport({
+      member: { userId: "analyst-export", role: "analyst", status: "active" },
+      generatedAt: "2026-06-29T10:01:00.000Z",
+      contract: {
+        schemaVersion: "organization.watchlist_alert_generation.v1",
+        organizationId: "org_export_acme",
+        tenantId: "org_export_acme",
+        canGenerateAlerts: true,
+        activeTerms: [{
+          watchlistId: "watch_export_acme",
+          watchlistItemId: "watch_item_export_acme",
+          organizationId: "org_export_acme",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          term: "acme.com",
+          status: "active",
+          alertGeneratorKey: "org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"
+        }, {
+          watchlistId: "watch_export_acme_duplicate",
+          watchlistItemId: "watch_item_export_acme_duplicate",
+          organizationId: "org_export_acme",
+          tenantId: "org_export_acme",
+          kind: "domain",
+          term: "acme.com",
+          status: "active",
+          alertGeneratorKey: "org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"
+        }]
+      }
+    });
+    expect(cleanExport.state).toBe("ready");
+    expect(cleanExport.blockers).toEqual([]);
+    expect(cleanExport.termExport).toMatchObject({
+      activeTermCount: 2,
+      exportedWatchlistCount: 1,
+      duplicateCollapseCount: 1,
+      skippedTermCount: 1,
+      watchlistIds: ["watch_export_acme"],
+      watchlistItemIds: ["watch_item_export_acme"],
+      alertGeneratorKeys: ["org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"]
+    });
+    expect(cleanExport.runtimeWatchlists).toHaveLength(1);
+    expect(cleanExport.runtimeWatchlists[0]).toMatchObject({
+      id: "watch_export_acme",
+      tenantId: "org_export_acme",
+      organizationId: "org_export_acme",
+      status: "active",
+      orgMembershipContext: {
+        organizationId: "org_export_acme",
+        tenantId: "org_export_acme",
+        canGenerateAlerts: true
+      },
+      orgWatchlistTerms: [{
+        watchlistItemId: "watch_item_export_acme",
+        alertGeneratorKey: "org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"
+      }]
+    });
+    const readiness = buildDwmAlertGenerationReadiness({
+      watchlists: cleanExport.runtimeWatchlists,
+      tenantId: "org_export_acme",
+      organizationId: "org_export_acme",
+      sources: [telegramSource],
+      captures: [telegramCapture]
+    });
+    expect(readiness.readyForRebuild).toBe(true);
+    expect(readiness.plan.candidates[0]).toMatchObject({
+      organizationId: "org_export_acme",
+      normalizedTerm: "acme.com",
+      alertGeneratorKeys: ["org:org_export_acme:watchlist:watch_item_export_acme:domain:acme.com"]
+    });
+  });
+
+  test("blocks viewer nonmember revoked and archived org shared watchlist exports without leaking runtime watchlists", () => {
+    const baseContract = {
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: "org_export_guard",
+      tenantId: "tenant_export_guard",
+      activeTerms: [{
+        watchlistId: "watch_export_guard",
+        watchlistItemId: "watch_item_export_guard",
+        organizationId: "org_export_guard",
+        tenantId: "tenant_export_guard",
+        kind: "domain" as const,
+        term: "guard.example",
+        status: "active" as const
+      }]
+    };
+
+    const viewer = buildOrgSharedWatchlistAlertGenerationExport({
+      member: { userId: "viewer-export", role: "viewer", status: "active" },
+      contract: baseContract,
+      generatedAt: "2026-06-29T10:02:00.000Z"
+    });
+    expect(viewer).toMatchObject({
+      state: "blocked",
+      member: { role: "viewer", status: "active", allowed: false, readOnly: true },
+      runtimeWatchlists: []
+    });
+    expect(viewer.blockers).toEqual([expect.objectContaining({ code: "role_not_allowed", path: "member.role" })]);
+
+    const nonmember = buildOrgSharedWatchlistAlertGenerationExport({
+      member: null,
+      contract: baseContract,
+      generatedAt: "2026-06-29T10:03:00.000Z"
+    });
+    expect(nonmember).toMatchObject({
+      state: "blocked",
+      member: { role: "nonmember", status: "unknown", allowed: false },
+      runtimeWatchlists: []
+    });
+    expect(nonmember.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "not_member", path: "member" }),
+      expect.objectContaining({ code: "role_not_allowed", path: "member.role" })
+    ]));
+
+    const revoked = buildOrgSharedWatchlistAlertGenerationExport({
+      member: { userId: "revoked-export", role: "analyst", status: "removed" },
+      contract: baseContract,
+      generatedAt: "2026-06-29T10:04:00.000Z"
+    });
+    expect(revoked).toMatchObject({
+      state: "blocked",
+      member: { role: "analyst", status: "removed", allowed: false },
+      runtimeWatchlists: []
+    });
+    expect(revoked.blockers).toEqual([expect.objectContaining({ code: "member_inactive", path: "member.status" })]);
+
+    const archived = buildOrgSharedWatchlistAlertGenerationExport({
+      member: { userId: "admin-export", role: "admin", status: "active" },
+      generatedAt: "2026-06-29T10:05:00.000Z",
+      contract: {
+        ...baseContract,
+        downstreamAuthorization: {
+          organizationLifecycleState: "archived",
+          visibility: { allowed: true, allowedRoles: ["owner", "admin"] },
+          downstream: { alertGeneration: { canExportActiveTerms: false, blockerCodes: ["org_archived"] } }
+        }
+      }
+    });
+    expect(archived.runtimeWatchlists).toEqual([]);
+    expect(archived.blockers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "org_lifecycle_blocked", path: "organization.status" }),
+      expect.objectContaining({ code: "alert_generation_export_blocked", path: "downstreamAuthorization.downstream.alertGeneration" })
+    ]));
+    expect(archived.safeOutput).toMatchObject({
+      nonmemberEnumeration: false,
+      rawTargetsExposed: false,
+      privateSourceContentExposed: false
+    });
+  });
+
   test("preserves inactive organization blockers from API exports before alert matching", () => {
     const archivedOrgWatchlists = orgWatchlistContractToRuntimeDwmWatchlists({
       schemaVersion: "organization.watchlist_alert_generation.v1",
