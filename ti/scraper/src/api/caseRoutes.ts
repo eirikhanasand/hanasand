@@ -566,7 +566,7 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const transitionError = validateCaseTransition(existing, action, nextStatus);
   if (transitionError) return transitionError;
   const note = normalizeNote(body.note);
-  if (action === "note" && !note) {
+  if ((action === "note" || action === "review") && !note) {
     return json({ error: { code: "missing_note", message: "Recording a case note requires analyst text." } }, 400);
   }
   if ((action === "close" || nextStatus === "closed" || action === "false_positive" || action === "suppress") && !note) {
@@ -899,7 +899,7 @@ function syncAlertForCase(options: ApiServerOptions, alert: any, caseRecord: Ana
     : caseRecord.status === "suppressed" ? "false_positive_candidate"
     : caseRecord.status === "closed" ? "resolved"
     : caseRecord.status === "escalated" ? "route_to_customer"
-    : event.action === "reopen" ? "reviewing"
+    : event.action === "reopen" || event.action === "review" ? "reviewing"
     : alert.reviewState;
   const deliveryState = caseRecord.status === "suppressed" || caseRecord.status === "false_positive" ? "muted" : alert.deliveryState;
   (options.store as any).saveDwmAlert({
@@ -1270,6 +1270,7 @@ function caseWorkflowActionPolicy(caseRecord: AnalystCase, alert: any, deliverie
   const delivered = deliveries.some((delivery: any) => delivery.status === "delivered");
   const specs = [
     { id: "note", label: "Add note", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => true },
+    { id: "review", label: "Review", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
     { id: "assign", label: "Assign owner", method: "PATCH", requiresRationale: false, requiredFields: ["organizationId", "action", "assignedOwner", "idempotencyKey"], enabledWhen: () => caseRecord.status !== "closed" && caseRecord.status !== "false_positive" },
     { id: "escalate", label: "Escalate", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
     { id: "close", label: "Close", method: "PATCH", requiresRationale: true, requiredFields: ["organizationId", "action", "note", "idempotencyKey"], enabledWhen: () => !["closed", "suppressed", "false_positive"].includes(caseRecord.status) },
@@ -3251,18 +3252,18 @@ function statusForAction(action: string, status: unknown, current: CaseStatus): 
 }
 
 function unsupportedCaseAction(action: string): Response | undefined {
-  if (["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"].includes(action)) return undefined;
+  if (["note", "review", "assign", "escalate", "suppress", "false_positive", "close", "reopen"].includes(action)) return undefined;
   return json({
     error: {
       code: "unsupported_case_action",
       message: "Case action is not supported.",
-      supportedActions: ["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]
+      supportedActions: ["note", "review", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]
     }
   }, 400);
 }
 
 function validateCaseTransition(caseRecord: AnalystCase, action: string, nextStatus: CaseStatus): Response | undefined {
-  if (caseRecord.status === "closed" && action !== "reopen" && nextStatus !== "closed") {
+  if (caseRecord.status === "closed" && action !== "reopen" && action !== "note") {
     return json({
       error: {
         code: "invalid_case_transition",
@@ -3273,7 +3274,7 @@ function validateCaseTransition(caseRecord: AnalystCase, action: string, nextSta
       }
     }, 409);
   }
-  if ((caseRecord.status === "suppressed" || caseRecord.status === "false_positive") && action !== "reopen" && action !== "note" && nextStatus !== caseRecord.status) {
+  if ((caseRecord.status === "suppressed" || caseRecord.status === "false_positive") && action !== "reopen" && action !== "note") {
     return json({
       error: {
         code: "invalid_case_transition",

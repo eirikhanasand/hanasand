@@ -804,7 +804,7 @@ describe("DWM alert case handoff route", () => {
     expect(JSON.stringify(replayExportPayload)).not.toContain("discord.com");
   });
 
-  test("records analyst notes without changing case state and includes them in replay export", async () => {
+  test("records analyst review checkpoints and notes without changing case state", async () => {
     const { options, store } = fixtureRuntime();
     await postHandoff(options, "alert_acme", {
       organizationId: "org_acme",
@@ -820,6 +820,26 @@ describe("DWM alert case handoff route", () => {
       idempotencyKey: "case-note-001"
     });
     const notePayload = await note.json() as any;
+    const review = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "review",
+      note: "Reviewed source evidence and kept the case open for delivery.",
+      idempotencyKey: "case-review-001"
+    });
+    const reviewPayload = await review.json() as any;
+    const duplicateReview = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "review",
+      note: "Duplicate review should replay the existing event.",
+      idempotencyKey: "case-review-001"
+    });
+    const duplicateReviewPayload = await duplicateReview.json() as any;
+    const missingReview = await patchCase(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      action: "review",
+      idempotencyKey: "case-review-missing"
+    });
+    const missingReviewPayload = await missingReview.json() as any;
     const duplicate = await patchCase(options, "case_alert_acme", "owner@acme.com", {
       organizationId: "org_acme",
       action: "note",
@@ -854,6 +874,8 @@ describe("DWM alert case handoff route", () => {
     const viewerCaseListPayload = await viewerCaseList.json() as any;
     const replayExport = await getActionReplayExport(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&eventAction=note");
     const replayExportPayload = await replayExport.json() as any;
+    const reviewHistory = await getWorkflowTransitions(options, "case_alert_acme", "owner@acme.com", "organizationId=org_acme&action=review");
+    const reviewHistoryPayload = await reviewHistory.json() as any;
 
     expect(note.status).toBe(200);
     expect(notePayload).toMatchObject({
@@ -878,6 +900,51 @@ describe("DWM alert case handoff route", () => {
         }
       }
     });
+    expect(review.status).toBe(200);
+    expect(reviewPayload).toMatchObject({
+      replayed: false,
+      duplicate: false,
+      case: {
+        id: "case_alert_acme",
+        status: "open",
+        assignedOwner: "owner@acme.com",
+        lastDecision: "Reviewed source evidence and kept the case open for delivery."
+      },
+      workflowTransition: {
+        action: "review",
+        fromStatus: "open",
+        toStatus: "open",
+        fromOwner: "owner@acme.com",
+        toOwner: "owner@acme.com",
+        note: "Reviewed source evidence and kept the case open for delivery.",
+        workflowState: {
+          status: "open",
+          assignedOwner: "owner@acme.com",
+          idempotencyKey: "case-review-001"
+        }
+      },
+      alert: {
+        id: "alert_acme",
+        reviewState: "reviewing",
+        assignedOwner: "owner@acme.com"
+      }
+    });
+    expect(duplicateReview.status).toBe(200);
+    expect(duplicateReviewPayload).toMatchObject({
+      replayed: true,
+      duplicate: true,
+      event: {
+        action: "review",
+        idempotencyKey: "case-review-001",
+        note: "Reviewed source evidence and kept the case open for delivery."
+      },
+      workflowTransition: {
+        action: "review",
+        replayState: "replayed"
+      }
+    });
+    expect(missingReview.status).toBe(400);
+    expect(missingReviewPayload.error).toMatchObject({ code: "missing_note" });
     expect(duplicate.status).toBe(200);
     expect(duplicatePayload).toMatchObject({
       replayed: true,
@@ -899,6 +966,7 @@ describe("DWM alert case handoff route", () => {
     expect(detail.status).toBe(200);
     expect(detailPayload.nextAllowedActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "note", method: "PATCH", requiresRationale: true, enabled: true }),
+      expect.objectContaining({ id: "review", method: "PATCH", requiresRationale: true, enabled: true }),
       expect.objectContaining({ id: "escalate", method: "PATCH", requiresRationale: true, enabled: true })
     ]));
     expect(detailPayload.workflowActionPolicy).toMatchObject({
@@ -908,7 +976,7 @@ describe("DWM alert case handoff route", () => {
       status: "open",
       readOnly: false,
       summary: {
-        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
         blockedActionIds: ["reopen"],
         blockerCodes: ["not_applicable_for_status"]
       }
@@ -938,7 +1006,7 @@ describe("DWM alert case handoff route", () => {
         caseId: "case_alert_acme",
         workflowActionPolicySummary: {
           schemaVersion: "analyst.case_workflow_action_policy.v1",
-          enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+          enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
           blockedActionIds: ["reopen"],
           blockerCodes: ["not_applicable_for_status"],
           readOnly: false
@@ -948,7 +1016,7 @@ describe("DWM alert case handoff route", () => {
     expect(viewerCaseList.status).toBe(200);
     expect(viewerCaseListPayload.items[0].workflowActionPolicySummary).toMatchObject({
       enabledActionIds: [],
-      blockedActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive", "reopen"]),
+      blockedActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive", "reopen"]),
       blockerCodes: expect.arrayContaining(["case_read_only_member"]),
       readOnly: true
     });
@@ -959,7 +1027,7 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         workflowTransitionCount: 1,
-        enabledWorkflowActionCount: 6,
+        enabledWorkflowActionCount: 7,
         blockedWorkflowActionCount: 1,
         handoffReceiptCount: 0,
         customerNotificationCount: 0,
@@ -968,7 +1036,7 @@ describe("DWM alert case handoff route", () => {
       workflowActionPolicy: {
         schemaVersion: "analyst.case_workflow_action_policy.v1",
         summary: {
-          enabledActionIds: expect.arrayContaining(["note", "assign", "escalate"]),
+          enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate"]),
           blockedActionIds: ["reopen"]
         }
       },
@@ -1002,9 +1070,32 @@ describe("DWM alert case handoff route", () => {
         })]
       }
     });
+    expect(reviewHistory.status).toBe(200);
+    expect(reviewHistoryPayload).toMatchObject({
+      filters: {
+        eventAction: "review"
+      },
+      workflowTransitionHistory: {
+        summary: {
+          transitionCount: 1,
+          actions: ["review"],
+          latestTransition: expect.objectContaining({
+            action: "review",
+            note: "Reviewed source evidence and kept the case open for delivery.",
+            idempotencyKey: "case-review-001"
+          })
+        }
+      },
+      summary: {
+        transitionCount: 1,
+        totalTransitionCount: 3,
+        actionIds: ["review"]
+      }
+    });
     expect((store as any).getCase("case_alert_acme").workflowEvents.map((event: any) => event.action)).toEqual([
       "open",
-      "note"
+      "note",
+      "review"
     ]);
   });
 
@@ -1302,14 +1393,14 @@ describe("DWM alert case handoff route", () => {
       "reopen"
     ]);
     expect(replayExportPayload.replayPlan).toMatchObject({
-      enabledWorkflowActionCount: 6,
+      enabledWorkflowActionCount: 7,
       blockedWorkflowActionCount: 1
     });
     expect(replayExportPayload.workflowActionPolicy).toMatchObject({
       schemaVersion: "analyst.case_workflow_action_policy.v1",
       status: "open",
       summary: {
-        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
         blockedActionIds: ["reopen"],
         blockerCodes: ["not_applicable_for_status"]
       }
@@ -1374,7 +1465,7 @@ describe("DWM alert case handoff route", () => {
         totalTransitionCount: 3,
         actionIds: ["open", "false_positive", "reopen"],
         actorIds: ["case-api"],
-        enabledActionIds: expect.arrayContaining(["note", "assign", "escalate", "close", "suppress", "false_positive"]),
+        enabledActionIds: expect.arrayContaining(["note", "review", "assign", "escalate", "close", "suppress", "false_positive"]),
         blockedActionIds: ["reopen"],
         readOnly: false
       },
