@@ -911,7 +911,7 @@ function EvidenceDispositionQueue({ alert, visibleEvidence, selectedEvidence, se
                             return (
                                 <tr key={item.id} onClick={() => onSelectEvidence(item.id)} className={`cursor-pointer align-top transition hover:bg-[#f8fbff] ${selectedEvidence?.id === item.id ? 'bg-[#f8fbff]' : 'bg-white'}`}>
                                     <td className='px-3 py-3'>
-                                        <p className='line-clamp-2 max-w-[320px] text-sm leading-5 text-[#171a21]'>{item.excerpt}</p>
+                                        <p className='line-clamp-2 max-w-80 text-sm leading-5 text-[#171a21]'>{item.excerpt}</p>
                                         <p className='mt-1 font-mono text-[11px] text-[#667085]'>{item.contentHash}</p>
                                     </td>
                                     <td className='px-3 py-3'>

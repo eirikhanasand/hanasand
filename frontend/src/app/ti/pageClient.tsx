@@ -4573,7 +4573,7 @@ function EnrichmentGapWorkbench({
                     </div>
                     {selectedRow ? <CopyPayloadButton label='Enrichment row' payload={selectedRow.payload} /> : null}
                 </div>
-                <div className='max-h-[24rem] min-w-0 overflow-auto rounded-lg border border-[#eef1f5] dark:border-[#273244]'>
+                <div className='max-h-96 min-w-0 overflow-auto rounded-lg border border-[#eef1f5] dark:border-[#273244]'>
                     <table className='min-w-[680px] w-full border-collapse text-left text-xs'>
                         <thead className='bg-[#fbfcfe] text-[11px] uppercase text-[#667085] dark:bg-[#131c29] dark:text-[#9aa8bd]'>
                             <tr>
