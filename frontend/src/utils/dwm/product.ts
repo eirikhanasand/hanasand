@@ -40,6 +40,15 @@ export type DwmAlert = {
         customerVisibleEvidence: 'metadata_only' | 'redacted_excerpt'
         reason: string
     }
+    sourceHandoffReadiness?: {
+        analystWorkflowConsumer?: {
+            ready?: boolean
+            workflowStatus?: string
+            assignedOwner?: string
+            workflowEventCount?: number
+            actionReadiness?: DwmAlertAnalystActionReadiness
+        }
+    }
     reviewState: string
     recommendedAction: string
     evidence: Array<{
@@ -68,6 +77,26 @@ export type DwmAlert = {
         payloadHash: string
         dedupeKey: string
     }
+}
+
+export type DwmAlertAnalystActionReadiness = {
+    schemaVersion: 'dwm.alert_analyst_action_readiness.v1' | string
+    expectedWorkflowEventCount?: number
+    readyActions?: DwmAlertAnalystAction[]
+    blockedActions?: DwmAlertAnalystAction[]
+    actions?: DwmAlertAnalystActionReadinessRow[]
+}
+
+export type DwmAlertAnalystAction = 'assign' | 'note' | 'transition' | 'case_link' | 'replay' | 'close' | 'reopen' | 'suppress' | 'deliver'
+
+export type DwmAlertAnalystActionReadinessRow = {
+    action: DwmAlertAnalystAction
+    ready: boolean
+    idempotencyKey?: string
+    workflowEventCount?: number
+    casePath?: string
+    deliveryDedupeKey?: string
+    blockerCodes?: string[]
 }
 
 export type DwmSourceCoverage = {

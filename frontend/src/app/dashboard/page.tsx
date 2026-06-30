@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { BellRing, Radar } from 'lucide-react'
 import { DashboardPage } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, type DwmAlert, type DwmSeverity } from '@/utils/dwm/product'
+import { demoDwmProductSnapshot, type DwmAlert, type DwmAlertAnalystAction, type DwmAlertAnalystActionReadiness, type DwmSeverity } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
@@ -422,6 +422,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
     const alertDeliveries = deliveries.filter(delivery => delivery.alertId === alert.id)
     const latestDelivery = latestDeliveryAttempt(alertDeliveries)
     const deliveryHistoryHref = alertDeliveryHistoryHref(alert.id, scope, latestDelivery)
+    const actionReadiness = alertAnalystActionReadiness(alert)
     const workflowPath = [
         {
             id: `${alert.id}_path_org`,
@@ -485,6 +486,12 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             title: 'Match reason',
             body: `${alert.matchContext.termKind}:${alert.matchContext.normalizedTerm} matched ${alert.matchContext.matchedFieldHints.join(', ') || 'alert evidence'}.`,
         }] : []),
+        ...(actionReadiness ? [{
+            id: `${alert.id}_action_readiness`,
+            at: alert.lastSeenAt || alert.firstSeenAt,
+            title: 'Analyst actions',
+            body: alertActionReadinessSummary(actionReadiness),
+        }] : []),
         ...deliveryTimelineItems(alertDeliveries),
     ]
 
@@ -525,6 +532,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         nextTasks: [
             liveAlert ? `Owner: analyst. Alert ID: ${alert.id}.` : `Owner: analyst. ${alert.id} is fallback-only until live alerts load.`,
             caseId ? `Case ID: ${caseId}. Update the backed case before closing.` : 'Open a backed analyst case before customer delivery.',
+            actionReadiness ? alertActionReadinessSummary(actionReadiness) : 'Action readiness is not returned with this alert.',
             latestDelivery
                 ? `Latest delivery ${latestDelivery.id} is ${latestDelivery.status}; open the ledger before notifying the customer.`
                 : webhookDestinationIds.length ? `Webhook destination IDs: ${webhookDestinationIds.join(', ')}.` : 'Configure/test webhook destination before sending.',
@@ -572,6 +580,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                     priority: severity,
                     reopen: true,
                 },
+                disabledReason: alertActionDisabledReason(actionReadiness, 'case_link'),
             },
             {
                 id: 'send_alert',
@@ -579,8 +588,9 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                 method: 'POST',
                 href: '/api/dwm/webhooks/deliver',
                 body: { ...actionScope(scope), alertId: alert.id, limit: 1 },
+                disabledReason: alertActionDisabledReason(actionReadiness, 'deliver'),
             },
-            ...alertWorkflowActions(alert, deliveryState, scope),
+            ...alertWorkflowActions(alert, deliveryState, scope, actionReadiness),
         ] : [],
     }
 }
@@ -599,17 +609,26 @@ function alertEvidenceMetadata(alert: DwmAlert, item: DwmAlert['evidence'][numbe
     ].filter((meta): meta is { label: string, value: string } => Boolean(meta?.value))
 }
 
-function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: OperatorScope) {
+function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: OperatorScope, readiness?: DwmAlertAnalystActionReadiness) {
     const href = `/api/dwm/alerts/${encodeURIComponent(alert.id)}`
     const scoped = { ...actionScope(scope), alertId: alert.id }
     const closeDeliveryState = deliveryState === 'delivered' ? 'delivered' : 'muted'
     return [
+        {
+            id: 'replay_alert',
+            label: 'Replay',
+            method: 'POST' as const,
+            href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}/replay`,
+            body: { ...scoped, action: 'replay' },
+            disabledReason: alertActionDisabledReason(readiness, 'replay'),
+        },
         {
             id: 'review_alert',
             label: 'Review alert',
             method: 'PATCH' as const,
             href,
             body: { ...scoped, reviewState: 'reviewing', deliveryState: 'pending_review', note: 'Analyst review started.' },
+            disabledReason: alertActionDisabledReason(readiness, 'transition'),
         },
         {
             id: 'escalate_alert',
@@ -617,6 +636,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             method: 'PATCH' as const,
             href,
             body: { ...scoped, reviewState: 'route_to_customer', deliveryState: 'ready_to_send', note: 'Escalated for customer or incident response.' },
+            disabledReason: alertActionDisabledReason(readiness, 'transition'),
         },
         {
             id: 'suppress_alert',
@@ -624,6 +644,7 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             method: 'PATCH' as const,
             href,
             body: { ...scoped, reviewState: 'false_positive', deliveryState: 'muted', note: 'Suppressed as low-value or false positive.' },
+            disabledReason: alertActionDisabledReason(readiness, 'suppress'),
         },
         {
             id: 'close_alert',
@@ -631,8 +652,30 @@ function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: Ope
             method: 'PATCH' as const,
             href,
             body: { ...scoped, reviewState: 'resolved', deliveryState: closeDeliveryState, note: 'Closed from analyst workbench.' },
+            disabledReason: alertActionDisabledReason(readiness, deliveryState === 'delivered' ? 'close' : 'close'),
         },
     ]
+}
+
+function alertAnalystActionReadiness(alert: DwmAlert): DwmAlertAnalystActionReadiness | undefined {
+    const readiness = alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness
+    return readiness?.schemaVersion === 'dwm.alert_analyst_action_readiness.v1' ? readiness : undefined
+}
+
+function alertActionDisabledReason(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction) {
+    if (!readiness) return undefined
+    const row = readiness.actions?.find(item => item.action === action)
+    if (!row) return `Backend action readiness did not return ${action}.`
+    if (row.ready) return undefined
+    const blockers = row.blockerCodes?.length ? row.blockerCodes.join(', ') : 'not ready'
+    return `${action.replaceAll('_', ' ')} blocked by backend action readiness: ${blockers}.`
+}
+
+function alertActionReadinessSummary(readiness: DwmAlertAnalystActionReadiness) {
+    const ready = readiness.readyActions?.length ? readiness.readyActions.join(', ') : 'none'
+    const blocked = readiness.blockedActions?.length ? readiness.blockedActions.join(', ') : 'none'
+    const eventCount = readiness.expectedWorkflowEventCount ?? readiness.actions?.[0]?.workflowEventCount
+    return `Ready actions: ${ready}. Blocked actions: ${blocked}.${eventCount === undefined ? '' : ` Workflow events: ${eventCount}.`}`
 }
 
 function latestDeliveryAttempt(deliveries: DwmDeliveryItem[]) {

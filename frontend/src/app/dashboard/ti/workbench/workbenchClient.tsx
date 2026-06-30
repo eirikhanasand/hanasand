@@ -1412,12 +1412,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
     }
     if (selected.kind === 'dwm_alert') {
+        const replayAction = selected.actions?.find(action => action.id === 'replay_alert')
+        const replayDisabledReason = replayAction?.disabledReason || (selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.')
         rows.push({
             id: 'replay_alert',
             label: 'Replay evidence',
-            detail: selected.persistent ? `POST /api/dwm/alerts/${selected.id}/replay.` : 'Replay is blocked for fallback alerts until the DWM alerts API returns this item.',
-            tone: selected.persistent ? 'ready' : 'blocked',
-            action: {
+            detail: replayDisabledReason
+                ? replayDisabledReason
+                : replayAction ? `${replayAction.method} ${replayAction.href}; backend action readiness allows replay for this workflow version.` : `POST /api/dwm/alerts/${selected.id}/replay.`,
+            tone: replayDisabledReason ? 'blocked' : 'ready',
+            action: replayAction || {
                 id: 'replay_alert',
                 label: 'Replay',
                 method: 'POST',
@@ -1425,7 +1429,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 body: { actor: 'dashboard' },
                 disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot call /api/dwm/alerts/:id/replay.',
             },
-            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.',
+            disabledReason: replayDisabledReason,
         })
         for (const action of selected.actions?.filter(candidate => alertWorkflowActionIds.has(candidate.id)) || []) {
             rows.push({
