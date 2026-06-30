@@ -165,6 +165,7 @@ const sourceProofProxyPayload = {
     endpoints: {
         sourceInventory: { ok: true, status: 200 },
         sourcePacks: { ok: true, status: 200 },
+        contracts: { ok: true, status: 200 },
     },
     sourceInventory: {
         schemaVersion: 'dwm.source_inventory.v1',
@@ -188,7 +189,53 @@ const sourceProofProxyPayload = {
             activeSourceRows: 349,
             collectionReadyRows: 349,
         },
+        sourceOperationsReadiness: {
+            schemaVersion: 'dwm.source_operations_readiness.v1',
+            nextOperatorActions: [{ action: 'inspect_source_family', reason: 'verify freshness before customer alerting' }],
+        },
+        sourceCustomerConfig: {
+            schemaVersion: 'dwm.source_pack_customer_config.v1',
+            sourceConfigs: [{ redactedIdentity: { rawStored: false } }],
+            safeOutput: {
+                rawTargetsExposed: false,
+                privateTelegramContentExposed: false,
+                liveNetworkScrapeStarted: false,
+            },
+        },
+        sourceReadinessArtifact: {
+            schemaVersion: 'dwm.source_readiness_artifact.v1',
+            readinessLedgerRows: [{ state: 'ready', safeOutput: { liveNetworkScrapeStarted: false } }],
+            actorCoverage: [{ watchlistTerm: 'LockBit', actorSections: { overview: { covered: true } } }],
+            sharedWatchlistAlertability: {
+                activeSourceFamilies: ['telegram', 'darkweb_onion'],
+                matchableFields: ['actor', 'company', 'domain'],
+                sourceTrust: { averageScore: 0.91 },
+            },
+            safeOutput: { liveNetworkScrapeStarted: false },
+        },
+        proxyVerification: {
+            schemaVersion: 'dwm.source_pack_worker_proxy_verification.v1',
+            state: 'ready',
+            checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
+        },
+        sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
         lastRun: { status: 'completed', completedAt: '2026-06-28T10:18:00.000Z' },
+    },
+    contracts: {
+        schemaLookup: {
+            schemaVersion: 'ti.api_contract_schema_lookup.v1',
+            rows: [{
+                schemaId: 'dwm.webhook_event_contract.v1',
+                contractId: 'webhook_delivery_receipts',
+                ownerLane: 'webhook',
+                route: '/v1/dwm/webhooks/deliver',
+                scopeFields: ['tenantId', 'organizationId', 'alertId'],
+                blockerCodes: ['missing_webhook_destination'],
+                downstreamConsumers: [{ ownerLane: 'case', route: '/v1/cases/:caseId', requiredFields: ['webhookDeliveryId'] }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            }],
+            safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+        },
     },
 } satisfies DashboardSourceProofProxyPayload
 const operatorSourceProof = buildSourceProofReadinessFromProxy(sourceProofProxyPayload, {
@@ -1262,7 +1309,7 @@ void (missingEntitlementOrgContext.readiness.fullChainBlockedBy[0] satisfies str
 void expectProductReadinessStatus(blockedEntitlementOrgContext, 'entitlement_readiness', 'blocked')
 void (blockedEntitlementOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'source_inventory_probe', 'needs_action')
-void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'dashboard_evidence', 'needs_action')
+void expectProductReadinessStatus(missingSourceWorkerProductProgressOrgContext, 'dashboard_evidence', 'ready')
 void (missingSourceWorkerProductProgressOrgContext.readiness.fullChainBlockedBy[0] satisfies string | undefined)
 void expectProductReadinessStatus(staleWorkerOrgContext, 'source_inventory_probe', 'needs_action')
 void (staleWorkerOrgContext.readiness.fullChainReady satisfies boolean)
