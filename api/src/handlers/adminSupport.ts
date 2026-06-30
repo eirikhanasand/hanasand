@@ -13932,8 +13932,11 @@ function supportAuditSupportWorkflowPacket(filters: Record<string, unknown>, tim
     const actionEvidenceRollup = supportAuditActionEvidenceRollup(timeline)
     const entityLinks = supportAuditEntityLinkRollup(timeline)
     const eventIds = timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const caseTimelineEntries = supportCaseTimelineEntries(timeline)
+    const sourceWorkflows = uniqueTimelineValues(timeline.map(event => supportAuditWorkflowName(event)))
     const blockers = uniqueTimelineValues([
         timeline.length ? '' : 'missing_audit_events',
+        caseTimelineEntries.length ? '' : 'missing_case_handoff_events',
         ...actionEvidenceRollup.blockers,
     ].filter(Boolean))
     return {
@@ -13951,6 +13954,27 @@ function supportAuditSupportWorkflowPacket(filters: Record<string, unknown>, tim
             eventIds,
             actionEvidenceRollup,
             entityLinks,
+            caseTimelineEntryCount: caseTimelineEntries.length,
+            caseTimelineEntries,
+            sourceWorkflows,
+        },
+        caseHandoffReplay: {
+            schemaVersion: 'support.audit.case_handoff_replay.v1',
+            redacted: true,
+            noMutation: true,
+            expectedConsumer: 'case.replay',
+            sourceWorkflows,
+            bySourceWorkflow: sourceWorkflows.map(workflow => auditFilterQuery({ ...filters, workflow, source: 'admin', service: 'hanasand-api' })),
+            byRecoveryAction: ['invite', 'access_recovery', 'member_role_recovery', 'impersonation'].map(action => auditFilterQuery({ ...filters, action, source: 'admin', service: 'hanasand-api' })),
+            denied: auditFilterQuery({ ...filters, outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
+            safeHandoff: {
+                noLiveAccessGrant: true,
+                noSilentMembershipMutation: true,
+                noSilentImpersonation: true,
+                noLiveWebhookDelivery: true,
+                noCrossOrgLeakage: true,
+                redactionRequired: true,
+            },
         },
         operatorContract: {
             requiredInputs: ['reason', 'context'],
@@ -13975,6 +13999,8 @@ function supportAuditSupportWorkflowPacket(filters: Record<string, unknown>, tim
             'Support workflow packet',
             `Audit route: ${auditFilterQuery(filters)}`,
             `Events: ${eventIds.join(', ') || 'none'}`,
+            `Case handoff entries: ${caseTimelineEntries.length}`,
+            `Source workflows: ${sourceWorkflows.join(', ') || 'none'}`,
             `Blockers: ${blockers.join(', ') || 'none'}`,
         ].join('\n'),
     }
