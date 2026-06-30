@@ -241,7 +241,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                         <div className='border-b border-[#edf1f6] px-3 py-2'>
                             <h3 className='text-sm font-semibold text-[#171a21]'>Destinations</h3>
                         </div>
-                        <div className='max-h-[320px] overflow-auto'>
+                        <div className='max-h-80 overflow-auto'>
                             {!destinations.length ? (
                                 <div className='p-4 text-sm text-[#667085]'>No destination is configured. Add a Discord or generic webhook endpoint to enable dry-run tests.</div>
                             ) : destinations.map(destination => (

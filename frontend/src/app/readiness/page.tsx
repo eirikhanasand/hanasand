@@ -386,7 +386,7 @@ function RouteTargetList({ label, routes }: { label: string, routes: string[] })
                         <Link
                             key={route}
                             href={route}
-                            className='inline-flex min-h-8 min-w-[44px] max-w-full items-center justify-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                            className='inline-flex min-h-8 min-w-11 max-w-full items-center justify-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
                         >
                             <span className='min-w-0 wrap-break-word'>{route}</span>
                         </Link>
@@ -545,7 +545,7 @@ function ProofDrilldowns({
                     <dt className='font-semibold text-[#667085] dark:text-[#97a6bd]'>{item.label}</dt>
                     <dd className='min-w-0 wrap-break-word font-medium text-[#171a21] dark:text-[#f5f7fb]'>
                         {item.href ? (
-                            <Link href={item.href} className='inline-flex min-h-8 min-w-[44px] items-center justify-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
+                            <Link href={item.href} className='inline-flex min-h-8 min-w-11 items-center justify-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
                                 {item.value}
                             </Link>
                         ) : item.value}

@@ -765,7 +765,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 <span className='rounded-md bg-[#eef4ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#1b2a44] dark:text-[#9cc2ff]'>{item.kind}</span>
                                                 <StatusPill status={item.status} />
                                             </div>
-                                            <p className='mt-2 break-words text-base font-semibold text-[#171a21] dark:text-white'>{item.value}</p>
+                                            <p className='mt-2 wrap-break-word text-base font-semibold text-[#171a21] dark:text-white'>{item.value}</p>
                                             <p className='mt-1 text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>{item.notes || 'No notes.'}</p>
                                             <p className='mt-2 truncate text-xs text-[#7a8493] dark:text-[#93a4bd]'>{item.alertGenerationRef || item.id}</p>
                                         </div>
