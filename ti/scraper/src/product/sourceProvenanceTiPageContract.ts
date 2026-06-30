@@ -30,6 +30,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ALERT_DEDUPE_PACKET_SCHEMA
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_HEALTH_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_health_drilldown_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_INTELLIGENCE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_intelligence_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_OPERATOR_REMEDIATION_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_operator_remediation_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_execution_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -2109,6 +2110,77 @@ export type TiSourceProvenanceSourcePackFixtureOperatorRemediationAction = {
     captureIds: string[];
     contentHashes: string[];
     fixtureBacked: true;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionExecutionPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureOperatorRemediationPacketId: string;
+  rows: TiSourceProvenanceSourcePackFixtureActionExecutionRow[];
+  summary: {
+    rowCount: number;
+    dryRunExecutable: number;
+    blockedRows: number;
+    retryWaiting: number;
+    policyReviews: number;
+    sourceInspections: number;
+    watchlistMaterialization: number;
+    actors: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    ownerLanes: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"][];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "support" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionExecutionRow = {
+  rowId: string;
+  actionId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["action"];
+  executionState: "ready" | "retry_waiting" | "policy_review_required" | "inspection_required";
+  ownerLane: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"];
+  priority: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["priority"];
+  canExecuteDryRun: boolean;
+  typedFailureReason?: {
+    code: "retry_window_pending" | "policy_review_required" | "source_health_inspection_required";
+    ownerLane: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"];
+    field: string;
+    reason: string;
+    nextAction: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["action"];
+  };
+  retry: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["retry"];
+  downstreamReadiness: {
+    publicTI: boolean;
+    alertGeneration: boolean;
+    dashboard: boolean;
+    sourceOps: boolean;
+    support: boolean;
+  };
+  route: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["route"];
+  provenance: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["provenance"] & {
+    sourcePackFixtureOperatorRemediationPacketId: string;
   };
 };
 
@@ -5220,6 +5292,56 @@ export function buildSourceProvenanceSourcePackFixtureOperatorRemediationPacket(
       "summary"
     ],
     safeOutput: input.intelligence.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureActionExecutionPacket(input: {
+  remediation: TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureActionExecutionPacket {
+  const generatedAt = input.generatedAt ?? input.remediation.generatedAt;
+  const rows = input.remediation.actions.map((action) => sourcePackFixtureActionExecutionRow(input.remediation, action));
+  const sourceFamilies = uniqueStrings(rows.flatMap((row) => row.sourceFamily ? [row.sourceFamily] : [])) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const ownerLanes = uniqueStrings(rows.map((row) => row.ownerLane)) as TiSourceProvenanceSourcePackFixtureOperatorRemediationAction["ownerLane"][];
+  const blockedRows = rows.filter((row) => row.executionState !== "ready").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_EXECUTION_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_action_execution_packet", `${input.remediation.id}:${generatedAt}:${rows.map((row) => row.rowId).join(",")}`),
+    generatedAt,
+    ok: rows.length > 0,
+    status: rows.length === 0 ? "blocked" : blockedRows > 0 ? "partial" : "ready",
+    tenantId: input.remediation.tenantId,
+    organizationId: input.remediation.organizationId,
+    sourcePackFixtureOperatorRemediationPacketId: input.remediation.id,
+    rows,
+    summary: {
+      rowCount: rows.length,
+      dryRunExecutable: rows.filter((row) => row.canExecuteDryRun).length,
+      blockedRows,
+      retryWaiting: rows.filter((row) => row.executionState === "retry_waiting").length,
+      policyReviews: rows.filter((row) => row.executionState === "policy_review_required").length,
+      sourceInspections: rows.filter((row) => row.executionState === "inspection_required").length,
+      watchlistMaterialization: rows.filter((row) => row.action === "materialize_watchlist_terms").length,
+      actors: uniqueStrings(rows.map((row) => row.actor)),
+      sourceFamilies,
+      ownerLanes,
+      nextRetryAt: earliestTimestamp(rows.map((row) => row.retry.nextRetryAt))
+    },
+    consumers: sourcePackFixtureActionExecutionConsumers(rows),
+    payloadShape: [
+      "rows[].actor",
+      "rows[].publicTiRoute",
+      "rows[].sourceFamily",
+      "rows[].action",
+      "rows[].executionState",
+      "rows[].typedFailureReason",
+      "rows[].downstreamReadiness",
+      "rows[].route",
+      "rows[].provenance",
+      "summary"
+    ],
+    safeOutput: input.remediation.safeOutput
   };
 }
 
@@ -10537,6 +10659,162 @@ function sourcePackFixtureOperatorRemediationConsumers(
         includeIntegrationFixtureOperatorRemediation: true,
         dryRun: true
       },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureActionExecutionRow(
+  packet: TiSourceProvenanceSourcePackFixtureOperatorRemediationPacket,
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction
+): TiSourceProvenanceSourcePackFixtureActionExecutionRow {
+  const executionState = sourcePackFixtureActionExecutionState(action);
+  return {
+    rowId: stableId("ti_source_provenance_source_pack_fixture_action_execution_row", `${packet.id}:${action.actionId}:${executionState}`),
+    actionId: action.actionId,
+    actor: action.actor,
+    publicTiRoute: action.publicTiRoute,
+    sourceFamily: action.sourceFamily,
+    action: action.action,
+    executionState,
+    ownerLane: action.ownerLane,
+    priority: action.priority,
+    canExecuteDryRun: action.route.dryRunSupported && action.route.liveNetworkFetch === false,
+    typedFailureReason: sourcePackFixtureActionExecutionFailure(action, executionState),
+    retry: action.retry,
+    downstreamReadiness: sourcePackFixtureActionExecutionDownstreamReadiness(action, executionState),
+    route: action.route,
+    provenance: {
+      ...action.provenance,
+      sourcePackFixtureOperatorRemediationPacketId: packet.id
+    }
+  };
+}
+
+function sourcePackFixtureActionExecutionState(
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction
+): TiSourceProvenanceSourcePackFixtureActionExecutionRow["executionState"] {
+  if (action.action === "retry_parser") return "retry_waiting";
+  if (action.action === "request_policy_review") return "policy_review_required";
+  if (action.action === "inspect_source_health") return "inspection_required";
+  return "ready";
+}
+
+function sourcePackFixtureActionExecutionFailure(
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction,
+  executionState: TiSourceProvenanceSourcePackFixtureActionExecutionRow["executionState"]
+): TiSourceProvenanceSourcePackFixtureActionExecutionRow["typedFailureReason"] {
+  if (executionState === "ready") return undefined;
+  if (executionState === "retry_waiting") {
+    return {
+      code: "retry_window_pending",
+      ownerLane: "parser",
+      field: "retry.nextRetryAt",
+      reason: action.retry.nextRetryAt ? "Parser retry is scheduled and must complete before this source can produce fresh alertable enrichment." : "Parser retry is required before this source can produce fresh alertable enrichment.",
+      nextAction: action.action
+    };
+  }
+  if (executionState === "policy_review_required") {
+    return {
+      code: "policy_review_required",
+      ownerLane: "policy",
+      field: "sourceFamily",
+      reason: "Policy review is required before restricted metadata can be promoted beyond safe source-pack metadata.",
+      nextAction: action.action
+    };
+  }
+  return {
+    code: "source_health_inspection_required",
+    ownerLane: "source",
+    field: "route.body",
+    reason: "Source health inspection is required before this row can be treated as current coverage.",
+    nextAction: action.action
+  };
+}
+
+function sourcePackFixtureActionExecutionDownstreamReadiness(
+  action: TiSourceProvenanceSourcePackFixtureOperatorRemediationAction,
+  executionState: TiSourceProvenanceSourcePackFixtureActionExecutionRow["executionState"]
+): TiSourceProvenanceSourcePackFixtureActionExecutionRow["downstreamReadiness"] {
+  const ready = executionState === "ready";
+  return {
+    publicTI: ready || action.action === "inspect_source_health",
+    alertGeneration: ready,
+    dashboard: true,
+    sourceOps: true,
+    support: true
+  };
+}
+
+function sourcePackFixtureActionExecutionConsumers(
+  rows: TiSourceProvenanceSourcePackFixtureActionExecutionRow[]
+): TiSourceProvenanceSourcePackFixtureActionExecutionPacket["consumers"] {
+  const hasRows = rows.length > 0;
+  const hasAlertReadyRows = rows.some((row) => row.downstreamReadiness.alertGeneration);
+  return [{
+    consumer: "publicTI",
+    ready: rows.some((row) => row.downstreamReadiness.publicTI),
+    requiredFields: ["rows[].actor", "rows[].publicTiRoute", "rows[].sourceFamily", "rows[].executionState", "rows[].typedFailureReason"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "publicTI", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasAlertReadyRows,
+    requiredFields: ["rows[].actor", "rows[].action", "rows[].downstreamReadiness", "rows[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "alertGeneration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRows,
+    requiredFields: ["summary", "rows[].priority", "rows[].route", "rows[].typedFailureReason"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "dashboard", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasRows,
+    requiredFields: ["rows[].ownerLane", "rows[].canExecuteDryRun", "rows[].retry", "rows[].route"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "sourceOps", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "support",
+    ready: hasRows,
+    requiredFields: ["rows[].publicTiRoute", "rows[].typedFailureReason", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "support", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRows,
+    requiredFields: ["schemaVersion", "sourcePackFixtureOperatorRemediationPacketId", "rows[].rowId", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionExecution: true, consumer: "integration", dryRun: true },
       dryRunSupported: true,
       liveNetworkFetch: false
     }
