@@ -1342,6 +1342,8 @@ export type OperatorActionRailRow = {
     disabledReason?: string
 }
 
+const alertWorkflowActionIds = new Set(['review_alert', 'escalate_alert', 'suppress_alert', 'close_alert'])
+
 function actionRailRows(selected: WorkbenchCase | undefined, orgContext: WorkbenchOrgContext | undefined, caseDetail?: CaseDetailState, alertDetail?: AlertDetailState, actionDeliveries: WorkbenchDeliveryEvidence[] = [], note = ''): OperatorActionRailRow[] {
     if (!selected) return [{
         id: 'select_case',
@@ -1413,6 +1415,16 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             },
             disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.',
         })
+        for (const action of selected.actions?.filter(candidate => alertWorkflowActionIds.has(candidate.id)) || []) {
+            rows.push({
+                id: action.id,
+                label: action.label,
+                detail: `${action.method} ${action.href}; rationale is attached before the workflow state is updated.`,
+                tone: action.disabledReason ? 'blocked' : 'ready',
+                action,
+                disabledReason: action.disabledReason,
+            })
+        }
     }
     if (selected.kind === 'source_capture') {
         const sourceHref = relatedLinkHref(selected, 'Open source')

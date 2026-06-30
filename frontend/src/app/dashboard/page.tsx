@@ -573,8 +573,45 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                 href: '/api/dwm/webhooks/deliver',
                 body: { ...actionScope(scope), alertId: alert.id, limit: 1 },
             },
+            ...alertWorkflowActions(alert, deliveryState, scope),
         ] : [],
     }
+}
+
+function alertWorkflowActions(alert: DwmAlert, deliveryState: string, scope: OperatorScope) {
+    const href = `/api/dwm/alerts/${encodeURIComponent(alert.id)}`
+    const scoped = { ...actionScope(scope), alertId: alert.id }
+    const closeDeliveryState = deliveryState === 'delivered' ? 'delivered' : 'muted'
+    return [
+        {
+            id: 'review_alert',
+            label: 'Review alert',
+            method: 'PATCH' as const,
+            href,
+            body: { ...scoped, reviewState: 'reviewing', deliveryState: 'pending_review', note: 'Analyst review started.' },
+        },
+        {
+            id: 'escalate_alert',
+            label: 'Escalate alert',
+            method: 'PATCH' as const,
+            href,
+            body: { ...scoped, reviewState: 'route_to_customer', deliveryState: 'ready_to_send', note: 'Escalated for customer or incident response.' },
+        },
+        {
+            id: 'suppress_alert',
+            label: 'Suppress alert',
+            method: 'PATCH' as const,
+            href,
+            body: { ...scoped, reviewState: 'false_positive', deliveryState: 'muted', note: 'Suppressed as low-value or false positive.' },
+        },
+        {
+            id: 'close_alert',
+            label: 'Close alert',
+            method: 'PATCH' as const,
+            href,
+            body: { ...scoped, reviewState: 'resolved', deliveryState: closeDeliveryState, note: 'Closed from analyst workbench.' },
+        },
+    ]
 }
 
 function latestDeliveryAttempt(deliveries: DwmDeliveryItem[]) {
