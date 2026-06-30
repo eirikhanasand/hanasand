@@ -617,6 +617,7 @@ describe("DWM alert case handoff route", () => {
         workflowTransitionCount: 4,
         handoffReceiptCount: 3,
         customerNotificationCount: 0,
+        auditTimelineRowCount: 7,
         organizationAccessReady: true,
         publicTiHandoffReady: true,
         sourceHandoffReady: true,
@@ -753,6 +754,73 @@ describe("DWM alert case handoff route", () => {
       "handoff_webhook_dry_run",
       "handoff_alert_replay"
     ]);
+    expect(replayExportPayload.auditTimeline).toMatchObject({
+      schemaVersion: "dwm.case_replay_audit_timeline.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      summary: {
+        rowCount: 7,
+        workflowTransitionCount: 4,
+        handoffReceiptCount: 3,
+        customerNotificationCount: 0,
+        actions: expect.arrayContaining(["open", "handoff_alert_replay", "handoff_webhook_dry_run", "alertReplay", "webhookDryRun"]),
+        rowTypes: expect.arrayContaining(["workflow_transition", "handoff_action_receipt"])
+      },
+      auditSafety: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(replayExportPayload.auditTimeline.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        rowType: "workflow_transition",
+        action: "open",
+        actor: "case-api",
+        rationale: "Open case for action receipt testing.",
+        workflow: expect.objectContaining({
+          toStatus: "open",
+          currentStatus: "open",
+          currentOwner: "owner@acme.com"
+        }),
+        replay: expect.objectContaining({
+          idempotencyKey: "alert-case-handoff-receipt",
+          workflowEventId: expect.stringMatching(/^case_event_/)
+        })
+      }),
+      expect.objectContaining({
+        rowType: "handoff_action_receipt",
+        action: "alertReplay",
+        actor: "owner@acme.com",
+        handoffAction: expect.objectContaining({
+          receiptId: ownerReplayPayload.receipt.id,
+          route: "/v1/dwm/alerts/alert_acme/replay",
+          method: "POST"
+        }),
+        replay: expect.objectContaining({
+          idempotencyKey: "case-action-replay-001",
+          auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+          workflowEventId: expect.stringMatching(/^case_event_/)
+        }),
+        provenance: expect.objectContaining({
+          captureIds: ["cap_acme_1"],
+          sourceIds: ["src_acme_tg"],
+          contentHashes: ["hash_acme_1"],
+          evidenceCount: 1
+        })
+      }),
+      expect.objectContaining({
+        rowType: "handoff_action_receipt",
+        action: "webhookDryRun",
+        actor: "admin@acme.com",
+        replay: expect.objectContaining({
+          idempotencyKey: "case-action-webhook-001",
+          dedupeKey: "delivery_alert_acme_webhook"
+        })
+      })
+    ]));
     expect(replayExportPayload.handoffActionHistory.receipts).toHaveLength(3);
     expect(replayExportPayload.nextAnalystActions).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "review_org_access", ownerLane: "org", ready: true, blocked: false }),
@@ -771,7 +839,8 @@ describe("DWM alert case handoff route", () => {
       },
       replayPlan: {
         workflowTransitionCount: 1,
-        handoffReceiptCount: 1
+        handoffReceiptCount: 1,
+        auditTimelineRowCount: 2
       }
     });
     expect(filteredReplayExportPayload.workflowTransitions[0]).toMatchObject({
@@ -780,6 +849,21 @@ describe("DWM alert case handoff route", () => {
         idempotencyKey: "case-action-replay-001"
       }
     });
+    expect(filteredReplayExportPayload.auditTimeline).toMatchObject({
+      filters: {
+        idempotencyKey: "case-action-replay-001"
+      },
+      summary: {
+        rowCount: 2,
+        workflowTransitionCount: 1,
+        handoffReceiptCount: 1,
+        customerNotificationCount: 0
+      }
+    });
+    expect(filteredReplayExportPayload.auditTimeline.rows.map((row: any) => row.rowType)).toEqual([
+      "workflow_transition",
+      "handoff_action_receipt"
+    ]);
     expect(viewerReplayExport.status).toBe(200);
     expect(viewerReplayExportPayload).toMatchObject({
       access: {

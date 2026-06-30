@@ -1574,6 +1574,12 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     sourceHandoffReadiness,
     webhookDryRunReadiness
   });
+  const auditTimeline = caseReplayAuditTimeline({
+    caseRecord,
+    filters,
+    handoffReceipts: handoffHistory.receipts,
+    customerNotifications
+  });
   const blockerCodes = uniqueCaseStrings([
     ...(alert ? [] : ["missing_case_alert"]),
     ...(handoffHistory.handoffActionReadiness?.blockerCodes ?? [])
@@ -1607,6 +1613,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
     },
     workflowTransitions,
     customerNotifications,
+    auditTimeline,
     organizationAccessReadiness,
     publicTiHandoffReadiness,
     webhookDryRunReadiness,
@@ -1617,6 +1624,7 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       workflowTransitionCount: workflowTransitions.length,
       handoffReceiptCount: handoffHistory.receipts.length,
       customerNotificationCount: customerNotifications.length,
+      auditTimelineRowCount: auditTimeline.summary.rowCount,
       dryRunDeliveryReceiptCount: webhookDryRunReadiness.deliveryReceipts.length,
       organizationAccessReady: organizationAccessReadiness.ready,
       publicTiHandoffReady: publicTiHandoffReadiness.ready,
@@ -1632,6 +1640,167 @@ function buildCaseActionReplayExport(caseRecord: AnalystCase, options: ApiServer
       contentHashes: handoffHistory.handoffActionReadiness?.provenance?.contentHashes ?? [],
       evidenceCount: handoffHistory.handoffActionReadiness?.provenance?.evidenceCount ?? 0
     },
+    auditSafety: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false
+    }
+  };
+}
+
+function caseReplayAuditTimeline(input: {
+  caseRecord: AnalystCase;
+  filters: {
+    actionId?: "alertReplay" | "webhookDryRun";
+    idempotencyKey?: string;
+    eventAction?: string;
+  };
+  handoffReceipts: Array<any>;
+  customerNotifications: Array<any>;
+}) {
+  const workflowRows = (input.caseRecord.workflowEvents ?? [])
+    .filter((event) => !input.filters.eventAction || event.action === input.filters.eventAction)
+    .filter((event) => !input.filters.idempotencyKey || event.idempotencyKey === input.filters.idempotencyKey)
+    .map((event) => ({
+      schemaVersion: "dwm.case_replay_audit_timeline_row.v1",
+      id: stableId("case_replay_audit_timeline_row", `${input.caseRecord.id}:workflow:${event.id}`),
+      at: event.at,
+      rowType: "workflow_transition",
+      caseId: input.caseRecord.id,
+      tenantId: input.caseRecord.tenantId,
+      organizationId: input.caseRecord.organizationId,
+      alertId: input.caseRecord.alertId,
+      actor: event.actor,
+      action: event.action,
+      rationale: event.note,
+      workflow: {
+        eventId: event.id,
+        fromStatus: event.fromStatus,
+        toStatus: event.toStatus,
+        fromOwner: event.fromOwner,
+        toOwner: event.toOwner,
+        currentStatus: input.caseRecord.status,
+        currentOwner: input.caseRecord.assignedOwner
+      },
+      replay: {
+        replayState: event.replayState ?? "recorded",
+        idempotencyKey: event.idempotencyKey,
+        dedupeKey: event.transitionKey,
+        auditEventId: event.auditEventId,
+        workflowEventId: event.id
+      },
+      provenance: {
+        source: "case_workflow",
+        eventId: event.id,
+        auditEventId: event.auditEventId,
+        captureIds: [],
+        sourceIds: [],
+        contentHashes: [],
+        evidenceCount: 0,
+        blockerCodes: []
+      }
+    }));
+
+  const handoffRows = input.handoffReceipts.map((receipt) => ({
+    schemaVersion: "dwm.case_replay_audit_timeline_row.v1",
+    id: stableId("case_replay_audit_timeline_row", `${input.caseRecord.id}:handoff:${receipt.id}`),
+    at: receipt.at,
+    rowType: "handoff_action_receipt",
+    caseId: receipt.caseId,
+    tenantId: receipt.tenantId,
+    organizationId: receipt.organizationId,
+    alertId: receipt.alertId,
+    actor: receipt.actor,
+    action: receipt.actionId,
+    rationale: receipt.actionId === "webhookDryRun" ? "Webhook dry-run handoff recorded." : "Alert replay handoff recorded.",
+    handoffAction: {
+      receiptId: receipt.id,
+      actionId: receipt.actionId,
+      route: receipt.route,
+      method: receipt.method,
+      execution: receipt.execution
+    },
+    workflow: {
+      workflowEventId: receipt.workflowEventId,
+      currentStatus: input.caseRecord.status,
+      currentOwner: input.caseRecord.assignedOwner
+    },
+    replay: {
+      replayState: receipt.execution?.state ?? "recorded",
+      idempotencyKey: receipt.idempotencyKey,
+      dedupeKey: receipt.dedupeKey,
+      auditEventId: receipt.auditEventId,
+      workflowEventId: receipt.workflowEventId
+    },
+    provenance: {
+      source: "case_handoff_action",
+      receiptId: receipt.id,
+      captureIds: receipt.provenance?.captureIds ?? [],
+      sourceIds: receipt.provenance?.sourceIds ?? [],
+      contentHashes: receipt.provenance?.contentHashes ?? [],
+      evidenceCount: receipt.provenance?.evidenceCount ?? 0,
+      blockerCodes: receipt.provenance?.blockerCodes ?? []
+    }
+  }));
+
+  const customerNotificationRows = input.customerNotifications.map((receipt) => ({
+    schemaVersion: "dwm.case_replay_audit_timeline_row.v1",
+    id: stableId("case_replay_audit_timeline_row", `${input.caseRecord.id}:customer_notification:${receipt.id}`),
+    at: receipt.at,
+    rowType: "customer_notification",
+    caseId: receipt.caseId,
+    tenantId: receipt.tenantId,
+    organizationId: receipt.organizationId,
+    alertId: receipt.alertId,
+    actor: receipt.actor,
+    action: "customer_notified",
+    rationale: receipt.rationale,
+    delivery: {
+      deliveryMode: receipt.deliveryMode,
+      webhookDeliveryId: receipt.webhookDeliveryId,
+      webhookDestinationId: receipt.webhookDestinationId,
+      webhookStatus: receipt.webhookStatus,
+      externalReference: receipt.externalReference
+    },
+    workflow: {
+      currentStatus: input.caseRecord.status,
+      currentOwner: input.caseRecord.assignedOwner
+    },
+    replay: {
+      replayState: "recorded",
+      idempotencyKey: receipt.idempotencyKey
+    },
+    provenance: {
+      source: "case_customer_notification",
+      receiptId: receipt.id,
+      captureIds: [],
+      sourceIds: receipt.evidence?.sourceIds ?? [],
+      contentHashes: receipt.evidence?.contentHashes ?? [],
+      evidenceCount: receipt.evidence?.evidenceCount ?? 0,
+      blockerCodes: []
+    }
+  }));
+
+  const rows = [...workflowRows, ...handoffRows, ...customerNotificationRows]
+    .sort((a, b) => String(a.at ?? "").localeCompare(String(b.at ?? "")) || String(a.id).localeCompare(String(b.id)));
+  return {
+    schemaVersion: "dwm.case_replay_audit_timeline.v1",
+    generatedAt: nowIso(),
+    caseId: input.caseRecord.id,
+    tenantId: input.caseRecord.tenantId,
+    organizationId: input.caseRecord.organizationId,
+    alertId: input.caseRecord.alertId,
+    filters: input.filters,
+    summary: {
+      rowCount: rows.length,
+      workflowTransitionCount: workflowRows.length,
+      handoffReceiptCount: handoffRows.length,
+      customerNotificationCount: customerNotificationRows.length,
+      latestAt: rows[rows.length - 1]?.at,
+      actions: uniqueCaseStrings(rows.map((row) => row.action)),
+      rowTypes: uniqueCaseStrings(rows.map((row) => row.rowType))
+    },
+    rows,
     auditSafety: {
       metadataOnly: true,
       rawEvidenceExposed: false,
