@@ -3702,7 +3702,7 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
                             {blocked ? 'blocked' : 'ready'}
                         </span>
                     </div>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{detail}</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(detail)}</p>
                 </div>
                 <div className='flex min-w-0 w-full flex-wrap items-center justify-start gap-1.5 sm:w-auto sm:justify-end sm:shrink-0'>
                     {route ? (
