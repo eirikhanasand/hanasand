@@ -8237,6 +8237,9 @@ function buildDwmWebhookCaseActionDryRunReceipt({
         : null
     const casePath = entry.alert.casePath || null
     const caseId = entry.alert.caseId || null
+    const dedupeKey = entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey)
+    const routeUrl = entry.alert.alertUrl || casePath || entry.route || null
+    const expectedAuditAction = entry.replay ? 'delivery.replayed' : 'delivery.retry_requested'
 
     return {
         schemaVersion: 'dwm.webhook.case_action_dry_run_receipt.v1',
@@ -8284,14 +8287,14 @@ function buildDwmWebhookCaseActionDryRunReceipt({
             dryRun: true,
             live: false,
             route: entry.route,
-            routeUrl: entry.alert.alertUrl || casePath || entry.route || null,
+            routeUrl,
             idempotencyKey: entry.deliveryProof.idempotencyKey,
-            dedupeKey: entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey),
+            dedupeKey,
         },
         audit: {
             auditEventId: entry.deliveryProof.auditEventId,
             currentAction: entry.deliveryProof.auditAction,
-            expectedAction: entry.replay ? 'delivery.replayed' : 'delivery.retry_requested',
+            expectedAction: expectedAuditAction,
         },
         bodyPreview: body,
         payloadPreview: entry.sanitizedPayloadPreview
@@ -8309,7 +8312,7 @@ function buildDwmWebhookCaseActionDryRunReceipt({
                     casePath,
                     watchlistTerm: entry.watchlist.terms[0] || entry.watchlist.name || null,
                     sourceFamily: entry.alert.sourceFamily,
-                    routeUrl: entry.alert.alertUrl || casePath || entry.route || null,
+                    routeUrl,
                 },
                 redaction: {
                     safeForCustomerDisplay: true,
@@ -8326,7 +8329,7 @@ function buildDwmWebhookCaseActionDryRunReceipt({
                 destinationId: entry.destinationId,
                 alertId: entry.alert.id,
                 casePath,
-                dedupeKey: entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey),
+                dedupeKey,
                 deliveryId: entry.deliveryId,
             },
             noNetwork: true as const,
@@ -8336,10 +8339,63 @@ function buildDwmWebhookCaseActionDryRunReceipt({
             route: 'POST /api/dwm/webhook-deliveries',
             canSend: canDryRunRetry,
             body,
-            expectedAuditAction: entry.replay ? 'delivery.replayed' : 'delivery.retry_requested',
+            expectedAuditAction,
             blockers: canDryRunRetry ? [] : blockers.filter(blocker => blocker.blocking),
             noNetwork: true as const,
             externalSendEnabled: false as const,
+        },
+        caseReplayExportConsumer: {
+            schemaVersion: 'dwm.webhook.case_replay_export_consumer.v1',
+            consumesSchemaVersion: 'dwm.case_action_replay_export.v1',
+            route: caseId ? `/v1/cases/${encodeURIComponent(caseId)}/action-replay-export` : '/v1/cases/:caseId/action-replay-export',
+            method: 'GET' as const,
+            noNetwork: true,
+            ready: Boolean(caseId && entry.orgId),
+            query: {
+                organizationId: entry.orgId,
+                actionId: entry.replay ? 'alertReplay' : 'webhookDryRun',
+                idempotencyKey: entry.deliveryProof.idempotencyKey,
+            },
+            expectedFields: [
+                'schemaVersion',
+                'caseId',
+                'organizationId',
+                'alertId',
+                'handoffActionReadiness',
+                'handoffActionHistory.receipts[]',
+                'workflowTransitions[]',
+                'replayPlan.blockerCodes',
+                'provenance.captureIds',
+                'auditSafety.webhookSecretExposed',
+            ],
+            webhookContext: {
+                orgId: entry.orgId,
+                destinationId: entry.destinationId,
+                alertId: entry.alert.id,
+                caseId,
+                casePath,
+                watchlistTerm: entry.watchlist.terms[0] || entry.watchlist.name || null,
+                sourceFamily: entry.alert.sourceFamily,
+                routeUrl,
+                dedupeKey,
+                idempotencyKey: entry.deliveryProof.idempotencyKey,
+                auditEventId: entry.deliveryProof.auditEventId,
+                expectedAuditAction,
+            },
+            deliveryState: {
+                status: entry.status,
+                retryable: entry.retry.retryable,
+                attemptCount: entry.retry.attemptCount,
+                nextRetryAt: entry.retry.nextRetryAt,
+                lastErrorCategory: entry.retry.lastErrorCategory,
+                terminalFailure: entry.retry.terminalFailure,
+                blockers: blockers.map(blocker => blocker.code),
+            },
+            redaction: {
+                safeForCustomerDisplay: true,
+                endpointExposed: false,
+                webhookSecretExposed: false,
+            },
         },
         denial: {
             denied: blockingCodes.length > 0,

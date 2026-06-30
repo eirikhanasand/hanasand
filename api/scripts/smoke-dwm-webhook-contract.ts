@@ -3191,9 +3191,13 @@ expect(Boolean(deliveryReceiptRetry?.transitionReceipt.watchlist.term) && Boolea
 expect(deliveryReceiptReplay?.transitionReceipt.provenance.captureIds.includes('capture_replay_contract') && deliveryReceiptReplay.transitionReceipt.provenance.sourceIds.includes('source_replay_contract'), 'Delivery transition receipts should carry alert provenance ids.', deliveryReceiptReplay?.transitionReceipt.provenance)
 expect(deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.schemaVersion === 'dwm.webhook.case_action_dry_run_receipt.v1' && deliveryReceiptRetry.transitionReceipt.caseActionDryRunReceipt.ready === true && deliveryReceiptRetry.transitionReceipt.caseActionDryRunReceipt.actionRequest.body?.casePath === '/v1/cases/case_live_contract?alertId=alert_live_contract&dedupeKey=dwm_dedupe_live_contract', 'Delivery transition receipts should expose case action dry-run retry receipts.', deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt)
 expect(deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt.workflow.replay === true && deliveryReceiptReplay.transitionReceipt.caseActionDryRunReceipt.payloadPreview?.context.casePath === replayWorkflowAlert.casePath && deliveryReceiptReplay.transitionReceipt.caseActionDryRunReceipt.audit.auditEventId === 'audit_replay_duplicate_contract', 'Case action dry-run receipts should preserve replay, case, and audit context.', deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt)
+expect(deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.consumesSchemaVersion === 'dwm.case_action_replay_export.v1' && deliveryReceiptReplay.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.route.includes('/v1/cases/case_replay_contract/action-replay-export'), 'Case action dry-run receipts should expose case replay export consumer routes.', deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer)
+expect(deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.webhookContext.dedupeKey === 'dwm_dedupe_replay_contract' && deliveryReceiptReplay.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.webhookContext.auditEventId === 'audit_replay_duplicate_contract', 'Case replay export consumers should carry webhook dedupe and audit context.', deliveryReceiptReplay?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer)
+expect(deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.deliveryState.retryable === true && deliveryReceiptRetry.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.deliveryState.nextRetryAt === '2026-06-28T12:11:00.000Z', 'Case replay export consumers should carry retry/backoff state.', deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer)
 expect(deliveryReceiptTerminal?.transitionReceipt.caseActionDryRunReceipt.ready === false && deliveryReceiptTerminal.transitionReceipt.caseActionDryRunReceipt.denial.blockingCodes.includes('terminal_failure'), 'Case action dry-run receipts should block terminal failures.', deliveryReceiptTerminal?.transitionReceipt.caseActionDryRunReceipt)
 expect(deliveryReceiptMissingDestination?.transitionReceipt.caseActionDryRunReceipt.ready === false && deliveryReceiptMissingDestination.transitionReceipt.caseActionDryRunReceipt.denial.blockingCodes.includes('destination_unavailable'), 'Case action dry-run receipts should block missing destinations.', deliveryReceiptMissingDestination?.transitionReceipt.caseActionDryRunReceipt)
 expect(deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.destination.endpointExposed === false && deliveryReceiptRetry.transitionReceipt.caseActionDryRunReceipt.payloadPreview?.redaction.endpointExposed === false, 'Case action dry-run receipts should keep endpoint and payload previews redacted.', deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt)
+expect(deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.redaction.webhookSecretExposed === false, 'Case replay export consumers should keep webhook secrets redacted.', deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer)
 expect(!JSON.stringify(deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt).includes(secret), 'Case action dry-run receipts should not leak endpoint secrets.', deliveryReceiptRetry?.transitionReceipt.caseActionDryRunReceipt)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
 expect(deliveryReceiptTerminal?.transitionReceipt.state.next === 'terminal_failure' && deliveryReceiptTerminal.transitionReceipt.requests.dryRunRetry.canSend === false, 'Delivery transition receipts should block terminal failure retries.', deliveryReceiptTerminal?.transitionReceipt)
@@ -3455,6 +3459,9 @@ console.log(JSON.stringify({
         'delivery receipts transition receipt audit/provenance',
         'delivery receipts case action dry-run receipt',
         'delivery receipts case action replay/audit context',
+        'delivery receipts case replay export consumer route',
+        'delivery receipts case replay export dedupe/audit context',
+        'delivery receipts case replay export retry/backoff state',
         'delivery receipts case action terminal blocker',
         'delivery receipts case action missing destination blocker',
         'delivery receipts case action secret redaction',
@@ -3693,6 +3700,11 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.payloadPreview.context.casePath',
             'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.denial.blockingCodes',
             'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.destination.endpointExposed',
+            'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.consumesSchemaVersion',
+            'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.route',
+            'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.webhookContext.dedupeKey',
+            'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.deliveryState.nextRetryAt',
+            'deliveryReceipts.receipts[].transitionReceipt.caseActionDryRunReceipt.caseReplayExportConsumer.redaction.webhookSecretExposed',
             'deliveryReceipts.receipts[].blockers[].code',
             'deliveryReceipts.historyReplayFilters.schemaVersion',
             'deliveryReceipts.historyReplayFilters.routeContract.replayHistory.requiredQuery',
