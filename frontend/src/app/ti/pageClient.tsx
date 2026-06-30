@@ -240,6 +240,25 @@ function Results({ result }: { result: TiSearchResponse }) {
         { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
         { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
     ]
+    const mobileEvidenceWorkbar = selected ? (
+        <MobileEvidenceWorkbar
+            selected={selected}
+            filteredCount={filteredWorkItems.length}
+            totalCount={workItems.length}
+            kind={queueKindFilter}
+            source={queueSourceFilter}
+            confidence={queueConfidenceFilter}
+            sourceCounts={queueSourceCounts}
+            onKindChange={setQueueKindFilter}
+            onSourceChange={setQueueSourceFilter}
+            onConfidenceChange={setQueueConfidenceFilter}
+            onMarkReviewed={() => applyDecision('reviewing')}
+            onEscalate={() => applyDecision('escalated')}
+            onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
+            onCase={() => stageSelectedHandoff()}
+            caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
+        />
+    ) : null
 
     useEffect(() => {
         if (!workItems.length) return
@@ -284,6 +303,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     return (
         <div className='grid gap-6'>
             <section data-ti-workspace='true' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
+                {mobileEvidenceWorkbar ? <div className='border-b border-[#e8edf5] bg-[#f8fafc] p-3 lg:hidden'>{mobileEvidenceWorkbar}</div> : null}
                 <div className='grid gap-3 border-b border-[#e8edf5] bg-white p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                     <div className='min-w-0'>
                         <div className='flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center'>
@@ -372,23 +392,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <main className='order-1 min-w-0 p-4 lg:order-none'>
                         {selected ? (
                             <div className='grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-hidden'>
-                                <MobileEvidenceWorkbar
-                                    selected={selected}
-                                    filteredCount={filteredWorkItems.length}
-                                    totalCount={workItems.length}
-                                    kind={queueKindFilter}
-                                    source={queueSourceFilter}
-                                    confidence={queueConfidenceFilter}
-                                    sourceCounts={queueSourceCounts}
-                                    onKindChange={setQueueKindFilter}
-                                    onSourceChange={setQueueSourceFilter}
-                                    onConfidenceChange={setQueueConfidenceFilter}
-                                    onMarkReviewed={() => applyDecision('reviewing')}
-                                    onEscalate={() => applyDecision('escalated')}
-                                    onWatchlist={() => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor('customer_relevant', selected, watchlist, actionability, selectedNote) }))}
-                                    onCase={() => stageSelectedHandoff()}
-                                    caseAvailable={Boolean(selectedCaseDraft && selectedCaseOwnership && selectedCaseCreateRequest && selectedWatchlistPlan && selectedAlertPlan && selectedDeliveryPlan && selectedEnrichmentTriage && selectedCaseActionTrail)}
-                                />
                                 <section id='ti-selected-evidence' data-ti-detail='true' className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
                                     <div className='flex flex-wrap items-start justify-between gap-3'>
                                         <div className='min-w-0'>
