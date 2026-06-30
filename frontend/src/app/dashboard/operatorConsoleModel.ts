@@ -276,6 +276,10 @@ export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     schemaLookupReady?: boolean
     schemaLookupSafe?: boolean
     contractLookupRows?: number
+    receiptMatrixReady?: boolean
+    receiptMatrixSafe?: boolean
+    receiptMatrixRows?: number
+    receiptMatrixBlockedRows?: number
 }
 
 export type ProductReadinessExternalState = {
@@ -321,6 +325,34 @@ export type DashboardSourceProofProxyPayload = {
                 route?: string
                 scopeFields?: unknown[]
                 blockerCodes?: unknown[]
+                downstreamConsumers?: unknown[]
+                safeOutput?: {
+                    metadataOnly?: boolean
+                    rawEvidenceExposed?: boolean
+                    webhookSecretExposed?: boolean
+                    crossOrgDataExposed?: boolean
+                }
+            }>
+            safeOutput?: {
+                metadataOnly?: boolean
+                rawEvidenceExposed?: boolean
+                webhookSecretExposed?: boolean
+                crossOrgDataExposed?: boolean
+            }
+        }
+        productReadinessReceiptMatrix?: {
+            schemaVersion?: string
+            aggregateSchemaVersion?: string
+            route?: string
+            rows?: Array<{
+                capabilityId?: string
+                ownerLane?: string
+                readinessRoute?: string
+                contractIds?: unknown[]
+                schemaIds?: unknown[]
+                receiptSchemaIds?: unknown[]
+                blockerCodes?: unknown[]
+                scopeFields?: unknown[]
                 downstreamConsumers?: unknown[]
                 safeOutput?: {
                     metadataOnly?: boolean
@@ -1009,9 +1041,39 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         && schemaLookupRows.every(row => row.schemaId && row.contractId && row.ownerLane && row.route)
         && schemaLookupSafe,
     )
+    const receiptMatrix = input.contracts?.productReadinessReceiptMatrix
+    const receiptMatrixRows = receiptMatrix?.rows || []
+    const receiptMatrixSafe = Boolean(
+        receiptMatrix?.safeOutput?.metadataOnly === true
+        && receiptMatrix.safeOutput.rawEvidenceExposed === false
+        && receiptMatrix.safeOutput.webhookSecretExposed === false
+        && receiptMatrix.safeOutput.crossOrgDataExposed === false
+        && receiptMatrixRows.every(row => row.safeOutput?.metadataOnly === true
+            && row.safeOutput.rawEvidenceExposed === false
+            && row.safeOutput.webhookSecretExposed === false
+            && row.safeOutput.crossOrgDataExposed === false),
+    )
+    const receiptMatrixReady = Boolean(
+        input.endpoints?.contracts?.ok === true
+        && receiptMatrix?.schemaVersion === 'hanasand.product_readiness.receipt_matrix.v1'
+        && receiptMatrix.aggregateSchemaVersion === 'hanasand.product_readiness.v1'
+        && receiptMatrixRows.length > 0
+        && receiptMatrixRows.every(row => row.capabilityId
+            && row.ownerLane
+            && row.readinessRoute
+            && Array.isArray(row.contractIds)
+            && row.contractIds.length > 0
+            && Array.isArray(row.schemaIds)
+            && row.schemaIds.length > 0
+            && Array.isArray(row.blockerCodes)
+            && row.blockerCodes.length > 0
+            && Array.isArray(row.scopeFields)
+            && row.scopeFields.length > 0)
+        && receiptMatrixSafe,
+    )
     const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
     const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
-    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && sourceFamilyCount > 0)
+    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && sourceFamilyCount > 0)
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
@@ -1024,6 +1086,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         sourceReadinessArtifactReady ? '' : 'Source readiness artifact is missing ledger, trust, or safe-output proof.',
         sourceProxyVerificationReady ? '' : 'Source proxy verification proof is missing or not ready.',
         schemaLookupReady ? '' : 'Safe contract schema lookup is not loaded from the source proxy.',
+        receiptMatrixReady ? '' : 'Product readiness receipt matrix is not loaded from the source proxy.',
         sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
         ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
@@ -1044,6 +1107,10 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         schemaLookupReady,
         schemaLookupSafe,
         contractLookupRows: schemaLookupRows.length,
+        receiptMatrixReady,
+        receiptMatrixSafe,
+        receiptMatrixRows: receiptMatrixRows.length,
+        receiptMatrixBlockedRows: receiptMatrixRows.filter(row => Array.isArray(row.blockerCodes) && row.blockerCodes.length > 0).length,
         sourceFamilyCount,
         registeredTotal: counts?.registeredTotal,
         activeSourceCount: counts?.registeredActiveOrCanary,
@@ -1069,7 +1136,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         staleAfterSeconds: staleAfterMinutes * 60,
         proofTimestamp: workerLastRunAt || input.sourceInventory?.generatedAt || input.generatedAt || options.checkedAt,
         expectedDashboardRowId: 'source_inventory_probe',
-        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, schemaLookup, and sourceFamilyCounts.',
+        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, schemaLookup, productReadinessReceiptMatrix, and sourceFamilyCounts.',
         backendProofContractVersion: [
             input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
             input.sourcePacks?.schemaVersion || 'dwm.source_packs.v1',
@@ -1078,6 +1145,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             input.sourcePacks?.sourceReadinessArtifact?.schemaVersion || 'dwm.source_readiness_artifact.v1',
             input.sourcePacks?.proxyVerification?.schemaVersion || 'dwm.source_pack_worker_proxy_verification.v1',
             schemaLookup?.schemaVersion || 'ti.api_contract_schema_lookup.v1',
+            receiptMatrix?.schemaVersion || 'hanasand.product_readiness.receipt_matrix.v1',
         ].join(' + '),
     }
 }

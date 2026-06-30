@@ -236,6 +236,24 @@ const sourceProofProxyPayload = {
             }],
             safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
         },
+        productReadinessReceiptMatrix: {
+            schemaVersion: 'hanasand.product_readiness.receipt_matrix.v1',
+            aggregateSchemaVersion: 'hanasand.product_readiness.v1',
+            route: '/v1/contracts',
+            rows: [{
+                capabilityId: 'source_activation',
+                ownerLane: 'source',
+                readinessRoute: 'GET /v1/dwm/source-requests/readiness',
+                contractIds: ['source_activation_and_provenance', 'source_provenance_readiness'],
+                schemaIds: ['dwm.source_worker_readiness.v1', 'dwm.source_pack_action_contract.v1'],
+                receiptSchemaIds: ['ti.source_provenance_source_activation_decision_receipt.v1'],
+                blockerCodes: ['source_inactive', 'source_worker_not_ready'],
+                scopeFields: ['tenantId', 'organizationId', 'sourceIds'],
+                downstreamConsumers: [{ ownerLane: 'alert', route: 'POST /v1/dwm/alerts/rebuild', requiredFields: ['sourceIds', 'captureIds'] }],
+                safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+            }],
+            safeOutput: { metadataOnly: true, rawEvidenceExposed: false, webhookSecretExposed: false, crossOrgDataExposed: false },
+        },
     },
 } satisfies DashboardSourceProofProxyPayload
 const operatorSourceProof = buildSourceProofReadinessFromProxy(sourceProofProxyPayload, {
