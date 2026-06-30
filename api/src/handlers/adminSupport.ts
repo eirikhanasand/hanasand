@@ -9801,6 +9801,7 @@ function supportRecoveryLifecycleCleanupExport(input: {
     const requestIds = uniqueTimelineValues([input.request, ...lifecycleEvents.map(event => event.requestId)])
     const entityIds = uniqueTimelineValues([input.entity, ...lifecycleEvents.map(event => event.entity?.id || event.entityId)])
     const supportSessionIds = uniqueTimelineValues([input.supportSession, ...lifecycleEvents.map(event => event.actionEvidence?.supportSessionId || event.context?.supportSessionId)])
+    const sourceWorkflows = uniqueTimelineValues(lifecycleEvents.map(event => supportAuditWorkflowName(event)))
     const denialReasonCodes = uniqueTimelineValues(lifecycleEvents.flatMap(event => [
         event.actionEvidence?.blockerCode,
         event.actionEvidence?.blockers,
@@ -9876,6 +9877,7 @@ function supportRecoveryLifecycleCleanupExport(input: {
             requestIds,
             entityIds,
             supportSessionIds,
+            sourceWorkflows,
             denialReasonCodes,
             filter: input.timelineFilter,
             replayFilters: {
@@ -9885,6 +9887,14 @@ function supportRecoveryLifecycleCleanupExport(input: {
                 revokedSessions: auditFilterQuery({ org: input.org, target: input.user || input.email, supportSession: input.supportSession, action: 'support.session.revoke', source: 'admin', service: 'hanasand-api' }),
                 deniedRecovery: auditFilterQuery({ org: input.org, target: input.user || input.email, action: 'support.organization.access_recovery', outcome: 'denied', source: 'admin', service: 'hanasand-api' }),
                 byRequest: requestIds.map(request => auditFilterQuery({ request, source: 'admin', service: 'hanasand-api' })),
+                bySourceWorkflow: sourceWorkflows.map(workflow => auditFilterQuery({ ...input.timelineFilter, workflow, source: 'admin', service: 'hanasand-api' })),
+            },
+            sourceWorkflowHandoff: {
+                alias: 'sourceWorkflow',
+                workflows: sourceWorkflows,
+                safeForCaseReplay: true,
+                noLiveAccessGrant: true,
+                redacted: true,
             },
         },
         cleanupPolicy: {
@@ -9905,17 +9915,19 @@ function supportRecoveryLifecycleCleanupExport(input: {
                 request: input.request,
                 entity: input.entity,
                 supportSession: input.supportSession,
+                workflow: sourceWorkflows[0] || '',
             }).replace('/api/admin/audit-events', '/api/admin/support/inspect'),
             auditReplay: auditFilterQuery(input.timelineFilter),
             accessRecovery: input.org ? `/api/admin/support/organizations/${encodeURIComponent(input.org)}/access-recovery` : null,
             supportSession: input.supportSession ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSession)}` : null,
         },
-        requiredAuditFields: ['actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason', 'outcome', 'severity', 'timestamp', 'actionEvidence.supportSessionId'],
+        requiredAuditFields: ['actor.id', 'target.id', 'organization.id', 'entity.id', 'requestId', 'reason', 'outcome', 'severity', 'timestamp', 'actionEvidence.supportSessionId', 'actionEvidence.workflow'],
         forbiddenFields: ['token', 'secret', 'authorization', 'cookie', 'webhookUrl', 'privateSourceUrl', 'sessionToken', 'inviteToken'],
         blockers,
         copyText: [
             `Support recovery lifecycle cleanup org=${input.org || '*'} target=${input.user || input.email || '*'} request=${input.request || '*'}`,
             `Events: ${eventIds.join(', ') || 'none'}`,
+            `Source workflows: ${sourceWorkflows.join(', ') || 'none'}`,
             `Stale/expired/revoked/denied: ${staleEvents.length}/${expiredSessionEvents.length}/${revokedSessionEvents.length}/${deniedRecoveryEvents.length}`,
             `Replay: ${auditFilterQuery(input.timelineFilter)}`,
             `Blockers: ${blockers.join(', ') || 'none'}`,
