@@ -424,7 +424,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                                     <button
                                                         type='button'
                                                         onClick={() => selectArtifactBy('technique', item.attackId ? `${item.attackId} ${item.name}` : item.name)}
-                                                        className='text-left text-sm font-semibold text-[#171a21] transition hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                                                        className='inline-flex min-h-8 max-w-full items-center rounded-md px-1 text-left text-sm font-semibold text-[#171a21] transition hover:text-[#3056d3] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:text-[#eef4ff] dark:hover:text-[#9db6ff]'
                                                     >
                                                         {item.name}
                                                     </button>
@@ -1842,7 +1842,7 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
                 {values.length ? values.slice(0, 8).map(value => {
                     const artifact = artifactKind ? artifactByLookup?.get(`${artifactKind}:${value.toLowerCase()}`) : undefined
                     if (!artifact || !onSelectArtifact) {
-                        return <span key={value} className='w-full max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] sm:w-auto'>{value}</span>
+                        return <span key={value} className='inline-flex min-h-8 w-full max-w-full items-center wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] sm:w-auto'>{value}</span>
                     }
                     const active = artifact.id === selectedArtifactId
                     return (
@@ -1850,7 +1850,7 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
                             key={value}
                             type='button'
                             onClick={() => onSelectArtifact(artifact.id)}
-                            className={`w-full max-w-full wrap-break-word rounded-md border px-2 py-1 text-left text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] sm:w-auto ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#9ab3ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#344054] hover:border-[#b8c5ff] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:border-[#4a68a8] dark:hover:bg-[#172131]'}`}
+                            className={`inline-flex min-h-8 w-full max-w-full items-center wrap-break-word rounded-md border px-2 py-1 text-left text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] sm:w-auto ${active ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#9ab3ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#344054] hover:border-[#b8c5ff] hover:bg-[#f8fafc] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:border-[#4a68a8] dark:hover:bg-[#172131]'}`}
                         >
                             {value}
                         </button>
@@ -1886,11 +1886,11 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                     move('last')
                 }
             }}
-            className='rounded-lg border border-[#dfe5ee] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+            className='rounded-lg border border-[#dfe5ee] bg-white p-3 focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#273244] dark:bg-[#131c29]'
         >
             <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
-                <p className='text-xs font-semibold uppercase text-[#667085]'>Artifact queue</p>
-                <p className='text-[11px] text-[#667085]'>Arrow keys, Home, and End move selection.</p>
+                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#9aa8bd]'>Artifact queue</p>
+                <p className='text-[11px] text-[#667085] dark:text-[#9aa8bd]'>Arrow keys, Home, and End move selection.</p>
             </div>
             <div className='grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3'>
                 {artifacts.map(artifact => {
@@ -1900,10 +1900,10 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             key={artifact.id}
                             type='button'
                             onClick={() => onSelectArtifact(artifact.id)}
-                            className={`min-w-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white'}`}
+                            className={`min-h-12 min-w-0 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#9ab3ff] dark:bg-[#172646]' : 'border-[#dfe5ee] bg-[#fbfcfe] hover:bg-white dark:border-[#314057] dark:bg-[#0f1621] dark:hover:bg-[#172131]'}`}
                         >
-                            <span className='block wrap-break-word text-xs font-semibold text-[#171a21]'>{artifact.label}</span>
-                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
+                            <span className='block wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{artifact.label}</span>
+                            <span className='mt-1 block wrap-break-word text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{formatLabel(artifact.kind)} · {artifact.readiness.label}</span>
                         </button>
                     )
                 })}
@@ -7223,13 +7223,13 @@ function TechniqueBadge({ attackId, name, tactic, detail }: { attackId: string; 
                 target='_blank'
                 rel='noopener noreferrer'
                 aria-label={`${attackId}: ${description}`}
-                className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-1.5 py-0.5 text-xs font-semibold text-[#3056d3] transition hover:border-[#3056d3] hover:bg-[#e1e9ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'
+                className='inline-flex min-h-8 items-center rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] transition hover:border-[#3056d3] hover:bg-[#e1e9ff] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff] dark:hover:border-[#9ab3ff] dark:hover:bg-[#1f315a]'
             >
                 {attackId}
             </a>
-            <span className='pointer-events-none absolute left-1/2 top-7 z-20 hidden w-80 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block'>
-                <span className='block font-semibold text-[#171a21]'>{attackId}: {name}</span>
-                <span className='mt-1 block text-[#667085]'>{tactic}</span>
+            <span className='pointer-events-none absolute left-1/2 top-9 z-20 hidden w-80 -translate-x-1/2 rounded-lg border border-[#dfe5ee] bg-white p-3 text-left text-xs font-medium leading-5 text-[#404957] shadow-xl group-hover:block group-focus-within:block dark:border-[#273244] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
+                <span className='block font-semibold text-[#171a21] dark:text-[#eef4ff]'>{attackId}: {name}</span>
+                <span className='mt-1 block text-[#667085] dark:text-[#9aa8bd]'>{tactic}</span>
                 <span className='mt-2 block'>{description}</span>
             </span>
         </span>
@@ -7490,7 +7490,7 @@ function MapPointActionRow({ point, active, handoff, onFocus }: { point: ReturnT
             data-ti-geo-context-actions='true'
             className={`rounded-lg border px-3 py-2 text-left text-xs transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${active ? 'border-[#3056d3] bg-[#eef3ff] dark:border-[#5269d8] dark:bg-[#172449]' : 'border-[#eef1f5] bg-[#fbfcfe] hover:border-[#d8dee9] hover:bg-white dark:border-[#273244] dark:bg-[#131c29] dark:hover:border-[#314057] dark:hover:bg-[#172131]'}`}
         >
-            <button type='button' onClick={onFocus} className='grid w-full min-w-0 gap-1 text-left focus:outline-none'>
+            <button type='button' onClick={onFocus} className='grid min-h-9 w-full min-w-0 items-center gap-1 rounded-md text-left focus:outline-none focus:ring-2 focus:ring-[#b8c5ff]'>
                 <span className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                     <span className='min-w-0 wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{point.label}</span>
                     <span className={point.role === 'operator' ? 'whitespace-nowrap text-[#7c3aed] dark:text-[#b89cff]' : 'whitespace-nowrap text-[#b42318] dark:text-[#ffb4aa]'}>{point.role === 'operator' ? 'operator attribution' : `${point.count} observation${point.count === 1 ? '' : 's'}`}</span>
@@ -7559,7 +7559,7 @@ function MapZoomButton({ label, onClick, wide = false }: { label: string; onClic
         <button
             type='button'
             onClick={onClick}
-            className={`rounded-md border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${wide ? 'min-w-16' : 'min-w-8'}`}
+            className={`min-h-8 rounded-md border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${wide ? 'min-w-16' : 'min-w-8'}`}
         >
             {label}
         </button>
