@@ -274,10 +274,39 @@ const missingDestinationPlan = buildDwmAlertWebhookDispatchPlan({
 })
 const missingDestinationIntent = buildDwmAlertWebhookMissingDeliveryIntent(missingDestinationPlan)
 const requestedMissingDestinationIntent = buildDwmAlertWebhookMissingDeliveryIntent(missingDestinationPlan, 'destination_requested_missing')
+const missingDestinationReadiness = buildDwmAlertWebhookReadinessHandoff({
+    ownerId: 'owner_contract',
+    input: {
+        organizationId: 'org_contract',
+        alertId: 'alert_missing_destination_contract',
+        eventType: 'dwm.alert.created',
+        watchlistItemId: 'watchlist_missing_destination_contract',
+        dedupeKey: 'dwm_dedupe_missing_destination_contract',
+        route: 'customer_discord',
+        casePath: '/dashboard/dwm?alert=alert_missing_destination_contract',
+        evidenceCount: 1,
+        sourceFamily: 'telegram_public',
+        alert: {
+            id: 'alert_missing_destination_contract',
+            title: 'Missing destination alert-created event',
+            severity: 'medium',
+            sourceFamily: 'telegram_public',
+            evidence: [{ label: 'Capture', detail: 'Alert-created fixture proof.' }],
+            provenance: { captureIds: ['capture_missing_destination'], sourceIds: ['source_missing_destination'] },
+            watchlist: { id: 'watchlist_missing_destination_contract', terms: ['missing.example'] },
+        },
+    },
+    destinations: [],
+    deliveries: [],
+    auditEvents: [],
+    liveDeliveryEnabled: false,
+})
 expect(missingDestinationIntent?.reason === 'missing_destination' && missingDestinationIntent.error.includes('no enabled webhook destination'), 'Missing destination dispatch should create a durable skipped delivery intent.', missingDestinationIntent)
 expect(requestedMissingDestinationIntent?.reason === 'requested_destination_not_found' && requestedMissingDestinationIntent.requestedDestinationId === 'destination_requested_missing', 'Requested missing destination should create a specific skipped delivery intent.', requestedMissingDestinationIntent)
 expect(missingDestinationIntent?.idempotencyKey === 'dwm.alert.created:org_contract:missing_destination:dwm_dedupe_missing_destination_contract', 'Missing destination intent should use a stable org alert idempotency key.', missingDestinationIntent)
 expect(missingDestinationIntent?.persistable === true && !JSON.stringify([missingDestinationIntent, requestedMissingDestinationIntent]).includes(secret), 'Missing destination intents should be persistable and secret-free.', { missingDestinationIntent, requestedMissingDestinationIntent })
+expect(missingDestinationReadiness.alertEventConsumer.ready === false && missingDestinationReadiness.alertEventConsumer.state === 'missing_destination' && missingDestinationReadiness.alertEventConsumer.payloadPreview === null, 'Alert event consumer should expose missing-destination readiness without fabricating a send preview.', missingDestinationReadiness.alertEventConsumer)
+expect(missingDestinationReadiness.alertEventConsumer.blockerCodes.includes('no_enabled_destination') && missingDestinationReadiness.alertEventConsumer.requiredFields.orgId === true, 'Alert event consumer should keep typed blockers and required fields for missing destinations.', missingDestinationReadiness.alertEventConsumer)
 
 const bridgePayload = buildDwmAlertDeliveryPayload({
     destination: {
@@ -876,6 +905,8 @@ const overlappingOrgBPayload = buildDwmAlertDeliveryPayload({
     deliveryId: 'delivery_overlap_b_payload',
     alert: buildDwmAlertWebhookNotificationInput(overlappingOrgAlertB).alert || {},
 }) as Record<string, unknown>
+const overlappingOrgAAlertEventConsumer = overlappingOrgAReadiness.alertEventConsumer
+const overlappingOrgBAlertEventConsumer = overlappingOrgBReadiness.alertEventConsumer
 expect(overlappingOrgAReadiness.schemaVersion === 'dwm.webhook.alert_readiness_handoff.v1' && overlappingOrgAReadiness.orgId === 'org_overlap_a', 'Alert readiness handoff should expose org A readiness.', overlappingOrgAReadiness)
 expect(overlappingOrgAReadiness.destinationSelection.selectedDestinationIds.join(',') === 'destination_overlap_org_a', 'Alert readiness handoff should select only org A destination for overlapping term.', overlappingOrgAReadiness)
 expect(overlappingOrgBReadiness.destinationSelection.selectedDestinationIds.join(',') === 'destination_overlap_org_b', 'Alert readiness handoff should select only org B destination for overlapping term.', overlappingOrgBReadiness)
@@ -883,6 +914,12 @@ expect(overlappingOrgAReadiness.deliveryRetryPersistence.deliveryKeys.every(item
 expect(overlappingOrgBReadiness.deliveryRetryPersistence.deliveryKeys.every(item => item.orgId === 'org_overlap_b' && item.destinationId !== 'destination_overlap_org_a'), 'Alert readiness retry proof should not leak org A deliveries into org B.', overlappingOrgBReadiness.deliveryRetryPersistence)
 expect(overlappingOrgAReadiness.deliveryRetryPersistence.counts.retryable === 1 && overlappingOrgAReadiness.blockers.some(item => item.code === 'retry_scheduled' && item.blocking === false), 'Alert readiness should expose retry/backoff without blocking dry-run customer proof.', overlappingOrgAReadiness)
 expect(overlappingOrgBReadiness.deliveryRetryPersistence.counts.replay === 1 && overlappingOrgBReadiness.deliveryRetryPersistence.counts.duplicateDedupe === 0, 'Alert readiness should expose replay attempts without inventing duplicate replay state.', overlappingOrgBReadiness)
+expect(overlappingOrgAAlertEventConsumer.schemaVersion === 'dwm.webhook.alert_event_consumer.v1' && overlappingOrgAAlertEventConsumer.ready === true && overlappingOrgAAlertEventConsumer.noNetwork === true, 'Alert event consumer should prove alert-created webhook readiness without network delivery.', overlappingOrgAAlertEventConsumer)
+expect(overlappingOrgAAlertEventConsumer.requiredFields.orgId === true && overlappingOrgAAlertEventConsumer.requiredFields.destinationId === true && overlappingOrgAAlertEventConsumer.requiredFields.provenance === true, 'Alert event consumer should expose required alert/org/watchlist/provenance fields.', overlappingOrgAAlertEventConsumer.requiredFields)
+expect(overlappingOrgAAlertEventConsumer.persistenceTargets.deliveryAttempt === true && overlappingOrgAAlertEventConsumer.persistenceTargets.retryPersistence === true && overlappingOrgAAlertEventConsumer.persistenceTargets.idempotencyKey === 'dwm.alert.created:org_overlap_a:destination_overlap_org_a:dwm_overlap_org_a', 'Alert event consumer should expose delivery persistence and idempotency targets.', overlappingOrgAAlertEventConsumer.persistenceTargets)
+expect(overlappingOrgAAlertEventConsumer.payloadPreview?.discord.fieldNames.some(name => name.toLowerCase() === 'source family') && overlappingOrgAAlertEventConsumer.payloadPreview.context.watchlistId === 'watchlist_overlap_a', 'Alert event consumer should expose Discord-ready payload preview context.', overlappingOrgAAlertEventConsumer.payloadPreview)
+expect(overlappingOrgAAlertEventConsumer.payloadPreview?.redaction.webhookSecretExposed === false && overlappingOrgAAlertEventConsumer.payloadPreview.redaction.endpointExposed === false, 'Alert event consumer payload preview should redact destination secrets.', overlappingOrgAAlertEventConsumer.payloadPreview)
+expect(overlappingOrgBAlertEventConsumer.payloadPreview?.context.replay === true && overlappingOrgBAlertEventConsumer.persistenceTargets.idempotencyKey === 'dwm.alert.replayed:org_overlap_b:destination_overlap_org_b:dwm_overlap_org_b', 'Alert event consumer should preserve replay event idempotency.', overlappingOrgBAlertEventConsumer)
 expect(JSON.stringify(overlappingOrgAPayload).includes('Org A Customer') && !JSON.stringify(overlappingOrgAPayload).includes('Org B Customer'), 'Org A Discord payload should not leak org B customer context.', overlappingOrgAPayload)
 expect(JSON.stringify(overlappingOrgBPayload).includes('Org B Customer') && !JSON.stringify(overlappingOrgBPayload).includes('Org A Customer'), 'Org B Discord payload should not leak org A customer context.', overlappingOrgBPayload)
 expect(!JSON.stringify([overlappingOrgAReadiness, overlappingOrgBReadiness, overlappingOrgAPayload, overlappingOrgBPayload]).includes(secret), 'Overlapping org readiness and payloads should redact webhook secrets.', { overlappingOrgAReadiness, overlappingOrgBReadiness })
@@ -3413,6 +3450,12 @@ console.log(JSON.stringify({
         'workflow replay handoff type contract',
         'adapter destination dry-run/live selection',
         'API delivery bridge persisted-alert normalization',
+        'alert event consumer created readiness fixture',
+        'alert event consumer required field proof',
+        'alert event consumer persistence targets',
+        'alert event consumer redacted Discord preview',
+        'alert event consumer replay idempotency',
+        'alert event consumer missing destination denial',
         'replay alert/dedupe/case linkage',
         'replay confidence/workflow context',
         'idempotent duplicate replay key',
@@ -3866,6 +3909,12 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDestinationReadiness.schemaVersion',
             'orgAlertDelivery.alertDestinationReadiness.destinationSelection.selectedDestinationIds',
             'orgAlertDelivery.alertDestinationReadiness.deliveryRetryPersistence.deliveryKeys[]',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.schemaVersion',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.requiredFields',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.persistenceTargets.idempotencyKey',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.discord.fieldNames',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.context',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.blockerCodes',
             'orgAlertDelivery.deliveryOutcome.schemaVersion',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].latestAttempt.deliveryId',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].preview.discord.fieldNames',
