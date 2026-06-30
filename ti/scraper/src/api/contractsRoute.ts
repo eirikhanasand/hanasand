@@ -18,6 +18,9 @@ export function contractIndex() {
     route("GET", "/v1/quality/evaluate"),
     route("GET", "/v1/ops/product-slo"),
     route("GET", "/v1/contracts"),
+    route("GET", "/v1/dwm/watchlists"),
+    route("POST", "/v1/dwm/watchlists"),
+    route("GET", "/v1/dwm/alerts/generation-readiness"),
     route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
     route("PATCH", "/v1/cases/:caseId"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
@@ -29,6 +32,32 @@ export function contractIndex() {
     schemaVersion: "ti.api_contract_index.compact.v4",
     routeInventory: { count: routes.length, routes },
     surfaces: [
+      {
+        id: "shared_watchlist_alert_export",
+        ownerLane: "org",
+        route: "/v1/dwm/watchlists",
+        downstreamRoutes: {
+          alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+          alertRebuild: "/v1/dwm/alerts/rebuild",
+          webhookDelivery: "/v1/dwm/webhooks/deliver"
+        },
+        methods: ["GET", "POST"],
+        schemas: {
+          export: "organization.shared_watchlist_alert_generation_export.v1",
+          consumers: "organization.shared_watchlist_alert_generation_consumers.v1",
+          runtimeWatchlist: "organization.watchlist_alert_generation.v1"
+        },
+        scopeFields: ["tenantId", "organizationId", "member.role", "member.status"],
+        writeFields: ["organizationId", "terms", "webhookDestinationId", "reason"],
+        recordFields: ["watchlistId", "watchlistItemId", "term", "normalizedTerm", "alertGeneratorKey", "lifecycle.status", "dedupe.key"],
+        consumerFields: ["runtimeWatchlists", "termExport.alertGeneratorKeys", "termExport.watchlistItemIds", "blockers.code"],
+        blockerCodes: ["not_member", "member_inactive", "role_not_allowed", "visibility_denied", "org_lifecycle_blocked", "term_org_mismatch", "no_active_watchlist_terms"],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false
+        }
+      },
       {
         id: "alert_case_handoff",
         ownerLane: "case",

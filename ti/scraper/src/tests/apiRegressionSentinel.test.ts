@@ -15,6 +15,8 @@ describe("api regression sentinel", () => {
       "/api/ti/search",
       "/v1/darkweb/search",
       "/v1/ops/product-slo",
+      "/v1/dwm/watchlists",
+      "/v1/dwm/alerts/generation-readiness",
       "/v1/dwm/alerts/:alertId/case-handoff",
       "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
@@ -59,6 +61,49 @@ describe("api regression sentinel", () => {
     });
     expect(JSON.stringify(contract)).not.toContain("https://discord.com");
     expect(JSON.stringify(contract)).not.toContain("authorization:");
+  });
+
+  test("publishes the shared watchlist alert export contract for org and alert consumers", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const exportSurface = contract.surfaces.find((surface: any) => surface.id === "shared_watchlist_alert_export");
+
+    expect(contract.routeInventory.routes).toEqual(expect.arrayContaining([
+      { method: "GET", path: "/v1/dwm/watchlists" },
+      { method: "POST", path: "/v1/dwm/watchlists" },
+      { method: "GET", path: "/v1/dwm/alerts/generation-readiness" }
+    ]));
+    expect(exportSurface).toMatchObject({
+      ownerLane: "org",
+      route: "/v1/dwm/watchlists",
+      downstreamRoutes: {
+        alertGenerationReadiness: "/v1/dwm/alerts/generation-readiness",
+        alertRebuild: "/v1/dwm/alerts/rebuild",
+        webhookDelivery: "/v1/dwm/webhooks/deliver"
+      },
+      methods: ["GET", "POST"],
+      schemas: {
+        export: "organization.shared_watchlist_alert_generation_export.v1",
+        consumers: "organization.shared_watchlist_alert_generation_consumers.v1",
+        runtimeWatchlist: "organization.watchlist_alert_generation.v1"
+      },
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status"]),
+      writeFields: expect.arrayContaining(["organizationId", "terms", "webhookDestinationId", "reason"]),
+      recordFields: expect.arrayContaining(["watchlistId", "watchlistItemId", "alertGeneratorKey", "lifecycle.status", "dedupe.key"]),
+      consumerFields: expect.arrayContaining(["runtimeWatchlists", "termExport.alertGeneratorKeys", "blockers.code"]),
+      blockerCodes: expect.arrayContaining(["not_member", "member_inactive", "role_not_allowed", "term_org_mismatch", "no_active_watchlist_terms"]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false
+      }
+    });
+    expect(JSON.stringify(exportSurface)).not.toContain("https://discord.com");
+    expect(JSON.stringify(exportSurface)).not.toContain("rawText");
+    expect(JSON.stringify(exportSurface)).not.toContain("password");
   });
 
   test("publishes the alert case handoff contract for workflow consumers", async () => {
