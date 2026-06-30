@@ -248,18 +248,28 @@ export default async function Page({
 function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
     const stateLabel = scoreboard.fullChainReady ? 'ready' : 'needs proof'
     const firstMissingRow = scoreboard.rows.find(row => row.state !== 'ready')
+    const ledger = scoreboard.productReadinessAggregate
+    const ledgerValue = ledger.state === 'unavailable'
+        ? 'not configured'
+        : `${homeStateLabel(ledger.state)}; ${ledger.customerVisibleBlockedCount}/${ledger.rowCount} blocked`
     const nextStep = scoreboard.fullChainReady
         ? 'Source, alert, delivery, and analyst proof are loaded.'
         : formatProofText(scoreboard.firstBlocker || 'Product readiness proof is not loaded.')
 
     return (
         <div
-            className='grid w-full max-w-5xl gap-3 rounded-xl border border-[#d9e2ef] bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_1.5fr_auto]'
+            className='grid w-full max-w-6xl gap-3 rounded-xl border border-[#d9e2ef] bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
             data-home-product-readiness='true'
             data-home-readiness-state={stateLabel}
             data-home-readiness-ready-rows={scoreboard.readyRows}
             data-home-readiness-total-rows={scoreboard.totalRows}
             data-home-readiness-query={scoreboard.query}
+            data-home-readiness-deploy-state={scoreboard.deployGate.state}
+            data-home-readiness-ledger-state={ledger.state}
+            data-home-readiness-ledger-source={ledger.source}
+            data-home-readiness-ledger-blocked-count={ledger.customerVisibleBlockedCount}
+            data-home-readiness-ledger-row-count={ledger.rowCount}
+            data-home-readiness-ledger-deploy-risk={ledger.deployRisk}
             data-home-first-blocker-row={firstMissingRow?.id || ''}
             data-home-first-blocker-owner={firstMissingRow?.ownerLane || ''}
             data-home-first-blocker-contract={firstMissingRow?.backendProofContractVersion || ''}
@@ -268,6 +278,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
             <HomeReadinessFact label='Product category' value='Company exposure monitoring API and analyst console' />
             <HomeReadinessFact label='Proof state' value={`${scoreboard.readyRows}/${scoreboard.totalRows} rows ready`} />
             <HomeReadinessFact label='Checked' value={formatChecked(scoreboard.generatedAt)} />
+            <HomeReadinessFact label='Ledger' value={ledgerValue} />
             <HomeReadinessFact label={scoreboard.fullChainReady ? 'Workflow proof' : 'Next blocker'} value={nextStep} />
             <Link
                 href={`/readiness?q=${encodeURIComponent(scoreboard.query)}`}
@@ -338,7 +349,7 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
                             <p className='min-w-0 wrap-break-word text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
                                 {item.state === 'ready' ? item.proofSummary : formatProofText(item.blocker || item.detail)}
                             </p>
-                            <Link href={item.href} className='w-fit text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
+                            <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
                                 Open
                             </Link>
                         </div>
