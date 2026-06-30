@@ -1003,7 +1003,32 @@ type SelectedWatchlistPlan = {
         route: string
         evidenceRefs: string[]
         sourceFamilies: string[]
+        evidenceRows: Array<{
+            sourceName: string
+            sourceId?: string
+            provenance: string
+            reportDate?: string
+            captureId?: string
+            sourceRequestId?: string
+            sourceFamily?: string
+            parserStatus?: string
+            lastCollectedAt?: string
+            confidence?: number
+            shownBecause: string
+        }>
+        handoffRows: Array<{
+            rowId: string
+            kind: TiActionabilityModel['orgRelevance']['handoffRows'][number]['kind']
+            state: TiActionabilityModel['orgRelevance']['handoffRows'][number]['state']
+            ownerLane: TiActionabilityModel['readiness']['blockers'][number]['ownerLane']
+            label: string
+            action: string
+            route: string
+            sourceFamily: string
+            blockerCount: number
+        }>
         blockers: string[]
+        blockerOwners: TiActionabilityModel['readiness']['blockers'][number]['ownerLane'][]
         nextAction: string
     }>
     intersections: Array<{
@@ -4149,6 +4174,37 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                                 </span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            {row.evidenceRows.length ? (
+                                <div data-ti-selected-watchlist-evidence='true' className='mt-2 grid gap-1.5'>
+                                    {row.evidenceRows.slice(0, 2).map(source => (
+                                        <div key={`${row.kind}:${row.value}:${source.sourceId ?? source.sourceName}:${source.captureId ?? source.provenance}`} className='rounded-md border border-[#eef1f5] bg-[#fbfcfe] px-2 py-1.5 dark:border-[#273244] dark:bg-[#131c29]'>
+                                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                                <div className='min-w-0'>
+                                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{source.sourceName}{source.sourceId ? ` · source ${source.sourceId}` : ''}</p>
+                                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                                        {source.sourceFamily ? formatLabel(source.sourceFamily) : 'source family pending'} · {source.reportDate ? formatDate(source.reportDate) : source.lastCollectedAt ? formatDate(source.lastCollectedAt) : 'collection date pending'} · {source.parserStatus ?? 'parser status pending'}
+                                                    </p>
+                                                </div>
+                                                <span className={sourceHealthChipClass(source.captureId ? 'ready' : 'blocked')}>{source.captureId ? `capture ${source.captureId}` : 'capture needed'}</span>
+                                            </div>
+                                            <p className='mt-1 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{source.provenance}</p>
+                                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{source.shownBecause}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {row.handoffRows.length ? (
+                                <div data-ti-selected-watchlist-handoff-rows='true' className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                    {row.handoffRows.slice(0, 4).map(item => (
+                                        <span key={`${row.kind}:${row.value}:${item.rowId}`} className={sourceHealthChipClass(item.state === 'ready' ? 'ready' : item.state === 'blocked' ? 'blocked' : 'review')}>
+                                            {readinessOwnerLabel(item.ownerLane)} · {formatLabel(item.kind)}
+                                        </span>
+                                    ))}
+                                    {row.blockerOwners.map(owner => (
+                                        <span key={`${row.kind}:${row.value}:owner:${owner}`} className={sourceHealthChipClass('blocked')}>{readinessOwnerLabel(owner)}</span>
+                                    ))}
+                                </div>
+                            ) : null}
                             {row.blockers.length ? (
                                 <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
                             ) : null}
@@ -5347,11 +5403,28 @@ function selectedWatchlistPlanFor(
             term.sourceEvidenceRefs.some(ref => ref === source.sourceId || ref === source.captureId || ref === source.provenance)
             || source.supportsTerms.some(value => value.toLowerCase() === term.value.toLowerCase())
         )
+        const evidenceRefs = unique([
+            ...term.sourceEvidenceRefs,
+            ...(matchingIntersection?.sourceEvidenceRefs ?? []),
+            ...sourceEvidence.flatMap(source => [source.sourceId, source.captureId, source.provenance].filter((value): value is string => Boolean(value))),
+        ]).slice(0, 8)
+        const handoffRows = actionability.orgRelevance.handoffRows.filter(row =>
+            row.label.toLowerCase().includes(term.value.toLowerCase())
+            || row.provenanceRefs.some(ref => evidenceRefs.includes(ref))
+            || (matchingIntersection?.watchlistItemId ? row.watchlistItemId === matchingIntersection.watchlistItemId : false)
+            || (matchingIntersection?.alertIds ?? []).some(alertId => row.alertId === alertId)
+            || (matchingIntersection?.casePaths ?? []).some(casePath => row.casePath === casePath)
+        )
         const blockersForTerm = unique([
             ...(matchingIntersection?.blockers.map(blocker => blocker.handoff) ?? []),
+            ...handoffRows.flatMap(row => row.blockers.map(blocker => blocker.handoff)),
             ...(!term.matched ? actionability.watchlistRelevance.blockers : []),
             ...(sourceEvidence.some(source => source.captureId) ? [] : ['Capture evidence is required before alert rebuild.']),
         ]).slice(0, 6)
+        const blockerOwners = unique([
+            ...(matchingIntersection?.blockers.map(blocker => blocker.ownerLane) ?? []),
+            ...handoffRows.flatMap(row => row.blockers.map(blocker => blocker.ownerLane)),
+        ]).slice(0, 4) as SelectedWatchlistPlan['relevanceRows'][number]['blockerOwners']
         const alertable = Boolean(matchingIntersection?.alertIds.length && matchingIntersection.captureIds.length && !blockersForTerm.length)
         return {
             kind: term.kind,
@@ -5359,13 +5432,34 @@ function selectedWatchlistPlanFor(
             fit: term.matched ? 'matched' as const : blockersForTerm.length ? 'blocked' as const : 'near' as const,
             alertable,
             route: matchingIntersection?.route ?? actionability.exportPayloads.watchlist.backedRoute ?? actionability.exportPayloads.watchlist.route,
-            evidenceRefs: unique([
-                ...term.sourceEvidenceRefs,
-                ...(matchingIntersection?.sourceEvidenceRefs ?? []),
-                ...sourceEvidence.flatMap(source => [source.sourceId, source.captureId, source.provenance].filter((value): value is string => Boolean(value))),
-            ]).slice(0, 8),
+            evidenceRefs,
             sourceFamilies: unique(sourceEvidence.flatMap(source => source.sourceFamily ? [source.sourceFamily] : [])).slice(0, 4),
+            evidenceRows: sourceEvidence.slice(0, 4).map(source => ({
+                sourceName: source.sourceName,
+                sourceId: source.sourceId,
+                provenance: source.provenance,
+                reportDate: source.reportDate,
+                captureId: source.captureId,
+                sourceRequestId: source.sourceRequestId,
+                sourceFamily: source.sourceFamily,
+                parserStatus: source.parserStatus,
+                lastCollectedAt: source.lastCollectedAt,
+                confidence: source.confidence,
+                shownBecause: source.shownBecause,
+            })),
+            handoffRows: handoffRows.slice(0, 4).map(row => ({
+                rowId: row.rowId,
+                kind: row.kind,
+                state: row.state,
+                ownerLane: row.ownerLane,
+                label: row.label,
+                action: row.action,
+                route: row.route,
+                sourceFamily: row.sourceFamily,
+                blockerCount: row.blockers.length,
+            })),
             blockers: blockersForTerm,
+            blockerOwners,
             nextAction: alertable
                 ? 'Rebuild alert review from the persisted watchlist item and selected source evidence.'
                 : blockersForTerm.length ? `Resolve ${displayRequirementList(blockersForTerm.slice(0, 2))} before alert rebuild.` : 'Review this candidate against the organization watchlist before alert rebuild.',
