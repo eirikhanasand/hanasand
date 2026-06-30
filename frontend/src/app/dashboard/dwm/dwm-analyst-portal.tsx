@@ -116,6 +116,7 @@ type DataHealthItem = {
 }
 
 type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
+type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 
 export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth }: PortalProps) {
     const router = useRouter()
@@ -308,6 +309,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                                 sourceHealth={operations?.sourceHealth ?? []}
                                 localState={localCaseState[selectedAlert.id]}
                                 busyAction={busyAction}
+                                actionMessage={message}
                                 onLocalStateChange={(patch) => {
                                     setLocalCaseState(current => ({
                                         ...current,
@@ -334,24 +336,19 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                 </div>
             </section>
 
-            {message && (
-                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
-                    {message.text}
-                </p>
-            )}
-
             <DwmWorkflowActions initialTerms={snapshot.watchlist.map(term => term.value)} />
         </div>
     )
 }
 
-function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
+function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     sourceCoverage: DwmProductSnapshot['sourceCoverage']
     sourceHealth: OperationsSnapshot['sourceHealth']
     localState?: LocalCaseState
     busyAction: string | null
+    actionMessage: { ok: boolean, text: string } | null
     onLocalStateChange: (patch: LocalCaseState) => void
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
@@ -373,7 +370,13 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     }
     const sourceFamilies = Array.from(new Set(alert.evidence.map(item => item.sourceFamily)))
     const [sourceFilter, setSourceFilter] = useState('all')
-    const visibleEvidence = sourceFilter === 'all' ? alert.evidence : alert.evidence.filter(item => item.sourceFamily === sourceFilter)
+    const [investigationTab, setInvestigationTab] = useState<InvestigationTab>('evidence')
+    const entities = buildExposureEntities(alert, evidenceSummary, workflowContext, routingContext)
+    const [selectedEntityKey, setSelectedEntityKey] = useState('')
+    const selectedEntity = entities.find(entity => entity.key === selectedEntityKey)
+    const sourceFilteredEvidence = sourceFilter === 'all' ? alert.evidence : alert.evidence.filter(item => item.sourceFamily === sourceFilter)
+    const entityFilteredEvidence = selectedEntity ? sourceFilteredEvidence.filter(item => evidenceMatchesEntity(item, selectedEntity)) : sourceFilteredEvidence
+    const visibleEvidence = entityFilteredEvidence.length ? entityFilteredEvidence : sourceFilteredEvidence
     const [selectedEvidenceId, setSelectedEvidenceId] = useState(alert.evidence[0]?.id ?? '')
     const selectedEvidence = alert.evidence.find(item => item.id === selectedEvidenceId) ?? visibleEvidence[0] ?? alert.evidence[0]
     const [copiedHash, setCopiedHash] = useState('')
@@ -405,18 +408,11 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 deliveries={deliveries}
                 assignee={assignee}
                 busyAction={busyAction}
+                actionMessage={actionMessage}
                 onUpdate={onUpdate}
                 onReplay={onReplay}
                 onTest={onTest}
                 onSend={onSend}
-            />
-
-            <SourceCoverageStrip
-                evidenceSummary={evidenceSummary}
-                sourceCoverage={sourceCoverage}
-                sourceHealth={sourceHealth}
-                sourceFilter={sourceFilter}
-                onSourceFilter={setSourceFilter}
             />
 
             <section className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:grid-cols-2 xl:grid-cols-5'>
@@ -455,13 +451,6 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                     </div>
                 </div>
             </section>
-
-            <ExposureEntitiesPanel
-                alert={alert}
-                evidenceSummary={evidenceSummary}
-                workflowContext={workflowContext}
-                routingContext={routingContext}
-            />
 
             <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.55fr_1fr_auto] lg:items-end'>
                 <label className='grid gap-2'>
@@ -505,21 +494,122 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 <CaseBrief label='Customer route' value={`${stateLabel(alert.webhookDelivery.recommendedRoute)} · ${alert.webhookDelivery.dedupeKey}`} />
             </section>
 
-            <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
-                <SourceProvenancePanel
-                    alert={alert}
-                    sourceFamilies={sourceFamilies}
-                    sourceFilter={sourceFilter}
-                    selectedEvidence={selectedEvidence}
-                    visibleEvidence={visibleEvidence}
-                    copiedHash={copiedHash}
-                    onSourceFilter={setSourceFilter}
-                    onSelectEvidence={setSelectedEvidenceId}
-                    onCopyHash={copyHash}
-                />
+            <InvestigationTabs active={investigationTab} onChange={setInvestigationTab} />
 
-                <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
-            </section>
+            {investigationTab === 'evidence' && (
+                <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
+                    <SourceProvenancePanel
+                        alert={alert}
+                        sourceFamilies={sourceFamilies}
+                        sourceFilter={sourceFilter}
+                        selectedEvidence={selectedEvidence}
+                        selectedEntity={selectedEntity}
+                        visibleEvidence={visibleEvidence}
+                        copiedHash={copiedHash}
+                        onSourceFilter={setSourceFilter}
+                        onSelectEvidence={setSelectedEvidenceId}
+                        onCopyHash={copyHash}
+                    />
+                    <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
+                </section>
+            )}
+
+            {investigationTab === 'entities' && (
+                <section className='grid gap-4 lg:grid-cols-[1fr_0.82fr]'>
+                    <ExposureEntitiesPanel
+                        entities={entities}
+                        selectedEntityKey={selectedEntityKey}
+                        workflowContext={workflowContext}
+                        onSelectEntity={(key) => {
+                            const entity = entities.find(row => row.key === key)
+                            setSelectedEntityKey(key)
+                            const nextEvidence = entity ? alert.evidence.find(item => evidenceMatchesEntity(item, entity)) : undefined
+                            if (nextEvidence) setSelectedEvidenceId(nextEvidence.id)
+                            setInvestigationTab('evidence')
+                        }}
+                    />
+                    <SourceProvenancePanel
+                        alert={alert}
+                        sourceFamilies={sourceFamilies}
+                        sourceFilter={sourceFilter}
+                        selectedEvidence={selectedEvidence}
+                        selectedEntity={selectedEntity}
+                        visibleEvidence={visibleEvidence}
+                        copiedHash={copiedHash}
+                        onSourceFilter={setSourceFilter}
+                        onSelectEvidence={setSelectedEvidenceId}
+                        onCopyHash={copyHash}
+                    />
+                </section>
+            )}
+
+            {investigationTab === 'sources' && (
+                <section className='grid gap-4'>
+                    <SourceCoverageStrip
+                        evidenceSummary={evidenceSummary}
+                        sourceCoverage={sourceCoverage}
+                        sourceHealth={sourceHealth}
+                        sourceFilter={sourceFilter}
+                        onSourceFilter={(value) => {
+                            setSourceFilter(value)
+                            setInvestigationTab('evidence')
+                        }}
+                    />
+                    <SourceProvenancePanel
+                        alert={alert}
+                        sourceFamilies={sourceFamilies}
+                        sourceFilter={sourceFilter}
+                        selectedEvidence={selectedEvidence}
+                        selectedEntity={selectedEntity}
+                        visibleEvidence={visibleEvidence}
+                        copiedHash={copiedHash}
+                        onSourceFilter={setSourceFilter}
+                        onSelectEvidence={setSelectedEvidenceId}
+                        onCopyHash={copyHash}
+                    />
+                </section>
+            )}
+
+            {investigationTab === 'delivery' && (
+                <section className='grid gap-4 lg:grid-cols-[0.9fr_1.1fr]'>
+                    <DeliveryCaseActivityRail alert={alert} deliveries={deliveries} timeline={timeline} workflowContext={workflowContext} />
+                    <SourceProvenancePanel
+                        alert={alert}
+                        sourceFamilies={sourceFamilies}
+                        sourceFilter={sourceFilter}
+                        selectedEvidence={selectedEvidence}
+                        selectedEntity={selectedEntity}
+                        visibleEvidence={visibleEvidence}
+                        copiedHash={copiedHash}
+                        onSourceFilter={setSourceFilter}
+                        onSelectEvidence={setSelectedEvidenceId}
+                        onCopyHash={copyHash}
+                    />
+                </section>
+            )}
+        </div>
+    )
+}
+
+function InvestigationTabs({ active, onChange }: { active: InvestigationTab, onChange: (tab: InvestigationTab) => void }) {
+    const tabs: Array<{ id: InvestigationTab, label: string }> = [
+        { id: 'evidence', label: 'Evidence' },
+        { id: 'entities', label: 'Entities' },
+        { id: 'sources', label: 'Sources' },
+        { id: 'delivery', label: 'Delivery/case' },
+    ]
+    return (
+        <div className='flex gap-2 overflow-x-auto rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-2'>
+            {tabs.map(tab => (
+                <button
+                    key={tab.id}
+                    type='button'
+                    onClick={() => onChange(tab.id)}
+                    className={`h-9 shrink-0 rounded-lg border px-3 text-xs font-semibold transition ${active === tab.id ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}
+                >
+                    {tab.label}
+                </button>
+            ))}
         </div>
     )
 }
@@ -585,13 +675,12 @@ function SourceCoverageStrip({ evidenceSummary, sourceCoverage, sourceHealth, so
     )
 }
 
-function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routingContext }: {
-    alert: PortalAlert
-    evidenceSummary: NonNullable<PortalAlert['evidenceSummary']>
+function ExposureEntitiesPanel({ entities, selectedEntityKey, workflowContext, onSelectEntity }: {
+    entities: ReturnType<typeof buildExposureEntities>
+    selectedEntityKey: string
     workflowContext: ReturnType<typeof selectedWorkflowContext>
-    routingContext: NonNullable<PortalAlert['routingContext']>
+    onSelectEntity: (key: string) => void
 }) {
-    const entities = buildExposureEntities(alert, evidenceSummary, workflowContext, routingContext)
     return (
         <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
@@ -618,7 +707,7 @@ function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routin
                     </thead>
                     <tbody className='divide-y divide-[#eef1f5]'>
                         {entities.map(entity => (
-                            <tr key={`${entity.kind}:${entity.name}`} className='align-top'>
+                            <tr key={entity.key} onClick={() => onSelectEntity(entity.key)} className={`cursor-pointer align-top transition hover:bg-[#f8fbff] ${selectedEntityKey === entity.key ? 'bg-[#f8fbff]' : 'bg-white'}`}>
                                 <td className='px-4 py-3'>
                                     <p className='font-semibold text-[#171a21]'>{entity.name}</p>
                                     <p className='mt-0.5 text-[11px] text-[#667085]'>{entity.scope}</p>
@@ -632,7 +721,12 @@ function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routin
                                 </td>
                                 <td className='px-4 py-3 font-semibold text-[#475467]'>{relativeTimeLabel(entity.newestAt)}</td>
                                 <td className='px-4 py-3 font-semibold text-[#475467]'>{entity.confidence}%</td>
-                                <td className='px-4 py-3 text-[#475467]'>{entity.nextAction}</td>
+                                <td className='px-4 py-3'>
+                                    <button type='button' onClick={(event) => { event.stopPropagation(); onSelectEntity(entity.key) }} className='inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                        Pivot
+                                    </button>
+                                    <p className='mt-1 text-[11px] text-[#667085]'>{entity.nextAction}</p>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
@@ -642,11 +736,12 @@ function ExposureEntitiesPanel({ alert, evidenceSummary, workflowContext, routin
     )
 }
 
-function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, visibleEvidence, copiedHash, onSourceFilter, onSelectEvidence, onCopyHash }: {
+function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEvidence, selectedEntity, visibleEvidence, copiedHash, onSourceFilter, onSelectEvidence, onCopyHash }: {
     alert: PortalAlert
     sourceFamilies: string[]
     sourceFilter: string
     selectedEvidence?: PortalAlert['evidence'][number]
+    selectedEntity?: ReturnType<typeof buildExposureEntities>[number]
     visibleEvidence: PortalAlert['evidence']
     copiedHash: string
     onSourceFilter: (value: string) => void
@@ -658,7 +753,7 @@ function SourceProvenancePanel({ alert, sourceFamilies, sourceFilter, selectedEv
             <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
                 <div>
                     <h3 className='text-sm font-semibold text-[#171a21]'>Source provenance</h3>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Timeline, source family, capture state, and customer-safe excerpts.</p>
+                    <p className='mt-0.5 text-xs text-[#667085]'>{selectedEntity ? `${selectedEntity.name} · ${visibleEvidence.length} row${visibleEvidence.length === 1 ? '' : 's'}` : 'Timeline, source family, capture state, and customer-safe excerpts.'}</p>
                 </div>
                 <RotateCcw className='h-4 w-4 text-[#3056d3]' />
             </div>
@@ -789,11 +884,12 @@ function SourceFilterChip({ label, active, onClick }: { label: string, active: b
     )
 }
 
-function SelectedActionBar({ alert, deliveries, assignee, busyAction, onUpdate, onReplay, onTest, onSend }: {
+function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMessage, onUpdate, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     assignee: string
     busyAction: string | null
+    actionMessage: { ok: boolean, text: string } | null
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
     onTest: (alertId: string) => Promise<void>
@@ -810,15 +906,22 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, onUpdate, 
                 <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'route available' : 'route unavailable'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'candidate pending'} />
             </div>
-            <div className='flex flex-wrap gap-2 xl:justify-end'>
-                <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
-                <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
-                <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
-                <CaseButton busy={busyAction === `test:${alert.id}`} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
-                <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
-                <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
-                <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
-                <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+            <div className='grid gap-2'>
+                <div className='flex flex-wrap gap-2 xl:justify-end'>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
+                    <CaseButton busy={busyAction === `replay:${alert.id}`} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
+                    <CaseButton busy={busyAction === `test:${alert.id}`} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
+                    <CaseButton busy={busyAction === `send:${alert.id}`} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='false' onClick={() => onUpdate(alert.id, 'false_positive', 'muted', 'Suppressed as false positive.', persistedOwner)}>Suppress</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='ready' onClick={() => onUpdate(alert.id, 'resolved', alert.deliveryState === 'delivered' ? 'delivered' : 'muted', 'Closed by analyst.', persistedOwner)}>Close</CaseButton>
+                    <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
+                </div>
+                {actionMessage && (
+                    <p className={`justify-self-start rounded-lg border px-3 py-2 text-xs font-semibold xl:justify-self-end ${actionMessage.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
+                        {actionMessage.text}
+                    </p>
+                )}
             </div>
         </section>
     )
@@ -1086,8 +1189,10 @@ function buildExposureEntities(
     const baseScope = workflowContext.organizationId || 'tenant default'
     const rows = [
         {
+            key: `company:${alert.company}`,
             name: alert.company,
             kind: 'company',
+            matchValue: alert.company,
             scope: baseScope,
             evidenceCount: evidenceSummary.evidenceCount,
             sourceFamilies,
@@ -1096,8 +1201,10 @@ function buildExposureEntities(
             nextAction: stateLabel(routingContext.queue),
         },
         {
+            key: `${alert.matchedTerm.kind}:${alert.matchedTerm.value}`,
             name: alert.matchedTerm.value,
             kind: alert.matchedTerm.kind,
+            matchValue: alert.matchedTerm.value,
             scope: workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} watchlist scopes` : 'watchlist match',
             evidenceCount: evidenceSummary.evidenceCount,
             sourceFamilies,
@@ -1108,8 +1215,10 @@ function buildExposureEntities(
     ]
     if (alert.actor) {
         rows.push({
+            key: `actor:${alert.actor}`,
             name: alert.actor,
             kind: 'actor',
+            matchValue: alert.actor,
             scope: stateLabel(alert.sourceFamily),
             evidenceCount: evidenceSummary.evidenceCount,
             sourceFamilies,
@@ -1119,6 +1228,17 @@ function buildExposureEntities(
         })
     }
     return rows
+}
+
+function evidenceMatchesEntity(item: PortalAlert['evidence'][number], entity: ReturnType<typeof buildExposureEntities>[number]) {
+    const needle = entity.matchValue.toLowerCase()
+    return [
+        item.excerpt,
+        item.sourceName,
+        item.provenance?.sourceId,
+        item.provenance?.captureId,
+        item.contentHash,
+    ].filter(Boolean).some(value => String(value).toLowerCase().includes(needle))
 }
 
 function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['evidenceSummary']> {
