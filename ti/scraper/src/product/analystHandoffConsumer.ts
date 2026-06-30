@@ -37,6 +37,7 @@ export const ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION = "organization.lif
 export const SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION = "support.action_executor_readiness.v1" as const;
 export const ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION = "hanasand.analyst_handoff.readiness_matrix.v1" as const;
 export const PRODUCT_READINESS_SCHEMA_VERSION = "hanasand.product_readiness.v1" as const;
+export const PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION = "hanasand.product_readiness.receipt_matrix.v1" as const;
 export const BETA_READINESS_SCHEMA_VERSION = "hanasand.beta_readiness.v1" as const;
 export const BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION = "hanasand.beta_readiness.deploy_gate_coverage.v1" as const;
 export const UI_QUALITY_PROOF_SCHEMA_VERSION = "hanasand.ui_quality_proof.v1" as const;
@@ -77,6 +78,7 @@ export const ANALYST_HANDOFF_CONTRACT_VERSIONS = {
   supportActionExecutorReadiness: SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION,
   readinessMatrix: ANALYST_HANDOFF_READINESS_MATRIX_SCHEMA_VERSION,
   productReadiness: PRODUCT_READINESS_SCHEMA_VERSION,
+  productReadinessReceiptMatrix: PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
   betaReadiness: BETA_READINESS_SCHEMA_VERSION,
   betaDeployGateCoverage: BETA_READINESS_DEPLOY_GATE_COVERAGE_SCHEMA_VERSION,
   uiQualityProof: UI_QUALITY_PROOF_SCHEMA_VERSION,
@@ -552,6 +554,7 @@ export type AnalystHandoffValidationReport = {
   deployGate: AnalystHandoffDeployGateAssertions;
   readinessMatrix: AnalystHandoffReadinessMatrix;
   productReadinessAggregate: ProductReadinessAggregate;
+  productReadinessReceiptMatrix: ProductReadinessReceiptMatrix;
   betaReadiness: BetaReadinessArtifact;
   betaDeployGateCoverage: BetaReadinessDeployGateCoverage;
   results: Array<{
@@ -691,6 +694,7 @@ export type ProductReadinessOwnerLane =
 export type ProductReadinessState = "ready" | "degraded" | "blocked" | "provisional";
 
 export type ProductReadinessContractReference = {
+  contractId: string;
   ownerLane: ProductReadinessOwnerLane | "case" | "integration";
   schemaVersions: string[];
   receiptSchemaIds?: string[];
@@ -748,6 +752,42 @@ export type ProductReadinessAggregate = {
 };
 
 export type ProductReadinessAggregateValidation = {
+  ok: boolean;
+  blockerCodes: string[];
+  blockers: Array<{ code: string; rowId?: string; field?: string; detail: string }>;
+};
+
+export type ProductReadinessReceiptMatrixRow = {
+  id: ProductReadinessCapabilityId;
+  ownerLane: ProductReadinessOwnerLane;
+  customerVisibleState: ProductReadinessState;
+  readinessRoute: string;
+  contractIds: string[];
+  schemaIds: string[];
+  receiptSchemaIds: string[];
+  blockerCodes: string[];
+  scopeFields: string[];
+  downstreamOwners: Array<ProductReadinessOwnerLane | "case" | "integration">;
+  downstreamConsumers: ProductReadinessContractReference["downstreamConsumers"];
+  missingContract: boolean;
+  safeOutput: {
+    metadataOnly: boolean;
+    rawEvidenceExposed: boolean;
+    webhookSecretExposed: boolean;
+    crossOrgDataExposed: boolean;
+  };
+};
+
+export type ProductReadinessReceiptMatrix = {
+  schemaVersion: typeof PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION;
+  checkedAt: string;
+  ok: boolean;
+  rowCount: number;
+  missingContractCount: number;
+  rows: ProductReadinessReceiptMatrixRow[];
+};
+
+export type ProductReadinessReceiptMatrixValidation = {
   ok: boolean;
   blockerCodes: string[];
   blockers: Array<{ code: string; rowId?: string; field?: string; detail: string }>;
@@ -971,6 +1011,7 @@ export function buildAnalystHandoffValidationReport(input: {
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
     result: results[index]
   })), readinessMatrix, checkedAt);
+  const productReadinessReceiptMatrix = buildProductReadinessReceiptMatrix(productReadinessAggregate, checkedAt);
   const betaReadiness = buildBetaReadinessArtifact(input.results.map((item, index) => ({
     file: item.file,
     bundle: item.bundle as Partial<AnalystHandoffConsumerBundle> | undefined,
@@ -990,6 +1031,7 @@ export function buildAnalystHandoffValidationReport(input: {
     deployGate,
     readinessMatrix,
     productReadinessAggregate,
+    productReadinessReceiptMatrix,
     betaReadiness,
     betaDeployGateCoverage,
     results
@@ -1430,6 +1472,7 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
         }
         for (const [index, reference] of (typed.workflowContract.contractReferences || []).entries()) {
           const field = `workflowContract.contractReferences[${index}]`;
+          if (!reference.contractId) blockers.push({ code: "missing_contract_id", rowId, field: `${field}.contractId`, detail: "Contract references need a stable contract id." });
           if (!reference.ownerLane) blockers.push({ code: "missing_contract_owner_lane", rowId, field: `${field}.ownerLane`, detail: "Contract references need an owner lane." });
           if (!Array.isArray(reference.schemaVersions) || !reference.schemaVersions.length) blockers.push({ code: "missing_contract_schema_ids", rowId, field: `${field}.schemaVersions`, detail: "Contract references need schema ids." });
           if (reference.receiptSchemaIds !== undefined && (!Array.isArray(reference.receiptSchemaIds) || !reference.receiptSchemaIds.length || reference.receiptSchemaIds.some((schemaId) => !schemaId))) {
@@ -1465,6 +1508,103 @@ export function validateProductReadinessAggregateArtifact(input: unknown): Produ
     }
     if (typed.customerVisible && typed.capabilityLabel && !hasDomainNativeLabel(typed.capabilityLabel)) {
       blockers.push({ code: "non_domain_native_label", rowId, field: "capabilityLabel", detail: "Customer-visible rows must use domain-native terminology." });
+    }
+  }
+  return {
+    ok: blockers.length === 0,
+    blockerCodes: [...new Set(blockers.map((item) => item.code))].sort(),
+    blockers
+  };
+}
+
+export function buildProductReadinessReceiptMatrix(
+  productReadiness: ProductReadinessAggregate,
+  checkedAt: string = productReadiness.checkedAt || nowIso()
+): ProductReadinessReceiptMatrix {
+  const rows = (productReadiness.rows || []).map((row): ProductReadinessReceiptMatrixRow => {
+    const references = row.workflowContract?.contractReferences || [];
+    const schemaIds = uniqueStrings(references.flatMap((reference) => reference.schemaVersions || []));
+    const receiptSchemaIds = uniqueStrings(references.flatMap((reference) => reference.receiptSchemaIds || []));
+    const contractIds = uniqueStrings([
+      row.workflowContract?.proofRowId,
+      ...references.map((reference) => reference.contractId)
+    ]);
+    const downstreamConsumers = references.flatMap((reference) => reference.downstreamConsumers || []);
+    const downstreamOwners = uniqueStrings(downstreamConsumers.map((consumer) => consumer.ownerLane)) as ProductReadinessReceiptMatrixRow["downstreamOwners"];
+    const blockerCodes = uniqueStrings([
+      ...(row.blockers || []),
+      ...references.flatMap((reference) => reference.blockerCodes || [])
+    ]);
+    const scopeFields = uniqueStrings(references.flatMap((reference) => reference.scopeFields || []));
+    const unsafeReference = references.some((reference) =>
+      !reference.safeOutput?.metadataOnly
+      || reference.safeOutput.rawEvidenceExposed
+      || reference.safeOutput.webhookSecretExposed
+      || reference.safeOutput.crossOrgDataExposed
+    );
+    const missingContract = references.length === 0
+      || !row.workflowContract?.route
+      || contractIds.length === 0
+      || schemaIds.length === 0
+      || scopeFields.length === 0
+      || unsafeReference;
+    return {
+      id: row.id,
+      ownerLane: row.ownerLane,
+      customerVisibleState: row.customerVisibleState,
+      readinessRoute: row.workflowContract?.route || "",
+      contractIds,
+      schemaIds,
+      receiptSchemaIds,
+      blockerCodes: missingContract ? uniqueStrings([...blockerCodes, "missing_contract_reference"]) : blockerCodes,
+      scopeFields,
+      downstreamOwners,
+      downstreamConsumers,
+      missingContract,
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: unsafeReference,
+        webhookSecretExposed: references.some((reference) => Boolean(reference.safeOutput?.webhookSecretExposed)),
+        crossOrgDataExposed: references.some((reference) => Boolean(reference.safeOutput?.crossOrgDataExposed))
+      }
+    };
+  });
+  return {
+    schemaVersion: PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION,
+    checkedAt,
+    ok: rows.every((row) => !row.missingContract),
+    rowCount: rows.length,
+    missingContractCount: rows.filter((row) => row.missingContract).length,
+    rows
+  };
+}
+
+export function validateProductReadinessReceiptMatrix(input: unknown): ProductReadinessReceiptMatrixValidation {
+  const artifact = input as Partial<ProductReadinessReceiptMatrix>;
+  const blockers: ProductReadinessReceiptMatrixValidation["blockers"] = [];
+  if (artifact.schemaVersion !== PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION) {
+    blockers.push({ code: "unsupported_schema", field: "schemaVersion", detail: `Expected ${PRODUCT_READINESS_RECEIPT_MATRIX_SCHEMA_VERSION}.` });
+  }
+  if (!Array.isArray(artifact.rows)) {
+    blockers.push({ code: "missing_rows", field: "rows", detail: "Receipt matrix rows are required." });
+  }
+  if (Array.isArray(artifact.rows) && artifact.rowCount !== artifact.rows.length) {
+    blockers.push({ code: "row_count_mismatch", field: "rowCount", detail: "Receipt matrix rowCount must match rows.length." });
+  }
+  for (const row of artifact.rows || []) {
+    const typed = row as Partial<ProductReadinessReceiptMatrixRow>;
+    const rowId = typed.id;
+    if (!typed.id) blockers.push({ code: "missing_row_id", field: "rows[].id", detail: "Every receipt matrix row needs a stable product readiness id." });
+    if (!typed.ownerLane) blockers.push({ code: "missing_owner_lane", rowId, field: "ownerLane", detail: "Every receipt matrix row needs an owner lane." });
+    if (!typed.readinessRoute) blockers.push({ code: "missing_readiness_route", rowId, field: "readinessRoute", detail: "Every receipt matrix row needs a route or surface id." });
+    if (!Array.isArray(typed.contractIds) || !typed.contractIds.length) blockers.push({ code: "missing_contract_ids", rowId, field: "contractIds", detail: "Every receipt matrix row needs contract ids." });
+    if (!Array.isArray(typed.schemaIds) || !typed.schemaIds.length) blockers.push({ code: "missing_schema_ids", rowId, field: "schemaIds", detail: "Every receipt matrix row needs schema ids." });
+    if (!Array.isArray(typed.blockerCodes)) blockers.push({ code: "missing_blocker_codes", rowId, field: "blockerCodes", detail: "Every receipt matrix row needs blocker code metadata." });
+    if (!Array.isArray(typed.scopeFields) || !typed.scopeFields.length) blockers.push({ code: "missing_scope_fields", rowId, field: "scopeFields", detail: "Every receipt matrix row needs org/member scope fields." });
+    if (!Array.isArray(typed.downstreamOwners) || !typed.downstreamOwners.length) blockers.push({ code: "missing_downstream_owners", rowId, field: "downstreamOwners", detail: "Every receipt matrix row needs downstream owner metadata." });
+    if (typed.missingContract) blockers.push({ code: "missing_contract_reference", rowId, field: "missingContract", detail: "Receipt matrix row is missing a usable contract reference." });
+    if (!typed.safeOutput?.metadataOnly || typed.safeOutput.rawEvidenceExposed || typed.safeOutput.webhookSecretExposed || typed.safeOutput.crossOrgDataExposed) {
+      blockers.push({ code: "unsafe_receipt_matrix_row", rowId, field: "safeOutput", detail: "Receipt matrix rows must stay metadata-only and cannot expose raw evidence, secrets, or cross-org data." });
     }
   }
   return {
@@ -1908,6 +2048,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
   switch (id) {
     case "organization_lifecycle":
       return [metadataContractReference({
+        contractId: "organization_lifecycle_readiness",
         ownerLane: "org",
         schemaVersions: [ORGANIZATION_LIFECYCLE_READINESS_SCHEMA_VERSION],
         routes: ["POST /api/organizations", "GET /api/organizations/:id/readiness-lifecycle"],
@@ -1920,6 +2061,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "shared_watchlists":
       return [metadataContractReference({
+        contractId: "shared_watchlist_alert_generation",
         ownerLane: "watchlist",
         schemaVersions: [
           ORG_SHARED_WATCHLIST_ALERT_EXPORT_SCHEMA_VERSION,
@@ -1937,6 +2079,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "source_activation":
       return [metadataContractReference({
+        contractId: "source_provenance_readiness",
         ownerLane: "source",
         schemaVersions: [DWM_SOURCE_WORKER_READINESS_SCHEMA_VERSION, DWM_SOURCE_PACK_ACTION_CONTRACT_SCHEMA_VERSION],
         receiptSchemaIds: [
@@ -1955,6 +2098,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "alert_case_workflow":
       return [metadataContractReference({
+        contractId: "org_alert_case_workflow",
         ownerLane: "alert",
         schemaVersions: [ORG_ALERT_WATCHLIST_READINESS_SCHEMA_VERSION, "dwm.alert_case_handoff.v1", "analyst.case_detail.v1"],
         receiptSchemaIds: [
@@ -1972,6 +2116,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "webhook_delivery":
       return [metadataContractReference({
+        contractId: "webhook_delivery_receipts",
         ownerLane: "webhook",
         schemaVersions: [DWM_WEBHOOK_DESTINATION_LIFECYCLE_SCHEMA_VERSION, DWM_WEBHOOK_AUDIT_EVENT_SCHEMA_VERSION],
         receiptSchemaIds: [
@@ -1990,6 +2135,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "support_controls":
       return [metadataContractReference({
+        contractId: "support_recovery_receipts",
         ownerLane: "support",
         schemaVersions: [SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION, SUPPORT_ACTION_EXECUTOR_READINESS_SCHEMA_VERSION],
         receiptSchemaIds: [
@@ -2006,6 +2152,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "public_ti_actor_handoff":
       return [metadataContractReference({
+        contractId: "public_ti_actor_handoff",
         ownerLane: "publicTI",
         schemaVersions: [PUBLIC_TI_HANDOFF_SCHEMA_VERSION, PUBLIC_TI_READINESS_SCHEMA_VERSION],
         routes: ["/ti", "/api/ti/search"],
@@ -2018,6 +2165,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "dashboard_operator_workspace":
       return [metadataContractReference({
+        contractId: "dashboard_operator_workspace",
         ownerLane: "dashboard",
         schemaVersions: [UI_QUALITY_PROOF_SCHEMA_VERSION, "analyst.case_detail.v1"],
         routes: ["/dashboard", "/v1/cases/:caseId"],
@@ -2030,6 +2178,7 @@ function productContractReferences(id: ProductReadinessCapabilityId): ProductRea
       })];
     case "website_product_surface":
       return [metadataContractReference({
+        contractId: "website_product_surface",
         ownerLane: "website",
         schemaVersions: [UI_QUALITY_PROOF_SCHEMA_VERSION, PRODUCT_READINESS_SCHEMA_VERSION],
         routes: ["/", "/solutions/onion-session"],
@@ -2090,6 +2239,10 @@ function maxDeployRisk(values: ProductReadinessRow["deployRisk"][]): ProductRead
   if (values.includes("medium")) return "medium";
   if (values.includes("low")) return "low";
   return "none";
+}
+
+function uniqueStrings<T extends string>(values: Array<T | undefined | null>): T[] {
+  return [...new Set(values.filter((value): value is T => Boolean(value)))];
 }
 
 function hasDomainNativeLabel(label: string): boolean {

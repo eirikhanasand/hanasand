@@ -13,9 +13,11 @@ import {
   ANALYST_HANDOFF_VALIDATION_REPORT_SCHEMA_VERSION,
   PRODUCT_READINESS_FORBIDDEN_LANGUAGE,
   buildAnalystHandoffValidationReport,
+  buildProductReadinessReceiptMatrix,
   validateAnalystHandoffConsumerBundle,
   validateBetaReadinessArtifact,
   validateProductReadinessAggregateArtifact,
+  validateProductReadinessReceiptMatrix,
   type BetaReadinessArtifact,
   type AnalystHandoffConsumerBlockerCode,
   type AnalystHandoffConsumerBundle,
@@ -23,6 +25,7 @@ import {
   type DwmWebhookAuditEventContract,
   type OrgWatchlistAlertTermsExportContract,
   type ProductReadinessAggregate,
+  type ProductReadinessReceiptMatrix,
 } from "../product/analystHandoffConsumer.ts";
 import { buildDwmProductSnapshot, type DwmAlert } from "../product/dwmProduct.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
@@ -646,6 +649,10 @@ describe("analyst handoff consumer validation", () => {
     const aggregate = report.productReadinessAggregate;
 
     expect(aggregate.schemaVersion).toBe("hanasand.product_readiness.v1");
+    expect(report.productReadinessReceiptMatrix.schemaVersion).toBe("hanasand.product_readiness.receipt_matrix.v1");
+    expect(report.productReadinessReceiptMatrix.checkedAt).toBe("2026-06-29T01:40:00.000Z");
+    expect(report.productReadinessReceiptMatrix.ok).toBe(true);
+    expect(validateProductReadinessReceiptMatrix(report.productReadinessReceiptMatrix)).toMatchObject({ ok: true, blockerCodes: [] });
     expect(aggregate.checkedAt).toBe("2026-06-29T01:40:00.000Z");
     expect(aggregate.ok).toBe(true);
     expect(aggregate.rowCount).toBe(9);
@@ -689,6 +696,7 @@ describe("analyst handoff consumer validation", () => {
         proofRowId: "shared_watchlist_alert_export",
         expectedAdapter: "orgWatchlistTermsToAlertGenerationRequest",
         contractReferences: [expect.objectContaining({
+          contractId: "shared_watchlist_alert_generation",
           schemaVersions: expect.arrayContaining([
             "organization.shared_watchlist_alert_generation_export.v1",
             "organization.shared_watchlist_alert_generation_consumers.v1",
@@ -773,6 +781,7 @@ describe("analyst handoff consumer validation", () => {
         proofRowId: "webhook_destination",
         expectedAdapter: "persistedAlertToWebhookTriggerContext",
         contractReferences: [expect.objectContaining({
+          contractId: "webhook_delivery_receipts",
           schemaVersions: expect.arrayContaining(["dwm.webhook.destination_lifecycle.v1", "dwm.webhook.audit_event.v1"]),
           receiptSchemaIds: expect.arrayContaining([
             "dwm.webhook_event_contract.v1",
@@ -801,6 +810,7 @@ describe("analyst handoff consumer validation", () => {
     ]));
     expect(aggregate.rows.find((row) => row.id === "support_controls")?.workflowContract.contractReferences).toEqual(expect.arrayContaining([
       expect.objectContaining({
+        contractId: "support_recovery_receipts",
         receiptSchemaIds: expect.arrayContaining([
           "support.action_execution_handoff.v1",
           "support.action_executor_readiness.v1"
@@ -812,6 +822,109 @@ describe("analyst handoff consumer validation", () => {
     expect(serialized).not.toContain("\"stages\"");
     expect(serialized).not.toContain("\"deployGate\"");
     expect(serialized).not.toContain("\"readinessMatrix\"");
+  });
+
+  test("emits a receipt matrix that maps product workflows to contracts and receipt schemas", () => {
+    const fixture = clone(loadFixture("analyst-handoff-happy.json") as AnalystHandoffConsumerBundle);
+    const report = buildAnalystHandoffValidationReport({
+      checkedAt: "2026-06-29T01:45:00.000Z",
+      results: [{ file: "customer-org.json", bundle: fixture }]
+    });
+    const matrix = report.productReadinessReceiptMatrix;
+    const serializedMatrix = JSON.stringify(matrix);
+
+    expect(matrix).toMatchObject({
+      schemaVersion: "hanasand.product_readiness.receipt_matrix.v1",
+      checkedAt: "2026-06-29T01:45:00.000Z",
+      ok: true,
+      rowCount: 9,
+      missingContractCount: 0
+    });
+    expect(validateProductReadinessReceiptMatrix(matrix)).toMatchObject({ ok: true, blockerCodes: [] });
+    expect(serializedMatrix).not.toContain("webhookUrl");
+    expect(serializedMatrix).not.toContain("token");
+    expect(serializedMatrix).not.toContain("rawHtml");
+    expect(matrix.rows.every((row) =>
+      row.safeOutput.metadataOnly
+      && !row.safeOutput.rawEvidenceExposed
+      && !row.safeOutput.webhookSecretExposed
+      && !row.safeOutput.crossOrgDataExposed
+    )).toBe(true);
+    expect(matrix.rows.map((row) => row.id).sort()).toEqual(report.productReadinessAggregate.rows.map((row) => row.id).sort());
+    expect(matrix.rows.find((row) => row.id === "shared_watchlists")).toMatchObject({
+      readinessRoute: "GET /api/organizations/:id/watchlists/alert-terms",
+      contractIds: expect.arrayContaining(["shared_watchlist_alert_export", "shared_watchlist_alert_generation"]),
+      schemaIds: expect.arrayContaining([
+        "organization.shared_watchlist_alert_generation_export.v1",
+        "organization.shared_watchlist_alert_generation_consumers.v1",
+        "organization.shared_watchlist_readiness_proof.v1"
+      ]),
+      blockerCodes: expect.arrayContaining(["not_member", "role_not_allowed", "no_active_watchlist_terms"]),
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "member.role", "member.status", "watchlistItemIds"]),
+      downstreamOwners: expect.arrayContaining(["alert", "webhook", "dashboard"]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(matrix.rows.find((row) => row.id === "source_activation")).toMatchObject({
+      receiptSchemaIds: expect.arrayContaining([
+        "ti.source_provenance_alert_rebuild_receipt.v1",
+        "ti.source_provenance_actor_enrichment_gap_receipt.v1",
+        "ti.source_provenance_source_pack_intake_receipt.v1",
+        "ti.source_provenance_source_activation_decision_receipt.v1"
+      ]),
+      downstreamOwners: expect.arrayContaining(["alert", "publicTI"])
+    });
+    expect(matrix.rows.find((row) => row.id === "alert_case_workflow")).toMatchObject({
+      contractIds: expect.arrayContaining(["org_scoped_alert_case_workflow", "org_alert_case_workflow"]),
+      receiptSchemaIds: expect.arrayContaining([
+        "dwm.org_alert_case_action_receipt.v1",
+        "dwm.org_alert_case_action_audit_event.v1"
+      ]),
+      downstreamOwners: expect.arrayContaining(["case", "webhook", "dashboard"])
+    });
+    expect(matrix.rows.find((row) => row.id === "webhook_delivery")).toMatchObject({
+      contractIds: expect.arrayContaining(["webhook_destination", "webhook_delivery_receipts"]),
+      receiptSchemaIds: expect.arrayContaining([
+        "dwm.webhook_event_contract.v1",
+        "dwm.webhook_event_support_handoff.v1",
+        "dwm.webhook_support_action_request.v1",
+        "dwm.webhook_dispatch_retry_audit.v1"
+      ]),
+      downstreamOwners: expect.arrayContaining(["dashboard", "support"])
+    });
+
+    const brokenAggregate = clone(report.productReadinessAggregate) as ProductReadinessAggregate;
+    brokenAggregate.rows[1] = {
+      ...brokenAggregate.rows[1]!,
+      workflowContract: {
+        ...brokenAggregate.rows[1]!.workflowContract,
+        contractReferences: []
+      }
+    };
+    const brokenMatrix = buildProductReadinessReceiptMatrix(brokenAggregate, "2026-06-29T01:46:00.000Z");
+    expect(brokenMatrix).toMatchObject({
+      ok: false,
+      missingContractCount: 1
+    });
+    expect(brokenMatrix.rows.find((row) => row.id === "shared_watchlists")).toMatchObject({
+      missingContract: true,
+      blockerCodes: expect.arrayContaining(["missing_contract_reference"])
+    });
+    expect(validateProductReadinessReceiptMatrix(brokenMatrix).blockerCodes).toContain("missing_contract_reference");
+
+    const unsafeMatrix = clone(matrix) as ProductReadinessReceiptMatrix;
+    unsafeMatrix.rows[0] = {
+      ...unsafeMatrix.rows[0]!,
+      safeOutput: {
+        ...unsafeMatrix.rows[0]!.safeOutput,
+        webhookSecretExposed: true
+      }
+    };
+    expect(validateProductReadinessReceiptMatrix(unsafeMatrix).blockerCodes).toContain("unsafe_receipt_matrix_row");
   });
 
   test("validates checked-in product readiness fixtures for green-ish and blocked paths", () => {
@@ -1063,6 +1176,7 @@ describe("analyst handoff consumer validation", () => {
       workflowContract: {
         ...unsafeContractReference.rows[1]!.workflowContract,
         contractReferences: [{
+          contractId: "",
           ownerLane: "watchlist",
           schemaVersions: [],
           receiptSchemaIds: [],
