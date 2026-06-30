@@ -307,6 +307,7 @@ expect(missingDestinationIntent?.idempotencyKey === 'dwm.alert.created:org_contr
 expect(missingDestinationIntent?.persistable === true && !JSON.stringify([missingDestinationIntent, requestedMissingDestinationIntent]).includes(secret), 'Missing destination intents should be persistable and secret-free.', { missingDestinationIntent, requestedMissingDestinationIntent })
 expect(missingDestinationReadiness.alertEventConsumer.ready === false && missingDestinationReadiness.alertEventConsumer.state === 'missing_destination' && missingDestinationReadiness.alertEventConsumer.payloadPreview === null, 'Alert event consumer should expose missing-destination readiness without fabricating a send preview.', missingDestinationReadiness.alertEventConsumer)
 expect(missingDestinationReadiness.alertEventConsumer.blockerCodes.includes('no_enabled_destination') && missingDestinationReadiness.alertEventConsumer.requiredFields.orgId === true, 'Alert event consumer should keep typed blockers and required fields for missing destinations.', missingDestinationReadiness.alertEventConsumer)
+expect(missingDestinationReadiness.alertEventConsumer.payloadValidation.valid === false && missingDestinationReadiness.alertEventConsumer.payloadValidation.missingDiscordFields.length > 0, 'Alert event consumer should mark payload validation invalid when no destination preview exists.', missingDestinationReadiness.alertEventConsumer.payloadValidation)
 
 const bridgePayload = buildDwmAlertDeliveryPayload({
     destination: {
@@ -919,7 +920,10 @@ expect(overlappingOrgAAlertEventConsumer.requiredFields.orgId === true && overla
 expect(overlappingOrgAAlertEventConsumer.persistenceTargets.deliveryAttempt === true && overlappingOrgAAlertEventConsumer.persistenceTargets.retryPersistence === true && overlappingOrgAAlertEventConsumer.persistenceTargets.idempotencyKey === 'dwm.alert.created:org_overlap_a:destination_overlap_org_a:dwm_overlap_org_a', 'Alert event consumer should expose delivery persistence and idempotency targets.', overlappingOrgAAlertEventConsumer.persistenceTargets)
 expect(overlappingOrgAAlertEventConsumer.payloadPreview?.discord.fieldNames.some(name => name.toLowerCase() === 'source family') && overlappingOrgAAlertEventConsumer.payloadPreview.context.watchlistId === 'watchlist_overlap_a', 'Alert event consumer should expose Discord-ready payload preview context.', overlappingOrgAAlertEventConsumer.payloadPreview)
 expect(overlappingOrgAAlertEventConsumer.payloadPreview?.redaction.webhookSecretExposed === false && overlappingOrgAAlertEventConsumer.payloadPreview.redaction.endpointExposed === false, 'Alert event consumer payload preview should redact destination secrets.', overlappingOrgAAlertEventConsumer.payloadPreview)
+expect(overlappingOrgAAlertEventConsumer.payloadValidation.valid === true && overlappingOrgAAlertEventConsumer.payloadValidation.requiredDiscordFields.includes('Dedupe key') && overlappingOrgAAlertEventConsumer.payloadValidation.missingDiscordFields.length === 0, 'Alert event consumer should validate required Discord payload fields.', overlappingOrgAAlertEventConsumer.payloadValidation)
+expect(Object.values(overlappingOrgAAlertEventConsumer.payloadValidation.limits).every(Boolean) && overlappingOrgAAlertEventConsumer.payloadValidation.redaction.mentionsDisabled === true && overlappingOrgAAlertEventConsumer.payloadValidation.redaction.noWebhookUrl === true, 'Alert event consumer payload validation should enforce Discord limits and redaction.', overlappingOrgAAlertEventConsumer.payloadValidation)
 expect(overlappingOrgBAlertEventConsumer.payloadPreview?.context.replay === true && overlappingOrgBAlertEventConsumer.persistenceTargets.idempotencyKey === 'dwm.alert.replayed:org_overlap_b:destination_overlap_org_b:dwm_overlap_org_b', 'Alert event consumer should preserve replay event idempotency.', overlappingOrgBAlertEventConsumer)
+expect(overlappingOrgBAlertEventConsumer.payloadValidation.valid === true && overlappingOrgBAlertEventConsumer.payloadValidation.context.provenance === true, 'Alert event consumer replay payload should keep validation and provenance proof.', overlappingOrgBAlertEventConsumer.payloadValidation)
 expect(JSON.stringify(overlappingOrgAPayload).includes('Org A Customer') && !JSON.stringify(overlappingOrgAPayload).includes('Org B Customer'), 'Org A Discord payload should not leak org B customer context.', overlappingOrgAPayload)
 expect(JSON.stringify(overlappingOrgBPayload).includes('Org B Customer') && !JSON.stringify(overlappingOrgBPayload).includes('Org A Customer'), 'Org B Discord payload should not leak org A customer context.', overlappingOrgBPayload)
 expect(!JSON.stringify([overlappingOrgAReadiness, overlappingOrgBReadiness, overlappingOrgAPayload, overlappingOrgBPayload]).includes(secret), 'Overlapping org readiness and payloads should redact webhook secrets.', { overlappingOrgAReadiness, overlappingOrgBReadiness })
@@ -3454,6 +3458,8 @@ console.log(JSON.stringify({
         'alert event consumer required field proof',
         'alert event consumer persistence targets',
         'alert event consumer redacted Discord preview',
+        'alert event consumer Discord schema validation',
+        'alert event consumer Discord limit/redaction validation',
         'alert event consumer replay idempotency',
         'alert event consumer missing destination denial',
         'replay alert/dedupe/case linkage',
@@ -3914,6 +3920,10 @@ console.log(JSON.stringify({
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.persistenceTargets.idempotencyKey',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.discord.fieldNames',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadPreview.context',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.valid',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.requiredDiscordFields',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.limits',
+            'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.payloadValidation.redaction',
             'orgAlertDelivery.alertDestinationReadiness.alertEventConsumer.blockerCodes',
             'orgAlertDelivery.deliveryOutcome.schemaVersion',
             'orgAlertDelivery.deliveryOutcome.selectedDestinations[].latestAttempt.deliveryId',

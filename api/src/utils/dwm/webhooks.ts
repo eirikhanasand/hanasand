@@ -5258,6 +5258,32 @@ export function buildDwmAlertWebhookReadinessHandoff({
     const alertEventPreviewFields = Array.isArray(alertEventPreviewEmbeds[0]?.fields)
         ? (alertEventPreviewEmbeds[0]?.fields as Array<Record<string, unknown>>)
         : []
+    const alertEventPreviewFieldNames = alertEventPreviewFields.map(field => clean(field.name)).filter(Boolean)
+    const alertEventRequiredDiscordFields = ['Organization', 'Severity', 'Watchlist', 'Source family', 'Evidence count', 'Workflow', 'Dedupe key']
+    const alertEventMissingDiscordFields = alertEventRequiredDiscordFields.filter(name => !alertEventPreviewFieldNames.includes(name))
+    const alertEventDiscordLimits = {
+        content: clean(alertEventPreviewPayload?.content).length <= DISCORD_CONTENT_LIMIT,
+        embedCount: alertEventPreviewEmbeds.length <= 10,
+        title: clean(alertEventPreviewEmbeds[0]?.title).length <= DISCORD_EMBED_TITLE_LIMIT,
+        description: clean(alertEventPreviewEmbeds[0]?.description).length <= DISCORD_EMBED_DESCRIPTION_LIMIT,
+        fields: alertEventPreviewFields.length <= DISCORD_EMBED_FIELD_LIMIT,
+        fieldNames: alertEventPreviewFields.every(field => clean(field.name).length <= DISCORD_EMBED_FIELD_NAME_LIMIT),
+        fieldValues: alertEventPreviewFields.every(field => clean(field.value).length <= DISCORD_EMBED_FIELD_VALUE_LIMIT),
+    }
+    const alertEventSerializedPreview = JSON.stringify(alertEventPreviewPayload || {})
+    const alertEventRedactionProof = {
+        endpointExposed: false,
+        webhookSecretExposed: false,
+        responseBodyExposed: false,
+        mentionsDisabled: Array.isArray(recordOrEmpty(alertEventPreviewPayload?.allowed_mentions).parse)
+            && (recordOrEmpty(alertEventPreviewPayload?.allowed_mentions).parse as unknown[]).length === 0,
+        noWebhookUrl: !/discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9._-]+/i.test(alertEventSerializedPreview),
+    }
+    const alertEventRedactionValid = !alertEventRedactionProof.endpointExposed
+        && !alertEventRedactionProof.webhookSecretExposed
+        && !alertEventRedactionProof.responseBodyExposed
+        && alertEventRedactionProof.mentionsDisabled
+        && alertEventRedactionProof.noWebhookUrl
     const blockers: Array<{
         code: string
         message: string
@@ -5378,7 +5404,7 @@ export function buildDwmAlertWebhookReadinessHandoff({
                     discord: {
                         content: clean(alertEventPreviewPayload.content),
                         embedCount: alertEventPreviewEmbeds.length,
-                        fieldNames: alertEventPreviewFields.map(field => clean(field.name)).filter(Boolean),
+                        fieldNames: alertEventPreviewFieldNames,
                     },
                     context: {
                         orgId: dispatch.orgId || null,
@@ -5404,6 +5430,26 @@ export function buildDwmAlertWebhookReadinessHandoff({
                     },
                 }
                 : null,
+            payloadValidation: {
+                schemaVersion: 'dwm.webhook.discord_payload_validation.v1',
+                valid: Boolean(alertEventPreviewPayload && firstSelectedDestination)
+                    && alertEventMissingDiscordFields.length === 0
+                    && Object.values(alertEventDiscordLimits).every(Boolean)
+                    && alertEventRedactionValid,
+                requiredDiscordFields: alertEventRequiredDiscordFields,
+                missingDiscordFields: alertEventMissingDiscordFields,
+                limits: alertEventDiscordLimits,
+                redaction: alertEventRedactionProof,
+                context: {
+                    orgId: Boolean(dispatch.orgId),
+                    alertId: Boolean(normalizedAlert.id),
+                    watchlistId: Boolean(watchlist.id),
+                    sourceFamily: Boolean(normalizedAlert.sourceFamily),
+                    evidence: normalizedAlert.evidenceCount > 0,
+                    caseOrAlertLink: Boolean(normalizedAlert.alertUrl || normalizedAlert.casePath),
+                    provenance: Boolean(normalizedAlert.provenanceSummary),
+                },
+            },
             blockers: uniqueBlockers,
             blockerCodes: blockingCodes,
             redaction: {
