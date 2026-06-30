@@ -1127,6 +1127,17 @@ function expectProductReadinessLink(context: WorkbenchOrgContext, id: string, hr
     return item
 }
 
+function expectProductReadinessWorkflow(context: WorkbenchOrgContext, id: string, workflowBlocker: string) {
+    const item = context.readiness.productReadiness.find(row => row.id === id)
+    if (!item || item.workflowBlocker !== workflowBlocker) {
+        throw new Error(`Expected ${id} to be grouped under ${workflowBlocker}, got ${item?.workflowBlocker || 'missing'}.`)
+    }
+    if (!item.customerImpact || !item.evidenceProvenance) {
+        throw new Error(`Expected ${id} to expose customer impact and provenance for the readiness queue.`)
+    }
+    return item
+}
+
 function expectWorkbenchCase(items: WorkbenchCase[], id: string) {
     const item = items.find(row => row.id === id)
     if (!item) throw new Error(`Expected ${id} workbench case to be present.`)
@@ -1348,6 +1359,15 @@ void expectProductReadinessLink(productProgressOrgContext, 'webhook_health', '/d
 void expectProductReadinessLink(productProgressOrgContext, 'helpdesk_audit', '/dashboard/system/impersonation')
 void expectProductReadinessLink(productProgressOrgContext, 'deploy_probe', '/status')
 void expectProductReadinessLink(productProgressOrgContext, 'public_ti_provenance', '/ti')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'org_members', 'Organization setup')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'shared_watchlists', 'Shared watchlists')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'source_inventory_probe', 'Source health')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'dashboard_evidence', 'Alert generation')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'webhook_delivery', 'Webhook delivery')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'analyst_workflow', 'Case action replay')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'helpdesk_audit', 'Support audit')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Public TI handoff')
+void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy proof')
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerStatus satisfies string | undefined)
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerLastRunAt satisfies string | undefined)

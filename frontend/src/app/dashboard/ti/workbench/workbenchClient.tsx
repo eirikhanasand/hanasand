@@ -176,6 +176,9 @@ export type WorkbenchProductReadinessItem = {
     detail: string
     source: string
     href?: string
+    workflowBlocker?: string
+    customerImpact?: string
+    evidenceProvenance?: string
     checkedAt?: string
     blockerCount?: number
     deepLinkTarget?: string
@@ -1945,12 +1948,15 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-backend-proof-contract-version={item.backendProofContractVersion || ''}
                             data-readiness-owner-lane={item.ownerLane || ''}
                             data-readiness-operator-action={item.operatorAction || ''}
+                            data-readiness-workflow-blocker={item.workflowBlocker || ''}
+                            data-readiness-customer-impact={item.customerImpact || ''}
+                            data-readiness-provenance={item.evidenceProvenance || ''}
                             data-readiness-priority={index + 1}
                         >
                             <div className='min-w-0'>
                                 <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
                                 <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.detail}</p>
-                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{[item.ownerLane, item.operatorAction, item.source].filter(Boolean).join(' · ')}</p>
+                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{[item.workflowBlocker, item.ownerLane, item.operatorAction].filter(Boolean).join(' · ')}</p>
                             </div>
                             <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(item.status)}</span>
                         </button>
@@ -1975,6 +1981,9 @@ function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
             data-readiness-detail-action={item.operatorAction || ''}
             data-readiness-detail-proof={item.backendProofContractVersion || ''}
             data-readiness-detail-blocker={blocker}
+            data-readiness-detail-workflow-blocker={item.workflowBlocker || ''}
+            data-readiness-detail-customer-impact={item.customerImpact || ''}
+            data-readiness-detail-provenance={item.evidenceProvenance || ''}
             data-readiness-detail-href={item.deepLinkTarget || item.href || ''}
         >
             <div className='flex flex-wrap items-start justify-between gap-3'>
@@ -1985,16 +1994,19 @@ function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
                 <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
             </div>
             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
+                <ReadinessDetailField label='Workflow' value={item.workflowBlocker || 'workflow unavailable'} />
                 <ReadinessDetailField label='Owner' value={item.ownerLane || 'owner unavailable'} />
                 <ReadinessDetailField label='Next action' value={item.operatorAction || 'review blocker'} />
                 <ReadinessDetailField label='Last check' value={proofTime ? relativeTime(proofTime) : 'not returned'} />
                 <ReadinessDetailField label='Proof' value={item.backendProofContractVersion || item.source || 'proof contract unavailable'} />
+                <ReadinessDetailField label='Provenance' value={item.evidenceProvenance || item.source || 'provenance unavailable'} />
                 <ReadinessDetailField label='Stale window' value={formatSeconds(item.staleAfterSeconds)} />
                 <ReadinessDetailField label='Source' value={item.source || 'source unavailable'} />
             </div>
             <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
                 <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{item.status === 'ready' ? 'Evidence' : 'Blocker'}</p>
                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#344054] dark:text-[#d8deea]'>{item.status === 'ready' ? item.detail : blocker}</p>
+                {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>Impact: {item.customerImpact}</p> : null}
                 {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.integrationProbeHint}</p> : null}
             </div>
             {item.href ? (

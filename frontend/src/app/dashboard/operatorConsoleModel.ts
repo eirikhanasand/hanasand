@@ -1819,10 +1819,14 @@ function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessIte
     const blockerCount = item.status === 'ready' ? 0 : countReadinessBlockers(item.detail)
     const workflow = productReadinessWorkflow(item)
     const proof = productReadinessProofMetadata(item)
+    const blocker = productReadinessBlockerMetadata(item)
     return {
         ...item,
         blockerCount,
         deepLinkTarget: item.href,
+        workflowBlocker: blocker.workflowBlocker,
+        customerImpact: blocker.customerImpact,
+        evidenceProvenance: blocker.evidenceProvenance || item.source,
         proofTimestamp: item.proofTimestamp || item.checkedAt,
         unavailableReason: item.status === 'ready' ? undefined : item.unavailableReason || proof.unavailableReason || item.source,
         staleAfterSeconds: item.staleAfterSeconds ?? proof.staleAfterSeconds,
@@ -1831,6 +1835,103 @@ function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessIte
         backendProofContractVersion: item.backendProofContractVersion || proof.backendProofContractVersion,
         ownerLane: workflow.ownerLane,
         operatorAction: workflow.operatorAction,
+    }
+}
+
+function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
+    workflowBlocker: string
+    customerImpact: string
+    evidenceProvenance: string
+} {
+    const evidenceProvenance = [item.source, item.backendProofContractVersion].filter(Boolean).join(' -> ')
+    switch (item.id) {
+        case 'org_members':
+        case 'entitlement_readiness':
+            return {
+                workflowBlocker: 'Organization setup',
+                customerImpact: item.status === 'ready'
+                    ? 'Analysts can work shared cases and alerts inside the selected organization scope.'
+                    : 'Shared cases, watchlists, and delivery routing are blocked until organization access is proven.',
+                evidenceProvenance,
+            }
+        case 'shared_watchlists':
+        case 'org_alert_export':
+            return {
+                workflowBlocker: 'Shared watchlists',
+                customerImpact: item.status === 'ready'
+                    ? 'Customer terms can feed org-scoped alert generation.'
+                    : 'Customer terms cannot produce org-scoped alerts until active watchlists and export proof are present.',
+                evidenceProvenance,
+            }
+        case 'source_coverage':
+        case 'source_inventory_probe':
+            return {
+                workflowBlocker: 'Source health',
+                customerImpact: item.status === 'ready'
+                    ? 'Source inventory and worker proof can support alert generation.'
+                    : 'Alert coverage is incomplete until source inventory and worker health are operator-reachable.',
+                evidenceProvenance,
+            }
+        case 'dashboard_alert':
+        case 'dashboard_evidence':
+        case 'alert_generation':
+        case 'dwm_product_snapshot':
+            return {
+                workflowBlocker: 'Alert generation',
+                customerImpact: item.status === 'ready'
+                    ? 'Analysts can select real backend alerts with evidence from the dashboard queue.'
+                    : 'Analysts cannot treat fallback rows as customer evidence until backend alerts and dashboard evidence are visible.',
+                evidenceProvenance,
+            }
+        case 'webhook_delivery':
+        case 'webhook_health':
+            return {
+                workflowBlocker: 'Webhook delivery',
+                customerImpact: item.status === 'ready'
+                    ? 'Customer delivery can be inspected against destination and delivery proof.'
+                    : 'Customer notification delivery is blocked until a tested destination and matching delivery ledger exist.',
+                evidenceProvenance,
+            }
+        case 'analyst_workflow':
+            return {
+                workflowBlocker: 'Case action replay',
+                customerImpact: item.status === 'ready'
+                    ? 'Analyst decisions can be reviewed against a backed case timeline.'
+                    : 'Review, escalation, suppression, close, and replay work are blocked until a readable case is linked.',
+                evidenceProvenance,
+            }
+        case 'helpdesk_audit':
+            return {
+                workflowBlocker: 'Support audit',
+                customerImpact: item.status === 'ready'
+                    ? 'Support actions have audit evidence for customer-facing recovery work.'
+                    : 'Support recovery cannot be considered enterprise-ready until audit proof is returned.',
+                evidenceProvenance,
+            }
+        case 'public_ti_provenance':
+            return {
+                workflowBlocker: 'Public TI handoff',
+                customerImpact: item.status === 'ready'
+                    ? 'Public TI artifacts can hand off into watchlist, alert, case, and source workflows.'
+                    : 'Public TI artifacts need provenance and action readiness before they can drive customer operations.',
+                evidenceProvenance,
+            }
+        case 'deploy_probe':
+            return {
+                workflowBlocker: 'Deploy proof',
+                customerImpact: item.status === 'ready'
+                    ? 'The deployed surface has current probe evidence for dashboard alert and delivery paths.'
+                    : 'Release readiness is blocked until live probe evidence confirms the dashboard workflow after deploy.',
+                evidenceProvenance,
+            }
+        default:
+            return {
+                workflowBlocker: 'Readiness blocker',
+                customerImpact: item.status === 'ready'
+                    ? 'This readiness row is backed by a proof source.'
+                    : 'This workflow needs backed proof before an operator can rely on it.',
+                evidenceProvenance,
+            }
     }
 }
 
