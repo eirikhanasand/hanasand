@@ -1,6 +1,7 @@
 import { buildDwmProductSnapshot, classifySourceFamily, type DwmAlert, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { stableId, uniqueStrings } from "../utils.ts";
 import type { RawCapture, SourceRecord } from "../types.ts";
+import type { TiSourceProvenancePublicTiSourceOpsProjection } from "../product/sourceProvenanceTiPageContract.ts";
 import type { RuntimeOrgMembershipContext, RuntimeOrgWatchlistTermContext } from "./dwmOrgWatchlistBridge.ts";
 
 type DwmAlertVisibilityPolicy = "members" | "admins" | "owners";
@@ -1014,6 +1015,14 @@ export type DwmOrgAlertPipelineProof = {
     sourceFamily?: string;
     watchlistIds: string[];
     watchlistItemIds: string[];
+    selectedCaptureIds: string[];
+    evidenceCount: number;
+    provenanceCaptureIds: string[];
+    provenanceSourceIds: string[];
+    provenanceGapCodes: string[];
+    workflowStatus: string;
+    assignedOwner?: string;
+    workflowEventCount: number;
     caseReady: boolean;
     deliveryReady: boolean;
     delivered: boolean;
@@ -1034,6 +1043,112 @@ export type DwmOrgAlertPipelineProof = {
     blockerCodes: string[];
     detail: string;
   }>;
+  proofCommands: string[];
+};
+
+export type DwmSourceProjectionAlertReadinessProof = {
+  schemaVersion: "dwm.source_projection_alert_readiness.v1";
+  id: string;
+  tenantId: string;
+  organizationId?: string;
+  actor: string;
+  generatedAt: string;
+  state:
+    | "ready_for_customer_delivery"
+    | "ready_for_alert_rebuild"
+    | "blocked"
+    | "zero_alert_no_match";
+  ownerLane: "source_operations" | "alert_generation" | "webhook_delivery" | "org_foundation" | "case_workflow" | "entitlement";
+  sourceProjection: {
+    schemaVersion: TiSourceProvenancePublicTiSourceOpsProjection["schemaVersion"];
+    id: string;
+    generatedAt: string;
+    publicTiRoute: string;
+    pageReadiness: TiSourceProvenancePublicTiSourceOpsProjection["pageReadiness"];
+    sourceCoverage: TiSourceProvenancePublicTiSourceOpsProjection["sourceCoverage"];
+    provenanceRowCount: number;
+    enrichmentGapCount: number;
+  };
+  alertPipeline: {
+    schemaVersion: DwmOrgAlertPipelineProof["schemaVersion"];
+    generatedAt: string;
+    state: DwmOrgAlertPipelineProof["state"];
+    readyForRebuild: boolean;
+    readyForCustomerDelivery: boolean;
+    candidateCount: number;
+    alertCount: number;
+    blockerCodes: string[];
+    zeroAlertState: DwmZeroAlertProof["state"];
+  };
+  blockers: Array<{
+    code:
+      | "missing_org_scope"
+      | "org_mismatch"
+      | "missing_provenance"
+      | "source_projection_blocked"
+      | "source_projection_partial"
+      | "stale_source"
+      | "duplicate_candidate"
+      | "unsupported_source_family"
+      | "alert_readiness_blocked"
+      | "zero_alert_no_match"
+      | "webhook_delivery_unready";
+    ownerLane: "source_operations" | "alert_generation" | "webhook_delivery" | "org_foundation" | "case_workflow" | "entitlement";
+    route: string;
+    detail: string;
+    recoverable: boolean;
+    sourceFamily?: string;
+    blockerCodes?: string[];
+  }>;
+  downstreamRoutes: {
+    publicTI: string;
+    dashboard: "/v1/dwm/alerts";
+    alertReadiness: "/v1/dwm/alerts/generation-readiness";
+    alertRebuild: "/v1/dwm/alerts/rebuild";
+    webhookDelivery: "/v1/dwm/webhooks/deliver";
+  };
+  provenanceRefs: {
+    sourceOpsFixtureBundleId: string;
+    sourceFreshnessGapPacketIds: string[];
+    parserHealthAlertPacketIds: string[];
+    sourceOpsActionQueueIds: string[];
+    alertCandidateIds: string[];
+    alertIds: string[];
+    deliveryHistoryRefs: string[];
+  };
+  consumerContracts: {
+    schemaVersion: "dwm.source_projection_alert_readiness_consumers.v1";
+    publicTI: {
+      canConsume: boolean;
+      redacted: true;
+      stableFields: string[];
+      gapFields: string[];
+    };
+    dashboard: {
+      canConsume: boolean;
+      route: "/v1/dwm/alerts";
+      stableFields: string[];
+      gapFields: string[];
+    };
+    alertGeneration: {
+      canConsume: boolean;
+      route: "/v1/dwm/alerts/rebuild";
+      stableFields: string[];
+      gapFields: string[];
+    };
+    webhook: {
+      canConsume: boolean;
+      route: "/v1/dwm/webhooks/deliver";
+      stableFields: string[];
+      gapFields: string[];
+    };
+  };
+  safeOutput: {
+    rawTargetsExposed: false;
+    restrictedMetadataLeaked: false;
+    privateTelegramContentExposed: false;
+    liveNetworkScrapeStarted: false;
+  };
   proofCommands: string[];
 };
 
@@ -1572,18 +1687,33 @@ export function buildDwmOrgAlertPipelineProof(input: {
       blockerCodes
     };
   });
-  const alertRows = handoffs.map(({ alert, handoff }) => ({
-    alertId: String(alert.id),
-    dedupeKey: handoff.dedupe.alertDedupeKey,
-    sourceFamily: handoff.sourceFamily,
-    watchlistIds: handoff.watchlist.watchlistIds,
-    watchlistItemIds: handoff.watchlist.watchlistItemIds,
-    caseReady: handoff.caseReadiness.ready,
-    deliveryReady: handoff.deliveryReadiness.ready,
-    delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
-    downstreamBlockerCodes: handoff.blockerCodes,
-    deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs
-  }));
+  const alertRows = handoffs.map(({ alert, handoff }) => {
+    const sourceProvenanceSummary = alert.sourceProvenanceSummary ?? buildDwmAlertSourceProvenanceSummary({
+      alert,
+      tenantId: input.tenantId,
+      organizationId: input.organizationId
+    });
+    return {
+      alertId: String(alert.id),
+      dedupeKey: handoff.dedupe.alertDedupeKey,
+      sourceFamily: handoff.sourceFamily,
+      watchlistIds: handoff.watchlist.watchlistIds,
+      watchlistItemIds: handoff.watchlist.watchlistItemIds,
+      selectedCaptureIds: handoff.evidence.selectedCaptureIds,
+      evidenceCount: handoff.evidence.evidenceCount,
+      provenanceCaptureIds: sourceProvenanceSummary.captureIds,
+      provenanceSourceIds: sourceProvenanceSummary.sourceIds,
+      provenanceGapCodes: uniqueStrings(sourceProvenanceSummary.provenanceGaps.map((gap) => gap.code)),
+      workflowStatus: handoff.lifecycle.alertStatus,
+      assignedOwner: alert.assignedOwner ? String(alert.assignedOwner) : undefined,
+      workflowEventCount: handoff.workflowVersion.eventCount,
+      caseReady: handoff.caseReadiness.ready,
+      deliveryReady: handoff.deliveryReadiness.ready,
+      delivered: handoff.deliveryReadiness.lastDeliveryStatus === "delivered" || handoff.deliveryReadiness.deliveryHistoryRefs.length > 0,
+      downstreamBlockerCodes: handoff.blockerCodes,
+      deliveryHistoryRefs: handoff.deliveryReadiness.deliveryHistoryRefs
+    };
+  });
   const gaps = buildOrgAlertPipelineGaps({ readiness, candidates, alertRows });
   const state = orgAlertPipelineState({ readiness, candidates, alertRows, gaps });
   return {
@@ -1625,6 +1755,291 @@ export function buildDwmOrgAlertPipelineProof(input: {
   };
 }
 
+export function buildDwmSourceProjectionAlertReadinessProof(input: {
+  sourceProjection: TiSourceProvenancePublicTiSourceOpsProjection;
+  alertPipeline: DwmOrgAlertPipelineProof;
+  generatedAt?: string;
+}): DwmSourceProjectionAlertReadinessProof {
+  const generatedAt = input.generatedAt ?? new Date().toISOString();
+  const blockers = buildSourceProjectionAlertReadinessBlockers(input.sourceProjection, input.alertPipeline);
+  const state = sourceProjectionAlertReadinessState(input.sourceProjection, input.alertPipeline, blockers);
+  const ownerLane = sourceProjectionAlertReadinessOwnerLane(blockers, state);
+  const provenanceRefs = sourceProjectionAlertReadinessProvenanceRefs(input.sourceProjection, input.alertPipeline);
+  const canRenderGaps = blockers.length > 0 || input.alertPipeline.readiness.zeroAlertProof.zeroAlert;
+
+  return {
+    schemaVersion: "dwm.source_projection_alert_readiness.v1",
+    id: stableId("dwm_source_projection_alert_readiness", `${input.sourceProjection.id}:${input.alertPipeline.generatedAt}:${generatedAt}:${state}`),
+    tenantId: input.alertPipeline.tenantId,
+    organizationId: input.alertPipeline.organizationId,
+    actor: input.sourceProjection.actor,
+    generatedAt,
+    state,
+    ownerLane,
+    sourceProjection: {
+      schemaVersion: input.sourceProjection.schemaVersion,
+      id: input.sourceProjection.id,
+      generatedAt: input.sourceProjection.generatedAt,
+      publicTiRoute: input.sourceProjection.publicTiRoute,
+      pageReadiness: input.sourceProjection.pageReadiness,
+      sourceCoverage: input.sourceProjection.sourceCoverage,
+      provenanceRowCount: input.sourceProjection.provenanceRows.length,
+      enrichmentGapCount: input.sourceProjection.enrichmentGaps.length
+    },
+    alertPipeline: {
+      schemaVersion: input.alertPipeline.schemaVersion,
+      generatedAt: input.alertPipeline.generatedAt,
+      state: input.alertPipeline.state,
+      readyForRebuild: input.alertPipeline.readiness.readyForRebuild,
+      readyForCustomerDelivery: input.alertPipeline.readiness.readyForCustomerDelivery,
+      candidateCount: input.alertPipeline.candidates.length,
+      alertCount: input.alertPipeline.alerts.length,
+      blockerCodes: input.alertPipeline.readiness.blockerCodes,
+      zeroAlertState: input.alertPipeline.readiness.zeroAlertProof.state
+    },
+    blockers,
+    downstreamRoutes: {
+      publicTI: input.sourceProjection.publicTiRoute,
+      dashboard: "/v1/dwm/alerts",
+      alertReadiness: "/v1/dwm/alerts/generation-readiness",
+      alertRebuild: "/v1/dwm/alerts/rebuild",
+      webhookDelivery: "/v1/dwm/webhooks/deliver"
+    },
+    provenanceRefs,
+    consumerContracts: {
+      schemaVersion: "dwm.source_projection_alert_readiness_consumers.v1",
+      publicTI: {
+        canConsume: input.sourceProjection.pageReadiness.canRender,
+        redacted: true,
+        stableFields: [
+          "actor",
+          "sourceProjection.publicTiRoute",
+          "sourceProjection.sourceCoverage",
+          "alertPipeline.zeroAlertState",
+          "blockers"
+        ],
+        gapFields: ["blockers.code", "blockers.ownerLane", "blockers.route"]
+      },
+      dashboard: {
+        canConsume: true,
+        route: "/v1/dwm/alerts",
+        stableFields: [
+          "state",
+          "sourceProjection.pageReadiness",
+          "alertPipeline.readyForRebuild",
+          "alertPipeline.readyForCustomerDelivery",
+          "provenanceRefs.alertCandidateIds",
+          "provenanceRefs.alertIds"
+        ],
+        gapFields: ["blockers.code", "blockers.blockerCodes", "alertPipeline.zeroAlertState"]
+      },
+      alertGeneration: {
+        canConsume: input.sourceProjection.pageReadiness.alertGeneration && input.alertPipeline.readiness.readyForRebuild,
+        route: "/v1/dwm/alerts/rebuild",
+        stableFields: [
+          "tenantId",
+          "organizationId",
+          "sourceProjection.sourceCoverage.families",
+          "provenanceRefs.sourceOpsFixtureBundleId",
+          "provenanceRefs.alertCandidateIds"
+        ],
+        gapFields: ["blockers.code", "alertPipeline.blockerCodes"]
+      },
+      webhook: {
+        canConsume: input.alertPipeline.consumerAdapters.webhook.canConsume && state === "ready_for_customer_delivery",
+        route: "/v1/dwm/webhooks/deliver",
+        stableFields: [
+          "provenanceRefs.alertIds",
+          "provenanceRefs.deliveryHistoryRefs",
+          "alertPipeline.readyForCustomerDelivery"
+        ],
+        gapFields: ["blockers.code", "blockers.route"]
+      }
+    },
+    safeOutput: {
+      rawTargetsExposed: false,
+      restrictedMetadataLeaked: false,
+      privateTelegramContentExposed: false,
+      liveNetworkScrapeStarted: false
+    },
+    proofCommands: [
+      "bun test src/tests/sourceProvenanceTiPageContract.test.ts src/tests/dwmOrgAlertPipelineProof.test.ts",
+      "bunx tsc --noEmit"
+    ]
+  };
+}
+
+function buildSourceProjectionAlertReadinessBlockers(
+  sourceProjection: TiSourceProvenancePublicTiSourceOpsProjection,
+  alertPipeline: DwmOrgAlertPipelineProof
+): DwmSourceProjectionAlertReadinessProof["blockers"] {
+  const blockers: DwmSourceProjectionAlertReadinessProof["blockers"] = [];
+  if (!sourceProjection.organizationId || !alertPipeline.organizationId) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "missing_org_scope",
+      "org_foundation",
+      "/v1/dwm/alerts/generation-readiness",
+      "Org scope is required before source-backed alert readiness can be shared.",
+      true
+    ));
+  } else if (sourceProjection.organizationId !== alertPipeline.organizationId) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "org_mismatch",
+      "org_foundation",
+      "/v1/dwm/alerts/generation-readiness",
+      "Source projection and alert pipeline reference different organizations.",
+      true
+    ));
+  }
+  if (!sourceProjection.sourceOpsFixtureBundleId || sourceProjection.provenanceRows.some((row) => !row.provenance?.sourceOpsFixtureBundleId)) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "missing_provenance",
+      "source_operations",
+      "/v1/dwm/source-requests",
+      "Source projection must include fixture and packet provenance before downstream consumers can trust it.",
+      true
+    ));
+  }
+  if (sourceProjection.pageReadiness.state === "blocked") {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "source_projection_blocked",
+      "source_operations",
+      sourceProjection.publicTiRoute,
+      "Source-backed public TI projection is blocked.",
+      true
+    ));
+  } else if (sourceProjection.pageReadiness.state === "partial") {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "source_projection_partial",
+      "source_operations",
+      sourceProjection.publicTiRoute,
+      "Source-backed public TI projection is only partially ready.",
+      true
+    ));
+  }
+  if (sourceProjection.sourceCoverage.freshnessState === "stale") {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "stale_source",
+      "source_operations",
+      "/v1/dwm/source-requests",
+      "Source evidence is stale and must be refreshed or acknowledged before alert readiness is trusted.",
+      true
+    ));
+  }
+  for (const gap of sourceProjection.enrichmentGaps) {
+    if (gap.code === "duplicate_candidate") {
+      blockers.push(sourceProjectionAlertReadinessBlocker(
+        "duplicate_candidate",
+        "source_operations",
+        gap.route.path,
+        "Source operations reported a duplicate candidate.",
+        true,
+        { sourceFamily: gap.sourceFamily }
+      ));
+    }
+    if (gap.code === "unsupported_source_family") {
+      blockers.push(sourceProjectionAlertReadinessBlocker(
+        "unsupported_source_family",
+        "source_operations",
+        gap.route.path,
+        "Source operations reported a source family that alert generation cannot consume yet.",
+        true,
+        { sourceFamily: gap.sourceFamily }
+      ));
+    }
+  }
+  if (alertPipeline.readiness.blockerCodes.length > 0) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "alert_readiness_blocked",
+      ownerLaneForPipelineBlockers(alertPipeline.readiness.blockerCodes),
+      "/v1/dwm/alerts/generation-readiness",
+      "Org alert generation readiness has blockers.",
+      true,
+      { blockerCodes: alertPipeline.readiness.blockerCodes }
+    ));
+  }
+  if (alertPipeline.readiness.zeroAlertProof.zeroAlert) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "zero_alert_no_match",
+      "alert_generation",
+      "/v1/dwm/alerts/rebuild",
+      "No customer alert row is expected from the current watchlist and capture inputs.",
+      true,
+      { blockerCodes: alertPipeline.readiness.zeroAlertProof.blockerCodes }
+    ));
+  }
+  if (!alertPipeline.consumerAdapters.webhook.canConsume && !alertPipeline.readiness.zeroAlertProof.zeroAlert) {
+    blockers.push(sourceProjectionAlertReadinessBlocker(
+      "webhook_delivery_unready",
+      "webhook_delivery",
+      "/v1/dwm/webhooks/deliver",
+      "Webhook delivery cannot consume this alert pipeline state yet.",
+      true
+    ));
+  }
+  return uniqueSourceProjectionAlertReadinessBlockers(blockers);
+}
+
+function sourceProjectionAlertReadinessBlocker(
+  code: DwmSourceProjectionAlertReadinessProof["blockers"][number]["code"],
+  ownerLane: DwmSourceProjectionAlertReadinessProof["blockers"][number]["ownerLane"],
+  route: string,
+  detail: string,
+  recoverable: boolean,
+  extra: Partial<Pick<DwmSourceProjectionAlertReadinessProof["blockers"][number], "sourceFamily" | "blockerCodes">> = {}
+): DwmSourceProjectionAlertReadinessProof["blockers"][number] {
+  return { code, ownerLane, route, detail, recoverable, ...extra };
+}
+
+function uniqueSourceProjectionAlertReadinessBlockers(
+  blockers: DwmSourceProjectionAlertReadinessProof["blockers"]
+): DwmSourceProjectionAlertReadinessProof["blockers"] {
+  const seen = new Set<string>();
+  return blockers.filter((blocker) => {
+    const key = `${blocker.code}:${blocker.ownerLane}:${blocker.route}:${blocker.sourceFamily ?? ""}:${(blocker.blockerCodes ?? []).join(",")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function sourceProjectionAlertReadinessState(
+  sourceProjection: TiSourceProvenancePublicTiSourceOpsProjection,
+  alertPipeline: DwmOrgAlertPipelineProof,
+  blockers: DwmSourceProjectionAlertReadinessProof["blockers"]
+): DwmSourceProjectionAlertReadinessProof["state"] {
+  const hardBlocked = blockers.some((blocker) => blocker.code === "missing_org_scope" || blocker.code === "org_mismatch" || blocker.code === "missing_provenance" || blocker.code === "source_projection_blocked");
+  if (hardBlocked) return "blocked";
+  if (alertPipeline.readiness.zeroAlertProof.zeroAlert) return "zero_alert_no_match";
+  if (sourceProjection.ok && alertPipeline.readiness.readyForCustomerDelivery && alertPipeline.alerts.length > 0) return "ready_for_customer_delivery";
+  if (sourceProjection.pageReadiness.alertGeneration && alertPipeline.readiness.readyForRebuild) return "ready_for_alert_rebuild";
+  return "blocked";
+}
+
+function sourceProjectionAlertReadinessOwnerLane(
+  blockers: DwmSourceProjectionAlertReadinessProof["blockers"],
+  state: DwmSourceProjectionAlertReadinessProof["state"]
+): DwmSourceProjectionAlertReadinessProof["ownerLane"] {
+  if (blockers.length > 0) return blockers[0].ownerLane;
+  if (state === "ready_for_customer_delivery") return "webhook_delivery";
+  return "alert_generation";
+}
+
+function sourceProjectionAlertReadinessProvenanceRefs(
+  sourceProjection: TiSourceProvenancePublicTiSourceOpsProjection,
+  alertPipeline: DwmOrgAlertPipelineProof
+): DwmSourceProjectionAlertReadinessProof["provenanceRefs"] {
+  return {
+    sourceOpsFixtureBundleId: sourceProjection.sourceOpsFixtureBundleId,
+    sourceFreshnessGapPacketIds: uniqueStrings(sourceProjection.provenanceRows.map((row) => row.provenance.sourceFreshnessGapPacketId).filter(Boolean)),
+    parserHealthAlertPacketIds: uniqueStrings(sourceProjection.provenanceRows.map((row) => row.provenance.parserHealthAlertPacketId).filter(Boolean)),
+    sourceOpsActionQueueIds: uniqueStrings(sourceProjection.provenanceRows.map((row) => row.provenance.sourceOpsActionQueueId).filter(Boolean)),
+    alertCandidateIds: uniqueStrings(alertPipeline.candidates.map((candidate) => candidate.candidateId)),
+    alertIds: uniqueStrings(alertPipeline.alerts.map((alert) => alert.alertId)),
+    deliveryHistoryRefs: uniqueStrings(alertPipeline.alerts.flatMap((alert) => alert.deliveryHistoryRefs))
+  };
+}
+
 function buildDwmOrgAlertPipelineConsumerAdapters(input: {
   readiness: DwmAlertGenerationReadiness;
   alertRows: DwmOrgAlertPipelineProof["alerts"];
@@ -1642,11 +2057,15 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
     "readiness.sourceFamilyGaps",
     "candidates.watchlistIds",
     "candidates.watchlistItemIds",
-    "alerts.alertId",
-    "alerts.dedupeKey",
-    "alerts.sourceFamily",
-    "gaps.blockerCodes"
-  ];
+        "alerts.alertId",
+        "alerts.dedupeKey",
+        "alerts.sourceFamily",
+        "alerts.selectedCaptureIds",
+        "alerts.evidenceCount",
+        "alerts.provenanceGapCodes",
+        "alerts.workflowStatus",
+        "gaps.blockerCodes"
+      ];
   const gapFields = [
     "readiness.zeroAlertProof.state",
     "readiness.zeroAlertProof.nextAction",
@@ -1664,6 +2083,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         ...sharedStableFields,
         "alerts.caseReady",
         "alerts.deliveryReady",
+        "alerts.workflowStatus",
         "alerts.downstreamBlockerCodes"
       ],
       gapFields
@@ -1679,6 +2099,8 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.dedupeKey",
         "alerts.deliveryReady",
         "alerts.deliveryHistoryRefs",
+        "alerts.selectedCaptureIds",
+        "alerts.provenanceGapCodes",
         "candidates.webhookDestinationIds",
         "gaps.blockerCodes"
       ],
@@ -1694,6 +2116,7 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "readiness.zeroAlertProof",
         "readiness.sourceFamilyGaps",
         "alerts.sourceFamily",
+        "alerts.provenanceGapCodes",
         "gaps.detail"
       ],
       gapFields
@@ -1706,11 +2129,17 @@ function buildDwmOrgAlertPipelineConsumerAdapters(input: {
         "alerts.caseReady",
         "alerts.deliveryReady",
         "alerts.delivered",
+        "alerts.workflowStatus",
+        "alerts.workflowEventCount",
+        "alerts.assignedOwner",
         "proofCommands"
       ],
       workflowFields: [
         "alerts.alertId",
         "alerts.dedupeKey",
+        "alerts.workflowStatus",
+        "alerts.assignedOwner",
+        "alerts.workflowEventCount",
         "alerts.downstreamBlockerCodes",
         "readiness.zeroAlertProof.watchlistTerms",
         "gaps"
