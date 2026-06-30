@@ -261,6 +261,8 @@ export type SourceGrowthReadiness = ProductReadinessSnapshotBase & {
     sourceReadinessArtifactReady?: boolean
     sourceProxyVerificationReady?: boolean
     sourceFamilyCount?: number
+    parserSourceFamilyCount?: number
+    parserSourceFamilyNames?: string[]
     registeredTotal?: number
     activeSourceCount?: number
     catalogCandidates?: number
@@ -1001,7 +1003,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
             staleAfterSeconds: staleAfterMinutes * 60,
             proofTimestamp: options.checkedAt,
             expectedDashboardRowId: 'source_inventory_probe',
-            integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+            integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceFamilyCounts, and parserSourceFamilyCounts.',
             backendProofContractVersion: 'dwm.source_inventory.v1',
         }
     }
@@ -1075,8 +1077,10 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         && receiptMatrixSafe,
     )
     const sourceFamilyCount = Object.keys(input.sourcePacks?.sourceFamilyCounts || {}).length
+    const parserSourceFamilyNames = Object.keys(input.sourcePacks?.parserSourceFamilyCounts || {}).sort()
+    const parserSourceFamilyCount = parserSourceFamilyNames.length
     const workerRowsReady = Boolean(worker && workerFresh && (worker.collectionReadyRows || worker.activeSourceRows))
-    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && sourceFamilyCount > 0)
+    const workerReady = Boolean(workerRowsReady && sourceOperationsReady && sourceCustomerConfigReady && sourceReadinessArtifactReady && sourceProxyVerificationReady && schemaLookupReady && receiptMatrixReady && sourceFamilyCount > 0 && parserSourceFamilyCount > 0)
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
@@ -1091,6 +1095,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         schemaLookupReady ? '' : 'Safe contract schema lookup is not loaded from the source proxy.',
         receiptMatrixReady ? '' : 'Product readiness receipt matrix is not loaded from the source proxy.',
         sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
+        parserSourceFamilyCount > 0 ? '' : 'Parser family counts were not returned by the source-pack proof.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
         ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
     ].filter(Boolean)
@@ -1115,6 +1120,8 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         receiptMatrixRows: receiptMatrixRows.length,
         receiptMatrixBlockedRows: receiptMatrixRows.filter(row => Array.isArray(row.blockerCodes) && row.blockerCodes.length > 0).length,
         sourceFamilyCount,
+        parserSourceFamilyCount,
+        parserSourceFamilyNames,
         registeredTotal: counts?.registeredTotal,
         activeSourceCount: counts?.registeredActiveOrCanary,
         catalogCandidates: counts?.catalogTotalCandidates ?? input.sourcePacks?.counts?.candidateCount,
@@ -1139,7 +1146,7 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
         staleAfterSeconds: staleAfterMinutes * 60,
         proofTimestamp: workerLastRunAt || input.sourceInventory?.generatedAt || input.generatedAt || options.checkedAt,
         expectedDashboardRowId: 'source_inventory_probe',
-        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, schemaLookup, productReadinessReceiptMatrix, and sourceFamilyCounts.',
+        integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, workerReadiness, sourceOperationsReadiness, sourceCustomerConfig, sourceReadinessArtifact, proxyVerification, schemaLookup, productReadinessReceiptMatrix, sourceFamilyCounts, and parserSourceFamilyCounts.',
         backendProofContractVersion: [
             input.sourceInventory?.schemaVersion || 'dwm.source_inventory.v1',
             input.sourcePacks?.schemaVersion || 'dwm.source_packs.v1',
@@ -1764,6 +1771,8 @@ function buildProductReadiness(input: {
             registeredTotal: sourceGrowth?.registeredTotal,
             activeSourceCount: sourceGrowth?.activeSourceCount,
             reviewQueueCount: sourceGrowth?.reviewQueueCount,
+            parserSourceFamilyCount: sourceGrowth?.parserSourceFamilyCount,
+            parserSourceFamilyNames: sourceGrowth?.parserSourceFamilyNames,
         },
         {
             id: 'public_ti_provenance',
@@ -1895,6 +1904,19 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                     maxSources: 12,
                     maxTasks: 24,
                 },
+            })
+            actions.push({
+                id: 'preview_source_apply_plan',
+                label: 'Preview source plan',
+                method: 'POST',
+                href: '/api/ti/scraper/control',
+                body: {
+                    action: 'source_apply_plan',
+                    query: context.scope.organizationId || context.scope.tenantId,
+                    sourcePackIds: ['safe-public-cti-starter-pack'],
+                    actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
+                },
+                disabledReason: item.parserSourceFamilyCount ? undefined : 'Preview requires parser-family proof from the source-pack worker.',
             })
             break
         case 'dashboard_alert':
@@ -2349,6 +2371,7 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
         typeof input.activeSourceCount === 'number' && typeof input.registeredTotal === 'number' ? `${input.activeSourceCount}/${input.registeredTotal} active sources` : '',
         typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
         typeof input.sourceFamilyCount === 'number' ? `${input.sourceFamilyCount} source families` : '',
+        typeof input.parserSourceFamilyCount === 'number' ? `${input.parserSourceFamilyCount} parser families` : '',
         typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
         typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
         typeof input.collectionReadyRows === 'number' ? `${input.collectionReadyRows} worker-ready rows` : '',

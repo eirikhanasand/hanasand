@@ -102,6 +102,7 @@ const sourceProxy = {
             checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
         },
         sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
+        parserSourceFamilyCounts: { telegram: 2, darkweb_onion: 1 },
         lastRun: { status: 'completed', completedAt: generatedAt },
     },
     contracts: {
@@ -795,6 +796,8 @@ assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id ==
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.workerStatus, 'ready')
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.collectionReadyRows, 349)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.queuedValidationJobs, 0)
+assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.parserSourceFamilyCount, 2)
+assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.actions?.some(action => action.id === 'preview_source_apply_plan'))
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.activeDestinationCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.deliveryReadyCount, 1)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'webhook_health')?.latestDeliveryAt, generatedAt)

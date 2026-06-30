@@ -215,6 +215,8 @@ export type WorkbenchProductReadinessItem = {
     registeredTotal?: number
     activeSourceCount?: number
     reviewQueueCount?: number
+    parserSourceFamilyCount?: number
+    parserSourceFamilyNames?: string[]
 }
 
 export type WorkbenchOrgContext = {
@@ -1692,7 +1694,7 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
                 ? ` Destinations ${item.activeDestinationCount ?? 0}/${item.destinationCount ?? 0} active; ${item.deliveryReadyCount ?? 0} delivery-ready${item.latestDeliveryAt ? `; latest delivery ${relativeTime(item.latestDeliveryAt)}` : item.latestAuditEventAt ? `; latest audit ${relativeTime(item.latestAuditEventAt)}` : ''}.`
                 : ''
             const sourceWorkerDetail = item.id === 'source_inventory_probe'
-                ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
+                ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.parserSourceFamilyCount ?? 0} parser families; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
                 : ''
             return {
                 id: `readiness_${item.id}`,

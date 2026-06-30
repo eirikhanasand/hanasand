@@ -219,6 +219,7 @@ const sourceProofProxyPayload = {
             checks: [{ id: 'safe_output_no_live_network', status: 'pass' }],
         },
         sourceFamilyCounts: { telegram: 3, darkweb_onion: 2 },
+        parserSourceFamilyCounts: { telegram: 2, darkweb_onion: 1 },
         lastRun: { status: 'completed', completedAt: '2026-06-28T10:18:00.000Z' },
     },
     contracts: {
@@ -1384,6 +1385,7 @@ if (expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists',
 }
 void expectProductReadinessAction(productProgressOrgContext, 'source_inventory_probe', 'inspect_source_inventory', '/api/ti/scraper/control?q=org_acme&organizationId=org_acme')
 void expectProductReadinessAction(productProgressOrgContext, 'source_inventory_probe', 'request_source_coverage', '/api/dwm/source-requests')
+void expectProductReadinessAction(productProgressOrgContext, 'source_inventory_probe', 'preview_source_apply_plan', '/api/ti/scraper/control')
 void expectProductReadinessAction(productProgressOrgContext, 'dashboard_evidence', 'open_alert_queue', '/api/dwm/alerts?organizationId=org_acme')
 void expectProductReadinessAction(productProgressOrgContext, 'dashboard_evidence', 'open_alert_generation_readiness', '/api/dwm/alerts/generation-readiness')
 void expectProductReadinessAction(productProgressOrgContext, 'webhook_delivery', 'open_delivery_history', '/api/dwm/webhooks/deliveries?organizationId=org_acme&alertId=alert_acme_1')
@@ -1399,6 +1401,10 @@ void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_prob
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerLastRunAt satisfies string | undefined)
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').collectionReadyRows satisfies number | undefined)
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').queuedValidationJobs satisfies number | undefined)
+void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount satisfies number | undefined)
+if (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').parserSourceFamilyCount !== 2) {
+    throw new Error('Expected source inventory readiness to expose parser-family coverage from source-pack proof.')
+}
 void (sourceProofOrgContext.readiness.fullChainReady satisfies boolean)
 void expectProductReadinessStatus(productProgressOrgContext, 'source_inventory_probe', 'ready')
 void expectProductReadinessStatus(productProgressOrgContext, 'entitlement_readiness', 'ready')
