@@ -900,7 +900,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 ))}
                             </div>
                         </div>
-                        <div className={`${compact ? 'max-h-[calc(100vh-250px)]' : 'max-h-[620px]'} overflow-auto p-2`}>
+                        <div className={`${compact ? 'xl:max-h-[calc(100vh-250px)]' : 'xl:max-h-[620px]'} overflow-visible p-2 xl:overflow-auto`}>
                             <div role='listbox' aria-label='Analyst work queue' className='grid gap-1'>
                                 {cases.map((item, index) => (
                                     <button

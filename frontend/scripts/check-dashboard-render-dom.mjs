@@ -149,6 +149,11 @@ async function inspectRenderedPage(page, spec) {
             if (isMobileViewport && (!analystQueueRect || analystQueueRect.top > 360)) {
                 reasons.push(`mobile work queue starts too low: ${analystQueueRect ? Math.round(analystQueueRect.top) : 'missing'}`)
             }
+            const queueScroller = analystQueue?.parentElement
+            const queueScrollerStyle = queueScroller ? window.getComputedStyle(queueScroller) : null
+            if (isMobileViewport && queueScrollerStyle && ['auto', 'scroll'].includes(queueScrollerStyle.overflowY)) {
+                reasons.push('mobile work queue uses an internal scroll container before selected detail')
+            }
             const detail = document.querySelector('[data-readiness-detail]')
             if (!detail) {
                 reasons.push('missing readiness detail panel')
