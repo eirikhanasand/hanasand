@@ -2051,6 +2051,10 @@ export function buildReadinessCases(input: {
     const analystWorkflowReady = analystWorkflow?.status === 'ready'
     const analystWorkflowCheckedAt = analystWorkflow?.checkedAt || analystWorkflow?.latestCaseAt || analystWorkflow?.proofTimestamp || now
     const analystWorkflowBlockers = analystWorkflow?.blockers?.filter(Boolean) || []
+    const sourceGrowth = input.externalReadiness?.sourceGrowth
+    const sourceWorkerReady = sourceGrowthReady(sourceGrowth)
+    const sourceWorkerCheckedAt = sourceGrowth?.checkedAt || sourceGrowth?.workerLastRunAt || sourceGrowth?.latestInventoryAt || sourceGrowth?.proofTimestamp || now
+    const sourceWorkerBlockers = sourceGrowth?.blockers?.filter(Boolean) || []
     const attemptedAlertIdentity = [
         input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
         input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
@@ -2283,6 +2287,58 @@ export function buildReadinessCases(input: {
                 label: 'Open case workflow',
                 method: 'GET',
                 href: analystWorkflow.href || '/dashboard/ti/workbench',
+            }],
+        })] : []),
+        ...(sourceGrowth ? [readinessCase({
+            id: 'source_worker_readiness',
+            kind: 'source_readiness',
+            queue: 'Source worker',
+            title: sourceWorkerReady ? 'Source worker proof loaded' : 'Resolve source worker proof',
+            severity: sourceWorkerReady ? 'medium' : 'high',
+            status: sourceGrowth.status,
+            priority: sourceWorkerReady ? 244 : 358,
+            confidence: sourceWorkerReady ? 89 : 66,
+            subtitle: sourceGrowth.detail || sourceGrowthDetail(sourceGrowth),
+            recommendedAction: sourceWorkerReady
+                ? 'Open source operations, inspect worker readiness, then rerun alert generation from the selected organization scope.'
+                : 'Open source operations and resolve worker, inventory, customer configuration, or proxy proof blockers before treating alert generation as ready.',
+            evidence: [{
+                id: 'ev_source_worker_readiness',
+                sourceName: 'Source worker readiness',
+                sourceFamily: 'source health',
+                captureMode: 'api snapshot',
+                redactionState: 'customer safe',
+                contentHash: sourceGrowth.backendProofContractVersion || sourceGrowth.schemaVersion,
+                excerpt: sourceWorkerReady
+                    ? `${sourceGrowth.collectionReadyRows ?? 0} collection-ready rows, ${sourceGrowth.activeSourceRows ?? sourceGrowth.activeSourceCount ?? 0} active sources, worker ${sourceGrowth.workerStatus || 'ready'}.`
+                    : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Source worker readiness is not operator-reachable.',
+                observedAt: sourceWorkerCheckedAt,
+                provenance: sourceGrowth.source || '/api/ti/scraper/control',
+                confidence: sourceWorkerReady ? 89 : 66,
+            }],
+            timeline: [{
+                id: 'source_worker_readiness_at',
+                at: sourceWorkerCheckedAt,
+                title: sourceWorkerReady ? 'Source worker ready' : 'Source worker blocked',
+                body: sourceWorkerReady
+                    ? `Worker status ${sourceGrowth.workerStatus || 'ready'}; ${sourceGrowth.collectionReadyRows ?? 0} collection-ready rows; last run ${sourceGrowth.workerLastRunAt || 'not returned'}.`
+                    : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Source worker readiness needs operator proof.',
+            }],
+            nextTasks: sourceWorkerReady
+                ? ['Owner: source ops. Inspect source worker proof in source operations.', 'Confirm source family coverage before alert rebuild.', 'Return to the alert queue after source worker proof stays fresh.']
+                : ['Owner: source ops. Open source operations.', 'Resolve source inventory, source-pack, worker, or proxy verification blockers.', 'Rerun product-progress readiness after source proof is operator-reachable.'],
+            relatedLinks: [
+                { href: sourceGrowth.href || '/dashboard/ti/sources', label: 'Source operations' },
+                { href: '/api/ti/scraper/control', label: 'Source proof API' },
+                { href: '/dashboard/dwm', label: 'DWM console' },
+            ],
+            workflowPath: path,
+            missingDependency: sourceWorkerReady ? undefined : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Missing operator-reachable source worker proof.',
+            actions: [{
+                id: 'open_source_worker_readiness',
+                label: 'Open source operations',
+                method: 'GET',
+                href: sourceGrowth.href || '/dashboard/ti/sources',
             }],
         })] : []),
         readinessCase({

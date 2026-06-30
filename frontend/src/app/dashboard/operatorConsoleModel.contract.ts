@@ -1116,6 +1116,9 @@ void _contract
 if (cases.some(item => item.id === 'case_workflow_readiness')) {
     throw new Error('Case workflow queue item must be backed by product-progress analystWorkflow readiness.')
 }
+if (cases.some(item => item.id === 'source_worker_readiness')) {
+    throw new Error('Source worker queue item must be backed by product-progress sourceGrowth readiness.')
+}
 const productProgressCaseWorkflow = expectWorkbenchCase(productProgressCases, 'case_workflow_readiness')
 void (productProgressCaseWorkflow.status satisfies string)
 if (productProgressCaseWorkflow.caseDetailHref !== '/api/cases/case_acme_1') {
@@ -1124,6 +1127,15 @@ if (productProgressCaseWorkflow.caseDetailHref !== '/api/cases/case_acme_1') {
 void (productProgressCaseWorkflow.relatedLinks.find(link => link.href === '/api/cases/case_acme_1')?.label satisfies string | undefined)
 if (productProgressCaseWorkflow.actions?.find(action => action.id === 'open_analyst_case_workflow')?.href !== '/dashboard/ti/workbench?case=case_acme_1') {
     throw new Error('Expected case workflow action to open the backed analyst workbench route.')
+}
+const productProgressSourceWorker = expectWorkbenchCase(productProgressCases, 'source_worker_readiness')
+void (productProgressSourceWorker.status satisfies string)
+void (productProgressSourceWorker.evidence.find(item => item.id === 'ev_source_worker_readiness')?.provenance satisfies string | undefined)
+if (productProgressSourceWorker.relatedLinks.find(link => link.href === '/dashboard/ti/sources')?.label !== 'Source operations') {
+    throw new Error('Expected source worker readiness to deep-link to source operations.')
+}
+if (productProgressSourceWorker.actions?.find(action => action.id === 'open_source_worker_readiness')?.href !== '/dashboard/ti/sources') {
+    throw new Error('Expected source worker action to open source operations.')
 }
 void (liveProofIdentity.userEmail satisfies string | undefined)
 void (liveProofAlertsUrl.searchParams.get('userEmail') satisfies string | null)
