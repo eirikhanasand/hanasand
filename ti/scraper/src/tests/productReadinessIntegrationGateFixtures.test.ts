@@ -4,6 +4,8 @@ import {
   PRODUCT_READINESS_CONSUMER_VERIFICATION_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_CONSUMER_VERIFICATION_LEDGER_SCHEMA_VERSION,
   PRODUCT_READINESS_INTEGRATION_GATE_FIXTURE_SCHEMA_VERSION,
+  PRODUCT_READINESS_LANE_SELF_VALIDATION_EXAMPLES_SCHEMA_VERSION,
+  PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION,
   PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_SCHEMA_VERSION,
   PRODUCT_READINESS_SCHEMA_LOOKUP_METADATA_GUARD_SCHEMA_VERSION,
@@ -12,10 +14,12 @@ import {
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixture,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessLaneSelfValidationExamples,
   buildProductReadinessOwnerLaneReceiptExamples,
   buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
+  productReadinessLaneSelfValidationGuard,
   productReadinessOwnerLaneReceiptExamplesGuard,
   productReadinessSchemaLookupMetadataGuard,
   productReadinessWorkflowAcceptanceGuard
@@ -90,6 +94,23 @@ describe("product readiness integration gate fixtures", () => {
         "public_ti_handoff",
         "support_recovery",
         "website_readiness"
+      ]
+    });
+    expect(fixture.laneSelfValidation).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION,
+      ok: true,
+      blockerCodes: [],
+      requiredLaneIds: [
+        "org",
+        "watchlist",
+        "source",
+        "alert",
+        "webhook",
+        "case",
+        "dashboard",
+        "publicTI",
+        "support",
+        "website"
       ]
     });
     expect(fixture.coverage.failingRows).toEqual([]);
@@ -359,6 +380,42 @@ describe("product readiness integration gate fixtures", () => {
         "missing_owner_lane",
         "missing_owner_lane_self_validate_command",
         "missing_owner_lane_payload_shape"
+      ])
+    });
+    expect(byKind.get("missing_lane_self_validation_example")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_lane_self_validation_example"],
+      actualBlockerCodes: expect.arrayContaining(["missing_lane_self_validation_example"]),
+      laneSelfValidation: {
+        ok: false,
+        missingLaneIds: ["dashboard"]
+      }
+    });
+    expect(byKind.get("stale_lane_self_validation_example")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["stale_lane_self_validation_example"],
+      actualBlockerCodes: expect.arrayContaining(["stale_lane_self_validation_example"])
+    });
+    expect(byKind.get("missing_lane_self_validation_route")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_lane_self_validation_route"],
+      actualBlockerCodes: expect.arrayContaining(["missing_lane_self_validation_route"])
+    });
+    expect(byKind.get("prompt_literal_lane_self_validation_copy")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["lane_self_validation_copy_guard_dashboard_slop", "lane_self_validation_copy_guard_signal"],
+      actualBlockerCodes: expect.arrayContaining([
+        "lane_self_validation_copy_guard_dashboard_slop",
+        "lane_self_validation_copy_guard_signal"
+      ])
+    });
+    expect(byKind.get("malformed_lane_self_validation_payload")).toMatchObject({
+      passed: true,
+      expectedBlockerCodes: ["missing_lane_self_validation_owner", "missing_lane_self_validation_command", "missing_lane_self_validation_payload_shape"],
+      actualBlockerCodes: expect.arrayContaining([
+        "missing_lane_self_validation_owner",
+        "missing_lane_self_validation_command",
+        "missing_lane_self_validation_payload_shape"
       ])
     });
   });
@@ -646,6 +703,79 @@ describe("product readiness integration gate fixtures", () => {
         "missing_owner_lane_payload_shape",
         "owner_lane_copy_guard_control_room",
         "owner_lane_copy_guard_signal"
+      ])
+    });
+  });
+
+  test("publishes lane self-validation examples for producer and consumer handoff owners", () => {
+    const contract = JSON.parse(JSON.stringify(contractIndex())) as ReturnType<typeof contractIndex>;
+    const workflowReceipts = buildProductReadinessWorkflowAcceptanceReceipts(contract);
+    const ownerExamples = buildProductReadinessOwnerLaneReceiptExamples(workflowReceipts);
+    const laneExamples = buildProductReadinessLaneSelfValidationExamples(ownerExamples);
+    const guard = productReadinessLaneSelfValidationGuard(laneExamples);
+
+    expect(laneExamples).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_EXAMPLES_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      proofCommand: expect.stringContaining("check:product-readiness-contracts"),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(laneExamples.examples.map((example) => example.laneId)).toEqual([
+      "org",
+      "watchlist",
+      "source",
+      "alert",
+      "webhook",
+      "case",
+      "dashboard",
+      "publicTI",
+      "support",
+      "website"
+    ]);
+    const dashboard = laneExamples.examples.find((example) => example.laneId === "dashboard");
+    expect(dashboard).toMatchObject({
+      ownerLane: "dashboard",
+      consumerWorkflowIds: expect.arrayContaining(["case_workflow", "webhook_delivery"]),
+      routeRefs: expect.arrayContaining(["/dashboard"]),
+      selfValidateCommand: expect.stringContaining("check:product-readiness-contracts")
+    });
+    expect(dashboard?.payloadShape.requiredFields).toContain("routeRefs");
+    expect(guard).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      ok: true,
+      blockerCodes: [],
+      missingLaneIds: [],
+      proofCommand: expect.stringContaining("check:product-readiness-contracts")
+    });
+
+    const broken = JSON.parse(JSON.stringify(laneExamples)) as typeof laneExamples;
+    const brokenDashboard = broken.examples.find((example) => example.laneId === "dashboard");
+    if (!brokenDashboard) throw new Error("dashboard lane self-validation example missing");
+    brokenDashboard.ownerLane = "" as typeof brokenDashboard.ownerLane;
+    brokenDashboard.routeRefs = [];
+    brokenDashboard.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
+    brokenDashboard.selfValidateCommand = "";
+    brokenDashboard.payloadShape.requiredFields = [];
+    brokenDashboard.uiCopyLabel = "dashboard slop signal";
+
+    const brokenGuard = productReadinessLaneSelfValidationGuard(broken);
+
+    expect(brokenGuard).toMatchObject({
+      ok: false,
+      blockerCodes: expect.arrayContaining([
+        "missing_lane_self_validation_owner",
+        "missing_lane_self_validation_route",
+        "stale_lane_self_validation_example",
+        "missing_lane_self_validation_command",
+        "missing_lane_self_validation_payload_shape",
+        "lane_self_validation_copy_guard_dashboard_slop",
+        "lane_self_validation_copy_guard_signal"
       ])
     });
   });

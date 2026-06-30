@@ -23,6 +23,10 @@ export const PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_SCHEMA_VERSION =
   "hanasand.product_readiness.owner_lane_receipt_examples.v1" as const;
 export const PRODUCT_READINESS_OWNER_LANE_RECEIPT_EXAMPLES_GUARD_SCHEMA_VERSION =
   "hanasand.product_readiness.owner_lane_receipt_examples_guard.v1" as const;
+export const PRODUCT_READINESS_LANE_SELF_VALIDATION_EXAMPLES_SCHEMA_VERSION =
+  "hanasand.product_readiness.lane_self_validation_examples.v1" as const;
+export const PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION =
+  "hanasand.product_readiness.lane_self_validation_guard.v1" as const;
 const PRODUCT_READINESS_CONSUMER_VERIFIED_AT = "2026-06-30T00:00:00.000Z";
 const PRODUCT_READINESS_CONSUMER_STALE_BEFORE = "2026-06-23T00:00:00.000Z";
 const PRODUCT_READINESS_CONSUMER_PROOF_COMMAND = "cd ti/scraper && /Users/eirikhanasand/.bun/bin/bun run check:product-readiness-contracts";
@@ -52,7 +56,12 @@ export type ProductReadinessIntegrationGateFixtureKind =
   | "untested_owner_lane_receipt_example"
   | "missing_owner_lane_consumer"
   | "prompt_literal_owner_lane_copy"
-  | "malformed_owner_lane_receipt_example";
+  | "malformed_owner_lane_receipt_example"
+  | "missing_lane_self_validation_example"
+  | "stale_lane_self_validation_example"
+  | "missing_lane_self_validation_route"
+  | "prompt_literal_lane_self_validation_copy"
+  | "malformed_lane_self_validation_payload";
 
 const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "valid",
@@ -79,7 +88,12 @@ const FIXTURE_KINDS: ProductReadinessIntegrationGateFixtureKind[] = [
   "untested_owner_lane_receipt_example",
   "missing_owner_lane_consumer",
   "prompt_literal_owner_lane_copy",
-  "malformed_owner_lane_receipt_example"
+  "malformed_owner_lane_receipt_example",
+  "missing_lane_self_validation_example",
+  "stale_lane_self_validation_example",
+  "missing_lane_self_validation_route",
+  "prompt_literal_lane_self_validation_copy",
+  "malformed_lane_self_validation_payload"
 ];
 
 function cloneJson<T>(input: T): T {
@@ -196,12 +210,18 @@ const EXPECTED_BLOCKERS: Record<ProductReadinessIntegrationGateFixtureKind, stri
   untested_owner_lane_receipt_example: ["untested_owner_lane_receipt_example"],
   missing_owner_lane_consumer: ["missing_owner_lane_consumer"],
   prompt_literal_owner_lane_copy: ["owner_lane_copy_guard_control_room", "owner_lane_copy_guard_signal"],
-  malformed_owner_lane_receipt_example: ["missing_owner_lane", "missing_owner_lane_self_validate_command", "missing_owner_lane_payload_shape"]
+  malformed_owner_lane_receipt_example: ["missing_owner_lane", "missing_owner_lane_self_validate_command", "missing_owner_lane_payload_shape"],
+  missing_lane_self_validation_example: ["missing_lane_self_validation_example"],
+  stale_lane_self_validation_example: ["stale_lane_self_validation_example"],
+  missing_lane_self_validation_route: ["missing_lane_self_validation_route"],
+  prompt_literal_lane_self_validation_copy: ["lane_self_validation_copy_guard_dashboard_slop", "lane_self_validation_copy_guard_signal"],
+  malformed_lane_self_validation_payload: ["missing_lane_self_validation_owner", "missing_lane_self_validation_command", "missing_lane_self_validation_payload_shape"]
 };
 
 type ConsumerVerificationLedger = ReturnType<typeof buildProductReadinessConsumerVerificationLedger>;
 type WorkflowAcceptanceReceipts = ReturnType<typeof buildProductReadinessWorkflowAcceptanceReceipts>;
 type OwnerLaneReceiptExamples = ReturnType<typeof buildProductReadinessOwnerLaneReceiptExamples>;
+type LaneSelfValidationExamples = ReturnType<typeof buildProductReadinessLaneSelfValidationExamples>;
 
 const REQUIRED_WORKFLOW_ACCEPTANCE_IDS = [
   "org_setup",
@@ -213,6 +233,19 @@ const REQUIRED_WORKFLOW_ACCEPTANCE_IDS = [
   "public_ti_handoff",
   "support_recovery",
   "website_readiness"
+] as const;
+
+const REQUIRED_SELF_VALIDATION_LANES = [
+  "org",
+  "watchlist",
+  "source",
+  "alert",
+  "webhook",
+  "case",
+  "dashboard",
+  "publicTI",
+  "support",
+  "website"
 ] as const;
 
 const WORKFLOW_ACCEPTANCE_SPECS: Array<{
@@ -809,6 +842,169 @@ export function productReadinessOwnerLaneReceiptExamplesGuard(examples: OwnerLan
   };
 }
 
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+export function buildProductReadinessLaneSelfValidationExamples(ownerLaneExamples: OwnerLaneReceiptExamples) {
+  return {
+    schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_EXAMPLES_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    verifiedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+    staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE,
+    proofCommand: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+    examples: REQUIRED_SELF_VALIDATION_LANES.map((lane) => {
+      const related = ownerLaneExamples.examples.filter((example) => (
+        example.ownerLane === lane || example.consumerOwnerLanes.includes(lane)
+      ));
+      const producerWorkflows = related.filter((example) => example.ownerLane === lane).map((example) => example.workflowId);
+      const consumerWorkflows = related.filter((example) => example.consumerOwnerLanes.includes(lane)).map((example) => example.workflowId);
+      const routeRefs = uniqueSorted([
+        ...related.flatMap((example) => example.schemaLookupRefs.map((ref) => ref.route)),
+        ...related.flatMap((example) => example.consumerRoutes)
+      ]);
+      return {
+        laneId: lane,
+        ownerLane: lane,
+        producerWorkflowIds: uniqueSorted(producerWorkflows),
+        consumerWorkflowIds: uniqueSorted(consumerWorkflows),
+        workflowIds: uniqueSorted(related.map((example) => example.workflowId)),
+        customerWorkflowIds: uniqueSorted(related.flatMap((example) => example.customerWorkflowIds)),
+        capabilityIds: uniqueSorted(related.flatMap((example) => example.capabilityIds)),
+        schemaLookupRefs: related.flatMap((example) => example.schemaLookupRefs),
+        routeRefs,
+        focusedCheck: {
+          command: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+          result: "pass" as const,
+          checkedAt: PRODUCT_READINESS_CONSUMER_VERIFIED_AT,
+          staleBefore: PRODUCT_READINESS_CONSUMER_STALE_BEFORE
+        },
+        selfValidateCommand: PRODUCT_READINESS_CONSUMER_PROOF_COMMAND,
+        payloadShape: {
+          schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_EXAMPLES_SCHEMA_VERSION,
+          requiredFields: [
+            "laneId",
+            "ownerLane",
+            "workflowIds",
+            "customerWorkflowIds",
+            "schemaLookupRefs",
+            "routeRefs",
+            "focusedCheck",
+            "selfValidateCommand",
+            "safeOutput"
+          ],
+          forbiddenFields: ["rawText", "html", "webhookUrl", "authorization", "password", "credential"]
+        },
+        uiCopyLabel: `${lane}_lane_self_validation_example`,
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false,
+          crossOrgDataExposed: false
+        }
+      };
+    }),
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+function mutateLaneSelfValidationExamples(examples: LaneSelfValidationExamples, kind: ProductReadinessIntegrationGateFixtureKind) {
+  const dashboardExample = examples.examples.find((example) => example.laneId === "dashboard");
+  switch (kind) {
+    case "missing_lane_self_validation_example":
+      examples.examples = examples.examples.filter((example) => example.laneId !== "dashboard");
+      break;
+    case "stale_lane_self_validation_example":
+      if (dashboardExample) dashboardExample.focusedCheck.checkedAt = "2026-06-01T00:00:00.000Z";
+      break;
+    case "missing_lane_self_validation_route":
+      if (dashboardExample) dashboardExample.routeRefs = [];
+      break;
+    case "prompt_literal_lane_self_validation_copy":
+      if (dashboardExample) dashboardExample.uiCopyLabel = "dashboard slop signal";
+      break;
+    case "malformed_lane_self_validation_payload":
+      if (dashboardExample) {
+        dashboardExample.ownerLane = "" as typeof dashboardExample.ownerLane;
+        dashboardExample.selfValidateCommand = "";
+        dashboardExample.payloadShape.requiredFields = [];
+      }
+      break;
+  }
+}
+
+export function productReadinessLaneSelfValidationGuard(examples: LaneSelfValidationExamples) {
+  const forbiddenTerms = ["control room", "how this feeds", "dashboard slop", "named examples", "signal", "acceptance criteria", "acceptance-criteria"];
+  const laneIds = new Set(examples.examples.map((example) => example.laneId));
+  const missingLaneIds = REQUIRED_SELF_VALIDATION_LANES.filter((lane) => !laneIds.has(lane));
+  const rows = examples.examples.map((example) => {
+    const unsafeFields = [
+      !example.safeOutput?.metadataOnly ? "safeOutput.metadataOnly" : "",
+      example.safeOutput?.rawEvidenceExposed ? "safeOutput.rawEvidenceExposed" : "",
+      example.safeOutput?.webhookSecretExposed ? "safeOutput.webhookSecretExposed" : "",
+      example.safeOutput?.crossOrgDataExposed ? "safeOutput.crossOrgDataExposed" : ""
+    ].filter(Boolean);
+    const label = String(example.uiCopyLabel || "").toLowerCase();
+    const copyBlockers = forbiddenTerms
+      .filter((term) => label.includes(term))
+      .map((term) => `lane_self_validation_copy_guard_${term.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")}`);
+    const requiredPayloadFields = Array.isArray(example.payloadShape?.requiredFields) ? example.payloadShape.requiredFields : [];
+    const blockerCodes = [
+      ...(!example.ownerLane ? ["missing_lane_self_validation_owner"] : []),
+      ...(!example.workflowIds.length ? ["missing_lane_self_validation_workflow"] : []),
+      ...(!example.schemaLookupRefs.length ? ["missing_lane_self_validation_schema_lookup"] : []),
+      ...(!example.routeRefs.length ? ["missing_lane_self_validation_route"] : []),
+      ...(!example.focusedCheck?.command ? ["missing_lane_self_validation_check_command"] : []),
+      ...(example.focusedCheck?.result !== "pass" ? ["untested_lane_self_validation_example"] : []),
+      ...(!example.focusedCheck?.checkedAt ? ["missing_lane_self_validation_verified_at"] : []),
+      ...(example.focusedCheck?.checkedAt && example.focusedCheck.checkedAt < example.focusedCheck.staleBefore ? ["stale_lane_self_validation_example"] : []),
+      ...(!example.selfValidateCommand ? ["missing_lane_self_validation_command"] : []),
+      ...(!requiredPayloadFields.length ? ["missing_lane_self_validation_payload_shape"] : []),
+      ...copyBlockers,
+      ...unsafeFields.map(() => "unsafe_lane_self_validation_example")
+    ];
+    return {
+      laneId: example.laneId,
+      ownerLane: example.ownerLane,
+      ok: blockerCodes.length === 0,
+      blockerCodes: [...new Set(blockerCodes)].sort(),
+      producerWorkflowIds: example.producerWorkflowIds,
+      consumerWorkflowIds: example.consumerWorkflowIds,
+      workflowIds: example.workflowIds,
+      customerWorkflowIds: example.customerWorkflowIds,
+      schemaLookupRefCount: example.schemaLookupRefs.length,
+      routeRefs: example.routeRefs,
+      focusedCheck: example.focusedCheck,
+      selfValidateCommand: example.selfValidateCommand,
+      payloadShapeRequiredFieldCount: requiredPayloadFields.length,
+      unsafeFields
+    };
+  });
+  const blockerCodes = [...new Set([
+    ...missingLaneIds.map(() => "missing_lane_self_validation_example"),
+    ...rows.flatMap((row) => row.blockerCodes)
+  ])].sort();
+  return {
+    schemaVersion: PRODUCT_READINESS_LANE_SELF_VALIDATION_GUARD_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    ok: blockerCodes.length === 0,
+    rowCount: rows.length,
+    requiredLaneIds: [...REQUIRED_SELF_VALIDATION_LANES],
+    missingLaneIds,
+    verifiedAt: examples.verifiedAt,
+    staleBefore: examples.staleBefore,
+    proofCommand: examples.proofCommand,
+    blockerCodes,
+    rows,
+    safeOutput: examples.safeOutput
+  };
+}
+
 export function buildProductReadinessIntegrationGateFixture(kind: ProductReadinessIntegrationGateFixtureKind) {
   const contractLike = cloneJson(contractIndex());
   mutateFixtureContract(contractLike, kind);
@@ -824,6 +1020,9 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
   const ownerLaneReceiptExamples = buildProductReadinessOwnerLaneReceiptExamples(workflowAcceptanceReceipts);
   mutateOwnerLaneReceiptExamples(ownerLaneReceiptExamples, kind);
   const ownerLaneReceiptExamplesGuard = productReadinessOwnerLaneReceiptExamplesGuard(ownerLaneReceiptExamples);
+  const laneSelfValidationExamples = buildProductReadinessLaneSelfValidationExamples(ownerLaneReceiptExamples);
+  mutateLaneSelfValidationExamples(laneSelfValidationExamples, kind);
+  const laneSelfValidation = productReadinessLaneSelfValidationGuard(laneSelfValidationExamples);
   const expectedBlockerCodes = EXPECTED_BLOCKERS[kind];
   const actualBlockerCodes = [...new Set([
     ...gate.blockerCodes,
@@ -831,10 +1030,17 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
     ...schemaLookupMetadata.blockerCodes,
     ...consumerVerification.blockerCodes,
     ...workflowAcceptance.blockerCodes,
-    ...ownerLaneReceiptExamplesGuard.blockerCodes
+    ...ownerLaneReceiptExamplesGuard.blockerCodes,
+    ...laneSelfValidation.blockerCodes
   ])].sort();
   const expectedBlockersPresent = expectedBlockerCodes.every((code) => actualBlockerCodes.includes(code));
-  const liveOk = gate.ok && consumerProofMetadata.ok && schemaLookupMetadata.ok && consumerVerification.ok && workflowAcceptance.ok && ownerLaneReceiptExamplesGuard.ok;
+  const liveOk = gate.ok
+    && consumerProofMetadata.ok
+    && schemaLookupMetadata.ok
+    && consumerVerification.ok
+    && workflowAcceptance.ok
+    && ownerLaneReceiptExamplesGuard.ok
+    && laneSelfValidation.ok;
   const passed = kind === "valid" ? liveOk : !liveOk && expectedBlockersPresent;
 
   return {
@@ -892,6 +1098,7 @@ export function buildProductReadinessIntegrationGateFixture(kind: ProductReadine
     consumerVerification,
     workflowAcceptance,
     ownerLaneReceiptExamples: ownerLaneReceiptExamplesGuard,
+    laneSelfValidation,
     safeOutput: {
       metadataOnly: true,
       rawEvidenceExposed: false,

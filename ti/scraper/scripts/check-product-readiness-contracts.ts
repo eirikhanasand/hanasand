@@ -2,10 +2,12 @@ import { contractIndex } from "../src/api/contractsRoute.ts";
 import {
   buildProductReadinessConsumerVerificationLedger,
   buildProductReadinessIntegrationGateFixtures,
+  buildProductReadinessLaneSelfValidationExamples,
   buildProductReadinessOwnerLaneReceiptExamples,
   buildProductReadinessWorkflowAcceptanceReceipts,
   productReadinessConsumerProofMetadataGuard,
   productReadinessConsumerVerificationGuard,
+  productReadinessLaneSelfValidationGuard,
   productReadinessOwnerLaneReceiptExamplesGuard,
   productReadinessSchemaLookupMetadataGuard,
   productReadinessWorkflowAcceptanceGuard
@@ -18,8 +20,12 @@ const schemaLookupMetadata = productReadinessSchemaLookupMetadataGuard(contract)
 const consumerVerification = productReadinessConsumerVerificationGuard(buildProductReadinessConsumerVerificationLedger(contract));
 const workflowAcceptanceReceipts = buildProductReadinessWorkflowAcceptanceReceipts(contract);
 const workflowAcceptance = productReadinessWorkflowAcceptanceGuard(workflowAcceptanceReceipts);
+const ownerLaneReceiptExampleRows = buildProductReadinessOwnerLaneReceiptExamples(workflowAcceptanceReceipts);
 const ownerLaneReceiptExamples = productReadinessOwnerLaneReceiptExamplesGuard(
-  buildProductReadinessOwnerLaneReceiptExamples(workflowAcceptanceReceipts)
+  ownerLaneReceiptExampleRows
+);
+const laneSelfValidation = productReadinessLaneSelfValidationGuard(
+  buildProductReadinessLaneSelfValidationExamples(ownerLaneReceiptExampleRows)
 );
 const consumerProofMetadataSummary = {
   schemaVersion: consumerProofMetadata.schemaVersion,
@@ -112,6 +118,27 @@ const ownerLaneReceiptExamplesSummary = {
   })),
   safeOutput: ownerLaneReceiptExamples.safeOutput
 };
+const laneSelfValidationSummary = {
+  schemaVersion: laneSelfValidation.schemaVersion,
+  route: laneSelfValidation.route,
+  ok: laneSelfValidation.ok,
+  rowCount: laneSelfValidation.rowCount,
+  requiredLaneIds: laneSelfValidation.requiredLaneIds,
+  missingLaneIds: laneSelfValidation.missingLaneIds,
+  verifiedAt: laneSelfValidation.verifiedAt,
+  staleBefore: laneSelfValidation.staleBefore,
+  proofCommand: laneSelfValidation.proofCommand,
+  blockerCodes: laneSelfValidation.blockerCodes,
+  failingRows: laneSelfValidation.rows.filter((row) => !row.ok).map((row) => ({
+    laneId: row.laneId,
+    ownerLane: row.ownerLane,
+    blockerCodes: row.blockerCodes,
+    workflowIds: row.workflowIds,
+    routeRefs: row.routeRefs,
+    payloadShapeRequiredFieldCount: row.payloadShapeRequiredFieldCount
+  })),
+  safeOutput: laneSelfValidation.safeOutput
+};
 const fixtures = buildProductReadinessIntegrationGateFixtures();
 const fixtureChecks = fixtures.map((fixture) => ({
   kind: fixture.kind,
@@ -123,7 +150,8 @@ const fixtureChecks = fixtures.map((fixture) => ({
   schemaLookupMetadataOk: fixture.schemaLookupMetadata.ok,
   consumerVerificationOk: fixture.consumerVerification.ok,
   workflowAcceptanceOk: fixture.workflowAcceptance.ok,
-  ownerLaneReceiptExamplesOk: fixture.ownerLaneReceiptExamples.ok
+  ownerLaneReceiptExamplesOk: fixture.ownerLaneReceiptExamples.ok,
+  laneSelfValidationOk: fixture.laneSelfValidation.ok
 }));
 const fixturesOk = fixtureChecks.every((fixture) => fixture.passed);
 const ok = gate.ok
@@ -132,6 +160,7 @@ const ok = gate.ok
   && consumerVerification.ok
   && workflowAcceptance.ok
   && ownerLaneReceiptExamples.ok
+  && laneSelfValidation.ok
   && fixturesOk;
 
 console.log(JSON.stringify({
@@ -155,6 +184,7 @@ console.log(JSON.stringify({
   consumerVerification: consumerVerificationSummary,
   workflowAcceptance: workflowAcceptanceSummary,
   ownerLaneReceiptExamples: ownerLaneReceiptExamplesSummary,
+  laneSelfValidation: laneSelfValidationSummary,
   fixtureSchemaVersion: fixtures[0]?.schemaVersion,
   fixtureChecks,
   safeOutput: gate.safeOutput
