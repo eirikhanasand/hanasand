@@ -895,6 +895,12 @@ export type DwmAlertGenerationCaptureRef = {
   observedAt?: string;
 };
 
+export type DwmAlertGenerationSuppressedCaptureRef = DwmAlertGenerationCaptureRef & {
+  duplicateOfCaptureId: string;
+  duplicateReason: "duplicate_content_hash";
+  duplicateIdentity: string;
+};
+
 export type DwmAlertGenerationCandidate = {
   id: string;
   tenantId: string;
@@ -909,6 +915,8 @@ export type DwmAlertGenerationCandidate = {
   membershipContext?: RuntimeOrgMembershipContext;
   sourceFamilies: string[];
   captureRefs: DwmAlertGenerationCaptureRef[];
+  suppressedDuplicateCaptureRefs: DwmAlertGenerationSuppressedCaptureRef[];
+  duplicateCaptureCollapseCount: number;
   evidenceWindow: {
     captureIds: string[];
     sourceFamilies: string[];
@@ -949,6 +957,7 @@ export type DwmAlertGenerationReadiness = {
     candidateCount: number;
     rawActiveTermCount: number;
     duplicateCollapseCount: number;
+    duplicateCaptureCollapseCount: number;
     captureRefCount: number;
     matchedCandidateCount: number;
     unmatchedCandidateCount: number;
@@ -1079,6 +1088,8 @@ export type DwmOrgAlertPipelineProof = {
     alertGeneratorKeys: string[];
     sourceFamilies: string[];
     captureRefCount: number;
+    suppressedDuplicateCaptureCount: number;
+    suppressedDuplicateCaptureIds: string[];
     webhookDestinationIds: string[];
     matchedAlertIds: string[];
     caseReady: boolean;
@@ -1642,7 +1653,8 @@ export function buildDwmAlertGenerationPlan(input: {
       if (!normalizedTerm) continue;
       const key = `${input.tenantId}:${input.organizationId ?? ""}:${term.kind}:${normalizedTerm}`;
       const existing = candidates.get(key);
-      const captureRefs = captureRefsForTerm({ term, sources, captures });
+      const captureEvidence = captureRefsForTermWithSuppression({ term, sources, captures });
+      const captureRefs = captureEvidence.captureRefs;
       const sourceFamilies = uniqueStrings(captureRefs.map((ref) => ref.sourceFamily));
       const watchlistTermContexts = watchlistTermContextsFor(watchlist, term.value);
       if (existing) {
@@ -1651,6 +1663,8 @@ export function buildDwmAlertGenerationPlan(input: {
         existing.webhookDestinationIds = uniqueStrings([...existing.webhookDestinationIds, watchlist.webhookDestinationId].filter(Boolean) as string[]);
         existing.hasWebhookRoute = existing.hasWebhookRoute || Boolean(watchlist.webhookDestinationId || watchlist.webhookUrl);
         existing.captureRefs = mergeCaptureRefs(existing.captureRefs, captureRefs);
+        existing.suppressedDuplicateCaptureRefs = mergeSuppressedDuplicateCaptureRefs(existing.suppressedDuplicateCaptureRefs, captureEvidence.suppressedDuplicateCaptureRefs);
+        existing.duplicateCaptureCollapseCount = existing.suppressedDuplicateCaptureRefs.length;
         existing.sourceFamilies = uniqueStrings([...existing.sourceFamilies, ...sourceFamilies]);
         existing.evidenceWindow = evidenceWindowForCaptureRefs(existing.captureRefs);
         existing.watchlistTermContexts = mergeWatchlistTermContexts(existing.watchlistTermContexts, watchlistTermContexts);
@@ -1675,6 +1689,8 @@ export function buildDwmAlertGenerationPlan(input: {
         membershipContext: watchlist.orgMembershipContext,
         sourceFamilies,
         captureRefs,
+        suppressedDuplicateCaptureRefs: captureEvidence.suppressedDuplicateCaptureRefs,
+        duplicateCaptureCollapseCount: captureEvidence.suppressedDuplicateCaptureRefs.length,
         evidenceWindow: evidenceWindowForCaptureRefs(captureRefs),
         watchlistTermContexts,
         alertGeneratorKeys: uniqueStrings(watchlistTermContexts.map((term) => term.alertGeneratorKey)),
@@ -1712,6 +1728,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     .filter((watchlist) => watchlist.tenantId === input.tenantId && watchlist.status === "active" && (!watchlist.organizationId || watchlist.organizationId === input.organizationId))
     .reduce((count, watchlist) => count + watchlist.terms.length, 0);
   const captureRefCount = plan.candidates.reduce((count, candidate) => count + candidate.captureRefs.length, 0);
+  const duplicateCaptureCollapseCount = plan.candidates.reduce((count, candidate) => count + candidate.duplicateCaptureCollapseCount, 0);
   const sourceFamilyCoverage = buildSourceFamilyCoverage(plan.candidates);
   const sourceFamilyGaps = buildSourceFamilyGaps({
     coverage: sourceFamilyCoverage,
@@ -1737,6 +1754,7 @@ export function buildDwmAlertGenerationReadiness(input: {
     candidateCount: plan.candidateCount,
     rawActiveTermCount,
     duplicateCollapseCount: Math.max(0, rawActiveTermCount - plan.candidateCount),
+    duplicateCaptureCollapseCount,
     captureRefCount,
     matchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length > 0).length,
     unmatchedCandidateCount: plan.candidates.filter((candidate) => candidate.captureRefs.length === 0).length
@@ -1834,6 +1852,8 @@ export function buildDwmOrgAlertPipelineProof(input: {
       alertGeneratorKeys: candidate.alertGeneratorKeys,
       sourceFamilies: candidate.sourceFamilies,
       captureRefCount: candidate.captureRefs.length,
+      suppressedDuplicateCaptureCount: candidate.duplicateCaptureCollapseCount,
+      suppressedDuplicateCaptureIds: candidate.suppressedDuplicateCaptureRefs.map((ref) => ref.captureId),
       webhookDestinationIds: candidate.webhookDestinationIds,
       matchedAlertIds,
       caseReady,
@@ -4331,7 +4351,14 @@ function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: s
 }
 
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
-  return mergeCaptureRefs([], input.captures
+  return captureRefsForTermWithSuppression(input).captureRefs;
+}
+
+function captureRefsForTermWithSuppression(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): {
+  captureRefs: DwmAlertGenerationCaptureRef[];
+  suppressedDuplicateCaptureRefs: DwmAlertGenerationSuppressedCaptureRef[];
+} {
+  const refs = input.captures
     .filter((capture) => termMatchesText(captureText(capture), input.term.value))
     .map((capture) => {
       const source = input.sources.find((row) => row.id === capture.sourceId);
@@ -4342,7 +4369,26 @@ function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]
         contentHash: capture.contentHash,
         observedAt: capture.collectedAt
       };
-    }));
+    });
+  const byIdentity = new Map<string, DwmAlertGenerationCaptureRef>();
+  const captureRefs: DwmAlertGenerationCaptureRef[] = [];
+  const suppressedDuplicateCaptureRefs: DwmAlertGenerationSuppressedCaptureRef[] = [];
+  for (const ref of refs) {
+    const duplicateIdentity = ref.contentHash ? `${ref.sourceFamily}:${ref.contentHash}` : `capture:${ref.captureId}`;
+    const existing = byIdentity.get(duplicateIdentity);
+    if (existing) {
+      suppressedDuplicateCaptureRefs.push({
+        ...ref,
+        duplicateOfCaptureId: existing.captureId,
+        duplicateReason: "duplicate_content_hash",
+        duplicateIdentity
+      });
+      continue;
+    }
+    byIdentity.set(duplicateIdentity, ref);
+    captureRefs.push(ref);
+  }
+  return { captureRefs, suppressedDuplicateCaptureRefs };
 }
 
 function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAlertGenerationCaptureRef[]): DwmAlertGenerationCaptureRef[] {
@@ -4350,6 +4396,15 @@ function mergeCaptureRefs(existing: DwmAlertGenerationCaptureRef[], next: DwmAle
   for (const ref of [...existing, ...next]) {
     const identity = ref.contentHash ? `${ref.sourceFamily}:${ref.contentHash}` : `capture:${ref.captureId}`;
     byIdentity.set(identity, byIdentity.get(identity) ?? ref);
+  }
+  return [...byIdentity.values()];
+}
+
+function mergeSuppressedDuplicateCaptureRefs(existing: DwmAlertGenerationSuppressedCaptureRef[], next: DwmAlertGenerationSuppressedCaptureRef[]): DwmAlertGenerationSuppressedCaptureRef[] {
+  const byIdentity = new Map<string, DwmAlertGenerationSuppressedCaptureRef>();
+  for (const ref of [...existing, ...next]) {
+    const key = `${ref.duplicateIdentity}:${ref.captureId}:${ref.duplicateOfCaptureId}`;
+    byIdentity.set(key, byIdentity.get(key) ?? ref);
   }
   return [...byIdentity.values()];
 }
