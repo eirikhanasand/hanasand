@@ -3487,11 +3487,15 @@ expect(deliveryActionRetry?.requests.liveRetry?.canSend === false && deliveryAct
 expect(deliveryActionRetry?.requests.testDestination?.route === 'POST /api/dwm/webhook-destinations/destination_live_contract/test' && deliveryActionRetry.requests.testDestination.noNetwork === true && deliveryActionRetry.requests.testDestination.body.eventType === 'dwm.alert.test', 'Delivery action plan should include a no-network destination test request for retry validation.', deliveryActionRetry?.requests.testDestination)
 expect(deliveryActionRetry?.requests.testDestination?.payloadPreview?.schemaVersion === 'dwm.webhook.destination_test_payload_preview.v1' && deliveryActionRetry.requests.testDestination.payloadPreview.discord.fieldNames.includes('Watchlist') && deliveryActionRetry.requests.testDestination.payloadPreview.redaction.safeForCustomerDisplay === true, 'Delivery action plan destination test request should expose a no-network Discord payload preview for customer validation.', deliveryActionRetry?.requests.testDestination?.payloadPreview)
 expect(deliveryActionRetry?.operationLinks?.retryDryRun === 'POST /api/dwm/webhook-deliveries' && deliveryActionRetry.operationLinks.deliveryDetail.includes('delivery_live_failed_retry_contract'), 'Delivery action plan should expose operation links for dry-run retry and delivery detail.', deliveryActionRetry)
+expect(deliveryActionRetry?.remediation?.schemaVersion === 'dwm.webhook.delivery_remediation.v1' && deliveryActionRetry.remediation.code === 'retry_dry_run' && deliveryActionRetry.remediation.readiness.dryRunReplayReady === true && deliveryActionRetry.remediation.redaction.webhookSecretExposed === false, 'Delivery action plan should expose typed retry remediation guidance without secrets.', deliveryActionRetry?.remediation)
 expect(deliveryActionTerminal?.action === 'rotate_or_disable_destination' && deliveryActionTerminal.audit.nextAction === 'destination.update_requested', 'Delivery action plan should guide terminal failures to destination remediation.', deliveryActionTerminal)
+expect(deliveryActionTerminal?.remediation?.code === 'rotate_or_disable_destination' && deliveryActionTerminal.remediation.priority === 'high' && deliveryActionTerminal.remediation.readiness.terminalFailure === true, 'Delivery action plan should expose terminal-failure remediation state.', deliveryActionTerminal?.remediation)
 expect(deliveryActionTerminal?.requests.testDestination?.body.destinationId === 'destination_terminal_contract' && deliveryActionTerminal.requests.testDestination.body.alertId === 'alert_terminal_contract' && deliveryActionTerminal.requests.testDestination.body.dedupeKey === 'dwm_dedupe_terminal_contract' && Boolean(deliveryActionTerminal.requests.testDestination.body.casePath), 'Delivery action plan should preserve terminal-failure alert, dedupe, and case context in destination test requests.', deliveryActionTerminal?.requests.testDestination)
 expect(deliveryActionTerminal?.requests.testDestination?.payloadPreview?.redaction.endpointExposed === false && deliveryActionTerminal.requests.testDestination.payloadPreview.discord.fieldNames.some(name => name.toLowerCase() === 'source family'), 'Delivery action plan terminal remediation test request should keep endpoint secrets hidden while showing Discord source context.', deliveryActionTerminal?.requests.testDestination?.payloadPreview)
 expect(deliveryActionDelivered?.action === 'monitor' && deliveryActionDelivered.status === 'delivered', 'Delivery action plan should mark delivered attempts as monitor-only.', deliveryActionDelivered)
+expect(deliveryActionDelivered?.remediation?.code === 'monitor_delivery' && deliveryActionDelivered.remediation.status === 'resolved', 'Delivery action plan should expose resolved delivery monitoring guidance.', deliveryActionDelivered?.remediation)
 expect(deliveryActionMissingDestination?.action === 'configure_destination' && deliveryActionMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery action plan should route missing destination outcomes to destination setup.', deliveryActionMissingDestination)
+expect(deliveryActionMissingDestination?.remediation?.code === 'configure_destination' && deliveryActionMissingDestination.remediation.readiness.destinationUnavailable === true && deliveryActionMissingDestination.remediation.routeHints.destinationTest === null, 'Delivery action plan should expose missing-destination remediation without fake test routes.', deliveryActionMissingDestination?.remediation)
 expect(nonmemberDeliveryActionPlan.actions.length === 0 && nonmemberDeliveryActionPlan.blockers.some(item => item.code === 'permission_denied'), 'Delivery action plan should deny nonmembers without leaking actions.', nonmemberDeliveryActionPlan)
 expect(orgAlertDeliveryContract.deliveryActionPlan.schemaVersion === 'dwm.webhook.delivery_action_plan.v1' && orgAlertDeliveryContract.deliveryActionPlan.actions.some(item => item.alertId === 'alert_replay_contract'), 'Org alert delivery contract should include alert-scoped delivery action plan.', orgAlertDeliveryContract.deliveryActionPlan)
 expect(!JSON.stringify(deliveryActionPlan).includes(secret), 'Delivery action plan should redact endpoint, response, and payload secrets.', deliveryActionPlan)
@@ -3770,6 +3774,7 @@ console.log(JSON.stringify({
         'delivery action plan live-send blockers',
         'delivery action plan terminal failure remediation',
         'delivery action plan delivered monitoring',
+        'delivery action plan typed remediation guidance',
         'delivery action plan nonmember denial',
         'delivery action plan secret redaction',
         'delivery replay guard dry-run replay',
@@ -4040,6 +4045,9 @@ console.log(JSON.stringify({
             'deliveryActionPlan.actions[].requests.testDestination.payloadPreview.discord.fieldNames',
             'deliveryActionPlan.actions[].operationLinks.retryDryRun',
             'deliveryActionPlan.actions[].audit.nextAction',
+            'deliveryActionPlan.actions[].remediation.code',
+            'deliveryActionPlan.actions[].remediation.nextSafeStep',
+            'deliveryActionPlan.actions[].remediation.redaction.webhookSecretExposed',
             'deliveryReplayGuard.schemaVersion',
             'deliveryReplayGuard.entries[].guard.dryRunAllowed',
             'deliveryReplayGuard.entries[].guard.duplicateLiveBlocked',
