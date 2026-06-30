@@ -15,6 +15,10 @@ type AnalystCaseEvent = {
   at: string;
   actor: string;
   action: string;
+  idempotencyKey?: string;
+  transitionKey?: string;
+  replayState?: "recorded" | "replayed";
+  auditEventId?: string;
   fromStatus?: CaseStatus;
   toStatus?: CaseStatus;
   fromOwner?: string;
@@ -118,6 +122,8 @@ export async function createCase(request: Request, options: ApiServerOptions): P
   const note = normalizeNote(body.note ?? "Case opened from DWM alert.");
   const event = caseEvent({
     caseId: id,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId ?? alert.organizationId,
     generatedAt,
     actor,
     action: existing ? "reopen" : "open",
@@ -237,6 +243,8 @@ export async function recordCaseCustomerNotification(request: Request, options: 
   };
   const event = caseEvent({
     caseId: existing.id,
+    tenantId: existing.tenantId,
+    organizationId: existing.organizationId,
     generatedAt,
     actor,
     action: "customer_notified",
@@ -281,7 +289,11 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const generatedAt = nowIso();
   const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? "case-api");
   const action = normalizeAction(body.action, body.status);
+  const unsupportedAction = unsupportedCaseAction(action);
+  if (unsupportedAction) return unsupportedAction;
   const nextStatus = statusForAction(action, body.status, existing.status);
+  const transitionError = validateCaseTransition(existing, action, nextStatus);
+  if (transitionError) return transitionError;
   const note = normalizeNote(body.note);
   if ((action === "close" || nextStatus === "closed" || action === "false_positive" || action === "suppress") && !note) {
     return json({ error: { code: "missing_decision_rationale", message: "Closing, suppressing, or marking false positive requires an analyst note." } }, 400);
@@ -289,11 +301,28 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const assignedOwner = body.assignedOwner === undefined && body.owner === undefined ? existing.assignedOwner : normalizeOwner(body.assignedOwner ?? body.owner);
   const ownerValidation = validateAssignedOwner(options, scope.organizationId, assignedOwner);
   if (ownerValidation) return ownerValidation;
+  const idempotencyKey = normalizeNote(body.idempotencyKey ?? request.headers.get("idempotency-key") ?? request.headers.get("x-idempotency-key"));
+  const replayedEvent = idempotencyKey ? (existing.workflowEvents ?? []).find((item) => item.idempotencyKey === idempotencyKey) : undefined;
+  if (replayedEvent) {
+    return json({
+      organization: scope.organization,
+      access: caseAccessSummary(access),
+      replayed: true,
+      duplicate: true,
+      case: existing,
+      event: replayedEvent,
+      workflowTransition: caseWorkflowTransition(existing, { ...replayedEvent, replayState: "replayed" }),
+      detail: buildCaseDetail(existing, options, scope.organization, access)
+    });
+  }
   const event = caseEvent({
     caseId: existing.id,
+    tenantId: existing.tenantId,
+    organizationId: existing.organizationId,
     generatedAt,
     actor,
     action,
+    idempotencyKey,
     fromStatus: existing.status,
     toStatus: nextStatus,
     fromOwner: existing.assignedOwner,
@@ -312,7 +341,16 @@ export async function updateCase(request: Request, options: ApiServerOptions, ca
   const saved = (options.store as any).saveCase(caseRecord);
   const alert = findDwmAlert(options, existing.alertId);
   if (alert) syncAlertForCase(options, alert, saved, event);
-  return json({ organization: scope.organization, access: caseAccessSummary(access), case: saved, event, alert: alert ? findDwmAlert(options, alert.id) : undefined });
+  return json({
+    organization: scope.organization,
+    access: caseAccessSummary(access),
+    replayed: false,
+    duplicate: false,
+    case: saved,
+    event,
+    workflowTransition: caseWorkflowTransition(saved, event),
+    alert: alert ? findDwmAlert(options, alert.id) : undefined
+  });
 }
 
 function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, organization: unknown, access?: CaseAccessResult) {
@@ -328,6 +366,7 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
     organization,
     access: caseAccessSummary(access),
     case: caseRecord,
+    workflowState: caseWorkflowSummary(caseRecord),
     alert,
     alertContext: alert ? {
       id: alert.id,
@@ -1151,6 +1190,47 @@ function customerNotificationContext(caseRecord: AnalystCase) {
   };
 }
 
+function caseWorkflowSummary(caseRecord: AnalystCase) {
+  const latest = [...(caseRecord.workflowEvents ?? [])].reverse()[0];
+  return {
+    status: caseRecord.status,
+    assignedOwner: caseRecord.assignedOwner,
+    updatedAt: caseRecord.updatedAt,
+    latestTransition: latest ? caseWorkflowTransition(caseRecord, latest) : undefined
+  };
+}
+
+function caseWorkflowTransition(caseRecord: AnalystCase, event: AnalystCaseEvent) {
+  return {
+    schemaVersion: "analyst.case_workflow_transition.v1",
+    caseId: caseRecord.id,
+    tenantId: caseRecord.tenantId,
+    organizationId: caseRecord.organizationId,
+    alertId: caseRecord.alertId,
+    at: event.at,
+    actor: event.actor,
+    action: event.action,
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    fromOwner: event.fromOwner,
+    toOwner: event.toOwner,
+    workflowState: {
+      status: caseRecord.status,
+      assignedOwner: caseRecord.assignedOwner,
+      replayState: event.replayState ?? "recorded",
+      idempotencyKey: event.idempotencyKey,
+      dedupeKey: event.transitionKey
+    },
+    provenance: {
+      source: "case_workflow",
+      caseId: caseRecord.id,
+      alertId: caseRecord.alertId,
+      auditEventId: event.auditEventId,
+      eventId: event.id
+    }
+  };
+}
+
 function selectNotificationDelivery(deliveries: any[], webhookDeliveryId: unknown) {
   const requested = String(webhookDeliveryId ?? "").trim();
   const delivered = deliveries.filter((delivery: any) => delivery.status === "delivered");
@@ -1172,12 +1252,18 @@ function findDwmAlert(options: ApiServerOptions, alertId: string | undefined) {
   return (options.store as any).getDwmAlert?.(alertId) ?? ((options.store as any).listDwmAlerts?.() ?? []).find((row: any) => row.id === alertId);
 }
 
-function caseEvent(input: { caseId: string; generatedAt: string; actor: string; action: string; fromStatus?: CaseStatus; toStatus?: CaseStatus; fromOwner?: string; toOwner?: string; note?: string }): AnalystCaseEvent {
+function caseEvent(input: { caseId: string; tenantId?: string; organizationId?: string; generatedAt: string; actor: string; action: string; idempotencyKey?: string; fromStatus?: CaseStatus; toStatus?: CaseStatus; fromOwner?: string; toOwner?: string; note?: string }): AnalystCaseEvent {
+  const transitionKey = stableId("case_workflow_transition", `${input.tenantId ?? ""}:${input.organizationId ?? ""}:${input.caseId}:${input.idempotencyKey ?? input.generatedAt}:${input.action}`);
+  const id = stableId("case_event", `${input.caseId}:${input.generatedAt}:${input.action}:${input.toStatus ?? ""}:${input.toOwner ?? ""}:${input.note ?? ""}:${input.idempotencyKey ?? ""}`);
   return {
-    id: stableId("case_event", `${input.caseId}:${input.generatedAt}:${input.action}:${input.toStatus ?? ""}:${input.toOwner ?? ""}:${input.note ?? ""}`),
+    id,
     at: input.generatedAt,
     actor: input.actor,
     action: input.action,
+    idempotencyKey: input.idempotencyKey,
+    transitionKey,
+    replayState: "recorded",
+    auditEventId: stableId("case_workflow_audit", `${input.caseId}:${id}`),
     fromStatus: input.fromStatus,
     toStatus: input.toStatus,
     fromOwner: input.fromOwner,
@@ -1206,6 +1292,43 @@ function statusForAction(action: string, status: unknown, current: CaseStatus): 
   if (action === "close") return "closed";
   if (action === "reopen") return "open";
   return current;
+}
+
+function unsupportedCaseAction(action: string): Response | undefined {
+  if (["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"].includes(action)) return undefined;
+  return json({
+    error: {
+      code: "unsupported_case_action",
+      message: "Case action is not supported.",
+      supportedActions: ["note", "assign", "escalate", "suppress", "false_positive", "close", "reopen"]
+    }
+  }, 400);
+}
+
+function validateCaseTransition(caseRecord: AnalystCase, action: string, nextStatus: CaseStatus): Response | undefined {
+  if (caseRecord.status === "closed" && action !== "reopen" && nextStatus !== "closed") {
+    return json({
+      error: {
+        code: "invalid_case_transition",
+        message: "Closed cases must be reopened before changing workflow state.",
+        fromStatus: caseRecord.status,
+        requestedAction: action,
+        requestedStatus: nextStatus
+      }
+    }, 409);
+  }
+  if ((caseRecord.status === "suppressed" || caseRecord.status === "false_positive") && action !== "reopen" && action !== "note" && nextStatus !== caseRecord.status) {
+    return json({
+      error: {
+        code: "invalid_case_transition",
+        message: "Suppressed and false-positive cases must be reopened before changing workflow state.",
+        fromStatus: caseRecord.status,
+        requestedAction: action,
+        requestedStatus: nextStatus
+      }
+    }, 409);
+  }
+  return undefined;
 }
 
 function normalizePriority(value: unknown): CasePriority {

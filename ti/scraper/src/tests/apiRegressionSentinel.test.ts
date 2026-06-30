@@ -15,6 +15,7 @@ describe("api regression sentinel", () => {
       "/api/ti/search",
       "/v1/darkweb/search",
       "/v1/ops/product-slo",
+      "/v1/cases/:caseId",
       "/v1/dwm/org-alert-case-actions",
       "/v1/dwm/org-alert-case-actions/timeline"
     ]));
@@ -57,5 +58,29 @@ describe("api regression sentinel", () => {
     });
     expect(JSON.stringify(contract)).not.toContain("https://discord.com");
     expect(JSON.stringify(contract)).not.toContain("authorization:");
+  });
+
+  test("publishes the case workflow transition contract for workflow consumers", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const transitionSurface = contract.surfaces.find((surface: any) => surface.id === "case_workflow_transition");
+
+    expect(transitionSurface).toMatchObject({
+      ownerLane: "case",
+      route: "/v1/cases/:caseId",
+      methods: ["PATCH"],
+      schemas: {
+        transition: "analyst.case_workflow_transition.v1",
+        detail: "analyst.case_detail.v1"
+      },
+      scopeFields: expect.arrayContaining(["organizationId", "caseId", "alertId"]),
+      writeFields: expect.arrayContaining(["action", "assignedOwner", "note", "idempotencyKey"]),
+      recordFields: expect.arrayContaining(["caseId", "alertId", "auditEventId", "eventId", "idempotencyKey", "dedupeKey", "replayState"]),
+      blockerCodes: expect.arrayContaining(["organization_visibility_denied", "case_read_only_member", "invalid_case_transition", "unsupported_case_action"])
+    });
+    expect(JSON.stringify(transitionSurface)).not.toContain("https://discord.com");
   });
 });
