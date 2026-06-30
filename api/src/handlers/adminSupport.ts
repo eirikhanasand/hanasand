@@ -12602,6 +12602,7 @@ function supportCaseReplayAccessReview(input: {
     entityIds: string[]
     requestIds: string[]
     supportSessionIds: string[]
+    sourceWorkflows: string[]
     reasons: string[]
     blockerCodes: string[]
 }) {
@@ -12624,6 +12625,7 @@ function supportCaseReplayAccessReview(input: {
         supportSessionRequired && !input.supportSessionIds.length ? 'missing_support_session_scope' : '',
         deniedEntries.length ? 'review_denied_support_actions' : '',
         input.organizationIds.length > 1 ? 'multi_org_review_required' : '',
+        input.sourceWorkflows.length > 1 ? 'multi_workflow_review_required' : '',
         ...input.blockerCodes,
     ])
     return {
@@ -12639,6 +12641,7 @@ function supportCaseReplayAccessReview(input: {
             entityIds: input.entityIds,
             requestIds: input.requestIds,
             supportSessionIds: input.supportSessionIds,
+            sourceWorkflows: input.sourceWorkflows,
         },
         evidence: {
             auditEventIds: input.eventIds,
@@ -12647,6 +12650,7 @@ function supportCaseReplayAccessReview(input: {
             reasonValues: input.reasons,
             missingReasonEventIds,
             denialReasonCodes,
+            sourceWorkflows: input.sourceWorkflows,
             allowedActionCount: allowedEntries.length,
             deniedActionCount: deniedEntries.length,
         },
@@ -12664,6 +12668,7 @@ function supportCaseReplayAccessReview(input: {
             denied: auditFilterQuery({ ...input.replayFilter, outcome: 'denied' }),
             byRequest: input.requestIds.map(request => auditFilterQuery({ request, source: 'admin', service: 'hanasand-api' })),
             bySupportSession: input.supportSessionIds.map(supportSession => auditFilterQuery({ supportSession, source: 'admin', service: 'hanasand-api' })),
+            bySourceWorkflow: input.sourceWorkflows.map(workflow => auditFilterQuery({ ...input.replayFilter, workflow, source: 'admin', service: 'hanasand-api' })),
         },
         operatorReview: {
             required: blockers.length > 0,
@@ -12700,6 +12705,7 @@ function supportCaseReplayAccessReview(input: {
             `Events: ${input.eventIds.join(', ') || 'none'}`,
             `Allowed/denied: ${allowedEntries.length}/${deniedEntries.length}`,
             `Recovery/impersonation: ${accessRecoveryEntries.length}/${impersonationEntries.length}`,
+            `Source workflows: ${input.sourceWorkflows.join(', ') || 'none'}`,
             `Blockers: ${blockers.join(', ') || 'none'}`,
         ].join('\n'),
     }
@@ -12723,6 +12729,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
     const entityIds = uniqueTimelineValues(supportEvents.map(event => event.entity?.id || event.entityId || filters.entity))
     const requestIds = uniqueTimelineValues(supportEvents.map(event => event.requestId || filters.request))
     const supportSessionIds = uniqueTimelineValues(supportEvents.map(event => event.actionEvidence?.supportSessionId || event.context?.supportSessionId || filters.supportSession))
+    const sourceWorkflows = uniqueTimelineValues(supportEvents.map(event => supportAuditWorkflowName(event)))
     const reasons = uniqueTimelineValues(supportEvents.map(event => event.reason || event.actionEvidence?.reason || filters.reason))
     const blockerCodes = uniqueTimelineValues(supportEvents.flatMap(event => [
         event.actionEvidence?.blockerCode,
@@ -12741,6 +12748,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
         request: text(filters.request || requestIds[0]),
         outcome: text(filters.outcome || outcomes[0]),
         supportSession: text(filters.supportSession || supportSessionIds[0]),
+        workflow: text(filters.workflow || sourceWorkflows[0]),
         reason: text(filters.reason || reasons[0]),
         source: text(filters.source) || 'admin',
         service: text(filters.service) || 'hanasand-api',
@@ -12759,6 +12767,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
         entityIds,
         requestIds,
         supportSessionIds,
+        sourceWorkflows,
         reasons,
         blockerCodes,
     })
@@ -12785,7 +12794,15 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
                 byTarget: targetIds.map(target => auditFilterQuery({ target, source: 'admin', service: 'hanasand-api' })),
                 byEntity: entityIds.map(entity => auditFilterQuery({ entity, source: 'admin', service: 'hanasand-api' })),
                 bySupportSession: supportSessionIds.map(supportSession => auditFilterQuery({ supportSession, source: 'admin', service: 'hanasand-api' })),
+                bySourceWorkflow: sourceWorkflows.map(workflow => auditFilterQuery({ ...replayFilter, workflow, source: 'admin', service: 'hanasand-api' })),
                 denied: auditFilterQuery({ ...replayFilter, outcome: 'denied' }),
+            },
+            sourceWorkflowHandoff: {
+                alias: 'sourceWorkflow',
+                workflows: sourceWorkflows,
+                safeForCaseReplay: true,
+                noLiveAccessGrant: true,
+                redacted: true,
             },
         },
         supportActionEvidence: {
@@ -12800,6 +12817,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
             entityIds,
             requestIds,
             supportSessionIds,
+            sourceWorkflows,
             reasonsPresent: reasons.length > 0,
             reasonValues: reasons,
             blockerCodes,
@@ -12816,6 +12834,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
             'reason',
             'timestamp',
             'actionEvidence.supportSessionId',
+            'actionEvidence.workflow',
             'caseReplay.timelineEntries.operatorNotes.reason',
             'caseReplay.timelineEntries.recoveryState.denialReasonCodes',
         ],
@@ -12826,6 +12845,7 @@ function supportAuditCaseReplayExport(filters: Record<string, unknown>, timeline
                 request: replayFilter.request,
                 entity: replayFilter.entity,
                 supportSession: replayFilter.supportSession,
+                workflow: replayFilter.workflow,
             }).replace('/api/admin/audit-events', '/api/admin/support/inspect'),
             auditReplay: replayQuery,
             auditDetails: eventIds.map(id => `/api/admin/audit-events/${encodeURIComponent(String(id))}`),
