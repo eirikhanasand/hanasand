@@ -1428,6 +1428,7 @@ function ActorActionStrip({
                         <span className='min-w-0'>
                             <CopyPayloadButton
                                 label='Export IOCs'
+                                showLabel
                                 payload={{
                                     schemaVersion: 'ti.public_actor.ioc_export.v1',
                                     source: 'public-ti',
@@ -3936,7 +3937,7 @@ function PayloadHandoffRow({ label, detail, payload, route, blocked }: { label: 
     )
 }
 
-function CopyPayloadButton({ label, payload }: { label: string; payload: unknown }) {
+function CopyPayloadButton({ label, payload, showLabel = false }: { label: string; payload: unknown; showLabel?: boolean }) {
     const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
     const resetTimerRef = useRef<number | null>(null)
 
@@ -3969,7 +3970,7 @@ function CopyPayloadButton({ label, payload }: { label: string; payload: unknown
     return (
         <button type='button' onClick={copyPayload} className='inline-flex min-h-8 min-w-16 max-w-full items-center justify-center gap-1.5 justify-self-start whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]' aria-label={`Copy ${label} payload`}>
             {state === 'copied' ? <CheckCircle2 className='h-3.5 w-3.5 text-[#147a3b]' /> : <Copy className='h-3.5 w-3.5' />}
-            {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : 'Copy'}
+            {state === 'copied' ? 'Copied' : state === 'failed' ? 'Unavailable' : showLabel ? label : 'Copy'}
         </button>
     )
 }
