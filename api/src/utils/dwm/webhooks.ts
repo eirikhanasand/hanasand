@@ -8240,6 +8240,12 @@ function buildDwmWebhookCaseActionDryRunReceipt({
     const dedupeKey = entry.alert.dedupeKey || dedupeFromIdempotencyKey(entry.deliveryProof.idempotencyKey)
     const routeUrl = entry.alert.alertUrl || casePath || entry.route || null
     const expectedAuditAction = entry.replay ? 'delivery.replayed' : 'delivery.retry_requested'
+    const sourceHandoffReadinessConsumer = buildDwmWebhookAlertSourceHandoffReadinessConsumer({
+        entry,
+        blockers,
+        dedupeKey,
+        routeUrl,
+    })
 
     return {
         schemaVersion: 'dwm.webhook.case_action_dry_run_receipt.v1',
@@ -8397,6 +8403,7 @@ function buildDwmWebhookCaseActionDryRunReceipt({
                 webhookSecretExposed: false,
             },
         },
+        sourceHandoffReadinessConsumer,
         denial: {
             denied: blockingCodes.length > 0,
             blockingCodes,
@@ -8406,6 +8413,158 @@ function buildDwmWebhookCaseActionDryRunReceipt({
             safeForCustomerDisplay: true,
             endpointExposed: false,
             secretFields: ['endpointUrl', 'endpointSecret', 'endpoint_encrypted'],
+        },
+    }
+}
+
+function buildDwmWebhookAlertSourceHandoffReadinessConsumer({
+    entry,
+    blockers,
+    dedupeKey,
+    routeUrl,
+}: {
+    entry: ReturnType<typeof buildDwmWebhookDeliveryHistory>['entries'][number]
+    blockers: ReturnType<typeof retryQueueBlocker>[]
+    dedupeKey: string | null
+    routeUrl: string | null
+}) {
+    const captureIds = entry.alert.provenanceIds.captureIds || []
+    const sourceIds = entry.alert.provenanceIds.sourceIds || []
+    const sourceReady = Boolean(entry.alert.sourceFamily && entry.alert.evidenceCount > 0 && captureIds.length > 0 && sourceIds.length > 0)
+    const destinationReady = Boolean(entry.destinationId && entry.destination.enabled !== false && entry.destination.status !== 'disabled')
+    const deliveryReady = destinationReady && !blockers.some(blocker => blocker.blocking && ['destination_unavailable', 'destination_disabled', 'permission_denied'].includes(blocker.code))
+    const state = sourceReady && deliveryReady
+        ? 'ready_for_consumers'
+        : !sourceReady
+            ? 'source_provenance_gap'
+            : 'delivery_handoff_gap'
+    const supportRecoveryNeeded = blockers.some(blocker => blocker.code === 'permission_denied')
+
+    return {
+        schemaVersion: 'dwm.webhook.alert_source_handoff_readiness_consumer.v1',
+        consumesSchemaVersion: 'dwm.alert_source_handoff_readiness.v1',
+        noNetwork: true,
+        ready: state === 'ready_for_consumers',
+        state,
+        routeContract: {
+            sourceHandoff: {
+                method: 'GET' as const,
+                route: '/v1/dwm/alerts',
+                requiredQuery: ['organizationId', 'alertId'],
+                expectedSchemaVersion: 'dwm.alert_source_handoff_readiness.v1',
+                noNetwork: true,
+            },
+            supportHistory: {
+                method: 'GET' as const,
+                route: '/api/admin/support/inspect',
+                requiredQuery: ['organizationId', 'targetUserId', 'requestId', 'action'],
+                expectedSchemaVersion: 'organization.member_recovery_support_history_bridge.v1',
+                noNetwork: true,
+            },
+        },
+        org: {
+            id: entry.orgId,
+        },
+        destination: {
+            id: entry.destinationId,
+            label: entry.destination.label,
+            type: entry.destination.type,
+            endpointHash: entry.destination.redactedEndpoint.endpointHash,
+            endpointExposed: false,
+        },
+        alert: {
+            id: entry.alert.id,
+            title: entry.alert.title,
+            severity: entry.alert.severity,
+            sourceFamily: entry.alert.sourceFamily,
+            evidenceCount: entry.alert.evidenceCount,
+            selectedCaptureIds: captureIds,
+            provenanceCaptureIds: captureIds,
+            provenanceSourceIds: sourceIds,
+            provenanceGapCodes: sourceReady ? [] : ['missing_source_provenance'],
+        },
+        case: {
+            id: entry.alert.caseId || null,
+            path: entry.alert.casePath || null,
+            routeUrl,
+        },
+        watchlist: {
+            id: entry.watchlist.id,
+            term: entry.watchlist.terms[0] || entry.watchlist.name || null,
+            name: entry.watchlist.name,
+        },
+        webhookConsumer: {
+            ready: deliveryReady,
+            deliveryReady,
+            delivered: entry.dedupe.alreadyDelivered || entry.status === 'sent',
+            deliveryDedupeKey: dedupeKey,
+            deliveryHistoryRefs: [entry.deliveryId].filter(Boolean),
+            blockerCodes: blockers.map(blocker => blocker.code),
+            retry: {
+                retryable: entry.retry.retryable,
+                nextRetryAt: entry.retry.nextRetryAt,
+                attemptCount: entry.retry.attemptCount,
+                terminalFailure: entry.retry.terminalFailure,
+            },
+        },
+        caseConsumer: {
+            ready: Boolean(entry.alert.caseId || entry.alert.casePath),
+            caseId: entry.alert.caseId || null,
+            casePath: entry.alert.casePath || null,
+            idempotencyKey: entry.deliveryProof.idempotencyKey,
+            blockerCodes: [],
+        },
+        supportRecoveryBridge: {
+            schemaVersion: 'organization.member_recovery_support_history_bridge.v1',
+            required: supportRecoveryNeeded,
+            source: 'support_audit_timeline',
+            supportReceiptSchemas: [
+                'support.access_recovery.execution_receipt.v1',
+                'support.access_recovery.decision_receipt.v1',
+                'support.action_execute.member_role_recovery.v1',
+            ],
+            expectedSupportActions: [
+                'support.organization.access_recovery',
+                'support.organization.access_recovery.approve',
+                'support.organization.access_recovery.deny',
+                'support.organization.member_role_recovery',
+            ],
+            replayFilters: {
+                organizationId: entry.orgId,
+                targetUserId: '<target_user_id>',
+                requestId: entry.requestId,
+                action: 'support.organization.access_recovery',
+            },
+            supportRoutes: {
+                inspect: '/api/admin/support/inspect',
+                accessRecovery: '/api/admin/support/access-recovery/:requestId',
+                organization: '/api/admin/support/organizations/:id',
+                memberRoleRecovery: '/api/admin/support/organizations/:id/members/:userId/role-recovery',
+            },
+            requiredAuditFields: ['organizationId', 'targetUserId', 'requestId', 'supportSessionId', 'reason', 'outcome'],
+            noSilentMembershipMutation: true,
+            nonmemberEnumeration: false,
+        },
+        stableFields: [
+            'sourceFamily',
+            'selectedCaptureIds',
+            'evidenceCount',
+            'provenanceCaptureIds',
+            'provenanceSourceIds',
+            'webhookConsumer.deliveryDedupeKey',
+            'webhookConsumer.retry.nextRetryAt',
+            'caseConsumer.casePath',
+        ],
+        gapFields: [
+            'state',
+            'alert.provenanceGapCodes',
+            'webhookConsumer.blockerCodes',
+            'supportRecoveryBridge.required',
+        ],
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            webhookSecretExposed: false,
         },
     }
 }
