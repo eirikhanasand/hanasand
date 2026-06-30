@@ -2090,6 +2090,16 @@ const deliveryReceipts = buildDwmWebhookDeliveryReceipts({
     canManage: true,
     visibility: { role: 'admin', status: 'active', userActive: true, alertVisibilityPolicy: 'members' },
 })
+const nonmemberDeliveryReceipts = buildDwmWebhookDeliveryReceipts({
+    liveDeliveryEnabled: false,
+    destinations: operationDestinations,
+    deliveries: auditDeliveryRows,
+    auditEvents: operationAuditEvents,
+    filters: { orgId: 'org_contract' },
+    viewerRole: null,
+    canManage: false,
+    visibility: { role: null, status: null, userActive: true, alertVisibilityPolicy: 'members' },
+})
 const deliveryTimeline = buildDwmWebhookDeliveryTimeline({
     liveDeliveryEnabled: false,
     destinations: operationDestinations,
@@ -3173,10 +3183,19 @@ expect(deliveryReceiptReplay?.proof.updatedAt === '2026-06-28T12:08:05.000Z', 'D
 expect(deliveryReceiptReplay?.operationLinks?.deliveryDetail.includes('delivery_replay_duplicate_contract') && deliveryReceiptReplay.operationLinks.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery receipts should expose stable operation links for customer support and retry proof.', deliveryReceiptReplay)
 expect(deliveryReceiptReplay?.operationLinks?.destinationArchive === 'DELETE /api/dwm/webhook-destinations/destination_replay_contract', 'Delivery receipts should expose destination archive/delete remediation links.', deliveryReceiptReplay?.operationLinks)
 expect(deliveryReceiptRetry?.retry.retryable === true && deliveryReceiptRetry.retry.nextRetryAt === '2026-06-28T12:11:00.000Z' && deliveryReceiptRetry.blockers.some(item => item.code === 'retry_scheduled'), 'Delivery receipts should expose retry/backoff blockers and next retry.', deliveryReceiptRetry)
+expect(deliveryReceiptRetry?.transitionReceipt.schemaVersion === 'dwm.webhook.delivery_transition_receipt.v1' && deliveryReceiptRetry.transitionReceipt.state.next === 'dry_run_retry_ready', 'Delivery transition receipts should expose retry/backoff state transitions.', deliveryReceiptRetry?.transitionReceipt)
+expect(deliveryReceiptRetry?.transitionReceipt.requests.dryRunRetry.canSend === true && deliveryReceiptRetry.transitionReceipt.requests.dryRunRetry.body?.casePath === '/v1/cases/case_live_contract?alertId=alert_live_contract&dedupeKey=dwm_dedupe_live_contract', 'Delivery transition receipts should build no-network dry-run retry bodies with case context.', deliveryReceiptRetry?.transitionReceipt.requests.dryRunRetry)
+expect(deliveryReceiptRetry?.transitionReceipt.requests.liveRetry.canSend === false && deliveryReceiptRetry.transitionReceipt.requests.liveRetry.blockers.some(item => item.code === 'live_delivery_disabled'), 'Delivery transition receipts should block live retry when live sends are not configured.', deliveryReceiptRetry?.transitionReceipt.requests.liveRetry)
+expect(deliveryReceiptRetry?.transitionReceipt.redactedTarget.endpointExposed === false && deliveryReceiptRetry.transitionReceipt.audit.auditEventIds.includes('audit_live_retry_contract'), 'Delivery transition receipts should carry redacted destination and audit ids.', deliveryReceiptRetry?.transitionReceipt)
+expect(Boolean(deliveryReceiptRetry?.transitionReceipt.watchlist.term) && Boolean(deliveryReceiptRetry?.transitionReceipt.workflow.routeUrl), 'Delivery transition receipts should carry watchlist and route URL context.', deliveryReceiptRetry?.transitionReceipt)
+expect(deliveryReceiptReplay?.transitionReceipt.provenance.captureIds.includes('capture_replay_contract') && deliveryReceiptReplay.transitionReceipt.provenance.sourceIds.includes('source_replay_contract'), 'Delivery transition receipts should carry alert provenance ids.', deliveryReceiptReplay?.transitionReceipt.provenance)
 expect(deliveryReceiptTerminal?.retry.terminalFailure === true && deliveryReceiptTerminal.blockers.some(item => item.code === 'terminal_failure'), 'Delivery receipts should expose terminal failure blockers.', deliveryReceiptTerminal)
+expect(deliveryReceiptTerminal?.transitionReceipt.state.next === 'terminal_failure' && deliveryReceiptTerminal.transitionReceipt.requests.dryRunRetry.canSend === false, 'Delivery transition receipts should block terminal failure retries.', deliveryReceiptTerminal?.transitionReceipt)
 expect(deliveryReceiptMissingDestination?.destination.availability.code === 'destination_unavailable' && deliveryReceiptMissingDestination.blockers.some(item => item.code === 'destination_unavailable'), 'Delivery receipts should expose typed blockers for missing destination outcomes.', deliveryReceiptMissingDestination)
+expect(deliveryReceiptMissingDestination?.transitionReceipt.state.next === 'destination_unavailable' && deliveryReceiptMissingDestination.transitionReceipt.denial.blockingCodes.includes('destination_unavailable'), 'Delivery transition receipts should expose missing destination denial state.', deliveryReceiptMissingDestination?.transitionReceipt)
 expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === null && deliveryReceiptMissingDestination.operationLinks.destinationArchive === null && deliveryReceiptMissingDestination.operationLinks.deliveryHistory.includes('alert_missing_destination_contract'), 'Missing destination receipts should avoid fake destination remediation links and keep alert-scoped history links.', deliveryReceiptMissingDestination)
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
+expect(nonmemberDeliveryReceipts.receipts.length === 0 && nonmemberDeliveryReceipts.blockers.some(item => item.code === 'permission_denied'), 'Delivery receipts should deny nonmembers without leaking transition receipts.', nonmemberDeliveryReceipts)
 expect(!JSON.stringify(deliveryReceipts).includes(secret), 'Delivery receipts should redact endpoint, response, and payload secrets.', deliveryReceipts)
 expect(deliveryTimeline.schemaVersion === 'dwm.webhook.delivery_timeline.v1' && deliveryTimeline.counts.receipts === deliveryReceipts.counts.total, 'Delivery timeline should group delivery receipts for customer history.', deliveryTimeline)
 expect(deliveryTimelineReplay?.latestReceipt.discordPreview?.fieldNames.includes('Alert URL') && deliveryTimelineReplay.auditEventIds.includes('audit_replay_duplicate_contract'), 'Delivery timeline should preserve Discord preview and audit proof for replayed alerts.', deliveryTimelineReplay)
@@ -3408,8 +3427,14 @@ console.log(JSON.stringify({
         'delivery receipts customer-safe proof contract',
         'delivery receipts Discord preview proof',
         'delivery receipts retry/backoff blockers',
+        'delivery receipts transition receipt retry state',
+        'delivery receipts transition receipt dry-run request',
+        'delivery receipts transition receipt live blocker',
+        'delivery receipts transition receipt audit/provenance',
         'delivery receipts terminal failure blocker',
+        'delivery receipts missing destination transition blocker',
         'delivery receipts audit/no-network linkage',
+        'delivery receipts nonmember denial',
         'delivery receipts destination archive remediation link',
         'delivery receipts secret redaction',
         'delivery timeline customer history grouping',
@@ -3618,6 +3643,12 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].operationLinks.destinationTest',
             'deliveryReceipts.receipts[].operationLinks.destinationArchive',
             'deliveryReceipts.receipts[].retry.nextRetryAt',
+            'deliveryReceipts.receipts[].transitionReceipt.state.next',
+            'deliveryReceipts.receipts[].transitionReceipt.requests.dryRunRetry.body',
+            'deliveryReceipts.receipts[].transitionReceipt.requests.liveRetry.blockers[].code',
+            'deliveryReceipts.receipts[].transitionReceipt.provenance.captureIds',
+            'deliveryReceipts.receipts[].transitionReceipt.audit.auditEventIds',
+            'deliveryReceipts.receipts[].transitionReceipt.redactedTarget.endpointExposed',
             'deliveryReceipts.receipts[].blockers[].code',
             'deliveryTimeline.schemaVersion',
             'deliveryTimeline.timelines[].latestReceipt.proof.auditEventId',
