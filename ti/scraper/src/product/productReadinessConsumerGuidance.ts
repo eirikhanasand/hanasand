@@ -2,6 +2,7 @@ import { uniqueStrings } from "../utils.ts";
 
 export const PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION = "hanasand.product_readiness.consumer_guidance.v1" as const;
 export const PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION = "hanasand.product_readiness.org_alert_consumer_packet_fixture.v1" as const;
+export const PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION = "hanasand.product_readiness.end_to_end_workflow_packet.v1" as const;
 
 export type ProductReadinessConsumerState = "ready" | "partial" | "blocked" | "unsupported";
 export type ProductReadinessConsumerLane = "org" | "dashboard" | "publicTI" | "alert" | "webhook" | "case" | "helpdesk" | "website";
@@ -101,6 +102,36 @@ export type ProductReadinessConsumerGuidanceRow = {
   safeOutput: Required<SafeOutput>;
 };
 
+export type ProductReadinessEndToEndWorkflowStepId =
+  | "organization_access"
+  | "shared_watchlist"
+  | "source_coverage"
+  | "matched_alert"
+  | "analyst_case"
+  | "webhook_destination"
+  | "delivery_outcome"
+  | "support_audit";
+
+export type ProductReadinessEndToEndWorkflowField = {
+  alias: string;
+  sourceField: string;
+  stepId: ProductReadinessEndToEndWorkflowStepId;
+  consumerLane: ProductReadinessConsumerLane;
+  present: boolean;
+};
+
+export type ProductReadinessEndToEndWorkflowStep = {
+  stepId: ProductReadinessEndToEndWorkflowStepId;
+  state: ProductReadinessConsumerState;
+  consumerLane: ProductReadinessConsumerLane;
+  ownerLane: string;
+  route: string;
+  typedFields: ProductReadinessEndToEndWorkflowField[];
+  missingTypedFields: string[];
+  blockerCodes: string[];
+  proofLink: ProductReadinessConsumerGuidanceRow["proofLink"];
+};
+
 type ProductReadinessConsumerDefinition = {
   laneId: ProductReadinessConsumerLane;
   ownerLane: string;
@@ -108,6 +139,12 @@ type ProductReadinessConsumerDefinition = {
   consumerId?: string;
   orgCapabilityIds: string[];
   requiredTypedFields: Record<string, string>;
+};
+
+type ProductReadinessWorkflowStepDefinition = {
+  stepId: ProductReadinessEndToEndWorkflowStepId;
+  consumerLane: ProductReadinessConsumerLane;
+  requiredFields: Record<string, string>;
 };
 
 const safeMetadataOnly = {
@@ -245,6 +282,123 @@ const consumerDefinitions: ProductReadinessConsumerDefinition[] = [
   }
 ];
 
+const endToEndWorkflowDefinitions: ProductReadinessWorkflowStepDefinition[] = [
+  {
+    stepId: "organization_access",
+    consumerLane: "org",
+    requiredFields: {
+      orgId: "organizationId",
+      memberRef: "member.status",
+      inviteRef: "invite.status",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "shared_watchlist",
+    consumerLane: "org",
+    requiredFields: {
+      orgId: "organizationId",
+      watchlistId: "watchlistId",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "source_coverage",
+    consumerLane: "publicTI",
+    requiredFields: {
+      orgId: "organizationId",
+      sourceCoverageIds: "sourceIds",
+      provenanceHash: "provenanceHash",
+      sourceCoverage: "sourceCoverageState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "matched_alert",
+    consumerLane: "alert",
+    requiredFields: {
+      orgId: "organizationId",
+      watchlistId: "watchlistId",
+      alertId: "alertId",
+      caseId: "caseId",
+      provenanceHash: "provenanceHash",
+      sourceCoverage: "sourceCoverageState",
+      workflowStatus: "workflowState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "analyst_case",
+    consumerLane: "case",
+    requiredFields: {
+      orgId: "organizationId",
+      alertId: "alertId",
+      caseId: "caseId",
+      workflowStatus: "workflowState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "webhook_destination",
+    consumerLane: "webhook",
+    requiredFields: {
+      orgId: "organizationId",
+      alertId: "alertId",
+      caseId: "caseId",
+      destinationDeliveryState: "destinationDeliveryState",
+      deliveryStatus: "destinationDeliveryState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "delivery_outcome",
+    consumerLane: "webhook",
+    requiredFields: {
+      orgId: "organizationId",
+      alertId: "alertId",
+      caseId: "caseId",
+      deliveryStatus: "destinationDeliveryState",
+      workflowStatus: "workflowState",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  },
+  {
+    stepId: "support_audit",
+    consumerLane: "helpdesk",
+    requiredFields: {
+      orgId: "organizationId",
+      alertId: "alertId",
+      caseId: "caseId",
+      supportAuditStatus: "supportAction.status",
+      blockerReason: "blockerCodes",
+      owningLane: "ownerLane",
+      proofLink: "proofLink",
+      lastVerifiedAt: "lastVerifiedAt"
+    }
+  }
+];
+
 export function buildProductReadinessConsumerGuidance(input: ProductReadinessConsumerGuidanceInput) {
   const handoffRows = input.productReadinessConsumerHandoffPacket?.rows || [];
   const capabilityRows = input.productReadinessOrgCapabilityPacket?.rows || [];
@@ -293,6 +447,37 @@ export function buildProductReadinessOrgAlertConsumerPacketFixture(guidance: Ret
       receiptSchemaIds: row.proofLink.receiptSchemaIds
     })),
     blockerCodes,
+    safeOutput: safeMetadataOnly
+  };
+}
+
+export function buildProductReadinessEndToEndWorkflowPacket(
+  guidance: ReturnType<typeof buildProductReadinessConsumerGuidance>,
+  options: { lastVerifiedAt?: string } = {}
+) {
+  const lastVerifiedAt = options.lastVerifiedAt || "2026-06-30T00:00:00.000Z";
+  const guidanceByLane = new Map(guidance.rows.map((row) => [row.laneId, row]));
+  const steps = endToEndWorkflowDefinitions.map((definition) => buildEndToEndWorkflowStep(definition, guidanceByLane, lastVerifiedAt));
+  const blockerCodes = uniqueStrings(steps.flatMap((step) => step.blockerCodes));
+  const state = steps.some((step) => step.state === "unsupported")
+    ? "unsupported"
+    : steps.some((step) => step.state === "blocked")
+      ? "blocked"
+      : steps.some((step) => step.state === "partial")
+        ? "partial"
+        : "ready";
+  return {
+    schemaVersion: PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
+    route: "/v1/contracts",
+    producer: "buildProductReadinessEndToEndWorkflowPacket",
+    state,
+    lastVerifiedAt,
+    requiredStepIds: endToEndWorkflowDefinitions.map((definition) => definition.stepId),
+    steps,
+    typedFields: uniqueStrings(steps.flatMap((step) => step.typedFields.filter((field) => field.present).map((field) => field.alias))),
+    missingTypedFields: uniqueStrings(steps.flatMap((step) => step.missingTypedFields)),
+    blockerCodes,
+    consumerGuidanceSchemaVersion: guidance.schemaVersion,
     safeOutput: safeMetadataOnly
   };
 }
@@ -360,6 +545,96 @@ function buildConsumerGuidanceRow(
     blockerCodes,
     safeOutput: safeMetadataOnly
   };
+}
+
+function buildEndToEndWorkflowStep(
+  definition: ProductReadinessWorkflowStepDefinition,
+  guidanceByLane: Map<ProductReadinessConsumerLane, ProductReadinessConsumerGuidanceRow>,
+  lastVerifiedAt: string
+): ProductReadinessEndToEndWorkflowStep {
+  const guidanceRow = guidanceByLane.get(definition.consumerLane);
+  const availableAliases = new Map((guidanceRow?.typedFields || [])
+    .filter((field) => field.present)
+    .map((field) => [field.alias, field.sourceField]));
+  const syntheticFields = buildSyntheticWorkflowFields(definition, guidanceRow, lastVerifiedAt);
+  for (const [alias, sourceField] of Object.entries(syntheticFields)) {
+    availableAliases.set(alias, sourceField);
+  }
+  const typedFields = Object.entries(definition.requiredFields).map(([alias, sourceField]) => ({
+    alias,
+    sourceField: availableAliases.get(alias) || sourceField,
+    stepId: definition.stepId,
+    consumerLane: definition.consumerLane,
+    present: availableAliases.has(alias)
+  }));
+  const missingTypedFields = typedFields.filter((field) => !field.present).map((field) => field.alias);
+  const blockerCodes = uniqueStrings([
+    ...(guidanceRow?.blockerCodes || []),
+    ...(!guidanceRow ? ["missing_consumer_guidance_row"] : []),
+    ...missingTypedFields.map(() => "missing_end_to_end_workflow_field")
+  ]);
+  const state = !guidanceRow
+    ? "unsupported"
+    : guidanceRow.state === "ready" && missingTypedFields.length > 0
+      ? "partial"
+      : guidanceRow.state;
+  return {
+    stepId: definition.stepId,
+    state,
+    consumerLane: definition.consumerLane,
+    ownerLane: guidanceRow?.ownerLane || definition.consumerLane,
+    route: guidanceRow?.route || "/v1/contracts",
+    typedFields,
+    missingTypedFields,
+    blockerCodes,
+    proofLink: guidanceRow?.proofLink || {
+      route: "/v1/contracts",
+      contractIds: [],
+      schemaIds: [],
+      receiptSchemaIds: []
+    }
+  };
+}
+
+function buildSyntheticWorkflowFields(
+  definition: ProductReadinessWorkflowStepDefinition,
+  guidanceRow: ProductReadinessConsumerGuidanceRow | undefined,
+  lastVerifiedAt: string
+) {
+  const fields: Record<string, string> = {
+    lastVerifiedAt: lastVerifiedAt ? "lastVerifiedAt" : ""
+  };
+  if (!guidanceRow) {
+    return fields;
+  }
+  const proofContractIds = new Set(guidanceRow.proofLink.contractIds);
+  const proofSchemaIds = new Set(guidanceRow.proofLink.schemaIds);
+  if (definition.stepId === "organization_access") {
+    if (proofSchemaIds.has("organization.lifecycle_readiness.v1")) {
+      fields.memberRef = "member.status";
+    }
+    if (proofContractIds.has("support_action_receipts")) {
+      fields.inviteRef = "invite.status";
+    }
+  }
+  if (definition.stepId === "source_coverage" && proofContractIds.has("source_provenance_receipts")) {
+    fields.sourceCoverageIds = "sourceIds";
+  }
+  if (definition.stepId === "matched_alert" || definition.stepId === "analyst_case" || definition.stepId === "delivery_outcome") {
+    const workflowField = guidanceRow.typedFields.find((field) => field.alias === "workflowState" && field.present);
+    if (workflowField) {
+      fields.workflowStatus = workflowField.sourceField;
+    } else if (proofContractIds.has("org_scoped_alert_case_workflow") || proofContractIds.has("org_alert_case_workflow")) {
+      fields.workflowStatus = "workflowState";
+    }
+  }
+  if ((definition.stepId === "webhook_destination" || definition.stepId === "delivery_outcome") && proofContractIds.has("webhook_delivery_receipts")) {
+    fields.deliveryStatus = "destinationDeliveryState";
+  }
+  if (definition.stepId === "support_audit" && proofContractIds.has("support_action_receipts")) {
+    fields.supportAuditStatus = "supportAction.status";
+  }
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => Boolean(value)));
 }
 
 function buildCapabilityAliases(capabilityRows: ProductReadinessOrgCapabilityRow[]) {

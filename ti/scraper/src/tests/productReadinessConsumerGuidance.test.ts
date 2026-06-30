@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { contractIndex } from "../api/contractsRoute.ts";
 import {
   PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION,
+  PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
   PRODUCT_READINESS_ORG_ALERT_CONSUMER_PACKET_FIXTURE_SCHEMA_VERSION,
   buildProductReadinessConsumerGuidance,
+  buildProductReadinessEndToEndWorkflowPacket,
   buildProductReadinessOrgAlertConsumerPacketFixture
 } from "../product/productReadinessConsumerGuidance.ts";
 
@@ -143,5 +145,153 @@ describe("product readiness consumer guidance", () => {
       contractIds: expect.arrayContaining(["org_scoped_alert_case_workflow"]),
       receiptSchemaIds: expect.arrayContaining(["dwm.webhook_event_contract.v1"])
     }));
+  });
+
+  test("builds an end-to-end customer workflow readiness packet", () => {
+    const guidance = buildProductReadinessConsumerGuidance(contractIndex());
+    const packet = buildProductReadinessEndToEndWorkflowPacket(guidance, { lastVerifiedAt: "2026-06-30T12:00:00.000Z" });
+    const steps = new Map(packet.steps.map((step) => [step.stepId, step]));
+
+    expect(packet).toMatchObject({
+      schemaVersion: PRODUCT_READINESS_END_TO_END_WORKFLOW_PACKET_SCHEMA_VERSION,
+      route: "/v1/contracts",
+      producer: "buildProductReadinessEndToEndWorkflowPacket",
+      state: "ready",
+      lastVerifiedAt: "2026-06-30T12:00:00.000Z",
+      requiredStepIds: [
+        "organization_access",
+        "shared_watchlist",
+        "source_coverage",
+        "matched_alert",
+        "analyst_case",
+        "webhook_destination",
+        "delivery_outcome",
+        "support_audit"
+      ],
+      typedFields: expect.arrayContaining([
+        "orgId",
+        "memberRef",
+        "inviteRef",
+        "watchlistId",
+        "alertId",
+        "caseId",
+        "sourceCoverageIds",
+        "provenanceHash",
+        "workflowStatus",
+        "deliveryStatus",
+        "supportAuditStatus",
+        "blockerReason",
+        "owningLane",
+        "proofLink",
+        "lastVerifiedAt"
+      ]),
+      missingTypedFields: [],
+      blockerCodes: [],
+      consumerGuidanceSchemaVersion: PRODUCT_READINESS_CONSUMER_GUIDANCE_SCHEMA_VERSION,
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(steps.get("organization_access")).toMatchObject({
+      state: "ready",
+      consumerLane: "org",
+      typedFields: expect.arrayContaining([
+        expect.objectContaining({ alias: "memberRef", sourceField: "member.status", present: true }),
+        expect.objectContaining({ alias: "inviteRef", sourceField: "invite.status", present: true })
+      ])
+    });
+    expect(steps.get("matched_alert")).toMatchObject({
+      state: "ready",
+      consumerLane: "alert",
+      typedFields: expect.arrayContaining([
+        expect.objectContaining({ alias: "watchlistId", present: true }),
+        expect.objectContaining({ alias: "alertId", present: true }),
+        expect.objectContaining({ alias: "caseId", present: true }),
+        expect.objectContaining({ alias: "provenanceHash", present: true }),
+        expect.objectContaining({ alias: "workflowStatus", sourceField: "workflowState", present: true })
+      ]),
+      proofLink: {
+        contractIds: expect.arrayContaining(["shared_watchlist_alert_export", "org_scoped_alert_case_workflow"]),
+        schemaIds: expect.arrayContaining(["organization.watchlist_alert_readiness.v1"])
+      }
+    });
+    expect(steps.get("delivery_outcome")).toMatchObject({
+      state: "ready",
+      consumerLane: "webhook"
+    });
+    expect(steps.get("delivery_outcome")?.typedFields).toContainEqual(expect.objectContaining({ alias: "deliveryStatus", sourceField: "destinationDeliveryState", present: true }));
+    expect(steps.get("webhook_destination")?.typedFields).toContainEqual(expect.objectContaining({ alias: "destinationDeliveryState", present: true }));
+    expect(steps.get("delivery_outcome")?.proofLink.receiptSchemaIds).toContain("dwm.webhook_event_contract.v1");
+    expect(steps.get("support_audit")).toMatchObject({
+      state: "ready",
+      consumerLane: "helpdesk",
+      typedFields: expect.arrayContaining([
+        expect.objectContaining({ alias: "supportAuditStatus", sourceField: "supportAction.status", present: true })
+      ])
+    });
+    expect(JSON.stringify(packet)).not.toContain("https://discord.com");
+    expect(JSON.stringify(packet)).not.toContain("rawEvidenceDump");
+  });
+
+  test("keeps end-to-end proof links discoverable from the contract index", () => {
+    const contracts = contractIndex();
+    const guidance = buildProductReadinessConsumerGuidance(contracts);
+    const packet = buildProductReadinessEndToEndWorkflowPacket(guidance);
+    const matrixContractIds = new Set(contracts.productReadinessReceiptMatrix.rows.flatMap((row: any) => row.contractIds));
+    const receiptSchemaIds = new Set(contracts.receiptSchemas.flatMap((row: any) => Object.values(row.schemas)));
+    const sourceSchemaIds = new Set(contracts.schemaLookup.rows.map((row: any) => row.schemaId));
+
+    expect([...sourceSchemaIds]).toEqual(expect.arrayContaining([
+      contracts.productReadinessConsumerHandoffPacket.schemaVersion,
+      contracts.productReadinessOrgCapabilityPacket.schemaVersion
+    ]));
+    for (const step of packet.steps) {
+      expect(step.proofLink.route).toEqual(expect.any(String));
+      expect(step.proofLink.contractIds.length).toBeGreaterThan(0);
+      expect(step.proofLink.schemaIds.length).toBeGreaterThan(0);
+      expect(step.proofLink.contractIds.every((contractId) => matrixContractIds.has(contractId))).toBe(true);
+      expect(step.proofLink.receiptSchemaIds.every((schemaId) => receiptSchemaIds.has(schemaId))).toBe(true);
+    }
+  });
+
+  test("classifies end-to-end partial, blocked, and unsupported states", () => {
+    const contracts = JSON.parse(JSON.stringify(contractIndex()));
+    contracts.productReadinessConsumerHandoffPacket.rows = contracts.productReadinessConsumerHandoffPacket.rows.filter((row: any) => row.consumerId !== "alert_generation");
+    delete contracts.productReadinessConsumerHandoffPacket.rows.find((row: any) => row.consumerId === "public_ti_handoff").fieldAliases.sourceCoverage;
+    contracts.productReadinessOrgCapabilityPacket.rows.find((row: any) => row.orgCapabilityId === "source_coverage_state").readinessFields = [];
+    delete contracts.productReadinessConsumerHandoffPacket.rows.find((row: any) => row.consumerId === "webhook_delivery").fieldAliases.destinationDeliveryState;
+    contracts.productReadinessOrgCapabilityPacket.rows.find((row: any) => row.orgCapabilityId === "destination_delivery_state").safeOutput.rawEvidenceExposed = true;
+    const guidance = buildProductReadinessConsumerGuidance(contracts);
+    const packet = buildProductReadinessEndToEndWorkflowPacket(guidance);
+    const steps = new Map(packet.steps.map((step) => [step.stepId, step]));
+
+    expect(packet).toMatchObject({
+      state: "unsupported",
+      blockerCodes: expect.arrayContaining([
+        "missing_consumer_handoff_row",
+        "unsafe_org_capability_output",
+        "missing_end_to_end_workflow_field"
+      ])
+    });
+    expect(steps.get("matched_alert")).toMatchObject({
+      state: "unsupported",
+      blockerCodes: expect.arrayContaining(["missing_consumer_handoff_row"])
+    });
+    expect(steps.get("source_coverage")).toMatchObject({
+      state: "partial",
+      blockerCodes: expect.arrayContaining(["missing_end_to_end_workflow_field"]),
+      missingTypedFields: expect.arrayContaining(["sourceCoverage"])
+    });
+    expect(steps.get("webhook_destination")).toMatchObject({
+      state: "blocked",
+      blockerCodes: expect.arrayContaining(["unsafe_org_capability_output"])
+    });
+    expect(steps.get("delivery_outcome")).toMatchObject({
+      state: "blocked"
+    });
+    expect(steps.get("delivery_outcome")?.blockerCodes).toContain("unsafe_org_capability_output");
   });
 });
