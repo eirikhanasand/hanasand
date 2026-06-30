@@ -1525,6 +1525,52 @@ function buildDwmAlertCustomerReadiness(input: {
         actions: actionRows
       }
     },
+    transitionHandoff: {
+      schemaVersion: "dwm.alert_transition_handoff.v1",
+      ready: workflowReady && readyForCase,
+      workflowEventCount: input.downstreamHandoff.workflowVersion.eventCount,
+      replayCount: input.downstreamHandoff.workflowVersion.replayCount,
+      lastReplayedAt: input.downstreamHandoff.workflowVersion.lastReplayedAt,
+      actions: input.downstreamHandoff.workflowTransitions.actions,
+      lastEventAt: input.downstreamHandoff.workflowTransitions.lastEventAt,
+      caseLinked: input.downstreamHandoff.workflowTransitions.caseLinked,
+      closed: input.downstreamHandoff.workflowTransitions.closed,
+      suppressed: input.downstreamHandoff.workflowTransitions.suppressed,
+      caseIdCandidate: input.downstreamHandoff.caseReadiness.caseIdCandidate,
+      caseId: input.downstreamHandoff.caseReadiness.caseId,
+      casePath: input.downstreamHandoff.caseReadiness.casePath,
+      updateReceipt: input.downstreamHandoff.updateReceipt ? {
+        schemaVersion: input.downstreamHandoff.updateReceipt.schemaVersion,
+        ready: input.downstreamHandoff.updateReceipt.ready,
+        eventId: input.downstreamHandoff.updateReceipt.eventId,
+        addedCaptureIds: input.downstreamHandoff.updateReceipt.addedCaptureIds,
+        selectedCaptureIds: input.downstreamHandoff.updateReceipt.selectedCaptureIds,
+        workflowEventCount: input.downstreamHandoff.updateReceipt.workflowEventCount,
+        caseId: input.downstreamHandoff.updateReceipt.caseId,
+        casePath: input.downstreamHandoff.updateReceipt.casePath,
+        deliveryDedupeKey: input.downstreamHandoff.updateReceipt.deliveryDedupeKey,
+        blockerCodes: input.downstreamHandoff.updateReceipt.blockerCodes
+      } : undefined,
+      replayReceipt: {
+        schemaVersion: input.downstreamHandoff.replayReceipt.schemaVersion,
+        ready: input.downstreamHandoff.replayReceipt.ready,
+        replayCount: input.downstreamHandoff.replayReceipt.replayCount,
+        workflowEventCount: input.downstreamHandoff.replayReceipt.workflowEventCount,
+        caseIdCandidate: input.downstreamHandoff.replayReceipt.caseIdCandidate,
+        caseId: input.downstreamHandoff.replayReceipt.caseId,
+        casePath: input.downstreamHandoff.replayReceipt.casePath,
+        deliveryDedupeKey: input.downstreamHandoff.replayReceipt.deliveryDedupeKey,
+        selectedCaptureIds: input.downstreamHandoff.replayReceipt.selectedCaptureIds,
+        watchlistItemIds: input.downstreamHandoff.replayReceipt.watchlistItemIds,
+        alertGenerationRefs: input.downstreamHandoff.replayReceipt.alertGenerationRefs,
+        blockerCodes: input.downstreamHandoff.replayReceipt.blockerCodes
+      },
+      blockerCodes: uniqueAlertStrings([
+        ...input.downstreamHandoff.blockerCodes.map(String),
+        ...input.downstreamHandoff.replayReceipt.blockerCodes.map(String),
+        ...(input.downstreamHandoff.updateReceipt?.blockerCodes ?? []).map(String)
+      ])
+    },
     sourceCoverage: {
       sourceFamily: input.downstreamHandoff.sourceFamily ?? alert.sourceFamily,
       evidenceCount,
@@ -1560,10 +1606,10 @@ function buildDwmAlertCustomerReadiness(input: {
       }))
     ],
     consumerFields: {
-      dashboard: ["id", "alertDetailPath", "customerReadiness.alertReadiness", "customerReadiness.workflowReadiness", "customerReadiness.blockerCodes"],
-      webhook: ["customerReadiness.deliveryReadiness", "alertCreatedDispatch", "downstreamHandoff.createdEventDispatch"],
+      dashboard: ["id", "alertDetailPath", "customerReadiness.alertReadiness", "customerReadiness.workflowReadiness", "customerReadiness.transitionHandoff", "customerReadiness.blockerCodes"],
+      webhook: ["customerReadiness.deliveryReadiness", "customerReadiness.transitionHandoff.replayReceipt", "alertCreatedDispatch", "downstreamHandoff.createdEventDispatch"],
       publicTI: ["customerReadiness.sourceCoverage", "customerReadiness.alertReadiness.matchReason", "sourceProvenanceSummary"],
-      analystPortal: ["customerReadiness.workflowReadiness", "caseHandoff", "nextBestAction"]
+      analystPortal: ["customerReadiness.workflowReadiness", "customerReadiness.transitionHandoff", "caseHandoff", "nextBestAction"]
     }
   };
 }
@@ -1676,6 +1722,8 @@ function buildDwmAlertQueueVisibility(input: {
         "alerts[].customerReadiness.alertReadiness.matchReason",
         "alerts[].customerReadiness.sourceCoverage",
         "alerts[].customerReadiness.workflowReadiness",
+        "alerts[].customerReadiness.transitionHandoff",
+        "alerts[].customerReadiness.transitionHandoff.replayReceipt",
         "alerts[].customerReadiness.deliveryReadiness",
         "alerts[].customerReadiness.caseHandoff",
         "alertQueueVisibility.orgAlertWorkflowBridge",
