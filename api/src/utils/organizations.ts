@@ -1875,6 +1875,26 @@ export type OrganizationReadinessProof = {
         nonmemberDestinationEnumeration: false
         expectedDeliveryFields: string[]
         blockerCodes: string[]
+        webhookDestinationReadinessBridge: {
+            schemaVersion: 'organization.webhook_destination_readiness_bridge.v1'
+            deliveryContractSchema: 'dwm.webhook.org_alert_delivery.v1'
+            sourceContract: 'organization.watchlist_webhook_delivery_contract.v1'
+            route: 'POST /v1/dwm/webhooks/deliver'
+            defaultWebhookPolicy: OrganizationDefaultWebhookPolicy
+            canUseDefaultDestinations: boolean
+            selectedDestinationSource: 'org_active_destinations' | 'manual_selection_required' | 'webhook_policy_disabled'
+            requiredDestinationOrgId: string
+            selectedDestinationOrgField: 'destination.org_id'
+            selectedDestinationIdField: 'webhookDestinationIds[]'
+            ownerAdminManualTriggerRequired: true
+            memberManualTriggerAllowed: false
+            requiredAlertFields: string[]
+            expectedDeliveryFields: string[]
+            skippedDestinationReasons: Array<'org_mismatch' | 'destination_disabled' | 'event_not_subscribed' | 'manual_selection_required' | 'webhook_policy_disabled'>
+            lifecycleBlockers: Array<'org_archived' | 'org_deleted' | 'watchlist_paused' | 'watchlist_archived' | 'member_revoked' | 'nonmember_denied'>
+            blockerCodes: string[]
+            nonmemberDestinationEnumeration: false
+        }
     }
     memberLifecycleProof: {
         schemaVersion: 'organization.member_lifecycle_visibility_proof.v1'
@@ -4692,6 +4712,17 @@ export function organizationReadinessProof(input: {
         input.downstreamAuthorization.visibility.allowed ? undefined : input.downstreamAuthorization.visibility.reason,
         cleanupRequired ? 'cleanup_required' : undefined,
     ].filter(Boolean).map(String))).sort()
+    const webhookBlockerCodes = [
+        ...input.downstreamAuthorization.downstream.alertGeneration.blockerCodes,
+        input.downstreamAuthorization.downstream.webhook.denialReason,
+        input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
+    ].filter(Boolean).map(String)
+    const webhookSelectedDestinationSource = input.downstreamAuthorization.downstream.webhook.defaultPolicy === 'active_destinations'
+        && input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations
+        ? 'org_active_destinations'
+        : input.downstreamAuthorization.downstream.webhook.defaultPolicy === 'disabled'
+            ? 'webhook_policy_disabled'
+            : 'manual_selection_required'
 
     return {
         schemaVersion: 'organization.worker3_ui_readiness_proof.v1',
@@ -4784,11 +4815,56 @@ export function organizationReadinessProof(input: {
                 'orgAlertDelivery.ledger.deliveries',
                 'orgAlertDelivery.auditEventContracts',
             ],
-            blockerCodes: [
-                ...input.downstreamAuthorization.downstream.alertGeneration.blockerCodes,
-                input.downstreamAuthorization.downstream.webhook.denialReason,
-                input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations ? undefined : 'manual_webhook_selection_required',
-            ].filter(Boolean).map(String),
+            blockerCodes: webhookBlockerCodes,
+            webhookDestinationReadinessBridge: {
+                schemaVersion: 'organization.webhook_destination_readiness_bridge.v1',
+                deliveryContractSchema: 'dwm.webhook.org_alert_delivery.v1',
+                sourceContract: 'organization.watchlist_webhook_delivery_contract.v1',
+                route: 'POST /v1/dwm/webhooks/deliver',
+                defaultWebhookPolicy: input.downstreamAuthorization.downstream.webhook.defaultPolicy,
+                canUseDefaultDestinations: input.downstreamAuthorization.downstream.webhook.canUseDefaultDestinations,
+                selectedDestinationSource: webhookSelectedDestinationSource,
+                requiredDestinationOrgId: input.downstreamAuthorization.organizationId,
+                selectedDestinationOrgField: 'destination.org_id',
+                selectedDestinationIdField: 'webhookDestinationIds[]',
+                ownerAdminManualTriggerRequired: true,
+                memberManualTriggerAllowed: false,
+                requiredAlertFields: [
+                    'alert.id',
+                    'alert.organizationId',
+                    'alert.tenantId',
+                    'alert.watchlistItemIds',
+                    'alert.workflowContext.alertGenerationRefs',
+                    'alert.workflowContext.alertGeneratorKeys',
+                ],
+                expectedDeliveryFields: [
+                    'organizationId',
+                    'tenantId',
+                    'destinationId',
+                    'eventType',
+                    'payload.alert.id',
+                    'payload.alert.organizationId',
+                    'payload.watchlist.watchlistItemIds',
+                    'delivery.idempotencyKey',
+                ],
+                skippedDestinationReasons: [
+                    'org_mismatch',
+                    'destination_disabled',
+                    'event_not_subscribed',
+                    'manual_selection_required',
+                    'webhook_policy_disabled',
+                ],
+                lifecycleBlockers: [
+                    'org_archived',
+                    'org_deleted',
+                    'watchlist_paused',
+                    'watchlist_archived',
+                    'member_revoked',
+                    'nonmember_denied',
+                ],
+                blockerCodes: webhookBlockerCodes,
+                nonmemberDestinationEnumeration: false,
+            },
         },
         memberLifecycleProof: {
             schemaVersion: 'organization.member_lifecycle_visibility_proof.v1',
