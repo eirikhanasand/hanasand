@@ -4308,6 +4308,16 @@ export function buildDwmWebhookDashboardReadinessAdapter({
     const destinationHealth = buildDwmWebhookDestinationHealth({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
     const retryPersistence = buildDwmWebhookDeliveryRetryPersistence({ destinations, deliveries, auditEvents, liveDeliveryEnabled })
     const deliveriesById = new Map(deliveries.map(delivery => [delivery.id, delivery]))
+    const destinationById = new Map(destinations.map(destination => [destination.id, destination]))
+    const auditContracts = buildDwmWebhookAuditEventContracts({ destinations, deliveries, auditEvents })
+    const auditByDestination = new Map<string, typeof auditContracts>()
+    const dashboardCanManage = ['owner', 'admin'].includes(clean(recordOrEmpty(visibility).role).toLowerCase())
+    for (const audit of auditContracts) {
+        if (!audit.destinationId) continue
+        const audits = auditByDestination.get(audit.destinationId) || []
+        audits.push(audit)
+        auditByDestination.set(audit.destinationId, audits)
+    }
     const retryKeysByDestination = new Map<string, ReturnType<typeof buildDwmWebhookDeliveryRetryPersistence>['deliveryKeys']>()
     for (const key of retryPersistence.deliveryKeys) {
         if (!key.destinationId) continue
@@ -4344,6 +4354,12 @@ export function buildDwmWebhookDashboardReadinessAdapter({
         const healthStatus = dashboardPrimaryHealthStatus(states)
         const latestDelivery = health.latestAttempt?.deliveryId ? deliveriesById.get(health.latestAttempt.deliveryId) || null : null
         const latestPayloadPreview = latestDelivery?.payload ? buildDwmWebhookDestinationTestPayloadPreview(latestDelivery.payload) : null
+        const lifecycleState = destinationLifecycleState({
+            destination: destinationById.get(health.destinationId) || null,
+            health,
+            audits: auditByDestination.get(health.destinationId) || [],
+            canManage: dashboardCanManage,
+        })
 
         return {
             schemaVersion: 'dwm.webhook.dashboard_destination_readiness.v1',
@@ -4361,6 +4377,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
             readyForLive: health.ready && liveDeliveryEnabled && !policyBlockers.length,
             secretState: endpointPresent ? 'redacted' : 'missing',
             redactedEndpoint: health.redactedEndpoint,
+            lifecycleState,
             latestDeliveryProof: {
                 requestId: health.latestAttempt?.requestId || null,
                 deliveryId: health.latestAttempt?.deliveryId || null,
