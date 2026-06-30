@@ -435,7 +435,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
-                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} payload={actionability.exportPayloads.enrichment} />
+                        <SourceHealthPanel queue={actionability.sourceHealthQueue} intake={actionability.sourceEnrichmentIntake} coverage={actionability.actorEnrichmentCoverage} consumerReadiness={actionability.actorEnrichmentConsumerReadiness} payload={actionability.exportPayloads.enrichment} />
 
                         <div data-ti-actions='true'>
                             <ActionPanel
@@ -3134,7 +3134,7 @@ function collectionGapTaskPayloadFor(task: EnrichmentTask, intake: TiActionabili
     }
 }
 
-function SourceHealthPanel({ queue, intake, coverage, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; coverage: TiActionabilityModel['actorEnrichmentCoverage']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
+function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload }: { queue: TiActionabilityModel['sourceHealthQueue']; intake: TiActionabilityModel['sourceEnrichmentIntake']; coverage: TiActionabilityModel['actorEnrichmentCoverage']; consumerReadiness: TiActionabilityModel['actorEnrichmentConsumerReadiness']; payload: TiActionabilityModel['exportPayloads']['enrichment'] }) {
     const rows = queue.rows
 
     return (
@@ -3148,8 +3148,33 @@ function SourceHealthPanel({ queue, intake, coverage, payload }: { queue: TiActi
                         <span data-ti-enrichment-coverage-export='true' className='inline-flex'>
                             <CopyPayloadButton label='Coverage review' payload={coverage} />
                         </span>
-                        <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, enrichmentPayload: payload }} />
+                        <span data-ti-enrichment-consumer-readiness='true' className='inline-flex'>
+                            <CopyPayloadButton label='Consumer readiness' payload={consumerReadiness} />
+                        </span>
+                        <CopyPayloadButton label='Source health queue' payload={{ ...queue, sourceEnrichmentIntake: intake, actorEnrichmentCoverage: coverage, actorEnrichmentConsumerReadiness: consumerReadiness, enrichmentPayload: payload }} />
                     </div>
+                </div>
+                <div data-ti-source-consumer-readiness='true' className='grid min-w-0 gap-2 sm:grid-cols-3'>
+                    {consumerReadiness.rows.map(row => (
+                        <div key={row.consumer} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{actorEnrichmentConsumerLabel(row.consumer)}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                                        {row.coverageCounts.covered} covered · {row.coverageCounts.alertable} alert-ready · {row.blockerCodes.length} blocker{row.blockerCodes.length === 1 ? '' : 's'}
+                                    </p>
+                                </div>
+                                <span className={sourceHealthChipClass(actorEnrichmentConsumerState(row.state))}>{formatLabel(row.state)}</span>
+                            </div>
+                            <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                                {row.sourceFamilies.slice(0, 3).map(family => (
+                                    <span key={family} className={sourceHealthChipClass('review')}>{formatLabel(family)}</span>
+                                ))}
+                                {row.retry.retryable ? <span className={sourceHealthChipClass('blocked')}>retry queued</span> : null}
+                            </div>
+                            <p className='mt-2 break-all font-mono text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>{row.route}</p>
+                        </div>
+                    ))}
                 </div>
                 {rows.length ? rows.slice(0, 5).map(row => (
                     <div key={row.id} className='min-w-0 rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -3194,6 +3219,18 @@ function SourceHealthPanel({ queue, intake, coverage, payload }: { queue: TiActi
             </div>
         </Panel>
     )
+}
+
+function actorEnrichmentConsumerLabel(consumer: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['consumer']) {
+    if (consumer === 'publicTI') return 'Actor page'
+    if (consumer === 'alertGeneration') return 'Alert generation'
+    return 'Source operations'
+}
+
+function actorEnrichmentConsumerState(state: TiActionabilityModel['actorEnrichmentConsumerReadiness']['rows'][number]['state']) {
+    if (state === 'ready') return 'ready'
+    if (state === 'action_required') return 'review'
+    return 'blocked'
 }
 
 function sourceRefreshPayloadFor(
