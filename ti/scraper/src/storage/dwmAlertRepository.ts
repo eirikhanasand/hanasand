@@ -931,6 +931,15 @@ export type DwmAlertGenerationCandidate = {
   dedupeKeyCandidate: string;
 };
 
+export type DwmDuplicateEvidenceSuppressionSummary = {
+  schemaVersion: "dwm.duplicate_evidence_suppression.v1";
+  suppressedCount: number;
+  suppressedCaptureIds: string[];
+  duplicateOfCaptureIds: string[];
+  duplicateIdentities: string[];
+  reasons: Array<DwmAlertGenerationSuppressedCaptureRef["duplicateReason"]>;
+};
+
 export type DwmAlertGenerationPlan = {
   schemaVersion: "dwm.alert_generation_plan.v1";
   tenantId: string;
@@ -1346,6 +1355,7 @@ export type DwmPersistedDeliveryReadinessContext = {
     firstObservedAt?: string;
     lastObservedAt?: string;
   };
+  duplicateEvidenceSuppression?: DwmDuplicateEvidenceSuppressionSummary;
   sourceFamily: string;
   evidenceCount: number;
   recommendedRoute?: string;
@@ -1581,6 +1591,7 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
     replayCount: Number(input.existing?.replayCount ?? 0),
     selectedCaptureIds,
     generationEvidenceWindow: normalizeGenerationEvidenceWindow(input.workflowContext.generationEvidenceWindow ?? previousContext.generationEvidenceWindow),
+    duplicateEvidenceSuppression: input.workflowContext.duplicateEvidenceSuppression ?? previousContext.duplicateEvidenceSuppression,
     sourceFamily: String(input.alert.sourceFamily ?? input.workflowContext.sourceFamily ?? "unknown"),
     evidenceCount,
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute ?? input.workflowContext.recommendedRoute,
@@ -3789,6 +3800,7 @@ export function buildDwmAlertWorkflowContext(input: {
     visibilityPolicy: input.generationCandidate?.visibilityPolicy,
     membershipContext: input.generationCandidate?.membershipContext,
     generationCandidateId: input.generationCandidate?.id,
+    duplicateEvidenceSuppression: duplicateEvidenceSuppressionForCandidate(input.generationCandidate),
     caseIdCandidate,
     watchlistIds,
     watchlistItemIds,
@@ -3980,6 +3992,7 @@ export function buildDwmAlertWebhookContext(alert: DwmAlert, workflowContext: Re
     confidenceReasoning: alert.confidenceReasoning ?? [],
     provenance: alert.provenance,
     generationEvidenceWindow: workflowContext.generationEvidenceWindow,
+    duplicateEvidenceSuppression: workflowContext.duplicateEvidenceSuppression,
     claimSummary: alert.claimSummary
   };
 }
@@ -4084,6 +4097,7 @@ function buildDwmAlertUpdatedEvent(input: {
     recommendedRoute: input.alert.recommendedRoute ?? input.alert.webhookDelivery?.recommendedRoute,
     alertDetailPath: input.workflowContext.alertDetailPath,
     generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
+    duplicateEvidenceSuppression: input.workflowContext.duplicateEvidenceSuppression,
     provenance: {
       matchBasis: input.alert.provenance?.matchBasis,
       captureIds: input.alert.provenance?.captureIds ?? captureIds,
@@ -4168,7 +4182,8 @@ function buildDwmAlertEventConsumerPayload(input: {
       captureIds: input.alert.provenance?.captureIds ?? input.captureIds,
       sourceIds: input.alert.provenance?.sourceIds ?? []
     },
-    generationEvidenceWindow: input.workflowContext.generationEvidenceWindow
+    generationEvidenceWindow: input.workflowContext.generationEvidenceWindow,
+    duplicateEvidenceSuppression: input.workflowContext.duplicateEvidenceSuppression
   };
 }
 
@@ -4407,6 +4422,18 @@ function mergeSuppressedDuplicateCaptureRefs(existing: DwmAlertGenerationSuppres
     byIdentity.set(key, byIdentity.get(key) ?? ref);
   }
   return [...byIdentity.values()];
+}
+
+function duplicateEvidenceSuppressionForCandidate(candidate: DwmAlertGenerationCandidate | undefined): DwmDuplicateEvidenceSuppressionSummary {
+  const refs = candidate?.suppressedDuplicateCaptureRefs ?? [];
+  return {
+    schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+    suppressedCount: refs.length,
+    suppressedCaptureIds: uniqueStrings(refs.map((ref) => ref.captureId)),
+    duplicateOfCaptureIds: uniqueStrings(refs.map((ref) => ref.duplicateOfCaptureId)),
+    duplicateIdentities: uniqueStrings(refs.map((ref) => ref.duplicateIdentity)),
+    reasons: uniqueStrings(refs.map((ref) => ref.duplicateReason)) as DwmDuplicateEvidenceSuppressionSummary["reasons"]
+  };
 }
 
 function evidenceWindowForCaptureRefs(refs: DwmAlertGenerationCaptureRef[]) {

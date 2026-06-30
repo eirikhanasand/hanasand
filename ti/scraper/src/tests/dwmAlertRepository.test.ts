@@ -276,6 +276,7 @@ describe("dwm alert repository", () => {
     store.saveSource(publicAdvisorySource);
     store.saveCapture(telegramCapture);
     store.saveCapture(telegramDuplicateCapture);
+    (store as any).captures.set(telegramDuplicateCapture.id, telegramDuplicateCapture);
     store.saveCapture(nonmatchCapture);
     store.saveCapture(substringFalsePositiveCapture);
     store.saveCapture(darkwebCapture);
@@ -344,18 +345,8 @@ describe("dwm alert repository", () => {
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.contentHash)).toEqual(expect.arrayContaining(["hash-repo-tg-acme", "hash-repo-darkweb-acme", "hash-repo-public-ti-acme"]));
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId)).not.toContain("cap_repo_tg_notacme_false_positive");
     expect(generationPlan.candidates[0].captureRefs.map((ref) => ref.captureId)).not.toContain("cap_repo_tg_acme_duplicate");
-    expect(generationPlan.candidates[0].duplicateCaptureCollapseCount).toBe(0);
-    expect(generationPlan.candidates[0].suppressedDuplicateCaptureRefs).toEqual([]);
-    const duplicateAwarePlan = buildDwmAlertGenerationPlan({
-      watchlists: (store as any).listDwmWatchlists(),
-      tenantId: "tenant_repo_acme",
-      organizationId: "org_repo_acme",
-      visibilityPolicy: "admins",
-      sources: store.listSources(),
-      captures: [...store.listCaptures(), telegramDuplicateCapture]
-    });
-    expect(duplicateAwarePlan.candidates[0].duplicateCaptureCollapseCount).toBe(1);
-    expect(duplicateAwarePlan.candidates[0].suppressedDuplicateCaptureRefs).toEqual([expect.objectContaining({
+    expect(generationPlan.candidates[0].duplicateCaptureCollapseCount).toBe(1);
+    expect(generationPlan.candidates[0].suppressedDuplicateCaptureRefs).toEqual([expect.objectContaining({
       captureId: "cap_repo_tg_acme_duplicate",
       duplicateOfCaptureId: "cap_repo_tg_acme",
       duplicateReason: "duplicate_content_hash",
@@ -392,7 +383,7 @@ describe("dwm alert repository", () => {
         candidateCount: 1,
         rawActiveTermCount: 2,
         duplicateCollapseCount: 1,
-        duplicateCaptureCollapseCount: 0,
+        duplicateCaptureCollapseCount: 1,
         captureRefCount: 3,
         matchedCandidateCount: 1,
         unmatchedCandidateCount: 0
@@ -412,14 +403,7 @@ describe("dwm alert repository", () => {
         blocked: false
       }
     });
-    expect(buildDwmAlertGenerationReadiness({
-      watchlists: (store as any).listDwmWatchlists(),
-      tenantId: "tenant_repo_acme",
-      organizationId: "org_repo_acme",
-      visibilityPolicy: "admins",
-      sources: store.listSources(),
-      captures: [...store.listCaptures(), telegramDuplicateCapture]
-    }).counts.duplicateCaptureCollapseCount).toBe(1);
+    expect(readiness.plan.candidates[0].suppressedDuplicateCaptureRefs.map((ref) => ref.captureId)).toEqual(["cap_repo_tg_acme_duplicate"]);
     expect(readiness.sourceFamilyCoverage).toEqual([
       { sourceFamily: "darkweb_metadata", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
       { sourceFamily: "public_advisory", candidateCount: 1, captureRefCount: 1, watchlistIds: ["watch_repo_acme", "watch_repo_acme_duplicate"] },
@@ -562,6 +546,14 @@ describe("dwm alert repository", () => {
         sourceFamilies: ["telegram_public", "darkweb_metadata", "public_advisory"]
       },
       recommendedRoute: "identity_response",
+      duplicateEvidenceSuppression: {
+        schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+        suppressedCount: 1,
+        suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+        duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+        duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+        reasons: ["duplicate_content_hash"]
+      },
       hasWebhookRoute: true
     });
     expect(first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.alertCreatedEvent).toMatchObject({
@@ -603,6 +595,14 @@ describe("dwm alert repository", () => {
         dedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         deliveryDedupeKey: first.alerts.find((alert) => alert.sourceFamily === "telegram_public")?.dedupeKey,
         recommendedRoute: "identity_response",
+        duplicateEvidenceSuppression: {
+          schemaVersion: "dwm.duplicate_evidence_suppression.v1",
+          suppressedCount: 1,
+          suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+          duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+          duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+          reasons: ["duplicate_content_hash"]
+        },
         sourceProvenanceSummary: {
           schemaVersion: "dwm.alert_source_provenance.v1",
           sourceFamily: "telegram_public",
@@ -1098,9 +1098,19 @@ describe("dwm alert repository", () => {
     });
     expect(preserved?.sourceProvenanceSummary.captureIds).not.toContain("cap_repo_tg_acme_duplicate");
     expect(preserved?.sourceProvenanceSummary.evidenceExcerpts.map((item: any) => item.captureId)).toContain("cap_repo_tg_acme_followup");
-    expect(second.generationPlan.candidates[0].suppressedDuplicateCaptureRefs).toEqual([]);
-    expect(second.generationReadiness.counts.duplicateCaptureCollapseCount).toBe(0);
-    expect(second.generationReadiness.plan.candidates[0].duplicateCaptureCollapseCount).toBe(0);
+    expect(second.generationPlan.candidates[0].suppressedDuplicateCaptureRefs.map((ref) => ref.captureId)).toEqual(["cap_repo_tg_acme_duplicate"]);
+    expect(second.generationReadiness.counts.duplicateCaptureCollapseCount).toBe(1);
+    expect(second.generationReadiness.plan.candidates[0].duplicateCaptureCollapseCount).toBe(1);
+    expect(preserved?.workflowContext.duplicateEvidenceSuppression).toMatchObject({
+      suppressedCount: 1,
+      suppressedCaptureIds: ["cap_repo_tg_acme_duplicate"],
+      duplicateOfCaptureIds: ["cap_repo_tg_acme"],
+      duplicateIdentities: ["telegram_public:hash-repo-tg-acme"],
+      reasons: ["duplicate_content_hash"]
+    });
+    expect(preserved?.webhookContext.duplicateEvidenceSuppression).toEqual(preserved?.workflowContext.duplicateEvidenceSuppression);
+    expect(preserved?.deliveryReadinessContext.duplicateEvidenceSuppression).toEqual(preserved?.workflowContext.duplicateEvidenceSuppression);
+    expect(preserved?.alertUpdatedEvent.consumerPayload.duplicateEvidenceSuppression).toEqual(preserved?.workflowContext.duplicateEvidenceSuppression);
     expect(preserved?.deliveryReadinessContext).toMatchObject({
       state: "delivered",
       blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),
