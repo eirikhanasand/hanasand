@@ -35,6 +35,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_AUDIT_PACKET_SCHEMA
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_DRILLDOWN_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_drilldown_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_BRIDGE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_alert_bridge_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_DEDUPE_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_alert_dedupe_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_REBUILD_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_action_alert_rebuild_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION = "ti.source_provenance_source_pack_fixture_readiness_export.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_pack_retry_policy_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION = "ti.source_provenance_source_candidate_validation_receipt.v1" as const;
@@ -2470,6 +2471,75 @@ export type TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow = {
   provenance: TiSourceProvenanceSourcePackFixtureActionAlertBridgeRow["provenance"] & {
     sourcePackFixtureActionAlertBridgePacketId: string;
   };
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAlertRebuildPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_REBUILD_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourcePackFixtureActionAlertDedupePacketId: string;
+  requests: TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest[];
+  summary: {
+    requestCount: number;
+    readyRequests: number;
+    blockedRequests: number;
+    suppressedRequests: number;
+    actors: string[];
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    blockerCodes: TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker["code"][];
+    matchableFields: string[];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "publicTI" | "alertGeneration" | "dashboard" | "sourceOps" | "support" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest = {
+  requestId: string;
+  dedupeRowId: string;
+  actor: string;
+  publicTiRoute: string;
+  sourceFamily?: TiSourceProvenanceActorProfileGapSourceCandidate["family"];
+  requestState: "ready" | "blocked" | "suppressed";
+  dedupeKey: string;
+  alertGeneratorKey: string;
+  matchableFields: string[];
+  freshness: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["freshness"];
+  blockers: TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker[];
+  route: {
+    method: "GET" | "POST";
+    path: string;
+    body?: Record<string, unknown>;
+    dryRunSupported: true;
+    liveNetworkFetch: false;
+  };
+  provenance: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["provenance"] & {
+    sourcePackFixtureActionAlertDedupePacketId: string;
+  };
+};
+
+export type TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker = {
+  code: TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite["code"] | "duplicate_source_action";
+  ownerLane: TiSourceProvenanceSourcePackFixtureActionAlertBridgePrerequisite["ownerLane"] | "alert";
+  field: string;
+  reason: string;
+  nextAction: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow["action"]["action"];
 };
 
 export type TiSourceProvenanceSourcePackFixtureReadinessExport = {
@@ -5850,6 +5920,57 @@ export function buildSourceProvenanceSourcePackFixtureActionAlertDedupePacket(in
       "summary"
     ],
     safeOutput: input.alertBridge.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourcePackFixtureActionAlertRebuildPacket(input: {
+  dedupe: TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourcePackFixtureActionAlertRebuildPacket {
+  const generatedAt = input.generatedAt ?? input.dedupe.generatedAt;
+  const requests = input.dedupe.rows.map((row) => sourcePackFixtureActionAlertRebuildRequest(input.dedupe, row));
+  const sourceFamilies = uniqueStrings(requests.flatMap((request) => request.sourceFamily ? [request.sourceFamily] : [])) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const blockerCodes = uniqueStrings(requests.flatMap((request) => request.blockers.map((blocker) => blocker.code))) as TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker["code"][];
+  const matchableFields = uniqueStrings(requests.flatMap((request) => request.matchableFields));
+  const readyRequests = requests.filter((request) => request.requestState === "ready").length;
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_ACTION_ALERT_REBUILD_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_pack_fixture_action_alert_rebuild_packet", `${input.dedupe.id}:${generatedAt}:${requests.map((request) => request.requestId).join(",")}`),
+    generatedAt,
+    ok: requests.length > 0,
+    status: requests.length === 0 ? "blocked" : readyRequests > 0 && requests.some((request) => request.requestState !== "ready") ? "partial" : readyRequests > 0 ? "ready" : "blocked",
+    tenantId: input.dedupe.tenantId,
+    organizationId: input.dedupe.organizationId,
+    sourcePackFixtureActionAlertDedupePacketId: input.dedupe.id,
+    requests,
+    summary: {
+      requestCount: requests.length,
+      readyRequests,
+      blockedRequests: requests.filter((request) => request.requestState === "blocked").length,
+      suppressedRequests: requests.filter((request) => request.requestState === "suppressed").length,
+      actors: uniqueStrings(requests.map((request) => request.actor)),
+      sourceFamilies,
+      blockerCodes,
+      matchableFields,
+      nextRetryAt: earliestTimestamp(requests.map((request) => request.freshness.nextRetryAt))
+    },
+    consumers: sourcePackFixtureActionAlertRebuildConsumers(requests),
+    payloadShape: [
+      "requests[].actor",
+      "requests[].publicTiRoute",
+      "requests[].sourceFamily",
+      "requests[].requestState",
+      "requests[].dedupeKey",
+      "requests[].alertGeneratorKey",
+      "requests[].matchableFields",
+      "requests[].freshness",
+      "requests[].blockers",
+      "requests[].route",
+      "requests[].provenance",
+      "summary"
+    ],
+    safeOutput: input.dedupe.safeOutput
   };
 }
 
@@ -11958,6 +12079,174 @@ function sourcePackFixtureActionAlertDedupeConsumers(
       method: "GET",
       path: "/v1/dwm/source-requests",
       body: { includeFixtureActionAlertDedupe: true, consumer: "integration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourcePackFixtureActionAlertRebuildRequest(
+  packet: TiSourceProvenanceSourcePackFixtureActionAlertDedupePacket,
+  row: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow
+): TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest {
+  const requestState = sourcePackFixtureActionAlertRebuildRequestState(row);
+  const alertGeneratorKey = sourcePackFixtureActionAlertRebuildGeneratorKey(row);
+  return {
+    requestId: stableId("ti_source_provenance_source_pack_fixture_action_alert_rebuild_request", `${packet.id}:${row.rowId}:${requestState}:${alertGeneratorKey}`),
+    dedupeRowId: row.rowId,
+    actor: row.actor,
+    publicTiRoute: row.publicTiRoute,
+    sourceFamily: row.sourceFamily,
+    requestState,
+    dedupeKey: row.dedupeKey,
+    alertGeneratorKey,
+    matchableFields: row.matchableFields,
+    freshness: row.freshness,
+    blockers: sourcePackFixtureActionAlertRebuildBlockers(row),
+    route: sourcePackFixtureActionAlertRebuildRoute(row, requestState, alertGeneratorKey),
+    provenance: {
+      ...row.provenance,
+      sourcePackFixtureActionAlertDedupePacketId: packet.id
+    }
+  };
+}
+
+function sourcePackFixtureActionAlertRebuildRequestState(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow
+): TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest["requestState"] {
+  if (row.dedupeState === "canonical" && row.alertReadiness === "ready") return "ready";
+  if (row.dedupeState === "duplicate") return "suppressed";
+  return "blocked";
+}
+
+function sourcePackFixtureActionAlertRebuildGeneratorKey(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow
+): string {
+  return stableId("ti_source_provenance_source_pack_fixture_action_alert_generator", `${row.actor}:${row.sourceFamily ?? "unknown"}:${row.dedupeKey}:${row.matchableFields.slice().sort().join(",")}`);
+}
+
+function sourcePackFixtureActionAlertRebuildBlockers(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow
+): TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker[] {
+  const blockers: TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker[] = row.blockerCodes.map((code) => ({
+    code,
+    ownerLane: code === "source_not_alert_ready" ? "alert" : code === "policy_review_required" ? "policy" : code === "retry_window_pending" ? "parser" : "source",
+    field: code === "source_not_alert_ready" ? "alertReadiness" : code === "policy_review_required" ? "sourceFamily" : code === "retry_window_pending" ? "freshness.nextRetryAt" : "sourceFamily",
+    reason: sourcePackFixtureActionAlertRebuildBlockerReason(code),
+    nextAction: row.action.action
+  }));
+  if (row.dedupeState === "duplicate") {
+    blockers.push({
+      code: "duplicate_source_action",
+      ownerLane: "alert",
+      field: "dedupeKey",
+      reason: "Duplicate source action is suppressed so alert rebuild consumes only the canonical source row.",
+      nextAction: "suppress_duplicate"
+    });
+  }
+  return blockers;
+}
+
+function sourcePackFixtureActionAlertRebuildBlockerReason(
+  code: TiSourceProvenanceSourcePackFixtureActionAlertRebuildBlocker["code"]
+): string {
+  if (code === "duplicate_source_action") return "Duplicate source action is suppressed before alert rebuild.";
+  if (code === "source_not_alert_ready") return "Source row is not eligible for alert rebuild yet.";
+  if (code === "policy_review_required") return "Policy review is required before restricted metadata can contribute to alert rebuild.";
+  if (code === "retry_window_pending") return "Parser retry window must complete before alert rebuild can use this source.";
+  return "Source health inspection is required before alert rebuild can use this source.";
+}
+
+function sourcePackFixtureActionAlertRebuildRoute(
+  row: TiSourceProvenanceSourcePackFixtureActionAlertDedupeRow,
+  requestState: TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest["requestState"],
+  alertGeneratorKey: string
+): TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest["route"] {
+  return {
+    method: requestState === "ready" ? "POST" : "GET",
+    path: "/v1/dwm/source-requests",
+    body: {
+      action: requestState === "ready" ? "queue_alert_rebuild" : requestState === "suppressed" ? "suppress_duplicate" : "review_blockers",
+      actor: row.actor,
+      sourceFamily: row.sourceFamily,
+      dedupeKey: row.dedupeKey,
+      alertGeneratorKey,
+      blockerCodes: row.blockerCodes,
+      dryRun: true
+    },
+    dryRunSupported: true,
+    liveNetworkFetch: false
+  };
+}
+
+function sourcePackFixtureActionAlertRebuildConsumers(
+  requests: TiSourceProvenanceSourcePackFixtureActionAlertRebuildRequest[]
+): TiSourceProvenanceSourcePackFixtureActionAlertRebuildPacket["consumers"] {
+  const hasRequests = requests.length > 0;
+  const ready = requests.some((request) => request.requestState === "ready");
+  return [{
+    consumer: "publicTI",
+    ready: requests.some((request) => request.publicTiRoute),
+    requiredFields: ["requests[].actor", "requests[].publicTiRoute", "requests[].requestState", "requests[].blockers"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "publicTI", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready,
+    requiredFields: ["requests[].requestState", "requests[].alertGeneratorKey", "requests[].dedupeKey", "requests[].provenance"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "alertGeneration", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasRequests,
+    requiredFields: ["summary", "requests[].requestState", "requests[].blockers"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "dashboard", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "sourceOps",
+    ready: hasRequests,
+    requiredFields: ["requests[].freshness", "requests[].route", "requests[].blockers"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "sourceOps", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "support",
+    ready: hasRequests,
+    requiredFields: ["requests[].publicTiRoute", "requests[].blockers", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "support", dryRun: true },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasRequests,
+    requiredFields: ["schemaVersion", "sourcePackFixtureActionAlertDedupePacketId", "requests[].requestId", "safeOutput"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: { includeFixtureActionAlertRebuild: true, consumer: "integration", dryRun: true },
       dryRunSupported: true,
       liveNetworkFetch: false
     }
