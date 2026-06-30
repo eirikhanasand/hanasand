@@ -55,6 +55,8 @@ type AuditQuery = {
     blockerCode?: string
     reason?: string
     supportReason?: string
+    scope?: string
+    supportScope?: string
     context?: string
     supportContext?: string
     outcome?: string
@@ -104,6 +106,7 @@ type SupportInspectionQuery = {
     prepareAction?: string
     reason?: string
     supportReason?: string
+    supportScope?: string
     context?: string
     supportContext?: string
     scope?: string
@@ -287,6 +290,7 @@ type SupportTimelineFilter = {
     service: string
     blocker: string
     reason: string
+    scope?: string
     context: string
     from: string
     to: string
@@ -330,6 +334,7 @@ const supportInspectionFilters = new Set([
     'prepareAction',
     'reason',
     'supportReason',
+    'supportScope',
     'context',
     'supportContext',
     'scope',
@@ -382,6 +387,8 @@ const adminAuditFilters = new Set([
     'blockerCode',
     'reason',
     'supportReason',
+    'scope',
+    'supportScope',
     'context',
     'supportContext',
     'outcome',
@@ -419,6 +426,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
     const workflow = text(query.workflow || query.bridgeWorkflow)
     const blocker = text(query.blocker || query.blockerCode)
     const reason = text(query.reason || query.supportReason)
+    const scope = text(query.scope || query.supportScope)
     const contextFilter = text(query.context || query.supportContext)
     const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
     const from = text(query.from)
@@ -483,6 +491,10 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
         where.push('(e.context->>\'blockerCode\' ILIKE ' + placeholder + ' OR e.context->>\'blocker\' ILIKE ' + placeholder + ')')
     }
     if (reason) where.push(`e.reason ILIKE ${add(`%${reason}%`)}`)
+    if (scope) {
+        const placeholder = add(`%${scope}%`)
+        where.push('(e.context->>\'scope\' ILIKE ' + placeholder + ' OR e.context->>\'supportScope\' ILIKE ' + placeholder + ' OR e.context::text ILIKE ' + placeholder + ')')
+    }
     if (contextFilter) where.push(`e.context::text ILIKE ${add(`%${contextFilter}%`)}`)
     if (outcome) where.push(`e.outcome = ${add(outcome)}`)
     if (from && !Number.isNaN(Date.parse(from))) where.push(`e.created_at >= ${add(new Date(from).toISOString())}`)
@@ -521,7 +533,7 @@ export async function getAdminAuditEvents(req: FastifyRequest, res: FastifyReply
 
     const events = result.rows.map(toAdminAuditEvent)
     const timeline = events.map(event => event.detail.timelineEvent)
-    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, context: contextFilter, outcome, from, to, limit }
+    const filters = { q, org, actor: actorFilter, target, action, severity, source, service, entity, entityType, request, correlation, idempotency, supportSession, workflow, blocker, reason, scope, context: contextFilter, outcome, from, to, limit }
     return res.send({
         events,
         filters,
@@ -1593,6 +1605,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const service = text(query.service)
     const blocker = text(query.blocker || query.blockerCode)
     const reason = text(query.reason || query.supportReason)
+    const scope = text(query.scope || query.supportScope)
     const contextFilter = text(query.context || query.supportContext)
     const prepareAction = normalizeOption(query.prepareAction, ['invite_assist', 'access_recovery', 'impersonation'])
     const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
@@ -1648,7 +1661,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     const user = sessionState?.targetUserId || requestedUser || ''
     const request = requestedRequest || sessionState?.requestId || ''
     const entity = requestedEntity || supportSession
-    const filterError = supportInspectionFilterError(query, { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const filterError = supportInspectionFilterError(query, { q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     if (filterError) {
         return res.status(400).send(filterError)
     }
@@ -1657,8 +1670,8 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         return res.status(400).send(preparationInput.error)
     }
 
-    if (!q && !org && !user && !email && !request && !entity && !entityType && !supportSession && !action && !blocker && !reason && !contextFilter) {
-        return res.status(400).send(supportError('missing_support_target', 'Add q, org, user, email, request, entity, entityType, supportSession, action, blocker, reason, or context to inspect support state.'))
+    if (!q && !org && !user && !email && !request && !entity && !entityType && !supportSession && !action && !blocker && !reason && !scope && !contextFilter) {
+        return res.status(400).send(supportError('missing_support_target', 'Add q, org, user, email, request, entity, entityType, supportSession, action, blocker, reason, scope, or context to inspect support state.'))
     }
 
     const [organizations, users, memberships, invites, approvals, audit] = await Promise.all([
@@ -1667,9 +1680,9 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         loadInspectionMemberships({ q, org, user, request, limit }),
         loadInspectionInvites({ q, org, email, request, limit }),
         loadInspectionApprovals({ q, org, user, email, request, outcome, limit }),
-        loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit }),
+        loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit }),
     ])
-    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const auditTimelineFilters = {
         q,
         org,
@@ -1685,6 +1698,7 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
         service,
         blocker,
         reason,
+        scope,
         context: contextFilter,
         from,
         to,
@@ -2101,18 +2115,19 @@ export async function getSupportReadiness(req: FastifyRequest<{ Querystring: Sup
     const service = text(query.service || 'hanasand-api')
     const blocker = text(query.blocker || query.blockerCode)
     const reason = text(query.reason || query.supportReason)
+    const scope = text(query.scope || query.supportScope)
     const contextFilter = text(query.context || query.supportContext)
     const from = text(query.from)
     const to = text(query.to)
     const parsedLimit = Number(query.limit || 25)
     const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 50) : 25
-    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const filterError = supportInspectionFilterError(query, timelineFilter)
     if (filterError && filterError.detail?.code !== 'overbroad_support_timeline_filter') {
         return res.status(400).send(filterError)
     }
 
-    const audit = await loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const audit = await loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit })
     const timeline = audit.map(toSupportAuditTimelineEvent)
     const readiness = supportReadinessExport({
         actorId: actor.id,
@@ -4894,7 +4909,7 @@ async function loadInspectionApprovals(input: { q?: string, org: string, user: s
     return result.rows as AccessRecoveryApprovalRow[]
 }
 
-async function loadInspectionAuditEvents(input: { q: string, org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, blocker: string, reason: string, context: string, from: string, to: string, limit: number }) {
+async function loadInspectionAuditEvents(input: { q: string, org: string, user: string, email: string, request: string, entity: string, entityType: string, supportSession: string, action: string, severity: string, outcome: string, source: string, service: string, blocker: string, reason: string, scope?: string, context: string, from: string, to: string, limit: number }) {
     const where: string[] = []
     const values: Array<string | number> = []
     const add = (value: string | number) => {
@@ -4950,6 +4965,10 @@ async function loadInspectionAuditEvents(input: { q: string, org: string, user: 
         where.push('(event.context->>\'blockerCode\' ILIKE ' + placeholder + ' OR event.context->>\'blocker\' ILIKE ' + placeholder + ')')
     }
     if (input.reason) where.push(`event.reason ILIKE ${add(`%${input.reason}%`)}`)
+    if (input.scope) {
+        const placeholder = add(`%${input.scope}%`)
+        where.push('(event.context->>\'scope\' ILIKE ' + placeholder + ' OR event.context->>\'supportScope\' ILIKE ' + placeholder + ' OR event.context::text ILIKE ' + placeholder + ')')
+    }
     if (input.context) where.push(`event.context::text ILIKE ${add(`%${input.context}%`)}`)
     if (input.from && !Number.isNaN(Date.parse(input.from))) where.push(`event.created_at >= ${add(new Date(input.from).toISOString())}`)
     if (input.to && !Number.isNaN(Date.parse(input.to))) where.push(`event.created_at <= ${add(new Date(input.to).toISOString())}`)
@@ -11798,7 +11817,7 @@ function supportInspectionFilterError(rawQuery: SupportInspectionQuery, filter: 
     if (rawQuery.limit !== undefined && (!Number.isFinite(Number(rawQuery.limit)) || Number(rawQuery.limit) < 1)) {
         return supportError('invalid_support_filter', 'Support inspection limit must be a positive number.', { filter: 'limit' })
     }
-    const hasTarget = Boolean(filter.q || filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.blocker || filter.reason || filter.context)
+    const hasTarget = Boolean(filter.q || filter.org || filter.user || filter.email || filter.request || filter.entity || filter.entityType || filter.supportSession || filter.blocker || filter.reason || filter.scope || filter.context)
     if (!hasTarget && Boolean(filter.action || filter.source || filter.service || filter.severity || filter.outcome || filter.from || filter.to)) {
         return supportError('overbroad_support_timeline_filter', 'Add org, user, email, request, entity, entityType, or supportSession with audit timeline filters.', {
             filters: supportTimelineFilter(filter),
@@ -11824,6 +11843,7 @@ function supportTimelineFilter(input: Omit<SupportTimelineFilter, 'unsupported'>
         service: input.service,
         blocker: input.blocker,
         reason: input.reason,
+        scope: input.scope || '',
         context: input.context,
         from: input.from,
         to: input.to,
@@ -12479,6 +12499,7 @@ function supportAuditTimelineReplayContract(filters: Record<string, unknown>, ti
             outcome: ['outcome'],
             query: ['q'],
             reason: ['reason', 'supportReason'],
+            scope: ['scope', 'supportScope'],
         },
         replay: {
             query: replayQuery,
@@ -13254,7 +13275,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
         .filter(key => filterText(key))
     const textQueryFilters = ['q']
         .filter(key => filterText(key))
-    const reasonContextFilters = ['reason', 'context', 'blocker']
+    const reasonContextFilters = ['reason', 'scope', 'context', 'blocker']
         .filter(key => filterText(key))
     const from = filterText('from')
     const to = filterText('to')
@@ -13288,6 +13309,7 @@ function supportAuditFilterReadiness(filters: Record<string, unknown>, timeline:
             request: ['request', 'requestId', 'correlation', 'correlationId'],
             blocker: ['blocker', 'blockerCode'],
             reason: ['reason', 'supportReason'],
+            scope: ['scope', 'supportScope'],
             context: ['context', 'supportContext'],
             supportSession: ['session', 'supportSession', 'supportSessionId'],
         },
@@ -13337,6 +13359,7 @@ function supportAuditBridgeAdapterContract(filters: Record<string, unknown>) {
             supportSession: ['session', 'supportSession', 'supportSessionId'],
             blocker: ['blocker', 'blockerCode'],
             reason: ['reason', 'supportReason'],
+            scope: ['scope', 'supportScope'],
             context: ['context', 'supportContext'],
         },
         currentFilters: filters,

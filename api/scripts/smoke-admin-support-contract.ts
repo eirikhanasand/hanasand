@@ -93,7 +93,7 @@ assert.match(ensureSchema, /idx_admin_access_recovery_approved_by/)
 assert.match(ensureSchema, /idx_admin_access_recovery_denied_by/)
 
 const adminSupport = await readFile(new URL('../src/handlers/adminSupport.ts', import.meta.url), 'utf8')
-for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'blocker', 'blockerCode', 'reason', 'supportReason', 'context', 'supportContext', 'outcome', 'from', 'to']) {
+for (const expected of ['q', 'org', 'orgId', 'organizationId', 'actor', 'actorId', 'supportActor', 'supportActorId', 'target', 'targetId', 'user', 'userId', 'targetUserId', 'action', 'actionType', 'severity', 'source', 'service', 'entity', 'entityId', 'entityType', 'request', 'requestId', 'correlation', 'correlationId', 'idempotency', 'idempotencyKey', 'supportSession', 'supportSessionId', 'workflow', 'bridgeWorkflow', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'outcome', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing audit filter ${expected}.`)
 }
 assert.match(adminSupport, /const org = text\(query\.org \|\| query\.orgId \|\| query\.organizationId\)/)
@@ -107,26 +107,31 @@ assert.match(adminSupport, /const blocker = text\(query\.blocker \|\| query\.blo
 assert.match(adminSupport, /e\.context->>\\'blockerCode\\' ILIKE/)
 assert.match(adminSupport, /e\.context->>\\'blocker\\' ILIKE/)
 assert.match(adminSupport, /const reason = text\(query\.reason \|\| query\.supportReason\)/)
+assert.match(adminSupport, /const scope = text\(query\.scope \|\| query\.supportScope\)/)
+assert.match(adminSupport, /e\.context->>\\'scope\\' ILIKE/)
+assert.match(adminSupport, /e\.context->>\\'supportScope\\' ILIKE/)
 assert.match(adminSupport, /const contextFilter = text\(query\.context \|\| query\.supportContext\)/)
 assert.match(adminSupport, /e\.context::text ILIKE/)
 for (const expected of ['requestId', 'status', 'requester', 'approver']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing approval search filter ${expected}.`)
 }
-for (const expected of ['q', 'orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'action', 'severity', 'blocker', 'blockerCode', 'reason', 'supportReason', 'context', 'supportContext', 'from', 'to']) {
+for (const expected of ['q', 'orgId', 'userId', 'email', 'requestId', 'entityId', 'entityType', 'supportSession', 'supportSessionId', 'action', 'severity', 'blocker', 'blockerCode', 'reason', 'supportReason', 'scope', 'supportScope', 'context', 'supportContext', 'from', 'to']) {
     assert.match(adminSupport, new RegExp(`\\b${expected}\\b`), `Missing support inspection filter ${expected}.`)
 }
 assert.match(adminSupport, /const q = text\(query\.q\)/)
 assert.match(adminSupport, /const reason = text\(query\.reason \|\| query\.supportReason\)/)
 assert.match(adminSupport, /const contextFilter = text\(query\.context \|\| query\.supportContext\)/)
 assert.match(adminSupport, /loadInspectionOrganizations\(\{ q, org, user, email, request, limit \}\)/)
-assert.match(adminSupport, /loadInspectionAuditEvents\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit \}\)/)
-assert.match(adminSupport, /supportTimelineFilter\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit \}\)/)
+assert.match(adminSupport, /loadInspectionAuditEvents\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit \}\)/)
+assert.match(adminSupport, /supportTimelineFilter\(\{ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, scope, context: contextFilter, from, to, limit \}\)/)
 assert.match(adminSupport, /event\.action_type ILIKE \${placeholder}/)
 assert.match(adminSupport, /event\.reason ILIKE/)
+assert.match(adminSupport, /event\.context->>\\'scope\\' ILIKE/)
+assert.match(adminSupport, /event\.context->>\\'supportScope\\' ILIKE/)
 assert.match(adminSupport, /event\.context::text ILIKE/)
 assert.match(adminSupport, /event\.context->>\\'blockerCode\\' ILIKE/)
 assert.match(adminSupport, /event\.context->>\\'blocker\\' ILIKE/)
-assert.match(adminSupport, /q, org, user, email, request, entity, entityType, supportSession, action, blocker, reason, or context to inspect support state/)
+assert.match(adminSupport, /q, org, user, email, request, entity, entityType, supportSession, action, blocker, reason, scope, or context to inspect support state/)
 assert.match(adminSupport, /getSupportInspection/)
 assert.match(adminSupport, /getAdminAuditEvent/)
 assert.match(adminSupport, /supportAuditEventDetailResponse/)
