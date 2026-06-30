@@ -1981,6 +1981,71 @@ export async function getSupportInspection(req: FastifyRequest<{ Querystring: Su
     })
 }
 
+export async function getSupportReadiness(req: FastifyRequest<{ Querystring: SupportInspectionQuery }>, res: FastifyReply) {
+    const actor = await requireAdminSupport(req, res)
+    if (!actor) return
+
+    const query = req.query as SupportInspectionQuery
+    const q = text(query.q)
+    const org = text(query.org || query.orgId)
+    const user = text(query.user || query.userId)
+    const email = text(query.email).toLowerCase()
+    const request = text(query.request || query.requestId)
+    const entity = text(query.entity || query.entityId)
+    const entityType = text(query.entityType)
+    const supportSession = text(query.session || query.supportSession || query.supportSessionId)
+    const action = text(query.action || 'support')
+    const severity = normalizeOption(query.severity, ['info', 'notice', 'warning', 'critical'])
+    const outcome = normalizeOption(query.outcome, ['success', 'denied', 'failed'])
+    const source = text(query.source || 'admin')
+    const service = text(query.service || 'hanasand-api')
+    const blocker = text(query.blocker || query.blockerCode)
+    const reason = text(query.reason || query.supportReason)
+    const contextFilter = text(query.context || query.supportContext)
+    const from = text(query.from)
+    const to = text(query.to)
+    const parsedLimit = Number(query.limit || 25)
+    const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 50) : 25
+    const timelineFilter = supportTimelineFilter({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const filterError = supportInspectionFilterError(query, timelineFilter)
+    if (filterError && filterError.detail?.code !== 'overbroad_support_timeline_filter') {
+        return res.status(400).send(filterError)
+    }
+
+    const audit = await loadInspectionAuditEvents({ q, org, user, email, request, entity, entityType, supportSession, action, severity, outcome, source, service, blocker, reason, context: contextFilter, from, to, limit })
+    const timeline = audit.map(toSupportAuditTimelineEvent)
+    const readiness = supportReadinessExport({
+        actorId: actor.id,
+        timelineFilter,
+        timeline,
+        org,
+        user,
+        email,
+        request,
+        entity,
+        entityType,
+        supportSession,
+    })
+
+    return res.send({
+        readiness,
+        auditEventIds: timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id)),
+        filteredTimeline: {
+            schemaVersion: 'support.readiness.filtered_timeline.v1',
+            filter: timelineFilter,
+            summary: auditTimelineSummary(timeline),
+            filterContract: supportAuditFilterContract(timelineFilter, timeline),
+            exportProof: supportAuditExportProof(timelineFilter, timeline),
+            events: timeline,
+            redacted: true,
+            links: {
+                timeline: auditFilterQuery(timelineFilter),
+                details: timeline.map(event => event.links?.detail).filter(Boolean),
+            },
+        },
+    })
+}
+
 export async function postSupportOrganizationInvite(req: FastifyRequest<{ Params: OrganizationParams, Body: SupportInviteBody }>, res: FastifyReply) {
     const actor = await requireAdminSupport(req, res)
     if (!actor) return
@@ -8372,6 +8437,192 @@ function supportWorkbenchReadinessProof(input: {
             blockers: input.actionPreparation?.blockers || [],
         },
         redacted: true,
+    }
+}
+
+function supportReadinessExport(input: {
+    actorId: string
+    timelineFilter: SupportTimelineFilter
+    timeline: Array<Record<string, any>>
+    org: string
+    user: string
+    email: string
+    request: string
+    entity: string
+    entityType: string
+    supportSession: string
+}) {
+    const eventIds = input.timeline.map(event => event.id).filter((id): id is number => Number.isFinite(id))
+    const actions = uniqueTimelineValues(input.timeline.map(event => event.action || event.actionType))
+    const outcomes = uniqueTimelineValues(input.timeline.map(event => event.outcome))
+    const requestIds = uniqueTimelineValues([
+        input.request,
+        ...input.timeline.map(event => event.requestId),
+    ])
+    const entityIds = uniqueTimelineValues([
+        input.entity,
+        ...input.timeline.map(event => event.entity?.id || event.entityId),
+    ])
+    const blockers = uniqueTimelineValues([
+        eventIds.length ? '' : 'audit_unavailable',
+        input.timelineFilter.unsupported.length ? 'audit_filter_unavailable' : '',
+    ])
+    return {
+        schemaVersion: 'support.readiness_export.v1',
+        generatedAt: new Date().toISOString(),
+        status: blockers.length ? 'needs_action' : 'ready',
+        redacted: true,
+        noMutation: true,
+        supportRoleRequired: true,
+        actorId: input.actorId,
+        target: {
+            organizationId: input.org || null,
+            targetUserId: input.user || null,
+            email: input.email || null,
+            requestId: input.request || null,
+            entityId: input.entity || null,
+            entityType: input.entityType || null,
+            supportSessionId: input.supportSession || null,
+        },
+        audit: {
+            eventIds,
+            actions,
+            outcomes,
+            requestIds,
+            entityIds,
+            filter: input.timelineFilter,
+            filterContract: supportAuditFilterContract(input.timelineFilter, input.timeline),
+            exportProof: supportAuditExportProof(input.timelineFilter, input.timeline),
+            replayFilters: {
+                current: auditFilterQuery(input.timelineFilter),
+                bySupportSession: input.supportSession ? auditFilterQuery({ supportSession: input.supportSession, source: 'admin', service: 'hanasand-api' }) : null,
+                byRequest: requestIds.map(request => auditFilterQuery({ request, source: 'admin', service: 'hanasand-api' })),
+                byEntity: entityIds.map(entity => auditFilterQuery({ entity, source: 'admin', service: 'hanasand-api' })),
+                byActionOutcome: actions.flatMap(action => outcomes.map(outcome => auditFilterQuery({ action, outcome, source: 'admin', service: 'hanasand-api' }))),
+                denied: auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' }),
+                recovery: auditFilterQuery({ org: input.org, target: input.user || input.email, action: 'support.organization.access_recovery', source: 'admin', service: 'hanasand-api' }),
+                memberRecovery: auditFilterQuery({ org: input.org, target: input.user, action: 'support.organization.member_role_recovery', source: 'admin', service: 'hanasand-api' }),
+                impersonation: auditFilterQuery({ org: input.org, target: input.user, action: 'impersonation', source: 'admin', service: 'hanasand-api' }),
+            },
+        },
+        supportWorkflows: {
+            inspect: {
+                route: '/api/admin/support/inspect',
+                method: 'GET',
+                scope: ['read_org', 'read_profile', 'audit:read'],
+                reasonRecommended: true,
+            },
+            scopedSession: {
+                createRoute: '/api/admin/support/sessions',
+                detailRoute: input.supportSession ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSession)}` : '/api/admin/support/sessions/:sessionId',
+                revokeRoute: input.supportSession ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSession)}/revoke` : '/api/admin/support/sessions/:sessionId/revoke',
+                reasonRequired: true,
+                scopeRequired: true,
+                durationRequired: true,
+                expiryRequired: true,
+                revocationSemantics: ['support_session_revoked', 'support_session_expired', 'support_session_scope_denied'],
+            },
+            inviteRecovery: {
+                routeTemplate: '/api/admin/support/organizations/:id/invites/:inviteId/actions',
+                supportedActions: ['resend', 'revoke'],
+                reasonRequired: true,
+                contextRequired: true,
+                idempotencyRequired: true,
+                expiryRequired: true,
+                expectedAuditActions: ['support.organization.invite_resend', 'support.organization.invite_revoke'],
+            },
+            accessRecovery: {
+                requestRouteTemplate: '/api/admin/support/organizations/:id/access-recovery',
+                decisionRouteTemplates: ['/api/admin/support/access-recovery/:requestId/approve', '/api/admin/support/access-recovery/:requestId/deny'],
+                reasonRequired: true,
+                contextRequired: true,
+                approvalAware: true,
+                expectedReceiptSchemas: ['support.access_recovery.execution_receipt.v1', 'support.access_recovery.decision_receipt.v1'],
+            },
+            memberRecovery: {
+                routeTemplate: '/api/admin/support/organizations/:id/members/:userId/role-recovery',
+                reasonRequired: true,
+                contextRequired: true,
+                scopeRequired: true,
+                idempotencyRequired: true,
+                expectedReceiptSchemas: ['support.action_execute.member_role_recovery.v1', 'support.member_recovery.handoff_receipt.v1'],
+            },
+            impersonation: {
+                route: '/api/impersonation/start',
+                eventsRoute: '/api/impersonation/events',
+                reasonRequired: true,
+                scopeRequired: true,
+                durationRequired: true,
+                expectedReceiptSchemas: ['support.impersonation.lifecycle_receipt.v1'],
+            },
+        },
+        orgWebhookRecoveryReadiness: {
+            schemaVersion: 'support.org_webhook_recovery.readiness_bridge.v1',
+            consumesContracts: [
+                'organization.worker3_ui_readiness_proof.v1',
+                'dwm.webhook.destination_admin_product_progress.v1',
+                'support.organization.alert_readiness.audit_bridge.v1',
+            ],
+            auditBridge: supportAuditBridgeAdapterContract({ org: input.org, target: input.user || input.email, request: input.request, supportSession: input.supportSession, source: 'admin', service: 'hanasand-api' }),
+            recoveryBlockers: [
+                'active_admin_available',
+                'missing_support_reason',
+                'support_session_revoked',
+                'support_session_expired',
+                'denied_recovery_approval',
+                'duplicate_idempotency_key',
+                'audit_unavailable',
+                'redaction_required',
+            ],
+            noCrossOrgLeakage: true,
+        },
+        receiptSchemas: [
+            'support.readiness_export.v1',
+            'support.workbench.readiness_proof.v1',
+            'support.inspection.enterprise_readiness.v1',
+            'support.inspection.replay_export_packet.v1',
+            'support.member_recovery.handoff_receipt.v1',
+            'support.access_recovery.decision_receipt.v1',
+            'support.impersonation.lifecycle_receipt.v1',
+            'support.audit.filter_contract.v1',
+            'support.audit.export_proof.v1',
+        ],
+        nextRoutes: {
+            readiness: '/api/admin/support/readiness',
+            inspect: '/api/admin/support/inspect',
+            auditReplay: auditFilterQuery(input.timelineFilter),
+            auditDetails: eventIds.map(id => `/api/admin/audit-events/${encodeURIComponent(String(id))}`),
+            accessRecoveryQueue: '/api/admin/support/access-recovery',
+            supportSession: input.supportSession ? `/api/admin/support/sessions/${encodeURIComponent(input.supportSession)}` : null,
+        },
+        denialCases: [
+            'support_role_required',
+            'missing_support_reason',
+            'non_support_actor',
+            'wrong_org_scope',
+            'support_session_revoked',
+            'support_session_expired',
+            'support_session_scope_denied',
+            'denied_recovery_approval',
+            'duplicate_invite_or_idempotency_key',
+            'audit_unavailable',
+            'redaction_required',
+        ],
+        blockers,
+        productReadiness: {
+            expectedDashboardRowId: 'helpdesk_audit',
+            backendProofContractVersion: 'support.readiness_export.v1',
+            integrationProbeHint: 'GET /api/admin/support/readiness must return readiness.schemaVersion=support.readiness_export.v1 and redacted audit replay filters.',
+            focusedCheck: 'cd api && bun scripts/smoke-admin-support-contract.ts',
+        },
+        copyText: [
+            `Support readiness: ${blockers.length ? 'needs_action' : 'ready'}`,
+            `Actor: ${input.actorId}`,
+            `Target org=${input.org || '*'} user=${input.user || '*'} request=${input.request || '*'} session=${input.supportSession || '*'}`,
+            `Audit events: ${eventIds.join(', ') || 'none'}`,
+            `Replay: ${auditFilterQuery(input.timelineFilter)}`,
+            `Blockers: ${blockers.join(', ') || 'none'}`,
+        ].join('\n'),
     }
 }
 
