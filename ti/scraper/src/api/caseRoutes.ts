@@ -51,6 +51,36 @@ type CaseCustomerNotificationReceipt = {
   };
 };
 
+type CaseHandoffActionReceipt = {
+  schemaVersion: "dwm.case_handoff_action_receipt.v1";
+  id: string;
+  caseId: string;
+  tenantId: string;
+  organizationId?: string;
+  alertId?: string;
+  actionId: "alertReplay" | "webhookDryRun";
+  at: string;
+  actor: string;
+  route?: string;
+  method?: string;
+  idempotencyKey: string;
+  dedupeKey?: string;
+  workflowEventId: string;
+  auditEventId?: string;
+  execution: {
+    state: "recorded";
+    dryRun: boolean;
+    delegated: boolean;
+  };
+  provenance: {
+    captureIds: string[];
+    sourceIds: string[];
+    contentHashes: string[];
+    evidenceCount: number;
+    blockerCodes: string[];
+  };
+};
+
 type AnalystCase = {
   id: string;
   tenantId: string;
@@ -68,6 +98,7 @@ type AnalystCase = {
   closedAt?: string;
   workflowEvents: AnalystCaseEvent[];
   customerNotifications?: CaseCustomerNotificationReceipt[];
+  handoffActionReceipts?: CaseHandoffActionReceipt[];
   lastDecision?: string;
   deliveryState?: string;
 };
@@ -341,6 +372,128 @@ export async function recordCaseCustomerNotification(request: Request, options: 
   }, 201);
 }
 
+export async function recordCaseHandoffAction(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
+  const existing = findCase(options, caseId);
+  if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+  const body = await readJson<any>(request);
+  const scope = resolveOrganizationScope({ body, request }, options);
+  if (scope.error) return scope.error;
+  const access = authorizeCaseAccess({ options, scope, request, body, mode: "mutate" });
+  if (access.error) return access.error;
+  if (existing.tenantId !== scope.tenantId || !caseMatchesOrganizationScope(existing, scope.organizationId)) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
+
+  const alert = findDwmAlert(options, existing.alertId);
+  if (!alert) return json({ error: { code: "missing_case_alert", message: "Case is not linked to a persisted DWM alert." } }, 409);
+  const actionId = normalizeHandoffActionId(body.actionId ?? body.action);
+  if (!actionId) return json({ error: { code: "unsupported_handoff_action", message: "Handoff action must be alertReplay or webhookDryRun." } }, 400);
+
+  const deliveries = ((options.store as any).listDwmWebhookDeliveries?.() ?? []).filter((row: any) => row.alertId === existing.alertId);
+  const handoff = buildAlertCaseHandoff({
+    caseRecord: existing,
+    alert,
+    route: `/v1/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`,
+    replayState: "reused",
+    provenance: alertCaseHandoffProvenance(alert)
+  });
+  const actionReadiness = buildCaseHandoffActionReadiness({ caseRecord: existing, handoff, deliveries, access });
+  const action = actionReadiness.actions[actionId];
+  if (!action?.ready) {
+    return json({
+      error: { code: "handoff_action_not_ready", message: "Case handoff action is not ready for this case." },
+      actionId,
+      blockerCodes: action?.blockerCodes ?? ["unsupported_handoff_action"],
+      blockers: action?.blockers ?? [],
+      handoffActionReadiness: actionReadiness
+    }, 409);
+  }
+
+  const generatedAt = nowIso();
+  const actor = String(body.actor ?? request.headers.get("x-actor-id") ?? request.headers.get("x-user-email") ?? "case-api");
+  const idempotencyKey = normalizeNote(body.idempotencyKey ?? request.headers.get("idempotency-key") ?? request.headers.get("x-idempotency-key"))
+    ?? action.idempotencyKey
+    ?? stableId("case_handoff_action_idempotency", `${existing.tenantId}:${existing.organizationId ?? ""}:${existing.id}:${actionId}:${action.route ?? ""}`);
+  const duplicateReceipt = (existing.handoffActionReceipts ?? []).find((receipt) => receipt.actionId === actionId && receipt.idempotencyKey === idempotencyKey);
+  if (duplicateReceipt) {
+    return json({
+      organization: scope.organization,
+      access: caseAccessSummary(access),
+      created: false,
+      duplicate: true,
+      receipt: duplicateReceipt,
+      case: existing,
+      handoffActionReadiness: actionReadiness,
+      detail: buildCaseDetail(existing, options, scope.organization, access)
+    });
+  }
+
+  const note = normalizeNote(body.note ?? (actionId === "alertReplay" ? "Recorded alert replay handoff action." : "Recorded webhook dry-run handoff action."));
+  const event = caseEvent({
+    caseId: existing.id,
+    tenantId: existing.tenantId,
+    organizationId: existing.organizationId,
+    generatedAt,
+    actor,
+    action: actionId === "alertReplay" ? "handoff_alert_replay" : "handoff_webhook_dry_run",
+    idempotencyKey,
+    fromStatus: existing.status,
+    toStatus: existing.status,
+    fromOwner: existing.assignedOwner,
+    toOwner: existing.assignedOwner,
+    note
+  });
+  const receipt: CaseHandoffActionReceipt = {
+    schemaVersion: "dwm.case_handoff_action_receipt.v1",
+    id: stableId("case_handoff_action_receipt", `${existing.id}:${actionId}:${idempotencyKey}`),
+    caseId: existing.id,
+    tenantId: existing.tenantId,
+    organizationId: existing.organizationId,
+    alertId: existing.alertId,
+    actionId,
+    at: generatedAt,
+    actor,
+    route: action.route,
+    method: action.method,
+    idempotencyKey,
+    dedupeKey: action.dedupeKey,
+    workflowEventId: event.id,
+    auditEventId: event.auditEventId,
+    execution: {
+      state: "recorded",
+      dryRun: actionId === "webhookDryRun",
+      delegated: true
+    },
+    provenance: {
+      captureIds: actionReadiness.provenance.captureIds,
+      sourceIds: actionReadiness.provenance.sourceIds,
+      contentHashes: actionReadiness.provenance.contentHashes,
+      evidenceCount: actionReadiness.provenance.evidenceCount,
+      blockerCodes: action.blockerCodes
+    }
+  };
+  const caseRecord: AnalystCase = {
+    ...existing,
+    updatedAt: generatedAt,
+    workflowEvents: [...(existing.workflowEvents ?? []), event],
+    handoffActionReceipts: [...(existing.handoffActionReceipts ?? []), receipt],
+    lastDecision: note
+  };
+  const saved = (options.store as any).saveCase(caseRecord);
+  syncAlertForCase(options, alert, saved, event);
+  return json({
+    organization: scope.organization,
+    access: caseAccessSummary(access),
+    created: true,
+    duplicate: false,
+    receipt,
+    case: saved,
+    event,
+    workflowTransition: caseWorkflowTransition(saved, event),
+    alert: findDwmAlert(options, alert.id),
+    handoffActionReadiness: buildCaseDetail(saved, options, scope.organization, access).handoffActionReadiness,
+    detail: buildCaseDetail(saved, options, scope.organization, access)
+  }, 201);
+}
+
 export async function updateCase(request: Request, options: ApiServerOptions, caseId: string | undefined): Promise<Response> {
   const existing = findCase(options, caseId);
   if (!existing) return json({ error: { code: "case_not_found", message: "Case not found." } }, 404);
@@ -469,6 +622,8 @@ function buildCaseDetail(caseRecord: AnalystCase, options: ApiServerOptions, org
       retryable: deliveries.some((delivery: any) => delivery.status === "failed" || delivery.status === "skipped")
     },
     customerNotificationContext: customerNotificationContext(caseRecord),
+    handoffActionReceipts: caseRecord.handoffActionReceipts ?? [],
+    handoffActionReceiptContext: handoffActionReceiptContext(caseRecord),
     caseActionLedgerContext: caseActionLedgerContext(caseActionLedger),
     deliveries,
     evidence: alert?.evidence ?? [],
@@ -1269,6 +1424,18 @@ function customerNotificationContext(caseRecord: AnalystCase) {
   };
 }
 
+function handoffActionReceiptContext(caseRecord: AnalystCase) {
+  const receipts = caseRecord.handoffActionReceipts ?? [];
+  const latest = [...receipts].sort((a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")))[0];
+  return {
+    schemaVersion: "dwm.case_handoff_action_receipt_context.v1",
+    receiptCount: receipts.length,
+    latest,
+    actionIds: uniqueCaseStrings(receipts.map((receipt) => receipt.actionId)),
+    route: "/v1/cases/:caseId/handoff-action"
+  };
+}
+
 function alertCaseHandoffProvenance(alert: any) {
   const evidence = Array.isArray(alert?.evidence) ? alert.evidence : [];
   const captureIds = uniqueCaseStrings([
@@ -1492,6 +1659,13 @@ function readinessAction(id: string, ready: boolean, action: any, blockers: any[
     blockerCodes: uniqueCaseStrings(blockers.map((blocker: any) => blocker?.code)),
     blockers
   };
+}
+
+function normalizeHandoffActionId(value: unknown): "alertReplay" | "webhookDryRun" | undefined {
+  const action = String(value ?? "").trim();
+  if (action === "alertReplay" || action === "replay_alert" || action === "alert_replay") return "alertReplay";
+  if (action === "webhookDryRun" || action === "webhook_dry_run" || action === "dry_run_webhook") return "webhookDryRun";
+  return undefined;
 }
 
 function caseWorkflowSummary(caseRecord: AnalystCase) {

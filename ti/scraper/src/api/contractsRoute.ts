@@ -42,6 +42,7 @@ export function contractIndex() {
     route("POST", "/v1/dwm/watchlists"),
     route("GET", "/v1/dwm/alerts/generation-readiness"),
     route("POST", "/v1/dwm/alerts/:alertId/case-handoff"),
+    route("POST", "/v1/cases/:caseId/handoff-action"),
     route("PATCH", "/v1/cases/:caseId"),
     route("GET", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
     route("POST", ORG_ALERT_CASE_ACTION_LEDGER_ROUTE),
@@ -96,6 +97,26 @@ export function contractIndex() {
           { id: "webhookDryRun", route: "/v1/dwm/webhooks/deliver", method: "POST", bodyFields: ["organizationId", "alertId", "caseId", "casePath", "webhookDestinationId", "webhookDestinationIds", "dryRun", "limit"] }
         ],
         blockerCodes: ["alert_not_found", "missing_alert_provenance", "missing_webhook_destination", "missing_alert_id", "case_closed", "organization_visibility_denied", "case_read_only_member", "invalid_case_owner_role"],
+        safeOutput: {
+          metadataOnly: true,
+          rawEvidenceExposed: false,
+          webhookSecretExposed: false
+        }
+      },
+      {
+        id: "case_handoff_action_receipt",
+        ownerLane: "case",
+        route: "/v1/cases/:caseId/handoff-action",
+        methods: ["POST"],
+        schemas: {
+          receipt: "dwm.case_handoff_action_receipt.v1",
+          readiness: "dwm.case_handoff_action_readiness.v1",
+          detail: "analyst.case_detail.v1"
+        },
+        scopeFields: ["tenantId", "organizationId", "caseId", "alertId", "actionId"],
+        writeFields: ["organizationId", "actionId", "note", "idempotencyKey"],
+        recordFields: ["receiptId", "caseId", "alertId", "actionId", "route", "method", "auditEventId", "workflowEventId", "idempotencyKey", "dedupeKey", "captureIds", "sourceIds", "contentHashes"],
+        blockerCodes: ["case_not_found", "missing_case_alert", "unsupported_handoff_action", "handoff_action_not_ready", "case_read_only_member", "organization_visibility_denied", "missing_webhook_destination"],
         safeOutput: {
           metadataOnly: true,
           rawEvidenceExposed: false,

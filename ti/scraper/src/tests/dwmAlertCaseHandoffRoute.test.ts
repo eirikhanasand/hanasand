@@ -339,6 +339,226 @@ describe("DWM alert case handoff route", () => {
     expect((store as any).getCase("case_alert_no_destination").organizationId).toBe("org_acme");
   });
 
+  test("records idempotent case handoff action receipts with org access gates", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case for action receipt testing.",
+      idempotencyKey: "alert-case-handoff-receipt"
+    });
+
+    const ownerReplay = await postHandoffAction(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      actionId: "alertReplay",
+      note: "Record replay delegation.",
+      idempotencyKey: "case-action-replay-001"
+    });
+    const ownerReplayPayload = await ownerReplay.json() as any;
+    const duplicateReplay = await postHandoffAction(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      actionId: "alertReplay",
+      note: "Record replay delegation again.",
+      idempotencyKey: "case-action-replay-001"
+    });
+    const duplicateReplayPayload = await duplicateReplay.json() as any;
+    const adminDryRun = await postHandoffAction(options, "case_alert_acme", "admin@acme.com", {
+      organizationId: "org_acme",
+      actionId: "webhookDryRun",
+      note: "Record dry-run delivery delegation.",
+      idempotencyKey: "case-action-webhook-001"
+    });
+    const adminDryRunPayload = await adminDryRun.json() as any;
+    const memberReplay = await postHandoffAction(options, "case_alert_acme", "member@acme.com", {
+      organizationId: "org_acme",
+      action: "alert_replay",
+      note: "Record member replay delegation.",
+      idempotencyKey: "case-action-replay-member"
+    });
+    const memberReplayPayload = await memberReplay.json() as any;
+    const viewerDenied = await postHandoffAction(options, "case_alert_acme", "viewer@acme.com", {
+      organizationId: "org_acme",
+      actionId: "alertReplay",
+      idempotencyKey: "case-action-viewer-denied"
+    });
+    const viewerDeniedPayload = await viewerDenied.json() as any;
+    const wrongOrg = await postHandoffAction(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_other",
+      actionId: "alertReplay",
+      idempotencyKey: "case-action-wrong-org"
+    });
+    const wrongOrgPayload = await wrongOrg.json() as any;
+
+    expect(ownerReplay.status).toBe(201);
+    expect(ownerReplayPayload.receipt).toMatchObject({
+      schemaVersion: "dwm.case_handoff_action_receipt.v1",
+      caseId: "case_alert_acme",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      alertId: "alert_acme",
+      actionId: "alertReplay",
+      actor: "owner@acme.com",
+      route: "/v1/dwm/alerts/alert_acme/replay",
+      method: "POST",
+      idempotencyKey: "case-action-replay-001",
+      execution: {
+        state: "recorded",
+        dryRun: false,
+        delegated: true
+      },
+      provenance: {
+        captureIds: ["cap_acme_1"],
+        sourceIds: ["src_acme_tg"],
+        contentHashes: ["hash_acme_1"],
+        evidenceCount: 1,
+        blockerCodes: []
+      }
+    });
+    expect(ownerReplayPayload.workflowTransition).toMatchObject({
+      action: "handoff_alert_replay",
+      workflowState: {
+        status: "open",
+        idempotencyKey: "case-action-replay-001",
+        replayState: "recorded"
+      },
+      provenance: {
+        auditEventId: expect.stringMatching(/^case_workflow_audit_/),
+        eventId: expect.stringMatching(/^case_event_/)
+      }
+    });
+    expect(duplicateReplay.status).toBe(200);
+    expect(duplicateReplayPayload).toMatchObject({
+      created: false,
+      duplicate: true,
+      receipt: {
+        id: ownerReplayPayload.receipt.id,
+        actionId: "alertReplay",
+        idempotencyKey: "case-action-replay-001"
+      }
+    });
+    expect(adminDryRun.status).toBe(201);
+    expect(adminDryRunPayload.receipt).toMatchObject({
+      actionId: "webhookDryRun",
+      actor: "admin@acme.com",
+      route: "/v1/dwm/webhooks/deliver",
+      method: "POST",
+      idempotencyKey: "case-action-webhook-001",
+      dedupeKey: "delivery_alert_acme_webhook",
+      execution: {
+        state: "recorded",
+        dryRun: true,
+        delegated: true
+      }
+    });
+    expect(memberReplay.status).toBe(201);
+    expect(memberReplayPayload.receipt).toMatchObject({
+      actionId: "alertReplay",
+      actor: "member@acme.com",
+      idempotencyKey: "case-action-replay-member"
+    });
+    expect(viewerDenied.status).toBe(403);
+    expect(viewerDeniedPayload.error).toMatchObject({ code: "case_read_only_member" });
+    expect(wrongOrg.status).toBe(404);
+    expect(wrongOrgPayload.error).toMatchObject({ code: "case_not_found" });
+
+    const saved = (store as any).getCase("case_alert_acme");
+    expect(saved.handoffActionReceipts).toHaveLength(3);
+    expect(saved.workflowEvents.filter((event: any) => event.action.startsWith("handoff_"))).toHaveLength(3);
+    expect((store as any).getDwmAlert("alert_acme").caseId).toBe("case_alert_acme");
+    const detail = await handleApiRequest(new Request("http://127.0.0.1/v1/cases/case_alert_acme?organizationId=org_acme", {
+      headers: { "x-user-email": "owner@acme.com" }
+    }), options);
+    const detailPayload = await detail.json() as any;
+    expect(detail.status).toBe(200);
+    expect(detailPayload.handoffActionReceiptContext).toMatchObject({
+      receiptCount: 3,
+      actionIds: ["alertReplay", "webhookDryRun"],
+      route: "/v1/cases/:caseId/handoff-action"
+    });
+    expect(detailPayload.handoffActionReceipts.map((receipt: any) => receipt.id)).toEqual(expect.arrayContaining([
+      ownerReplayPayload.receipt.id,
+      adminDryRunPayload.receipt.id,
+      memberReplayPayload.receipt.id
+    ]));
+  });
+
+  test("blocks handoff action receipts for missing alert, missing destination, and unsupported actions", async () => {
+    const { options, store } = fixtureRuntime();
+    await postHandoff(options, "alert_acme", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open case for receipt blockers.",
+      idempotencyKey: "alert-case-handoff-blockers"
+    });
+    store.saveCase({
+      ...(store as any).getCase("case_alert_acme"),
+      id: "case_missing_alert",
+      alertId: "alert_missing",
+      sourceId: "alert_missing",
+      workflowEvents: []
+    });
+    store.saveDwmAlert({
+      ...provenancedAlert(),
+      id: "alert_no_destination",
+      caseIdCandidate: "case_alert_no_destination",
+      casePath: "/v1/cases/case_alert_no_destination?alertId=alert_no_destination",
+      workflowContext: {
+        ...provenancedAlert().workflowContext,
+        caseIdCandidate: "case_alert_no_destination",
+        casePath: "/v1/cases/case_alert_no_destination?alertId=alert_no_destination",
+        webhookDestinationIds: []
+      },
+      webhookContext: undefined,
+      deliveryReadinessContext: undefined
+    });
+    await postHandoff(options, "alert_no_destination", {
+      organizationId: "org_acme",
+      assignedOwner: "owner@acme.com",
+      note: "Open no-destination case.",
+      idempotencyKey: "alert-case-handoff-no-destination"
+    });
+
+    const missingAlert = await postHandoffAction(options, "case_missing_alert", "owner@acme.com", {
+      organizationId: "org_acme",
+      actionId: "alertReplay",
+      idempotencyKey: "case-action-missing-alert"
+    });
+    const missingAlertPayload = await missingAlert.json() as any;
+    const missingDestination = await postHandoffAction(options, "case_alert_no_destination", "owner@acme.com", {
+      organizationId: "org_acme",
+      actionId: "webhookDryRun",
+      idempotencyKey: "case-action-missing-destination"
+    });
+    const missingDestinationPayload = await missingDestination.json() as any;
+    const unsupported = await postHandoffAction(options, "case_alert_acme", "owner@acme.com", {
+      organizationId: "org_acme",
+      actionId: "sendEverything",
+      idempotencyKey: "case-action-unsupported"
+    });
+    const unsupportedPayload = await unsupported.json() as any;
+
+    expect(missingAlert.status).toBe(409);
+    expect(missingAlertPayload.error).toMatchObject({ code: "missing_case_alert" });
+    expect(missingDestination.status).toBe(409);
+    expect(missingDestinationPayload).toMatchObject({
+      error: { code: "handoff_action_not_ready" },
+      actionId: "webhookDryRun",
+      blockerCodes: ["missing_webhook_destination"],
+      handoffActionReadiness: {
+        readyActionIds: ["alertReplay"],
+        actions: {
+          webhookDryRun: {
+            ready: false,
+            blockerCodes: ["missing_webhook_destination"]
+          }
+        }
+      }
+    });
+    expect(unsupported.status).toBe(400);
+    expect(unsupportedPayload.error).toMatchObject({ code: "unsupported_handoff_action" });
+    expect((store as any).getCase("case_alert_no_destination").handoffActionReceipts ?? []).toEqual([]);
+  });
+
   test("blocks missing provenance, wrong org, and read-only members", async () => {
     const { options, store } = fixtureRuntime();
     store.saveDwmAlert({
@@ -391,11 +611,21 @@ async function postHandoff(options: ReturnType<typeof fixtureRuntime>["options"]
   }), options);
 }
 
+async function postHandoffAction(options: ReturnType<typeof fixtureRuntime>["options"], caseId: string, email: string, body: Record<string, unknown>) {
+  return handleApiRequest(new Request(`http://127.0.0.1/v1/cases/${caseId}/handoff-action`, {
+    method: "POST",
+    headers: { "x-user-email": email },
+    body: JSON.stringify(body)
+  }), options);
+}
+
 function fixtureRuntime() {
   const store = new InMemoryScraperStore();
   store.saveOrganization({ id: "org_acme", tenantId: "tenant_acme", name: "Acme", slug: "acme", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganization({ id: "org_other", tenantId: "tenant_other", name: "Other", slug: "other", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_owner", organizationId: "org_acme", email: "owner@acme.com", role: "owner", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
+  store.saveOrganizationMember({ id: "member_admin", organizationId: "org_acme", email: "admin@acme.com", role: "admin", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
+  store.saveOrganizationMember({ id: "member_member", organizationId: "org_acme", email: "member@acme.com", role: "member", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveOrganizationMember({ id: "member_viewer", organizationId: "org_acme", email: "viewer@acme.com", role: "viewer", status: "active", createdAt: "2026-06-29T14:00:00.000Z", updatedAt: "2026-06-29T14:00:00.000Z" });
   store.saveDwmAlert(provenancedAlert());
   return { store, options: { store, frontier: new FocusedFrontier() } };
