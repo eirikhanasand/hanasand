@@ -1138,6 +1138,15 @@ function expectProductReadinessWorkflow(context: WorkbenchOrgContext, id: string
     return item
 }
 
+function expectProductReadinessAction(context: WorkbenchOrgContext, id: string, actionId: string, href: string) {
+    const item = context.readiness.productReadiness.find(row => row.id === id)
+    const action = item?.actions?.find(candidate => candidate.id === actionId)
+    if (!action || action.href !== href) {
+        throw new Error(`Expected ${id} to expose ${actionId} at ${href}, got ${action?.href || 'missing'}.`)
+    }
+    return action
+}
+
 function expectWorkbenchCase(items: WorkbenchCase[], id: string) {
     const item = items.find(row => row.id === id)
     if (!item) throw new Error(`Expected ${id} workbench case to be present.`)
@@ -1368,6 +1377,23 @@ void expectProductReadinessWorkflow(productProgressOrgContext, 'analyst_workflow
 void expectProductReadinessWorkflow(productProgressOrgContext, 'helpdesk_audit', 'Support audit')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'public_ti_provenance', 'Public TI handoff')
 void expectProductReadinessWorkflow(productProgressOrgContext, 'deploy_probe', 'Deploy proof')
+void expectProductReadinessAction(productProgressOrgContext, 'org_members', 'inspect_org_members', '/api/organizations/org_acme/members')
+void expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'inspect_watchlist_coverage', '/api/organizations/org_acme/alert-readiness')
+if (expectProductReadinessAction(productProgressOrgContext, 'shared_watchlists', 'rebuild_alerts', '/api/dwm/alerts/rebuild').body?.organizationId !== 'org_acme') {
+    throw new Error('Expected shared-watchlist rebuild action to carry organization scope.')
+}
+void expectProductReadinessAction(productProgressOrgContext, 'source_inventory_probe', 'inspect_source_inventory', '/api/ti/scraper/control?q=org_acme&organizationId=org_acme')
+void expectProductReadinessAction(productProgressOrgContext, 'source_inventory_probe', 'request_source_coverage', '/api/dwm/source-requests')
+void expectProductReadinessAction(productProgressOrgContext, 'dashboard_evidence', 'open_alert_queue', '/api/dwm/alerts?organizationId=org_acme')
+void expectProductReadinessAction(productProgressOrgContext, 'dashboard_evidence', 'open_alert_generation_readiness', '/api/dwm/alerts/generation-readiness')
+void expectProductReadinessAction(productProgressOrgContext, 'webhook_delivery', 'open_delivery_history', '/api/dwm/webhooks/deliveries?organizationId=org_acme&alertId=alert_acme_1')
+if (expectProductReadinessAction(productProgressOrgContext, 'webhook_delivery', 'replay_latest_delivery', '/api/dwm/webhooks/deliver').body?.alertId !== 'alert_acme_1') {
+    throw new Error('Expected webhook replay action to carry the latest alert id.')
+}
+void expectProductReadinessAction(productProgressOrgContext, 'analyst_workflow', 'open_case_detail', '/api/cases/case_acme_1')
+void expectProductReadinessAction(productProgressOrgContext, 'helpdesk_audit', 'inspect_admin_audit', '/api/backend/admin/audit-events?limit=50')
+void expectProductReadinessAction(productProgressOrgContext, 'public_ti_provenance', 'open_public_ti', '/ti')
+void expectProductReadinessAction(productProgressOrgContext, 'deploy_probe', 'open_deploy_status', '/status')
 void expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready')
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerStatus satisfies string | undefined)
 void (expectProductReadinessStatus(sourceProofOrgContext, 'source_inventory_probe', 'ready').workerLastRunAt satisfies string | undefined)

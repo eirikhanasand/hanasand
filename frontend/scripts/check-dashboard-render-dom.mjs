@@ -25,7 +25,7 @@ const pageSpecs = [
     {
         id: 'dashboard',
         path: '/dashboard',
-        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-workflow-blocker]', '[data-readiness-customer-impact]', '[data-readiness-provenance]', '[data-readiness-backend-proof-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-scorecard-link="/readiness"]'],
+        requiredSelectors: ['[data-readiness-row-id]', '[data-readiness-owner-lane]', '[data-readiness-operator-action]', '[data-readiness-workflow-blocker]', '[data-readiness-customer-impact]', '[data-readiness-provenance]', '[data-readiness-action-count]', '[data-readiness-backend-proof-contract-version]', '[data-readiness-priority]', '[data-readiness-detail]', '[data-readiness-detail-actions]', '[data-readiness-scorecard-link="/readiness"]'],
     },
     {
         id: 'dashboard_ti_control',
@@ -164,6 +164,8 @@ async function inspectRenderedPage(page, spec) {
                 if (detail.getAttribute('data-readiness-detail-state') !== 'ready' && !detail.getAttribute('data-readiness-detail-blocker')) {
                     reasons.push('readiness detail missing blocker')
                 }
+                const detailActionCount = Number(detail.getAttribute('data-readiness-detail-action-count'))
+                if (!detailActionCount || Number.isNaN(detailActionCount)) reasons.push('readiness detail missing backed actions')
             }
             for (const [id, href] of Object.entries(expectedReadinessRows)) {
                 const row = document.querySelector(`[data-readiness-row-id="${id}"]`)
@@ -181,6 +183,8 @@ async function inspectRenderedPage(page, spec) {
                 const workflowBlocker = row.getAttribute('data-readiness-workflow-blocker') || ''
                 const customerImpact = row.getAttribute('data-readiness-customer-impact') || ''
                 const evidenceProvenance = row.getAttribute('data-readiness-provenance') || ''
+                const actionCountText = row.getAttribute('data-readiness-action-count')
+                const actionCount = Number(actionCountText)
                 const unavailableReason = row.getAttribute('data-readiness-unavailable-reason') || ''
                 const proofTimestamp = row.getAttribute('data-readiness-proof-timestamp') || ''
                 const staleAfterSecondsText = row.getAttribute('data-readiness-stale-after-seconds')
@@ -198,6 +202,7 @@ async function inspectRenderedPage(page, spec) {
                     workflowBlocker,
                     customerImpact,
                     evidenceProvenance,
+                    actionCount,
                     unavailableReason,
                     proofTimestamp,
                     staleAfterSeconds,
@@ -211,6 +216,7 @@ async function inspectRenderedPage(page, spec) {
                 if (!workflowBlocker) reasons.push(`missing workflow blocker for ${id}`)
                 if (!customerImpact) reasons.push(`missing customer impact for ${id}`)
                 if (!evidenceProvenance) reasons.push(`missing evidence provenance for ${id}`)
+                if (actionCountText === null || Number.isNaN(actionCount) || actionCount <= 0) reasons.push(`missing backed actions for ${id}`)
                 if (blockerCountText === null || Number.isNaN(blockerCount)) reasons.push(`missing blocker count for ${id}`)
                 if (!row.getAttribute('data-readiness-priority')) reasons.push(`missing readiness priority for ${id}`)
                 if (!proofTimestamp) reasons.push(`missing proof timestamp for ${id}`)

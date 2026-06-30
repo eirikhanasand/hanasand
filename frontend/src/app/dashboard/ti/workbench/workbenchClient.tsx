@@ -179,6 +179,7 @@ export type WorkbenchProductReadinessItem = {
     workflowBlocker?: string
     customerImpact?: string
     evidenceProvenance?: string
+    actions?: WorkbenchAction[]
     checkedAt?: string
     blockerCount?: number
     deepLinkTarget?: string
@@ -1884,9 +1885,31 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     const readyCount = items.filter(item => item.status === 'ready').length
     const blockerCount = items.length - readyCount
     const [selectedReadinessId, setSelectedReadinessId] = useState('')
+    const [readinessActionState, setReadinessActionState] = useState<{ id: string, status: 'running' | 'ready' | 'blocked', text: string } | null>(null)
     const selectedReadiness = items.find(item => item.id === selectedReadinessId)
         || items.find(item => item.status !== 'ready')
         || items[0]
+    const runReadinessAction = useCallback(async (item: WorkbenchProductReadinessItem, action: WorkbenchAction) => {
+        if (action.method === 'GET') return
+        const key = `${item.id}:${action.id}`
+        if (action.disabledReason) {
+            setReadinessActionState({ id: key, status: 'blocked', text: action.disabledReason })
+            return
+        }
+        setReadinessActionState({ id: key, status: 'running', text: `${action.method} ${action.href}` })
+        try {
+            const response = await fetch(action.href, {
+                method: action.method,
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify(action.body || {}),
+            })
+            const payload = await readJson(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            setReadinessActionState({ id: key, status: 'ready', text: `${action.label} completed.` })
+        } catch (error) {
+            setReadinessActionState({ id: key, status: 'blocked', text: error instanceof Error ? error.message : String(error) })
+        }
+    }, [])
     if (!items.length) {
         return (
             <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
@@ -1951,6 +1974,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             data-readiness-workflow-blocker={item.workflowBlocker || ''}
                             data-readiness-customer-impact={item.customerImpact || ''}
                             data-readiness-provenance={item.evidenceProvenance || ''}
+                            data-readiness-action-count={item.actions?.length || 0}
                             data-readiness-priority={index + 1}
                         >
                             <div className='min-w-0'>
@@ -1963,15 +1987,16 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                     )
                 })}
             </div>
-            {selectedReadiness ? <ReadinessDetail item={selectedReadiness} /> : null}
+            {selectedReadiness ? <ReadinessDetail item={selectedReadiness} actionState={readinessActionState} onRunAction={runReadinessAction} /> : null}
         </div>
     )
 }
 
-function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
+function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchProductReadinessItem, actionState: { id: string, status: 'running' | 'ready' | 'blocked', text: string } | null, onRunAction: (item: WorkbenchProductReadinessItem, action: WorkbenchAction) => void | Promise<void> }) {
     const blocker = readinessBlocker(item)
     const proofTime = item.proofTimestamp || item.checkedAt || ''
     const tone = productReadinessTone(item.status)
+    const actions = item.actions || []
     return (
         <div
             className='mt-3 rounded-lg border border-[#d8e1ef] bg-white p-3 dark:border-[#2d3a52] dark:bg-[#111827]'
@@ -1985,6 +2010,7 @@ function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
             data-readiness-detail-customer-impact={item.customerImpact || ''}
             data-readiness-detail-provenance={item.evidenceProvenance || ''}
             data-readiness-detail-href={item.deepLinkTarget || item.href || ''}
+            data-readiness-detail-action-count={actions.length}
         >
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
@@ -2009,6 +2035,45 @@ function ReadinessDetail({ item }: { item: WorkbenchProductReadinessItem }) {
                 {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>Impact: {item.customerImpact}</p> : null}
                 {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.integrationProbeHint}</p> : null}
             </div>
+            {actions.length ? (
+                <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]' data-readiness-detail-actions={item.id}>
+                    <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Backed actions</p>
+                    <div className='mt-2 flex flex-wrap gap-2'>
+                        {actions.map(action => {
+                            const actionKey = `${item.id}:${action.id}`
+                            const busy = actionState?.id === actionKey && actionState.status === 'running'
+                            return action.method === 'GET' ? (
+                                <Link
+                                    key={action.id}
+                                    href={action.href}
+                                    data-readiness-action-id={action.id}
+                                    data-readiness-action-method={action.method}
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 rounded-lg border border-[#d8e1ef] bg-white px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'
+                                >
+                                    {action.label}
+                                    <ExternalLink className='h-3.5 w-3.5' />
+                                </Link>
+                            ) : (
+                                <button
+                                    key={action.id}
+                                    type='button'
+                                    disabled={busy || Boolean(action.disabledReason)}
+                                    title={action.disabledReason}
+                                    data-readiness-action-id={action.id}
+                                    data-readiness-action-method={action.method}
+                                    onClick={() => onRunAction(item, action)}
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center rounded-lg border border-[#d8e1ef] bg-white px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'
+                                >
+                                    {busy ? 'Running...' : action.label}
+                                </button>
+                            )
+                        })}
+                    </div>
+                    {actionState && actionState.id.startsWith(`${item.id}:`) ? (
+                        <p className={`mt-2 wrap-break-word text-[11px] leading-4 ${actionState.status === 'blocked' ? 'text-[#a23f3f] dark:text-[#f3a7a7]' : 'text-[#667085] dark:text-[#aab6ca]'}`}>{actionState.text}</p>
+                    ) : null}
+                </div>
+            ) : null}
             {item.href ? (
                 <div className='mt-3 flex flex-wrap gap-2'>
                     <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'>
