@@ -1073,6 +1073,29 @@ describe("dwm workflow persistence", () => {
         canReplay: true,
         blockerCodes: []
       },
+      caseWebhookReplayReadiness: {
+        schemaVersion: "dwm.alert_case_webhook_replay_readiness.v1",
+        ready: true,
+        route: "/v1/cases/case_alpha_darkweb/webhook-replay-readiness",
+        caseId: "case_alpha_darkweb",
+        casePath: `/v1/cases/case_alpha_darkweb?alertId=${alphaDarkweb.id}`,
+        selectedWebhookDestinationId: "webhook_workflow_alpha",
+        webhookDestinationIds: ["webhook_workflow_alpha"],
+        selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
+        watchlistItemIds: ["watch_item_workflow_alpha_acme"],
+        deliveryHistoryRefs: [],
+        replayCount: 0,
+        workflowEventCount: 1,
+        deliveryDedupeKey: alphaDarkweb.dedupeKey,
+        readinessRefs: {
+          caseHandoffReady: true,
+          deliveryReady: true,
+          alertReplayReady: true,
+          workflowReady: true,
+          hasDeliveryHistory: false
+        },
+        blockerCodes: []
+      },
       workflowReadiness: {
         ready: true,
         status: "investigating",
@@ -1101,11 +1124,12 @@ describe("dwm workflow persistence", () => {
       blockerCodes: []
     });
     expect(alphaUpdatedList.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.webhookReplayReadiness");
+    expect(alphaUpdatedList.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.caseWebhookReplayReadiness");
     expect(alphaUpdatedList.alertQueueVisibility).toMatchObject({
       consumerContract: {
         schemaVersion: "dwm.alert_queue_consumer_contract.v1",
         route: "/v1/dwm/alerts",
-        filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily", "replayReady", "hasDeliveryHistory"]),
+        filters: expect.arrayContaining(["organizationId", "eventType", "hasUpdatedEvent", "sourceFamily", "replayReady", "caseWebhookReplayReady", "hasDeliveryHistory"]),
         zeroAlertContract: "dwm.zero_alert_proof.v1"
       },
       orgAlertWorkflowBridge: {
@@ -1164,6 +1188,7 @@ describe("dwm workflow persistence", () => {
       "alerts[].orgWatchlistScope",
       "alerts[].alertEventSummary",
       "alerts[].customerReadiness.webhookReplayReadiness",
+      "alerts[].customerReadiness.caseWebhookReplayReadiness",
       "alertQueueVisibility.customerReadinessSummary",
       "alerts[].evidenceFreshness",
       "alertQueueVisibility.orgAlertWorkflowBridge",
@@ -1179,6 +1204,7 @@ describe("dwm workflow persistence", () => {
       caseReadyCount: 1,
       deliveryReadyCount: 1,
       replayReadyCount: 1,
+      caseWebhookReplayReadyCount: 1,
       workflowReadyCount: 1,
       deliveryHistoryCount: 0,
       sourceFamilies: ["darkweb_metadata"],
@@ -1190,6 +1216,7 @@ describe("dwm workflow persistence", () => {
         caseReadyCount: 1,
         deliveryReadyCount: 1,
         replayReadyCount: 1,
+        caseWebhookReplayReadyCount: 1,
         workflowReadyCount: 1,
         selectedCaptureIds: expect.arrayContaining(["cap_workflow_onion_acme", "cap_workflow_onion_acme_followup"]),
         watchlistItemIds: ["watch_item_workflow_alpha_acme"],
@@ -1200,10 +1227,10 @@ describe("dwm workflow persistence", () => {
       watchlistItemIds: ["watch_item_workflow_alpha_acme"],
       blockerCodes: [],
       states: ["ready"],
-      filters: expect.arrayContaining(["replayReady", "hasDeliveryHistory", "readinessBlocker"])
+      filters: expect.arrayContaining(["replayReady", "caseWebhookReplayReady", "hasDeliveryHistory", "readinessBlocker"])
     });
 
-    const replayReadyListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&replayReady=true&deliveryReady=true&caseReady=true&hasDeliveryHistory=false&readyAction=deliver&transitionAction=escalated`, {
+    const replayReadyListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&replayReady=true&caseWebhookReplayReady=true&deliveryReady=true&caseReady=true&hasDeliveryHistory=false&readyAction=deliver&transitionAction=escalated`, {
       headers: { "x-user-email": "owner-alpha@workflow.example" }
     }), options);
     const replayReadyList = await replayReadyListResponse.json() as any;
@@ -1211,6 +1238,7 @@ describe("dwm workflow persistence", () => {
     expect(replayReadyList.alerts.map((alert: any) => alert.id)).toEqual([alphaDarkweb.id]);
     expect(replayReadyList.alertQueueVisibility.filters).toMatchObject({
       replayReady: "true",
+      caseWebhookReplayReady: "true",
       deliveryReady: "true",
       caseReady: "true",
       hasDeliveryHistory: "false",
@@ -1221,10 +1249,12 @@ describe("dwm workflow persistence", () => {
       alertCount: 1,
       readyCount: 1,
       replayReadyCount: 1,
+      caseWebhookReplayReadyCount: 1,
       sourceFamilies: ["darkweb_metadata"],
       sourceFamilyRows: [expect.objectContaining({
         sourceFamily: "darkweb_metadata",
         replayReadyCount: 1,
+        caseWebhookReplayReadyCount: 1,
         blockerCodes: []
       })],
       blockerCodes: []
@@ -1237,6 +1267,14 @@ describe("dwm workflow persistence", () => {
     expect(replayBlockedListResponse.status).toBe(200);
     expect(replayBlockedList.alerts).toHaveLength(0);
     expect(replayBlockedList.alertQueueVisibility.customerReadinessSummary.alertCount).toBe(0);
+
+    const caseReplayBlockedListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts?organizationId=${alphaOrg.id}&caseWebhookReplayReady=false&sourceFamily=darkweb_metadata`, {
+      headers: { "x-user-email": "owner-alpha@workflow.example" }
+    }), options);
+    const caseReplayBlockedList = await caseReplayBlockedListResponse.json() as any;
+    expect(caseReplayBlockedListResponse.status).toBe(200);
+    expect(caseReplayBlockedList.alerts).toHaveLength(0);
+    expect(caseReplayBlockedList.alertQueueVisibility.customerReadinessSummary.alertCount).toBe(0);
 
     const alphaUpdatedDetailResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/${alphaDarkweb.id}?organizationId=${alphaOrg.id}`, {
       headers: { "x-user-email": "owner-alpha@workflow.example" }
