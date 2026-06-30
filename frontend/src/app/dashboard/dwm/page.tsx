@@ -1,6 +1,4 @@
-import Link from 'next/link'
-import { BellRing } from 'lucide-react'
-import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
+import { DashboardPage } from '@/components/dashboard/ui'
 import { demoDwmProductSnapshot, type DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmAnalystPortal } from './dwm-analyst-portal'
 
@@ -22,24 +20,7 @@ export default async function DashboardDwmPage() {
     }
 
     return (
-        <DashboardPage>
-            <DashboardHeader
-                eyebrow='Dark web monitoring'
-                title='Exposure workbench'
-                description='Watchlist, collection, alert review, evidence replay, and customer delivery.'
-                actions={(
-                    <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
-                            <BellRing className='h-4 w-4' />
-                            Subscribe webhook
-                        </Link>
-                        <Link href='/solutions/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                            Public page
-                        </Link>
-                    </div>
-                )}
-            />
-
+        <DashboardPage className='gap-2 sm:gap-3'>
             <DwmAnalystPortal snapshot={snapshot} operations={operations} alerts={alerts} deliveries={deliveries} dataHealth={dataHealth} />
         </DashboardPage>
     )

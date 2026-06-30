@@ -121,6 +121,8 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     const latestRunLabel = operations?.latestRun ? `${operations.latestRun.captureCount} captures` : 'No run yet'
     const watchTermCount = snapshot.watchlist.length
     const webhookState = deliveries.some(delivery => delivery.alertId === 'webhook_test' && (delivery.status === 'dry_run' || delivery.status === 'delivered')) ? 'Tested' : 'Not tested'
+    const apiProblemCount = [dataHealth.snapshot, dataHealth.operations, dataHealth.alerts, dataHealth.deliveries]
+        .filter(item => item.state !== 'live').length + (dataHealth.usingFallbackAlerts ? 1 : 0)
 
     useEffect(() => {
         if (queue.length && !queue.some(alert => alert.id === selectedId)) {
@@ -194,6 +196,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                             <StatusPill label='Watchlist' value={`${watchTermCount} terms`} tone={watchTermCount ? 'good' : 'warn'} />
                             <StatusPill label='Webhook' value={webhookState} tone={webhookState === 'Tested' ? 'good' : 'warn'} />
                             <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
+                            <StatusPill label='API' value={apiProblemCount ? `${apiProblemCount} issue${apiProblemCount === 1 ? '' : 's'}` : 'Live'} tone={apiProblemCount ? 'warn' : 'good'} />
                         </div>
                         <div className='text-right'>
                             <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Monitoring state</p>
@@ -201,8 +204,6 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                         </div>
                     </div>
                 </div>
-
-                <DataHealthBanner dataHealth={dataHealth} />
 
                 <div className='grid min-h-[680px] xl:grid-cols-[320px_minmax(0,1fr)_360px]'>
                     <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
@@ -633,51 +634,6 @@ const queueFilters: Array<{ id: QueueFilter, label: string }> = [
     { id: 'muted', label: 'Muted' },
     { id: 'all', label: 'All' },
 ]
-
-function DataHealthBanner({ dataHealth }: { dataHealth: DwmDataHealth }) {
-    const items = [
-        { id: 'snapshot', item: dataHealth.snapshot },
-        { id: 'operations', item: dataHealth.operations },
-        { id: 'alerts', item: dataHealth.alerts },
-        { id: 'deliveries', item: dataHealth.deliveries },
-    ]
-    const hasProblem = items.some(({ item }) => item.state === 'error' || item.state === 'fallback' || item.state === 'missing') || dataHealth.usingFallbackAlerts
-    return (
-        <div className={`border-b px-4 py-3 ${hasProblem ? 'border-[#fde2d6] bg-[#fffaf7]' : 'border-[#e7f0e9] bg-[#f7fbf8]'}`}>
-            <div className='flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between'>
-                <div className='min-w-0'>
-                    <p className={`text-xs font-semibold uppercase ${hasProblem ? 'text-[#b45309]' : 'text-[#147a3b]'}`}>
-                        {hasProblem ? 'Data source attention' : 'Live data connected'}
-                    </p>
-                    <p className='mt-1 text-sm leading-6 text-[#3d4656]'>
-                        {dataHealth.usingFallbackAlerts
-                            ? 'Saved workflow alerts were empty, so the queue is using the current product snapshot.'
-                            : hasProblem
-                                ? 'One or more backing APIs are unavailable; actions still use the configured workflow routes.'
-                                : 'Snapshot, operations, alert workflow, and delivery APIs responded.'}
-                    </p>
-                </div>
-                <div className='grid gap-2 sm:grid-cols-2 lg:min-w-[560px] lg:grid-cols-4'>
-                    {items.map(({ id, item }) => <DataHealthSegment key={id} item={item} />)}
-                </div>
-            </div>
-        </div>
-    )
-}
-
-function DataHealthSegment({ item }: { item: DataHealthItem }) {
-    const tone = item.state === 'live'
-        ? 'border-[#d6e9de] bg-white text-[#147a3b]'
-        : item.state === 'error'
-            ? 'border-[#fde2d6] bg-white text-[#9a3412]'
-            : 'border-[#ffe6bd] bg-white text-[#b45309]'
-    return (
-        <div className={`min-w-0 rounded-lg border px-3 py-2 ${tone}`}>
-            <p className='truncate text-xs font-semibold' title={item.label}>{item.label}</p>
-            <p className='mt-1 truncate text-[11px] text-[#667085]' title={item.detail}>{item.detail}</p>
-        </div>
-    )
-}
 
 function ActorPanel({ snapshot }: { snapshot: DwmProductSnapshot }) {
     return (
