@@ -1209,16 +1209,50 @@ export type OrganizationWatchlistAlertTermsExport = {
             sourceFamily: 'organization_watchlist'
             matchingRoute: 'organization_watchlist'
             termCount: number
-            requiredMatcherFields: Array<'organizationId' | 'tenantId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm' | 'alertGeneratorKey' | 'alertGenerationRef'>
+            requiredMatcherFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm' | 'watchedEntity' | 'matchReason' | 'actorRef' | 'sourceRefs' | 'provenance' | 'alertGeneratorKey' | 'alertGenerationRef'>
             dedupeKeyFields: Array<'organizationId' | 'watchlistItemId' | 'termFamily' | 'normalizedTerm'>
             terms: Array<{
                 organizationId: string
                 tenantId: string
+                watchlistId: string
                 watchlistItemId: string
                 termFamily: WatchlistKind
+                watchedEntity: {
+                    type: WatchlistKind
+                    value: string
+                    normalizedValue: string
+                }
+                matchReason: {
+                    kind: 'shared_watchlist_term'
+                    code: 'organization_watchlist_term_match'
+                    field: 'watchedEntity.normalizedValue'
+                }
+                actorRef: {
+                    userId: string
+                    role: OrganizationRole
+                    source: 'organization_member'
+                }
+                sourceRefs: {
+                    sourceFamily: 'organization_watchlist'
+                    exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms'
+                    caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility'
+                }
                 normalizedTerm: string
                 alertGeneratorKey: string
                 status: 'active'
+                provenance: {
+                    schemaVersion: 'organization.watchlist_match_provenance.v1'
+                    organizationId: string
+                    tenantId: string
+                    watchlistId: string
+                    watchlistItemId: string
+                    alertGeneratorKey: string
+                    createdBy: string
+                    updatedBy: string | null
+                    lifecycleRequestId: string | null
+                    matchBasis: 'normalized_watchlist_term'
+                    caseReplayFields: Array<'organizationId' | 'tenantId' | 'watchlistId' | 'watchlistItemId' | 'watchedEntity' | 'matchReason' | 'alertGeneratorKey' | 'provenance'>
+                }
                 alertGenerationRef: OrganizationWatchlistAlertGenerationRef
             }>
             lifecycleExclusions: {
@@ -7255,9 +7289,15 @@ export function organizationWatchlistAlertTermsExport(
             requiredMatcherFields: [
                 'organizationId',
                 'tenantId',
+                'watchlistId',
                 'watchlistItemId',
                 'termFamily',
                 'normalizedTerm',
+                'watchedEntity',
+                'matchReason',
+                'actorRef',
+                'sourceRefs',
+                'provenance',
                 'alertGeneratorKey',
                 'alertGenerationRef',
             ],
@@ -7265,11 +7305,54 @@ export function organizationWatchlistAlertTermsExport(
             terms: activeTerms.map(term => ({
                 organizationId: term.organizationId,
                 tenantId: term.tenantId,
+                watchlistId: term.watchlistItemId,
                 watchlistItemId: term.watchlistItemId,
                 termFamily: term.termFamily,
+                watchedEntity: {
+                    type: term.termFamily,
+                    value: term.term,
+                    normalizedValue: term.alertGenerationRef.normalizedTerm,
+                },
+                matchReason: {
+                    kind: 'shared_watchlist_term',
+                    code: 'organization_watchlist_term_match',
+                    field: 'watchedEntity.normalizedValue',
+                },
+                actorRef: {
+                    userId: member.userId,
+                    role: member.role,
+                    source: 'organization_member',
+                },
+                sourceRefs: {
+                    sourceFamily: 'organization_watchlist',
+                    exportRoute: 'GET /api/organizations/:id/watchlists/alert-terms',
+                    caseVisibilityRoute: 'GET /api/organizations/:id/alert-case-visibility',
+                },
                 normalizedTerm: term.alertGenerationRef.normalizedTerm,
                 alertGeneratorKey: term.alertGeneratorKey,
                 status: 'active',
+                provenance: {
+                    schemaVersion: 'organization.watchlist_match_provenance.v1',
+                    organizationId: term.organizationId,
+                    tenantId: term.tenantId,
+                    watchlistId: term.watchlistItemId,
+                    watchlistItemId: term.watchlistItemId,
+                    alertGeneratorKey: term.alertGeneratorKey,
+                    createdBy: term.createdBy,
+                    updatedBy: term.updatedBy,
+                    lifecycleRequestId: term.lifecycleRequestId,
+                    matchBasis: 'normalized_watchlist_term',
+                    caseReplayFields: [
+                        'organizationId',
+                        'tenantId',
+                        'watchlistId',
+                        'watchlistItemId',
+                        'watchedEntity',
+                        'matchReason',
+                        'alertGeneratorKey',
+                        'provenance',
+                    ],
+                },
                 alertGenerationRef: term.alertGenerationRef,
             })),
             lifecycleExclusions: {
