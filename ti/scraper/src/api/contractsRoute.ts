@@ -252,6 +252,65 @@ export function contractIndex() {
         ]
       })
     ],
+    schemaLookup: {
+      schemaVersion: "ti.api_contract_schema_lookup.v1",
+      rows: [
+        schemaLookupRow({
+          schemaId: DWM_ORG_ALERT_CASE_ACTION_RECEIPT_SCHEMA_VERSION,
+          contractId: "org_alert_case_action_receipt",
+          ownerLane: "case",
+          route: ORG_ALERT_CASE_ACTION_LEDGER_ROUTE,
+          scopeFields: ["tenantId", "organizationId", "alertId", "casePath", "receiptId"],
+          blockerCodes: ["missing_tenant_scope", "missing_organization_scope", "organization_scope_mismatch", "blocked_receipt"],
+          downstreamConsumers: [
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["receiptId", "action", "execution.status"] },
+            { ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver", requiredFields: ["alertIds", "casePaths", "replayState"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: DWM_WEBHOOK_EVENT_CONTRACT_SCHEMA_VERSION,
+          contractId: "webhook_delivery_receipts",
+          ownerLane: "webhook",
+          route: "/v1/dwm/webhooks/deliver",
+          scopeFields: ["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId", "webhookDeliveryId"],
+          blockerCodes: ["missing_webhook_destination", "webhook_not_verified", "unsupported_destination", "organization_visibility_denied"],
+          downstreamConsumers: [
+            { ownerLane: "case", route: "/v1/cases/:caseId", requiredFields: ["webhookDeliveryId", "status", "caseId"] },
+            { ownerLane: "support", route: "/api/admin/support/readiness", requiredFields: ["organizationId", "webhookDestinationId", "auditEventId"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: TI_SOURCE_PROVENANCE_ALERT_REBUILD_RECEIPT_SCHEMA_VERSION,
+          contractId: "source_provenance_receipts",
+          ownerLane: "source",
+          route: "/v1/dwm/alerts/rebuild",
+          scopeFields: ["tenantId", "organizationId", "sourceIds", "captureIds", "contentHashes", "actor"],
+          blockerCodes: ["source_inactive", "source_policy_inactive", "missing_source_provenance", "case_handoff_blocked"],
+          downstreamConsumers: [
+            { ownerLane: "alert", route: "/v1/dwm/alerts/rebuild", requiredFields: ["sourceIds", "captureIds", "contentHashes"] },
+            { ownerLane: "publicTI", route: "/ti", requiredFields: ["actor", "provenance.refs", "sourceFamilies"] }
+          ]
+        }),
+        schemaLookupRow({
+          schemaId: SUPPORT_ACTION_EXECUTION_HANDOFF_SCHEMA_VERSION,
+          contractId: "support_action_receipts",
+          ownerLane: "support",
+          route: "/api/admin/support/readiness",
+          scopeFields: ["tenantId", "organizationId", "actorId", "action", "idempotencyKey", "audit.reason"],
+          blockerCodes: ["support_executor_unavailable", "helpdesk_audit_unavailable", "missing_invite_teammate_executor"],
+          downstreamConsumers: [
+            { ownerLane: "org", route: "GET /api/organizations/:id/members", requiredFields: ["member.status", "invite.status", "auditEventId"] },
+            { ownerLane: "dashboard", route: "/dashboard", requiredFields: ["organizationId", "supportAction.status"] }
+          ]
+        })
+      ],
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    },
     semantics: { safeMetadataOnly: true, noCredentialCollection: true, noThreatActorInteraction: true },
     publicCompatibility: { canonicalSearchRoute: "/api/ti/search", unknownQueryCopy: "searching", noDefaultActor: true }
   };
@@ -268,6 +327,26 @@ function receiptSchema(input: {
   routes: string[];
   scopeFields: string[];
   requiredFields: string[];
+  blockerCodes: string[];
+  downstreamConsumers: Array<{ ownerLane: string; route: string; requiredFields: string[] }>;
+}) {
+  return {
+    ...input,
+    safeOutput: {
+      metadataOnly: true,
+      rawEvidenceExposed: false,
+      webhookSecretExposed: false,
+      crossOrgDataExposed: false
+    }
+  };
+}
+
+function schemaLookupRow(input: {
+  schemaId: string;
+  contractId: string;
+  ownerLane: "case" | "webhook" | "source" | "support";
+  route: string;
+  scopeFields: string[];
   blockerCodes: string[];
   downstreamConsumers: Array<{ ownerLane: string; route: string; requiredFields: string[] }>;
 }) {

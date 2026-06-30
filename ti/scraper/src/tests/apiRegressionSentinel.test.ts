@@ -156,6 +156,69 @@ describe("api regression sentinel", () => {
     expect(serialized).not.toContain("password");
   });
 
+  test("indexes receipt schema ids for direct integration lookup", async () => {
+    const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
+      store: new InMemoryScraperStore(),
+      frontier: new FocusedFrontier()
+    });
+    const contract = await response.json() as any;
+    const rows = new Map(contract.schemaLookup.rows.map((row: any) => [row.schemaId, row]));
+
+    expect(contract.schemaLookup).toMatchObject({
+      schemaVersion: "ti.api_contract_schema_lookup.v1",
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(rows.get("dwm.org_alert_case_action_receipt.v1")).toMatchObject({
+      contractId: "org_alert_case_action_receipt",
+      ownerLane: "case",
+      route: "/v1/dwm/org-alert-case-actions",
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "alertId", "casePath", "receiptId"]),
+      blockerCodes: expect.arrayContaining(["missing_tenant_scope", "organization_scope_mismatch"]),
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "dashboard", route: "/dashboard" }),
+        expect.objectContaining({ ownerLane: "webhook", route: "/v1/dwm/webhooks/deliver" })
+      ]),
+      safeOutput: {
+        metadataOnly: true,
+        rawEvidenceExposed: false,
+        webhookSecretExposed: false,
+        crossOrgDataExposed: false
+      }
+    });
+    expect(rows.get("dwm.webhook_event_contract.v1")).toMatchObject({
+      contractId: "webhook_delivery_receipts",
+      ownerLane: "webhook",
+      route: "/v1/dwm/webhooks/deliver",
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "alertId", "caseId", "webhookDestinationId"]),
+      blockerCodes: expect.arrayContaining(["missing_webhook_destination", "unsupported_destination"])
+    });
+    expect(rows.get("ti.source_provenance_alert_rebuild_receipt.v1")).toMatchObject({
+      contractId: "source_provenance_receipts",
+      ownerLane: "source",
+      route: "/v1/dwm/alerts/rebuild",
+      downstreamConsumers: expect.arrayContaining([
+        expect.objectContaining({ ownerLane: "alert", route: "/v1/dwm/alerts/rebuild" }),
+        expect.objectContaining({ ownerLane: "publicTI", route: "/ti" })
+      ])
+    });
+    expect(rows.get("support.action_execution_handoff.v1")).toMatchObject({
+      contractId: "support_action_receipts",
+      ownerLane: "support",
+      route: "/api/admin/support/readiness",
+      scopeFields: expect.arrayContaining(["tenantId", "organizationId", "actorId", "idempotencyKey"])
+    });
+    const serialized = JSON.stringify(contract.schemaLookup);
+    expect(serialized).not.toContain("https://discord.com");
+    expect(serialized).not.toContain("authorization:");
+    expect(serialized).not.toContain("rawText");
+    expect(serialized).not.toContain("password");
+  });
+
   test("publishes the shared watchlist alert export contract for org and alert consumers", async () => {
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/contracts"), {
       store: new InMemoryScraperStore(),
