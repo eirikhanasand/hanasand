@@ -971,6 +971,17 @@ type SelectedWatchlistPlan = {
         matched: boolean
         notes: string
     }>
+    relevanceRows: Array<{
+        kind: 'company' | 'domain' | 'vendor'
+        value: string
+        fit: 'matched' | 'near' | 'blocked'
+        alertable: boolean
+        route: string
+        evidenceRefs: string[]
+        sourceFamilies: string[]
+        blockers: string[]
+        nextAction: string
+    }>
     intersections: Array<{
         intersectionId: string
         kind: WatchlistIntersectionRow['kind']
@@ -4032,7 +4043,7 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2'>
                 <EvidenceMetric label='Terms' value={`${plan.terms.length}`} />
-                <EvidenceMetric label='Matches' value={`${plan.intersections.filter(item => item.state === 'ready').length}`} />
+                <EvidenceMetric label='Matches' value={`${plan.relevanceRows.filter(item => item.fit === 'matched').length}`} />
                 <EvidenceMetric label='Alerts' value={`${plan.sourceRefs.alertIds.length}`} />
                 <EvidenceMetric label='Captures' value={`${plan.sourceRefs.captureIds.length}`} />
             </div>
@@ -4054,6 +4065,29 @@ function SelectedWatchlistPlanPanel({ plan }: { plan: SelectedWatchlistPlan }) {
                 ))}
                 {!plan.terms.length ? <p className='rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-[11px] leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No watchlist terms are attached to this selected evidence.</p> : null}
             </div>
+            {plan.relevanceRows.length ? (
+                <div data-ti-selected-watchlist-relevance='true' className='mt-2 grid gap-2'>
+                    {plan.relevanceRows.slice(0, 3).map(row => (
+                        <div key={`${row.kind}:${row.value}:${row.fit}`} className='rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                            <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                                <div className='min-w-0'>
+                                    <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>{row.kind}: {row.value}</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#667085] dark:text-[#9aa8bd]'>
+                                        {row.alertable ? 'Alert-ready' : 'Needs review'} · {row.evidenceRefs.length} evidence ref{row.evidenceRefs.length === 1 ? '' : 's'} · {row.sourceFamilies.map(formatLabel).join(', ') || 'source family pending'}
+                                    </p>
+                                </div>
+                                <span className={sourceHealthChipClass(row.fit === 'matched' ? 'ready' : row.fit === 'blocked' ? 'blocked' : 'review')}>
+                                    {row.fit === 'matched' ? 'matched' : row.fit === 'near' ? 'near match' : 'blocked'}
+                                </span>
+                            </div>
+                            <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.nextAction}</p>
+                            {row.blockers.length ? (
+                                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#8a5a00] dark:text-[#ffd77a]'>{displayRequirementList(row.blockers.slice(0, 3))}</p>
+                            ) : null}
+                        </div>
+                    ))}
+                </div>
+            ) : null}
         </div>
     )
 }
@@ -5138,6 +5172,60 @@ function selectedWatchlistPlanFor(
         || item.sourceEvidenceRefs.some(ref => selectedSourceIds.includes(ref) || selectedText.includes(ref.toLowerCase()))
     )
     const relevantIntersections = intersections.length ? intersections : actionability.orgRelevance.watchlistIntersections.slice(0, 3)
+    const selectedTermKeys = new Set(selectedTerms.map(term => `${term.kind}:${term.value.toLowerCase()}`))
+    const selectedEvidenceRefs = unique([
+        ...selectedSourceIds,
+        ...(selected.priority?.captureIds ?? []),
+        selected.source,
+        selected.provenance,
+    ].filter(Boolean))
+    const relevanceCandidates = uniqueBy([
+        ...actionability.orgRelevance.candidateTerms.filter(term =>
+            selectedTermKeys.has(`${term.kind}:${term.value.toLowerCase()}`)
+            || term.sourceEvidenceRefs.some(ref => selectedEvidenceRefs.some(selectedRef => selectedRef.toLowerCase() === ref.toLowerCase() || selectedText.includes(ref.toLowerCase())))
+            || selectedText.includes(term.value.toLowerCase())
+        ),
+        ...selectedTerms.map(term => ({
+            kind: term.kind,
+            value: term.value,
+            notes: term.notes,
+            matched: term.matched,
+            sourceEvidenceRefs: actionability.orgRelevance.sourceEvidence
+                .filter(source => source.supportsTerms.some(value => value.toLowerCase() === term.value.toLowerCase()))
+                .flatMap(source => [source.sourceId, source.captureId, source.provenance].filter((value): value is string => Boolean(value))),
+        })),
+    ], term => `${term.kind}:${term.value.toLowerCase()}`).slice(0, 6)
+    const relevanceRows = relevanceCandidates.map(term => {
+        const matchingIntersection = relevantIntersections.find(item => item.kind === term.kind && item.value.toLowerCase() === term.value.toLowerCase())
+            ?? actionability.orgRelevance.watchlistIntersections.find(item => item.kind === term.kind && item.value.toLowerCase() === term.value.toLowerCase())
+        const sourceEvidence = actionability.orgRelevance.sourceEvidence.filter(source =>
+            term.sourceEvidenceRefs.some(ref => ref === source.sourceId || ref === source.captureId || ref === source.provenance)
+            || source.supportsTerms.some(value => value.toLowerCase() === term.value.toLowerCase())
+        )
+        const blockersForTerm = unique([
+            ...(matchingIntersection?.blockers.map(blocker => blocker.handoff) ?? []),
+            ...(!term.matched ? actionability.watchlistRelevance.blockers : []),
+            ...(sourceEvidence.some(source => source.captureId) ? [] : ['Capture evidence is required before alert rebuild.']),
+        ]).slice(0, 6)
+        const alertable = Boolean(matchingIntersection?.alertIds.length && matchingIntersection.captureIds.length && !blockersForTerm.length)
+        return {
+            kind: term.kind,
+            value: term.value,
+            fit: term.matched ? 'matched' as const : blockersForTerm.length ? 'blocked' as const : 'near' as const,
+            alertable,
+            route: matchingIntersection?.route ?? actionability.exportPayloads.watchlist.backedRoute ?? actionability.exportPayloads.watchlist.route,
+            evidenceRefs: unique([
+                ...term.sourceEvidenceRefs,
+                ...(matchingIntersection?.sourceEvidenceRefs ?? []),
+                ...sourceEvidence.flatMap(source => [source.sourceId, source.captureId, source.provenance].filter((value): value is string => Boolean(value))),
+            ]).slice(0, 8),
+            sourceFamilies: unique(sourceEvidence.flatMap(source => source.sourceFamily ? [source.sourceFamily] : [])).slice(0, 4),
+            blockers: blockersForTerm,
+            nextAction: alertable
+                ? 'Rebuild alert review from the persisted watchlist item and selected source evidence.'
+                : blockersForTerm.length ? `Resolve ${displayRequirementList(blockersForTerm.slice(0, 2))} before alert rebuild.` : 'Review this candidate against the organization watchlist before alert rebuild.',
+        }
+    })
     const blockers = unique([
         ...actionability.watchlistRelevance.blockers,
         ...actionability.exportPayloads.watchlist.missing,
@@ -5164,6 +5252,7 @@ function selectedWatchlistPlanFor(
             matched: term.matched || relevantIntersections.some(item => item.kind === term.kind && item.value.toLowerCase() === term.value.toLowerCase()),
             notes: term.notes,
         })),
+        relevanceRows,
         intersections: relevantIntersections.map(item => ({
             intersectionId: item.intersectionId,
             kind: item.kind,
