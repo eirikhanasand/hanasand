@@ -1041,6 +1041,19 @@ assert.equal(memberWatchlistItemBody.watchlistReadContract.webhookBridge.nonmemb
 assert.ok(memberWatchlistItemBody.watchlistReadContract.noLeakFields.includes('otherOrg.watchlistItemIds'))
 assert.equal(memberWatchlistItemBody.watchlistReadContract.lifecycle.status, 'active')
 assert.equal(memberWatchlistItemBody.watchlistReadContract.lifecycle.alertGenerationEligible, true)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.schemaVersion, 'organization.watchlist_item_term_lifecycle.v1')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.organizationId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.tenantId, organization.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.watchlistItemId, ownerWatchlistItem.id)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.status, 'active')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.activeForAlertMatching, true)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.deletedByArchive, false)
+assert.deepEqual(memberWatchlistItemBody.watchlistReadContract.termLifecycle.alertMatchingEligibleStatuses, ['active'])
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.blockerCode, null)
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.lifecycleRequestId, 'smoke-domain-duplicate-upsert')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.downstreamRefs.alertTermsExport, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.equal(memberWatchlistItemBody.watchlistReadContract.termLifecycle.downstreamRefs.webhookDestinationOrgField, 'destination.org_id')
+assert.ok(memberWatchlistItemBody.watchlistReadContract.termLifecycle.noLeakFields.includes('otherOrg.alertGeneratorKeys'))
 const memberSharedWatchlistContract = parseBody(memberWatchlistResponse.body).sharedWatchlistContract
 assert.equal(memberSharedWatchlistContract.schemaVersion, 'organization.shared_watchlist_contract.v1')
 assert.equal(memberSharedWatchlistContract.organizationId, organization.id)
@@ -3533,6 +3546,22 @@ assert.equal(archivedWatchlistsResponse.statusCode, 200, archivedWatchlistsRespo
 assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.id), [actorWatchlistItem.id])
 assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.enabled), [false])
 assert.deepEqual(parseBody(archivedWatchlistsResponse.body).watchlistItems.map((item: Row) => item.disabledReason), ['watchlist_archived'])
+const archivedActorReadResponse = await app.inject({
+    method: 'GET',
+    url: `/api/organizations/${organization.id}/watchlists/${actorWatchlistItem.id}`,
+    headers: authHeaders('org_smoke_admin', 'admin-token'),
+})
+assert.equal(archivedActorReadResponse.statusCode, 200, archivedActorReadResponse.body)
+const archivedActorReadContract = parseBody(archivedActorReadResponse.body).watchlistReadContract
+assert.equal(archivedActorReadContract.termLifecycle.schemaVersion, 'organization.watchlist_item_term_lifecycle.v1')
+assert.equal(archivedActorReadContract.termLifecycle.watchlistItemId, actorWatchlistItem.id)
+assert.equal(archivedActorReadContract.termLifecycle.status, 'archived')
+assert.equal(archivedActorReadContract.termLifecycle.activeForAlertMatching, false)
+assert.equal(archivedActorReadContract.termLifecycle.deletedByArchive, true)
+assert.equal(archivedActorReadContract.termLifecycle.blockerCode, 'watchlist_archived')
+assert.equal(archivedActorReadContract.termLifecycle.lifecycleReason, 'Retire actor watchlist after proof.')
+assert.equal(archivedActorReadContract.termLifecycle.lifecycleRequestId, 'smoke-disable-actor')
+assert.ok(archivedActorReadContract.termLifecycle.noLeakFields.includes('destination.secret'))
 
 const alertTermsAfterArchiveResponse = await app.inject({
     method: 'GET',
