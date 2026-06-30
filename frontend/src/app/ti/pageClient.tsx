@@ -190,7 +190,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const selectedAlertPlan = selected ? selectedAlertActionPlanFor(result, selected, actionability, watchlist, selectedCaseDraft, selectedRelevance) : null
     const selectedEnrichmentTriage = selected ? selectedEnrichmentTriageFor(result, selected, actionability, selectedSourceDrilldown) : null
     const selectedCaseOwnership = selected ? selectedCaseOwnershipFor(result, selected, actionability, selectedCaseDraft, selectedCaseActionTrail) : null
-    const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
+    const selectedCaseCreateRequest = selected ? selectedCaseCreateRequestFor(result, selected, actorIntel, actionability, selectedCaseDraft, selectedCaseOwnership, selectedSourceDrilldown, selectedWatchlistPlan) : null
     const selectedDeliveryPlan = selected ? selectedDeliveryReadinessPlanFor(result, selected, actionability, selectedAlertPlan, selectedCaseOwnership) : null
     const enrichmentTasks = enrichmentTasksFor(result, selected, watchlist, sources, actorIntel, actionability)
     const readyHandoffCount = actionability.consumerReadiness.stages.filter(stage => stage.state === 'ready').length
@@ -717,6 +717,58 @@ type SelectedCaseCreateRequest = {
         casePaths: string[]
         sourceIds: string[]
         watchTerms: string[]
+    }
+    actorContext: {
+        actorClass: string
+        attribution: string
+        aliases: string[]
+        motivation: string[]
+        targetSectors: string[]
+        geographies: string[]
+        malwareTools: string[]
+        campaigns: string[]
+        infrastructure: string[]
+        indicators: string[]
+        confidence: number
+        confidenceReasoning: string[]
+        freshness: TiActorIntelligenceProfile['freshness']
+        sourceCoverage: Pick<TiActorIntelligenceProfile['sourceCoverage'], 'totalRows' | 'datedRows' | 'captureRows' | 'latestReportDate' | 'stale' | 'missing'>
+        techniques: Array<{
+            attackId?: string
+            name: string
+            tactic: string
+            confidence: number
+            freshness: TiActorIntelligenceProfile['techniqueCoverage'][number]['freshness']
+            sourceIds: string[]
+            captureIds: string[]
+            provenanceRefs: string[]
+            missing: string[]
+        }>
+        campaignTimeline: Array<{
+            title: string
+            firstReportedAt: string
+            confidence: number
+            freshness: TiActorIntelligenceProfile['campaignTimeline'][number]['freshness']
+            sourceIds: string[]
+            provenanceRefs: string[]
+            affectedSectors: string[]
+            countries: string[]
+            missing: string[]
+        }>
+        enrichmentGaps: Array<{
+            id: string
+            title: string
+            severity: TiActionabilityModel['enrichmentGapQueue'][number]['severity']
+            route: string
+            sourceFamily: TiActionabilityModel['enrichmentGapQueue'][number]['sourceFamily']
+            requestedFields: string[]
+        }>
+        sourceRefs: {
+            sourceIds: string[]
+            captureIds: string[]
+            provenanceRefs: string[]
+            sourceRequestIds: string[]
+        }
     }
     watchlistBasis: {
         state: SelectedWatchlistPlan['state']
@@ -4151,6 +4203,38 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
             </div>
             <p className='mt-2 break-all font-mono text-[11px] text-[#667085] dark:text-[#9aa8bd]'>{request.request.method} {request.request.path}</p>
             <p className='mt-2 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>{request.nextAction}</p>
+            <div data-ti-selected-case-actor-context='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
+                <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>Actor context</p>
+                        <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                            {request.actorContext.attribution} · {Math.round(request.actorContext.confidence * 100)}% confidence
+                        </p>
+                    </div>
+                    <span className={decisionStepStatusClass(request.actorContext.sourceCoverage.stale || request.actorContext.enrichmentGaps.length ? 'review' : 'ready')}>
+                        {request.actorContext.sourceCoverage.stale ? 'refresh' : request.actorContext.enrichmentGaps.length ? 'review' : 'ready'}
+                    </span>
+                </div>
+                <div className='mt-2 grid grid-cols-2 gap-2'>
+                    <EvidenceMetric label='Aliases' value={`${request.actorContext.aliases.length}`} />
+                    <EvidenceMetric label='TTPs' value={`${request.actorContext.techniques.length}`} />
+                    <EvidenceMetric label='Tools' value={`${request.actorContext.malwareTools.length}`} />
+                    <EvidenceMetric label='Sources' value={`${request.actorContext.sourceCoverage.totalRows}`} />
+                </div>
+                <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
+                    {request.actorContext.aliases.slice(0, 2).map(alias => <span key={alias} className={sourceHealthChipClass('review')}>{alias}</span>)}
+                    {request.actorContext.malwareTools.slice(0, 2).map(tool => <span key={tool} className={sourceHealthChipClass('review')}>{tool}</span>)}
+                    {request.actorContext.techniques.slice(0, 2).map(technique => (
+                        <span key={`${technique.attackId ?? technique.name}:${technique.tactic}`} className={sourceHealthChipClass(technique.freshness)}>
+                            {technique.attackId ?? technique.name}
+                        </span>
+                    ))}
+                    {request.actorContext.enrichmentGaps.slice(0, 2).map(gap => <span key={gap.id} className={sourceHealthChipClass('blocked')}>{gap.sourceFamily}</span>)}
+                </div>
+                <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                    {request.actorContext.targetSectors.slice(0, 3).join(', ') || 'Target sectors pending'} · {request.actorContext.geographies.slice(0, 3).join(', ') || 'Geography pending'}
+                </p>
+            </div>
             <div data-ti-selected-case-watchlist-basis='true' className='mt-2 rounded-md border border-[#eef1f5] bg-white p-2 dark:border-[#273244] dark:bg-[#0f1621]'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
@@ -5096,6 +5180,93 @@ function caseReplaySourceSchemaVersionFor(actionability: TiActionabilityModel) {
     return typeof value === 'string' ? value : ''
 }
 
+function selectedCaseActorContextFor(
+    result: TiSearchResponse,
+    actor: TiActorIntelligenceProfile,
+    actionability: TiActionabilityModel,
+    sourceRows: SelectedCaseSourceRow[]
+): SelectedCaseCreateRequest['actorContext'] {
+    const provenanceRefs = unique([
+        ...actor.provenanceRows.map(row => row.provenance),
+        ...sourceRows.flatMap(row => row.provenanceRefs),
+        ...actionability.orgRelevance.sourceEvidence.map(row => row.provenance),
+    ]).slice(0, 12)
+    const sourceIds = unique([
+        ...actor.provenanceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)),
+        ...sourceRows.map(row => row.sourceId).filter((value): value is string => Boolean(value)),
+        ...actionability.orgRelevance.sourceEvidence.map(row => row.sourceId).filter((value): value is string => Boolean(value)),
+    ]).slice(0, 12)
+    const captureIds = unique([
+        ...actor.provenanceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)),
+        ...sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value)),
+        ...actionability.orgRelevance.sourceEvidence.map(row => row.captureId).filter((value): value is string => Boolean(value)),
+    ]).slice(0, 12)
+    const sourceRequestIds = unique([
+        ...actor.provenanceRows.map(row => row.sourceRequestId).filter((value): value is string => Boolean(value)),
+        ...actionability.orgRelevance.sourceEvidence.map(row => row.sourceRequestId).filter((value): value is string => Boolean(value)),
+    ]).slice(0, 12)
+
+    return {
+        actorClass: actor.actorClass,
+        attribution: actor.attribution,
+        aliases: unique([...result.aliases, ...actionability.orgRelevance.actorIdentity.aliases]).slice(0, 10),
+        motivation: actor.motivation.slice(0, 6),
+        targetSectors: actor.targetSectors.slice(0, 10),
+        geographies: actor.geographies.slice(0, 10),
+        malwareTools: actor.malwareTools.slice(0, 10),
+        campaigns: actor.campaigns.slice(0, 10),
+        infrastructure: actor.infrastructure.slice(0, 10),
+        indicators: actor.indicators.slice(0, 10),
+        confidence: actor.confidence,
+        confidenceReasoning: actor.confidenceReasoning.slice(0, 6),
+        freshness: actor.freshness,
+        sourceCoverage: {
+            totalRows: actor.sourceCoverage.totalRows,
+            datedRows: actor.sourceCoverage.datedRows,
+            captureRows: actor.sourceCoverage.captureRows,
+            latestReportDate: actor.sourceCoverage.latestReportDate,
+            stale: actor.sourceCoverage.stale,
+            missing: actor.sourceCoverage.missing,
+        },
+        techniques: actor.techniqueCoverage.slice(0, 6).map(item => ({
+            attackId: item.attackId,
+            name: item.name,
+            tactic: item.tactic,
+            confidence: item.confidence,
+            freshness: item.freshness,
+            sourceIds: item.sourceIds,
+            captureIds: item.captureIds,
+            provenanceRefs: item.provenanceRefs,
+            missing: item.missing,
+        })),
+        campaignTimeline: actor.campaignTimeline.slice(0, 6).map(item => ({
+            title: item.title,
+            firstReportedAt: item.firstReportedAt,
+            confidence: item.confidence,
+            freshness: item.freshness,
+            sourceIds: item.sourceIds,
+            provenanceRefs: item.provenanceRefs,
+            affectedSectors: item.affectedSectors,
+            countries: item.countries,
+            missing: item.missing,
+        })),
+        enrichmentGaps: actionability.enrichmentGapQueue.slice(0, 6).map(gap => ({
+            id: gap.id,
+            title: gap.title,
+            severity: gap.severity,
+            route: gap.route,
+            sourceFamily: gap.sourceFamily,
+            requestedFields: gap.requestedFields,
+        })),
+        sourceRefs: {
+            sourceIds,
+            captureIds,
+            provenanceRefs,
+            sourceRequestIds,
+        },
+    }
+}
+
 function selectedCaseDraftFor(
     result: TiSearchResponse,
     selected: AnalystWorkItem,
@@ -5171,6 +5342,7 @@ function selectedCaseDraftFor(
 function selectedCaseCreateRequestFor(
     result: TiSearchResponse,
     selected: AnalystWorkItem,
+    actor: TiActorIntelligenceProfile,
     actionability: TiActionabilityModel,
     caseDraft: SelectedCaseDraft | null,
     caseOwnership: SelectedCaseOwnershipPlan | null,
@@ -5294,6 +5466,7 @@ function selectedCaseCreateRequestFor(
             provenanceFingerprints: row.provenanceFingerprints,
         })),
     }
+    const actorContext = selectedCaseActorContextFor(result, actor, actionability, sourceRows)
     const blockers = unique([
         ...(caseDraft?.missing ?? []),
         ...caseAction.blockedBy.map(blocker => blocker.detail),
@@ -5317,6 +5490,7 @@ function selectedCaseCreateRequestFor(
         casePaths,
         sourceIds,
         watchTerms,
+        actorContext,
         watchlistBasis,
         caseReviewRows,
         actionReplay,
@@ -5366,6 +5540,7 @@ function selectedCaseCreateRequestFor(
             sourceIds,
             watchTerms,
         },
+        actorContext,
         watchlistBasis,
         actionReplay,
         caseReviewRows,
