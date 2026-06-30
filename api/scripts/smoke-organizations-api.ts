@@ -179,6 +179,23 @@ assert.deepEqual(accepted.inviteAcceptance.auditMetadataFields, ['inviteId', 'ro
 assert.equal(accepted.inviteAcceptance.reusedInviteBlocked, true)
 assert.equal(accepted.inviteAcceptance.expiredInviteDenied, 'invite_expired')
 assert.equal(accepted.inviteAcceptance.revokedInviteDenied, 'member_revoked')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.schemaVersion, 'organization.invite_consumer_visibility_receipt.v1')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.organizationId, organization.id)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.tenantId, organization.id)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.inviteId, invite.id)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.inviteStatus, 'accepted')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.role, 'member')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.action, 'accept')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.grantsConsumerAccess, true)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.membershipStatus, 'active')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.routes.sharedWatchlists, 'GET /api/organizations/:id/watchlists')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.routes.alertTermsExport, 'GET /api/organizations/:id/watchlists/alert-terms')
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.routes.alertCaseVisibility, 'GET /api/organizations/:id/alert-case-visibility')
+assert.ok(accepted.inviteAcceptance.consumerVisibilityReceipt.availableConsumerContracts.includes('organization.watchlist_alert_generation_consumer.v1'))
+assert.ok(accepted.inviteAcceptance.consumerVisibilityReceipt.availableConsumerContracts.includes('organization.case_visibility_consumer.v1'))
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.roleGates.canReadSharedWatchlists, true)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.roleGates.canMutateSharedWatchlists, false)
+assert.equal(accepted.inviteAcceptance.consumerVisibilityReceipt.noEnumeration, true)
 
 const reusedInviteResponse = await app.inject({
     method: 'POST',
@@ -581,6 +598,21 @@ assert.equal(revokedInviteAction.actorId, 'org_smoke_admin')
 assert.equal(revokedInviteAction.actorRole, 'admin')
 assert.equal(revokedInviteAction.reason, 'Duplicate operator invite cleanup.')
 assert.equal(revokedInviteAction.serviceLogAction, 'organization_invite_revoked')
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.schemaVersion, 'organization.invite_consumer_visibility_receipt.v1')
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.organizationId, organization.id)
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.tenantId, organization.id)
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.inviteId, pendingOpsInvite.id)
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.inviteStatus, 'revoked')
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.action, 'revoke')
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.grantsConsumerAccess, false)
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.acceptanceRequired, true)
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.blockerCode, 'member_revoked')
+assert.ok(revokedInviteAction.consumerVisibilityReceipt.blockedRoutes.includes('GET /api/organizations/:id/watchlists'))
+assert.ok(revokedInviteAction.consumerVisibilityReceipt.blockedRoutes.includes('GET /api/organizations/:id/watchlists/alert-terms'))
+assert.ok(revokedInviteAction.consumerVisibilityReceipt.blockedRoutes.includes('GET /api/organizations/:id/alert-case-visibility'))
+assert.ok(revokedInviteAction.consumerVisibilityReceipt.blockedConsumerContracts.includes('organization.watchlist_alert_generation_consumer.v1'))
+assert.ok(revokedInviteAction.consumerVisibilityReceipt.blockedConsumerContracts.includes('organization.case_visibility_consumer.v1'))
+assert.equal(revokedInviteAction.consumerVisibilityReceipt.noEnumeration, true)
 
 const revokePendingInviteRepeatResponse = await app.inject({
     method: 'POST',
@@ -593,6 +625,8 @@ const repeatRevokedInviteAction = parseBody(revokePendingInviteRepeatResponse.bo
 assert.equal(repeatRevokedInviteAction.previousStatus, 'revoked')
 assert.equal(repeatRevokedInviteAction.status, 'revoked')
 assert.equal(repeatRevokedInviteAction.requestId, 'smoke-revoke-pending-ops-repeat')
+assert.equal(repeatRevokedInviteAction.consumerVisibilityReceipt.grantsConsumerAccess, false)
+assert.equal(repeatRevokedInviteAction.consumerVisibilityReceipt.blockerCode, 'member_revoked')
 
 const revokedInviteAcceptResponse = await app.inject({
     method: 'POST',
