@@ -1421,6 +1421,14 @@ const mutableSuppressAction = expectProductReadinessAction(mutableCaseWorkflowOr
 if (mutableSuppressAction.disabledReason || mutableSuppressAction.method !== 'PATCH' || mutableSuppressAction.body?.action !== 'suppress') {
     throw new Error('Expected mutable analyst workflow readiness to expose backed PATCH suppression.')
 }
+const mutableNoteAction = expectProductReadinessAction(mutableCaseWorkflowOrgContext, 'analyst_workflow', 'record_case_note', '/api/cases/case_acme_1')
+if (mutableNoteAction.disabledReason || mutableNoteAction.method !== 'PATCH' || mutableNoteAction.body?.action !== 'note') {
+    throw new Error('Expected mutable analyst workflow readiness to expose backed PATCH note recording.')
+}
+const mutableCloseAction = expectProductReadinessAction(mutableCaseWorkflowOrgContext, 'analyst_workflow', 'close_case', '/api/cases/case_acme_1')
+if (mutableCloseAction.disabledReason || mutableCloseAction.method !== 'PATCH' || mutableCloseAction.body?.action !== 'close') {
+    throw new Error('Expected mutable analyst workflow readiness to expose backed PATCH close.')
+}
 void expectProductReadinessAction(productProgressOrgContext, 'helpdesk_audit', 'inspect_admin_audit', '/api/backend/admin/audit-events?limit=50')
 void expectProductReadinessAction(productProgressOrgContext, 'public_ti_provenance', 'open_public_ti', '/ti')
 void expectProductReadinessAction(productProgressOrgContext, 'deploy_probe', 'open_deploy_status', '/status')

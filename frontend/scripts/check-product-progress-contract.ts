@@ -795,6 +795,8 @@ assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id ==
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.caseDetailTimelineCount, 1)
 assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.actions?.some(action => action.id === 'assign_case_owner' && action.method === 'PATCH' && action.href === '/api/cases/case_acme_1'))
 assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.actions?.some(action => action.id === 'escalate_case' && action.method === 'PATCH' && action.href === '/api/cases/case_acme_1'))
+assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.actions?.some(action => action.id === 'record_case_note' && action.method === 'PATCH' && action.href === '/api/cases/case_acme_1'))
+assert.ok(longLabelContext.readiness.productReadiness.find(item => item.id === 'analyst_workflow')?.actions?.some(action => action.id === 'close_case' && action.method === 'PATCH' && action.href === '/api/cases/case_acme_1'))
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.workerStatus, 'ready')
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.collectionReadyRows, 349)
 assert.equal(longLabelContext.readiness.productReadiness.find(item => item.id === 'source_inventory_probe')?.queuedValidationJobs, 0)

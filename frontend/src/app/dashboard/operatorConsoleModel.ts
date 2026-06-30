@@ -2015,11 +2015,32 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
             disabledReason: mutationBlockedReason,
         },
         {
+            id: 'record_case_note',
+            label: 'Record note',
+            method: 'PATCH',
+            href: caseHref || '/api/cases/:id',
+            body: { action: 'note', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Readiness queue review recorded.' },
+            disabledReason: mutationBlockedReason,
+        },
+        {
             id: 'suppress_case',
             label: 'Suppress case',
             method: 'PATCH',
             href: caseHref || '/api/cases/:id',
             body: { action: 'suppress', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Suppressed from readiness queue after evidence review.' },
+            disabledReason: mutationBlockedReason,
+        },
+        {
+            id: item.caseStatus === 'closed' ? 'reopen_case' : 'close_case',
+            label: item.caseStatus === 'closed' ? 'Reopen case' : 'Close case',
+            method: 'PATCH',
+            href: caseHref || '/api/cases/:id',
+            body: {
+                action: item.caseStatus === 'closed' ? 'reopen' : 'close',
+                actor: 'dashboard',
+                assignedOwner: item.assignedOwner,
+                note: item.caseStatus === 'closed' ? 'Reopened from readiness queue for review.' : 'Closed from readiness queue after evidence review.',
+            },
             disabledReason: mutationBlockedReason,
         },
     ]
