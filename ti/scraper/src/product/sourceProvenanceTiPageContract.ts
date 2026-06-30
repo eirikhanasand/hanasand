@@ -30,6 +30,7 @@ export const TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VER
 export const TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION = "ti.source_provenance_actor_source_coverage_portfolio.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_alert_prerequisite_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION = "ti.source_provenance_actor_enrichment_source_health_event_packet.v1" as const;
+export const TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_health_monitoring_filter_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION = "ti.source_provenance_scraper_enrichment_lifecycle.v1" as const;
 export const TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION = "ti.source_provenance_source_freshness_gap_packet.v1" as const;
 export const TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION = "ti.source_provenance_parser_health_alert_packet.v1" as const;
@@ -2045,6 +2046,77 @@ export type TiSourceProvenanceActorEnrichmentSourceHealthEvent = {
   };
   downstreamRoutes: TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow["downstreamRoutes"];
   provenance: TiSourceProvenanceActorEnrichmentAlertPrerequisiteRow["provenance"];
+};
+
+export type TiSourceProvenanceSourceHealthMonitoringFilterPacket = {
+  schemaVersion: typeof TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION;
+  id: string;
+  generatedAt: string;
+  ok: boolean;
+  status: "ready" | "partial" | "blocked";
+  tenantId: string;
+  organizationId?: string;
+  sourceHealthEventPacketId: string;
+  filters: TiSourceProvenanceSourceHealthMonitoringFilter[];
+  summary: {
+    filterCount: number;
+    eventCount: number;
+    sourceFamilyFilters: number;
+    candidateStateFilters: number;
+    parserHealthFilters: number;
+    actorPageFilters: number;
+    alertFamilyFilters: number;
+    retryWindowFilters: number;
+    retryableEvents: number;
+    policyBlockedEvents: number;
+    staleEvents: number;
+    healthyEvents: number;
+    sourceFamilies: TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+    candidateStates: TiSourceProvenanceActorEnrichmentSourceHealthEvent["candidateValidation"]["state"][];
+    parserHealthStates: TiSourceProvenanceActorEnrichmentSourceHealthEvent["parserHealth"]["healthState"][];
+    affectedActorPages: string[];
+    affectedAlertFamilies: string[];
+    nextRetryAt?: string;
+  };
+  consumers: Array<{
+    consumer: "sourceOps" | "dashboard" | "publicTI" | "alertGeneration" | "integration";
+    ready: boolean;
+    requiredFields: string[];
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  }>;
+  payloadShape: string[];
+  safeOutput: TiSourceProvenanceActorEnrichmentSourceHealthEventPacket["safeOutput"];
+};
+
+export type TiSourceProvenanceSourceHealthMonitoringFilter = {
+  filterId: string;
+  kind: "source_family" | "candidate_state" | "parser_health" | "parser_status" | "affected_actor_page" | "alert_family" | "retry_window";
+  value: string;
+  count: number;
+  readyCount: number;
+  blockedCount: number;
+  retryableCount: number;
+  affectedActorPages: string[];
+  affectedAlertFamilies: string[];
+  sampleEventIds: string[];
+  operatorAction: {
+    action: "inspect" | "retry" | "request_policy_review" | "queue_alert_rebuild" | "review_gap";
+    ownerLane: "source" | "parser" | "policy" | "alert";
+    reason: string;
+    route: {
+      method: "GET" | "POST";
+      path: string;
+      body?: Record<string, unknown>;
+      dryRunSupported: true;
+      liveNetworkFetch: false;
+    };
+  };
 };
 
 export type TiSourceProvenanceScraperEnrichmentLifecycle = {
@@ -4619,6 +4691,80 @@ export function buildSourceProvenanceActorEnrichmentSourceHealthEventPacket(inpu
       "summary"
     ],
     safeOutput: input.alertPrerequisitePacket.safeOutput
+  };
+}
+
+export function buildSourceProvenanceSourceHealthMonitoringFilterPacket(input: {
+  sourceHealthEventPacket: TiSourceProvenanceActorEnrichmentSourceHealthEventPacket;
+  generatedAt?: string;
+}): TiSourceProvenanceSourceHealthMonitoringFilterPacket {
+  const generatedAt = input.generatedAt ?? input.sourceHealthEventPacket.generatedAt;
+  const events = input.sourceHealthEventPacket.events;
+  const filters = [
+    ...sourceHealthMonitoringFiltersForKind(events, "source_family", (event) => event.sourceFamily),
+    ...sourceHealthMonitoringFiltersForKind(events, "candidate_state", (event) => event.candidateValidation.state),
+    ...sourceHealthMonitoringFiltersForKind(events, "parser_health", (event) => event.parserHealth.healthState),
+    ...sourceHealthMonitoringFiltersForKind(events, "parser_status", (event) => event.parserHealth.parserStatus),
+    ...sourceHealthMonitoringFiltersForKind(events, "affected_actor_page", (event) => event.affected.actorPages),
+    ...sourceHealthMonitoringFiltersForKind(events, "alert_family", (event) => event.affected.alertFamilies),
+    ...sourceHealthMonitoringFiltersForKind(events, "retry_window", (event) => event.parserHealth.nextRetryAt ? ["retry_scheduled"] : [])
+  ];
+  const retryableEvents = events.filter((event) => event.candidateValidation.state === "retry_gated").length;
+  const policyBlockedEvents = events.filter((event) => event.candidateValidation.state === "policy_gated").length;
+  const staleEvents = events.filter((event) => event.parserHealth.healthState === "stale").length;
+  const healthyEvents = events.filter((event) => event.parserHealth.healthState === "healthy").length;
+  const sourceFamilies = uniqueStrings(events.map((event) => event.sourceFamily)) as TiSourceProvenanceActorProfileGapSourceCandidate["family"][];
+  const candidateStates = uniqueStrings(events.map((event) => event.candidateValidation.state)) as TiSourceProvenanceActorEnrichmentSourceHealthEvent["candidateValidation"]["state"][];
+  const parserHealthStates = uniqueStrings(events.map((event) => event.parserHealth.healthState)) as TiSourceProvenanceActorEnrichmentSourceHealthEvent["parserHealth"]["healthState"][];
+  const affectedActorPages = uniqueStrings(events.flatMap((event) => event.affected.actorPages));
+  const affectedAlertFamilies = uniqueStrings(events.flatMap((event) => event.affected.alertFamilies));
+  const status = filters.length === 0 ? "blocked" : policyBlockedEvents === 0 && retryableEvents === 0 && staleEvents === 0 ? "ready" : healthyEvents > 0 ? "partial" : "blocked";
+
+  return {
+    schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION,
+    id: stableId("ti_source_provenance_source_health_monitoring_filter_packet", `${generatedAt}:${input.sourceHealthEventPacket.id}:${filters.map((filter) => `${filter.kind}:${filter.value}:${filter.count}`).join(",")}`),
+    generatedAt,
+    ok: filters.length > 0,
+    status,
+    tenantId: input.sourceHealthEventPacket.tenantId,
+    organizationId: input.sourceHealthEventPacket.organizationId,
+    sourceHealthEventPacketId: input.sourceHealthEventPacket.id,
+    filters,
+    summary: {
+      filterCount: filters.length,
+      eventCount: events.length,
+      sourceFamilyFilters: filters.filter((filter) => filter.kind === "source_family").length,
+      candidateStateFilters: filters.filter((filter) => filter.kind === "candidate_state").length,
+      parserHealthFilters: filters.filter((filter) => filter.kind === "parser_health").length,
+      actorPageFilters: filters.filter((filter) => filter.kind === "affected_actor_page").length,
+      alertFamilyFilters: filters.filter((filter) => filter.kind === "alert_family").length,
+      retryWindowFilters: filters.filter((filter) => filter.kind === "retry_window").length,
+      retryableEvents,
+      policyBlockedEvents,
+      staleEvents,
+      healthyEvents,
+      sourceFamilies,
+      candidateStates,
+      parserHealthStates,
+      affectedActorPages,
+      affectedAlertFamilies,
+      nextRetryAt: input.sourceHealthEventPacket.summary.nextRetryAt
+    },
+    consumers: sourceHealthMonitoringFilterConsumers(filters),
+    payloadShape: [
+      "filters[].kind",
+      "filters[].value",
+      "filters[].count",
+      "filters[].readyCount",
+      "filters[].blockedCount",
+      "filters[].retryableCount",
+      "filters[].affectedActorPages",
+      "filters[].affectedAlertFamilies",
+      "filters[].sampleEventIds",
+      "filters[].operatorAction",
+      "summary"
+    ],
+    safeOutput: input.sourceHealthEventPacket.safeOutput
   };
 }
 
@@ -9231,6 +9377,222 @@ function actorEnrichmentSourceHealthEventConsumers(
       path: "/v1/dwm/source-requests",
       body: {
         includeIntegrationSourceHealthEvents: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }];
+}
+
+function sourceHealthMonitoringFiltersForKind(
+  events: TiSourceProvenanceActorEnrichmentSourceHealthEvent[],
+  kind: TiSourceProvenanceSourceHealthMonitoringFilter["kind"],
+  valueSelector: (event: TiSourceProvenanceActorEnrichmentSourceHealthEvent) => string | string[] | undefined
+): TiSourceProvenanceSourceHealthMonitoringFilter[] {
+  const grouped = new Map<string, TiSourceProvenanceActorEnrichmentSourceHealthEvent[]>();
+  for (const event of events) {
+    const values = valueSelector(event);
+    const normalizedValues = Array.isArray(values) ? values : values ? [values] : [];
+    for (const value of normalizedValues) {
+      const rows = grouped.get(value) ?? [];
+      rows.push(event);
+      grouped.set(value, rows);
+    }
+  }
+  return [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([value, rows]) => sourceHealthMonitoringFilter(kind, value, rows));
+}
+
+function sourceHealthMonitoringFilter(
+  kind: TiSourceProvenanceSourceHealthMonitoringFilter["kind"],
+  value: string,
+  rows: TiSourceProvenanceActorEnrichmentSourceHealthEvent[]
+): TiSourceProvenanceSourceHealthMonitoringFilter {
+  const readyCount = rows.filter((row) => row.candidateValidation.state === "accepted").length;
+  const blockedCount = rows.filter((row) => row.candidateValidation.state === "policy_gated" || row.parserHealth.healthState === "blocked").length;
+  const retryableCount = rows.filter((row) => row.candidateValidation.state === "retry_gated" || row.activationTest.state === "retry_scheduled").length;
+  return {
+    filterId: stableId("ti_source_provenance_source_health_monitoring_filter", `${kind}:${value}:${rows.map((row) => row.eventId).join(",")}`),
+    kind,
+    value,
+    count: rows.length,
+    readyCount,
+    blockedCount,
+    retryableCount,
+    affectedActorPages: uniqueStrings(rows.flatMap((row) => row.affected.actorPages)),
+    affectedAlertFamilies: uniqueStrings(rows.flatMap((row) => row.affected.alertFamilies)),
+    sampleEventIds: rows.slice(0, 5).map((row) => row.eventId),
+    operatorAction: sourceHealthMonitoringFilterAction(kind, value, rows)
+  };
+}
+
+function sourceHealthMonitoringFilterAction(
+  kind: TiSourceProvenanceSourceHealthMonitoringFilter["kind"],
+  value: string,
+  rows: TiSourceProvenanceActorEnrichmentSourceHealthEvent[]
+): TiSourceProvenanceSourceHealthMonitoringFilter["operatorAction"] {
+  const retryRow = rows.find((row) => row.candidateValidation.state === "retry_gated");
+  if (retryRow || kind === "retry_window" || value === "retry_gated" || value === "stale") {
+    return {
+      action: "retry",
+      ownerLane: "parser",
+      reason: "Retry parser/source health tests for stale or retry-gated source events.",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          eventIds: rows.map((row) => row.eventId),
+          action: "retry_parser",
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  const policyRow = rows.find((row) => row.candidateValidation.state === "policy_gated");
+  if (policyRow || value === "policy_gated" || value === "blocked" || value === "darkweb_metadata") {
+    return {
+      action: "request_policy_review",
+      ownerLane: "policy",
+      reason: "Review metadata-only policy gates before source activation or alert generation.",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/source-requests",
+        body: {
+          eventIds: rows.map((row) => row.eventId),
+          action: "request_policy_review",
+          metadataOnly: true,
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (rows.some((row) => row.candidateValidation.state === "accepted")) {
+    return {
+      action: "queue_alert_rebuild",
+      ownerLane: "alert",
+      reason: "Accepted source health events can be used to dry-run alert rebuild readiness.",
+      route: {
+        method: "POST",
+        path: "/v1/dwm/alerts/rebuild",
+        body: {
+          eventIds: rows.map((row) => row.eventId),
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  if (kind === "alert_family" || kind === "affected_actor_page") {
+    return {
+      action: "review_gap",
+      ownerLane: "source",
+      reason: "Review source coverage gaps before routing the affected actor page or alert family.",
+      route: {
+        method: "GET",
+        path: "/v1/dwm/source-requests",
+        body: {
+          filterKind: kind,
+          filterValue: value,
+          includeSourceHealthEvents: true,
+          dryRun: true
+        },
+        dryRunSupported: true,
+        liveNetworkFetch: false
+      }
+    };
+  }
+  return {
+    action: "inspect",
+    ownerLane: "source",
+    reason: "Inspect source health events and parser status before activation changes.",
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        filterKind: kind,
+        filterValue: value,
+        includeSourceHealthEvents: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  };
+}
+
+function sourceHealthMonitoringFilterConsumers(
+  filters: TiSourceProvenanceSourceHealthMonitoringFilter[]
+): TiSourceProvenanceSourceHealthMonitoringFilterPacket["consumers"] {
+  const hasFilters = filters.length > 0;
+  const hasReady = filters.some((filter) => filter.readyCount > 0);
+  return [{
+    consumer: "sourceOps",
+    ready: hasFilters,
+    requiredFields: ["filters[].kind", "filters[].value", "filters[].operatorAction", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeMonitoringFilters: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "dashboard",
+    ready: hasFilters,
+    requiredFields: ["filters[].count", "filters[].affectedActorPages", "filters[].affectedAlertFamilies", "summary"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeSourceHealthMonitoringFilters: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "publicTI",
+    ready: hasReady,
+    requiredFields: ["filters[].affectedActorPages", "filters[].operatorAction", "summary.affectedActorPages"],
+    route: {
+      method: "GET",
+      path: "/ti/:query",
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "alertGeneration",
+    ready: hasReady,
+    requiredFields: ["filters[].affectedAlertFamilies", "filters[].operatorAction", "summary.affectedAlertFamilies"],
+    route: {
+      method: "POST",
+      path: "/v1/dwm/alerts/rebuild",
+      body: {
+        includeSourceHealthMonitoringFilters: true,
+        dryRun: true
+      },
+      dryRunSupported: true,
+      liveNetworkFetch: false
+    }
+  }, {
+    consumer: "integration",
+    ready: hasFilters,
+    requiredFields: ["schemaVersion", "safeOutput", "filters[].sampleEventIds", "consumers[]"],
+    route: {
+      method: "GET",
+      path: "/v1/dwm/source-requests",
+      body: {
+        includeIntegrationMonitoringFilters: true,
         dryRun: true
       },
       dryRunSupported: true,

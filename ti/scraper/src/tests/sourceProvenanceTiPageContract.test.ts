@@ -19,6 +19,7 @@ import {
   TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_ALERT_PREREQUISITE_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_ACTOR_ENRICHMENT_SOURCE_HEALTH_EVENT_PACKET_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -62,6 +63,7 @@ import {
   buildSourceProvenanceActorSourceCoveragePortfolio,
   buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket,
   buildSourceProvenanceActorEnrichmentSourceHealthEventPacket,
+  buildSourceProvenanceSourceHealthMonitoringFilterPacket,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -4452,6 +4454,160 @@ describe("source provenance TI page contract", () => {
     ]));
     expect(JSON.stringify(packet)).not.toContain("rawText");
     expect(JSON.stringify(packet)).not.toContain("password");
+  });
+
+  test("builds source health monitoring filters for candidate parser and alert handoff work", () => {
+    const aptReceipt = buildActorValidationReceiptFixture({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29_monitoring_filters",
+      captureId: "cap_actor_page_apt29_monitoring_filters",
+      contentHash: "hash_actor_page_apt29_monitoring_filters",
+      provenance: "Actor page fixture gives APT29 monitoring filters with backed provenance.",
+      relationship: "actor_activity"
+    });
+    const ransomwareReceipt = buildActorValidationReceiptFixture({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira_monitoring_filters",
+      captureId: "cap_public_advisory_akira_monitoring_filters",
+      contentHash: "hash_public_advisory_akira_monitoring_filters",
+      provenance: "Public advisory fixture gives Akira monitoring filters with backed provenance.",
+      relationship: "targeting"
+    });
+    const portfolio = buildSourceProvenanceActorSourceCoveragePortfolio({
+      validationReceipts: [aptReceipt, ransomwareReceipt],
+      generatedAt: "2026-06-29T12:55:00.000Z"
+    });
+    const prerequisites = buildSourceProvenanceActorEnrichmentAlertPrerequisitePacket({
+      portfolio,
+      generatedAt: "2026-06-29T12:56:00.000Z"
+    });
+    const healthEvents = buildSourceProvenanceActorEnrichmentSourceHealthEventPacket({
+      alertPrerequisitePacket: prerequisites,
+      generatedAt: "2026-06-29T12:57:00.000Z"
+    });
+    const filters = buildSourceProvenanceSourceHealthMonitoringFilterPacket({
+      sourceHealthEventPacket: healthEvents,
+      generatedAt: "2026-06-29T12:58:00.000Z"
+    });
+
+    expect(filters).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_SOURCE_HEALTH_MONITORING_FILTER_PACKET_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      sourceHealthEventPacketId: healthEvents.id,
+      summary: {
+        eventCount: healthEvents.events.length,
+        sourceFamilyFilters: 4,
+        candidateStateFilters: 4,
+        parserHealthFilters: 4,
+        actorPageFilters: 2,
+        retryWindowFilters: 1,
+        retryableEvents: 2,
+        policyBlockedEvents: 2,
+        staleEvents: 2,
+        healthyEvents: 2,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        candidateStates: expect.arrayContaining(["accepted", "retry_gated", "policy_gated", "inspect_only"]),
+        parserHealthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+        affectedAlertFamilies: expect.arrayContaining(["watchlist_terms", "actor_enrichment", "campaign_freshness", "restricted_metadata"]),
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(filters.summary.filterCount).toBe(filters.filters.length);
+
+    const acceptedFilter = filters.filters.find((filter) => filter.kind === "candidate_state" && filter.value === "accepted");
+    const retryFilter = filters.filters.find((filter) => filter.kind === "candidate_state" && filter.value === "retry_gated");
+    const policyFilter = filters.filters.find((filter) => filter.kind === "candidate_state" && filter.value === "policy_gated");
+    const staleFilter = filters.filters.find((filter) => filter.kind === "parser_health" && filter.value === "stale");
+    const darkwebFilter = filters.filters.find((filter) => filter.kind === "source_family" && filter.value === "darkweb_metadata");
+    const alertFamilyFilter = filters.filters.find((filter) => filter.kind === "alert_family" && filter.value === "watchlist_terms");
+
+    expect(acceptedFilter).toMatchObject({
+      kind: "candidate_state",
+      value: "accepted",
+      count: 2,
+      readyCount: 2,
+      blockedCount: 0,
+      retryableCount: 0,
+      affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"]),
+      affectedAlertFamilies: expect.arrayContaining(["watchlist_terms", "actor_enrichment"]),
+      operatorAction: expect.objectContaining({
+        action: "queue_alert_rebuild",
+        ownerLane: "alert",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false })
+      })
+    });
+    expect(retryFilter).toMatchObject({
+      kind: "candidate_state",
+      value: "retry_gated",
+      count: 2,
+      retryableCount: 2,
+      operatorAction: expect.objectContaining({
+        action: "retry",
+        ownerLane: "parser",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })
+    });
+    expect(policyFilter).toMatchObject({
+      kind: "candidate_state",
+      value: "policy_gated",
+      count: 2,
+      blockedCount: 2,
+      operatorAction: expect.objectContaining({
+        action: "request_policy_review",
+        ownerLane: "policy",
+        route: expect.objectContaining({ method: "POST", path: "/v1/dwm/source-requests", liveNetworkFetch: false })
+      })
+    });
+    expect(staleFilter).toMatchObject({
+      kind: "parser_health",
+      value: "stale",
+      count: 2,
+      retryableCount: 2,
+      operatorAction: expect.objectContaining({ action: "retry", ownerLane: "parser" })
+    });
+    expect(darkwebFilter).toMatchObject({
+      kind: "source_family",
+      value: "darkweb_metadata",
+      count: 2,
+      blockedCount: 2,
+      operatorAction: expect.objectContaining({ action: "request_policy_review", ownerLane: "policy" })
+    });
+    expect(alertFamilyFilter).toMatchObject({
+      kind: "alert_family",
+      value: "watchlist_terms",
+      affectedActorPages: expect.arrayContaining(["/ti/APT29", "/ti/Akira"])
+    });
+    expect((alertFamilyFilter?.sampleEventIds.length ?? 0) >= 1).toBe(true);
+    expect(filters.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "sourceOps", ready: true, requiredFields: expect.arrayContaining(["filters[].operatorAction", "summary"]) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["filters[].affectedActorPages", "filters[].affectedAlertFamilies"]) }),
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/:query", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["filters[].sampleEventIds", "consumers[]"]) })
+    ]));
+    expect(filters.payloadShape).toEqual(expect.arrayContaining([
+      "filters[].kind",
+      "filters[].operatorAction",
+      "filters[].sampleEventIds",
+      "summary"
+    ]));
+    expect(JSON.stringify(filters)).not.toContain("rawText");
+    expect(JSON.stringify(filters)).not.toContain("password");
   });
 
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
