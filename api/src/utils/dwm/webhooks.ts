@@ -4391,6 +4391,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
             audits: auditByDestination.get(health.destinationId) || [],
             canManage: dashboardCanManage,
         })
+        const lifecycleReadinessReceipt = destinationLifecycleReadinessReceipt({ health, lifecycleState, canManage: dashboardCanManage })
 
         return {
             schemaVersion: 'dwm.webhook.dashboard_destination_readiness.v1',
@@ -4409,6 +4410,7 @@ export function buildDwmWebhookDashboardReadinessAdapter({
             secretState: endpointPresent ? 'redacted' : 'missing',
             redactedEndpoint: health.redactedEndpoint,
             lifecycleState,
+            lifecycleReadinessReceipt,
             latestDeliveryProof: {
                 requestId: health.latestAttempt?.requestId || null,
                 deliveryId: health.latestAttempt?.deliveryId || null,
@@ -4514,6 +4516,7 @@ export function buildDwmWebhookDestinationLifecycle({
         const adminAuditEvents = canManage ? audits : []
         const destination = destinationById.get(health.destinationId) || null
         const lifecycleState = destinationLifecycleState({ destination, health, audits, canManage })
+        const lifecycleReadinessReceipt = destinationLifecycleReadinessReceipt({ health, lifecycleState, canManage })
 
         return {
             schemaVersion: 'dwm.webhook.destination_lifecycle.v1',
@@ -4534,6 +4537,7 @@ export function buildDwmWebhookDestinationLifecycle({
                 memberSafe: !canManage,
             },
             lifecycleState,
+            lifecycleReadinessReceipt,
             redactedEndpoint: health.redactedEndpoint,
             lifecycle: {
                 created: lifecycleEvent(created, canManage),
@@ -9069,6 +9073,115 @@ function lifecycleStateActions({
                 noNetworkDefault: true,
             }
             : null,
+    }
+}
+
+function destinationLifecycleReadinessReceipt({
+    health,
+    lifecycleState,
+    canManage,
+}: {
+    health: ReturnType<typeof buildDwmWebhookDestinationHealth>[number]
+    lifecycleState: ReturnType<typeof destinationLifecycleState>
+    canManage: boolean
+}) {
+    const terminalFailure = Boolean(
+        health.lastFailure
+        && !health.lastFailure.retryable
+        && health.lastFailure.errorClass !== 'live_delivery_disabled'
+    )
+    const blockingCodes = lifecycleState.blockers
+        .filter(blocker => blocker.blocking)
+        .map(blocker => blocker.code)
+    const nextAction = lifecycleState.requiredActions.dryRunTest
+        ? 'dry_run_test'
+        : lifecycleState.requiredActions.enableDestination
+            ? 'enable_destination'
+            : lifecycleState.requiredActions.updateDestination
+                ? 'review_destination'
+                : health.retry.retryable
+                    ? 'retry_delivery'
+                    : health.ready
+                        ? 'ready'
+                        : 'inspect_destination'
+    const nextDeliveryState = !health.enabled
+        ? 'disabled'
+        : terminalFailure
+            ? 'terminal_failure'
+            : health.retry.retryable
+                ? 'retry_scheduled'
+                : lifecycleState.testRequired
+                    ? 'test_required'
+                    : health.ready
+                        ? 'ready'
+                        : 'blocked'
+
+    return {
+        schemaVersion: 'dwm.webhook.destination_lifecycle_readiness_receipt.v1',
+        orgId: health.orgId,
+        destinationId: health.destinationId,
+        status: {
+            lifecycle: lifecycleState.primary,
+            health: health.health,
+            nextDeliveryState,
+            readyForDryRun: health.enabled && lifecycleState.secretState === 'redacted',
+            readyForLive: health.ready && health.liveDeliveryEnabled && blockingCodes.length === 0,
+            liveDeliveryEnabled: health.liveDeliveryEnabled,
+        },
+        nextAction,
+        routes: {
+            test: lifecycleState.requiredActions.dryRunTest?.route || `POST /api/dwm/webhook-destinations/${health.destinationId}/test`,
+            update: lifecycleState.requiredActions.updateDestination?.route || `PATCH /api/dwm/webhook-destinations/${health.destinationId}`,
+            enable: lifecycleState.requiredActions.enableDestination?.route || `PATCH /api/dwm/webhook-destinations/${health.destinationId}`,
+            history: `/api/dwm/webhook-deliveries?orgId=${encodeURIComponent(health.orgId)}&destinationId=${encodeURIComponent(health.destinationId)}`,
+        },
+        actionBodyPreview: {
+            dryRunTest: lifecycleState.requiredActions.dryRunTest?.body || null,
+            enableDestination: lifecycleState.requiredActions.enableDestination?.body || null,
+            updateDestination: lifecycleState.requiredActions.updateDestination ? { destinationId: health.destinationId } : null,
+        },
+        deliveryProof: {
+            requestId: health.latestAttempt?.requestId || null,
+            deliveryId: health.latestAttempt?.deliveryId || null,
+            alertId: health.latestAttempt?.alertId || null,
+            casePath: health.latestAttempt?.casePath || null,
+            dedupeKey: health.latestAttempt?.dedupeKey || null,
+            idempotencyKey: health.latestAttempt?.idempotencyKey || null,
+            replay: health.latestAttempt?.replay ?? null,
+            status: health.latestAttempt?.status || null,
+            responseStatus: health.latestAttempt?.responseStatus || null,
+            errorClass: health.latestAttempt?.errorClass || health.retry.errorClass || null,
+            auditEventId: health.latestAttempt?.auditEventId || health.latestAuditEventId || null,
+            attemptedAt: health.latestAttempt?.attemptedAt || null,
+        },
+        retry: {
+            retryable: health.retry.retryable,
+            nextRetryAt: health.retry.nextRetryAt,
+            attemptCount: health.retry.attemptCount,
+            lastErrorCategory: health.retry.errorClass,
+            terminalFailure,
+        },
+        audit: {
+            latestAuditEventId: health.latestAuditEventId,
+            auditEventIds: canManage ? health.auditEventIds : [],
+            auditEventCount: health.auditEventIds.length,
+            actorExposed: canManage,
+        },
+        redactedDestination: {
+            label: health.label,
+            type: health.type,
+            endpointHint: health.redactedEndpoint.endpointHint,
+            endpointHash: health.redactedEndpoint.endpointHash,
+            endpointExposed: false,
+        },
+        blockers: lifecycleState.blockers,
+        redaction: {
+            safeForCustomerDisplay: true,
+            endpointExposed: false,
+            webhookSecretExposed: false,
+            actorExposed: canManage,
+        },
+        noNetwork: true,
     }
 }
 
