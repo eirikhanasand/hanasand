@@ -77,6 +77,18 @@ type OrgQuery = {
     request_id?: string
     deliveryId?: string
     delivery_id?: string
+    idempotencyKey?: string
+    idempotency_key?: string
+    action?: string
+    status?: string
+    timeFrom?: string
+    time_from?: string
+    timeTo?: string
+    time_to?: string
+    retryState?: string
+    retry_state?: string
+    actorId?: string
+    actor_id?: string
 }
 
 type Membership = {
@@ -589,6 +601,13 @@ export async function getDwmWebhookDeliveries(req: FastifyRequest<{ Querystring:
         casePath: clean(req.query?.casePath) || clean(req.query?.case_path),
         dedupeKey: clean(req.query?.dedupeKey) || clean(req.query?.dedupe_key),
         requestId: clean(req.query?.requestId) || clean(req.query?.request_id) || clean(req.query?.deliveryId) || clean(req.query?.delivery_id),
+        idempotencyKey: clean(req.query?.idempotencyKey) || clean(req.query?.idempotency_key),
+        action: clean(req.query?.action),
+        status: clean(req.query?.status),
+        timeFrom: clean(req.query?.timeFrom) || clean(req.query?.time_from),
+        timeTo: clean(req.query?.timeTo) || clean(req.query?.time_to),
+        retryState: clean(req.query?.retryState) || clean(req.query?.retry_state),
+        actorId: clean(req.query?.actorId) || clean(req.query?.actor_id),
     }
     const evidence = buildDwmWebhookDeliveryEvidence({
         deliveries,

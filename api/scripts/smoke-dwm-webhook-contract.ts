@@ -1214,6 +1214,36 @@ const deliveryLedger = buildDwmWebhookDeliveryLedger({
     ],
     filters: { orgId: 'org_contract' },
 })
+const advancedDeliveryFilterAuditEvents = [
+    {
+        id: 'audit_live_retry_contract',
+        ownerId: 'owner_contract',
+        actorId: 'owner_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_live_contract',
+        deliveryId: 'delivery_live_failed_retry_contract',
+        action: 'delivery.failed',
+        metadata: { status: 'failed' },
+        createdAt: '2026-06-28T12:06:01.000Z',
+    },
+    {
+        id: 'audit_live_sent_contract',
+        ownerId: 'owner_contract',
+        actorId: 'support_contract',
+        orgId: 'org_contract',
+        destinationId: 'destination_sent_contract',
+        deliveryId: 'delivery_live_sent_contract',
+        action: 'delivery.delivered',
+        metadata: { status: 'delivered' },
+        createdAt: '2026-06-28T12:07:01.000Z',
+    },
+]
+const actionFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', action: 'delivery.failed' } })
+const statusFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', status: 'sent' } })
+const retryStateFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', retryState: 'retry_scheduled' } })
+const actorFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', actorId: 'support_contract' } })
+const timeFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', timeFrom: '2026-06-28T12:06:30.000Z', timeTo: '2026-06-28T12:07:30.000Z' } })
+const idempotencyKeyFilteredEvidence = buildDwmWebhookDeliveryEvidence({ deliveries: retryLedgerRows, auditEvents: advancedDeliveryFilterAuditEvents, filters: { orgId: 'org_contract', idempotencyKey: 'dwm.alert.created:org_contract:destination_sent_contract:dwm_dedupe_sent_contract' } })
 const queuedLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_replay_contract')
 const retryLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_live_failed_retry_contract')
 const skippedLedger = deliveryLedger.find(item => item.deliveryId === 'delivery_live_skipped_contract')
@@ -1242,10 +1272,17 @@ expect(casePathEvidence.length === 1 && casePathEvidence[0].requestId === 'deliv
 expect(dedupeEvidence.length === 1 && dedupeEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by dedupe key.', dedupeEvidence)
 expect(idempotencyEvidence.length === 1 && idempotencyEvidence[0].requestId === 'delivery_replay_contract', 'Delivery evidence should filter by idempotency key.', idempotencyEvidence)
 expect(buildDwmWebhookDeliveryEvidence({ deliveries: evidenceRows, filters: { alertId: 'alert_replay_contract', casePath: replayWorkflowAlert.casePath, dedupeKey: 'dwm_dedupe_replay_contract' } }).length === 1, 'Delivery evidence should combine alert, case path, and dedupe filters.')
+expect(actionFilteredEvidence.length === 1 && actionFilteredEvidence[0].requestId === 'delivery_live_failed_retry_contract' && actionFilteredEvidence[0].auditAction === 'delivery.failed', 'Delivery evidence should filter by audit action.', actionFilteredEvidence)
+expect(statusFilteredEvidence.length === 1 && statusFilteredEvidence[0].requestId === 'delivery_live_sent_contract', 'Delivery evidence should filter by raw or derived delivery status.', statusFilteredEvidence)
+expect(retryStateFilteredEvidence.length === 1 && retryStateFilteredEvidence[0].retryState === 'retry_scheduled', 'Delivery evidence should filter by retry/backoff state.', retryStateFilteredEvidence)
+expect(actorFilteredEvidence.length === 1 && actorFilteredEvidence[0].actorId === 'support_contract', 'Delivery evidence should filter by audit actor without exposing secrets.', actorFilteredEvidence)
+expect(timeFilteredEvidence.length === 1 && timeFilteredEvidence[0].requestId === 'delivery_live_sent_contract', 'Delivery evidence should filter by attempted time window.', timeFilteredEvidence)
+expect(idempotencyKeyFilteredEvidence.length === 1 && idempotencyKeyFilteredEvidence[0].idempotencyKey.endsWith(':dwm_dedupe_sent_contract'), 'Delivery evidence should filter by explicit idempotency key.', idempotencyKeyFilteredEvidence)
 expect(queuedLedger?.status === 'queued' && queuedLedger.rawStatus === 'dry_run' && queuedLedger.retryable === false, 'Delivery ledger should map dry-run attempts to queued/no-retry state.', queuedLedger)
 expect(sentLedger?.status === 'sent' && sentLedger.retryable === false && sentLedger.responseStatus === 204, 'Delivery ledger should map delivered attempts to sent state.', sentLedger)
 expect(retryLedger?.status === 'failed' && retryLedger.retryable === true && retryLedger.attemptCount === 2, 'Delivery ledger should expose retryable failed attempts and attempt count.', retryLedger)
 expect(retryLedger?.nextRetryAt === '2026-06-28T12:11:00.000Z' && retryLedger.errorClass === 'upstream_5xx', 'Retry planner should use backoff from the latest failed attempt.', retryLedger)
+expect(retryLedger?.retryState === 'retry_scheduled' && retryLedger.actorId === 'owner_contract', 'Delivery ledger should carry retry-state and audit actor filters.', retryLedger)
 expect(retryLedger?.attemptCount === 2 && retryLedger.retryReason === 'upstream_retryable', 'Delivery ledger should preserve persisted retry metadata while keeping retry reason derivable.', retryLedger)
 expect(skippedLedger?.status === 'skipped' && skippedLedger.retryable === false && skippedLedger.errorClass === 'live_delivery_disabled', 'Delivery ledger should keep live-disabled skipped attempts non-retryable.', skippedLedger)
 expect(rateLimitRetry.retryable === true && rateLimitRetry.nextRetryAt === '2026-06-28T12:11:00.000Z' && rateLimitRetry.reason === 'rate_limited', 'Retry planner should retry rate-limited failed sends.', rateLimitRetry)
@@ -3359,6 +3396,7 @@ expect(deliveryHistoryConsumerReplay?.redactedDestination.endpointExposed === fa
 expect(deliveryHistoryConsumerReplay?.discord.fieldNames.includes('Alert URL') && deliveryHistoryConsumerReplay.discord.safeForCustomerDisplay === true, 'Delivery history consumer proof should expose Discord-safe preview fields.', deliveryHistoryConsumerReplay?.discord)
 expect(deliveryHistoryConsumerReplay?.audit.auditEventId === 'audit_replay_duplicate_contract' && deliveryHistoryConsumerReplay.idempotency.duplicateAttemptCount === 2 && deliveryHistoryConsumerReplay.replayHistory.duplicateReplay === true, 'Delivery history consumer proof should expose audit and replay idempotency proof.', deliveryHistoryConsumerReplay)
 expect(deliveryHistoryConsumerReplay?.routes.deliveryDetail?.includes('delivery_replay_duplicate_contract') && deliveryHistoryConsumerReplay.routes.destinationTest === 'POST /api/dwm/webhook-destinations/destination_replay_contract/test', 'Delivery history consumer proof should expose customer operation routes.', deliveryHistoryConsumerReplay?.routes)
+expect(deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('action') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('timeFrom') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('retryState') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('actorId') && deliveryHistoryConsumer.routeContract.list.optionalQuery.includes('idempotencyKey'), 'Delivery history consumer proof should advertise operational filters.', deliveryHistoryConsumer.routeContract.list.optionalQuery)
 expect(!JSON.stringify(deliveryHistoryConsumer).includes(secret), 'Delivery history consumer proof should redact endpoint, response, and payload secrets.', deliveryHistoryConsumer)
 expect(deliveryPersistenceProof.schemaVersion === 'dwm.webhook.delivery_persistence_proof.v1' && deliveryPersistenceProof.ok === true && deliveryPersistenceProof.totals.rows === deliveryHistory.total, 'Delivery persistence proof should summarize persisted delivery history rows.', deliveryPersistenceProof)
 expect(deliveryPersistenceReplay?.sanitizedPayloadPreview?.context.casePath === replayWorkflowAlert.casePath && deliveryPersistenceReplay.audit.auditEventId === 'audit_replay_duplicate_contract', 'Delivery persistence proof should preserve replay case context and audit linkage.', deliveryPersistenceReplay)
@@ -3422,6 +3460,7 @@ expect(deliveryReceiptMissingDestination?.operationLinks.destinationTest === nul
 expect(deliveryReceipts.counts.auditLinked >= 1 && deliveryReceipts.access.canRetry === true && deliveryReceipts.noNetwork === true, 'Delivery receipts should expose audit/read access and no-network semantics.', deliveryReceipts)
 expect(nonmemberDeliveryReceipts.receipts.length === 0 && nonmemberDeliveryReceipts.blockers.some(item => item.code === 'permission_denied'), 'Delivery receipts should deny nonmembers without leaking transition receipts.', nonmemberDeliveryReceipts)
 expect(deliveryReceipts.historyReplayFilters.schemaVersion === 'dwm.webhook.delivery_receipt_history_filters.v1' && deliveryReceipts.historyReplayFilters.routeContract.replayHistory.requiredQuery.includes('dedupeKey'), 'Delivery receipt filters should expose replay/history route contracts.', deliveryReceipts.historyReplayFilters)
+expect(deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery.includes('action') && deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery.includes('timeTo') && deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery.includes('retryState') && deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery.includes('actorId') && deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery.includes('idempotencyKey'), 'Delivery receipt filters should advertise action/status/time/retry/actor query keys.', deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery)
 expect(deliveryReceipts.historyReplayFilters.rows.some(item => item.deliveryId === 'delivery_replay_duplicate_contract' && item.queryKeys.byDedupe?.dedupeKey === 'dwm_dedupe_replay_contract'), 'Delivery receipt filters should expose replay/dedupe query keys.', deliveryReceipts.historyReplayFilters.rows)
 expect(deliveryReceipts.historyReplayFilters.rows.some(item => item.casePath === replayWorkflowAlert.casePath && item.queryKeys.byCase?.casePath === replayWorkflowAlert.casePath), 'Delivery receipt filters should expose case-path query keys.', deliveryReceipts.historyReplayFilters.rows)
 expect(deliveryReceipts.historyReplayFilters.queryPresets.missingDestination?.alertId === 'alert_missing_destination_contract' && deliveryReceipts.historyReplayFilters.counts.missingDestination >= 1, 'Delivery receipt filters should expose missing-destination history presets.', deliveryReceipts.historyReplayFilters)
@@ -3907,6 +3946,7 @@ console.log(JSON.stringify({
             'deliveryHistory.entries[].status',
             'deliveryHistoryConsumer.schemaVersion',
             'deliveryHistoryConsumer.routeContract.detail.requiredQuery',
+            'deliveryHistoryConsumer.routeContract.list.optionalQuery',
             'deliveryHistoryConsumer.routeContract.retryDryRun.noNetworkDefault',
             'deliveryHistoryConsumer.rows[].redactedDestination.endpointHash',
             'deliveryHistoryConsumer.rows[].discord.fieldNames',
@@ -3979,6 +4019,7 @@ console.log(JSON.stringify({
             'deliveryReceipts.receipts[].blockers[].code',
             'deliveryReceipts.historyReplayFilters.schemaVersion',
             'deliveryReceipts.historyReplayFilters.routeContract.replayHistory.requiredQuery',
+            'deliveryReceipts.historyReplayFilters.routeContract.list.optionalQuery',
             'deliveryReceipts.historyReplayFilters.rows[].queryKeys.byDedupe',
             'deliveryReceipts.historyReplayFilters.rows[].queryKeys.byCase',
             'deliveryReceipts.historyReplayFilters.rows[].redactedTarget.endpointExposed',
