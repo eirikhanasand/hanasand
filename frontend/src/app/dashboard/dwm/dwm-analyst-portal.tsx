@@ -10,10 +10,24 @@ type PortalAlert = DwmAlert & {
     deliveryState?: string
     workflowNote?: string
     assignedOwner?: string
+    organizationId?: string
+    caseId?: string
+    caseIdCandidate?: string
     replayCount?: number
     lastReplayedAt?: string
     savedAt?: string
     deliveredAt?: string
+    workflowContext?: {
+        organizationId?: string
+        watchlistIds?: string[]
+        webhookDestinationIds?: string[]
+        caseIdCandidate?: string
+    }
+    webhookContext?: {
+        hasWebhookRoute?: boolean
+        webhookDestinationIds?: string[]
+        caseIdCandidate?: string
+    }
     workflowEvents?: Array<{
         id: string
         at: string
@@ -101,7 +115,7 @@ type DataHealthItem = {
     detail: string
 }
 
-type QueueFilter = 'active' | 'ready' | 'critical' | 'reviewing' | 'delivered' | 'muted' | 'all'
+type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence' | 'fresh' | 'pending_delivery' | 'reviewing' | 'delivered' | 'muted' | 'all'
 
 export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth }: PortalProps) {
     const router = useRouter()
@@ -117,6 +131,8 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     const criticalCount = alerts.filter(alert => alert.severity === 'critical').length
     const readyCount = alerts.filter(alert => alert.deliveryState === 'ready_to_send').length
     const activeCount = alerts.filter(alert => alert.deliveryState !== 'muted' && alert.reviewState !== 'resolved').length
+    const freshCount = alerts.filter(isFreshAlert).length
+    const highConfidenceCount = alerts.filter(alert => alert.confidence >= 80).length
     const latestCaptures = operations?.latestCaptures ?? []
     const latestRunLabel = operations?.latestRun ? `${operations.latestRun.captureCount} captures` : 'No run yet'
     const watchTermCount = snapshot.watchlist.length
@@ -193,6 +209,8 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                             <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Ready' value={String(readyCount)} tone={readyCount ? 'good' : 'neutral'} />
+                            <StatusPill label='Fresh' value={String(freshCount)} tone={freshCount ? 'good' : 'neutral'} />
+                            <StatusPill label='80%+' value={String(highConfidenceCount)} tone={highConfidenceCount ? 'good' : 'neutral'} />
                             <StatusPill label='Watchlist' value={`${watchTermCount} terms`} tone={watchTermCount ? 'good' : 'warn'} />
                             <StatusPill label='Webhook' value={webhookState} tone={webhookState === 'Tested' ? 'good' : 'warn'} />
                             <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
@@ -327,6 +345,7 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
     const persistedOwner = assignee === 'Unassigned' ? undefined : assignee
     const evidenceSummary = alert.evidenceSummary ?? fallbackEvidenceSummary(alert)
     const routingContext = alert.routingContext ?? fallbackRoutingContext(alert)
+    const workflowContext = selectedWorkflowContext(alert, deliveries)
     const matchContext = alert.matchContext ?? {
         normalizedTerm: alert.matchedTerm.value.toLowerCase(),
         termKind: alert.matchedTerm.kind,
@@ -356,6 +375,14 @@ function CaseWorkspace({ alert, deliveries, localState, busyAction, onLocalState
                     <CaseButton busy={busyAction === `update:${alert.id}`} icon='review' onClick={() => onUpdate(alert.id, 'needs_review', 'pending_review', 'Reopened for analyst review.', persistedOwner)}>Reopen</CaseButton>
                 </div>
             </div>
+
+            <section className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                <ContextChip label='Org' value={workflowContext.organizationId || 'tenant default'} href={workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations'} />
+                <ContextChip label='Watchlist' value={workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped` : stateLabel(alert.matchedTerm.kind)} href='/organizations' />
+                <ContextChip label='Case' value={workflowContext.caseId || 'candidate missing'} href={workflowContext.caseId ? `/api/cases/${encodeURIComponent(workflowContext.caseId)}${workflowContext.organizationId ? `?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : ''}` : undefined} />
+                <ContextChip label='Delivery' value={workflowContext.lastDelivery ? `${stateLabel(workflowContext.lastDelivery.status)} · ${relativeTimeLabel(workflowContext.lastDelivery.attemptedAt)}` : workflowContext.hasWebhookRoute ? 'route configured' : 'route missing'} />
+                <ContextChip label='Source' value={`${stateLabel(alert.sourceFamily)} · ${alert.sourceCount}`} />
+            </section>
 
             <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
                 <div className='grid gap-0 md:grid-cols-4'>
@@ -629,6 +656,10 @@ const queueFilters: Array<{ id: QueueFilter, label: string }> = [
     { id: 'active', label: 'Active' },
     { id: 'ready', label: 'Ready' },
     { id: 'critical', label: 'Critical' },
+    { id: 'source', label: 'Source' },
+    { id: 'high_confidence', label: '80%+' },
+    { id: 'fresh', label: 'Fresh' },
+    { id: 'pending_delivery', label: 'To send' },
     { id: 'reviewing', label: 'Reviewing' },
     { id: 'delivered', label: 'Delivered' },
     { id: 'muted', label: 'Muted' },
@@ -703,6 +734,23 @@ function QueueCell({ label, value, tone = 'neutral' }: { label: string, value: s
             <p className={`mt-0.5 truncate font-semibold ${tone === 'bad' ? 'text-[#c2410c]' : 'text-[#475467]'}`} title={value}>{value}</p>
         </div>
     )
+}
+
+function ContextChip({ label, value, href }: { label: string, value: string, href?: string }) {
+    const content = (
+        <>
+            <p className='text-[10px] font-semibold uppercase text-[#667085]'>{label}</p>
+            <p className='mt-1 truncate text-xs font-semibold text-[#171a21]' title={value}>{value}</p>
+        </>
+    )
+    if (href) {
+        return (
+            <a href={href} className='min-w-0 rounded-lg border border-[#d8dee9] bg-white px-3 py-2 transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                {content}
+            </a>
+        )
+    }
+    return <div className='min-w-0 rounded-lg border border-[#e0e5ed] bg-white px-3 py-2'>{content}</div>
 }
 
 function fallbackEvidenceSummary(alert: PortalAlert): NonNullable<PortalAlert['evidenceSummary']> {
@@ -828,6 +876,10 @@ function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string)
             || (filter === 'active' && alert.deliveryState !== 'muted' && alert.reviewState !== 'resolved')
             || (filter === 'ready' && alert.deliveryState === 'ready_to_send')
             || (filter === 'critical' && alert.severity === 'critical')
+            || (filter === 'source' && ['telegram_public', 'darkweb_metadata'].includes(alert.sourceFamily))
+            || (filter === 'high_confidence' && alert.confidence >= 80)
+            || (filter === 'fresh' && isFreshAlert(alert))
+            || (filter === 'pending_delivery' && ['ready_to_send', 'pending_review'].includes(alert.deliveryState || 'pending_review'))
             || (filter === 'reviewing' && alert.reviewState === 'reviewing')
             || (filter === 'delivered' && (alert.deliveryState === 'delivered' || Boolean(alert.deliveredAt)))
             || (filter === 'muted' && (alert.deliveryState === 'muted' || alert.reviewState === 'false_positive'))
@@ -849,6 +901,31 @@ function filterAlerts(alerts: PortalAlert[], filter: QueueFilter, query: string)
         ].filter(Boolean).join(' ').toLowerCase()
         return haystack.includes(normalizedQuery)
     })
+}
+
+function isFreshAlert(alert: PortalAlert) {
+    const value = alert.lastSeenAt || alert.evidenceSummary?.lastObservedAt || alert.firstSeenAt
+    const timestamp = new Date(value).getTime()
+    if (Number.isNaN(timestamp)) return false
+    return Date.now() - timestamp < 1000 * 60 * 60 * 24 * 7
+}
+
+function selectedWorkflowContext(alert: PortalAlert, deliveries: DeliveryItem[]) {
+    const workflowContext = alert.workflowContext
+    const webhookContext = alert.webhookContext
+    const organizationId = alert.organizationId || workflowContext?.organizationId
+    const watchlistIds = workflowContext?.watchlistIds || []
+    const webhookDestinationIds = webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []
+    const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseIdCandidate || webhookContext?.caseIdCandidate
+    const lastDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    return {
+        organizationId,
+        watchlistIds,
+        webhookDestinationIds,
+        caseId,
+        hasWebhookRoute: Boolean(webhookContext?.hasWebhookRoute || webhookDestinationIds.length || alert.webhookDelivery.dedupeKey),
+        lastDelivery,
+    }
 }
 
 function stateWeight(alert: PortalAlert) {
