@@ -16,6 +16,7 @@ import {
   TI_SOURCE_PROVENANCE_SOURCE_PACK_FIXTURE_READINESS_EXPORT_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_PACK_RETRY_POLICY_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_CANDIDATE_VALIDATION_RECEIPT_SCHEMA_VERSION,
+  TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SCRAPER_ENRICHMENT_LIFECYCLE_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_SOURCE_FRESHNESS_GAP_PACKET_SCHEMA_VERSION,
   TI_SOURCE_PROVENANCE_PARSER_HEALTH_ALERT_PACKET_SCHEMA_VERSION,
@@ -56,6 +57,7 @@ import {
   buildSourceProvenanceSourcePackFixtureReadinessExport,
   buildSourceProvenanceSourcePackRetryPolicyPacket,
   buildSourceProvenanceSourceCandidateValidationReceipt,
+  buildSourceProvenanceActorSourceCoveragePortfolio,
   buildSourceProvenanceSourcePackIntakeRequest,
   buildSourceProvenanceSourcePackIntakeReceipt,
   buildSourceProvenanceScraperEnrichmentLifecycle,
@@ -4021,6 +4023,141 @@ describe("source provenance TI page contract", () => {
     expect(JSON.stringify(validationReceipt)).not.toContain("password");
   });
 
+  test("exports actor source coverage portfolio for APT and ransomware fixtures", () => {
+    const aptReceipt = buildActorValidationReceiptFixture({
+      actor: "APT29",
+      aliases: ["APT29", "Nobelium"],
+      sourceFamily: "actor_page",
+      sourceId: "src_actor_page_apt29",
+      captureId: "cap_actor_page_apt29_portfolio",
+      contentHash: "hash_actor_page_apt29_portfolio",
+      provenance: "Actor page fixture links APT29 to phishing infrastructure and public advisory coverage.",
+      relationship: "actor_activity"
+    });
+    const ransomwareReceipt = buildActorValidationReceiptFixture({
+      actor: "Akira",
+      aliases: ["Akira"],
+      sourceFamily: "public_advisory",
+      sourceId: "src_public_advisory_akira",
+      captureId: "cap_public_advisory_akira_portfolio",
+      contentHash: "hash_public_advisory_akira_portfolio",
+      provenance: "Public advisory fixture links Akira ransomware to victimology and extortion infrastructure.",
+      relationship: "targeting"
+    });
+    const portfolio = buildSourceProvenanceActorSourceCoveragePortfolio({
+      validationReceipts: [aptReceipt, ransomwareReceipt],
+      generatedAt: "2026-06-29T12:40:00.000Z"
+    });
+
+    expect(portfolio).toMatchObject({
+      schemaVersion: TI_SOURCE_PROVENANCE_ACTOR_SOURCE_COVERAGE_PORTFOLIO_SCHEMA_VERSION,
+      ok: true,
+      status: "partial",
+      tenantId: "tenant_acme",
+      organizationId: "org_acme",
+      summary: {
+        actorCount: 2,
+        readyActors: 0,
+        partialActors: 2,
+        blockedActors: 0,
+        alertReadyActors: 2,
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        blockerCodes: expect.arrayContaining(["parser_retry_scheduled", "policy_review_required", "degraded_parser"]),
+        newestFreshnessAt: "2026-06-29T12:28:00.000Z",
+        nextRetryAt: "2026-06-29T12:37:00.000Z"
+      },
+      safeOutput: {
+        rawTargetsExposed: false,
+        restrictedMetadataLeaked: false,
+        privateTelegramContentExposed: false,
+        liveNetworkScrapeStarted: false,
+        crossOrgDataIncluded: false
+      }
+    });
+    expect(portfolio.actorRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        actor: "APT29",
+        publicTiRoute: "/ti/APT29",
+        status: "partial",
+        readiness: {
+          publicTI: true,
+          alertGeneration: true,
+          dashboard: true,
+          integration: true
+        },
+        coverageCounts: expect.objectContaining({
+          accepted: 1,
+          retryGated: 1,
+          policyGated: 1,
+          inspectOnly: 3,
+          alertReady: 1
+        }),
+        sourceFamilies: expect.arrayContaining(["actor_page", "public_advisory", "telegram_public", "darkweb_metadata"]),
+        parserStatuses: expect.arrayContaining(["ready", "not_tested", "retry_scheduled", "blocked"]),
+        healthStates: expect.arrayContaining(["healthy", "degraded", "stale", "blocked"]),
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "parser_retry_scheduled", sourceFamily: "telegram_public" }),
+          expect.objectContaining({ code: "policy_review_required", sourceFamily: "darkweb_metadata" })
+        ]),
+        downstreamRoutes: {
+          publicTI: "/ti/APT29",
+          alertGeneration: "/v1/dwm/alerts/rebuild",
+          dashboard: "/v1/dwm/source-requests",
+          integration: "/v1/dwm/source-requests"
+        },
+        provenance: expect.objectContaining({
+          validationIds: expect.any(Array),
+          captureIds: expect.any(Array),
+          contentHashes: expect.any(Array),
+          sourceHealthProofIds: expect.any(Array)
+        })
+      }),
+      expect.objectContaining({
+        actor: "Akira",
+        publicTiRoute: "/ti/Akira",
+        readiness: expect.objectContaining({
+          publicTI: true,
+          alertGeneration: true,
+          dashboard: true,
+          integration: true
+        }),
+        coverageCounts: expect.objectContaining({
+          accepted: 1,
+          retryGated: 1,
+          policyGated: 1,
+          inspectOnly: 3,
+          alertReady: 1
+        }),
+        sourceFamilies: expect.arrayContaining(["public_advisory", "telegram_public", "darkweb_metadata"]),
+        blockers: expect.arrayContaining([
+          expect.objectContaining({ code: "degraded_parser" })
+        ]),
+        provenance: expect.objectContaining({
+          captureIds: expect.any(Array),
+          contentHashes: expect.any(Array)
+        })
+      })
+    ]));
+    expect(portfolio.consumers).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consumer: "publicTI", ready: true, route: expect.objectContaining({ path: "/ti/:query", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "alertGeneration", ready: true, route: expect.objectContaining({ path: "/v1/dwm/alerts/rebuild", liveNetworkFetch: false }) }),
+      expect.objectContaining({ consumer: "dashboard", ready: true, requiredFields: expect.arrayContaining(["actorRows[].readiness", "actorRows[].blockers", "summary"]) }),
+      expect.objectContaining({ consumer: "integration", ready: true, requiredFields: expect.arrayContaining(["schemaVersion", "safeOutput", "actorRows[].provenance", "consumers[]"]) })
+    ]));
+    expect(portfolio.payloadShape).toEqual(expect.arrayContaining([
+      "actorRows[].actor",
+      "actorRows[].readiness",
+      "actorRows[].blockers",
+      "actorRows[].downstreamRoutes",
+      "actorRows[].provenance",
+      "summary"
+    ]));
+    expect(JSON.stringify(portfolio)).not.toContain("rawText");
+    expect(JSON.stringify(portfolio)).not.toContain("password");
+  });
+
   test("codifies scraper enrichment lifecycle from source intake through actor case handoff", () => {
     const contract = buildSourceProvenanceTiPageContract({
       tenantId: "tenant_acme",
@@ -6128,6 +6265,80 @@ function buildBlockedSourceLifecycle() {
     generatedAt: "2026-06-29T12:35:00.000Z"
   });
   return { contract, readiness, handoff, lifecycle };
+}
+
+function buildActorValidationReceiptFixture(input: {
+  actor: string;
+  aliases: string[];
+  sourceFamily: string;
+  sourceId: string;
+  captureId: string;
+  contentHash: string;
+  provenance: string;
+  relationship: string;
+}) {
+  const contract = buildSourceProvenanceTiPageContract({
+    tenantId: "tenant_acme",
+    organizationId: "org_acme",
+    actor: input.actor,
+    generatedAt: "2026-06-29T12:00:00.000Z",
+    rows: [sourceRow({
+      actor: input.actor,
+      sourceId: input.sourceId,
+      sourceFamily: input.sourceFamily,
+      captureId: input.captureId,
+      contentHash: input.contentHash,
+      provenance: input.provenance,
+      relationship: input.relationship,
+      confidence: 0.82,
+      route: `/ti/${input.actor}`
+    })]
+  });
+  const profile = buildSourceProvenanceActorProfileContract({
+    contract,
+    values: { aliases: input.aliases }
+  });
+  const plan = buildSourceProvenanceActorProfileGapSourcePlan({ profile });
+  const campaignCandidate = plan.candidates.find((candidate) => candidate.field === "campaigns");
+  const sectorCandidate = plan.candidates.find((candidate) => candidate.field === "sectors");
+  expect(campaignCandidate).toBeDefined();
+  expect(sectorCandidate).toBeDefined();
+  const workflow = buildSourceProvenanceActorProfileSourceUpdateWorkflow({
+    plan,
+    health: [{
+      candidateId: campaignCandidate!.candidateId,
+      parserStatus: "retry_scheduled",
+      nextRetryAt: "2026-06-29T12:37:00.000Z",
+      failureReason: "fixture parser found no campaign timestamp"
+    }, {
+      candidateId: sectorCandidate!.candidateId,
+      parserStatus: "ready"
+    }]
+  });
+  const request = buildSourceProvenanceSourcePackIntakeRequest({ workflow });
+  const receipt = buildSourceProvenanceSourcePackIntakeReceipt({ request });
+  const activationReadiness = buildSourceProvenanceSourcePackActivationReadiness({ receipt });
+  const auditPacket = buildSourceProvenanceSourceActivationAuditPacket({ activationReadiness });
+  const decisionReceipt = buildSourceProvenanceSourceActivationDecisionReceipt({
+    auditPacket,
+    generatedAt: "2026-06-29T12:27:00.000Z"
+  });
+  const growthPacket = buildSourceProvenanceSourcePackFixtureGrowthPacket({
+    decisionReceipt,
+    generatedAt: "2026-06-29T12:28:00.000Z"
+  });
+  const readinessExport = buildSourceProvenanceSourcePackFixtureReadinessExport({
+    packet: growthPacket,
+    generatedAt: "2026-06-29T12:29:00.000Z"
+  });
+  const policyPacket = buildSourceProvenanceSourcePackRetryPolicyPacket({
+    readinessExport,
+    generatedAt: "2026-06-29T12:30:00.000Z"
+  });
+  return buildSourceProvenanceSourceCandidateValidationReceipt({
+    retryPolicyPacket: policyPacket,
+    generatedAt: "2026-06-29T12:31:00.000Z"
+  });
 }
 
 function sourceRow(overrides: Partial<ReturnType<typeof sourceRowBase>> = {}) {
