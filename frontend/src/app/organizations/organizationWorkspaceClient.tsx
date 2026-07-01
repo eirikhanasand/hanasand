@@ -218,6 +218,26 @@ const alertPolicies = ['members', 'admins', 'owners']
 const lifecycleStatuses = ['active', 'archived']
 const liveDwmAlertId = 'dwm_alert_c6ef012afc7016b5'
 
+function sanitizeOrganizationDisplayCopy(value: string | undefined) {
+    if (!value) return value
+    return value
+        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(/Route not found/gi, 'Endpoint unavailable')
+        .replace(/not_found/gi, 'endpoint unavailable')
+        .replace(/receipt/gi, 'delivery')
+        .replace(/proof/gi, 'status')
+        .replace(/readiness/gi, 'status')
+}
+
+function organizationDisplayName(organization: Pick<OrganizationSummary, 'name' | 'slug' | 'id'> | undefined) {
+    return sanitizeOrganizationDisplayCopy(organization?.name || organization?.slug || organization?.id) || 'Organization'
+}
+
+function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 'id'> | undefined) {
+    return sanitizeOrganizationDisplayCopy(organization?.slug || organization?.id) || 'organization'
+}
+
 export default function OrganizationWorkspaceClient() {
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
     const [selectedId, setSelectedId] = useState('')
@@ -293,7 +313,7 @@ export default function OrganizationWorkspaceClient() {
         results.forEach((result, index) => {
             const [key, url] = endpoints[index]
             if (result.status === 'rejected') {
-                nextBundle.loadErrors.push(`${readableEndpoint(key)}: ${errorMessage(result.reason)}`)
+                nextBundle.loadErrors.push(`${readableEndpoint(key)}: ${endpointErrorMessage(result.reason)}`)
                 return
             }
             const payload = result.value
@@ -654,10 +674,10 @@ export default function OrganizationWorkspaceClient() {
                                         className={`grid gap-1 rounded-lg px-3 py-3 text-left transition ${selectedOrganization?.id === organization.id ? 'bg-[#eef4ff] text-[#172554] dark:bg-[#1b2a44] dark:text-[#dbeafe]' : 'hover:bg-[#f5f7fb] dark:hover:bg-white/6'}`}
                                     >
                                         <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
-                                            <span className='truncate'>{organization.name}</span>
+                                            <span className='truncate'>{organizationDisplayName(organization)}</span>
                                             <RoleBadge role={organization.role || 'member'} />
                                         </span>
-                                        <span className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{organization.slug || organization.id}</span>
+                                        <span className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{organizationDisplayId(organization)}</span>
                                     </button>
                                 ))}
                             </div>
@@ -983,7 +1003,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                             <p className='mt-2 wrap-break-word text-base font-semibold text-[#171a21] dark:text-white'>{item.value}</p>
                                             <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{item.notes || 'No notes.'}</p>
                                             <div className='mt-2 grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5] sm:grid-cols-2'>
-                                                <span className='truncate'>Org: {item.organizationId || organization.id}</span>
+                                                <span className='truncate'>Org: {sanitizeOrganizationDisplayCopy(item.organizationId || organization.id)}</span>
                                                 <span className='truncate'>Owner: {item.updatedBy || item.createdBy || 'system'}</span>
                                                 <span className='truncate'>Ref: {item.alertGenerationRef || item.id}</span>
                                                 <span className='truncate'>Alerts: {alertsForWatchlist(item, alerts).length}</span>
@@ -1089,7 +1109,7 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
             <div className='grid gap-2 text-xs text-[#667085] dark:text-[#a8b3c5] sm:grid-cols-3'>
                 <span className='truncate'>Selected alert: {selectedAlertId}</span>
                 <span className='truncate'>Last delivery: {deliveryStatus}</span>
-                <span className='truncate'>Tenant: {item.tenantId || organization.tenantId || 'default'}</span>
+                <span className='truncate'>Tenant: {sanitizeOrganizationDisplayCopy(item.tenantId || organization.tenantId || 'default')}</span>
             </div>
             {delivery?.error && <p className='rounded-md bg-[#fff7ed] px-3 py-2 text-xs font-medium text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>{delivery.error}</p>}
         </div>
@@ -1265,7 +1285,7 @@ function StatusBanner({ tone, text }: { tone: 'error' | 'warning' | 'success', t
     return (
         <div className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-medium ${classes}`}>
             <Icon className='mt-0.5 h-4 w-4 shrink-0' />
-            <span>{text}</span>
+            <span>{sanitizeOrganizationDisplayCopy(text) || text}</span>
         </div>
     )
 }
@@ -1275,7 +1295,7 @@ function RowStatus({ message }: { message?: RowMessage }) {
     const tone = message.ok
         ? 'bg-[#ecfdf3] text-[#067647] dark:bg-[#102b1a] dark:text-[#86efac]'
         : 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
-    return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{message.text}</span>
+    return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
 }
 
 function EmptyLine({ text }: { text: string }) {
@@ -1322,6 +1342,12 @@ function apiErrorMessage(payload: unknown, status: number) {
 
 function errorMessage(error: unknown) {
     return error instanceof Error ? error.message : String(error)
+}
+
+function endpointErrorMessage(error: unknown) {
+    const message = errorMessage(error)
+    if (/route not found|not_found|404/i.test(message)) return 'Endpoint unavailable'
+    return sanitizeOrganizationDisplayCopy(message) || message
 }
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -1449,7 +1475,7 @@ function activityRowsForSubject(activity: ActivityItem[], subject: ActivitySubje
 }
 
 function selectedSubjectLabel(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
-    if (subject.type === 'organization') return organization.name
+    if (subject.type === 'organization') return organizationDisplayName(organization)
     if (subject.type === 'invite') {
         const invite = bundle.invites.find(item => item.id === subject.id)
         return invite?.email || subject.id
@@ -1466,8 +1492,8 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
 function selectedContextRows(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
     if (subject.type === 'organization') {
         return compactMetadata([
-            ['Org', organization.id],
-            ['Tenant', organization.tenantId || 'default'],
+            ['Org', organizationDisplayId(organization)],
+            ['Tenant', sanitizeOrganizationDisplayCopy(organization.tenantId || 'default') || 'default'],
             ['Role', organization.role || 'member'],
             ['Members', String(bundle.members.length)],
             ['Watchlists', String(bundle.watchlists.length)],
