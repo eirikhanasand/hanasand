@@ -969,7 +969,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         data-queue-index={index}
                                         onClick={() => setSelectedId(item.id)}
                                         onKeyDown={event => handleQueueKeyDown(event, index)}
-                                    className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
+                                        className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
                                     >
                                         <div className='flex items-center justify-between gap-2'>
                                             <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
