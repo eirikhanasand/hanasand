@@ -41,6 +41,16 @@ export type DashboardWebhookDelivery = {
     error?: string
 }
 
+function sanitizeDeliveryCopy(value: string | undefined) {
+    if (!value) return value
+    return value
+        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(/receipt/gi, 'delivery')
+        .replace(/proof/gi, 'status')
+        .replace(/readiness/gi, 'status')
+}
+
 export type DashboardWebhookAlertOption = {
     id: string
     title: string
@@ -194,7 +204,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                         Discord and webhook delivery
                     </h2>
                     <p className='mt-1 text-xs text-[#667085]'>
-                        {organization ? `${organization.name}: ${activeCount}/${destinations.length} active destinations.` : 'Select or create an organization before configuring destinations.'}
+                        {organization ? `${sanitizeDeliveryCopy(organization.name)}: ${activeCount}/${destinations.length} active destinations.` : 'Select or create an organization before configuring destinations.'}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs font-semibold'>
@@ -385,7 +395,7 @@ function buildPreview(organization: DashboardWebhookOrganization | undefined, de
             description: alert.summary,
             timestamp: alert.evidenceTimestamp,
             fields: [
-                { name: 'Organization', value: organization.name, inline: true },
+                { name: 'Organization', value: sanitizeDeliveryCopy(organization.name) || organization.name, inline: true },
                 { name: 'Matched term', value: alert.watchlistTerm, inline: true },
                 { name: 'Source family', value: alert.sourceFamily, inline: true },
                 { name: 'Evidence', value: `${alert.evidenceCount} item${alert.evidenceCount === 1 ? '' : 's'}`, inline: true },

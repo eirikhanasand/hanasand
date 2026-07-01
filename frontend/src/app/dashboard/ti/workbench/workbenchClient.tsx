@@ -1306,8 +1306,8 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                     <div key={row.id} className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#111827]'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{row.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>{row.detail}</p>
+                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             </div>
                             <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'blocked' : label(row.tone)}</span>
                         </div>
@@ -2493,8 +2493,8 @@ function TimelineRows({ title, rows }: { title: string, rows: CaseTimelineItem[]
                     <div key={row.id} className='grid grid-cols-[auto_1fr] gap-3'>
                         <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
                         <div>
-                            <p className='text-sm font-semibold text-[#171a21]'>{row.title}</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{row.detail}</p>
+                            <p className='text-sm font-semibold text-[#171a21]'>{sanitizeWorkbenchCopy(row.title) || row.title}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(row.at)}</p>
                         </div>
                     </div>
