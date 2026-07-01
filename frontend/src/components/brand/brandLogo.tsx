@@ -16,7 +16,7 @@ export default function BrandLogo({ compact = false, className = '' }: BrandLogo
                     <circle cx='18' cy='27.2' r='2.2' fill='#14a35a' />
                 </svg>
             </span>
-            {!compact && <span className='truncate text-xl font-semibold tracking-normal text-[#20242c] dark:text-[#f5f7fb]'>hanasand</span>}
+            {!compact && <span className='hidden truncate text-xl font-semibold tracking-normal text-[#20242c] min-[430px]:inline dark:text-[#f5f7fb]'>hanasand</span>}
         </Link>
     )
 }
