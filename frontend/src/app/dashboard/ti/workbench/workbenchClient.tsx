@@ -19,6 +19,22 @@ export type WorkbenchEvidence = {
     metadata?: Array<{ label: string, value: string }>
 }
 
+function sanitizeWorkbenchCopy(value: string | undefined) {
+    if (!value) return value
+    return value
+        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(/generation proof/gi, 'generation status')
+        .replace(/alertability proof/gi, 'alertability status')
+        .replace(/customer workflow proof/gi, 'customer workflow status')
+        .replace(/worker proof/gi, 'worker status')
+        .replace(/audit proof/gi, 'audit trail')
+        .replace(/proof/gi, 'status')
+        .replace(/readiness/gi, 'status')
+        .replace(/receipt delivery/gi, 'delivery history')
+        .replace(/receipt/gi, 'delivery')
+}
+
 export type WorkbenchTimelineItem = {
     id: string
     at: string
@@ -791,7 +807,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             const payload = await readJson(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             await refreshCaseDetail(item.id, item.caseDetailHref as string, { loading: false })
-            return payload.receipt?.id ? `Customer notification ${payload.receipt.id} recorded.` : 'Customer notification receipt recorded.'
+            return payload.receipt?.id ? `Customer notification ${payload.receipt.id} recorded.` : 'Customer notification delivery recorded.'
         })
     }
 
@@ -1593,8 +1609,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             })
             rows.push({
                 id: 'inspect_org_alert_readiness',
-                label: 'Alert readiness',
-                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns shared watchlist alertability proof.`,
+                label: 'Alert status',
+                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns shared watchlist alertability status.`,
                 tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
             })
@@ -1627,8 +1643,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         if (orgContext?.organization) {
             rows.push({
                 id: 'inspect_watchlist_alertability',
-                label: 'Alertability proof',
-                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns active watchlist term counts and visibility readiness.`,
+                label: 'Alertability status',
+                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns active watchlist term counts and visibility status.`,
                 tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
             })
@@ -1695,8 +1711,8 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     if (selected.kind === 'alert_readiness') {
         rows.push({
             id: 'open_alert_generation_readiness',
-            label: 'Generation proof',
-            detail: 'GET /api/dwm/alerts/generation-readiness returns source, watchlist, and alertability proof for generated alerts.',
+            label: 'Generation status',
+            detail: 'GET /api/dwm/alerts/generation-readiness returns source, watchlist, and alertability status for generated alerts.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
             href: '/api/dwm/alerts/generation-readiness',
         })
@@ -2275,11 +2291,13 @@ function OperatorReadinessRows({ orgContext, selected, caseDetail, actionDeliver
 }
 
 function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: string, tone: WorkbenchWorkflowStep['status'] }) {
+    const cleanLabel = sanitizeWorkbenchCopy(rowLabel) || rowLabel
+    const cleanValue = sanitizeWorkbenchCopy(value) || value
     return (
         <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#2d3a52] dark:bg-[#111827]'>
-            <span className='font-semibold text-[#171a21] dark:text-[#d8deea]'>{rowLabel}</span>
+            <span className='font-semibold text-[#171a21] dark:text-[#d8deea]'>{cleanLabel}</span>
             <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#667085] dark:text-[#aab6ca]'>
-                <span className='min-w-0 break-all'>{value}</span>
+                <span className='min-w-0 break-all'>{cleanValue}</span>
                 <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(tone)}</span>
             </span>
         </div>
@@ -3235,12 +3253,12 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                     <ContinuityBlock title='Customer notification'>
                         <p className='text-xs leading-5 text-[#667085]'>
                             {notificationContext?.notified
-                                ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'receipt'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
-                                : detail ? 'No customer notification receipt recorded yet.' : 'Receipt state requires case detail.'}
+                                ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'delivery'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
+                                : detail ? 'No customer notification delivery recorded yet.' : 'Delivery state requires case detail.'}
                         </p>
                         {notificationLedgerHref ? (
                             <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
-                                <span className='truncate'>Open receipt delivery</span>
+                                <span className='truncate'>Open delivery history</span>
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
                         ) : null}
