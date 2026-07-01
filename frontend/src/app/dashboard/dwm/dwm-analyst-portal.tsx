@@ -217,10 +217,10 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
 
     return (
         <div className='grid gap-4'>
-            <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+            <section className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
                 <div className='border-b border-[#e8edf5] bg-[#171a21] px-4 py-3 text-white'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <div className='flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0'>
+                        <div className='flex min-w-0 flex-1 flex-wrap items-center gap-2'>
                             <StatusPill label='Cases' value={String(alerts.length)} tone={alerts.length ? 'warn' : 'neutral'} />
                             <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
@@ -232,15 +232,15 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                             <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
                             <StatusPill label='API' value={apiProblemCount ? `${apiProblemCount} issue${apiProblemCount === 1 ? '' : 's'}` : 'Live'} tone={apiProblemCount ? 'warn' : 'good'} />
                         </div>
-                        <div className='shrink-0 text-right'>
+                        <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
                             <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Monitoring state</p>
                             <p className='mt-1 text-sm font-semibold text-white'>{operations?.counts.activeSourceCount ?? 0}/{operations?.counts.sourceCount ?? 0} sources active</p>
                         </div>
                     </div>
                 </div>
 
-                <div className='grid min-h-[680px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
-                    <aside className='order-2 border-b border-[#e8edf5] bg-[#f8fafc] xl:order-none xl:border-b-0 xl:border-r'>
+                <div className='grid min-h-[680px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
+                    <aside className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#f8fafc] xl:order-none xl:border-b-0 xl:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
@@ -328,7 +328,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                         )}
                     </main>
 
-                    <aside className='order-3 border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 xl:order-none 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
+                    <aside className='order-3 min-w-0 border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 xl:order-none 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <SourcePosture snapshot={snapshot} operations={operations} />
                             <DeliveryPanel alert={selectedAlert} deliveries={deliveries} />
@@ -1119,7 +1119,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
     return (
-        <section className='grid gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
+        <section className='grid min-w-0 gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
             <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 <ActionStatus label='Owner' value={assignee} />
                 <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
@@ -1133,7 +1133,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                     <ActionAvailability label='Delivery' ready={deliverReady} />
                     <ActionAvailability label='Close' ready={closeReady} />
                 </div>
-                <div className='flex flex-wrap gap-2 xl:justify-end'>
+                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
                     <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
@@ -1155,7 +1155,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
 
 function ActionAvailability({ label, ready }: { label: string, ready: boolean }) {
     return (
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
+        <span className={`min-w-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${ready ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
             {label}: {ready ? 'ready' : 'blocked'}
         </span>
     )
@@ -1533,7 +1533,7 @@ function WorkTile({ title, body, state }: { title: string, body: string, state: 
 function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false', onClick: () => void, children: string }) {
     const Icon = busy ? Loader2 : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
     return (
-        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
             {children}
         </button>

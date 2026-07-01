@@ -14,7 +14,9 @@ type LogsPageClientProps = {
 }
 
 function when(value: string) {
-    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'medium' }).format(new Date(value))
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return date.toISOString().replace('T', ' ').slice(0, 19) + ' UTC'
 }
 
 export default function LogsPageClient({

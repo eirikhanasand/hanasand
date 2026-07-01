@@ -5,5 +5,5 @@ export const dynamic = 'force-dynamic'
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string, userId: string }> }) {
     const { id, userId } = await context.params
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`, { method: 'PATCH' })
+    return proxyTiRequest(request, `/organizations/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}/role`, { method: 'PATCH' })
 }

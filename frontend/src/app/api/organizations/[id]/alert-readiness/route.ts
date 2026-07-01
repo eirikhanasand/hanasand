@@ -12,5 +12,5 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             return NextResponse.json(organizationReadinessPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
     }
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/alert-readiness`, { method: 'GET' })
+    return proxyTiRequest(request, `/organizations/${encodeURIComponent(id)}/alert-readiness`, { method: 'GET' })
 }

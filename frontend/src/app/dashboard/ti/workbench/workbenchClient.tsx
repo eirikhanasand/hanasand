@@ -922,7 +922,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                 </p>
             )}
 
-            <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
+            <div className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
                 <div className='hidden items-center gap-2 overflow-x-auto border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white sm:flex sm:flex-wrap'>
                     <StatusPill label='Cases' value={String(initialCases.length)} />
                     <StatusPill label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
@@ -931,8 +931,8 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                     <StatusPill label='TI decisions' value='session-local' tone='warn' />
                 </div>
 
-                <div className={`grid ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
-                    <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
+                <div className={`grid min-w-0 ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
+                    <aside className='min-w-0 border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
                         <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
                             <label className='relative block'>
                                 <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]' />
@@ -969,14 +969,14 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         data-queue-index={index}
                                         onClick={() => setSelectedId(item.id)}
                                         onKeyDown={event => handleQueueKeyDown(event, index)}
-                                        className={`w-full rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
+                                    className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
                                     >
                                         <div className='flex items-center justify-between gap-2'>
                                             <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
                                         </div>
                                         <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
-                                        <p className='mt-2 line-clamp-2 text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
+                                        <p className='mt-2 line-clamp-2 break-words text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
                                         <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
                                             <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
                                             <span>{item.confidence}%</span>
@@ -1016,7 +1016,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                         )}
                     </main>
 
-                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
+                    <aside className='min-w-0 border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <OrgOperatingPanel
                                 orgContext={orgContext}

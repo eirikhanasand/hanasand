@@ -12,10 +12,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             return NextResponse.json(webhookPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
     }
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/webhooks`, { method: 'GET' })
+    return proxyTiRequest(request, `/dwm/webhook-destinations?organizationId=${encodeURIComponent(id)}`, { method: 'GET' })
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params
-    return proxyTiRequest(request, `/v1/organizations/${encodeURIComponent(id)}/webhooks`, { method: 'POST' })
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>
+    const nextRequest = new NextRequest(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: JSON.stringify({ ...body, orgId: id }),
+    })
+    return proxyTiRequest(nextRequest, '/dwm/webhook-destinations', { method: 'POST' })
 }
