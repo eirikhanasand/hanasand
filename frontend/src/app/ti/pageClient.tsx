@@ -341,7 +341,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                     onReview={() => applyDecision('reviewing')}
                 />
 
-                <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[320px_minmax(0,1fr)_340px]'>
+                <div className='grid min-h-[44rem] min-w-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside id='ti-activity' data-ti-queue='true' className='order-2 min-w-0 border-b border-[#e8edf5] bg-[#fbfcfe] lg:order-none lg:border-b-0 lg:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
@@ -494,7 +494,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                         )}
                     </main>
 
-                    <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:border-l lg:border-t-0'>
+                    <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <ActionabilityPanel actionability={actionability} query={result.query} />
                         <EnrichmentTasksPanel tasks={enrichmentTasks} intake={actionability.sourceEnrichmentIntake} />
@@ -8672,7 +8672,7 @@ function EmptyState() {
                 </Link>
             </div>
 
-            <div className='grid min-w-0 gap-0 lg:grid-cols-[320px_minmax(0,1fr)_320px]'>
+            <div className='grid min-w-0 gap-0 lg:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_320px]'>
                 <div className='border-b border-[#e8edf5] bg-white p-4 dark:border-[#273244] dark:bg-[#101722] lg:border-b-0 lg:border-r'>
                     <div className='flex items-center justify-between gap-3'>
                         <div>
@@ -8706,7 +8706,7 @@ function EmptyState() {
                     </div>
                 </div>
 
-                <div className='bg-[#fbfcfe] p-4 dark:bg-[#131c29] lg:border-l lg:border-[#e8edf5] lg:dark:border-[#273244]'>
+                <div className='bg-[#fbfcfe] p-4 dark:bg-[#131c29] lg:col-span-2 lg:border-t lg:border-[#e8edf5] lg:dark:border-[#273244] 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                     <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Handoff status</h2>
                     <div className='mt-3 grid gap-2 text-sm'>
                         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
