@@ -60,7 +60,8 @@ export default async function Page({
         loadProductProgressReadiness(Headers, scope, viewerIdentity),
     ])
     const liveAlerts = alertLoad.alerts
-    const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
+    const alertVisibilityBlocked = alertLoad.accessState.status === 'identity_missing' || alertLoad.accessState.status === 'visibility_denied'
+    const fallbackAlerts = alertVisibilityBlocked ? [] : demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
         ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))

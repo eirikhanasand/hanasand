@@ -3212,9 +3212,9 @@ export function buildReadinessCases(input: {
         readinessCase({
             id: 'alert_generation',
             kind: 'alert_readiness',
-            queue: 'Alert generation',
-            title: alertVisibilityBlocked ? 'DWM alert visibility blocked' : alertGenerationProofReady && input.liveAlertCount ? 'Alert generation proof loaded' : alertGenerationProof ? 'Resolve alert generation proof' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
-            severity: alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
+            queue: alertVisibilityBlocked ? 'Org access' : 'Alert generation',
+            title: alertVisibilityBlocked ? 'Connect DWM alert visibility' : alertGenerationProofReady && input.liveAlertCount ? 'Alert generation proof loaded' : alertGenerationProof ? 'Resolve alert generation proof' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
+            severity: alertVisibilityBlocked ? 'medium' : alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
             status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : alertGenerationProof?.status || (input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty'),
             priority: alertVisibilityBlocked ? 395 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
             confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
@@ -3224,7 +3224,7 @@ export function buildReadinessCases(input: {
                     ? alertGenerationProof.detail || alertGenerationDetail(alertGenerationProof)
                     : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
             recommendedAction: alertVisibilityBlocked
-                ? 'Open the dashboard as an active organization member or fix the org membership/session identity before treating the alert queue as empty.'
+                ? 'Open organization access, match this session to an active member, then reload the DWM queue.'
                 : alertGenerationProofReady && input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : alertGenerationProof ? 'Resolve alert-generation blockers before treating the queue as customer-ready.' : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
             evidence: [{
                 id: 'ev_alert_generation',
@@ -3244,16 +3244,24 @@ export function buildReadinessCases(input: {
             }],
             timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Alert visibility denied' : alertGenerationProofReady ? 'Alert generation proven' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation proof is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
             nextTasks: alertVisibilityBlocked
-                ? ['Owner: operator. Verify the dashboard session maps to an active organization member.', 'Retry GET /api/dwm/alerts with userEmail or userId for the selected organization.', 'Do not treat fallback alerts as proof until org visibility succeeds.']
+                ? ['Owner: operator. Match this dashboard session to an active organization member.', 'Retry the DWM alert queue after the organization identity is fixed.', 'Keep demo alerts out of analyst triage until org visibility succeeds.']
                 : alertGenerationProofReady && input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.']
                     : alertGenerationProof ? ['Owner: DWM owner. Open alert generation readiness.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after proof returns customer-delivery readiness.']
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
-            relatedLinks: [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
+            relatedLinks: alertVisibilityBlocked
+                ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'Scoped alerts API' }]
+                : [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
             workflowPath: path,
             missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation readiness is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
             actions: [
-                { id: 'open_alert_queue', label: 'Open alert queue', method: 'GET', href: alertsHref(input.scope) },
-                { id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET', href: '/api/dwm/alerts/generation-readiness' },
+                ...(alertVisibilityBlocked ? [{
+                    id: 'open_organization_access',
+                    label: 'Open organization access',
+                    method: 'GET' as const,
+                    href: '/organizations',
+                }] : []),
+                { id: 'open_alert_queue', label: alertVisibilityBlocked ? 'Retry scoped queue' : 'Open alert queue', method: 'GET', href: alertsHref(input.scope) },
+                ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET' as const, href: '/api/dwm/alerts/generation-readiness' }] : []),
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
                     id: 'rebuild_alerts',
                     label: 'Rebuild alerts',
