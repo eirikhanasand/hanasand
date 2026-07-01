@@ -218,9 +218,9 @@ const alertPolicies = ['members', 'admins', 'owners']
 const lifecycleStatuses = ['active', 'archived']
 const liveDwmAlertId = 'dwm_alert_c6ef012afc7016b5'
 
-function sanitizeOrganizationDisplayCopy(value: string | undefined) {
-    if (!value) return value
-    return value
+function sanitizeOrganizationDisplayCopy(value: unknown) {
+    if (value === undefined || value === null) return undefined
+    return String(value)
         .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
         .replace(/hanasand-live-proof/gi, 'Hanasand live org')
         .replace(/Route not found/gi, 'Endpoint unavailable')
