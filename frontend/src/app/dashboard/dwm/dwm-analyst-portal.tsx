@@ -408,7 +408,10 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                         <span className='min-w-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{stateLabel(alert.deliveryState || 'pending_review')}</span>
                     </div>
                     <h2 className='mt-3 wrap-break-word text-2xl font-semibold tracking-normal text-[#171a21]'>{alert.company}</h2>
-                    <p className='mt-1 wrap-break-word text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170]'>
+                        Matched <span className='font-mono'>{alert.matchedTerm.value}</span>
+                        <span className='block sm:inline'> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</span>
+                    </p>
                 </div>
             </div>
 
