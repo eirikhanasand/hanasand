@@ -124,9 +124,9 @@ export async function getOrganizations(req: FastifyRequest, res: FastifyReply) {
           ON om.organization_id = o.id
          AND om.user_id = $1
          AND om.status = 'active'
-        JOIN users current_user
-          ON current_user.id = om.user_id
-         AND current_user.active = TRUE
+        JOIN users current_member_user
+          ON current_member_user.id = om.user_id
+         AND current_member_user.active = TRUE
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
@@ -2920,9 +2920,9 @@ async function loadOrganizationForMember(organizationId: string, userId: string)
           ON om.organization_id = o.id
          AND om.user_id = $2
          AND om.status = 'active'
-        JOIN users current_user
-          ON current_user.id = om.user_id
-         AND current_user.active = TRUE
+        JOIN users current_member_user
+          ON current_member_user.id = om.user_id
+         AND current_member_user.active = TRUE
         LEFT JOIN organization_members active_members
           ON active_members.organization_id = o.id
          AND active_members.status = 'active'
