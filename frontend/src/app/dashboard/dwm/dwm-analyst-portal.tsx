@@ -398,17 +398,17 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
         }
     }
     return (
-        <div className='grid gap-5 p-5'>
+        <div className='grid max-w-full min-w-0 gap-5 overflow-hidden p-4 sm:p-5'>
             <div className='flex flex-wrap items-start justify-between gap-4'>
                 <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2'>
+                    <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center'>
                         <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                        <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{alert.confidence}% confidence</span>
-                        <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{stateLabel(alert.reviewState)}</span>
-                        <span className='rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{stateLabel(alert.deliveryState || 'pending_review')}</span>
+                        <span className='min-w-0 rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{alert.confidence}% confidence</span>
+                        <span className='min-w-0 rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{stateLabel(alert.reviewState)}</span>
+                        <span className='min-w-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{stateLabel(alert.deliveryState || 'pending_review')}</span>
                     </div>
-                    <h2 className='mt-3 text-2xl font-semibold tracking-normal text-[#171a21]'>{alert.company}</h2>
-                    <p className='mt-1 text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</p>
+                    <h2 className='mt-3 wrap-break-word text-2xl font-semibold tracking-normal text-[#171a21]'>{alert.company}</h2>
+                    <p className='mt-1 wrap-break-word text-sm text-[#596170]'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {stateLabel(alert.sourceFamily)} · {stateLabel(alert.artifactType)}</p>
                 </div>
             </div>
 
