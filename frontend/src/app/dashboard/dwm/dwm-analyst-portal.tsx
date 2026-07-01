@@ -99,6 +99,7 @@ type PortalProps = {
     alerts: PortalAlert[]
     deliveries: DeliveryItem[]
     dataHealth: DwmDataHealth
+    initialAlertId?: string
 }
 
 type DwmDataHealth = {
@@ -119,9 +120,9 @@ type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 
-export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth }: PortalProps) {
+export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth, initialAlertId }: PortalProps) {
     const router = useRouter()
-    const [selectedId, setSelectedId] = useState(alerts[0]?.id ?? '')
+    const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
     const [localCaseState, setLocalCaseState] = useLocalCaseState()

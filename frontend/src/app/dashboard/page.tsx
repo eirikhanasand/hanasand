@@ -517,6 +517,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
     const alertDeliveries = deliveries.filter(delivery => delivery.alertId === alert.id)
     const latestDelivery = latestDeliveryAttempt(alertDeliveries)
     const deliveryHistoryHref = alertDeliveryHistoryHref(alert.id, scope, latestDelivery)
+    const dwmWorkspaceHref = dwmAlertWorkspaceHref(alert.id, scope)
     const actionReadiness = alertAnalystActionReadiness(alert)
     const workflowPath = [
         {
@@ -536,7 +537,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             owner: 'operator',
             source: 'GET/POST /api/dwm/watchlists',
             entityId: watchlistIds.join(', ') || undefined,
-            href: '/dashboard/dwm',
+            href: dwmWorkspaceHref,
             detail: watchlistIds.length ? `Matched watchlist ${watchlistIds.join(', ')}.` : 'No watchlist IDs returned with this alert.',
         },
         {
@@ -636,7 +637,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             { href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}`, label: 'Alert API' },
             ...(casePath ? [{ href: casePath, label: 'Case API' }] : []),
             { href: deliveryHistoryHref, label: 'Delivery history' },
-            { href: '/dashboard/dwm', label: 'Open DWM console' },
+            { href: dwmWorkspaceHref, label: 'Open DWM workspace' },
             { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
         ],
         workflowPath,
@@ -816,6 +817,14 @@ function alertDeliveryHistoryHref(alertId: string, scope: OperatorScope, deliver
     if (delivery?.id) params.set('deliveryId', delivery.id)
     if (delivery?.webhookDestinationId) params.set('webhookDestinationId', delivery.webhookDestinationId)
     return `/api/dwm/webhooks/deliveries?${params.toString()}`
+}
+
+function dwmAlertWorkspaceHref(alertId: string, scope: OperatorScope) {
+    const params = new URLSearchParams()
+    params.set('alert', alertId)
+    if (scope.organizationId) params.set('organizationId', scope.organizationId)
+    else params.set('tenantId', scope.tenantId)
+    return `/dashboard/dwm?${params.toString()}`
 }
 
 function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {

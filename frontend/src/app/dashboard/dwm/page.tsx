@@ -4,7 +4,13 @@ import { DwmAnalystPortal } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
 
-export default async function DashboardDwmPage() {
+export default async function DashboardDwmPage({
+    searchParams,
+}: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
+    const params = await searchParams
+    const initialAlertId = firstParam(params?.alert)
     const [snapshotResult, operationsResult, alertsResult, deliveriesResult] = await Promise.all([loadDwmSnapshot(), loadDwmOperations(), loadDwmAlerts(), loadDwmDeliveries()])
     const snapshot = snapshotResult.data
     const operations = operationsResult.data
@@ -21,9 +27,14 @@ export default async function DashboardDwmPage() {
 
     return (
         <DashboardPage className='gap-2 sm:gap-3'>
-            <DwmAnalystPortal snapshot={snapshot} operations={operations} alerts={alerts} deliveries={deliveries} dataHealth={dataHealth} />
+            <DwmAnalystPortal snapshot={snapshot} operations={operations} alerts={alerts} deliveries={deliveries} dataHealth={dataHealth} initialAlertId={initialAlertId} />
         </DashboardPage>
     )
+}
+
+function firstParam(value: string | string[] | undefined) {
+    if (Array.isArray(value)) return value[0] || undefined
+    return value
 }
 
 async function loadDwmSnapshot(): Promise<LoadResult<DwmProductSnapshot>> {

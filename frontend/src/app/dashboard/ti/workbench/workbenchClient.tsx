@@ -1374,6 +1374,14 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     if (selected.kind === 'dwm_alert') {
         const alertDetailHref = `/api/dwm/alerts/${encodeURIComponent(selected.id)}`
+        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open DWM workspace') || `/dashboard/dwm?alert=${encodeURIComponent(selected.id)}`
+        rows.push({
+            id: 'open_dwm_workspace',
+            label: 'Open DWM workspace',
+            detail: 'Open the selected alert with evidence disposition, source provenance, delivery state, and case activity.',
+            tone: selected.persistent ? 'ready' : 'needs_action',
+            href: dwmWorkspaceHref,
+        })
         rows.push({
             id: 'open_alert_detail',
             label: 'Open alert detail',
@@ -2301,6 +2309,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
     const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'No backed case ID is available for this selected alert. Use Open case after live alerts load; fallback alerts cannot load /api/cases/:id.' : '')
     const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
     const alertEvidence = alertRecord?.evidence || []
+    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open DWM workspace') || `/dashboard/dwm?alert=${encodeURIComponent(item.id)}` : ''
 
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
@@ -2310,6 +2319,12 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                     <p className='mt-0.5 text-xs text-[#667085]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
+                    {dwmWorkspaceHref && (
+                        <Link href={dwmWorkspaceHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            DWM workspace
+                            <ExternalLink className='h-3.5 w-3.5' />
+                        </Link>
+                    )}
                     {item.persistent && item.kind === 'dwm_alert' && (
                         <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
                             Alert API
