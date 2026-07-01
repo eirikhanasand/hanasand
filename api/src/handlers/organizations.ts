@@ -585,7 +585,7 @@ export async function deleteOrganizationMember(req: FastifyRequest<{ Params: Org
         FROM users
         WHERE organization_invites.organization_id = $1
           AND users.id = $2
-          AND lower(organization_invites.email) = lower(users.email)
+          AND lower(organization_invites.email) IN (lower(users.id), lower(users.name))
           AND organization_invites.status = 'pending'
         RETURNING organization_invites.*
     `, [req.params.id, req.params.userId])
@@ -2992,7 +2992,8 @@ async function loadInviteRecipientState(organizationId: string, email: string) {
         LEFT JOIN organization_members om
           ON om.organization_id = $1
          AND om.user_id = u.id
-        WHERE lower(u.email) = lower($2)
+        WHERE lower(u.id) = lower($2)
+           OR lower(u.name) = lower($2)
         LIMIT 1
     `, [organizationId, email])
 
