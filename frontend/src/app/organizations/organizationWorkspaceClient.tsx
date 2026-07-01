@@ -908,8 +908,8 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                             {members.map(member => (
                                 <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
                                     <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
-                                        <p className='truncate font-semibold text-[#171a21] dark:text-white'>{member.name || member.userId}</p>
-                                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{member.userId}</p>
+                                        <p className='truncate font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
+                                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
                                     </td>
                                     <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
                                         {canManage && member.role !== 'owner' ? (
@@ -1158,7 +1158,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
             <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                     <div className='min-w-0'>
-                        <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{selectedSubjectLabel(selectedSubject, organization, bundle)}</p>
+                        <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(selectedSubjectLabel(selectedSubject, organization, bundle))}</p>
                         <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{selectedSubject.type}</p>
                     </div>
                     <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
@@ -1169,7 +1169,7 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                     {contextRows.map(row => (
                         <div key={row.label} className='min-w-0 rounded-md bg-white px-2 py-1.5 dark:bg-[#111927]'>
                             <dt className='truncate font-semibold text-[#667085] dark:text-[#a8b3c5]'>{row.label}</dt>
-                            <dd className='truncate font-mono text-[#202838] dark:text-[#eef3fb]'>{row.value}</dd>
+                            <dd className='truncate font-mono text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(row.value) || row.value}</dd>
                         </div>
                     ))}
                 </dl>
@@ -1183,13 +1183,13 @@ function ActivityPanel({ organization, bundle, activity, selectedSubject, onSele
                             {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b42318]' />}
                             <div className='min-w-0 flex-1'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{item.title}</p>
+                                    <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(item.title) || item.title}</p>
                                     {item.subjectType && <span className='rounded-md bg-[#eef2f7] px-2 py-0.5 text-[11px] font-semibold text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'>{item.subjectType}</span>}
                                 </div>
-                                <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>{item.detail}</p>
+                                <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(item.detail) || item.detail}</p>
                                 {item.metadata && item.metadata.length > 0 && (
                                     <div className='mt-2 grid gap-1 text-[11px] text-[#667085] dark:text-[#a8b3c5]'>
-                                        {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {row.value}</span>)}
+                                        {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {sanitizeOrganizationDisplayCopy(row.value) || row.value}</span>)}
                                     </div>
                                 )}
                                 <p className='mt-2 text-xs text-[#7a8493] dark:text-[#93a4bd]'>{formatDate(item.at)}</p>
@@ -1215,12 +1215,12 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
                 {rows.length === 0 && <EmptyLine text={empty} />}
                 {rows.slice(0, 5).map(row => (
                     <div key={row.id} className='rounded-md bg-[#f8fafc] p-2 dark:bg-[#0d1522]'>
-                        <p className='truncate text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>{row.primary}</p>
-                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{row.secondary}</p>
+                        <p className='truncate text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(row.primary) || row.primary}</p>
+                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(row.secondary) || row.secondary}</p>
                     </div>
                 ))}
             </div>
-            <p className='mt-3 truncate font-mono text-[11px] text-[#667085] dark:text-[#93a4bd]'>{route}</p>
+            <p className='mt-3 truncate font-mono text-[11px] text-[#667085] dark:text-[#93a4bd]'>{sanitizeOrganizationDisplayCopy(route) || route}</p>
         </div>
     )
 }
