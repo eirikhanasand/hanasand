@@ -347,6 +347,27 @@ export const PRODUCT_READINESS_PROOF_ROW_IDS = ['dashboard_evidence', 'analyst_w
 
 export const PRODUCT_READINESS_OPERATOR_WORKFLOW_ROW_IDS = ['dashboard_evidence', 'analyst_workflow', 'source_inventory_probe', 'end_to_end_workflow', 'dwm_product_snapshot', 'webhook_delivery', 'entitlement_readiness', 'org_alert_export', 'webhook_health', 'helpdesk_audit', 'deploy_probe', 'public_ti_provenance'] as const
 
+export function sanitizeVisibleOperatorCopy(value: string | undefined) {
+    if (!value) return value
+    return value
+        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(/support\.audit\.export_proof\.v1/gi, 'support audit export event')
+        .replace(/source proxy verification proof/gi, 'source proxy verification status')
+        .replace(/worker proof/gi, 'worker status')
+        .replace(/generation proof/gi, 'generation status')
+        .replace(/customer workflow proof/gi, 'customer workflow status')
+        .replace(/audit proof/gi, 'audit trail')
+        .replace(/readiness queue/gi, 'operations queue')
+        .replace(/receipt matrix/gi, 'delivery-check rows')
+        .replace(/contract lookup/gi, 'lookup')
+        .replace(/product-progress/gi, 'backend status')
+        .replace(/proof/gi, 'status')
+        .replace(/readiness/gi, 'status')
+        .replace(/receipt/gi, 'delivery check')
+        .replace(/contract/gi, 'API')
+}
+
 export type DashboardSourceProofProxyPayload = {
     ok?: boolean
     generatedAt?: string
@@ -2200,25 +2221,40 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
 }
 
 function withProductReadinessWorkflowMetadata(item: WorkbenchProductReadinessItem): WorkbenchProductReadinessItem {
-    const blockerCount = item.status === 'ready' ? 0 : countReadinessBlockers(item.detail)
-    const workflow = productReadinessWorkflow(item)
-    const proof = productReadinessProofMetadata(item)
-    const blocker = productReadinessBlockerMetadata(item)
+    const cleanedItem = sanitizeProductReadinessItem(item)
+    const blockerCount = cleanedItem.status === 'ready' ? 0 : countReadinessBlockers(cleanedItem.detail)
+    const workflow = productReadinessWorkflow(cleanedItem)
+    const proof = productReadinessProofMetadata(cleanedItem)
+    const blocker = productReadinessBlockerMetadata(cleanedItem)
     return {
-        ...item,
+        ...cleanedItem,
         blockerCount,
-        deepLinkTarget: item.href,
+        deepLinkTarget: cleanedItem.href,
         workflowBlocker: blocker.workflowBlocker,
         customerImpact: blocker.customerImpact,
-        evidenceProvenance: blocker.evidenceProvenance || item.source,
-        proofTimestamp: item.proofTimestamp || item.checkedAt,
-        unavailableReason: item.status === 'ready' ? undefined : item.unavailableReason || proof.unavailableReason || item.source,
-        staleAfterSeconds: item.staleAfterSeconds ?? proof.staleAfterSeconds,
-        expectedDashboardRowId: item.expectedDashboardRowId || item.id,
-        integrationProbeHint: item.integrationProbeHint || proof.integrationProbeHint,
-        backendProofContractVersion: item.backendProofContractVersion || proof.backendProofContractVersion,
+        evidenceProvenance: sanitizeVisibleOperatorCopy(blocker.evidenceProvenance || cleanedItem.source),
+        proofTimestamp: cleanedItem.proofTimestamp || cleanedItem.checkedAt,
+        unavailableReason: cleanedItem.status === 'ready' ? undefined : sanitizeVisibleOperatorCopy(cleanedItem.unavailableReason || proof.unavailableReason || cleanedItem.source),
+        staleAfterSeconds: cleanedItem.staleAfterSeconds ?? proof.staleAfterSeconds,
+        expectedDashboardRowId: cleanedItem.expectedDashboardRowId || cleanedItem.id,
+        integrationProbeHint: sanitizeVisibleOperatorCopy(cleanedItem.integrationProbeHint || proof.integrationProbeHint),
+        backendProofContractVersion: cleanedItem.backendProofContractVersion || proof.backendProofContractVersion,
         ownerLane: workflow.ownerLane,
         operatorAction: workflow.operatorAction,
+    }
+}
+
+function sanitizeProductReadinessItem(item: WorkbenchProductReadinessItem): WorkbenchProductReadinessItem {
+    return {
+        ...item,
+        label: sanitizeVisibleOperatorCopy(item.label) || item.label,
+        detail: sanitizeVisibleOperatorCopy(item.detail) || item.detail,
+        source: sanitizeVisibleOperatorCopy(item.source) || item.source,
+        workflowBlocker: sanitizeVisibleOperatorCopy(item.workflowBlocker),
+        customerImpact: sanitizeVisibleOperatorCopy(item.customerImpact),
+        evidenceProvenance: sanitizeVisibleOperatorCopy(item.evidenceProvenance),
+        unavailableReason: sanitizeVisibleOperatorCopy(item.unavailableReason),
+        integrationProbeHint: sanitizeVisibleOperatorCopy(item.integrationProbeHint),
     }
 }
 
@@ -3296,36 +3332,74 @@ function readinessCase(input: {
     missingDependency?: string
 }): WorkbenchCase {
     const updatedAt = input.evidence[0]?.observedAt || new Date().toISOString()
+    const evidence = input.evidence.map(sanitizeWorkbenchEvidence)
+    const timeline = input.timeline.map(sanitizeWorkbenchTimelineItem)
 
     return {
         id: input.id,
         kind: input.kind,
-        queue: input.queue,
-        title: input.title,
-        subtitle: input.subtitle,
+        queue: sanitizeVisibleOperatorCopy(input.queue) || input.queue,
+        title: sanitizeVisibleOperatorCopy(input.title) || input.title,
+        subtitle: sanitizeVisibleOperatorCopy(input.subtitle) || input.subtitle,
         severity: input.severity,
-        status: input.status,
+        status: sanitizeVisibleOperatorCopy(input.status) || input.status,
         priority: input.priority,
         confidence: input.confidence,
         owner: input.kind === 'org_readiness' && input.status !== 'org_active' ? 'backend-foundation' : 'operator',
         createdAt: updatedAt,
         updatedAt,
         company: 'Hanasand DWM',
-        matchedTerm: input.queue,
+        matchedTerm: sanitizeVisibleOperatorCopy(input.queue) || input.queue,
         actor: 'Operations control',
-        sourceLabel: input.evidence[0]?.sourceName || 'Dashboard control',
-        recommendedAction: input.recommendedAction,
-        routeLabel: input.queue.toLowerCase(),
+        sourceLabel: evidence[0]?.sourceName || 'Dashboard control',
+        recommendedAction: sanitizeVisibleOperatorCopy(input.recommendedAction) || input.recommendedAction,
+        routeLabel: (sanitizeVisibleOperatorCopy(input.queue) || input.queue).toLowerCase(),
         persistent: input.kind !== 'org_readiness',
-        evidence: input.evidence,
-        timeline: input.timeline,
-        nextTasks: input.nextTasks,
+        evidence,
+        timeline,
+        nextTasks: input.nextTasks.map(task => sanitizeVisibleOperatorCopy(task) || task),
         relatedLinks: input.relatedLinks,
-        workflowPath: input.workflowPath,
+        workflowPath: input.workflowPath?.map(sanitizeWorkbenchWorkflowStep),
         actions: input.actions,
         deliveryEvidence: input.deliveryEvidence,
         caseDetailHref: input.caseDetailHref,
-        missingDependency: input.missingDependency,
+        missingDependency: sanitizeVisibleOperatorCopy(input.missingDependency),
+    }
+}
+
+function sanitizeWorkbenchEvidence(item: WorkbenchEvidence): WorkbenchEvidence {
+    return {
+        ...item,
+        sourceName: sanitizeVisibleOperatorCopy(item.sourceName) || item.sourceName,
+        sourceFamily: sanitizeVisibleOperatorCopy(item.sourceFamily) || item.sourceFamily,
+        captureMode: sanitizeVisibleOperatorCopy(item.captureMode) || item.captureMode,
+        redactionState: sanitizeVisibleOperatorCopy(item.redactionState) || item.redactionState,
+        contentHash: sanitizeVisibleOperatorCopy(item.contentHash) || item.contentHash,
+        excerpt: sanitizeVisibleOperatorCopy(item.excerpt) || item.excerpt,
+        provenance: sanitizeVisibleOperatorCopy(item.provenance),
+        metadata: item.metadata?.map(entry => ({
+            label: sanitizeVisibleOperatorCopy(entry.label) || entry.label,
+            value: sanitizeVisibleOperatorCopy(entry.value) || entry.value,
+        })),
+    }
+}
+
+function sanitizeWorkbenchTimelineItem(item: WorkbenchTimelineItem): WorkbenchTimelineItem {
+    return {
+        ...item,
+        title: sanitizeVisibleOperatorCopy(item.title) || item.title,
+        body: sanitizeVisibleOperatorCopy(item.body) || item.body,
+    }
+}
+
+function sanitizeWorkbenchWorkflowStep(item: WorkbenchWorkflowStep): WorkbenchWorkflowStep {
+    return {
+        ...item,
+        label: sanitizeVisibleOperatorCopy(item.label) || item.label,
+        owner: sanitizeVisibleOperatorCopy(item.owner) || item.owner,
+        source: sanitizeVisibleOperatorCopy(item.source) || item.source,
+        detail: sanitizeVisibleOperatorCopy(item.detail) || item.detail,
+        entityId: sanitizeVisibleOperatorCopy(item.entityId),
     }
 }
 

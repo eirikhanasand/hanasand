@@ -8,7 +8,7 @@ import { demoDwmProductSnapshot, type DwmAlert, type DwmAlertAnalystAction, type
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
-import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
+import { applyScope, buildOrgOperatingContext, buildProductProgressExternalState, buildPublicTiHandoffCase, buildReadinessCases, buildSourceProofReadinessFromProxy, parseProductProgressReadinessPayload, resolveDashboardViewerIdentity, sanitizeVisibleOperatorCopy, type DashboardSourceProofProxyPayload, type DashboardViewerIdentity, type DwmAlertAccessState, type DwmDeliveryItem, type DwmOperationsSnapshot, type DwmOrganizationInvite, type DwmOrganizationMember, type DwmOrganizationState, type DwmOrganizationSummary, type DwmOrganizationWebhookDestination, type DwmWatchlistSummary, type OperatorScope } from './operatorConsoleModel'
 import WebhookDeliveryConsole, { type DashboardWebhookAlertOption } from './WebhookDeliveryConsole'
 
 export const dynamic = 'force-dynamic'
@@ -163,7 +163,7 @@ function OperatorTopBar({
     orgContext: ReturnType<typeof buildOrgOperatingContext>
 }) {
     const activeOrg = orgContext.organization
-    const orgLabel = activeOrg?.name || activeOrg?.slug || 'Default tenant'
+    const orgLabel = sanitizeVisibleOperatorCopy(activeOrg?.name || activeOrg?.slug) || 'Default tenant'
     const activeWatchlists = orgContext.readiness.activeWatchlistCount
     const watchedTerms = orgContext.readiness.termCount
     const activeWebhooks = orgContext.readiness.activeWebhookCount
@@ -200,7 +200,7 @@ function OperatorTopBar({
             {activeOrg && (
                 <div className='mt-2 hidden min-w-0 items-center gap-2 border-t border-[#eef1f5] pt-2 text-xs font-medium text-[#596170] md:flex' data-dashboard-active-org={activeOrg.id}>
                     <Building2 className='h-4 w-4 shrink-0 text-[#3056d3]' />
-                    <span className='truncate'>Org {activeOrg.id}</span>
+                    <span className='truncate'>Org {sanitizeVisibleOperatorCopy(activeOrg.name || activeOrg.slug || activeOrg.id)}</span>
                     <span className='shrink-0 text-[#98a2b3]'>·</span>
                     <span className='truncate'>{orgContext.members.length} members</span>
                     <span className='shrink-0 text-[#98a2b3]'>·</span>
