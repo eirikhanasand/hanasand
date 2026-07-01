@@ -629,7 +629,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         nextTasks: [
             liveAlert ? `Owner: analyst. Alert ID: ${alert.id}.` : `Owner: analyst. ${alert.id} is fallback-only until live alerts load.`,
             caseId ? `Case ID: ${caseId}. Update the backed case before closing.` : 'Open a backed analyst case before customer delivery.',
-            actionReadiness ? alertActionReadinessSummary(actionReadiness) : 'Action readiness is not returned with this alert.',
+            actionReadiness ? alertActionReadinessSummary(actionReadiness) : 'Action status is not returned with this alert.',
             latestDelivery
                 ? `Latest delivery ${latestDelivery.id} is ${latestDelivery.status}; open the ledger before notifying the customer.`
                 : webhookDestinationIds.length ? `Webhook destination IDs: ${webhookDestinationIds.join(', ')}.` : 'Configure/test webhook destination before sending.',
@@ -764,10 +764,10 @@ function alertAnalystActionReadiness(alert: DwmAlert): DwmAlertAnalystActionRead
 function alertActionDisabledReason(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction) {
     if (!readiness) return undefined
     const row = readiness.actions?.find(item => item.action === action)
-    if (!row) return `Backend action readiness did not return ${action}.`
+    if (!row) return `Backend action status did not return ${action}.`
     if (row.ready) return undefined
     const blockers = row.blockerCodes?.length ? row.blockerCodes.join(', ') : 'not ready'
-    return `${action.replaceAll('_', ' ')} blocked by backend action readiness: ${blockers}.`
+    return `${action.replaceAll('_', ' ')} blocked by backend action status: ${blockers}.`
 }
 
 function alertActionRequestGuard(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction, options: { includeIdempotencyKey?: boolean, includeDeliveryDedupeKey?: boolean } = {}) {

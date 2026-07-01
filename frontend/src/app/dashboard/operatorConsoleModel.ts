@@ -597,14 +597,14 @@ function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvena
         checkedAt,
         source,
         href: '/ti',
-        detail: 'Public TI provenance readiness is not loaded by product progress.',
-        blockers: ['Public TI provenance readiness is not loaded by product progress.'],
+        detail: 'Public TI provenance status is not loaded by the backend.',
+        blockers: ['Public TI provenance status is not loaded by the backend.'],
         ownerLane: 'public-ti',
         unavailableReason: 'missing_public_ti_provenance_readiness_api',
         staleAfterSeconds: 3600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'public_ti_provenance',
-        integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+        integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source, evidence, and freshness status.',
         backendProofContractVersion: 'ti.public_provenance.readiness.v1',
     }
 }
@@ -616,14 +616,14 @@ function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditRe
         checkedAt,
         source,
         href: '/dashboard/system/impersonation',
-        detail: 'Helpdesk and structured audit readiness is not loaded by product progress.',
-        blockers: ['Helpdesk and structured audit readiness is not loaded by product progress.'],
+        detail: 'Helpdesk and structured audit status is not loaded by the backend.',
+        blockers: ['Helpdesk and structured audit status is not loaded by the backend.'],
         ownerLane: 'helpdesk',
         unavailableReason: 'missing_helpdesk_audit_readiness_api',
         staleAfterSeconds: 3600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'helpdesk_audit',
-        integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+        integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue status.',
         backendProofContractVersion: 'support.audit.readiness.v1',
     }
 }
@@ -635,8 +635,8 @@ function unavailableDeployProbe(source: string, checkedAt: string): DeployProbeR
         checkedAt,
         source,
         href: '/status',
-        detail: 'Deploy probe recency is not loaded by product progress.',
-        blockers: ['Deploy probe recency is not loaded by product progress.'],
+        detail: 'Deploy probe recency is not loaded by the backend.',
+        blockers: ['Deploy probe recency is not loaded by the backend.'],
         ownerLane: 'integration',
         unavailableReason: 'missing_live_deploy_probe',
         staleAfterSeconds: 600,
@@ -654,14 +654,14 @@ function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSna
         checkedAt,
         source,
         href: '/dashboard/dwm',
-        detail: 'Live DWM product snapshot is not loaded by product progress.',
-        blockers: ['DWM owner must expose /api/dwm/product with demo=false before this can become ready.'],
+        detail: 'Live DWM product snapshot is not loaded by the backend.',
+        blockers: ['DWM owner must expose /api/dwm/product with demo=false before this can become active.'],
         ownerLane: 'dwm',
         unavailableReason: 'missing_dwm_product_snapshot',
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
     }
 }
@@ -673,14 +673,14 @@ function unavailableOrgAlertExport(source: string, checkedAt: string): Organizat
         checkedAt,
         source,
         href: '/dashboard/dwm',
-        detail: 'Organization alert-term export readiness is not loaded by product progress.',
-        blockers: ['Organization alert-term export readiness is not loaded by product progress.'],
+        detail: 'Organization alert-term export status is not loaded by the backend.',
+        blockers: ['Organization alert-term export status is not loaded by the backend.'],
         ownerLane: 'org',
         unavailableReason: 'missing_org_alert_export_readiness_api',
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return organization alertability and active watchlist term counts.',
         backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     }
 }
@@ -692,8 +692,8 @@ function unavailableWebhookHealth(source: string, checkedAt: string): WebhookHea
         checkedAt,
         source,
         href: '/dashboard/automations?setup=dwm',
-        detail: 'Webhook health readiness is not loaded by product progress.',
-        blockers: ['Webhook health readiness is not loaded by product progress.'],
+        detail: 'Webhook health status is not loaded by the backend.',
+        blockers: ['Webhook health status is not loaded by the backend.'],
         ownerLane: 'webhook',
         unavailableReason: 'missing_webhook_lifecycle_health_api',
         staleAfterSeconds: 900,
@@ -711,8 +711,8 @@ function unavailableDashboardEvidence(source: string, checkedAt: string): Dashbo
         checkedAt,
         source,
         href: '/dashboard',
-        detail: 'Dashboard alert and delivery proof is not loaded by product progress.',
-        blockers: ['Dashboard alert and delivery proof is not loaded by product progress.'],
+        detail: 'Dashboard alert and delivery data is not loaded by the backend.',
+        blockers: ['Dashboard alert and delivery data is not loaded by the backend.'],
         ownerLane: 'dashboard',
         unavailableReason: 'missing_dashboard_alert_evidence',
         staleAfterSeconds: 600,
@@ -730,14 +730,14 @@ function unavailableAnalystWorkflow(source: string, checkedAt: string): AnalystW
         checkedAt,
         source,
         href: '/dashboard/ti/workbench',
-        detail: 'Analyst case readiness is not loaded by product progress.',
-        blockers: ['Analyst case readiness is not loaded by product progress.'],
+        detail: 'Analyst case status is not loaded by the backend.',
+        blockers: ['Analyst case status is not loaded by the backend.'],
         ownerLane: 'dashboard',
         unavailableReason: 'missing_analyst_case_readiness',
         staleAfterSeconds: 600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'analyst_workflow',
-        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+        integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is active.',
         backendProofContractVersion: 'analyst.workflow.readiness.v1',
     }
 }
@@ -749,8 +749,8 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         checkedAt,
         source,
         href: '/dashboard/dwm',
-        detail: 'DWM entitlement readiness is not loaded by product progress.',
-        blockers: ['DWM entitlement readiness is not loaded by product progress.'],
+        detail: 'DWM entitlement status is not loaded by the backend.',
+        blockers: ['DWM entitlement status is not loaded by the backend.'],
         ownerLane: 'org',
         unavailableReason: 'missing_dwm_entitlement_readiness_api',
         staleAfterSeconds: 900,
@@ -1698,12 +1698,12 @@ function buildProductReadiness(input: {
         },
         {
             id: 'entitlement_readiness',
-            label: 'Entitlement readiness',
+            label: 'Entitlement status',
             status: entitlement?.status || 'unavailable',
             detail: entitlement
                 ? entitlement.detail || entitlementDetail(entitlement)
-                : 'DWM entitlement readiness is not loaded by product progress.',
-            source: entitlement?.source || 'Missing DWM entitlement readiness contract',
+                : 'DWM entitlement status is not loaded by the backend.',
+            source: entitlement?.source || 'Missing DWM entitlement status API',
             href: entitlement?.href || '/dashboard/dwm',
             checkedAt: entitlement?.checkedAt,
             staleAfterSeconds: entitlement?.staleAfterSeconds,
@@ -1743,8 +1743,8 @@ function buildProductReadiness(input: {
             status: dwmProduct?.status || 'unavailable',
             detail: dwmProduct
                 ? dwmProduct.detail || dwmProductDetail(dwmProduct)
-                : 'Live DWM product snapshot is not loaded by product progress.',
-            source: dwmProduct?.source || 'Missing /api/dwm/product proof',
+                : 'Live DWM product snapshot is not loaded by the backend.',
+            source: dwmProduct?.source || 'Missing /api/dwm/product status',
             href: dwmProduct?.href || '/dashboard/dwm',
             checkedAt: dwmProduct?.checkedAt || dwmProduct?.latestAlertAt,
             staleAfterSeconds: dwmProduct?.staleAfterSeconds,
@@ -1772,8 +1772,8 @@ function buildProductReadiness(input: {
             status: orgAlertExport?.status || 'unavailable',
             detail: orgAlertExport
                 ? orgAlertExport.detail || orgAlertExportDetail(orgAlertExport)
-                : 'Organization alert-term export readiness is not loaded by product progress.',
-            source: orgAlertExport?.source || 'Missing organization watchlist alert-term export contract',
+                : 'Organization alert-term export status is not loaded by the backend.',
+            source: orgAlertExport?.source || 'Missing organization watchlist alert-term export API',
             href: orgAlertExport?.href || '/dashboard/dwm',
             checkedAt: orgAlertExport?.checkedAt || orgAlertExport?.exportedAt,
             staleAfterSeconds: orgAlertExport?.staleAfterSeconds,
@@ -1795,8 +1795,8 @@ function buildProductReadiness(input: {
             status: webhookHealth?.status || 'unavailable',
             detail: webhookHealth
                 ? webhookHealth.detail || webhookHealthDetail(webhookHealth)
-                : 'Webhook health readiness is not loaded by product progress.',
-            source: webhookHealth?.source || 'Missing DWM webhook health readiness contract',
+                : 'Webhook health status is not loaded by the backend.',
+            source: webhookHealth?.source || 'Missing DWM webhook health API',
             href: webhookHealth?.href || '/dashboard/automations?setup=dwm',
             checkedAt: webhookHealth?.checkedAt || webhookHealth?.latestDeliveryAt || webhookHealth?.latestAuditEventAt || input.latestWebhookAt,
             staleAfterSeconds: webhookHealth?.staleAfterSeconds,
@@ -1820,8 +1820,8 @@ function buildProductReadiness(input: {
             status: dashboardEvidence?.status || 'unavailable',
             detail: dashboardEvidence
                 ? dashboardAlertReadinessDetail(dashboardEvidence, alertGeneration)
-                : 'Product progress has not provided dashboard-visible alert and matching delivery proof.',
-            source: dashboardEvidence?.source || 'Missing dashboard alert evidence contract',
+                : 'Dashboard-visible alert and matching delivery data are not loaded.',
+            source: dashboardEvidence?.source || 'Missing dashboard alert evidence API',
             href: dashboardEvidence?.href || dashboardEvidence?.dashboardPath || '/dashboard',
             checkedAt: dashboardEvidence?.checkedAt,
             staleAfterSeconds: dashboardEvidence?.staleAfterSeconds,
@@ -1844,8 +1844,8 @@ function buildProductReadiness(input: {
             status: analystWorkflow?.status || 'unavailable',
             detail: analystWorkflow
                 ? analystWorkflow.detail || analystWorkflowDetail(analystWorkflow)
-                : 'Product progress has not provided a backed analyst case linked to the dashboard alert.',
-            source: analystWorkflow?.source || 'Missing analyst workflow readiness contract',
+                : 'No backed analyst case is linked to the dashboard alert.',
+            source: analystWorkflow?.source || 'Missing analyst workflow API',
             href: analystWorkflow?.href || '/dashboard/ti/workbench',
             checkedAt: analystWorkflow?.checkedAt || analystWorkflow?.latestCaseAt,
             staleAfterSeconds: analystWorkflow?.staleAfterSeconds,
@@ -1865,11 +1865,11 @@ function buildProductReadiness(input: {
         },
         {
             id: 'source_inventory_probe',
-            label: 'Source inventory proof',
+            label: 'Source inventory',
             status: sourceGrowthStatus,
             detail: sourceGrowth
                 ? sourceGrowth.detail || sourceGrowthDetail(sourceGrowth)
-                : 'Source pack and inventory proof is available inside the scraper network, but the dashboard has no safe operator proxy yet.',
+                : 'Source pack and inventory data is available inside the scraper network, but the dashboard has no safe operator proxy yet.',
             source: sourceGrowth?.source || (sourceGrowth?.proxyExposed ? 'GET /api/dwm/source-inventory' : 'Missing /api/dwm/source-packs proxy'),
             href: '/dashboard/ti/sources',
             checkedAt: sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
@@ -1905,17 +1905,17 @@ function buildProductReadiness(input: {
         },
         {
             id: 'end_to_end_workflow',
-            label: 'Customer workflow proof',
+            label: 'Customer workflow',
             status: sourceGrowth?.endToEndWorkflow?.status || 'blocked',
-            detail: sourceGrowth?.endToEndWorkflow?.detail || 'End-to-end customer workflow proof is not exposed by the source contract proxy.',
-            source: sourceGrowth?.source || 'GET /api/ti/scraper/control contracts',
+            detail: sourceGrowth?.endToEndWorkflow?.detail || 'End-to-end customer workflow status is not exposed by the source proxy.',
+            source: sourceGrowth?.source || 'GET /api/ti/scraper/control workflow status',
             href: '/dashboard/ti/sources',
             checkedAt: sourceGrowth?.endToEndWorkflow?.lastVerifiedAt || sourceGrowth?.checkedAt || sourceGrowth?.latestInventoryAt,
             staleAfterSeconds: sourceGrowth?.staleAfterSeconds || 900,
             proofTimestamp: sourceGrowth?.endToEndWorkflow?.lastVerifiedAt || sourceGrowth?.proofTimestamp,
             unavailableReason: sourceGrowth?.endToEndWorkflow?.status === 'ready' ? undefined : 'missing_end_to_end_workflow_packet',
             expectedDashboardRowId: 'end_to_end_workflow',
-            integrationProbeHint: 'GET /api/ti/scraper/control must expose contracts.productReadinessEndToEndWorkflowPacket with org, watchlist, source, alert, case, webhook, delivery, and support steps.',
+            integrationProbeHint: 'GET /api/ti/scraper/control must expose org, watchlist, source, alert, case, webhook, delivery, and support steps.',
             backendProofContractVersion: sourceGrowth?.endToEndWorkflow?.schemaVersion || 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
             endToEndWorkflowStepCount: sourceGrowth?.endToEndWorkflow?.stepCount,
             endToEndWorkflowReadyStepCount: sourceGrowth?.endToEndWorkflow?.readyStepCount,
@@ -1929,7 +1929,7 @@ function buildProductReadiness(input: {
             detail: publicTiProvenance
                 ? publicTiProvenance.detail || publicTiProvenanceDetail(publicTiProvenance)
                 : 'Public TI handoff payloads are validated per selected artifact; no global provenance API is loaded here.',
-            source: publicTiProvenance?.source || 'Public TI handoff contract',
+            source: publicTiProvenance?.source || 'Public TI handoff data',
             href: '/ti',
             checkedAt: publicTiProvenance?.checkedAt || publicTiProvenance?.latestArtifactAt,
             staleAfterSeconds: publicTiProvenance?.staleAfterSeconds,
@@ -1945,8 +1945,8 @@ function buildProductReadiness(input: {
             status: helpdeskAudit?.status || 'unavailable',
             detail: helpdeskAudit
                 ? helpdeskAudit.detail || helpdeskAuditDetail(helpdeskAudit)
-                : 'Support/audit routes exist, but this dashboard does not fetch a helpdesk readiness snapshot yet.',
-            source: helpdeskAudit?.source || 'Missing dashboard readiness API',
+                : 'Support/audit routes exist, but this dashboard does not fetch helpdesk status yet.',
+            source: helpdeskAudit?.source || 'Missing dashboard support API',
             href: '/dashboard/system/impersonation',
             checkedAt: helpdeskAudit?.checkedAt || helpdeskAudit?.latestAuditEventAt,
             staleAfterSeconds: helpdeskAudit?.staleAfterSeconds,
@@ -1962,8 +1962,8 @@ function buildProductReadiness(input: {
             status: deployProbe?.status || 'unavailable',
             detail: deployProbe
                 ? deployProbe.detail || deployProbeDetail(deployProbe)
-                : 'Deploy/probe recency is tracked in integration handoffs; no product-progress API is loaded by this dashboard.',
-            source: deployProbe?.source || 'Missing /api/product-progress contract',
+                : 'Deploy/probe recency is tracked by integration checks; no deploy status API is loaded by this dashboard.',
+            source: deployProbe?.source || 'Missing deploy status API',
             href: '/status',
             checkedAt: deployProbe?.checkedAt || deployProbe?.latestProbeAt,
             staleAfterSeconds: deployProbe?.staleAfterSeconds,
@@ -2065,7 +2065,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
                     sourcePackIds: ['safe-public-cti-starter-pack'],
                     actions: ['approve', 'quarantine', 'request_legal_notes', 'leave_unchanged'],
                 },
-                disabledReason: item.parserSourceFamilyCount ? undefined : 'Preview requires parser-family proof from the source-pack worker.',
+                disabledReason: item.parserSourceFamilyCount ? undefined : 'Preview requires parser-family data from the source-pack worker.',
             })
             if (item.id === 'end_to_end_workflow') {
                 actions.push({ id: 'open_watchlists_api', label: 'Watchlists API', method: 'GET', href: watchlistsHref(context.scope) })
@@ -2078,7 +2078,7 @@ function productReadinessActions(item: WorkbenchProductReadinessItem, context: {
         case 'alert_generation':
         case 'dwm_product_snapshot':
             actions.push({ id: 'open_alert_queue', label: 'Open alerts', method: 'GET', href: alertsHref(context.scope) })
-            actions.push({ id: 'open_alert_generation_readiness', label: 'Generation proof', method: 'GET', href: '/api/dwm/alerts/generation-readiness' })
+            actions.push({ id: 'open_alert_generation_readiness', label: 'Alert pipeline', method: 'GET', href: '/api/dwm/alerts/generation-readiness' })
             actions.push({
                 id: 'rebuild_alerts',
                 label: 'Rebuild alerts',
@@ -2149,14 +2149,14 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
         : item.caseDetailReady
             ? item.caseDetailReadOnly ? 'Case detail is read-only for the current member.' : undefined
             : 'Case mutation requires readable case detail from /api/cases/:id.'
-    const ownerBlockedReason = mutationBlockedReason || (item.assignedOwner ? undefined : 'Assignment requires an owner returned by analyst workflow readiness.')
+    const ownerBlockedReason = mutationBlockedReason || (item.assignedOwner ? undefined : 'Assignment requires an owner returned by analyst workflow status.')
     return [
         {
             id: 'assign_case_owner',
             label: 'Assign owner',
             method: 'PATCH',
             href: caseHref || '/api/cases/:id',
-            body: { action: 'assign', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Assigned from readiness queue.' },
+            body: { action: 'assign', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Assigned from operations queue.' },
             disabledReason: ownerBlockedReason,
         },
         {
@@ -2164,7 +2164,7 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
             label: 'Escalate case',
             method: 'PATCH',
             href: caseHref || '/api/cases/:id',
-            body: { action: 'escalate', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Escalated from readiness queue after evidence review.' },
+            body: { action: 'escalate', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Escalated from operations queue after evidence review.' },
             disabledReason: mutationBlockedReason,
         },
         {
@@ -2172,7 +2172,7 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
             label: 'Record note',
             method: 'PATCH',
             href: caseHref || '/api/cases/:id',
-            body: { action: 'note', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Readiness queue review recorded.' },
+            body: { action: 'note', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Operations queue review recorded.' },
             disabledReason: mutationBlockedReason,
         },
         {
@@ -2180,7 +2180,7 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
             label: 'Suppress case',
             method: 'PATCH',
             href: caseHref || '/api/cases/:id',
-            body: { action: 'suppress', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Suppressed from readiness queue after evidence review.' },
+            body: { action: 'suppress', actor: 'dashboard', assignedOwner: item.assignedOwner, note: 'Suppressed from operations queue after evidence review.' },
             disabledReason: mutationBlockedReason,
         },
         {
@@ -2192,7 +2192,7 @@ function caseReadinessMutationActions(item: WorkbenchProductReadinessItem): Work
                 action: item.caseStatus === 'closed' ? 'reopen' : 'close',
                 actor: 'dashboard',
                 assignedOwner: item.assignedOwner,
-                note: item.caseStatus === 'closed' ? 'Reopened from readiness queue for review.' : 'Closed from readiness queue after evidence review.',
+                note: item.caseStatus === 'closed' ? 'Reopened from operations queue for review.' : 'Closed from operations queue after evidence review.',
             },
             disabledReason: mutationBlockedReason,
         },
@@ -2244,7 +2244,7 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
                 workflowBlocker: 'Shared watchlists',
                 customerImpact: item.status === 'ready'
                     ? 'Customer terms can feed org-scoped alert generation.'
-                    : 'Customer terms cannot produce org-scoped alerts until active watchlists and export proof are present.',
+                    : 'Customer terms cannot produce org-scoped alerts until active watchlists and export data are present.',
                 evidenceProvenance,
             }
         case 'source_coverage':
@@ -2252,15 +2252,15 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             return {
                 workflowBlocker: 'Source health',
                 customerImpact: item.status === 'ready'
-                    ? 'Source inventory and worker proof can support alert generation.'
+                    ? 'Source inventory and worker status can support alert generation.'
                     : 'Alert coverage is incomplete until source inventory and worker health are operator-reachable.',
                 evidenceProvenance,
             }
         case 'end_to_end_workflow':
             return {
-                workflowBlocker: 'Workflow proof',
+                workflowBlocker: 'Workflow status',
                 customerImpact: item.status === 'ready'
-                    ? 'The customer workflow can be traced from organization scope through alert, case, delivery, and support proof.'
+                    ? 'The customer workflow can be traced from organization scope through alert, case, delivery, and support history.'
                     : 'Operators cannot trust the full customer workflow until every org, watchlist, source, alert, case, webhook, and support step is backed.',
                 evidenceProvenance,
             }
@@ -2280,7 +2280,7 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             return {
                 workflowBlocker: 'Webhook delivery',
                 customerImpact: item.status === 'ready'
-                    ? 'Customer delivery can be inspected against destination and delivery proof.'
+                    ? 'Customer delivery can be inspected against destination and delivery history.'
                     : 'Customer notification delivery is blocked until a tested destination and matching delivery ledger exist.',
                 evidenceProvenance,
             }
@@ -2296,8 +2296,8 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             return {
                 workflowBlocker: 'Support audit',
                 customerImpact: item.status === 'ready'
-                    ? 'Support actions have audit evidence for customer-facing recovery work.'
-                    : 'Support recovery cannot be considered enterprise-ready until audit proof is returned.',
+                    ? 'Support actions have audit history for customer-facing recovery work.'
+                    : 'Support recovery cannot be considered enterprise-ready until audit history is returned.',
                 evidenceProvenance,
             }
         case 'public_ti_provenance':
@@ -2310,18 +2310,18 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
             }
         case 'deploy_probe':
             return {
-                workflowBlocker: 'Deploy proof',
+                workflowBlocker: 'Deploy status',
                 customerImpact: item.status === 'ready'
                     ? 'The deployed surface has current probe evidence for dashboard alert and delivery paths.'
-                    : 'Release readiness is blocked until live probe evidence confirms the dashboard workflow after deploy.',
+                    : 'Release is blocked until live probe evidence confirms the dashboard workflow after deploy.',
                 evidenceProvenance,
             }
         default:
             return {
-                workflowBlocker: 'Readiness blocker',
+                workflowBlocker: 'Workflow blocker',
                 customerImpact: item.status === 'ready'
-                    ? 'This readiness row is backed by a proof source.'
-                    : 'This workflow needs backed proof before an operator can rely on it.',
+                    ? 'This workflow row is backed by live data.'
+                    : 'This workflow needs live data before an operator can rely on it.',
                 evidenceProvenance,
             }
     }
@@ -2339,17 +2339,17 @@ function productReadinessWorkflow(item: WorkbenchProductReadinessItem): { ownerL
         case 'source_inventory_probe':
             return { ownerLane: 'Source ops', operatorAction: item.status === 'ready' ? 'Review source health' : 'Open source operations' }
         case 'end_to_end_workflow':
-            return { ownerLane: 'Operator', operatorAction: item.status === 'ready' ? 'Review workflow proof' : 'Open workflow blockers' }
+            return { ownerLane: 'Operator', operatorAction: item.status === 'ready' ? 'Review workflow' : 'Open workflow blockers' }
         case 'dashboard_alert':
         case 'dashboard_evidence':
-            return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Open alert proof' : 'Open dashboard evidence' }
+            return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Open alert evidence' : 'Open dashboard evidence' }
         case 'analyst_workflow':
             return { ownerLane: 'SOC analyst', operatorAction: item.status === 'ready' ? 'Review case workflow' : 'Open analyst cases' }
         case 'dwm_product_snapshot':
-            return { ownerLane: 'DWM owner', operatorAction: item.status === 'ready' ? 'Inspect product snapshot' : 'Open DWM product proof' }
+            return { ownerLane: 'DWM owner', operatorAction: item.status === 'ready' ? 'Inspect product snapshot' : 'Open DWM product status' }
         case 'webhook_delivery':
         case 'webhook_health':
-            return { ownerLane: 'Delivery ops', operatorAction: item.status === 'ready' ? 'Review delivery proof' : 'Open delivery setup' }
+            return { ownerLane: 'Delivery ops', operatorAction: item.status === 'ready' ? 'Review delivery history' : 'Open delivery setup' }
         case 'org_alert_export':
             return { ownerLane: 'Org admin', operatorAction: item.status === 'ready' ? 'Review alert terms' : 'Open watchlist export' }
         case 'helpdesk_audit':
@@ -2401,14 +2401,14 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'source_inventory_probe':
             return {
                 backendProofContractVersion: 'dwm.source_inventory.v1',
-                integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and workerReadiness.',
+                integrationProbeHint: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, and worker status.',
                 staleAfterSeconds: 7200,
                 unavailableReason: 'missing_source_proxy_worker_readiness',
             }
         case 'end_to_end_workflow':
             return {
                 backendProofContractVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
-                integrationProbeHint: 'GET /api/ti/scraper/control must expose contracts.productReadinessEndToEndWorkflowPacket with typed workflow steps.',
+                integrationProbeHint: 'GET /api/ti/scraper/control must expose typed workflow steps.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_end_to_end_workflow_packet',
             }
@@ -2422,7 +2422,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'dwm_product_snapshot':
             return {
                 backendProofContractVersion: 'dwm.product.v1',
-                integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+                integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI backend.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_dwm_product_snapshot',
             }
@@ -2436,7 +2436,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'org_alert_export':
             return {
                 backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
-                integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+                integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return organization alertability and active watchlist term counts.',
                 staleAfterSeconds: 900,
                 unavailableReason: 'missing_org_alert_export_readiness_api',
             }
@@ -2457,21 +2457,21 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
         case 'analyst_workflow':
             return {
                 backendProofContractVersion: 'analyst.workflow.readiness.v1',
-                integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+                integrationProbeHint: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is active.',
                 staleAfterSeconds: 600,
                 unavailableReason: 'missing_analyst_case_readiness',
             }
         case 'public_ti_provenance':
             return {
                 backendProofContractVersion: 'ti.public_provenance.readiness.v1',
-                integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+                integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source, evidence, and freshness status.',
                 staleAfterSeconds: 3600,
                 unavailableReason: 'missing_public_ti_provenance_readiness_api',
             }
         case 'helpdesk_audit':
             return {
                 backendProofContractVersion: 'support.audit.readiness.v1',
-                integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+                integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue status.',
                 staleAfterSeconds: 3600,
                 unavailableReason: 'missing_helpdesk_audit_readiness_api',
             }
@@ -2487,7 +2487,7 @@ function productReadinessProofMetadata(item: WorkbenchProductReadinessItem): {
                 backendProofContractVersion: 'unknown.readiness.v1',
                 integrationProbeHint: item.source,
                 staleAfterSeconds: 900,
-                unavailableReason: 'missing_readiness_proof',
+                unavailableReason: 'missing_workflow_data',
             }
     }
 }
@@ -2547,8 +2547,8 @@ function deployProbeDetail(input: DeployProbeReadiness) {
         input.apiHealthy ? 'API healthy' : '',
         input.scraperHealthy ? 'scraper healthy' : '',
     ].filter(Boolean)
-    const proof = input.dashboardAlertId && input.deliveryId ? `dashboard alert ${input.dashboardAlertId} matched delivery ${input.deliveryId}` : 'dashboard alert plus delivery proof not loaded'
-    return `${input.deployedCommit ? `Commit ${input.deployedCommit}; ` : ''}${services.length ? `${services.join(', ')}; ` : ''}${proof}.`
+    const delivery = input.dashboardAlertId && input.deliveryId ? `dashboard alert ${input.dashboardAlertId} matched delivery ${input.deliveryId}` : 'dashboard alert plus delivery data not loaded'
+    return `${input.deployedCommit ? `Commit ${input.deployedCommit}; ` : ''}${services.length ? `${services.join(', ')}; ` : ''}${delivery}.`
 }
 
 function orgAlertExportDetail(input: OrganizationAlertExportReadiness) {
@@ -2576,7 +2576,7 @@ function alertGenerationDetail(input: DwmAlertGenerationReadiness) {
         typeof input.generationEvidenceWindowCaptureCount === 'number' ? `${input.generationEvidenceWindowCaptureCount} evidence-window capture${input.generationEvidenceWindowCaptureCount === 1 ? '' : 's'}` : '',
         typeof input.missingRouteCandidateCount === 'number' ? `${input.missingRouteCandidateCount} missing delivery route${input.missingRouteCandidateCount === 1 ? '' : 's'}` : '',
     ].filter(Boolean)
-    return counts.length ? counts.join(', ') + '.' : 'Alert generation proof snapshot loaded.'
+    return counts.length ? counts.join(', ') + '.' : 'Alert generation snapshot loaded.'
 }
 
 function dashboardEvidenceDetail(input: DashboardAlertEvidenceReadiness) {
@@ -2619,25 +2619,25 @@ function sourceGrowthDetail(input: SourceGrowthReadiness) {
         typeof input.catalogCandidates === 'number' ? `${input.catalogCandidates} catalog candidates` : '',
         typeof input.sourceFamilyCount === 'number' ? `${input.sourceFamilyCount} source families` : '',
         typeof input.parserSourceFamilyCount === 'number' ? `${input.parserSourceFamilyCount} parser families` : '',
-        typeof input.contractLookupRows === 'number' ? `${input.contractLookupRows} contract rows` : '',
-        typeof input.receiptMatrixRows === 'number' ? `${input.receiptMatrixRows} receipt rows` : '',
+        typeof input.contractLookupRows === 'number' ? `${input.contractLookupRows} lookup row${input.contractLookupRows === 1 ? '' : 's'}` : '',
+        typeof input.receiptMatrixRows === 'number' ? `${input.receiptMatrixRows} delivery-check row${input.receiptMatrixRows === 1 ? '' : 's'}` : '',
         typeof input.netNewCandidates === 'number' ? `${input.netNewCandidates} net-new` : '',
         typeof input.reviewQueueCount === 'number' ? `${input.reviewQueueCount} queued for review` : '',
         typeof input.collectionReadyRows === 'number' ? `${input.collectionReadyRows} worker-ready rows` : '',
     ].filter(Boolean)
-    const proxy = sourceGrowthReady(input) ? 'operator proxy and worker status loaded' : input.proxyExposed ? 'operator proxy loaded; worker readiness still blocked' : 'scraper inventory works, dashboard proxy still missing'
+    const proxy = sourceGrowthReady(input) ? 'operator proxy and worker status loaded' : input.proxyExposed ? 'operator proxy loaded; worker status still blocked' : 'scraper inventory works, dashboard proxy still missing'
     return counts.length ? `${counts.join(', ')}; ${proxy}.` : proxy + '.'
 }
 
 function sourceWorkerProofSummary(input: SourceGrowthReadiness, blockers: string[], ready: boolean) {
-    if (!ready) return blockers.join('; ') || input.unavailableReason || 'Source worker readiness is not operator-reachable.'
+    if (!ready) return blockers.join('; ') || input.unavailableReason || 'Source worker status is not operator-reachable.'
     return [
         `worker ${input.workerStatus || 'ready'}`,
         `${input.collectionReadyRows ?? 0} collection-ready row${input.collectionReadyRows === 1 ? '' : 's'}`,
         `${input.parserSourceFamilyCount ?? 0} parser famil${input.parserSourceFamilyCount === 1 ? 'y' : 'ies'}`,
-        `${input.contractLookupRows ?? 0} contract row${input.contractLookupRows === 1 ? '' : 's'}`,
-        `${input.receiptMatrixRows ?? 0} receipt row${input.receiptMatrixRows === 1 ? '' : 's'}`,
-        `${input.receiptMatrixBlockedRows ?? 0} receipt blocker${input.receiptMatrixBlockedRows === 1 ? '' : 's'}`,
+        `${input.contractLookupRows ?? 0} lookup row${input.contractLookupRows === 1 ? '' : 's'}`,
+        `${input.receiptMatrixRows ?? 0} delivery-check row${input.receiptMatrixRows === 1 ? '' : 's'}`,
+        `${input.receiptMatrixBlockedRows ?? 0} delivery-check blocker${input.receiptMatrixBlockedRows === 1 ? '' : 's'}`,
         `last run ${input.workerLastRunAt || 'not returned'}`,
     ].join('; ') + '.'
 }
@@ -2852,8 +2852,8 @@ export function buildReadinessCases(input: {
                 confidence: input.backendConfigured ? 94 : 64,
             }],
             timeline: [{ id: 'organization_setup_audit', at: organization?.updatedAt || now, title: organization ? 'Organization loaded' : 'Organization required', body: organization ? `Organization state includes ${activeOrgMembers.length} active member${activeOrgMembers.length === 1 ? '' : 's'}, ${pendingOrgInvites.length} pending invite${pendingOrgInvites.length === 1 ? '' : 's'}, and ${orgWebhooks.length} active webhook destination${orgWebhooks.length === 1 ? '' : 's'}.` : 'Create or join an organization before claiming shared team ownership.' }],
-            nextTasks: organization ? [`Owner: operator. Scope: ${organization.id}. Inspect members and pending invites.`, 'Open alert-readiness proof before rebuilding alerts.', 'Create or test org webhook destination before customer routing.'] : ['Owner: backend-foundation. POST /api/organizations with name and ownerEmail.', 'Invite analysts through /api/organizations/:id/invites.', 'Create an org webhook destination before customer routing.'],
-            relatedLinks: organization ? [{ href: '/api/organizations', label: 'Organizations API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`, label: 'Alert-readiness API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' }] : [{ href: '/api/organizations', label: 'Create organization API' }],
+            nextTasks: organization ? [`Owner: operator. Scope: ${organization.id}. Inspect members and pending invites.`, 'Check alert visibility before rebuilding alerts.', 'Create or test org webhook destination before customer routing.'] : ['Owner: backend-foundation. POST /api/organizations with name and ownerEmail.', 'Invite analysts through /api/organizations/:id/invites.', 'Create an org webhook destination before customer routing.'],
+            relatedLinks: organization ? [{ href: '/api/organizations', label: 'Organizations API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/members`, label: 'Members API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`, label: 'Alert visibility API' }, { href: `/api/organizations/${encodeURIComponent(organization.id)}/webhooks`, label: 'Webhooks API' }] : [{ href: '/api/organizations', label: 'Create organization API' }],
             workflowPath: path,
             actions: organization ? [{
                 id: 'inspect_org_members',
@@ -2862,7 +2862,7 @@ export function buildReadinessCases(input: {
                 href: `/api/organizations/${encodeURIComponent(organization.id)}/members`,
             }, {
                 id: 'inspect_org_alert_readiness',
-                label: 'Inspect readiness',
+                label: 'Inspect visibility',
                 method: 'GET',
                 href: `/api/organizations/${encodeURIComponent(organization.id)}/alert-readiness`,
             }, {
@@ -2971,28 +2971,28 @@ export function buildReadinessCases(input: {
         readinessCase({
             id: 'support_admin_readiness',
             kind: 'support_readiness',
-            queue: 'Support readiness',
-            title: helpdeskReady ? 'Support audit proof loaded' : 'Verify support audit proof',
+            queue: 'Support ops',
+            title: helpdeskReady ? 'Support audit trail loaded' : 'Connect support audit trail',
             severity: helpdeskReady ? 'medium' : 'high',
             status: helpdeskAudit?.status || 'unavailable',
             priority: helpdeskReady ? 248 : 365,
             confidence: helpdeskAudit ? 88 : 55,
             subtitle: helpdeskAudit
                 ? helpdeskAudit.detail || helpdeskAuditDetail(helpdeskAudit)
-                : 'Support recovery and admin audit routes were not returned by product-progress readiness.',
+                : 'Support recovery and admin audit routes were not returned by the backend.',
             recommendedAction: helpdeskReady
-                ? 'Review the audited support queue before customer-facing readiness is marked complete.'
-                : 'Open the helpdesk workbench and verify support recovery plus admin audit export proof.',
+                ? 'Review the audited support queue before closing customer access issues.'
+                : 'Open the helpdesk workbench and confirm support recovery plus admin audit export.',
             evidence: [{
                 id: 'ev_support_audit_readiness',
-                sourceName: 'Support audit readiness',
+                sourceName: 'Support audit trail',
                 sourceFamily: 'admin support',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
                 contentHash: helpdeskAudit?.backendProofContractVersion || helpdeskAudit?.schemaVersion || 'support.audit.readiness.v1',
                 excerpt: helpdeskAudit
                     ? `${helpdeskAuditCount} audited support action${helpdeskAuditCount === 1 ? '' : 's'}; ${helpdeskQueueDepth} recovery queue item${helpdeskQueueDepth === 1 ? '' : 's'}.`
-                    : 'Expected product-progress support readiness from recovery and admin audit routes.',
+                    : 'Expected support recovery and admin audit routes from the backend.',
                 observedAt: helpdeskCheckedAt,
                 provenance: helpdeskAudit?.source || '/api/backend/admin/support/access-recovery + /api/backend/admin/audit-events?limit=50',
                 confidence: helpdeskAudit ? 88 : 55,
@@ -3000,21 +3000,21 @@ export function buildReadinessCases(input: {
             timeline: [{
                 id: 'support_audit_readiness_at',
                 at: helpdeskCheckedAt,
-                title: helpdeskReady ? 'Support proof loaded' : 'Support proof required',
+                title: helpdeskReady ? 'Support audit loaded' : 'Support audit required',
                 body: helpdeskReady
                     ? `${helpdeskAuditCount} audited support action${helpdeskAuditCount === 1 ? '' : 's'} loaded with ${helpdeskQueueDepth} recovery queue item${helpdeskQueueDepth === 1 ? '' : 's'}.`
-                    : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Support readiness requires recovery queue and admin audit export proof.',
+                    : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Support access requires recovery queue and admin audit export.',
             }],
             nextTasks: helpdeskReady
-                ? ['Owner: support ops. Review recovery requests that need approval.', 'Open the admin audit export before closing readiness.', 'Keep support actions auditable before customer rollout.']
-                : ['Owner: support ops. Open the helpdesk workbench.', 'Verify recovery queue state from the backed support route.', 'Confirm admin audit export proof before readiness is marked ready.'],
+                ? ['Owner: support ops. Review recovery requests that need approval.', 'Open the admin audit export before closing customer access issues.', 'Keep support actions auditable before customer rollout.']
+                : ['Owner: support ops. Open the helpdesk workbench.', 'Verify recovery queue state from the backed support route.', 'Confirm admin audit export before marking support access ready.'],
             relatedLinks: [
                 { href: '/dashboard/system/impersonation', label: 'Helpdesk workbench' },
                 { href: '/api/backend/admin/support/access-recovery', label: 'Recovery API' },
                 { href: '/api/backend/admin/audit-events?limit=50', label: 'Admin audit API' },
             ],
             workflowPath: path,
-            missingDependency: helpdeskReady ? undefined : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Missing support audit readiness proof.',
+            missingDependency: helpdeskReady ? undefined : helpdeskBlockers.join('; ') || helpdeskAudit?.unavailableReason || 'Missing support recovery or admin audit data.',
             actions: [
                 { id: 'open_helpdesk_workbench', label: 'Open helpdesk', method: 'GET', href: '/dashboard/system/impersonation' },
                 { id: 'inspect_support_recovery', label: 'Inspect recovery', method: 'GET', href: '/api/backend/admin/support/access-recovery' },
@@ -3036,14 +3036,14 @@ export function buildReadinessCases(input: {
                 : 'Link a readable analyst case to the dashboard-visible alert before treating workflow state as ready.',
             evidence: [{
                 id: 'ev_analyst_workflow_readiness',
-                sourceName: 'Analyst workflow readiness',
+                sourceName: 'Analyst workflow status',
                 sourceFamily: 'case workflow',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
                 contentHash: analystWorkflow.caseId || analystWorkflow.backendProofContractVersion || analystWorkflow.schemaVersion,
                 excerpt: analystWorkflowReady
                     ? `Case ${analystWorkflow.caseId || 'unknown'} links to alert ${analystWorkflow.alertId || 'unknown'} with ${analystWorkflow.caseDetailTimelineCount ?? 0} timeline event${analystWorkflow.caseDetailTimelineCount === 1 ? '' : 's'}.`
-                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Analyst case workflow readiness is not backed by product progress.',
+                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Analyst case workflow is not backed by live case data.',
                 observedAt: analystWorkflowCheckedAt,
                 provenance: analystWorkflow.source || 'GET /api/cases + GET /api/cases/:id',
                 confidence: analystWorkflowReady ? 90 : 66,
@@ -3051,14 +3051,14 @@ export function buildReadinessCases(input: {
             timeline: [{
                 id: 'analyst_workflow_readiness_at',
                 at: analystWorkflowCheckedAt,
-                title: analystWorkflowReady ? 'Case workflow proven' : 'Case workflow blocked',
+                title: analystWorkflowReady ? 'Case workflow linked' : 'Case workflow blocked',
                 body: analystWorkflowReady
-                    ? `Case ${analystWorkflow.caseId || 'unknown'} is linked to dashboard alert ${analystWorkflow.alertId || 'unknown'} and detail readiness is ${analystWorkflow.caseDetailReady ? 'ready' : 'not ready'}.`
-                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Product progress did not prove readable case detail for the dashboard alert.',
+                    ? `Case ${analystWorkflow.caseId || 'unknown'} is linked to dashboard alert ${analystWorkflow.alertId || 'unknown'} and detail data is ${analystWorkflow.caseDetailReady ? 'ready' : 'not ready'}.`
+                    : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Readable case detail is missing for the dashboard alert.',
             }],
             nextTasks: analystWorkflowReady
                 ? [`Owner: analyst. Case ID: ${analystWorkflow.caseId || 'not returned'}.`, 'Open the selected case detail and review timeline evidence.', 'Use backed assign/note/escalate/suppress/close actions from the detail panel.']
-                : ['Owner: SOC analyst. Create or link a case for the dashboard-visible alert.', 'Verify GET /api/cases/:id returns timeline and allowed actions.', 'Return after product-progress marks analyst workflow ready.'],
+                : ['Owner: SOC analyst. Create or link a case for the dashboard-visible alert.', 'Verify GET /api/cases/:id returns timeline and allowed actions.', 'Return after the case workflow is backed by live case data.'],
             relatedLinks: [
                 { href: analystWorkflow.href || '/dashboard/ti/workbench', label: 'Analyst workbench' },
                 { href: analystWorkflow.caseDetailRoute || (analystWorkflow.caseId ? `/api/cases/${encodeURIComponent(analystWorkflow.caseId)}` : '/api/cases'), label: 'Case API' },
@@ -3066,7 +3066,7 @@ export function buildReadinessCases(input: {
             ],
             workflowPath: path,
             caseDetailHref: analystWorkflow.caseDetailRoute,
-            missingDependency: analystWorkflowReady ? undefined : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Missing analyst workflow readiness proof.',
+            missingDependency: analystWorkflowReady ? undefined : analystWorkflowBlockers.join('; ') || analystWorkflow.unavailableReason || 'Missing live analyst workflow data.',
             actions: [
                 {
                     id: 'open_analyst_case_workflow',
@@ -3086,18 +3086,18 @@ export function buildReadinessCases(input: {
             id: 'source_worker_readiness',
             kind: 'source_readiness',
             queue: 'Source worker',
-            title: sourceWorkerReady ? 'Source worker proof loaded' : 'Resolve source worker proof',
+            title: sourceWorkerReady ? 'Source worker status loaded' : 'Resolve source worker status',
             severity: sourceWorkerReady ? 'medium' : 'high',
             status: sourceGrowth.status,
             priority: sourceWorkerReady ? 244 : 358,
             confidence: sourceWorkerReady ? 89 : 66,
             subtitle: sourceGrowth.detail || sourceGrowthDetail(sourceGrowth),
             recommendedAction: sourceWorkerReady
-                ? 'Open source operations, inspect worker readiness, then rerun alert generation from the selected organization scope.'
-                : 'Open source operations and resolve worker, inventory, customer configuration, or proxy proof blockers before treating alert generation as ready.',
+                ? 'Open source operations, inspect worker status, then rerun alert generation from the selected organization scope.'
+                : 'Open source operations and resolve worker, inventory, customer configuration, or proxy blockers before treating alert generation as ready.',
             evidence: [{
                 id: 'ev_source_worker_readiness',
-                sourceName: 'Source worker readiness',
+                sourceName: 'Source worker status',
                 sourceFamily: 'source health',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
@@ -3114,15 +3114,15 @@ export function buildReadinessCases(input: {
                 body: sourceWorkerProofSummary(sourceGrowth, sourceWorkerBlockers, sourceWorkerReady),
             }],
             nextTasks: sourceWorkerReady
-                ? ['Owner: source ops. Inspect source worker proof in source operations.', 'Confirm contract lookup and receipt matrix stay safe before alert rebuild.', 'Return to the alert queue after source worker proof stays fresh.']
-                : ['Owner: source ops. Open source operations.', 'Resolve source inventory, source-pack, contract lookup, receipt matrix, worker, or proxy verification blockers.', 'Rerun product-progress readiness after source proof is operator-reachable.'],
+                ? ['Owner: source ops. Inspect source worker status in source operations.', 'Confirm source lookup and safety checks before alert rebuild.', 'Return to the alert queue after source worker data stays fresh.']
+                : ['Owner: source ops. Open source operations.', 'Resolve source inventory, source-pack, lookup, worker, or proxy verification blockers.', 'Refresh source status after the source data is operator-reachable.'],
             relatedLinks: [
                 { href: sourceGrowth.href || '/dashboard/ti/sources', label: 'Source operations' },
-                { href: sourceGrowth.source || '/api/ti/scraper/control', label: 'Source proof API' },
+                { href: sourceGrowth.source || '/api/ti/scraper/control', label: 'Source status API' },
                 { href: '/dashboard/dwm', label: 'DWM console' },
             ],
             workflowPath: path,
-            missingDependency: sourceWorkerReady ? undefined : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Missing operator-reachable source worker proof.',
+            missingDependency: sourceWorkerReady ? undefined : sourceWorkerBlockers.join('; ') || sourceGrowth.unavailableReason || 'Missing operator-reachable source worker data.',
             actions: [{
                 id: 'open_source_worker_readiness',
                 label: 'Open source operations',
@@ -3130,7 +3130,7 @@ export function buildReadinessCases(input: {
                 href: sourceGrowth.href || '/dashboard/ti/sources',
             }, {
                 id: 'inspect_source_worker_proof',
-                label: 'Inspect source proof',
+                label: 'Inspect source status',
                 method: 'GET',
                 href: sourceGrowth.source || '/api/ti/scraper/control',
             }],
@@ -3213,7 +3213,7 @@ export function buildReadinessCases(input: {
             id: 'alert_generation',
             kind: 'alert_readiness',
             queue: alertVisibilityBlocked ? 'Org access' : 'Alert generation',
-            title: alertVisibilityBlocked ? 'Connect DWM alert visibility' : alertGenerationProofReady && input.liveAlertCount ? 'Alert generation proof loaded' : alertGenerationProof ? 'Resolve alert generation proof' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
+            title: alertVisibilityBlocked ? 'Connect DWM alert visibility' : alertGenerationProofReady && input.liveAlertCount ? 'Alert pipeline status loaded' : alertGenerationProof ? 'Resolve alert pipeline status' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
             severity: alertVisibilityBlocked ? 'medium' : alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
             status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : alertGenerationProof?.status || (input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty'),
             priority: alertVisibilityBlocked ? 395 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
@@ -3228,7 +3228,7 @@ export function buildReadinessCases(input: {
                 : alertGenerationProofReady && input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : alertGenerationProof ? 'Resolve alert-generation blockers before treating the queue as customer-ready.' : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
             evidence: [{
                 id: 'ev_alert_generation',
-                sourceName: alertGenerationProof ? 'DWM alert-generation readiness' : 'DWM alerts API',
+                sourceName: alertGenerationProof ? 'DWM alert pipeline status' : 'DWM alerts API',
                 sourceFamily: 'alert workflow',
                 captureMode: 'api snapshot',
                 redactionState: 'customer safe',
@@ -3236,23 +3236,23 @@ export function buildReadinessCases(input: {
                 excerpt: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof
                     ? alertGenerationProofReady
                         ? `${alertGenerationProof.candidateCount ?? 0} candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'}; ${alertGenerationProof.generationEvidenceWindowCaptureCount ?? 0} evidence-window capture${alertGenerationProof.generationEvidenceWindowCaptureCount === 1 ? '' : 's'}.`
-                        : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation proof is blocked.'
+                        : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is blocked.'
                     : input.liveAlertCount ? 'Alerts came from GET /v1/dwm/alerts for the selected operator scope.' : 'The page is using fallback DWM cases because GET /v1/dwm/alerts returned no saved alerts or backend is absent.',
                 observedAt: alertGenerationProofCheckedAt,
                 provenance: alertGenerationProof?.source || 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
                 confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             }],
-            timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Alert visibility denied' : alertGenerationProofReady ? 'Alert generation proven' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation not proven', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation proof is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
+            timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Alert visibility denied' : alertGenerationProofReady ? 'Alert generation linked' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation blocked', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
             nextTasks: alertVisibilityBlocked
                 ? ['Owner: operator. Match this dashboard session to an active organization member.', 'Retry the DWM alert queue after the organization identity is fixed.', 'Keep demo alerts out of analyst triage until org visibility succeeds.']
                 : alertGenerationProofReady && input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.']
-                    : alertGenerationProof ? ['Owner: DWM owner. Open alert generation readiness.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after proof returns customer-delivery readiness.']
+                    : alertGenerationProof ? ['Owner: DWM owner. Open alert pipeline status.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after customer delivery data is healthy.']
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
             relatedLinks: alertVisibilityBlocked
                 ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'Scoped alerts API' }]
-                : [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Generation readiness API' }],
+                : [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Alert pipeline API' }],
             workflowPath: path,
-            missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation readiness is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect generation readiness before treating fallback rows as customer evidence.',
+            missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect alert pipeline status before treating fallback rows as customer evidence.',
             actions: [
                 ...(alertVisibilityBlocked ? [{
                     id: 'open_organization_access',
@@ -3261,7 +3261,7 @@ export function buildReadinessCases(input: {
                     href: '/organizations',
                 }] : []),
                 { id: 'open_alert_queue', label: alertVisibilityBlocked ? 'Retry scoped queue' : 'Open alert queue', method: 'GET', href: alertsHref(input.scope) },
-                ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open readiness', method: 'GET' as const, href: '/api/dwm/alerts/generation-readiness' }] : []),
+                ...(!alertVisibilityBlocked ? [{ id: 'open_alert_generation_readiness', label: 'Open pipeline status', method: 'GET' as const, href: '/api/dwm/alerts/generation-readiness' }] : []),
                 ...(!alertVisibilityBlocked && activeWatchlists.length ? [{
                     id: 'rebuild_alerts',
                     label: 'Rebuild alerts',
