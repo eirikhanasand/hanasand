@@ -220,7 +220,7 @@ function LogFeedCard({
             <div className={`grid gap-3 ${tall ? '' : 'max-h-168 overflow-auto'}`}>
                 {logs.map((log) => {
                     const key = String(log.id)
-                    const isOpen = expanded[key] ?? true
+                    const isOpen = expanded[key] ?? false
                     const hasMetadata = 'metadata' in log && Object.keys(log.metadata || {}).length > 0
 
                     return (
