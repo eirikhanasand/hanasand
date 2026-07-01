@@ -976,7 +976,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
                                         </div>
                                         <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
-                                        <p className='mt-2 line-clamp-2 break-words text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
+                                        <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
                                         <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
                                             <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
                                             <span>{item.confidence}%</span>
