@@ -615,7 +615,7 @@ export async function getImpersonationEvents(req: FastifyRequest, res: FastifyRe
 }
 
 async function loadImpersonationGuardrailAuditEvents(filters: Record<string, unknown>) {
-    const where = [`event.action_type = 'impersonation.start'`]
+    const where = ['event.action_type = \'impersonation.start\'']
     const values: Array<string | number> = []
     const add = (value: string | number) => {
         values.push(value)

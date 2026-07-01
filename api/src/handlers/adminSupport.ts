@@ -7842,7 +7842,7 @@ function supportInspectionAuditDetailPacket(input: {
             `Support inspection audit details org=${input.organizationIds.join(',') || '*'} user=${input.user || '*'} request=${input.request || '*'}`,
             `Detail routes: ${detailEvents.map(event => event.detailRoute).filter(Boolean).join(', ') || 'none'}`,
             `Denied replay: ${auditFilterQuery({ ...input.timelineFilter, outcome: 'denied' })}`,
-            `Redacted: true`,
+            'Redacted: true',
         ].join('\n'),
     }
 }
