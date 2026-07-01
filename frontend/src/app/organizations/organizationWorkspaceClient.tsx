@@ -600,8 +600,8 @@ export default function OrganizationWorkspaceClient() {
     }, `watchlist-${item.id}`)
 
     return (
-        <section className='min-h-full bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
-            <div className='mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
+        <section className='min-h-full overflow-x-hidden bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
+            <div className='mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
                 <header className='flex flex-col gap-4 border-b border-[#dfe5ee] pb-5 dark:border-[#273345] lg:flex-row lg:items-end lg:justify-between'>
                     <div className='max-w-3xl'>
                         <div className='mb-2 inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#8fb2ff]'>
@@ -631,7 +631,7 @@ export default function OrganizationWorkspaceClient() {
                 )}
 
                 <div className='grid gap-5 lg:grid-cols-[21rem_minmax(0,1fr)]'>
-                    <aside className='flex flex-col gap-4'>
+                    <aside className='flex min-w-0 flex-col gap-4'>
                         <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
                             <h2 className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>
                                 <Building2 className='h-4 w-4 text-[#3056d3]' />
@@ -726,7 +726,7 @@ export default function OrganizationWorkspaceClient() {
                                             onSelectSubject={setSelectedActivitySubject}
                                         />
                                     </div>
-                                    <div className='grid gap-5 content-start'>
+                                    <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
                                     </div>
@@ -734,7 +734,9 @@ export default function OrganizationWorkspaceClient() {
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
-                                    <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} />
+                                    <div className='min-w-0'>
+                                        <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} />
+                                    </div>
                                 </section>
                             </div>
                         ) : (
@@ -785,7 +787,7 @@ function EmptyWorkspacePreview() {
 
 function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, archivedWatchlists, memberCount, inviteCount, webhookCount }: { organization: OrganizationSummary, activeWatchlists: number, pausedWatchlists: number, archivedWatchlists: number, memberCount: number, inviteCount: number, webhookCount: number }) {
     return (
-        <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927] md:grid-cols-4'>
+        <section className='grid min-w-0 gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927] sm:grid-cols-2 lg:grid-cols-4'>
             <Metric icon={<ShieldCheck className='h-4 w-4' />} label='Role' value={organization.role || 'member'} detail={organization.status || 'active'} />
             <Metric icon={<Users className='h-4 w-4' />} label='Members' value={String(memberCount || organization.memberCount || organization.activeMemberCount || 0)} detail={`${inviteCount || organization.pendingInviteCount || 0} pending`} />
             <Metric icon={<BellRing className='h-4 w-4' />} label='Watchlists' value={String(activeWatchlists || organization.sharedWatchlistCount || 0)} detail={`${pausedWatchlists} paused · ${archivedWatchlists} archived`} />
@@ -850,40 +852,37 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                     Send invites
                 </button>
             </div>
-            <div className='mt-5 overflow-x-auto'>
+            <div className='mt-5 grid gap-2'>
                 {invites.length === 0 && <EmptyLine text='No pending invites.' />}
                 {invites.length > 0 && (
-                    <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
-                        <thead className='text-xs uppercase tracking-[0.08em] text-[#667085] dark:text-[#a8b3c5]'>
-                            <tr>
-                                <th className='border-b border-[#e6ebf2] py-2 pr-3 dark:border-[#26344a]'>Email</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Role</th>
-                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Status</th>
-                                <th className='border-b border-[#e6ebf2] py-2 pl-3 text-right dark:border-[#26344a]'>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {invites.map(invite => (
-                                <tr key={invite.id} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}>
-                                    <td className='max-w-44 truncate border-b border-[#eef2f7] py-2 pr-3 font-semibold text-[#171a21] dark:border-[#1d2a3d] dark:text-white'>{invite.email}</td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'><RoleBadge role={invite.role} /></td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                        <div className='grid gap-1'>
-                                            <StatusPill status={invite.status} />
-                                            <RowStatus message={rowMessages[`invite-${invite.id}`]} />
-                                        </div>
-                                    </td>
-                                    <td className='border-b border-[#eef2f7] py-2 pl-3 dark:border-[#1d2a3d]'>
-                                        <div className='flex justify-end gap-1'>
-                                            <button type='button' aria-label='Copy invite link' className={iconButtonClass} disabled={Boolean(busy) || !inviteLink(invite)} onClick={() => onCopyInvite(invite)}><Copy className='h-4 w-4' /></button>
-                                            <button type='button' aria-label='Resend invite' className={iconButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onInviteAction(invite, 'resend')}><RefreshCw className='h-4 w-4' /></button>
-                                            <button type='button' aria-label='Revoke invite' className={iconDangerButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onInviteAction(invite, 'revoke')}><Trash2 className='h-4 w-4' /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    invites.map(invite => (
+                        <div
+                            role='button'
+                            tabIndex={0}
+                            key={invite.id}
+                            className={`grid min-w-0 gap-3 rounded-lg border border-[#eef2f7] p-3 text-left transition dark:border-[#1d2a3d] ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`}
+                            onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter' || event.key === ' ') onSelectSubject({ type: 'invite', id: invite.id })
+                            }}
+                        >
+                            <span className='grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start'>
+                                <span className='min-w-0'>
+                                    <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{invite.email}</span>
+                                    <span className='mt-1 flex flex-wrap gap-2'>
+                                        <RoleBadge role={invite.role} />
+                                        <StatusPill status={invite.status} />
+                                    </span>
+                                    <RowStatus message={rowMessages[`invite-${invite.id}`]} />
+                                </span>
+                                <span className='flex gap-1 sm:justify-end'>
+                                    <span role='button' aria-label='Copy invite link' className={iconButtonClass} aria-disabled={Boolean(busy) || !inviteLink(invite)} onClick={event => { event.stopPropagation(); if (!busy && inviteLink(invite)) onCopyInvite(invite) }}><Copy className='h-4 w-4' /></span>
+                                    <span role='button' aria-label='Resend invite' className={iconButtonClass} aria-disabled={!canManage || Boolean(busy)} onClick={event => { event.stopPropagation(); if (canManage && !busy) onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></span>
+                                    <span role='button' aria-label='Revoke invite' className={iconDangerButtonClass} aria-disabled={!canManage || Boolean(busy)} onClick={event => { event.stopPropagation(); if (canManage && !busy) onInviteAction(invite, 'revoke') }}><Trash2 className='h-4 w-4' /></span>
+                                </span>
+                            </span>
+                        </div>
+                    ))
                 )}
             </div>
         </section>
@@ -1240,7 +1239,7 @@ function SectionTitle({ icon, title, detail }: { icon: ReactNode, title: string,
 
 function Metric({ icon, label, value, detail }: { icon: ReactNode, label: string, value: string, detail: string }) {
     return (
-        <div className='rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
+        <div className='min-w-0 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
             <p className='flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#667085] dark:text-[#a8b3c5]'>{icon}{label}</p>
             <p className='mt-2 truncate text-2xl font-semibold text-[#171a21] dark:text-white'>{value}</p>
             <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{detail}</p>
