@@ -1122,21 +1122,21 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
     return (
-        <section className='grid min-w-0 gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center'>
-            <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
+        <section className='grid min-w-0 gap-3 rounded-lg border border-[#cfd8e6] bg-[#f8fbff] p-3'>
+            <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 <ActionStatus label='Owner' value={assignee} />
                 <ActionStatus label='Work state' value={stateLabel(alert.reviewState)} />
                 <ActionStatus label='Delivery' value={latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTimeLabel(latestDelivery.attemptedAt)}` : hasDeliveryRoute ? 'route available' : 'route unavailable'} tone={latestDelivery?.status === 'failed' || !hasDeliveryRoute ? 'warn' : 'neutral'} />
                 <ActionStatus label='Case' value={alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || 'candidate pending'} />
             </div>
             <div className='grid gap-2'>
-                <div className='flex flex-wrap gap-1.5 xl:justify-end'>
+                <div className='flex flex-wrap gap-1.5'>
                     <ActionAvailability label='Workflow' ready={transitionReady} />
                     <ActionAvailability label='Replay' ready={replayReady} />
                     <ActionAvailability label='Delivery' ready={deliverReady} />
                     <ActionAvailability label='Close' ready={closeReady} />
                 </div>
-                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:justify-end'>
+                <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
                     <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>

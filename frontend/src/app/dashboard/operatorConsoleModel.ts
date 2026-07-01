@@ -2844,12 +2844,6 @@ export function buildReadinessCases(input: {
     const alertGenerationProofReady = alertGenerationProof?.status === 'ready'
     const alertGenerationProofCheckedAt = alertGenerationProof?.checkedAt || alertGenerationProof?.latestEvidenceAt || alertGenerationProof?.proofTimestamp || now
     const alertGenerationProofBlockers = alertGenerationProof?.blockers?.filter(Boolean) || []
-    const attemptedAlertIdentity = [
-        input.alertAccessState?.attemptedIdentity?.userEmail ? `userEmail=${input.alertAccessState.attemptedIdentity.userEmail}` : '',
-        input.alertAccessState?.attemptedIdentity?.userId ? `userId=${input.alertAccessState.attemptedIdentity.userId}` : '',
-        input.alertAccessState?.attemptedIdentity?.actor ? `actor=${input.alertAccessState.attemptedIdentity.actor}` : '',
-        input.alertAccessState?.attemptedIdentity?.source ? `source=${input.alertAccessState.attemptedIdentity.source}` : '',
-    ].filter(Boolean).join('; ')
     const path = operatorPath({
         scope: input.scope,
         organization,
@@ -3255,7 +3249,7 @@ export function buildReadinessCases(input: {
             priority: alertVisibilityBlocked ? 395 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
             confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             subtitle: alertVisibilityBlocked
-                ? `${alertAccessMessage}${attemptedAlertIdentity ? ` Attempted identity: ${attemptedAlertIdentity}.` : ''}`
+                ? `${alertAccessMessage} Match the signed-in operator to an active organization member before customer routing.`
                 : alertGenerationProof
                     ? alertGenerationProof.detail || alertGenerationDetail(alertGenerationProof)
                     : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
