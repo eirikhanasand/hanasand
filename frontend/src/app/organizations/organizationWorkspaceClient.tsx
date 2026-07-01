@@ -177,11 +177,21 @@ type ActivityItem = {
     title: string
     detail: string
     ok: boolean
+    subjectType?: ActivitySubjectType
+    subjectId?: string
+    metadata?: Array<{ label: string, value: string }>
 }
 
 type RowMessage = {
     ok: boolean
     text: string
+}
+
+type ActivitySubjectType = 'organization' | 'invite' | 'member' | 'watchlist' | 'destination'
+
+type ActivitySubject = {
+    type: ActivitySubjectType
+    id: string
 }
 
 type ApiError = Error & { status?: number }
@@ -226,6 +236,7 @@ export default function OrganizationWorkspaceClient() {
     const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
     const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
+    const [selectedActivitySubject, setSelectedActivitySubject] = useState<ActivitySubject>({ type: 'organization', id: 'organization' })
 
     const selectedOrganization = useMemo(
         () => organizations.find(organization => organization.id === selectedId) || organizations[0],
@@ -331,6 +342,7 @@ export default function OrganizationWorkspaceClient() {
     useEffect(() => {
         if (selectedOrganization?.id) {
             void loadOrganizationBundle(selectedOrganization.id)
+            setSelectedActivitySubject({ type: 'organization', id: selectedOrganization.id })
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
@@ -338,6 +350,7 @@ export default function OrganizationWorkspaceClient() {
         setBusy(label)
         setError('')
         setMessage('')
+        const actionSubject = activitySubjectFromRowKey(rowKey, selectedOrganization?.id)
         if (rowKey) {
             setRowMessages(current => {
                 const next = { ...current }
@@ -351,12 +364,16 @@ export default function OrganizationWorkspaceClient() {
             if (rowKey) {
                 setRowMessages(current => ({ ...current, [rowKey]: { ok: true, text: nextMessage || 'Saved.' } }))
             }
+            if (actionSubject) {
+                setSelectedActivitySubject(actionSubject)
+            }
             setActivity(current => [{
                 id: `${label}-${Date.now()}`,
                 at: new Date().toISOString(),
                 title: actionLabel(label),
                 detail: nextMessage || 'Saved.',
                 ok: true,
+                ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
             if (selectedOrganization?.id) {
                 await loadOrganizationBundle(selectedOrganization.id)
@@ -376,6 +393,7 @@ export default function OrganizationWorkspaceClient() {
                 title: actionLabel(label),
                 detail,
                 ok: false,
+                ...activityItemSubject(actionSubject),
             }, ...current].slice(0, 8))
         } finally {
             setBusy('')
@@ -682,17 +700,19 @@ export default function OrganizationWorkspaceClient() {
                                             onTestDestination={(item, mode) => void testWatchlistDestination(item, mode)}
                                             onCleanup={() => void cleanupWatchlists()}
                                             rowMessages={rowMessages}
+                                            selectedSubject={selectedActivitySubject}
+                                            onSelectSubject={setSelectedActivitySubject}
                                         />
                                     </div>
                                     <div className='grid gap-5 content-start'>
-                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
-                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
+                                        <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
+                                        <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
                                     </div>
                                 </section>
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
-                                    <ActivityPanel activity={activityRows} />
+                                    <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} />
                                 </section>
                             </div>
                         ) : (
@@ -793,7 +813,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, canManage, busy, onSav
     )
 }
 
-function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, busy, rowMessages, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
+function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onInvite, onInviteAction, onCopyInvite }: { emails: string, setEmails: (value: string) => void, role: OrganizationRole, setRole: (value: OrganizationRole) => void, invites: OrganizationInvite[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onInvite: () => void, onInviteAction: (invite: OrganizationInvite, action: 'revoke' | 'resend') => void, onCopyInvite: (invite: OrganizationInvite) => void }) {
     return (
         <section id='invites' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invite queue' detail={canManage ? 'Send, resend, revoke, copy.' : 'Owner or admin required.'} />
@@ -822,7 +842,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                         </thead>
                         <tbody>
                             {invites.map(invite => (
-                                <tr key={invite.id} className='align-middle'>
+                                <tr key={invite.id} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'invite' && selectedSubject.id === invite.id ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'invite', id: invite.id })}>
                                     <td className='max-w-44 truncate border-b border-[#eef2f7] py-2 pr-3 font-semibold text-[#171a21] dark:border-[#1d2a3d] dark:text-white'>{invite.email}</td>
                                     <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'><RoleBadge role={invite.role} /></td>
                                     <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
@@ -848,7 +868,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
     )
 }
 
-function MemberPanel({ members, canManage, busy, rowMessages, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
+function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     return (
         <section id='members' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, removal.' />
@@ -866,7 +886,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, onRoleChange, onRe
                         </thead>
                         <tbody>
                             {members.map(member => (
-                                <tr key={member.userId} className='align-middle'>
+                                <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
                                     <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
                                         <p className='truncate font-semibold text-[#171a21] dark:text-white'>{member.name || member.userId}</p>
                                         <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{member.userId}</p>
@@ -899,7 +919,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, onRoleChange, onRe
     )
 }
 
-function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage> }) {
+function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDraft, editing, setEditing, onCreate, onSave, onAction, onDelete, organization, alerts, deliveries, destinationDrafts, deliveryResults, setDestinationDrafts, onTestDestination, onCleanup, rowMessages, selectedSubject, onSelectSubject }: { watchlists: WatchlistItem[], activeTerms: AlertTerm[], canManage: boolean, busy: string, draft: { kind: WatchlistKind, value: string, notes: string }, setDraft: (next: { kind: WatchlistKind, value: string, notes: string }) => void, editing: Record<string, { kind: WatchlistKind, value: string, notes: string }>, setEditing: (next: Record<string, { kind: WatchlistKind, value: string, notes: string }> | ((current: Record<string, { kind: WatchlistKind, value: string, notes: string }>) => Record<string, { kind: WatchlistKind, value: string, notes: string }>)) => void, onCreate: () => void, onSave: (item: WatchlistItem) => void, onAction: (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => void, onDelete: (item: WatchlistItem) => void, organization: OrganizationSummary, alerts: ScopedAlert[], deliveries: DeliveryRow[], destinationDrafts: Record<string, DestinationDraft>, deliveryResults: Record<string, DeliveryRow>, setDestinationDrafts: (next: Record<string, DestinationDraft> | ((current: Record<string, DestinationDraft>) => Record<string, DestinationDraft>)) => void, onTestDestination: (item: WatchlistItem, mode: 'save' | 'replay') => void, onCleanup: () => void, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
     const archivedCount = watchlists.filter(item => item.status === 'archived').length
     return (
         <section id='watchlists' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
@@ -931,7 +951,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                 {watchlists.map(item => {
                     const edit = editing[item.id]
                     return (
-                        <div key={item.id} className='rounded-lg border border-[#e6ebf2] p-3 dark:border-[#26344a]'>
+                        <div key={item.id} className={`rounded-lg border p-3 transition ${selectedSubject.type === 'watchlist' && selectedSubject.id === item.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] dark:border-[#26344a]'}`} onClick={() => onSelectSubject({ type: 'watchlist', id: item.id })}>
                             {edit ? (
                                 <div className='grid gap-3 md:grid-cols-[9rem_1fr]'>
                                     <SelectField label='Type' value={edit.kind} options={watchlistKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [item.id]: { ...edit, kind: value as WatchlistKind } }))} />
@@ -991,6 +1011,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                         canManage={canManage}
                                         busy={busy}
                                         onDraftChange={next => setDestinationDrafts(current => ({ ...current, [item.id]: next }))}
+                                        onSelect={() => onSelectSubject({ type: 'destination', id: item.id })}
                                         onTest={mode => onTestDestination(item, mode)}
                                     />
                                     <RowStatus message={rowMessages[`watchlist-${item.id}`]} />
@@ -1022,7 +1043,7 @@ function WatchlistDestinationSummary({ item, delivery }: { item: WatchlistItem, 
     )
 }
 
-function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onTest: (mode: 'save' | 'replay') => void }) {
+function DestinationControls({ item, organization, alert, delivery, draft, canManage, busy, onDraftChange, onSelect, onTest }: { item: WatchlistItem, organization: OrganizationSummary, alert?: ScopedAlert, delivery?: DeliveryRow | null, draft: DestinationDraft, canManage: boolean, busy: string, onDraftChange: (next: DestinationDraft) => void, onSelect: () => void, onTest: (mode: 'save' | 'replay') => void }) {
     const configured = destinationConfigured(item)
     const endpointHint = item.webhookEndpointHint || delivery?.endpointHint || 'Not configured'
     const endpointHash = item.webhookEndpointHash || delivery?.endpointHash || 'No route hash'
@@ -1030,7 +1051,10 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
     const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
     return (
-        <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
+        <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]' onClick={event => {
+            event.stopPropagation()
+            onSelect()
+        }}>
             <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center'>
                 <div className='min-w-0'>
                     <p className='flex flex-wrap items-center gap-2 text-sm font-semibold text-[#202838] dark:text-[#eef3fb]'>
@@ -1104,19 +1128,50 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
     )
 }
 
-function ActivityPanel({ activity }: { activity: ActivityItem[] }) {
+function ActivityPanel({ organization, bundle, activity, selectedSubject, onSelectSubject }: { organization: OrganizationSummary, bundle: OrgBundle, activity: ActivityItem[], selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void }) {
+    const selectedRows = activityRowsForSubject(activity, selectedSubject)
+    const contextRows = selectedContextRows(selectedSubject, organization, bundle)
+    const visibleRows = selectedSubject.type === 'organization' ? activity : selectedRows
     return (
         <section id='audit' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Recent activity' detail='Loaded events and local actions.' />
+            <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity' detail='Selected row, delivery, and team actions.' />
+            <div className='mt-4 grid gap-3 rounded-lg border border-[#e6ebf2] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='min-w-0'>
+                        <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{selectedSubjectLabel(selectedSubject, organization, bundle)}</p>
+                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{selectedSubject.type}</p>
+                    </div>
+                    <button type='button' className={secondaryButtonClass} onClick={() => onSelectSubject({ type: 'organization', id: organization.id })}>
+                        All
+                    </button>
+                </div>
+                <dl className='grid gap-2 text-xs sm:grid-cols-2'>
+                    {contextRows.map(row => (
+                        <div key={row.label} className='min-w-0 rounded-md bg-white px-2 py-1.5 dark:bg-[#111927]'>
+                            <dt className='truncate font-semibold text-[#667085] dark:text-[#a8b3c5]'>{row.label}</dt>
+                            <dd className='truncate font-mono text-[#202838] dark:text-[#eef3fb]'>{row.value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
             <div className='mt-4 grid gap-2'>
                 {activity.length === 0 && <EmptyLine text='No actions in this browser session yet.' />}
-                {activity.map(item => (
+                {activity.length > 0 && selectedRows.length === 0 && selectedSubject.type !== 'organization' && <EmptyLine text='No activity for the selected row.' />}
+                {visibleRows.map(item => (
                     <div key={item.id} className='rounded-lg border border-[#e6ebf2] p-3 dark:border-[#26344a]'>
                         <div className='flex items-start gap-2'>
                             {item.ok ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b42318]' />}
-                            <div className='min-w-0'>
-                                <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{item.title}</p>
+                            <div className='min-w-0 flex-1'>
+                                <div className='flex flex-wrap items-center gap-2'>
+                                    <p className='truncate text-sm font-semibold text-[#171a21] dark:text-white'>{item.title}</p>
+                                    {item.subjectType && <span className='rounded-md bg-[#eef2f7] px-2 py-0.5 text-[11px] font-semibold text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'>{item.subjectType}</span>}
+                                </div>
                                 <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>{item.detail}</p>
+                                {item.metadata && item.metadata.length > 0 && (
+                                    <div className='mt-2 grid gap-1 text-[11px] text-[#667085] dark:text-[#a8b3c5]'>
+                                        {item.metadata.slice(0, 3).map(row => <span key={`${item.id}-${row.label}`} className='truncate'>{row.label}: {row.value}</span>)}
+                                    </div>
+                                )}
                                 <p className='mt-2 text-xs text-[#7a8493] dark:text-[#93a4bd]'>{formatDate(item.at)}</p>
                             </div>
                         </div>
@@ -1320,6 +1375,13 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         title: delivery.dryRun ? 'Destination tested' : 'Alert routed',
         detail: `${delivery.status || 'delivery'} · ${delivery.watchlistId || delivery.alertId || 'watchlist'}`,
         ok: !delivery.error && delivery.status !== 'failed',
+        subjectType: 'destination',
+        subjectId: delivery.watchlistItemId || delivery.watchlistId || delivery.webhookDestinationId || delivery.alertId,
+        metadata: compactMetadata([
+            ['Endpoint', delivery.endpointHint || delivery.endpointHash],
+            ['Alert', delivery.alertId],
+            ['Kind', delivery.deliveryKind],
+        ]),
     }))
     const inviteRows: ActivityItem[] = bundle.invites.map(invite => ({
         id: `invite-${invite.id}`,
@@ -1327,6 +1389,12 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         title: 'Invite',
         detail: `${invite.email} · ${invite.role} · ${invite.status}`,
         ok: invite.status !== 'revoked' && invite.status !== 'expired',
+        subjectType: 'invite',
+        subjectId: invite.id,
+        metadata: compactMetadata([
+            ['Email', invite.email],
+            ['Expires', invite.expiresAt ? formatDate(invite.expiresAt) : undefined],
+        ]),
     }))
     const memberRows: ActivityItem[] = bundle.members.map(member => ({
         id: `member-${member.userId}`,
@@ -1334,10 +1402,114 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         title: 'Member role',
         detail: `${member.name || member.userId} · ${member.role} · ${member.status}`,
         ok: member.status !== 'removed' && member.status !== 'revoked',
+        subjectType: 'member',
+        subjectId: member.userId,
+        metadata: compactMetadata([
+            ['User', member.userId],
+            ['Invited by', member.invitedBy || undefined],
+        ]),
     }))
-    return [...local, ...deliveryRows, ...inviteRows, ...memberRows]
+    const watchlistRows: ActivityItem[] = bundle.watchlists.map(item => ({
+        id: `watchlist-${item.id}`,
+        at: item.updatedAt || item.archivedAt || item.createdAt || new Date(0).toISOString(),
+        title: 'Watchlist term',
+        detail: `${item.kind} · ${item.value} · ${item.status}`,
+        ok: item.status !== 'archived',
+        subjectType: 'watchlist',
+        subjectId: item.id,
+        metadata: compactMetadata([
+            ['Owner', item.updatedBy || item.createdBy],
+            ['Route', item.webhookEndpointHint || item.webhookEndpointHash],
+            ['Ref', item.alertGenerationRef],
+        ]),
+    }))
+    return [...local, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows]
         .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
         .slice(0, 12)
+}
+
+function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: string | undefined): ActivitySubject | null {
+    if (!rowKey) return organizationId ? { type: 'organization', id: organizationId } : null
+    if (rowKey.startsWith('invite-')) return { type: 'invite', id: rowKey.replace(/^invite-/, '') }
+    if (rowKey.startsWith('member-')) return { type: 'member', id: rowKey.replace(/^member-/, '') }
+    if (rowKey.startsWith('watchlist-')) return { type: 'watchlist', id: rowKey.replace(/^watchlist-/, '') }
+    return organizationId ? { type: 'organization', id: organizationId } : null
+}
+
+function activityItemSubject(subject: ActivitySubject | null) {
+    return subject ? { subjectType: subject.type, subjectId: subject.id } : {}
+}
+
+function activityRowsForSubject(activity: ActivityItem[], subject: ActivitySubject) {
+    if (subject.type === 'organization') return activity
+    if (subject.type === 'destination') {
+        return activity.filter(item => (item.subjectType === 'destination' || item.subjectType === 'watchlist') && item.subjectId === subject.id)
+    }
+    return activity.filter(item => item.subjectType === subject.type && item.subjectId === subject.id)
+}
+
+function selectedSubjectLabel(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
+    if (subject.type === 'organization') return organization.name
+    if (subject.type === 'invite') {
+        const invite = bundle.invites.find(item => item.id === subject.id)
+        return invite?.email || subject.id
+    }
+    if (subject.type === 'member') {
+        const member = bundle.members.find(item => item.userId === subject.id)
+        return member?.name || member?.userId || subject.id
+    }
+    const watchlist = bundle.watchlists.find(item => item.id === subject.id)
+    if (subject.type === 'destination') return watchlist ? `Destination · ${watchlist.value}` : subject.id
+    return watchlist?.value || subject.id
+}
+
+function selectedContextRows(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
+    if (subject.type === 'organization') {
+        return compactMetadata([
+            ['Org', organization.id],
+            ['Tenant', organization.tenantId || 'default'],
+            ['Role', organization.role || 'member'],
+            ['Members', String(bundle.members.length)],
+            ['Watchlists', String(bundle.watchlists.length)],
+            ['Destinations', String(bundle.webhooks.length)],
+        ])
+    }
+    if (subject.type === 'invite') {
+        const invite = bundle.invites.find(item => item.id === subject.id)
+        return compactMetadata([
+            ['Email', invite?.email],
+            ['Role', invite?.role],
+            ['Status', invite?.status],
+            ['Expires', invite?.expiresAt ? formatDate(invite.expiresAt) : undefined],
+        ])
+    }
+    if (subject.type === 'member') {
+        const member = bundle.members.find(item => item.userId === subject.id)
+        return compactMetadata([
+            ['User', member?.userId],
+            ['Role', member?.role],
+            ['Status', member?.status],
+            ['Joined', member?.joinedAt ? formatDate(member.joinedAt) : undefined],
+        ])
+    }
+    const item = bundle.watchlists.find(row => row.id === subject.id)
+    const delivery = item ? latestDeliveryForWatchlist(item, bundle.deliveries) : null
+    const alertCount = item ? alertsForWatchlist(item, bundle.alerts).length : 0
+    return compactMetadata([
+        ['Watchlist', item?.id || subject.id],
+        ['Term', item?.value],
+        ['Status', item?.status],
+        ['Owner', item?.updatedBy || item?.createdBy],
+        ['Endpoint', item?.webhookEndpointHint || delivery?.endpointHint || item?.webhookEndpointHash || delivery?.endpointHash],
+        ['Last delivery', delivery?.status],
+        ['Alerts', String(alertCount)],
+    ])
+}
+
+function compactMetadata(rows: Array<[string, string | undefined]>) {
+    return rows
+        .filter(([, value]) => value !== undefined && value !== '')
+        .map(([label, value]) => ({ label, value: String(value) }))
 }
 
 function inviteLink(invite: OrganizationInvite) {
