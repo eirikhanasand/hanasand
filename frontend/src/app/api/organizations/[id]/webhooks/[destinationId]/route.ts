@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { proxyTiRequest } from '../../../../dwm/_tiProxy'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,10 +11,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         headers: request.headers,
         body: JSON.stringify({ ...body, orgId: id }),
     })
-    return proxyTiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'PUT' })
+    return proxyOrganizationApiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'PUT' })
 }
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string, destinationId: string }> }) {
     const { destinationId } = await context.params
-    return proxyTiRequest(request, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'DELETE' })
+    return proxyOrganizationApiRequest(request, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}`, { method: 'DELETE' })
 }

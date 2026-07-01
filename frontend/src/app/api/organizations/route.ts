@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { proxyTiRequest } from '../dwm/_tiProxy'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 import { loadProductOrganizationListProofLedger, organizationListPayloadFromLedger } from '@/utils/productProgress/organizationListProofSource'
 
 export const dynamic = 'force-dynamic'
@@ -13,9 +13,9 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    return proxyTiRequest(request, '/organizations', { method: 'GET' })
+    return proxyOrganizationApiRequest(request, '/organizations', { method: 'GET' })
 }
 
 export async function POST(request: NextRequest) {
-    return proxyTiRequest(request, '/organizations', { method: 'POST' })
+    return proxyOrganizationApiRequest(request, '/organizations', { method: 'POST' })
 }

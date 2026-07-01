@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { proxyTiRequest } from '../../../dwm/_tiProxy'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 import { loadProductOrganizationReadinessProofLedger, organizationReadinessPayloadFromLedger } from '@/utils/productProgress/orgReadinessProofSource'
 
 export const dynamic = 'force-dynamic'
@@ -12,5 +12,5 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             return NextResponse.json(organizationReadinessPayloadFromLedger(proofLedger), { headers: { 'cache-control': 'no-store' } })
         }
     }
-    return proxyTiRequest(request, `/organizations/${encodeURIComponent(id)}/alert-readiness`, { method: 'GET' })
+    return proxyOrganizationApiRequest(request, `/organizations/${encodeURIComponent(id)}/alert-readiness`, { method: 'GET' })
 }

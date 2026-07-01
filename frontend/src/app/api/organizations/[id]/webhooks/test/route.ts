@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { proxyTiRequest } from '../../../../dwm/_tiProxy'
+import { proxyOrganizationApiRequest } from '@/app/api/organizations/_organizationApiProxy'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,12 +13,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             headers: request.headers,
             body: JSON.stringify({ ...body, orgId: id }),
         })
-        return proxyTiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}/test`, { method: 'POST' })
+        return proxyOrganizationApiRequest(nextRequest, `/dwm/webhook-destinations/${encodeURIComponent(destinationId)}/test`, { method: 'POST' })
     }
     const nextRequest = new NextRequest(request.url, {
         method: 'POST',
         headers: request.headers,
         body: JSON.stringify({ ...body, organizationId: id, orgId: id, dryRun: true }),
     })
-    return proxyTiRequest(nextRequest, '/dwm/webhook-deliveries', { method: 'POST' })
+    return proxyOrganizationApiRequest(nextRequest, '/dwm/webhook-deliveries', { method: 'POST' })
 }
