@@ -220,7 +220,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
             <section className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
                 <div className='border-b border-[#e8edf5] bg-[#171a21] px-4 py-3 text-white'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <div className='flex items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0'>
+                        <div className='flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0'>
                             <StatusPill label='Cases' value={String(alerts.length)} tone={alerts.length ? 'warn' : 'neutral'} />
                             <StatusPill label='Active' value={String(activeCount)} tone={activeCount ? 'warn' : 'neutral'} />
                             <StatusPill label='Critical' value={String(criticalCount)} tone={criticalCount ? 'warn' : 'neutral'} />
@@ -232,14 +232,14 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                             <StatusPill label='Latest run' value={latestRunLabel} tone={operations?.latestRun?.status === 'completed' ? 'good' : 'neutral'} />
                             <StatusPill label='API' value={apiProblemCount ? `${apiProblemCount} issue${apiProblemCount === 1 ? '' : 's'}` : 'Live'} tone={apiProblemCount ? 'warn' : 'good'} />
                         </div>
-                        <div className='text-right'>
+                        <div className='shrink-0 text-right'>
                             <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Monitoring state</p>
                             <p className='mt-1 text-sm font-semibold text-white'>{operations?.counts.activeSourceCount ?? 0}/{operations?.counts.sourceCount ?? 0} sources active</p>
                         </div>
                     </div>
                 </div>
 
-                <div className='grid min-h-[680px] xl:grid-cols-[320px_minmax(0,1fr)_360px]'>
+                <div className='grid min-h-[680px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside className='order-2 border-b border-[#e8edf5] bg-[#f8fafc] xl:order-none xl:border-b-0 xl:border-r'>
                         <div className='border-b border-[#e8edf5] p-4'>
                             <div className='flex items-center justify-between gap-3'>
@@ -328,7 +328,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                         )}
                     </main>
 
-                    <aside className='order-3 border-t border-[#e8edf5] bg-[#fbfcfe] xl:order-none xl:border-l xl:border-t-0'>
+                    <aside className='order-3 border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 xl:order-none 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <SourcePosture snapshot={snapshot} operations={operations} />
                             <DeliveryPanel alert={selectedAlert} deliveries={deliveries} />

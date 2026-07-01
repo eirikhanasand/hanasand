@@ -931,7 +931,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                     <StatusPill label='TI decisions' value='session-local' tone='warn' />
                 </div>
 
-                <div className={`grid ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[350px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
+                <div className={`grid ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
                     <aside className='border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
                         <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
                             <label className='relative block'>
@@ -1016,7 +1016,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                         )}
                     </main>
 
-                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:border-l xl:border-t-0'>
+                    <aside className='border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <OrgOperatingPanel
                                 orgContext={orgContext}
