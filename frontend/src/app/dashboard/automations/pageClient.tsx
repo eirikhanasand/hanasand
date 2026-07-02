@@ -26,7 +26,7 @@ const newAutomationDraft = (prompt = ''): AutomationPayload => ({
     prompt,
     scheduleKind: 'interval',
     intervalMinutes: 30,
-    runAt: defaultRunAt(),
+    runAt: '',
     status: 'active',
     actionType: 'agent_prompt',
     timezone: defaultTimezone(),
@@ -117,9 +117,13 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     async function saveAutomation() {
         setBusy('save')
         try {
+            const payloadToSave = {
+                ...draft,
+                runAt: draft.runAt || defaultRunAt(),
+            }
             const payload = selected
-                ? await updateAutomation(selected.id, draft)
-                : await createAutomation(draft)
+                ? await updateAutomation(selected.id, payloadToSave)
+                : await createAutomation(payloadToSave)
             if (!selected && webhookDraft) {
                 clearStoredWebhookDraft()
                 setWebhookDraft(null)
@@ -250,7 +254,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
                         <RouteMetric label='Route health' value={selectedHealth.label} detail={selectedHealth.detail} tone={selectedHealth.tone} icon={<DeliveryIcon status={selected?.lastStatus} failures={selected?.consecutiveFailures || 0} />} />
                         <RouteMetric label='Destination' value={draft.modelName || 'auto'} detail={draft.actionType === 'echo' ? 'delivery test' : 'monitoring check'} tone={draft.modelName ? 'ok' : 'neutral'} icon={<Send className='h-4 w-4' />} />
-                        <RouteMetric label='Next check' value={selected ? shortDate(selected.nextRunAt || selected.runAt) : shortDate(draft.runAt)} detail={scheduleShort(selected || draft)} tone='neutral' icon={<CalendarClock className='h-4 w-4' />} />
+                        <RouteMetric label='Next check' value={selected ? shortDate(selected.nextRunAt || selected.runAt) : 'After save'} detail={scheduleShort(selected || draft)} tone='neutral' icon={<CalendarClock className='h-4 w-4' />} />
                         <RouteMetric label='Open issues' value={String(selected?.consecutiveFailures || routeIssueCount)} detail={lastRun?.error || selected?.pausedReason || 'delivery failures and paused routes'} tone={selected?.consecutiveFailures || routeIssueCount ? 'bad' : 'ok'} icon={<AlertTriangle className='h-4 w-4' />} />
                     </div>
 
@@ -332,7 +336,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         </label>
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>First check</span>
-                            <input className={`${inputClass} disabled:opacity-45`} type='datetime-local' disabled={draft.scheduleKind !== 'once'} value={draft.runAt || defaultRunAt()} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
+                            <input className={`${inputClass} disabled:opacity-45`} type='datetime-local' disabled={draft.scheduleKind !== 'once'} value={draft.runAt || ''} onChange={event => setDraft({ ...draft, runAt: event.target.value })} />
                         </label>
                         <label className='grid gap-1.5'>
                             <span className='text-xs font-medium text-[#596170]'>Status</span>
@@ -619,14 +623,14 @@ function formatTerms(terms: string[]) {
 
 function formatDate(value?: string | null) {
     if (!value) return 'Not scheduled'
-    return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+    return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Oslo' }).format(new Date(value))
 }
 
 function shortDate(value?: string | null) {
     if (!value) return 'none'
     const date = new Date(value)
     if (Number.isNaN(date.getTime())) return 'unknown'
-    return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date)
+    return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo' }).format(date)
 }
 
 function scheduleShort(automation: Pick<AutomationPayload, 'scheduleKind' | 'intervalMinutes' | 'runAt'>) {

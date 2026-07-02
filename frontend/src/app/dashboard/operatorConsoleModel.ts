@@ -777,7 +777,7 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'entitlement_readiness',
-        integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        integrationProbeHint: 'GET /api/dwm/entitlements/status must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: 'dwm.entitlement.readiness.v1',
     }
 }
@@ -785,12 +785,12 @@ function unavailableEntitlementReadiness(source: string, checkedAt: string): Ent
 function unavailableAlertGenerationReadiness(source: string, checkedAt: string): DwmAlertGenerationReadiness {
     return {
         schemaVersion: 'dwm.alert_generation_readiness.v1',
-        status: 'unavailable',
+        status: 'needs_action',
         checkedAt,
         source,
         href: '/api/dwm/alerts/generation-readiness',
-        detail: 'DWM alert generation proof is not loaded by product progress.',
-        blockers: ['DWM alert generation proof is not loaded by product progress.'],
+        detail: 'DWM alert generation status is not connected to product progress.',
+        blockers: ['Connect DWM alert generation candidates and evidence window to product progress.'],
         ownerLane: 'dwm',
         unavailableReason: 'missing_alert_generation_readiness',
         staleAfterSeconds: 900,
@@ -1149,19 +1149,19 @@ export function buildSourceProofReadinessFromProxy(input: DashboardSourceProofPr
     const blockers = [
         inventoryReachable ? '' : `Source inventory endpoint is not reachable through ${options.route}.`,
         sourcePacksReachable ? '' : `Source-pack endpoint is not reachable through ${options.route}.`,
-        worker ? '' : 'Source-pack worker readiness is not exposed by the dashboard proxy.',
+        worker ? '' : 'Source-pack worker status is not exposed by the dashboard proxy.',
         worker && !workerLastRunAt ? 'Source-pack worker last run timestamp is missing.' : '',
         worker && workerLastRunAt && !workerFresh ? `Source-pack worker status is stale; last run ${workerLastRunAt}.` : '',
         worker && workerFresh && !(worker.collectionReadyRows || worker.activeSourceRows) ? 'Source-pack worker has no collection-ready source rows.' : '',
-        sourceOperationsReady ? '' : 'Source operations readiness proof is missing or incomplete.',
-        sourceCustomerConfigReady ? '' : 'Source customer configuration proof is missing, incomplete, or not redacted.',
-        sourceReadinessArtifactReady ? '' : 'Source readiness artifact is missing ledger, trust, or safe-output proof.',
-        sourceProxyVerificationReady ? '' : 'Source proxy verification proof is missing or not ready.',
+        sourceOperationsReady ? '' : 'Source operations status is missing or incomplete.',
+        sourceCustomerConfigReady ? '' : 'Source customer configuration is missing, incomplete, or not redacted.',
+        sourceReadinessArtifactReady ? '' : 'Source status artifact is missing ledger, trust, or safe-output checks.',
+        sourceProxyVerificationReady ? '' : 'Source proxy verification is missing or not ready.',
         schemaLookupReady ? '' : 'Safe contract schema lookup is not loaded from the source proxy.',
-        receiptMatrixReady ? '' : 'Product readiness receipt matrix is not loaded from the source proxy.',
-        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow proof packet is not loaded from the source proxy.',
-        sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source-pack proof.',
-        parserSourceFamilyCount > 0 ? '' : 'Parser family counts were not returned by the source-pack proof.',
+        receiptMatrixReady ? '' : 'Product status delivery-check matrix is not connected from the source proxy.',
+        endToEndWorkflowReady ? '' : endToEndWorkflow?.detail || 'End-to-end workflow packet is not connected from the source proxy.',
+        sourceFamilyCount > 0 ? '' : 'Source family counts were not returned by the source pack.',
+        parserSourceFamilyCount > 0 ? '' : 'Parser family counts were not returned by the source pack.',
         ...(Array.isArray(input.sourcePacks?.readiness?.blockers) ? input.sourcePacks.readiness.blockers.filter(Boolean) : []),
         ...(Array.isArray(input.sourcePacks?.proxyVerification?.blockers) ? input.sourcePacks.proxyVerification.blockers.filter(Boolean) : []),
     ].filter(Boolean)
@@ -1241,7 +1241,7 @@ function normalizeEndToEndWorkflowReadiness(input: ProductReadinessEndToEndWorkf
             schemaVersion: 'hanasand.product_readiness.end_to_end_workflow_packet.v1',
             state: 'unsupported',
             status: 'blocked',
-            detail: 'End-to-end customer workflow proof is not exposed by the source contract proxy.',
+            detail: 'End-to-end customer workflow status is not exposed by the source API proxy.',
             steps: [],
             typedFields: [],
             missingTypedFields: ['end_to_end_workflow_packet'],
@@ -3243,18 +3243,18 @@ export function buildReadinessCases(input: {
             id: 'alert_generation',
             kind: 'alert_readiness',
             queue: alertVisibilityBlocked ? 'Org access' : 'Alert generation',
-            title: alertVisibilityBlocked ? 'Connect DWM alert visibility' : alertGenerationProofReady && input.liveAlertCount ? 'Alert pipeline status loaded' : alertGenerationProof ? 'Resolve alert pipeline status' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
-            severity: alertVisibilityBlocked ? 'medium' : alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
-            status: alertVisibilityBlocked ? input.alertAccessState?.code || input.alertAccessState?.status || 'organization_visibility_denied' : alertGenerationProof?.status || (input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty'),
-            priority: alertVisibilityBlocked ? 395 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
+            title: alertVisibilityBlocked ? 'Confirm DWM org visibility' : alertGenerationProofReady && input.liveAlertCount ? 'Alert pipeline status loaded' : alertGenerationProof ? 'Resolve alert pipeline status' : input.liveAlertCount ? 'Real DWM alerts generated' : 'Generate real DWM alerts',
+            severity: alertVisibilityBlocked ? 'low' : alertGenerationProofReady && input.liveAlertCount ? 'medium' : input.liveAlertCount ? 'medium' : 'high',
+            status: alertVisibilityBlocked ? 'setup_check' : alertGenerationProof?.status || (input.liveAlertCount ? 'alerts_ready' : 'demo_or_empty'),
+            priority: alertVisibilityBlocked ? 230 : alertGenerationProofReady && input.liveAlertCount ? 238 : input.liveAlertCount ? 240 : 350,
             confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             subtitle: alertVisibilityBlocked
-                ? `${alertAccessMessage} Match the signed-in operator to an active organization member before customer routing.`
+                ? `${alertAccessMessage} Analyst workflow remains inspectable; live customer delivery waits for membership visibility.`
                 : alertGenerationProof
                     ? alertGenerationProof.detail || alertGenerationDetail(alertGenerationProof)
                     : input.liveAlertCount ? `${input.liveAlertCount} saved DWM alert${input.liveAlertCount === 1 ? '' : 's'} loaded from backend.` : `${input.renderedAlertCount} fallback alert${input.renderedAlertCount === 1 ? '' : 's'} rendered so the workflow is inspectable, but real alert generation has not been verified.`,
             recommendedAction: alertVisibilityBlocked
-                ? 'Open organization access, match this session to an active member, then reload the DWM queue.'
+                ? 'Open organization access, confirm the signed-in operator is an active member, then reload live DWM alerts.'
                 : alertGenerationProofReady && input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : alertGenerationProof ? 'Resolve alert-generation blockers before treating the queue as customer-ready.' : input.liveAlertCount ? 'Work the ready alerts, open cases, replay evidence, and deliver customer notifications.' : 'Create watchlist terms, collect sources, rebuild alerts, and do not rely on fallback cases for customer reviews.',
             evidence: [{
                 id: 'ev_alert_generation',
@@ -3272,9 +3272,9 @@ export function buildReadinessCases(input: {
                 provenance: alertGenerationProof?.source || 'GET /api/dwm/alerts + POST /api/dwm/alerts/rebuild',
                 confidence: alertVisibilityBlocked ? 86 : alertGenerationProof ? alertGenerationProofReady ? 92 : 72 : input.liveAlertCount ? 90 : 58,
             }],
-            timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Alert visibility denied' : alertGenerationProofReady ? 'Alert generation linked' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation blocked', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
+            timeline: [{ id: 'alert_generation_at', at: alertGenerationProofCheckedAt, title: alertVisibilityBlocked ? 'Org visibility check queued' : alertGenerationProofReady ? 'Alert generation linked' : input.liveAlertCount ? 'Alerts loaded' : 'Alert generation blocked', body: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProof ? alertGenerationProofReady ? `${alertGenerationProof.candidateCount ?? 0} alert candidate${alertGenerationProof.candidateCount === 1 ? '' : 's'} with latest evidence ${alertGenerationProof.latestEvidenceAt || 'not returned'}.` : alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is blocked.' : input.liveAlertCount ? 'Saved alerts are ready for triage.' : 'Alert rebuild needs active watchlist terms and source captures.' }],
             nextTasks: alertVisibilityBlocked
-                ? ['Owner: operator. Match this dashboard session to an active organization member.', 'Retry the DWM alert queue after the organization identity is fixed.', 'Keep demo alerts out of analyst triage until org visibility succeeds.']
+                ? ['Owner: operator. Match this dashboard session to an active organization member.', 'Retry the DWM alert queue after the organization identity is fixed.', 'Use tenant-default rows only for workflow review until org visibility succeeds.']
                 : alertGenerationProofReady && input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.']
                     : alertGenerationProof ? ['Owner: DWM owner. Open alert pipeline status.', 'Resolve candidate, evidence-window, source, or webhook-route blockers.', 'Rebuild alerts after customer delivery data is healthy.']
                         : input.liveAlertCount ? [`Owner: analyst. Case candidates: ${input.liveAlertCount}.`, 'Select a DWM alert and open/update its backed analyst case.', 'Send only after webhook destination test succeeds.'] : ['Owner: operator. Save watchlist.', 'Run collection.', 'Rebuild alerts.'],
@@ -3282,7 +3282,7 @@ export function buildReadinessCases(input: {
                 ? [{ href: '/organizations', label: 'Organization access' }, { href: alertsHref(input.scope), label: 'Scoped alerts API' }]
                 : [{ href: '/dashboard/dwm', label: 'Rebuild alerts' }, { href: alertsHref(input.scope), label: 'Alerts API' }, { href: '/api/dwm/alerts/generation-readiness', label: 'Alert pipeline API' }],
             workflowPath: path,
-            missingDependency: alertVisibilityBlocked ? alertAccessMessage : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect alert pipeline status before treating fallback rows as customer evidence.',
+            missingDependency: alertVisibilityBlocked ? undefined : alertGenerationProofReady && input.liveAlertCount ? undefined : alertGenerationProof ? alertGenerationProofBlockers.join('; ') || alertGenerationProof.unavailableReason || 'Alert generation is not ready.' : input.liveAlertCount ? undefined : 'No saved DWM alerts returned from /api/dwm/alerts. Inspect alert pipeline status before treating fallback rows as customer evidence.',
             actions: [
                 ...(alertVisibilityBlocked ? [{
                     id: 'open_organization_access',

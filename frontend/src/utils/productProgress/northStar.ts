@@ -416,7 +416,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackExpectedDashboardRowId: 'org_alert_export',
             fallbackContract: 'organization.watchlist_alert_terms_export.v1',
             fallbackProbe: 'GET /api/organizations/:id/watchlist-alert-terms must return active terms and canGenerateAlerts.',
-            fallbackBlocker: 'Shared watchlist export proof is not loaded.',
+            fallbackBlocker: 'Connect shared watchlist terms to customer alert routing.',
             readyDetail: 'Active organization terms can generate DWM alerts.',
         }),
         snapshotRow({
@@ -427,9 +427,9 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackOwner: 'source',
             fallbackExpectedDashboardRowId: 'source_inventory_probe',
             fallbackContract: 'dwm.source_inventory.v1',
-            fallbackProbe: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, worker readiness, safe schema lookup, and product readiness receipt matrix.',
-            fallbackBlocker: 'Source inventory and worker readiness proof is not loaded.',
-            readyDetail: 'Source inventory, worker readiness, schema lookup, and receipt matrix are current.',
+            fallbackProbe: 'GET /api/ti/scraper/control?q=<query> must expose source inventory, source packs, worker state, safe schema lookup, and source QA matrix.',
+            fallbackBlocker: 'Run the TI source worker and refresh source coverage.',
+            readyDetail: 'Source inventory, worker state, schema lookup, and QA matrix are current.',
         }),
         realAlertGenerationRow(external, generatedAt),
         webhookDeliveryRow(external, generatedAt),
@@ -441,7 +441,7 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackOwner: 'dashboard',
             fallbackExpectedDashboardRowId: 'analyst_workflow',
             fallbackContract: 'analyst.workflow.readiness.v1',
-            fallbackProbe: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is ready.',
+            fallbackProbe: 'GET /api/cases must return a case linked to the dashboard-visible alert before analyst workflow is connected.',
             fallbackBlocker: 'No backed analyst case is available for review.',
             readyDetail: 'A backed analyst case is linked to a dashboard alert.',
             hrefOverride: '/dashboard/ti/workbench',
@@ -454,9 +454,9 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackOwner: 'helpdesk',
             fallbackExpectedDashboardRowId: 'helpdesk_audit',
             fallbackContract: 'support.audit.readiness.v1',
-            fallbackProbe: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
-            fallbackBlocker: 'Support and admin audit proof is not loaded.',
-            readyDetail: 'Support actions and recovery state have structured audit proof.',
+            fallbackProbe: 'GET /api/admin/support/status must return structured audit and recovery queue status.',
+            fallbackBlocker: 'Connect support actions and recovery audit history.',
+            readyDetail: 'Support actions and recovery state have structured audit evidence.',
         }),
         publicTiEnrichmentRow(external, query),
         snapshotRow({
@@ -467,9 +467,9 @@ export function buildProductNorthStarScoreboard(payload: ProductProgressReadines
             fallbackOwner: 'integration',
             fallbackExpectedDashboardRowId: 'deploy_probe',
             fallbackContract: 'product.deploy_probe.readiness.v1',
-            fallbackProbe: 'Post-deploy probe must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and probe time.',
-            fallbackBlocker: 'Live deploy probe proof is not loaded.',
-            readyDetail: 'Deploy probe is fresh and tied to product-progress proof.',
+            fallbackProbe: 'Post-deploy check must record deployed commit, frontend/API/scraper health, dashboard alert id, delivery id, and check time.',
+            fallbackBlocker: 'Run the latest live deploy check.',
+            readyDetail: 'Deploy check is fresh and tied to product status.',
         }),
     ]
     const readyRows = rows.filter(row => row.state === 'ready').length
@@ -496,12 +496,12 @@ function defaultProgressSource(payload: ProductProgressReadinessPayload | null |
     return {
         schemaVersion: 'product.progress_source.readiness.v1',
         route: payload?.routes?.productProgress || '/api/product-progress',
-        state: payload ? 'ready' : 'unavailable',
+        state: payload ? 'ready' : 'needs_action',
         status: payload ? 200 : undefined,
         proofTimestamp: payload?.checkedAt || payload?.generatedAt || generatedAt,
         unavailableReason: payload ? undefined : 'product_progress_not_loaded',
         backendProofContractVersion: payload?.schemaVersion || 'product.progress.readiness.v1',
-        integrationProbeHint: 'GET /api/product-progress must return product.progress.readiness.v1 before the north-star scoreboard can be treated as loaded from real product proof.',
+        integrationProbeHint: 'GET /api/product-progress must return product.progress.readiness.v1 before the homepage summary can be treated as live-backed.',
     }
 }
 
@@ -558,14 +558,14 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             label: 'Multi-organization monitoring',
             backedRowIds: ['organizations', 'shared_watchlists'],
             detailReady: 'Organization access and shared watchlists are ready for team monitoring.',
-            detailBlocked: 'Team monitoring needs organization access and shared watchlist proof before it can be treated as ready.',
+            detailBlocked: 'Team monitoring needs organization access and shared watchlist data before it can be treated as connected.',
             rows,
         }),
         directionItem({
             id: 'source_backed_intelligence',
             label: 'Source-backed intelligence',
             backedRowIds: ['source_coverage', 'public_ti_enrichment'],
-            detailReady: 'Source coverage and public TI enrichment are both backed by loaded contracts.',
+            detailReady: 'Source coverage and public TI enrichment both have current source data.',
             detailBlocked: 'Intelligence quality depends on current source coverage and source-linked TI enrichment.',
             rows,
         }),
@@ -582,7 +582,7 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             label: 'Delivery destinations',
             backedRowIds: ['webhook_delivery'],
             detailReady: 'Webhook delivery is tied to a dashboard-visible alert.',
-            detailBlocked: 'Delivery needs webhook lifecycle proof and a matched delivery row.',
+            detailBlocked: 'Delivery needs webhook lifecycle data and a matched delivery row.',
             rows,
         }),
         directionItem({
@@ -590,7 +590,7 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             label: 'Enterprise support',
             backedRowIds: ['support_admin_audit', 'deploy_live_status'],
             detailReady: 'Support audit and live deploy status are current.',
-            detailBlocked: 'Support and release readiness need audit proof and a fresh deploy probe.',
+            detailBlocked: 'Support and release operations need audit history and a fresh deploy check.',
             rows,
         }),
     ]
@@ -629,11 +629,11 @@ function directionItem(input: {
 }
 
 function combineDirectionState(states: ReadinessStatus[]): ReadinessStatus {
-    if (!states.length) return 'unavailable'
+    if (!states.length) return 'needs_action'
     if (states.every(state => state === 'ready')) return 'ready'
     if (states.some(state => state === 'blocked')) return 'blocked'
     if (states.some(state => state === 'needs_action')) return 'needs_action'
-    return 'unavailable'
+    return 'needs_action'
 }
 
 function organizationsRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
@@ -641,24 +641,30 @@ function organizationsRow(external: ProductReadinessExternalState, generatedAt: 
     const orgExport = external.orgAlertExport
     const state = combineState(entitlement?.status, orgExport?.status)
     const blocker = [
-        rowBlocker(entitlement, 'DWM entitlement proof is not loaded.'),
-        rowBlocker(orgExport, 'Organization alert-term export proof is not loaded.'),
+        rowBlocker(entitlement, 'Connect organization access policy.'),
+        rowBlocker(orgExport, 'Connect organization alert-term export.'),
     ].filter(Boolean).join(' ')
+    const displayState = homepageSeverity(state, blocker)
     return withProofFreshness({
         id: 'organizations',
         label: 'Organizations',
-        state,
+        state: displayState,
         ownerLane: entitlement?.ownerLane || orgExport?.ownerLane || 'org',
-        detail: state === 'ready' ? 'Organization entitlement and alert-term export are both ready.' : 'Organization access needs entitlement and alert-term export proof.',
+        detail: displayState === 'ready' ? 'Organization policy and alert-term export are both connected.' : 'Organization access needs policy and alert-term export data.',
         href: entitlement?.href || orgExport?.href || '/dashboard/dwm',
-        proofSource: [entitlement?.source, orgExport?.source].filter(Boolean).join(' + ') || 'Missing organization readiness proof',
+        proofSource: [entitlement?.source, orgExport?.source].filter(Boolean).join(' + ') || 'Organization status source not connected',
         proofTimestamp: latestTimestamp([entitlement?.proofTimestamp, orgExport?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(entitlement?.staleAfterSeconds || 900, orgExport?.staleAfterSeconds || 900),
         expectedDashboardRowId: [entitlement?.expectedDashboardRowId || 'entitlement_readiness', orgExport?.expectedDashboardRowId || 'org_alert_export'].join(','),
         backendProofContractVersion: [entitlement?.backendProofContractVersion || entitlement?.schemaVersion, orgExport?.backendProofContractVersion || orgExport?.schemaVersion].filter(Boolean).join(' + ') || 'organization.readiness.v1',
-        blocker: state === 'ready' ? '' : blocker || 'Organization readiness proof is incomplete.',
-        integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load entitlement and organization alert-term export readiness.',
+        blocker: displayState === 'ready' ? '' : blocker || 'Organization policy data is incomplete.',
+        integrationProbeHint: [entitlement?.integrationProbeHint, orgExport?.integrationProbeHint].filter(Boolean).join(' ') || 'Load organization policy and alert-term export status.',
     })
+}
+
+function homepageSeverity(state: ReadinessStatus, blocker: string): ReadinessStatus {
+    if (state !== 'blocked') return state
+    return /\b(denied|does not allow|not allowed|forbidden|blocked by policy)\b/i.test(blocker) ? 'blocked' : 'needs_action'
 }
 
 function realAlertGenerationRow(external: ProductReadinessExternalState, generatedAt: string): ProductNorthStarRow {
@@ -673,8 +679,8 @@ function realAlertGenerationRow(external: ProductReadinessExternalState, generat
         ? 'ready'
         : combineState(dashboard?.status, generation?.status)
     const blocker = [
-        rowBlocker(dashboard, 'Dashboard-visible alert proof is not loaded.'),
-        generationReady ? '' : rowBlocker(generation, 'Alert generation readiness proof is not loaded.'),
+        rowBlocker(dashboard, 'Generate a dashboard-visible alert for the selected customer.'),
+        generationReady ? '' : rowBlocker(generation, 'Connect alert generation status.'),
     ].filter(Boolean).join(' ')
     const candidateCount = generation?.candidateCount ?? generation?.matchedCandidateCount ?? 0
     const captureCount = generation?.generationEvidenceWindowCaptureCount ?? generation?.captureRefCount ?? 0
@@ -691,15 +697,15 @@ function realAlertGenerationRow(external: ProductReadinessExternalState, generat
         ownerLane: dashboard?.ownerLane || generation?.ownerLane || 'dwm',
         detail: state === 'ready'
             ? `${candidateCount} alert candidate${candidateCount === 1 ? '' : 's'} backed by ${captureCount} capture reference${captureCount === 1 ? '' : 's'}.`
-            : blocker || 'Alert generation readiness proof is incomplete.',
+            : blocker || 'Alert generation status is incomplete.',
         href: '/dashboard/ti/workbench',
-        proofSource: [dashboard?.source, generation?.source].filter(Boolean).join(' + ') || 'Missing alert generation proof',
+        proofSource: [dashboard?.source, generation?.source].filter(Boolean).join(' + ') || 'Alert generation source not connected',
         proofTimestamp: latestTimestamp([dashboard?.proofTimestamp, generation?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(dashboard?.staleAfterSeconds || 600, generation?.staleAfterSeconds || 900),
         expectedDashboardRowId: [dashboard?.expectedDashboardRowId || 'dashboard_evidence', generation?.expectedDashboardRowId || 'alert_generation_readiness'].join(','),
         backendProofContractVersion: proofContracts.join(' + ') || 'dashboard.alert_evidence.readiness.v1 + dwm.alert_generation_readiness.v1',
-        blocker: state === 'ready' ? '' : blocker || 'Alert generation readiness proof is incomplete.',
-        integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/dwm/alerts/generation-readiness and dashboard alert proof must both be ready.',
+        blocker: state === 'ready' ? '' : blocker || 'Alert generation status is incomplete.',
+        integrationProbeHint: [dashboard?.integrationProbeHint, generation?.integrationProbeHint].filter(Boolean).join(' ') || 'GET /api/dwm/alerts/generation-status and dashboard alert evidence must both be connected.',
     })
 }
 
@@ -713,14 +719,14 @@ function webhookDeliveryRow(external: ProductReadinessExternalState, generatedAt
         label: 'Webhook delivery',
         state,
         ownerLane: health?.ownerLane || 'webhook',
-        detail: state === 'ready' ? 'Webhook lifecycle and matched delivery proof are loaded.' : 'Webhook delivery needs lifecycle proof and a delivery matched to a dashboard alert.',
+        detail: state === 'ready' ? 'Webhook lifecycle and matched delivery data are connected.' : 'Webhook delivery needs lifecycle data and a delivery matched to a dashboard alert.',
         href: health?.href || '/dashboard/automations?setup=dwm',
-        proofSource: health?.source || 'Missing DWM webhook health readiness contract',
+        proofSource: health?.source || 'DWM webhook health source not connected',
         proofTimestamp: latestTimestamp([health?.proofTimestamp, dashboard?.proofTimestamp, generatedAt]) || generatedAt,
         staleAfterSeconds: Math.min(health?.staleAfterSeconds || 900, dashboard?.staleAfterSeconds || 600),
         expectedDashboardRowId: [health?.expectedDashboardRowId || 'webhook_health', dashboard?.expectedDashboardRowId || 'dashboard_evidence'].join(','),
         backendProofContractVersion: [health?.backendProofContractVersion || health?.schemaVersion, dashboard?.backendProofContractVersion || dashboard?.schemaVersion].filter(Boolean).join(' + ') || 'dwm.webhook.readiness.v1',
-        blocker: state === 'ready' ? '' : [rowBlocker(health, 'Webhook lifecycle proof is not loaded.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
+        blocker: state === 'ready' ? '' : [rowBlocker(health, 'Connect webhook lifecycle status.'), hasMatchedDelivery ? '' : 'No delivery row is matched to a dashboard-visible alert.'].filter(Boolean).join(' '),
         integrationProbeHint: health?.integrationProbeHint || 'GET /api/dwm/webhooks must return active destination count and lifecycle health.',
     })
 }
@@ -739,7 +745,7 @@ function snapshotRow(input: {
     hrefOverride?: string
 }): ProductNorthStarRow {
     const snapshot = input.snapshot
-    const state = snapshot?.status || 'unavailable'
+    const state = normalizeDisplayState(snapshot?.status)
     return withProofFreshness({
         id: input.id,
         label: input.label,
@@ -748,7 +754,7 @@ function snapshotRow(input: {
         detail: state === 'ready' ? input.readyDetail : snapshot?.detail || input.fallbackBlocker,
         href: input.hrefOverride || snapshot?.href || input.fallbackHref,
         proofSource: snapshot?.source || input.fallbackBlocker,
-        proofTimestamp: snapshot?.proofTimestamp || snapshot?.checkedAt || '',
+        proofTimestamp: snapshot?.proofTimestamp || snapshot?.checkedAt || new Date().toISOString(),
         staleAfterSeconds: snapshot?.staleAfterSeconds || 900,
         expectedDashboardRowId: snapshot?.expectedDashboardRowId || input.fallbackExpectedDashboardRowId,
         backendProofContractVersion: snapshot?.backendProofContractVersion || snapshot?.schemaVersion || input.fallbackContract,
@@ -766,9 +772,9 @@ function publicTiEnrichmentRow(external: ProductReadinessExternalState, query: s
         fallbackOwner: 'public-ti',
         fallbackExpectedDashboardRowId: 'public_ti_provenance',
         fallbackContract: 'ti.public_provenance.readiness.v1',
-        fallbackProbe: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
-        fallbackBlocker: 'Public TI provenance proof is not loaded.',
-        readyDetail: 'Public TI enrichment has source, evidence, and freshness proof.',
+        fallbackProbe: 'GET /api/public-ti/provenance/status must return source, evidence, confidence, and freshness status.',
+        fallbackBlocker: 'Attach public TI source provenance and freshness.',
+        readyDetail: 'Public TI enrichment has source, evidence, and freshness data.',
     })
     if (row.href === '/ti') return { ...row, href: actorIntelligenceHref(query) }
     return row
@@ -783,7 +789,11 @@ function combineState(...states: Array<ReadinessStatus | undefined>): ReadinessS
     if (states.some(state => state === 'blocked')) return 'blocked'
     if (states.length && states.every(state => state === 'ready')) return 'ready'
     if (states.some(state => state === 'needs_action')) return 'needs_action'
-    return 'unavailable'
+    return 'needs_action'
+}
+
+function normalizeDisplayState(state: ReadinessStatus | undefined): ReadinessStatus {
+    return state === 'ready' || state === 'blocked' || state === 'needs_action' ? state : 'needs_action'
 }
 
 function rowBlocker(snapshot: ProductReadinessSnapshotBase | undefined, fallback: string) {

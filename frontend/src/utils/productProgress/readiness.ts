@@ -87,8 +87,8 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
         generatedAt: input.generatedAt,
         checkedAt,
         routes: input.routes,
-        publicTiProvenance: input.publicTiProvenance || unavailablePublicTi(input.routes.publicTiProvenance || input.routes.productProgress || '/api/product-progress', checkedAt),
-        helpdeskAudit: input.helpdeskAudit || unavailableHelpdesk(input.routes.helpdeskAudit || input.routes.productProgress || '/api/product-progress', checkedAt),
+        publicTiProvenance: input.publicTiProvenance || actionNeededPublicTi(input.routes.publicTiProvenance || input.routes.productProgress || '/api/product-progress', checkedAt),
+        helpdeskAudit: input.helpdeskAudit || actionNeededHelpdesk(input.routes.helpdeskAudit || input.routes.productProgress || '/api/product-progress', checkedAt),
         deployProbe: {
             schemaVersion: 'product.deploy_probe.readiness.v1',
             status: input.deploy?.status === 'ready' && deployProbeFresh ? 'ready' : 'needs_action',
@@ -120,12 +120,12 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             generatedAt: checkedAt,
             query: input.query,
             baseConfigured: false,
-            error: { code: 'source_proxy_unavailable', message: 'Source proxy response is not loaded.' },
+            error: { code: 'source_proxy_needs_connection', message: 'Source proxy response is not connected to this console view.' },
         },
-        orgAlertExport: input.orgAlertExport || unavailableOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
+        orgAlertExport: input.orgAlertExport || actionNeededOrgAlertExport(input.routes.orgAlertExport || input.routes.productProgress || '/api/product-progress', checkedAt),
         webhookHealth: input.webhookHealth || webhookHealthFromDeliveries(input.routes.webhookHealth || input.routes.productProgress || '/api/product-progress', checkedAt, input.deliveries || [], input.deliveryProofLedger),
         entitlement: entitlementReadiness(input.entitlement, input.routes.entitlement || input.routes.productProgress || '/api/product-progress', checkedAt),
-        dwmProduct: input.dwmProduct || unavailableDwmProduct(input.routes.dwmProduct || input.routes.productProgress || '/api/product-progress', checkedAt),
+        dwmProduct: input.dwmProduct || actionNeededDwmProduct(input.routes.dwmProduct || input.routes.productProgress || '/api/product-progress', checkedAt),
         alertGeneration: input.alertGeneration,
         dashboardEvidence: dashboardEvidenceFromRows({
             checkedAt,
@@ -174,72 +174,72 @@ function currentCommit() {
     return process.env.NEXT_PUBLIC_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_SHA || process.env.COMMIT_SHA || process.env.GIT_SHA || undefined
 }
 
-function unavailablePublicTi(source: string, checkedAt: string): PublicTiProvenanceReadiness {
+function actionNeededPublicTi(source: string, checkedAt: string): PublicTiProvenanceReadiness {
     return {
         schemaVersion: 'ti.public_provenance.readiness.v1',
-        status: 'unavailable',
+        status: 'needs_action',
         checkedAt,
         source,
         href: '/ti',
-        detail: 'Public TI provenance readiness endpoint is not wired into product progress yet.',
-        blockers: ['Public TI owner must expose source/evidence/freshness readiness before this can become ready.'],
+        detail: 'Public TI source provenance needs to be connected to this console summary.',
+        blockers: ['Attach source, evidence, confidence, and freshness from public TI before using this row for customer routing.'],
         ownerLane: 'public-ti',
         unavailableReason: 'missing_public_ti_provenance_readiness_api',
         staleAfterSeconds: 3600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'public_ti_provenance',
-        integrationProbeHint: 'GET /api/public-ti/provenance/readiness must return source/evidence/freshness readiness.',
+        integrationProbeHint: 'GET /api/public-ti/provenance/status must return source, evidence, confidence, and freshness status.',
         backendProofContractVersion: 'ti.public_provenance.readiness.v1',
     }
 }
 
-function unavailableHelpdesk(source: string, checkedAt: string): HelpdeskAuditReadiness {
+function actionNeededHelpdesk(source: string, checkedAt: string): HelpdeskAuditReadiness {
     return {
         schemaVersion: 'support.audit.readiness.v1',
-        status: 'unavailable',
+        status: 'needs_action',
         checkedAt,
         source,
         href: '/dashboard/system/impersonation',
-        detail: 'Helpdesk and structured audit readiness endpoint is not wired into product progress yet.',
-        blockers: ['Helpdesk owner must expose support action and audit readiness before this can become ready.'],
+        detail: 'Support action and audit history need to be connected to this console summary.',
+        blockers: ['Connect support action history and recovery queue audit data before treating this as enterprise-ready.'],
         ownerLane: 'helpdesk',
         unavailableReason: 'missing_helpdesk_audit_readiness_api',
         staleAfterSeconds: 3600,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'helpdesk_audit',
-        integrationProbeHint: 'GET /api/admin/support/readiness must return structured audit and recovery queue readiness.',
+        integrationProbeHint: 'GET /api/admin/support/status must return structured audit and recovery queue status.',
         backendProofContractVersion: 'support.audit.readiness.v1',
     }
 }
 
-function unavailableOrgAlertExport(source: string, checkedAt: string): OrganizationAlertExportReadiness {
+function actionNeededOrgAlertExport(source: string, checkedAt: string): OrganizationAlertExportReadiness {
     return {
         schemaVersion: 'organization.watchlist_alert_terms_export.v1',
-        status: 'unavailable',
+        status: 'needs_action',
         checkedAt,
         source,
         href: '/dashboard/dwm',
-        detail: 'Organization alert-term export readiness is not wired into product progress yet.',
-        blockers: ['Org owner must expose active alert-term export readiness before this can become ready.'],
+        detail: 'Active organization watchlist terms need to be connected to alert routing.',
+        blockers: ['Connect active organization watchlist terms and alert-routing permission before customer alert generation.'],
         ownerLane: 'org',
         unavailableReason: 'missing_org_alert_export_readiness_api',
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-status must return whether the organization can generate alerts and active watchlist term counts.',
         backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     }
 }
 
-function unavailableDwmProduct(source: string, checkedAt: string): DwmProductSnapshotReadiness {
+function actionNeededDwmProduct(source: string, checkedAt: string): DwmProductSnapshotReadiness {
     return {
         schemaVersion: 'dwm.product_snapshot.readiness.v1',
-        status: 'unavailable',
+        status: 'needs_action',
         checkedAt,
         source,
         href: '/dashboard/dwm',
-        detail: 'Live DWM product snapshot endpoint is not wired into product progress yet.',
-        blockers: ['DWM owner must expose /api/dwm/product with demo=false before this can become ready.'],
+        detail: 'Live DWM product data needs to be connected to this console summary.',
+        blockers: ['Connect /api/dwm/product with demo=false before treating the homepage summary as live-backed.'],
         ownerLane: 'dwm',
         unavailableReason: 'missing_dwm_product_snapshot',
         staleAfterSeconds: 900,
@@ -254,18 +254,18 @@ function entitlementReadiness(input: EntitlementReadiness | undefined, source: s
     if (!input) {
         return {
             schemaVersion: 'dwm.entitlement.readiness.v1',
-            status: 'unavailable',
+            status: 'needs_action',
             checkedAt,
             source,
             href: '/dashboard/dwm',
-            detail: 'DWM entitlement readiness endpoint is not wired into product progress yet.',
-            blockers: ['Entitlement owner must expose policy, role, and allowed-action readiness before this can become ready.'],
+            detail: 'Organization access policy is not connected to this console summary yet.',
+            blockers: ['Connect policy, role, and allowed alert-routing actions before customer routing.'],
             ownerLane: 'org',
             unavailableReason: 'missing_dwm_entitlement_readiness_api',
             staleAfterSeconds: 900,
             proofTimestamp: checkedAt,
             expectedDashboardRowId: 'entitlement_readiness',
-            integrationProbeHint: 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+            integrationProbeHint: 'GET /api/dwm/entitlements/status must return policy, checked role, allowed action, and blockers.',
             backendProofContractVersion: 'dwm.entitlement.readiness.v1',
         }
     }
@@ -287,7 +287,7 @@ function entitlementReadiness(input: EntitlementReadiness | undefined, source: s
         staleAfterSeconds: input.staleAfterSeconds ?? 900,
         proofTimestamp: input.proofTimestamp || input.checkedAt || checkedAt,
         expectedDashboardRowId: input.expectedDashboardRowId || 'entitlement_readiness',
-        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/readiness must return policy, checked role, allowed action, and blockers.',
+        integrationProbeHint: input.integrationProbeHint || 'GET /api/dwm/entitlements/status must return policy, checked role, allowed action, and blockers.',
         backendProofContractVersion: input.backendProofContractVersion || input.schemaVersion || 'dwm.entitlement.readiness.v1',
         detail: input.detail || (blockers.length ? blockers.join('; ') : 'DWM entitlement policy allows alert operations.'),
     }
@@ -336,8 +336,8 @@ function dashboardEvidenceFromRows(input: {
         && input.alertGeneration.readyForCustomerDelivery === true
         && input.alertGeneration.generationEvidenceWindowReady === true
     const alertGenerationDetail = alertGenerationReady
-        ? `${input.alertGeneration?.candidateCount ?? 0} alert generation candidate${input.alertGeneration?.candidateCount === 1 ? '' : 's'} with ${input.alertGeneration?.generationEvidenceWindowCaptureCount ?? 0} evidence-window capture${input.alertGeneration?.generationEvidenceWindowCaptureCount === 1 ? '' : 's'} through ${input.alertGeneration?.latestEvidenceAt || 'the latest readiness proof'}.`
-        : input.alertGeneration?.blockers?.filter(Boolean).join('; ') || 'DWM alert generation readiness proof is not loaded.'
+        ? `${input.alertGeneration?.candidateCount ?? 0} alert generation candidate${input.alertGeneration?.candidateCount === 1 ? '' : 's'} with ${input.alertGeneration?.generationEvidenceWindowCaptureCount ?? 0} evidence-window capture${input.alertGeneration?.generationEvidenceWindowCaptureCount === 1 ? '' : 's'} through ${input.alertGeneration?.latestEvidenceAt || 'the latest status check'}.`
+        : input.alertGeneration?.blockers?.filter(Boolean).join('; ') || 'Connect DWM alert generation status.'
     const blockers = [
         visibleInDashboard ? '' : 'No dashboard-visible backend alert was loaded.',
         deliveryEvidenceMatched ? '' : 'No delivery row matched the dashboard-visible alert.',

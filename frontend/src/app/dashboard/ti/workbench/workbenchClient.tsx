@@ -1125,7 +1125,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                 )}
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
                             <p className='text-xs font-semibold uppercase text-[#667085]'>Team invite</p>
                             <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/organizations/:id/invites adds pending members to the selected org.</p>
@@ -1173,7 +1173,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                 </div>
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
                             <p className='text-xs font-semibold uppercase text-[#667085]'>Active members</p>
                             <p className='mt-1 text-xs leading-5 text-[#596170]'>Owner picker uses these identities for PATCH /api/cases/:id assignment.</p>
@@ -1189,7 +1189,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                 </div>
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
                             <p className='text-xs font-semibold uppercase text-[#667085]'>Selected term</p>
                             <p className='mt-1 break-all text-sm font-semibold text-[#171a21]'>{term || 'none'}</p>
@@ -1217,7 +1217,7 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                 </div>
 
                 <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
+                    <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
                             <p className='text-xs font-semibold uppercase text-[#667085]'>Shared terms</p>
                             <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/dwm/watchlists upserts existing watchlists. PATCH/DELETE /api/dwm/watchlists/:id is not available.</p>
@@ -1592,11 +1592,11 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             id: 'source_health',
             label: 'Source health',
             detail: `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${sourceCoverage.watchlistMatchCount} watchlist matches.`,
-            tone: sourceCoverage.activeSourceCount ? 'ready' : 'blocked',
+            tone: sourceCoverage.activeSourceCount ? 'ready' : 'needs_action',
             href: '/dashboard/ti/sources',
         })
     } else {
-        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Source state unavailable from /api/dwm/operations.', tone: 'blocked', href: '/dashboard/ti/sources' })
+        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Open source operations to refresh /api/dwm/operations.', tone: 'needs_action', href: '/dashboard/ti/sources' })
     }
     if (selected.kind === 'org_readiness') {
         if (orgContext?.organization) {
@@ -1604,7 +1604,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 id: 'inspect_org_members',
                 label: 'Inspect members',
                 detail: `GET /api/organizations/${orgContext.organization.id}/members returns active member and role state for assignment and alert visibility.`,
-                tone: orgContext.members.some(member => member.status === 'active') ? 'ready' : 'blocked',
+                tone: orgContext.members.some(member => member.status === 'active') ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/members`,
             })
             rows.push({
@@ -1615,7 +1615,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
             })
         } else {
-            rows.push({ id: 'create_org_context', label: 'Open organizations', detail: 'GET /api/organizations returned no selected organization for this operator scope.', tone: 'blocked', href: '/api/organizations' })
+            rows.push({ id: 'create_org_context', label: 'Open organizations', detail: 'Create or select an organization before live customer routing.', tone: 'needs_action', href: '/api/organizations' })
         }
     }
     if (selected.kind === 'watchlist_readiness') {
@@ -1637,7 +1637,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             id: 'inspect_watchlist_alert_queue',
             label: 'Generated alerts',
             detail: 'GET /api/dwm/alerts returns persisted alerts generated from shared watchlists and source coverage.',
-            tone: orgContext?.readiness.liveAlertCount ? 'ready' : orgContext?.readiness.activeWatchlistCount ? 'needs_action' : 'blocked',
+            tone: orgContext?.readiness.liveAlertCount ? 'ready' : 'needs_action',
             href: '/api/dwm/alerts',
         })
         if (orgContext?.organization) {
@@ -1657,7 +1657,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             detail: sourceCoverage
                 ? `GET /api/dwm/operations shows ${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources, ${sourceCoverage.captureCount} captures, and ${sourceCoverage.watchlistMatchCount} watchlist matches.`
                 : 'GET /api/dwm/operations did not return a source-health snapshot for this dashboard session.',
-            tone: sourceCoverage ? sourceCoverage.activeSourceCount ? 'ready' : 'blocked' : 'needs_action',
+            tone: sourceCoverage ? sourceCoverage.activeSourceCount ? 'ready' : 'needs_action' : 'needs_action',
             href: '/api/dwm/operations',
         })
         rows.push({
@@ -1992,10 +1992,10 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     if (!items.length) {
         return (
             <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
-                <div className='flex flex-wrap items-center justify-between gap-2'>
+                <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                     <div>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product readiness</p>
-                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>Readiness proof is not loaded yet.</p>
+                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product status</p>
+                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>Connect the workflow data source to review this item.</p>
                     </div>
                     <span className={workflowStatusClass('blocked')}>blocked</span>
                 </div>
@@ -2005,7 +2005,7 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
 
     return (
         <div className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                 <div>
                     <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product readiness</p>
                     <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>
@@ -2238,7 +2238,7 @@ function ReadinessDetailField({ label: fieldLabel, value }: { label: string, val
 
 function readinessBlocker(item: WorkbenchProductReadinessItem) {
     if (item.status === 'ready') return ''
-    return item.unavailableReason || item.detail || item.source || 'Readiness proof is incomplete.'
+    return item.unavailableReason || item.detail || item.source || 'Workflow data is incomplete.'
 }
 
 function readinessPrioritySort(first: WorkbenchProductReadinessItem, second: WorkbenchProductReadinessItem) {
@@ -2294,7 +2294,7 @@ function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: s
     const cleanLabel = sanitizeWorkbenchCopy(rowLabel) || rowLabel
     const cleanValue = sanitizeWorkbenchCopy(value) || value
     return (
-        <div className='flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#2d3a52] dark:bg-[#111827]'>
+        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#2d3a52] dark:bg-[#111827] sm:items-center'>
             <span className='font-semibold text-[#171a21] dark:text-[#d8deea]'>{cleanLabel}</span>
             <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#667085] dark:text-[#aab6ca]'>
                 <span className='min-w-0 break-all'>{cleanValue}</span>
@@ -2331,7 +2331,7 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
 
     return (
         <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 sm:items-center'>
                 <div>
                     <h3 className='text-sm font-semibold text-[#171a21]'>Backed inspection</h3>
                     <p className='mt-0.5 text-xs text-[#667085]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
@@ -2458,7 +2458,7 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
                     const ledgerHref = deliveryLedgerHref(orgContext, selected, delivery)
                     return (
                         <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
-                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
                                     <span className='font-mono text-xs font-semibold text-[#171a21]'>{delivery.id}</span>
                                     <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
@@ -2662,7 +2662,7 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
 function CaseWatchlistRows({ watchlists, orgContext }: { watchlists: CaseWatchlist[], orgContext?: WorkbenchOrgContext }) {
     return (
         <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <div className='flex flex-wrap items-center justify-between gap-2'>
+            <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                 <h4 className='text-sm font-semibold text-[#171a21]'>Watchlist scope</h4>
                 <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
                     Open watchlists
@@ -3011,7 +3011,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
 
     return (
         <section data-selected-workflow-handoff='true' className='rounded-lg border border-[#dbe3ee] bg-white dark:border-[#26384f] dark:bg-[#0f1722]'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 dark:border-[#20314a]'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 dark:border-[#20314a] sm:items-center'>
                 <div className='min-w-0'>
                     <h3 className='text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>Selected workflow</h3>
                     <p className='mt-0.5 wrap-break-word text-xs text-[#667085] dark:text-[#9fb0c8]'>
@@ -3026,7 +3026,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
             <div className='grid min-w-0 gap-2 p-3 md:grid-cols-2'>
                 {steps.map(step => (
                     <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-[#e0e7f0] bg-[#fbfcfe] p-3 dark:border-[#26384f] dark:bg-[#121d2b]'>
-                        <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                        <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 sm:items-center'>
                             <h4 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>{step.label}</h4>
                             <span className={`${workflowStatusClass(step.status)} shrink-0`}>{label(step.status)}</span>
                         </div>
@@ -3038,7 +3038,7 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
                         ) : (
-                            <span className='wrap-break-word rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#9a3412] dark:border-[#7c3f1d] dark:bg-[#2a1d14] dark:text-[#fed7aa]'>{step.blockedReason}</span>
+                            <span className={`${workflowStatusClass(step.status)} wrap-break-word justify-self-start`}>{step.blockedReason}</span>
                         )}
                     </div>
                 ))}
@@ -3072,24 +3072,24 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
         ? 'needs_action'
         : detail?.case
             ? 'ready'
-            : caseHref
+            : caseHref || item.kind === 'dwm_alert'
                 ? 'needs_action'
                 : 'blocked'
     const evidenceCount = (detail?.evidence?.length || 0) + item.evidence.length + (alertRecord?.evidence?.length || 0)
-    const evidenceStatus: WorkbenchWorkflowStep['status'] = evidenceCount ? 'ready' : sourceHref ? 'needs_action' : 'blocked'
-    const watchlistStatus: WorkbenchWorkflowStep['status'] = activeWatchlistCount ? 'ready' : watchlistCount ? 'needs_action' : 'blocked'
-    const deliveryStatus: WorkbenchWorkflowStep['status'] = delivered ? 'ready' : delivery ? 'needs_action' : activeDestination ? 'needs_action' : 'blocked'
+    const evidenceStatus: WorkbenchWorkflowStep['status'] = evidenceCount ? 'ready' : sourceHref || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
+    const watchlistStatus: WorkbenchWorkflowStep['status'] = activeWatchlistCount ? 'ready' : watchlistCount || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
+    const deliveryStatus: WorkbenchWorkflowStep['status'] = delivered ? 'ready' : delivery || activeDestination || item.kind === 'dwm_alert' ? 'needs_action' : 'blocked'
 
     return [
         {
             id: 'alert',
             label: 'Alert',
-            status: alertHref || alertRecord ? 'ready' : item.kind === 'dwm_alert' ? 'blocked' : 'needs_action',
-            detail: alertRecord ? `${label(alertRecord.reviewState || item.status)}; ${alertRecord.sourceCount ?? item.sourceLabel} source${alertRecord.sourceCount === 1 ? '' : 's'}.` : item.persistent ? 'Open the persisted alert detail before customer routing.' : 'Fallback alert rows cannot load persisted alert detail.',
+            status: alertHref || alertRecord ? 'ready' : 'needs_action',
+            detail: alertRecord ? `${label(alertRecord.reviewState || item.status)}; ${alertRecord.sourceCount ?? item.sourceLabel} source${alertRecord.sourceCount === 1 ? '' : 's'}.` : item.persistent ? 'Open the persisted alert detail before customer routing.' : 'Tenant-default row needs persisted alert detail before customer routing.',
             source: item.persistent ? 'GET /api/dwm/alerts/:id' : 'selected queue row',
             href: alertHref,
             actionLabel: 'Open alert',
-            blockedReason: 'Persisted alert ID required',
+            blockedReason: item.kind === 'dwm_alert' ? 'Persisted alert ID needed' : 'Alert route needed',
         },
         {
             id: 'case',
@@ -3099,7 +3099,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             source: 'GET /api/cases/:id',
             href: caseHref,
             actionLabel: 'Open case',
-            blockedReason: 'Case route required',
+            blockedReason: 'Case route needed',
         },
         {
             id: 'evidence',
@@ -3109,7 +3109,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             source: detail?.evidence?.length ? 'GET /api/cases/:id' : alertRecord?.evidence?.length ? 'GET /api/dwm/alerts/:id' : 'selected queue evidence',
             href: sourceHref || alertHref || caseHref,
             actionLabel: sourceHref ? 'Inspect source' : 'Open evidence',
-            blockedReason: 'Evidence source route required',
+            blockedReason: 'Evidence source route needed',
         },
         {
             id: 'watchlist',
@@ -3119,7 +3119,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             source: detail?.watchlists?.length ? 'GET /api/cases/:id watchlists' : 'GET /api/dwm/watchlists',
             href: watchlistLedgerHref(orgContext),
             actionLabel: 'Open watchlists',
-            blockedReason: 'Watchlist scope required',
+            blockedReason: 'Watchlist scope needed',
         },
         {
             id: 'delivery',
@@ -3129,7 +3129,7 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             source: 'GET /api/dwm/webhooks/deliveries',
             href: deliveryHref,
             actionLabel: 'Open delivery',
-            blockedReason: 'Delivery route required',
+            blockedReason: 'Delivery route needed',
         },
     ]
 }
@@ -3175,7 +3175,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
 
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#eef1f5] px-4 py-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 sm:items-center'>
                 <div>
                     <h3 className='text-sm font-semibold text-[#171a21]'>Continuity</h3>
                     <p className='mt-0.5 text-xs text-[#667085]'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>

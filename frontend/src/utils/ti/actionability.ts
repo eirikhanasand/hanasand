@@ -1966,7 +1966,7 @@ function buildPublicTiReadiness(input: {
     if (!webhookDestinationIds.length) blockers.push(readinessBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/dashboard/dwm', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
 
     if (hasOrgContext && !input.contract?.entitlementReadiness) {
-        blockers.push(readinessBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Entitlement readiness was not returned with the public TI result.', '/dashboard/dwm', 'Load organization entitlement readiness before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
+        blockers.push(readinessBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Organization access context was not returned with the public TI result.', '/dashboard/dwm', 'Load organization access context before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
     }
     if (hasAlertContext && input.relatedAlerts.every(alert => !alert.deliveryReadinessContext)) {
         blockers.push(readinessBlocker('unavailable_contract', 'webhook', 'webhook', 'relatedAlerts[].deliveryReadinessContext', 'Alert delivery readiness was not returned with the related alert.', '/dashboard/dwm', 'Return delivery readiness context with capture, case, destination, replay, and entitlement fields.', 'delivery_readiness'))

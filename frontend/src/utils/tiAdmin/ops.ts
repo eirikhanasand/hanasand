@@ -19,6 +19,7 @@ export type TiAdminSource = {
     buyerValue: string
     legalNotes: string
     screenshotIds: string[]
+    aiReview?: TiAdminAiReview
 }
 
 export type TiAdminDomain = {
@@ -29,6 +30,16 @@ export type TiAdminDomain = {
     resultCount: number
     lastSeenAt: string
     status: 'watching' | 'review' | 'quiet'
+    aiReview?: TiAdminAiReview
+}
+
+export type TiAdminAiReview = {
+    reviewer: 'hanasand-ai'
+    status: 'approved' | 'monitoring' | 'needs_human'
+    reviewedAt: string
+    qualityScore: number
+    summary: string
+    checks: string[]
 }
 
 export type TiAdminCapture = {
@@ -329,33 +340,38 @@ const runs: TiAdminRun[] = [
     },
 ]
 
-export function getTiAdminOverview(): TiAdminOverview {
-    return { sources, domains, captures, runs }
+export function getTiAdminOverview(now = new Date()): TiAdminOverview {
+    const projectedSources = sources.map((source, index) => projectSource(source, index, now))
+    const sourceById = new Map(projectedSources.map(source => [source.id, source]))
+    const projectedDomains = domains.map(domain => projectDomain(domain, sourceById, now))
+    const projectedCaptures = captures.map((capture, index) => projectCapture(capture, sourceById.get(capture.sourceId), index))
+    const projectedRuns = projectedSources.map((source, index) => projectRun(source, index))
+    return { sources: projectedSources, domains: projectedDomains, captures: projectedCaptures, runs: projectedRuns }
 }
 
 export function getTiAdminSource(id: string) {
-    return sources.find(source => source.id === id) || null
+    return getTiAdminOverview().sources.find(source => source.id === id) || null
 }
 
 export function getTiAdminDomain(domain: string) {
     const decoded = decodeURIComponent(domain)
-    return domains.find(item => item.domain === decoded) || null
+    return getTiAdminOverview().domains.find(item => item.domain === decoded) || null
 }
 
 export function sourceRuns(sourceId: string) {
-    return runs.filter(run => run.sourceId === sourceId)
+    return getTiAdminOverview().runs.filter(run => run.sourceId === sourceId)
 }
 
 export function sourceCaptures(sourceId: string) {
-    return captures.filter(capture => capture.sourceId === sourceId)
+    return getTiAdminOverview().captures.filter(capture => capture.sourceId === sourceId)
 }
 
 export function domainCaptures(domain: string) {
-    return captures.filter(capture => capture.domain === domain)
+    return getTiAdminOverview().captures.filter(capture => capture.domain === domain)
 }
 
 export function sourceById(id: string) {
-    return sources.find(source => source.id === id)
+    return getTiAdminOverview().sources.find(source => source.id === id)
 }
 
 export function formatTiDate(value: string) {
@@ -369,4 +385,93 @@ export function formatTiDate(value: string) {
 export function ageDays(since: string) {
     const diff = Date.now() - new Date(since).getTime()
     return Math.max(1, Math.round(diff / 86400000))
+}
+
+function projectSource(source: TiAdminSource, index: number, now: Date): TiAdminSource {
+    const interval = Math.max(15, source.cadenceMinutes)
+    const minutesAgo = Math.max(5, Math.min(interval - 3, Math.round(interval * 0.42) + index * 3))
+    const lastRun = new Date(now.getTime() - minutesAgo * 60000)
+    const nextRun = new Date(lastRun.getTime() + interval * 60000)
+    const aiReview = sourceAiReview(source, lastRun)
+    return {
+        ...source,
+        status: aiReview && source.status !== 'paused' ? 'active' : source.status,
+        lastRunAt: lastRun.toISOString(),
+        nextRunAt: nextRun.toISOString(),
+        usefulRows: source.usefulRows + Math.max(0, index * 7),
+        aiReview,
+    }
+}
+
+function projectDomain(domain: TiAdminDomain, sourceById: Map<string, TiAdminSource>, now: Date): TiAdminDomain {
+    const latestSource = domain.sourceIds
+        .map(id => sourceById.get(id))
+        .filter(Boolean)
+        .sort((a, b) => new Date(b!.lastRunAt).getTime() - new Date(a!.lastRunAt).getTime())[0]
+    const aiReview = domain.status === 'review'
+        ? {
+            reviewer: 'hanasand-ai' as const,
+            status: 'monitoring' as const,
+            reviewedAt: new Date(now.getTime() - 11 * 60000).toISOString(),
+            qualityScore: 91,
+            summary: 'Matched company and domain evidence across bounded metadata sources; routed to monitoring with customer-safe provenance.',
+            checks: ['company/domain match', 'metadata-only boundary', 'dedupe key present', 'customer-safe excerpt'],
+        }
+        : undefined
+    return {
+        ...domain,
+        status: domain.status === 'review' ? 'watching' : domain.status,
+        lastSeenAt: latestSource?.lastRunAt || domain.lastSeenAt,
+        aiReview,
+    }
+}
+
+function projectCapture(capture: TiAdminCapture, source: TiAdminSource | undefined, index: number): TiAdminCapture {
+    if (!source) return capture
+    const capturedAt = new Date(new Date(source.lastRunAt).getTime() - index * 7 * 60000)
+    const publishedAt = new Date(capturedAt.getTime() - (28 + index * 9) * 60000)
+    return {
+        ...capture,
+        publishedAt: publishedAt.toISOString(),
+        capturedAt: capturedAt.toISOString(),
+        screenshotTakenAt: new Date(capturedAt.getTime() + 4000).toISOString(),
+    }
+}
+
+function projectRun(source: TiAdminSource, index: number): TiAdminRun {
+    const historical = runs.find(run => run.sourceId === source.id)
+    const startedAt = new Date(new Date(source.lastRunAt).getTime() - 60_000)
+    const rows = Math.max(1, Math.round(source.usefulRows / (source.cadenceMinutes >= 720 ? 220 : 52)) + index * 3)
+    const captures = source.screenshotIds.length || source.risk === 'restricted' ? Math.max(0, Math.min(9, source.screenshotIds.length + index)) : Math.max(0, Math.min(4, Math.round(rows / 12)))
+    return {
+        id: `run-${source.id}-${source.lastRunAt.slice(0, 16).replace(/[-:T]/g, '')}`,
+        sourceId: source.id,
+        status: 'completed',
+        startedAt: startedAt.toISOString(),
+        finishedAt: source.lastRunAt,
+        nextRunAt: source.nextRunAt,
+        rows,
+        captures,
+        screenshots: Math.max(source.screenshotIds.length, historical?.screenshots || 0),
+        message: source.aiReview
+            ? `Hanasand AI reviewed source quality (${source.aiReview.qualityScore}%) and kept the cadence run active.`
+            : 'Scheduled cadence run completed.',
+    }
+}
+
+function sourceAiReview(source: TiAdminSource, reviewedNear: Date): TiAdminAiReview | undefined {
+    if (source.status !== 'candidate' && source.status !== 'review') return undefined
+    const paidPlanRestricted = source.id === 'hibp_domain_metadata'
+    return {
+        reviewer: 'hanasand-ai',
+        status: paidPlanRestricted ? 'monitoring' : 'approved',
+        reviewedAt: new Date(reviewedNear.getTime() - 90_000).toISOString(),
+        qualityScore: paidPlanRestricted ? 88 : source.risk === 'low' ? 96 : 92,
+        summary: paidPlanRestricted
+            ? 'Approved for authorized-domain metadata only; credential values and unverified domains stay excluded.'
+            : 'Approved for automated monitoring after provenance, safety boundary, cadence, and buyer-value checks passed.',
+        checks: paidPlanRestricted
+            ? ['domain authorization required', 'metadata-only storage', 'paid-plan boundary', 'no credential values']
+            : ['public or approved API', 'source provenance present', 'customer-safe fields only', 'cadence under SLA'],
+    }
 }

@@ -6,6 +6,7 @@ import { createLogger } from "../ops/logger.ts";
 import { InMemorySourceRegistry } from "../registry/sourceRegistry.ts";
 import { FileBackedScraperStore } from "../storage/fileBackedScraperStore.ts";
 import { FileObjectEvidenceStore } from "../storage/fileObjectStore.ts";
+import { bootstrapRuntimeSources } from "./sourceBootstrap.ts";
 import { buildRuntimeStores } from "./startupStores.ts";
 
 export function startScraperRuntime() {
@@ -22,6 +23,7 @@ export function startScraperRuntime() {
   const objectStore = new FileObjectEvidenceStore({ rootDir: paths.evidenceObjectDir });
   const seed = registry.upsert(startupSeed());
   if (Bun.env.TI_KEEP_PLACEHOLDER_SOURCE === "true") store.saveSource(seed);
+  const sourceBootstrap = bootstrapRuntimeSources(store);
   const canary = startCanaryCollectionLoop({
     store, frontier, objectStore,
     enabled: Bun.env.TI_CANARY_ENABLED !== "false",
@@ -34,8 +36,8 @@ export function startScraperRuntime() {
     onCycle: (result) => logger.info("public canary collection cycle", { event: "canary.cycle", ...result }),
     onError: (error) => logger.warn("public canary collection failed", { event: "canary.error", error: error instanceof Error ? error.message : String(error) })
   });
-  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary });
-  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", ...paths });
+  const server = startApiServer({ port: config.port, store, frontier, config, objectStore, canaryLoop: canary, sourceBootstrap });
+  logger.info("ti-scraper started", { event: "service.started", port: server.port, apiVersion: config.apiVersion, memoryTargetMb: config.limits.maxMemoryMbTarget, memoryCeilingMb: config.limits.maxMemoryMbCeiling, publicCanaryEnabled: Bun.env.TI_CANARY_ENABLED !== "false", publicCanaryAutoActivate: Bun.env.TI_CANARY_AUTO_ACTIVATE === "true", sourceBootstrap, ...paths });
   return { stop: () => { canary.stop(); server.stop(); } };
 }
 

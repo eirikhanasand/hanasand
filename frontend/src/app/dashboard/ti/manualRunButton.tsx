@@ -10,6 +10,13 @@ type ManualRunButtonProps = {
     queries?: string[]
 }
 
+type ControlResponseBody = {
+    scheduled?: boolean
+    qa?: { qualityScore?: number }
+    payload?: unknown
+    error?: { message?: string }
+}
+
 export default function ManualRunButton({ sourceId = 'all_sources', label = 'Start run', queries = [] }: ManualRunButtonProps) {
     const [state, setState] = useState<'idle' | 'running' | 'queued'>('idle')
     const [queuedAt, setQueuedAt] = useState('')
@@ -29,10 +36,34 @@ export default function ManualRunButton({ sourceId = 'all_sources', label = 'Sta
             // Local persistence is best-effort; the API trigger below is the source of truth.
         }
 
+        const controlResult: { ok: boolean; body: ControlResponseBody } = await fetch('/api/ti/scraper/control', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                action: sourceId === 'all_sources' ? 'source_apply_plan' : 'run_query',
+                sourceId,
+                query: uniqueQueries[0] || sourceId,
+                targets: uniqueQueries,
+                reason: 'operator source run from source inventory',
+            }),
+        }).then(async response => ({
+            ok: response.ok,
+            body: await response.json().catch(() => ({})) as ControlResponseBody,
+        })).catch(error => ({
+            ok: false,
+            body: { error: { message: error instanceof Error ? error.message : String(error) } } as ControlResponseBody,
+        }))
+
         if (uniqueQueries.length) {
             const results = await Promise.allSettled(uniqueQueries.map(query => searchThreatIntel(query)))
             const started = results.filter(result => result.status === 'fulfilled' && result.value).length
-            setMessage(started ? `Triggered ${started} source check${started === 1 ? '' : 's'}.` : 'Run request recorded; no immediate API response.')
+            const qa = controlResult.body.qa?.qualityScore ? ` · QA ${controlResult.body.qa.qualityScore}%` : ''
+            setMessage(controlResult.ok
+                ? `Queued in Hanasand AI scheduler${qa}${started ? `; ${started} live check${started === 1 ? '' : 's'} started` : ''}.`
+                : started ? `Started ${started} live check${started === 1 ? '' : 's'}; scheduler response unavailable.` : 'Run request recorded; scheduler response unavailable.')
+        } else {
+            const qa = controlResult.body.qa?.qualityScore ? ` QA ${controlResult.body.qa.qualityScore}%.` : ''
+            setMessage(controlResult.ok ? `Queued in Hanasand AI scheduler.${qa}` : controlResult.body.error?.message || 'Run request recorded; scheduler response unavailable.')
         }
 
         setState('queued')

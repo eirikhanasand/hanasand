@@ -104,8 +104,17 @@ services:
       TI_CANARY_ENABLED: "true"
       TI_CANARY_AUTO_ACTIVATE: "false"
       TI_CANARY_INTERVAL_SECONDS: 300
-      TI_CANARY_MAX_TASKS: 3
-      TI_CANARY_MAX_SOURCES: 10
+      TI_CANARY_MAX_TASKS: 500
+      TI_CANARY_MAX_SOURCES: 1200
+      TI_CANARY_MAX_QUEUE_SIZE: 10000
+      TI_SOURCE_TARGET_COUNT: 1000
+      TI_SOURCE_SEED_ACTIVATE: "true"
+      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
+      TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-false}
+      TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES: ${TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES:-false}
+      HANASAND_AI_API_BASE: ${HANASAND_AI_API_BASE:-}
+      HANASAND_AI_HEALTH_PATH: ${HANASAND_AI_HEALTH_PATH:-/health}
+      HANASAND_AI_EXPOSURE_PARSE_PATH: ${HANASAND_AI_EXPOSURE_PARSE_PATH:-/v1/parse/exposure-claim}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
     expose:

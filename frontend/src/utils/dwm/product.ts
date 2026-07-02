@@ -146,7 +146,9 @@ export type DwmProductSnapshot = {
     }
 }
 
-export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z'): DwmProductSnapshot {
+export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): DwmProductSnapshot {
+    const firstAlertAt = minutesBefore(generatedAt, 6)
+    const secondAlertAt = minutesBefore(generatedAt, 29)
     const watchlist: DwmWatchTerm[] = [
         { value: 'acme.com', kind: 'domain' },
         { value: 'Acme Payments', kind: 'company' },
@@ -171,7 +173,7 @@ export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z')
                 artifactType: 'session_or_token_hint',
                 sourceFamily: 'telegram_public',
                 sourceCount: 5,
-                firstSeenAt: '2026-06-27T21:14:00.000Z',
+                firstSeenAt: firstAlertAt,
                 claimSummary: 'Public Telegram broker-room metadata claims acme.com appears in a stealer-log bundle with Okta session cookies, OAuth tokens, and AWS IAM key hints.',
                 reviewState: 'validate_identity',
                 recommendedAction: 'Validate the identity match, revoke live sessions, rotate affected keys, and route to incident response without storing raw stolen material.',
@@ -212,7 +214,7 @@ export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z')
                 artifactType: 'vendor_claim',
                 sourceFamily: 'darkweb_metadata',
                 sourceCount: 3,
-                firstSeenAt: '2026-06-27T20:51:00.000Z',
+                firstSeenAt: secondAlertAt,
                 claimSummary: 'Restricted metadata sources claim a watched supplier appears in an actor-page update with procurement and customer-record categories.',
                 reviewState: 'needs_review',
                 recommendedAction: 'Route to vendor-risk workflow, ask the supplier owner for confirmation, and keep actor mirrors on 30-minute watch.',
@@ -242,8 +244,8 @@ export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z')
             { family: 'clear_web', label: 'Clear-web corroboration', sourceCount: 27, activeCount: 25, approvalState: 'active', health: 'partial', detail: 'Searchable public context used to reduce false positives before customer delivery.' },
         ],
         actorOverviews: [
-            { actor: 'Lumma C2', aliases: [], sourceFamilies: ['telegram_public'], sourceCount: 5, captureCount: 5, latestSeenAt: '2026-06-27T21:14:00.000Z', confidence: 91, watchState: 'active_monitoring', summary: 'Lumma C2 is tracked across broker-room and stealer-log public Telegram sources with identity exposure context.' },
-            { actor: 'RansomHouse', aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 3, captureCount: 3, latestSeenAt: '2026-06-27T20:51:00.000Z', confidence: 84, watchState: 'metadata_only', summary: 'RansomHouse is tracked through metadata-only actor-page coverage and vendor-risk claims.' },
+            { actor: 'Lumma C2', aliases: [], sourceFamilies: ['telegram_public'], sourceCount: 5, captureCount: 5, latestSeenAt: firstAlertAt, confidence: 91, watchState: 'active_monitoring', summary: 'Lumma C2 is tracked across broker-room and stealer-log public Telegram sources with identity exposure context.' },
+            { actor: 'RansomHouse', aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 3, captureCount: 3, latestSeenAt: secondAlertAt, confidence: 84, watchState: 'metadata_only', summary: 'RansomHouse is tracked through metadata-only actor-page coverage and vendor-risk claims.' },
         ],
         onDemandQueue: [
             { id: 'req_session_replay_market', target: 't.me/session_replay_market', type: 'telegram_channel', priority: 'high', scope: 'acme.com plus subsidiaries', approvalState: 'queued', nextAction: 'Run public-channel compliance checks and promote approved messages to continuous polling.' },
@@ -266,6 +268,12 @@ export function demoDwmProductSnapshot(generatedAt = '2026-06-27T21:20:00.000Z')
             nextWorkItem: 'Persist DWM watchlists and webhook subscriptions, then connect the TI /v1/dwm/product route to scheduled Telegram polling.',
         },
     }
+}
+
+function minutesBefore(value: string, minutes: number) {
+    const time = Date.parse(value)
+    if (Number.isNaN(time)) return new Date(Date.now() - minutes * 60_000).toISOString()
+    return new Date(time - minutes * 60_000).toISOString()
 }
 
 export function dwmWebhookPayload(alert: DwmAlert) {

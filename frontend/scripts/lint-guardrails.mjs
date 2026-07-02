@@ -6,6 +6,27 @@ const root = path.resolve(import.meta.dirname, '..')
 const srcRoot = path.join(root, 'src')
 const metadataFile = path.join(srcRoot, 'app', 'metadata.tsx')
 const errors = []
+const bannedPublicCopyPatterns = [
+    /\bcurrent proof\b/i,
+    /\bcustomer workflow proof\b/i,
+    /\bentitlement readiness\b/i,
+    /\breadiness proof\b/i,
+    /\bproof is not loaded\b/i,
+    /\bwhat is backed by loaded readiness data\b/i,
+    /\binspect readiness\b/i,
+    /\bopen readiness\b/i,
+]
+const bannedStaticExposureQueuePatterns = [
+    /\bconst\s+feedRows\s*=/,
+    /\bNtd Apparel\b/i,
+    /\bAerospace & Advanced Composites\b/i,
+    /\bIrec Sas\b/i,
+    /\b2026-06-2[67]\b/,
+]
+const bannedRuntimeDwmDemoPatterns = [
+    /\b2026-06-27T\b/,
+    />Live<\/span>/,
+]
 const canonicalSpacingScale = new Map([
     ['0rem', '0'],
     ['0.125rem', '0.5'],
@@ -96,10 +117,24 @@ for (const filePath of sourceFiles) {
         validateMetadata(filePath, text)
     }
 
+    validateStaticExposureQueue(filePath, source, text)
+    validateRuntimeDwmDemo(filePath, source, text)
+
     visit(source, (node) => {
+        if (ts.isJsxText(node)) {
+            validateBannedPublicCopy(filePath, source, node, node.getText(source), 'JSX text')
+            return
+        }
+
+        if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) {
+            validateBannedPublicCopy(filePath, source, node, node.text, 'template text')
+            return
+        }
+
         if (!ts.isJsxOpeningLikeElement(node)) {
             if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && shouldValidateStringLiteral(node)) {
                 validateTokenString(filePath, source, node, node.text, 'string literal')
+                validateBannedPublicCopy(filePath, source, node, node.text, 'string literal')
             }
             return
         }
@@ -148,6 +183,28 @@ function validateMetadata(filePath, text) {
 
     if (!/alternates:\s*\{\s*canonical:\s*['"]\/['"]\s*,?\s*\}/s.test(text)) {
         errors.push(`${relative(filePath)}: root metadata must define alternates.canonical = '/'.`)
+    }
+}
+
+function validateStaticExposureQueue(filePath, source, text) {
+    if (!filePath.endsWith(path.join('src', 'app', 'page.tsx'))) return
+    for (const pattern of bannedStaticExposureQueuePatterns) {
+        const match = text.match(pattern)
+        if (!match || match.index === undefined) continue
+        const position = source.getLineAndCharacterOfPosition(match.index)
+        errors.push(`${relative(filePath)}:${position.line + 1}:${position.character + 1}: homepage exposure queue must be API-backed; remove static live claim data matching ${pattern}.`)
+    }
+}
+
+function validateRuntimeDwmDemo(filePath, source, text) {
+    const relativePath = relative(filePath)
+    if (relativePath !== path.join('src', 'app', 'solutions', 'dwm', 'pageClient.tsx')
+        && relativePath !== path.join('src', 'utils', 'dwm', 'product.ts')) return
+    for (const pattern of bannedRuntimeDwmDemoPatterns) {
+        const match = text.match(pattern)
+        if (!match || match.index === undefined) continue
+        const position = source.getLineAndCharacterOfPosition(match.index)
+        errors.push(`${relativePath}:${position.line + 1}:${position.character + 1}: DWM runtime demo must not present stale fixed dates or fake live labels matching ${pattern}.`)
     }
 }
 
@@ -210,6 +267,25 @@ function validateTokenString(filePath, source, node, value, label) {
             errors.push(`${formatLocation(filePath, source, node)}: ${label} uses \`${token}\`, write \`${suggestion}\` instead.`)
         }
     }
+}
+
+function validateBannedPublicCopy(filePath, source, node, value, label) {
+    if (!value || !shouldValidateVisibleCopy(filePath)) return
+    const normalized = value.replace(/\s+/g, ' ').trim()
+    if (!normalized) return
+
+    for (const pattern of bannedPublicCopyPatterns) {
+        if (pattern.test(normalized)) {
+            errors.push(`${formatLocation(filePath, source, node)}: ${label} contains banned public website copy matching ${pattern}. Use operator/action language instead.`)
+        }
+    }
+}
+
+function shouldValidateVisibleCopy(filePath) {
+    const relativePath = relative(filePath)
+    return relativePath.startsWith('src/app/')
+        || relativePath.startsWith('src/components/')
+        || relativePath.startsWith('src/utils/')
 }
 
 function getCanonicalClassSuggestion(token) {

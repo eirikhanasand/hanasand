@@ -491,7 +491,7 @@ function ThreatConsole({ payload }: { payload: ReturnType<typeof samplePayload> 
                     <p className='font-mono text-xs uppercase tracking-[0.28em] text-[#ff8c6a]'>Critical</p>
                     <h2 className='mt-2 text-2xl font-semibold'>Identify exposure</h2>
                 </div>
-                <span className='rounded-full bg-[#ff4d1d]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Live</span>
+                <span className='rounded-full bg-[#ff4d1d]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Preview</span>
             </div>
             <div className='grid gap-3 py-5'>
                 <AlertRow dot='bg-[#ff4d1d]' title={`${alert.artifactType.replaceAll('_', ' ')} · ${alert.actor || 'Actor'}`} detail={`${alert.sourceCount} sources · ${alert.confidence}% confidence · ${alert.reviewState.replaceAll('_', ' ')}`} time='02:14' />
@@ -553,7 +553,7 @@ function TelegramFeed() {
                     <span className='h-3 w-3 rounded-full bg-[#667085]' />
                     <span className='ml-3 font-mono text-sm text-[#aeb9cc]'>hanasand://intel/feed/telegram</span>
                 </div>
-                <span className='text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Live</span>
+                <span className='text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Preview</span>
             </div>
             <div className='grid gap-3'>
                 {rows.map(([initials, handle, text, time]) => (
@@ -663,9 +663,11 @@ function writeWebhookDraft(draft: string) {
 
 function samplePayload(watchlist: string) {
     const matchedTerm = watchlist.split(',').map(item => item.trim()).filter(Boolean)[0] || 'acme.com'
+    const deliveredAt = new Date()
+    const firstSeenAt = new Date(deliveredAt.getTime() - 6 * 60_000)
     return {
         eventType: 'darkweb.monitoring.match',
-        deliveredAt: '2026-06-27T08:16:44.000Z',
+        deliveredAt: deliveredAt.toISOString(),
         severity: 'critical',
         actor: 'Akira',
         company: 'Acme Payments',
@@ -675,7 +677,7 @@ function samplePayload(watchlist: string) {
         sourceName: 'monitored Telegram broker room and actor-page metadata',
         sourceUrl: 'https://hanasand.com/ti/Acme%20Payments',
         claimSummary: 'Telegram broker post and actor-page metadata mention a watched company, corporate URLs, session artifacts, and claimed financial records.',
-        firstSeenAt: '2026-06-27T08:10:00.000Z',
+        firstSeenAt: firstSeenAt.toISOString(),
         confidence: 88,
         sourceCount: 5,
         reviewState: 'needs_review',

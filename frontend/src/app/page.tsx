@@ -72,12 +72,41 @@ const stats = [
     ['Review workflow', 'Webhook, API, and console review queue'],
 ]
 
-const feedRows = [
-    { actor: 'Akira', company: 'Ntd Apparel', data: '62 GB claimed', claimedAt: '2026-06-27 10:42 UTC', status: 'current' },
-    { actor: 'Aurora', company: 'Aerospace & Advanced Composites GmbH', data: '123 GB claimed', claimedAt: '2026-06-27 09:18 UTC', status: 'current' },
-    { actor: 'RansomHouse', company: 'Irec Sas', data: 'new victim claim', claimedAt: '2026-06-26 22:31 UTC', status: 'recent' },
-    { actor: 'Qilin', company: 'Supplier watchlist match', data: 'under review', claimedAt: '2026-06-26 18:05 UTC', status: 'review' },
-]
+type ExposureQueueItem = {
+    id: string
+    actor: string
+    company: string
+    claimedData: string
+    claimTime?: string
+    collectedAt?: string
+    status: string
+    confidence?: number
+    sourceName?: string
+}
+
+type ExposureQueue = {
+    generatedAt: string
+    status: 'live' | 'stale' | 'waiting_for_collection' | string
+    freshness?: {
+        latestClaimAt?: string | null
+        ageMinutes?: number | null
+        maxLiveAgeMinutes?: number
+    }
+    scheduler?: {
+        state?: string
+        cadenceSeconds?: number
+    }
+    counts?: {
+        visible?: number
+        needsReview?: number
+        metadataOnly?: number
+    }
+    items: ExposureQueueItem[]
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
 
 export default async function Page({
     searchParams,
@@ -90,6 +119,7 @@ export default async function Page({
     const Headers = await headers()
     const generatedAt = new Date().toISOString()
     const scoreboard = await loadProductReadiness(Headers, query) || buildProductNorthStarScoreboard(null, { generatedAt, query })
+    const exposureQueue = await loadExposureQueue(Headers) || emptyExposureQueue(generatedAt)
 
     return (
         <main className='min-h-full bg-[#f7f8fb] text-[#16181d] dark:bg-[#08111f] dark:text-[#f5f7fb]'>
@@ -181,13 +211,13 @@ export default async function Page({
                         </div>
                     </div>
 
-                    <div className='overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)]'>
+                    <div className='overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)]' data-exposure-queue-source='api'>
                         <div className='flex items-center justify-between gap-4 border-b border-[#eef1f5] px-4 py-3'>
                             <div className='min-w-0'>
                                 <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
-                                <p className='truncate text-xs text-[#737c8c]'>Recent actor claims matched to watchlist terms</p>
+                                <p className='truncate text-xs text-[#737c8c]'>{exposureQueueSubtitle(exposureQueue)}</p>
                             </div>
-                            <span className='landing-live-pill shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold'>Live</span>
+                            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${exposureQueueTone(exposureQueue.status)}`}>{exposureQueueLabel(exposureQueue.status)}</span>
                         </div>
                         <div className='min-w-0 overflow-x-auto'>
                             <div className='min-w-[48rem]'>
@@ -199,15 +229,20 @@ export default async function Page({
                                     <span className='text-right'>Status</span>
                                 </div>
                                 <div className='divide-y divide-[#eef1f5]'>
-                                    {feedRows.map(({ actor, company, data, claimedAt, status }) => (
-                                        <div key={`${actor}-${company}`} className='grid min-w-0 grid-cols-[6.5rem_minmax(12rem,1fr)_9rem_10.5rem_5rem] items-center gap-3 px-4 py-3 text-sm'>
+                                    {exposureQueue.items.length ? exposureQueue.items.slice(0, 6).map(({ id, actor, company, claimedData, claimTime, collectedAt, status }) => (
+                                        <div key={id} className='grid min-w-0 grid-cols-[6.5rem_minmax(12rem,1fr)_9rem_10.5rem_5rem] items-center gap-3 px-4 py-3 text-sm'>
                                             <span className='truncate font-semibold text-[#171a21]'>{actor}</span>
                                             <span className='truncate text-[#3d4656]'>{company}</span>
-                                            <span className='truncate whitespace-nowrap text-[#596170]'>{data}</span>
-                                            <time dateTime={claimedAt.replace(' UTC', 'Z').replace(' ', 'T')} className='truncate whitespace-nowrap font-mono text-xs text-[#596170]'>{claimedAt}</time>
+                                            <span className='truncate whitespace-nowrap text-[#596170]'>{claimedData}</span>
+                                            <time dateTime={claimTime || collectedAt || exposureQueue.generatedAt} className='truncate whitespace-nowrap font-mono text-xs text-[#596170]'>{formatClaimTime(claimTime || collectedAt)}</time>
                                             <span className='landing-status-pill justify-self-end whitespace-nowrap rounded-full border px-2 py-1 text-xs font-medium'>{status}</span>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <div className='grid min-w-0 gap-2 px-4 py-8 text-sm'>
+                                            <p className='font-semibold text-[#171a21]'>Waiting for the next exposure collection cycle</p>
+                                            <p className='max-w-2xl text-[#596170]'>Actor-page, public-channel, and news findings will appear here after the scraper posts metadata to the Hanasand AI parser.</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -246,15 +281,15 @@ export default async function Page({
 }
 
 function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
-    const stateLabel = scoreboard.fullChainReady ? 'ready' : 'needs proof'
+    const stateLabel = scoreboard.fullChainReady ? 'ready' : 'needs action'
     const firstMissingRow = scoreboard.rows.find(row => row.state !== 'ready')
     const ledger = scoreboard.productReadinessAggregate
     const ledgerValue = ledger.state === 'unavailable'
-        ? 'not configured'
-        : `${homeStateLabel(ledger.state)}; ${ledger.customerVisibleBlockedCount}/${ledger.rowCount} blocked`
+        ? 'setup needed'
+        : `${homeStateLabel(ledger.state)}; ${ledger.customerVisibleBlockedCount}/${ledger.rowCount} needs action`
     const nextStep = scoreboard.fullChainReady
-        ? 'Source, alert, delivery, and analyst proof are loaded.'
-        : formatProofText(scoreboard.firstBlocker || 'Product readiness proof is not loaded.')
+        ? 'Source, alert, delivery, and analyst workflow are connected.'
+        : formatOperatorText(scoreboard.firstBlocker || 'Connect the next workflow data source.')
 
     return (
         <div
@@ -276,15 +311,15 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
             data-home-first-blocker-raw={scoreboard.firstBlocker || ''}
         >
             <HomeReadinessFact label='Product category' value='Company exposure monitoring API and analyst console' />
-            <HomeReadinessFact label='Proof state' value={`${scoreboard.readyRows}/${scoreboard.totalRows} rows ready`} />
+            <HomeReadinessFact label='Workflow state' value={`${scoreboard.readyRows}/${scoreboard.totalRows} checks connected`} />
             <HomeReadinessFact label='Checked' value={formatChecked(scoreboard.generatedAt)} />
             <HomeReadinessFact label='Ledger' value={ledgerValue} />
-            <HomeReadinessFact label={scoreboard.fullChainReady ? 'Workflow proof' : 'Next blocker'} value={nextStep} />
+            <HomeReadinessFact label={scoreboard.fullChainReady ? 'Workflow path' : 'Next action'} value={nextStep} />
             <Link
-                href={`/readiness?q=${encodeURIComponent(scoreboard.query)}`}
+                href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
                 className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
             >
-                Open readiness
+                Open console
                 <ArrowRight className='h-4 w-4' />
             </Link>
         </div>
@@ -304,20 +339,20 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
     return (
         <section
             className='overflow-hidden rounded-xl border border-[#d9e2ef] bg-white/95 shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/95'
-            data-home-workflow-proof='true'
-            data-home-workflow-proof-ready-rows={scoreboard.readyRows}
-            data-home-workflow-proof-total-rows={scoreboard.totalRows}
+            data-home-workflow-coverage='true'
+            data-home-workflow-coverage-ready-rows={scoreboard.readyRows}
+            data-home-workflow-coverage-total-rows={scoreboard.totalRows}
         >
             <div className='grid gap-2 border-b border-[#eef1f5] px-4 py-4 dark:border-[#26364f] md:grid-cols-[1fr_auto] md:items-end'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9db6ff]'>Customer workflow proof</p>
-                    <h2 className='mt-1 text-xl font-semibold text-[#171a21] dark:text-white'>What is backed by loaded readiness data</h2>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9db6ff]'>Customer workflow coverage</p>
+                    <h2 className='mt-1 text-xl font-semibold text-[#171a21] dark:text-white'>What an analyst can act on now</h2>
                 </div>
                 <Link
-                    href={`/readiness?q=${encodeURIComponent(scoreboard.query)}`}
+                    href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
                     className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
                 >
-                    Inspect readiness
+                    Inspect console
                     <ArrowRight className='h-4 w-4' />
                 </Link>
             </div>
@@ -325,7 +360,7 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
                 <div className='hidden grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b border-[#eef1f5] px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#667085] dark:border-[#26364f] dark:text-[#97a6bd] md:grid'>
                     <span>Workflow</span>
                     <span>State</span>
-                    <span>Current proof</span>
+                    <span>Evidence</span>
                     <span className='text-right'>Action</span>
                 </div>
                 <div className='divide-y divide-[#eef1f5] dark:divide-[#26364f]'>
@@ -341,13 +376,13 @@ function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScorebo
                         >
                             <div className='min-w-0'>
                                 <p className='wrap-break-word font-semibold text-[#171a21] dark:text-white'>{item.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs text-[#667085] dark:text-[#97a6bd]'>{item.ownerLanes.join(', ') || 'owner not loaded'}</p>
+                                <p className='mt-1 wrap-break-word text-xs text-[#667085] dark:text-[#97a6bd]'>{formatLaneList(item.ownerLanes)}</p>
                             </div>
                             <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
                                 {homeStateLabel(item.state)}
                             </span>
                             <p className='min-w-0 wrap-break-word text-[#596170] dark:text-[#b9c4d6]' title={item.blocker || item.proofSummary}>
-                                {item.state === 'ready' ? item.proofSummary : formatProofText(item.blocker || item.detail)}
+                                {item.state === 'ready' ? formatEvidenceSummary(item.proofSummary) : formatOperatorText(item.blocker || item.detail)}
                             </p>
                             <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
                                 Open
@@ -364,29 +399,52 @@ function homeStateTone(state: ProductNorthStarScoreboard['rows'][number]['state'
     if (state === 'ready') return 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
     if (state === 'blocked') return 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
     if (state === 'needs_action') return 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-    return 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+    return 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8] dark:border-[#25456f] dark:bg-[#0b1b30] dark:text-[#93c5fd]'
 }
 
 function homeStateLabel(state: ProductNorthStarScoreboard['rows'][number]['state']) {
-    return state === 'needs_action' ? 'needs action' : state
+    if (state === 'ready') return 'ready'
+    if (state === 'blocked') return 'blocked'
+    if (state === 'needs_action') return 'needs action'
+    return 'setup needed'
 }
 
-function formatProofText(value: string) {
+function formatOperatorText(value: string) {
     const normalized = value
-        .replace(/\bmissing_dwm_entitlement_readiness_api\b/g, 'DWM entitlement readiness API is not loaded')
-        .replace(/\bmissing_org_alert_export_readiness_api\b/g, 'organization watchlist alert proof is not loaded')
-        .replace(/\bmissing_source_proxy_worker_readiness\b/g, 'source worker readiness proof is not loaded')
-        .replace(/\bmissing_dashboard_alert\b/g, 'no backed alert is visible in the analyst console')
-        .replace(/\bMissing dashboard alert evidence\b/g, 'No backed alert is visible in the analyst console')
-        .replace(/\bDashboard-visible alert proof is not loaded\b/g, 'No backed alert is visible in the analyst console')
-        .replace(/\bmissing_webhook_lifecycle_health_api\b/g, 'webhook lifecycle proof is not loaded')
-        .replace(/\bmissing_helpdesk_audit_readiness_api\b/g, 'support audit readiness proof is not loaded')
-        .replace(/\bmissing_live_deploy_probe\b/g, 'live deploy probe proof is not loaded')
-        .replace(/\bmissing_public_ti_provenance_readiness_api\b/g, 'public TI provenance proof is not loaded')
+        .replace(/\bmissing_dwm_entitlement_readiness_api\b/g, 'Connect organization access policy for alert routing.')
+        .replace(/\bmissing_org_alert_export_readiness_api\b/g, 'Connect active organization watchlist terms for alert routing.')
+        .replace(/\bmissing_source_proxy_worker_readiness\b/g, 'Run the TI source worker and refresh source coverage.')
+        .replace(/\bmissing_dashboard_alert\b/gi, 'Generate a dashboard-visible alert for the selected customer.')
+        .replace(/\bmissing_alert_generation_readiness\b/gi, 'Connect alert generation status.')
+        .replace(/\bMissing dashboard alert evidence\b/gi, 'Generate a dashboard-visible alert for the selected customer.')
+        .replace(/\bDashboard-visible alert proof is not loaded\b/g, 'Generate a dashboard-visible alert for the selected customer.')
+        .replace(/\bmissing_webhook_lifecycle_health_api\b/g, 'Connect webhook destination health and delivery history.')
+        .replace(/\bmissing_helpdesk_audit_readiness_api\b/g, 'Connect support audit history.')
+        .replace(/\bmissing_live_deploy_probe\b/g, 'Run the latest live deploy check.')
+        .replace(/\bmissing_public_ti_provenance_readiness_api\b/g, 'Attach public TI source provenance and freshness.')
+        .replace(/\bDWM entitlement readiness endpoint is not wired into product progress yet\b/gi, 'Organization access policy is not connected to this console view yet')
+        .replace(/\bEntitlement owner must expose policy, role, and allowed-action readiness before this can become ready\b/gi, 'Connect policy, role, and allowed alert actions before customer routing')
+        .replace(/\breadiness proof\b/gi, 'workflow data')
+        .replace(/\bproof is not loaded\b/gi, 'data is not connected')
+        .replace(/\bis not loaded\b/gi, 'is not connected')
+        .replace(/\bnot loaded\b/gi, 'not connected')
+        .replace(/\bunavailable\b/gi, 'setup needed')
+        .replace(/\breadiness\b/gi, 'status')
+        .replace(/\bproof\b/gi, 'evidence')
         .replace(/_/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
-    return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : 'Product readiness proof is not loaded.'
+    return normalized ? normalized[0].toUpperCase() + normalized.slice(1) : 'Connect the next workflow data source.'
+}
+
+function formatEvidenceSummary(value: string) {
+    return formatOperatorText(value)
+        .replace(/\bbackend contract version\b/gi, 'source')
+        .replace(/\bcontract\b/gi, 'source')
+}
+
+function formatLaneList(lanes: string[]) {
+    return lanes.length ? lanes.join(', ') : 'operator workflow'
 }
 
 async function loadProductReadiness(requestHeaders: Headers, query: string): Promise<ProductNorthStarScoreboard | null> {
@@ -409,6 +467,78 @@ async function loadProductReadiness(requestHeaders: Headers, query: string): Pro
     }
 }
 
+async function loadExposureQueue(requestHeaders: Headers): Promise<ExposureQueue | null> {
+    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host')
+    if (!host) return null
+    const proto = requestHeaders.get('x-forwarded-proto') || 'http'
+    const target = new URL('/api/dwm/exposure-queue', `${proto}://${host}`)
+    target.searchParams.set('limit', '6')
+
+    try {
+        const response = await fetch(target, {
+            cache: 'no-store',
+            headers: forwardedHeaders(requestHeaders),
+            signal: AbortSignal.timeout(3500),
+        })
+        if (!response.ok && response.status !== 202) return null
+        return normalizeExposureQueue(await response.json())
+    } catch {
+        return null
+    }
+}
+
+function normalizeExposureQueue(value: unknown): ExposureQueue {
+    const record = isRecord(value) ? value : {}
+    const generatedAt = typeof record.generatedAt === 'string' ? record.generatedAt : new Date().toISOString()
+    const items = Array.isArray(record.items) ? record.items.map((rawItem, index) => {
+        const item = isRecord(rawItem) ? rawItem : {}
+        return {
+            id: String(item.id || `exposure-${index}`),
+            actor: String(item.actor || 'Unknown actor'),
+            company: String(item.company || 'Unknown company'),
+            claimedData: String(item.claimedData || 'new victim claim'),
+            claimTime: typeof item.claimTime === 'string' ? item.claimTime : undefined,
+            collectedAt: typeof item.collectedAt === 'string' ? item.collectedAt : undefined,
+            status: String(item.status || 'parsed'),
+            confidence: typeof item.confidence === 'number' ? item.confidence : undefined,
+            sourceName: typeof item.sourceName === 'string' ? item.sourceName : undefined,
+        }
+    }) : []
+    const freshnessRecord = isRecord(record.freshness) ? record.freshness : {}
+    const schedulerRecord = isRecord(record.scheduler) ? record.scheduler : {}
+    const countsRecord = isRecord(record.counts) ? record.counts : {}
+    return {
+        generatedAt,
+        status: String(record.status || (items.length ? 'stale' : 'waiting_for_collection')),
+        freshness: {
+            latestClaimAt: typeof freshnessRecord.latestClaimAt === 'string' || freshnessRecord.latestClaimAt === null ? freshnessRecord.latestClaimAt : undefined,
+            ageMinutes: typeof freshnessRecord.ageMinutes === 'number' || freshnessRecord.ageMinutes === null ? freshnessRecord.ageMinutes : undefined,
+            maxLiveAgeMinutes: typeof freshnessRecord.maxLiveAgeMinutes === 'number' ? freshnessRecord.maxLiveAgeMinutes : undefined,
+        },
+        scheduler: {
+            state: typeof schedulerRecord.state === 'string' ? schedulerRecord.state : undefined,
+            cadenceSeconds: typeof schedulerRecord.cadenceSeconds === 'number' ? schedulerRecord.cadenceSeconds : undefined,
+        },
+        counts: {
+            visible: typeof countsRecord.visible === 'number' ? countsRecord.visible : undefined,
+            needsReview: typeof countsRecord.needsReview === 'number' ? countsRecord.needsReview : undefined,
+            metadataOnly: typeof countsRecord.metadataOnly === 'number' ? countsRecord.metadataOnly : undefined,
+        },
+        items,
+    }
+}
+
+function emptyExposureQueue(generatedAt: string): ExposureQueue {
+    return {
+        generatedAt,
+        status: 'waiting_for_collection',
+        freshness: { latestClaimAt: null, ageMinutes: null, maxLiveAgeMinutes: 60 },
+        scheduler: { state: 'due', cadenceSeconds: 300 },
+        counts: { visible: 0, needsReview: 0, metadataOnly: 0 },
+        items: [],
+    }
+}
+
 function forwardedHeaders(requestHeaders: Headers) {
     const next = new Headers()
     const cookie = requestHeaders.get('cookie')
@@ -418,6 +548,41 @@ function forwardedHeaders(requestHeaders: Headers) {
         if (value) next.set(name, value)
     }
     return next
+}
+
+function exposureQueueLabel(status: string) {
+    if (status === 'live') return 'Live'
+    if (status === 'stale') return 'Stale'
+    return 'Collecting'
+}
+
+function exposureQueueTone(status: string) {
+    if (status === 'live') return 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
+    if (status === 'stale') return 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412]'
+    return 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]'
+}
+
+function exposureQueueSubtitle(queue: ExposureQueue) {
+    if (queue.status === 'live' && typeof queue.freshness?.ageMinutes === 'number') {
+        return `Recent actor claims matched to watchlist terms; latest ${queue.freshness.ageMinutes}m ago`
+    }
+    if (queue.items.length) {
+        return `Latest parsed claim ${formatClaimTime(queue.freshness?.latestClaimAt || queue.items[0]?.claimTime)}; collection ${queue.scheduler?.state || 'due'}`
+    }
+    return 'Awaiting scraper findings and Hanasand AI parser output'
+}
+
+function formatClaimTime(value?: string | null) {
+    if (!value) return 'pending'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat('en', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+    }).format(date)
 }
 
 function firstParam(value: string | string[] | undefined) {

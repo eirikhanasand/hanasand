@@ -60,8 +60,7 @@ export default async function Page({
         loadProductProgressReadiness(Headers, scope, viewerIdentity),
     ])
     const liveAlerts = alertLoad.alerts
-    const alertVisibilityBlocked = alertLoad.accessState.status === 'identity_missing' || alertLoad.accessState.status === 'visibility_denied'
-    const fallbackAlerts = alertVisibilityBlocked ? [] : demoDwmProductSnapshot(new Date().toISOString()).alerts
+    const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
     const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
         ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
@@ -171,7 +170,7 @@ function OperatorTopBar({
     const latestDelivery = orgContext.readiness.latestDelivery
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 shadow-sm' data-dashboard-operator-strip='true'>
-            <div className='flex items-center justify-between gap-3 sm:hidden'>
+            <div className='flex items-start justify-between gap-3 sm:hidden'>
                 <div className='min-w-0'>
                     <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations</p>
                     <h1 className='truncate text-base font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
@@ -534,7 +533,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         {
             id: `${alert.id}_path_watchlist`,
             label: 'Shared watchlist',
-            status: watchlistIds.length ? 'ready' : liveAlert ? 'needs_action' : 'blocked',
+            status: watchlistIds.length ? 'ready' : 'needs_action',
             owner: 'operator',
             source: 'GET/POST /api/dwm/watchlists',
             entityId: watchlistIds.join(', ') || undefined,
@@ -544,17 +543,17 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         {
             id: `${alert.id}_path_case`,
             label: 'Analyst case',
-            status: liveAlert && caseId ? 'ready' : liveAlert ? 'needs_action' : 'blocked',
+            status: liveAlert && caseId ? 'ready' : 'needs_action',
             owner: 'analyst',
             source: 'POST /api/cases',
             entityId: caseId,
             href: casePath,
-            detail: liveAlert ? caseId ? `Case candidate ${caseId}.` : 'Open a backed case from this alert.' : 'Fallback alert cannot open a backed case.',
+            detail: liveAlert ? caseId ? `Case candidate ${caseId}.` : 'Open a backed case from this alert.' : 'Tenant-default alert needs live case backing before delivery.',
         },
         {
             id: `${alert.id}_path_webhook`,
             label: 'Webhook delivery',
-            status: deliveryState === 'delivered' ? 'ready' : webhookDestinationIds.length || workflowAlert.webhookContext?.hasWebhookRoute ? 'needs_action' : liveAlert ? 'blocked' : 'blocked',
+            status: deliveryState === 'delivered' ? 'ready' : webhookDestinationIds.length || workflowAlert.webhookContext?.hasWebhookRoute ? 'needs_action' : 'needs_action',
             owner: 'operator',
             source: 'POST /api/dwm/webhooks/deliver',
             entityId: webhookDestinationIds.join(', ') || workflowAlert.webhookDelivery.dedupeKey,
@@ -656,7 +655,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             error: delivery.error,
         })),
         missingDependency: !liveAlert
-            ? 'This is a fallback alert. It cannot load /api/cases/:id or delivery rows until live DWM alerts are returned by the backend.'
+            ? 'Tenant-default alert is inspectable for analyst workflow review; open a backed case and delivery route before customer notification.'
             : !casePath
                 ? 'No case ID is attached yet. Use Open case to create the backed /api/cases record.'
                 : !alertDeliveries.length

@@ -10,7 +10,9 @@ import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, getCaseWebhookReplayReadiness, listCaseHandoffActions, listCaseWorkflowTransitions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
+import { collectionSchedulerStatus } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
+import { exposureParserHealth, ingestExposureClaims, listExposureQueue } from "./exposureQueueRoutes.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
 import { handleOrgAlertCaseActionLedgerRequest } from "./orgAlertCaseActionLedgerRoutes.ts";
 import { createOrganization, createOrganizationInvites, createWebhookDestination, disableWebhookDestination, listOrganizationMembers, listOrganizations, listWebhookDestinations, resolveOrganizationScope, testOrganizationWebhook, updateWebhookDestination } from "./organizationRoutes.ts";
@@ -38,6 +40,7 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/health") return json({ ok: true, service: "ti-scraper", generatedAt: nowIso() });
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
+    if (url.pathname === "/v1/ops/collection-scheduler") return collectionSchedulerStatus(options);
     if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(url, options);
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
     if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(url, options, url.pathname.split("/")[3]);
@@ -87,6 +90,9 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (/^\/v1\/intel\/runs\/[^/]+\/results$/.test(url.pathname)) return runResults(options, url.pathname.split("/")[4]);
     if (url.pathname === "/v1/darkweb/status") return json({ status: buildDarkwebIndexStatus({ sources: options.store.listSources(), captures: options.store.listCaptures() } as any) });
     if (url.pathname === "/v1/darkweb/search") return json(searchDarkwebIndex({ query: url.searchParams.get("q") ?? "", sources: options.store.listSources(), captures: options.store.listCaptures(), limit: numberQuery(url.searchParams.get("limit")) ?? 50 } as any));
+    if ((url.pathname === "/v1/dwm/exposure-queue" || url.pathname === "/api/dwm/exposure-queue") && request.method === "GET") return listExposureQueue(url, options);
+    if ((url.pathname === "/v1/dwm/exposure-claims/ingest" || url.pathname === "/api/dwm/exposure-claims/ingest") && request.method === "POST") return ingestExposureClaims(request, options);
+    if ((url.pathname === "/v1/dwm/exposure-parser/health" || url.pathname === "/api/dwm/exposure-parser/health") && request.method === "GET") return exposureParserHealth();
     if ((url.pathname === "/v1/dwm/product" || url.pathname === "/api/dwm/product") && request.method === "GET") {
       const scope = resolveOrganizationScope({ url, request }, options);
       if (scope.error) return scope.error;

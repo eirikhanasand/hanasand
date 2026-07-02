@@ -735,9 +735,9 @@ function orgAlertExportReadiness(input: {
     const canGenerateAlerts = input.readinessProof?.readiness.organizationCanGenerateAlerts ?? blockersFromProof(input.readinessProof).length === 0
     const normalizedTermCount = typeof proofTermCount === 'number' ? proofTermCount : activeTermCount
     const blockers = [
-        input.organization ? '' : 'No selected organization was loaded for watchlist export readiness.',
+        input.organization ? '' : 'No selected organization was loaded for watchlist alert routing.',
         input.readinessProof || input.fetchOk ? '' : input.fetchError || `Watchlist route returned HTTP ${input.fetchStatus}.`,
-        canGenerateAlerts ? '' : 'Organization readiness proof does not allow alert generation.',
+        canGenerateAlerts ? '' : 'Organization policy does not allow alert generation.',
         normalizedTermCount > 0 ? '' : 'No active watchlist terms were returned for alert generation.',
         ...blockersFromProof(input.readinessProof).filter(blocker => blocker !== 'role_not_allowed'),
     ].filter(Boolean)
@@ -759,7 +759,7 @@ function orgAlertExportReadiness(input: {
         staleAfterSeconds: 900,
         proofTimestamp: input.generatedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-status must return organizationCanGenerateAlerts and active watchlist term counts.',
         backendProofContractVersion: input.readinessProof?.schemaVersion || 'organization.worker3_ui_readiness_proof.v1',
         detail: blockers.length ? blockers.join('; ') : `${normalizedTermCount} active shared watchlist term${normalizedTermCount === 1 ? '' : 's'} loaded for alert generation.`,
     }
@@ -815,17 +815,18 @@ function entitlementReadinessFromOrganizationProof(input: {
 }): EntitlementReadiness {
     const proofBlockers = blockersFromProof(input.readinessProof)
     const allowed = input.readinessProof?.readiness.actorCanExportActiveTerms === true
+    const explicitPolicyDeny = Boolean(input.readinessProof && !allowed)
     const blockers = [
-        input.organization ? '' : 'No selected organization was loaded for entitlement readiness.',
-        input.readinessProof || input.fetch.ok ? '' : input.fetch.error || `Organization readiness route returned HTTP ${input.fetch.status}.`,
-        input.readinessProof ? '' : 'Organization readiness proof was not returned.',
-        allowed ? '' : 'Organization readiness proof does not allow this actor to export active watchlist terms.',
+        input.organization ? '' : 'No selected organization was loaded for access policy.',
+        input.readinessProof || input.fetch.ok ? '' : input.fetch.error || `Organization status route returned HTTP ${input.fetch.status}.`,
+        input.readinessProof ? '' : 'Organization access policy was not returned.',
+        allowed ? '' : 'Organization access policy does not allow this actor to export active watchlist terms.',
         ...proofBlockers,
     ].filter(Boolean)
     const role = input.readinessProof?.actor?.role || 'unknown'
     return {
         schemaVersion: 'dwm.entitlement.readiness.v1',
-        status: blockers.length ? 'blocked' : 'ready',
+        status: blockers.length ? explicitPolicyDeny ? 'blocked' : 'needs_action' : 'ready',
         checkedAt: input.generatedAt,
         source: input.route,
         href: '/dashboard/dwm',
@@ -839,9 +840,9 @@ function entitlementReadinessFromOrganizationProof(input: {
         staleAfterSeconds: 900,
         proofTimestamp: input.generatedAt,
         expectedDashboardRowId: 'entitlement_readiness',
-        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.actor.canExportActiveTerms and blockers.',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-status must return actor.canExportActiveTerms and blockers.',
         backendProofContractVersion: input.readinessProof?.schemaVersion || 'dwm.entitlement.readiness.v1',
-        detail: blockers.length ? blockers.join('; ') : `Organization readiness allows ${role} to export active watchlist terms.`,
+        detail: blockers.length ? blockers.join('; ') : `Organization access policy allows ${role} to export active watchlist terms.`,
     }
 }
 
