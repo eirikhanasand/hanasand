@@ -1,0 +1,228 @@
+const PORT = Number(process.env.HANASAND_AI_BRIDGE_PORT ?? "18181");
+const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:18081";
+const MODEL = process.env.HANASAND_AI_MODEL ?? "hanasand";
+
+const server = Bun.serve({
+  hostname: "0.0.0.0",
+  port: PORT,
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") return health();
+    if (request.method === "GET" && url.pathname === "/v1/models") return proxyModels();
+    if (request.method === "POST" && url.pathname === "/v1/parse/exposure-claim") return parseExposureClaim(request);
+    return json({ error: "not_found" }, 404);
+  }
+});
+
+console.log(JSON.stringify({
+  service: "hanasand-ai-parser-bridge",
+  status: "listening",
+  port: server.port,
+  openaiBase: OPENAI_BASE,
+  model: MODEL
+}));
+
+async function health() {
+  const started = Date.now();
+  try {
+    const response = await fetch(upstreamUrl("/v1/models"), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000)
+    });
+    const body = await safeJson(response);
+    const models = Array.isArray(body?.data) ? body.data.map((item) => item.id).filter(Boolean) : [];
+    const modelAvailable = models.length === 0 || models.includes(MODEL);
+    return json({
+      schemaVersion: "hanasand.ai_parser_bridge.health.v1",
+      generatedAt: new Date().toISOString(),
+      status: response.ok && modelAvailable ? "ready" : "blocked",
+      upstream: upstreamUrl("/v1/models"),
+      upstreamHttpStatus: response.status,
+      model: MODEL,
+      modelAvailable,
+      models,
+      latencyMs: Date.now() - started
+    }, response.ok && modelAvailable ? 200 : 502);
+  } catch (error) {
+    return json({
+      schemaVersion: "hanasand.ai_parser_bridge.health.v1",
+      generatedAt: new Date().toISOString(),
+      status: "blocked",
+      upstream: upstreamUrl("/v1/models"),
+      model: MODEL,
+      blocker: messageOf(error),
+      latencyMs: Date.now() - started
+    }, 502);
+  }
+}
+
+async function proxyModels() {
+  try {
+    const response = await fetch(upstreamUrl("/v1/models"), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000)
+    });
+    return new Response(await response.text(), {
+      status: response.status,
+      headers: { "content-type": response.headers.get("content-type") ?? "application/json" }
+    });
+  } catch (error) {
+    return json({ error: messageOf(error) }, 502);
+  }
+}
+
+async function parseExposureClaim(request) {
+  const started = Date.now();
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "invalid_json" }, 400);
+  }
+
+  const item = body?.item ?? body;
+  const hints = deterministicHints(item);
+  let completion;
+  try {
+    completion = await callOpenAi(item, hints);
+  } catch (error) {
+    return json({
+      error: "upstream_ai_unavailable",
+      blocker: messageOf(error),
+      upstream: upstreamUrl("/v1/chat/completions"),
+      model: MODEL
+    }, 502);
+  }
+
+  const content = completion?.choices?.[0]?.message?.content ?? completion?.choices?.[0]?.text ?? "";
+  const parsed = parseJsonObject(content) ?? {};
+  const actor = clean(parsed.actor ?? parsed.threatActor ?? hints.actor ?? item?.actor ?? item?.sourceName ?? "Unknown actor");
+  const company = clean(parsed.company ?? parsed.victimName ?? parsed.victim ?? hints.company ?? item?.company ?? item?.victimName ?? "");
+  const claimedData = clean(parsed.claimedData ?? parsed.dataClaim ?? hints.claimedData ?? item?.claimedData ?? "new victim claim");
+  const confidence = clamp(Number(parsed.confidence ?? (company && actor !== "Unknown actor" ? 0.84 : 0.66)));
+  const summary = clean(parsed.summary ?? hints.summary ?? item?.title ?? "").slice(0, 320);
+
+  return json({
+    actor,
+    company,
+    victimName: company,
+    claimedData,
+    claimType: clean(parsed.claimType ?? item?.claimType ?? "ransomware_victim_publication"),
+    claimTime: parsed.claimTime ?? item?.publishedAt ?? item?.capturedAt ?? new Date().toISOString(),
+    summary,
+    confidence,
+    aiCalled: true,
+    aiProvider: "hanasand-inspur-openai-compatible",
+    aiModel: MODEL,
+    aiLatencyMs: Date.now() - started,
+    aiResponseId: completion?.id,
+    parserQuality: confidence >= 0.82 ? "high" : confidence >= 0.68 ? "medium" : "needs_review"
+  });
+}
+
+async function callOpenAi(item, hints) {
+  const title = clean(item?.title ?? "");
+  const text = clean(item?.text ?? item?.rawText ?? item?.body ?? "");
+  const source = clean(item?.sourceName ?? item?.sourceId ?? item?.sourceUrl ?? item?.url ?? "");
+  const prompt = [
+    "Extract metadata-only exposure claim fields from this public CTI/news/victim-feed item.",
+    "Return only compact JSON with keys actor, company, claimedData, claimType, claimTime, summary, confidence.",
+    "Do not include leaked content, credentials, file names, or raw private material.",
+    "",
+    `source: ${source.slice(0, 240)}`,
+    `title: ${title.slice(0, 600)}`,
+    `text: ${text.slice(0, 3000)}`,
+    `fallback_hints: ${JSON.stringify(hints).slice(0, 800)}`
+  ].join("\n");
+
+  const response = await fetch(upstreamUrl("/v1/chat/completions"), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0,
+      max_tokens: 220,
+      messages: [
+        {
+          role: "system",
+          content: "You are Hanasand AI. You parse public threat-intelligence exposure claims into strict JSON for a SOC queue."
+        },
+        { role: "user", content: prompt }
+      ]
+    }),
+    signal: AbortSignal.timeout(Number(process.env.HANASAND_AI_UPSTREAM_TIMEOUT_MS ?? "11000"))
+  });
+  if (!response.ok) throw new Error(`upstream returned HTTP ${response.status}: ${(await response.text()).slice(0, 240)}`);
+  return response.json();
+}
+
+function deterministicHints(item) {
+  const text = clean([item?.title, item?.text, item?.rawText, item?.body].filter(Boolean).join("\n"));
+  const victim =
+    clean(item?.company ?? item?.victimName) ||
+    match(text, /\bvictim\s*:?\s+([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
+    match(text, /\b(?:listed|lists|added|adds|published|claims?|target(?:ed|ing))\s+(?:victim\s*:?\s*)?([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})/i) ||
+    match(text, /:\s*([A-Z0-9][A-Za-z0-9&.,'() -]{2,90})$/);
+  const actor = clean(item?.actor) || match(text, /^([A-Z][A-Za-z0-9_. -]{2,50})\b/) || clean(item?.sourceName) || "Unknown actor";
+  const claimedData = clean(item?.claimedData) || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim";
+  return {
+    actor,
+    company: victim,
+    claimedData,
+    summary: text.slice(0, 300),
+    confidence: victim && actor !== "Unknown actor" ? 0.78 : 0.58
+  };
+}
+
+function upstreamUrl(path) {
+  return new URL(path, OPENAI_BASE).toString();
+}
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
+function parseJsonObject(text) {
+  const value = String(text ?? "").trim();
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    const start = value.indexOf("{");
+    const end = value.lastIndexOf("}");
+    if (start < 0 || end <= start) return undefined;
+    try {
+      return JSON.parse(value.slice(start, end + 1));
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function match(text, regex) {
+  return clean(text.match(regex)?.[1] ?? "");
+}
+
+function clean(value) {
+  return String(value ?? "").replace(/\s+/g, " ").replace(/[.。]+$/, "").trim();
+}
+
+function clamp(value) {
+  if (!Number.isFinite(value)) return 0.58;
+  return Math.max(0, Math.min(1, value));
+}
+
+function messageOf(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" }
+  });
+}

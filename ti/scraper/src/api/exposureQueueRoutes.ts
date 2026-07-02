@@ -271,7 +271,7 @@ async function parseWithHostedAi(item: ExposureClaimItem) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ item }),
-    signal: AbortSignal.timeout(4500)
+    signal: AbortSignal.timeout(Number(Bun.env.HANASAND_AI_PARSE_TIMEOUT_MS ?? "12000"))
   });
   if (!response.ok) return undefined;
   return await response.json();

@@ -27,6 +27,7 @@ const defaultSeedPaths = [
   "public_cti_sources.json",
   "public_cti_starter_pack.json",
   "public_telegram_channel_packs.json",
+  "public_threat_intel_generated_sources.json",
   "high_value_exposure_source_candidates.json",
   "restricted_metadata_source_packs.json"
 ].map((name) => join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds", name));

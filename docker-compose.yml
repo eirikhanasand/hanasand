@@ -81,6 +81,26 @@ services:
       ti-scraper:
         condition: service_healthy
 
+  ai-parser-bridge:
+    container_name: hanasand_ai_parser_bridge
+    image: hanasand_ai_parser_bridge
+    restart: always
+    build:
+      context: .
+      dockerfile: ./ti/ai-parser-bridge/Dockerfile
+    env_file:
+      .env
+    network_mode: host
+    environment:
+      HANASAND_AI_BRIDGE_PORT: ${HANASAND_AI_BRIDGE_PORT:-18181}
+      HANASAND_AI_OPENAI_BASE: ${HANASAND_AI_OPENAI_BASE:-http://127.0.0.1:18081}
+      HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${HANASAND_AI_BRIDGE_PORT:-18181}/health"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+
   ti-scraper:
     container_name: hanasand_ti_scraper
     image: hanasand_ti_scraper
@@ -104,19 +124,24 @@ services:
       TI_CANARY_ENABLED: "true"
       TI_CANARY_AUTO_ACTIVATE: "false"
       TI_CANARY_INTERVAL_SECONDS: 300
-      TI_CANARY_MAX_TASKS: 500
+      TI_CANARY_MAX_TASKS: 1200
       TI_CANARY_MAX_SOURCES: 1200
       TI_CANARY_MAX_QUEUE_SIZE: 10000
+      TI_CANARY_BUDGET_TASKS: 1200
+      TI_CANARY_BUDGET_BYTES: 768000000
       TI_SOURCE_TARGET_COUNT: 1000
       TI_SOURCE_SEED_ACTIVATE: "true"
-      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
+      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/public_threat_intel_generated_sources.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
       TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-false}
       TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES: ${TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES:-false}
-      HANASAND_AI_API_BASE: ${HANASAND_AI_API_BASE:-}
+      HANASAND_AI_API_BASE: ${HANASAND_AI_API_BASE:-http://host.docker.internal:18181}
       HANASAND_AI_HEALTH_PATH: ${HANASAND_AI_HEALTH_PATH:-/health}
       HANASAND_AI_EXPOSURE_PARSE_PATH: ${HANASAND_AI_EXPOSURE_PARSE_PATH:-/v1/parse/exposure-claim}
+      HANASAND_AI_PARSE_TIMEOUT_MS: ${HANASAND_AI_PARSE_TIMEOUT_MS:-12000}
     volumes:
       - ti_scraper_evidence:/var/lib/ti-scraper/evidence
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     expose:
       - "8097"
     healthcheck:
@@ -126,6 +151,9 @@ services:
       start_period: 20s
     networks:
       - hanasandnet
+    depends_on:
+      ai-parser-bridge:
+        condition: service_started
 
   postgres:
     image: postgres:15

@@ -1,7 +1,9 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, join, mkdtempSync, rmSync, test } from "./apiTestHarness.ts";
 import { tmpdir } from "node:os";
 import { bootstrapRuntimeSources } from "../runtime/sourceBootstrap.ts";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 describe("runtime source bootstrap and scheduler monitoring", () => {
   test("imports configured source bundles and reports the exact source target shortfall", () => {
@@ -81,6 +83,27 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("generated public source pack clears the 1k production source target from an empty registry", () => {
+    const seedPath = join(dirname(fileURLToPath(import.meta.url)), "../../seeds/public_threat_intel_generated_sources.json");
+    const bundle = JSON.parse(readFileSync(seedPath, "utf8"));
+    const store = new InMemoryScraperStore();
+
+    const result = bootstrapRuntimeSources(store, {
+      seedPaths: [seedPath],
+      generatedAt: "2026-07-02T00:00:00.000Z",
+      sourceTarget: 1000
+    });
+
+    expect(bundle.sources.length).toBeGreaterThanOrEqual(1000);
+    expect(bundle.sources.some((source: any) => !source.legalNotes || source.risk !== "low")).toBe(false);
+    expect(result.importedSourceCount).toBeGreaterThanOrEqual(1000);
+    expect(result.totalSourceCount).toBeGreaterThanOrEqual(1000);
+    expect(result.activeSourceCount).toBeGreaterThanOrEqual(1000);
+    expect(result.shortfall).toBe(0);
+    expect(result.blocker).toBeUndefined();
+    expect(result.errors.filter((error) => error.path === seedPath)).toEqual([]);
   });
 
   test("collection scheduler status exposes source coverage, durable run state, parser state, and per-source freshness", async () => {
