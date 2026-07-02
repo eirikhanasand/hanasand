@@ -346,7 +346,7 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     sourceName: source?.name || capture.sourceId,
     actor: leak.actorName || capture.metadata?.actor || parsedTitle?.actor || "Unknown actor",
     company: leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "Unknown company",
-    claimedData: leak.claimedDataCategory || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim",
+    claimedData: leak.claimedDataCategory || claimedDataFromText(text) || "new victim claim",
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
     collectedAt: capture.collectedAt,
@@ -361,7 +361,7 @@ function exposureClaimFromCapture(capture: any, source?: any) {
 }
 
 function parseVictimClaimTitle(title: string) {
-  const normalized = stripVictimFeedPrefix(title);
+  const normalized = victimClaimHeadline(title);
   const direct = normalized.match(/^(.+?)\s+has just published a new victim\s*:?\s*(.+)$/i)
     || normalized.match(/^(.+?)\s+(?:claims?|claimed|listed|added|published)\s+victim\s*:?\s*(.+)$/i);
   if (!direct) return undefined;
@@ -371,10 +371,25 @@ function parseVictimClaimTitle(title: string) {
   return { actor, company };
 }
 
+function victimClaimHeadline(value: unknown) {
+  const lines = String(value ?? "")
+    .split(/\r?\n/)
+    .map((line) => stripVictimFeedPrefix(line))
+    .filter(Boolean);
+  return lines.find((line) => /\b(has just published a new victim|claims victim|claim(?:ed|s)? victim|victim\s*:|added victim|listed victim|published victim)\b/i.test(line))
+    || stripVictimFeedPrefix(value);
+}
+
 function stripVictimFeedPrefix(value: unknown) {
   return clean(String(value ?? "")
     .replace(/^Ransomware\.live Victim Feed\s+/i, "")
     .replace(/^[^A-Za-z0-9]+/, ""));
+}
+
+function claimedDataFromText(text: string) {
+  const found = text.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB|MB)\b(?:\s+(claimed|leaked|stolen|exfiltrated|data))?/i);
+  if (!found) return "";
+  return clean(`${found[1]} ${found[2].toUpperCase()}${found[3] ? ` ${found[3].toLowerCase()}` : ""}`);
 }
 
 function nextCollectionAt(at: string) {

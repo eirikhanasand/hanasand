@@ -90,12 +90,15 @@ describe("DWM exposure queue pipeline", () => {
     store.saveCapture(fixtureCapture({
       id: "cap_akira_refinery",
       sourceId: "src_canary_ransomwarelive",
-      title: "Ransomware.live Victim Feed 🏴‍☠️ Akira has just published a new victim : Refinery Hotel",
-      body: "Ransomware.live Victim Feed 🏴‍☠️ Akira has just published a new victim : Refinery Hotel. 15 GB claimed.",
+      title: undefined as any,
+      body: "",
       url: "https://www.ransomware.live/#/recentvictims",
       publishedAt: "2026-07-01T13:50:38.000Z",
       collectedAt: "2026-07-02T01:00:48.809Z",
-      metadata: { adapter: "rss" }
+      metadata: {
+        adapter: "rss",
+        safeExcerpt: "Ransomware.live Victim Feed\n🏴‍☠️ Akira has just published a new victim : Refinery Hotel\nRefinery Hotel is a long descriptive victim-page summary. We will upload 15gb of corporate data soon."
+      }
     }));
     store.saveCapture(fixtureCapture({
       id: "cap_cisa_false_positive_backfill",
@@ -110,6 +113,6 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items).toHaveLength(1);
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Refinery Hotel");
-    expect(queueBody.items[0].claimedData).toBe("15 GB claimed");
+    expect(queueBody.items[0].claimedData).toBe("15 GB");
   });
 });
