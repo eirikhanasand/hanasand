@@ -38,8 +38,7 @@ export async function listExposureQueue(url: URL, options: ApiServerOptions) {
   const limit = numberQuery(url.searchParams.get("limit")) ?? 25;
   const query = url.searchParams.get("q") ?? "";
   const at = nowIso();
-  const items = exposureClaimsFromStore(options.store, query)
-    .slice(0, limit);
+  const items = exposureClaimsFromStore(options.store, query, { limit });
   const latestClaimAt = latestTime(items.map((item: any) => item.claimTime));
   const latestCollectedAt = latestTime(items.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
@@ -99,7 +98,7 @@ export async function ingestExposureClaims(request: Request, options: ApiServerO
       fallbackUsed: parsed.some((claim) => claim.parserMode !== "hanasand-ai")
     },
     captures: accepted.map((capture) => ({ id: capture.id, sourceId: capture.sourceId, collectedAt: capture.collectedAt })),
-    queue: exposureClaimsFromStore(options.store, "").slice(0, 25)
+    queue: exposureClaimsFromStore(options.store, "", { limit: 25 })
   });
 }
 
@@ -155,15 +154,23 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
   return saveExposureClaim(store, claim, at);
 }
 
-export function exposureClaimsFromStore(store: any, query = "") {
+export function exposureClaimsFromStore(store: any, query = "", options: { limit?: number } = {}) {
   const needle = query.trim().toLowerCase();
-  return (store.listCaptures?.() ?? [])
-    .map((capture: any) => ({ capture, source: store.getSource?.(capture.sourceId) }))
-    .filter(({ capture, source }: any) => capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))
-    .filter(({ capture, source }: any) => shouldShowExposureQueueCapture(capture, source))
-    .map(({ capture, source }: any) => exposureClaimFromCapture(capture, source))
-    .filter((item: any) => !needle || [item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle))
-    .sort((a: any, b: any) => epoch(b.claimTime ?? b.collectedAt) - epoch(a.claimTime ?? a.collectedAt));
+  const limit = Number(options.limit ?? 0);
+  const boundedLimit = Number.isFinite(limit) && limit > 0 ? Math.min(250, Math.max(1, Math.floor(limit))) : undefined;
+  const items: any[] = [];
+
+  for (const capture of store.listCaptures?.() ?? []) {
+    const source = store.getSource?.(capture.sourceId);
+    if (!(capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))) continue;
+    if (!shouldShowExposureQueueCapture(capture, source)) continue;
+    const item = exposureClaimFromCapture(capture, source);
+    if (needle && ![item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle)) continue;
+    items.push(item);
+  }
+
+  items.sort((a: any, b: any) => epoch(b.claimTime ?? b.collectedAt) - epoch(a.claimTime ?? a.collectedAt));
+  return boundedLimit ? items.slice(0, boundedLimit) : items;
 }
 
 function saveExposureClaim(store: any, claim: any, at: string) {

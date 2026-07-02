@@ -147,7 +147,7 @@ export async function disableDwmWatchlist(request: Request, options: ApiServerOp
   return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
 }
 
-export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Request): Response {
+export async function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Request): Promise<Response> {
   const scope = resolveOrganizationScope({ url, request }, options);
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
@@ -164,7 +164,7 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
       rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
     }
   }
-  ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
+  await ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
     .filter((row: any) => row.tenantId === tenantId)
@@ -1257,25 +1257,30 @@ function captureVisibleForScope(capture: RawCapture, tenantId: string, sourceIds
   return !sourceId || sourceIds.has(sourceId);
 }
 
-function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string }) {
+async function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string }) {
   if (typeof (options.store as any).saveDwmAlert !== "function") return { savedAlertCount: 0 };
   const generatedAt = nowIso();
   const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
   let savedAlertCount = 0;
+  const saveMissingAlerts = () => {
+    for (const claim of exposureClaimsFromStore(options.store, "", { limit: 25 })) {
+      const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
+      if (claimTenantId !== scope.tenantId) continue;
+      const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
+      const existing = existingAlerts.find((row: any) =>
+        row.id === alert.id
+        || row.dedupeKey === alert.dedupeKey
+        || row.webhookDelivery?.dedupeKey === alert.dedupeKey
+        || row.workflowContext?.exposureQueueId === alert.workflowContext.exposureQueueId
+      );
+      if (existing) continue;
+      (options.store as any).saveDwmAlert(alert);
+      savedAlertCount++;
+    }
+  };
 
-  for (const claim of exposureClaimsFromStore(options.store, "").slice(0, 50)) {
-    const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
-    if (claimTenantId !== scope.tenantId) continue;
-    const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
-    const existing = existingAlerts.find((row: any) =>
-      row.id === alert.id
-      || row.dedupeKey === alert.dedupeKey
-      || row.webhookDelivery?.dedupeKey === alert.dedupeKey
-      || row.workflowContext?.exposureQueueId === alert.workflowContext.exposureQueueId
-    );
-    (options.store as any).saveDwmAlert(mergeExposureQueueDwmAlert(existing, alert, generatedAt));
-    savedAlertCount++;
-  }
+  if (typeof (options.store as any).batch === "function") await (options.store as any).batch(saveMissingAlerts);
+  else saveMissingAlerts();
 
   return { savedAlertCount };
 }
@@ -1388,24 +1393,6 @@ function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope
       sourceFamily
     },
     createdAt: generatedAt,
-    updatedAt: generatedAt
-  };
-}
-
-function mergeExposureQueueDwmAlert(existing: any | undefined, next: any, generatedAt: string) {
-  if (!existing) return next;
-  return {
-    ...next,
-    workflowEvents: existing.workflowEvents ?? [],
-    workflowStatus: existing.workflowStatus ?? next.workflowStatus,
-    reviewState: existing.reviewState ?? next.reviewState,
-    deliveryState: existing.deliveryState ?? next.deliveryState,
-    assignedOwner: existing.assignedOwner,
-    severityOverride: existing.severityOverride,
-    caseId: existing.caseId,
-    casePath: existing.casePath,
-    replayCount: existing.replayCount,
-    createdAt: existing.createdAt ?? next.createdAt,
     updatedAt: generatedAt
   };
 }
