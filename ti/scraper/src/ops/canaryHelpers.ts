@@ -41,7 +41,10 @@ export function storageStats(captures: any[]) {
   return { metadataStore: "file_backed_or_repository", productionEvidenceMode: nativeLiveHttpCaptureCount && !injectedProofFetchCaptureCount ? "native_live_http" : injectedProofFetchCaptureCount && !nativeLiveHttpCaptureCount ? "injected_proof_only" : nativeLiveHttpCaptureCount ? "mixed" : "none", externalObjectCaptureCount, inlineCaptureCount: captures.length - externalObjectCaptureCount, missingObjectReferenceCount: captures.filter((c) => ["external_object", "object_ref"].includes(c.storageKind) && !c.objectRef).length, nativeLiveHttpCaptureCount, injectedProofFetchCaptureCount, unknownFetchModeCaptureCount: captures.filter((c) => !c.metadata?.fetchMode).length };
 }
 
-export function maxItemsFor(source: any) { return source.id === "src_canary_ransomwarelive" ? 120 : source.metadata?.maxItemsPerFetch; }
+export function maxItemsFor(source: any) {
+  if (source.id === "src_canary_ransomwarelive") return Number(Bun.env.TI_RANSOMWARELIVE_MAX_ITEMS ?? "24");
+  return source.metadata?.maxItemsPerFetch;
+}
 
 function publicFetchUrl(source: any, targetUrl: string) {
   if (source.type !== "telegram_public") return targetUrl;
