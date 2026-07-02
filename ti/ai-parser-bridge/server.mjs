@@ -1,6 +1,9 @@
 const PORT = Number(process.env.HANASAND_AI_BRIDGE_PORT ?? "18181");
 const OPENAI_BASE = process.env.HANASAND_AI_OPENAI_BASE ?? "http://127.0.0.1:18081";
 const MODEL = process.env.HANASAND_AI_MODEL ?? "hanasand";
+const TRANSPORT = process.env.HANASAND_AI_TRANSPORT ?? "tools-ai";
+const TOOLS_AI_URL = process.env.HANASAND_AI_TOOLS_API ?? "http://api:8080/api/tools/ai";
+const MODELS_URL = process.env.HANASAND_AI_MODELS_URL ?? "http://api:8080/api/ai/models";
 
 const server = Bun.serve({
   hostname: "0.0.0.0",
@@ -18,12 +21,16 @@ console.log(JSON.stringify({
   service: "hanasand-ai-parser-bridge",
   status: "listening",
   port: server.port,
+  transport: TRANSPORT,
   openaiBase: OPENAI_BASE,
+  toolsAiUrl: TOOLS_AI_URL,
   model: MODEL
 }));
 
 async function health() {
   const started = Date.now();
+  if (TRANSPORT === "tools-ai") return toolsAiHealth(started);
+
   try {
     const response = await fetch(upstreamUrl("/v1/models"), {
       cache: "no-store",
@@ -56,7 +63,59 @@ async function health() {
   }
 }
 
+async function toolsAiHealth(started) {
+  try {
+    const response = await fetch(MODELS_URL, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000)
+    });
+    const body = await safeJson(response);
+    const models = Array.isArray(body?.connected) ? body.connected.map((item) => item.name || item.modelId).filter(Boolean) : [];
+    const modelAvailable = models.includes(MODEL) || models.length > 0;
+    return json({
+      schemaVersion: "hanasand.ai_parser_bridge.health.v1",
+      generatedAt: new Date().toISOString(),
+      status: response.ok && modelAvailable ? "ready" : "blocked",
+      transport: "tools-ai",
+      modelsEndpoint: MODELS_URL,
+      toolsAiEndpoint: TOOLS_AI_URL,
+      upstreamHttpStatus: response.status,
+      model: MODEL,
+      modelAvailable,
+      models,
+      latencyMs: Date.now() - started
+    }, response.ok && modelAvailable ? 200 : 502);
+  } catch (error) {
+    return json({
+      schemaVersion: "hanasand.ai_parser_bridge.health.v1",
+      generatedAt: new Date().toISOString(),
+      status: "blocked",
+      transport: "tools-ai",
+      modelsEndpoint: MODELS_URL,
+      toolsAiEndpoint: TOOLS_AI_URL,
+      model: MODEL,
+      blocker: messageOf(error),
+      latencyMs: Date.now() - started
+    }, 502);
+  }
+}
+
 async function proxyModels() {
+  if (TRANSPORT === "tools-ai") {
+    try {
+      const response = await fetch(MODELS_URL, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000)
+      });
+      return new Response(await response.text(), {
+        status: response.status,
+        headers: { "content-type": response.headers.get("content-type") ?? "application/json" }
+      });
+    } catch (error) {
+      return json({ error: messageOf(error), modelsEndpoint: MODELS_URL }, 502);
+    }
+  }
+
   try {
     const response = await fetch(upstreamUrl("/v1/models"), {
       cache: "no-store",
@@ -84,17 +143,19 @@ async function parseExposureClaim(request) {
   const hints = deterministicHints(item);
   let completion;
   try {
-    completion = await callOpenAi(item, hints);
+    completion = TRANSPORT === "tools-ai"
+      ? await callToolsAi(item, hints)
+      : await callOpenAi(item, hints);
   } catch (error) {
     return json({
       error: "upstream_ai_unavailable",
       blocker: messageOf(error),
-      upstream: upstreamUrl("/v1/chat/completions"),
+      upstream: TRANSPORT === "tools-ai" ? TOOLS_AI_URL : upstreamUrl("/v1/chat/completions"),
       model: MODEL
     }, 502);
   }
 
-  const content = completion?.choices?.[0]?.message?.content ?? completion?.choices?.[0]?.text ?? "";
+  const content = completion?.message ?? completion?.choices?.[0]?.message?.content ?? completion?.choices?.[0]?.text ?? "";
   const parsed = parseJsonObject(content) ?? {};
   const actor = clean(parsed.actor ?? parsed.threatActor ?? hints.actor ?? item?.actor ?? item?.sourceName ?? "Unknown actor");
   const company = clean(parsed.company ?? parsed.victimName ?? parsed.victim ?? hints.company ?? item?.company ?? item?.victimName ?? "");
@@ -112,12 +173,40 @@ async function parseExposureClaim(request) {
     summary,
     confidence,
     aiCalled: true,
-    aiProvider: "hanasand-inspur-openai-compatible",
-    aiModel: MODEL,
+    aiProvider: TRANSPORT === "tools-ai" ? "hanasand-tools-ai" : "hanasand-inspur-openai-compatible",
+    aiModel: completion?.model ?? MODEL,
     aiLatencyMs: Date.now() - started,
-    aiResponseId: completion?.id,
+    aiResponseId: completion?.conversationId ?? completion?.id,
     parserQuality: confidence >= 0.82 ? "high" : confidence >= 0.68 ? "medium" : "needs_review"
   });
+}
+
+async function callToolsAi(item, hints) {
+  const prompt = [
+    "Parse this public CTI exposure item for a SOC exposure queue.",
+    "Return only a JSON object. No markdown.",
+    "Required keys: actor, company, claimedData, claimType, claimTime, summary, confidence.",
+    "Use metadata-only wording. Do not include leaked content, credentials, private data, or raw file names.",
+    "",
+    JSON.stringify({ item: compactItem(item), fallbackHints: hints }).slice(0, 5000)
+  ].join("\n");
+
+  const response = await fetch(TOOLS_AI_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      prompt,
+      maxTokens: 420,
+      billingMode: "standard",
+      metadata: {
+        source: "ti-exposure-parser-bridge",
+        parserUse: "metadata-only-exposure-claim"
+      }
+    }),
+    signal: AbortSignal.timeout(Number(process.env.HANASAND_AI_TOOLS_TIMEOUT_MS ?? "20000"))
+  });
+  if (!response.ok) throw new Error(`tools-ai returned HTTP ${response.status}: ${(await response.text()).slice(0, 240)}`);
+  return response.json();
 }
 
 async function callOpenAi(item, hints) {
@@ -171,6 +260,23 @@ function deterministicHints(item) {
     claimedData,
     summary: text.slice(0, 300),
     confidence: victim && actor !== "Unknown actor" ? 0.78 : 0.58
+  };
+}
+
+function compactItem(item) {
+  return {
+    sourceId: item?.sourceId,
+    sourceName: item?.sourceName,
+    sourceUrl: item?.sourceUrl,
+    url: item?.url,
+    title: clean(item?.title ?? "").slice(0, 600),
+    text: clean(item?.text ?? item?.rawText ?? item?.body ?? "").slice(0, 3000),
+    actor: item?.actor,
+    company: item?.company,
+    victimName: item?.victimName,
+    claimedData: item?.claimedData,
+    capturedAt: item?.capturedAt,
+    publishedAt: item?.publishedAt
   };
 }
 
