@@ -1,4 +1,4 @@
-import { describe, expect, FocusedFrontier, handleApiRequest, InMemoryScraperStore, test } from "./apiTestHarness.ts";
+import { describe, expect, fixtureCapture, FocusedFrontier, handleApiRequest, InMemoryScraperStore, source, test } from "./apiTestHarness.ts";
 import { saveExposureClaimFromCollectedItem } from "../api/exposureQueueRoutes.ts";
 
 describe("DWM exposure queue pipeline", () => {
@@ -78,5 +78,38 @@ describe("DWM exposure queue pipeline", () => {
     const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
     const queueBody = await queue.json() as any;
     expect(queueBody.items).toEqual([]);
+  });
+
+  test("surfaces existing trusted victim-feed captures without exposure metadata backfill", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source({
+      id: "src_canary_ransomwarelive",
+      name: "Ransomware.live Victim Feed",
+      metadata: { sourceFamily: "public_actor_claims" }
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_akira_refinery",
+      sourceId: "src_canary_ransomwarelive",
+      title: "Akira has just published a new victim : Refinery Hotel",
+      body: "Akira has just published a new victim : Refinery Hotel. 15 GB claimed.",
+      url: "https://www.ransomware.live/#/recentvictims",
+      publishedAt: "2026-07-01T13:50:38.000Z",
+      collectedAt: "2026-07-02T01:00:48.809Z",
+      metadata: { adapter: "rss" }
+    }));
+    store.saveCapture(fixtureCapture({
+      id: "cap_cisa_false_positive_backfill",
+      sourceId: "src_seed_cisa_known_exploited_vulns",
+      title: "CISA Catalog of Known Exploited Vulnerabilities",
+      body: "An attacker may target victims in some configurations.",
+      metadata: { adapter: "public_advisory" }
+    }));
+
+    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?q=Refinery"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const queueBody = await queue.json() as any;
+    expect(queueBody.items).toHaveLength(1);
+    expect(queueBody.items[0].actor).toBe("Akira");
+    expect(queueBody.items[0].company).toBe("Refinery Hotel");
+    expect(queueBody.items[0].claimedData).toBe("15 GB claimed");
   });
 });

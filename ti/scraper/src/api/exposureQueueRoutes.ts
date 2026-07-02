@@ -152,8 +152,8 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
 export function exposureClaimsFromStore(store: any, query = "") {
   const needle = query.trim().toLowerCase();
   return (store.listCaptures?.() ?? [])
-    .filter((capture: any) => capture?.metadata?.exposureClaim || capture?.metadata?.leakSite)
     .map((capture: any) => ({ capture, source: store.getSource?.(capture.sourceId) }))
+    .filter(({ capture, source }: any) => capture?.metadata?.exposureClaim || capture?.metadata?.leakSite || isTrustedVictimFeedCapture(capture, source))
     .filter(({ capture, source }: any) => shouldShowExposureQueueCapture(capture, source))
     .map(({ capture, source }: any) => exposureClaimFromCapture(capture, source))
     .filter((item: any) => !needle || [item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle))
@@ -306,9 +306,10 @@ function shouldPromoteExposureClaim(item: any) {
 
 function shouldShowExposureQueueCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
-  if (!leak.actorName || !leak.victimName) return false;
   const sourceText = `${capture.sourceId ?? ""} ${source?.name ?? ""} ${source?.metadata?.sourceFamily ?? ""}`;
   if (isGenericReferenceSource(sourceText)) return false;
+  if (isTrustedVictimFeedCapture(capture, source)) return true;
+  if (!leak.actorName || !leak.victimName) return false;
   if (String(capture.sourceId ?? "").startsWith("src_qa_")) return true;
   if (/\b(victim feed|ransomware\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)\b/i.test(sourceText)) return true;
   return /\b(has just published a new victim|claims victim|claim(?:ed|s)? victim|victim\s*:|added victim|listed victim|published victim)\b/i.test(String(capture.metadata?.safeExcerpt ?? capture.title ?? ""));
@@ -319,18 +320,27 @@ function isGenericReferenceSource(sourceText: string) {
   return /\b(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)\b/i.test(sourceText);
 }
 
+function isTrustedVictimFeedCapture(capture: any, source?: any) {
+  const sourceText = `${capture?.sourceId ?? ""} ${source?.name ?? ""} ${source?.metadata?.sourceFamily ?? ""}`;
+  if (isGenericReferenceSource(sourceText)) return false;
+  if (!/\b(victim feed|ransomware\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)\b/i.test(sourceText)) return false;
+  return Boolean(parseVictimClaimTitle(String(capture?.title ?? capture?.metadata?.safeExcerpt ?? "")));
+}
+
 function exposureClaimFromCapture(capture: any, source?: any) {
   const leak = capture.metadata?.leakSite ?? {};
+  const parsedTitle = parseVictimClaimTitle(String(capture.title ?? capture.metadata?.safeExcerpt ?? ""));
   const firstSeen = leak.firstSeenAt || capture.publishedAt || capture.collectedAt;
   const ageMinutes = Math.max(0, Math.round((Date.now() - Date.parse(firstSeen || capture.collectedAt || nowIso())) / 60_000));
   const confidence = capture.metadata?.parserQuality === "high" ? 0.9 : capture.metadata?.parserQuality === "medium" ? 0.78 : 0.64;
+  const text = [capture.title, capture.body, capture.rawText, capture.metadata?.safeExcerpt].filter(Boolean).join(" ");
   return {
     id: capture.id,
     sourceId: capture.sourceId,
     sourceName: source?.name || capture.sourceId,
-    actor: leak.actorName || capture.metadata?.actor || "Unknown actor",
-    company: leak.victimName || capture.metadata?.victimName || "Unknown company",
-    claimedData: leak.claimedDataCategory || "new victim claim",
+    actor: leak.actorName || capture.metadata?.actor || parsedTitle?.actor || "Unknown actor",
+    company: leak.victimName || capture.metadata?.victimName || parsedTitle?.company || "Unknown company",
+    claimedData: leak.claimedDataCategory || match(text, /\b(\d+(?:\.\d+)?\s*(?:GB|TB|MB)\s+(?:claimed|leaked|stolen|exfiltrated|data))/i) || "new victim claim",
     claimType: leak.claimType || "ransomware_victim_publication",
     claimTime: firstSeen,
     collectedAt: capture.collectedAt,
@@ -342,6 +352,17 @@ function exposureClaimFromCapture(capture: any, source?: any) {
     summary: capture.metadata?.safeExcerpt || capture.title || "",
     provenanceHash: hashContent(capture.id)
   };
+}
+
+function parseVictimClaimTitle(title: string) {
+  const normalized = clean(title.replace(/^[^\w]+/, ""));
+  const direct = normalized.match(/^(.+?)\s+has just published a new victim\s*:?\s*(.+)$/i)
+    || normalized.match(/^(.+?)\s+(?:claims?|claimed|listed|added|published)\s+victim\s*:?\s*(.+)$/i);
+  if (!direct) return undefined;
+  const actor = clean(direct[1]);
+  const company = clean(direct[2]);
+  if (!actor || !company || actor.length > 80 || company.length > 140) return undefined;
+  return { actor, company };
 }
 
 function nextCollectionAt(at: string) {
