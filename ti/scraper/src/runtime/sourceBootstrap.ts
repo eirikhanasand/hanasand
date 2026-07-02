@@ -19,8 +19,16 @@ export type RuntimeSourceBootstrapResult = {
 };
 
 type SourceStore = {
+  batch?<T>(write: () => T): T;
   saveSource(source: SourceRecord): SourceRecord;
   listSources(): SourceRecord[];
+};
+
+type RuntimeSourceBootstrapInput = {
+  seedPaths?: string[];
+  generatedAt?: string;
+  sourceTarget?: number;
+  batched?: boolean;
 };
 
 const defaultSeedPaths = [
@@ -32,7 +40,11 @@ const defaultSeedPaths = [
   "restricted_metadata_source_packs.json"
 ].map((name) => join(dirname(fileURLToPath(import.meta.url)), "..", "..", "seeds", name));
 
-export function bootstrapRuntimeSources(store: SourceStore, input: { seedPaths?: string[]; generatedAt?: string; sourceTarget?: number } = {}): RuntimeSourceBootstrapResult {
+export function bootstrapRuntimeSources(store: SourceStore, input: RuntimeSourceBootstrapInput = {}): RuntimeSourceBootstrapResult {
+  if (!input.batched && typeof store.batch === "function") {
+    return store.batch(() => bootstrapRuntimeSources(store, { ...input, batched: true }));
+  }
+
   const generatedAt = input.generatedAt ?? nowIso();
   const sourceTarget = input.sourceTarget ?? Number(Bun.env.TI_SOURCE_TARGET_COUNT ?? "1000");
   const seedPaths = input.seedPaths ?? configuredSeedPaths();

@@ -9,7 +9,18 @@ type FileBackedScraperSnapshot = any;
 export class FileBackedScraperStore extends InMemoryScraperStore {
   private readonly snapshotPath: string; private hydrating = false; private batchDepth = 0; private dirty = false;
   constructor(options: FileBackedScraperStoreOptions) { super(); this.snapshotPath = options.snapshotPath; mkdirSync(dirname(this.snapshotPath), { recursive: true }); this.hydrate(); }
-  async batch<T>(write: () => T | Promise<T>): Promise<T> { this.batchDepth++; try { return await write(); } finally { this.batchDepth--; if (!this.batchDepth && this.dirty) this.persist(); } }
+  batch<T>(write: () => T): T {
+    this.batchDepth++;
+    try {
+      const value = write();
+      if (value && typeof (value as any).then === "function") return ((value as unknown) as Promise<unknown>).finally(() => this.finishBatch()) as T;
+      this.finishBatch();
+      return value;
+    } catch (error) {
+      this.finishBatch();
+      throw error;
+    }
+  }
   override saveCapture(capture: RawCapture): RawCapture { return this.saved(() => super.saveCapture(capture)); }
   override saveCaptureWithDedupe(capture: RawCapture): CaptureWriteResult { return this.saved(() => super.saveCaptureWithDedupe(capture)); }
   override savePipelineResult(result: PipelineResult): PipelineResult { return this.saved(() => super.savePipelineResult(result)); }
@@ -39,6 +50,7 @@ export class FileBackedScraperStore extends InMemoryScraperStore {
   override saveDwmWebhookDelivery(delivery: any): any { return this.saved(() => super.saveDwmWebhookDelivery(delivery)); }
   override saveActorOrgRelevanceReview(review: any): any { return this.saved(() => super.saveActorOrgRelevanceReview(review)); }
   private saved<T>(write: () => T): T { const value = write(); this.batchDepth ? this.dirty = true : this.persist(); return value; }
+  private finishBatch(): void { this.batchDepth--; if (!this.batchDepth && this.dirty) this.persist(); }
   private hydrate(): void { if (!existsSync(this.snapshotPath)) return; this.hydrating = true; try { this.load(JSON.parse(readFileSync(this.snapshotPath, "utf8"))); } finally { this.hydrating = false; } }
   private load(snapshot: Partial<FileBackedScraperSnapshot>): void {
     for (const source of snapshot.sources ?? []) super.saveSource(source);
