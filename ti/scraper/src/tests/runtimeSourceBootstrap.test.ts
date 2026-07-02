@@ -158,6 +158,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         sourceShortfall: 0,
         activeSourceCount: 2,
         dailySourceCount: 2,
+        dailyAttemptedCount: 2,
         dailyCoveredCount: 1
       });
       expect(body.scheduler.lastSuccessfulRun.id).toBe("run_recent");

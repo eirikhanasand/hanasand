@@ -1,5 +1,5 @@
 import type { ApiServerOptions } from "./serverTypes.ts";
-import { json } from "./http.ts";
+import { json, readJson } from "./http.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { nowIso } from "../utils.ts";
 
@@ -8,11 +8,12 @@ export function collectionSchedulerStatus(options: ApiServerOptions) {
   const sources = options.store.listSources();
   const runs = options.store.listRuns?.() ?? [];
   const latestRun = [...runs].filter((run: any) => run.requestId === "req_public_canary").sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
-  const successfulRuns = runs.filter((run: any) => run.requestId === "req_public_canary" && run.status === "completed");
+  const successfulRuns = runs.filter((run: any) => run.requestId === "req_public_canary" && ["completed", "degraded"].includes(run.status));
   const lastSuccessfulRun = [...successfulRuns].sort((a: any, b: any) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0];
   const activeSources = sources.filter((source: any) => source.status === "active" || source.status === "canary");
   const dailySources = activeSources.filter((source: any) => Number(source.crawlFrequencySeconds ?? 86400) <= 86400);
   const dailyCovered = dailySources.filter((source: any) => withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt));
+  const dailyAttempted = dailySources.filter((source: any) => withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt) || withinDailyWindow(source.crawlState?.lastErrorAt, generatedAt));
   const exposureItems = exposureClaimsFromStore(options.store, "");
   const canaryState = readCanaryState(options.canaryLoop);
   const schedulerEnabled = canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false";
@@ -40,6 +41,8 @@ export function collectionSchedulerStatus(options: ApiServerOptions) {
       sourceShortfall,
       activeSourceCount: activeSources.length,
       dailySourceCount: dailySources.length,
+      dailyAttemptedCount: dailyAttempted.length,
+      dailyAttemptCoverageRatio: dailySources.length ? dailyAttempted.length / dailySources.length : 0,
       dailyCoveredCount: dailyCovered.length,
       dailyCoverageRatio: dailySources.length ? dailyCovered.length / dailySources.length : 0
     },
@@ -82,9 +85,44 @@ export function collectionSchedulerStatus(options: ApiServerOptions) {
       lastCollectedAt: source.crawlState?.lastCollectedAt,
       nextEligibleAt: source.crawlState?.nextEligibleAt,
       retryCount: source.crawlState?.retryCount ?? 0,
-      dailyCovered: withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt)
+      dailyCovered: withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt),
+      dailyAttempted: withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt) || withinDailyWindow(source.crawlState?.lastErrorAt, generatedAt)
     }))
   });
+}
+
+export async function updateCollectionSchedulerControl(request: Request, options: ApiServerOptions) {
+  const body = await readJson(request);
+  const action = body.action === "resume" || body.enabled === true
+    ? "resume"
+    : body.action === "pause" || body.enabled === false
+      ? "pause"
+      : body.action === "run_now"
+        ? "run_now"
+        : "";
+
+  if (!action) {
+    return json({ error: { code: "unsupported_action", message: "Use action pause, resume, or run_now." } }, 400);
+  }
+
+  const loop = options.canaryLoop as any;
+  if (!loop) {
+    return json({ error: { code: "scheduler_unavailable", message: "Collection scheduler loop is not attached." } }, 409);
+  }
+
+  if (action === "run_now") {
+    if (typeof loop.runOnce !== "function") {
+      return json({ error: { code: "run_now_unavailable", message: "Collection scheduler does not expose runOnce." } }, 409);
+    }
+    await loop.runOnce();
+  } else {
+    if (typeof loop.setEnabled !== "function") {
+      return json({ error: { code: "control_unavailable", message: "Collection scheduler does not expose pause/resume controls." } }, 409);
+    }
+    loop.setEnabled(action === "resume", body);
+  }
+
+  return collectionSchedulerStatus(options);
 }
 
 function readCanaryState(canaryLoop: unknown) {

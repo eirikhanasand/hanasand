@@ -24,19 +24,32 @@ export async function runCanaryCollectionCycle(options: CanaryCollectionOptions)
   const latestCaptureIds: string[] = [], errors: any[] = [];
   const concurrency = Math.max(1, Math.min(maxTasks, Number(options.maxConcurrentTasks ?? 5)));
   for (let done = 0; done < maxTasks; done += concurrency) await Promise.all(Array.from({ length: Math.min(concurrency, maxTasks - done) }, () => runLeasedTask(options, runId, generatedAt, fetcher, mode, maxBytes, counters, latestCaptureIds, errors)));
-  options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: counters.failedTaskCount ? "failed" : "completed", createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, sourceCount: due.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, error: errors[0]?.message });
+  const runStatus = counters.failedTaskCount && counters.completedTaskCount ? "degraded" : counters.failedTaskCount ? "failed" : "completed";
+  options.store.saveRun?.({ id: runId, planId, requestId: "req_public_canary", status: runStatus, createdAt: generatedAt, updatedAt: generatedAt, taskCount: tasks.length, sourceCount: due.length, captureCount: counters.insertedCaptureCount, incidentCount: counters.incidentCount, exposureClaimCount: counters.exposureClaimCount, skippedLowValueCount: counters.skippedLowValueCount, failedTaskCount: counters.failedTaskCount, completedTaskCount: counters.completedTaskCount, error: errors[0]?.message });
   return { generatedAt, mode: "production_canary", runId, planId, activationApplied: Boolean(options.activateSources), activatedSourceCount: activation.activated.length + activation.alreadyActive.length, activeSourceCount: due.length, queuedTaskCount: tasks.length, ...counters, remainingQueuedTaskCount: options.frontier.snapshot().filter((i: any) => i.task.runId === runId).length, latestCaptureIds, errors, health: health(options.store, generatedAt, counters) };
 }
 export function startCanaryCollectionLoop(options: CanaryCollectionOptions & { enabled?: boolean; intervalSeconds?: number; queueLimit?: number; onCycle?: (r: any) => void; onError?: (e: unknown) => void }): CanaryCollectionLoopHandle {
   const state = detachedState(nowIso(), options.queueLimit ?? 500), intervalMs = Math.max(5, options.intervalSeconds ?? 300) * 1000; let timer: Timer | undefined, startupTimer: Timer | undefined;
-  const cycle = async () => { if (!state.enabled || state.running) return; state.running = true; state.lastCycleAt = nowIso(); try { const result = await runCanaryCollectionCycle(options); state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); } catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); } finally { state.running = false; state.cycleCount++; state.nextCycleAt = new Date(Date.now() + intervalMs).toISOString(); } };
+  const cycle = async () => { if (!state.enabled || state.running) return; state.running = true; state.lastCycleAt = nowIso(); try { const result = await runCanaryCollectionCycle(options); state.latestResult = result; state.successCount++; state.lastSuccessAt = result.generatedAt; options.onCycle?.(result); } catch (e) { state.errorCount++; state.consecutiveErrorCount++; state.lastError = e instanceof Error ? e.message : String(e); state.lastErrorAt = nowIso(); options.onError?.(e); } finally { state.running = false; state.cycleCount++; state.nextCycleAt = state.enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined; } };
   Object.assign(state, { enabled: options.enabled !== false, intervalSeconds: options.intervalSeconds ?? 300, maxSources: options.maxSources ?? 10, maxTasks: options.maxTasks ?? 5, maxConcurrentTasks: options.maxConcurrentTasks ?? 5, maxItemsPerTask: options.maxItemsPerTask ?? 40, maxBytes: options.maxBytes ?? 512_000, timeoutMs: options.timeoutMs ?? 30_000, queueLimit: options.queueLimit ?? 500, activateSources: Boolean(options.activateSources) });
   if (state.enabled) {
     state.nextCycleAt = new Date(Date.now() + 1_000).toISOString();
     startupTimer = setTimeout(cycle, 1_000);
-    timer = setInterval(cycle, intervalMs);
   }
-  return { stop: () => { if (startupTimer) clearTimeout(startupTimer); if (timer) clearInterval(timer); state.enabled = false; }, getState: () => ({ ...state }) };
+  timer = setInterval(cycle, intervalMs);
+  return {
+    stop: () => { if (startupTimer) clearTimeout(startupTimer); if (timer) clearInterval(timer); state.enabled = false; state.nextCycleAt = undefined; },
+    getState: () => ({ ...state }),
+    setEnabled: (enabled: boolean, metadata: any = {}) => {
+      state.enabled = Boolean(enabled);
+      state.updatedAt = nowIso();
+      state.updatedBy = metadata.approvedBy ?? metadata.operatorId ?? "operator";
+      state.pausedReason = enabled ? undefined : metadata.reason ?? "Paused by operator.";
+      state.nextCycleAt = enabled ? new Date(Date.now() + intervalMs).toISOString() : undefined;
+      return { ...state };
+    },
+    runOnce: () => cycle()
+  };
 }
 async function runLeasedTask(options: any, runId: string, generatedAt: string, fetcher: any, mode: string, maxBytes: number, counters: any, latestCaptureIds: string[], errors: any[]) {
   const leased = options.frontier.next(new Date(generatedAt), (task: any) => task.runId === runId); if (!leased) return;
