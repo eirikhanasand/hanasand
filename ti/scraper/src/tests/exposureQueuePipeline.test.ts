@@ -36,6 +36,32 @@ describe("DWM exposure queue pipeline", () => {
     expect(searchBody.rows.some((row: any) => row.victimName === "Contoso Energy" && row.actor === "BlackSuit")).toBe(true);
   });
 
+  test("indexes metadata-only exposure smoke captures in shared TI search", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const item = {
+      sourceId: "src_qa_ai_parser_smoke",
+      sourceName: "Hanasand AI parser smoke",
+      title: "Akira has just published a new victim: Hanasand AI Parser Smoke",
+      text: "Akira victim: Hanasand AI Parser Smoke. Claimed data: 12 GB claimed. Metadata-only synthetic smoke; no leaked content.",
+      publishedAt: new Date().toISOString(),
+      url: "https://example.com/hanasand-ai-parser-smoke",
+      sourceFamily: "darkweb_metadata"
+    };
+
+    const ingest = await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [item] })
+    }), options);
+    expect(ingest.status).toBe(200);
+
+    const search = await handleApiRequest(new Request("http://local/v1/intel/search?q=Hanasand%20AI%20Parser%20Smoke"), options);
+    expect(search.status).toBe(200);
+    const searchBody = await search.json() as any;
+    expect(searchBody.rows.some((row: any) => row.victimName === "Hanasand AI Parser Smoke" && row.actor === "Akira")).toBe(true);
+  });
+
   test("bridges exposure queue captures into persisted DWM alerts without fake case state", async () => {
     const store = new InMemoryScraperStore();
     const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
@@ -99,6 +125,33 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].company).toBe("Fabrikam Manufacturing");
   });
 
+  test("keeps persisted exposure rows visible when the queue is stale", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const claim = {
+      sourceName: "Example actor leak monitor",
+      title: "LockBit has just published a new victim: Alpine Robotics",
+      text: "LockBit victim: Alpine Robotics. 22 GB claimed from engineering systems.",
+      publishedAt: "2026-01-01T00:00:00.000Z",
+      capturedAt: "2026-01-01T00:05:00.000Z",
+      url: "https://news.example.test/alpine-robotics"
+    };
+
+    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [claim] })
+    }), options);
+
+    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), options);
+    const queueBody = await queue.json() as any;
+    expect(queueBody.status).toBe("stale");
+    expect(queueBody.scheduler.state).toBe("due");
+    expect(queueBody.items).toHaveLength(1);
+    expect(queueBody.items[0].actor).toBe("LockBit");
+    expect(queueBody.items[0].company).toBe("Alpine Robotics");
+  });
+
   test("does not promote generic advisory or ATT&CK text as victim claims", async () => {
     const store = new InMemoryScraperStore();
     await saveExposureClaimFromCollectedItem(store, {
@@ -122,6 +175,7 @@ describe("DWM exposure queue pipeline", () => {
 
     const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
     const queueBody = await queue.json() as any;
+    expect(queueBody.status).toBe("empty");
     expect(queueBody.items).toEqual([]);
   });
 

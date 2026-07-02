@@ -35,6 +35,7 @@ function docFor(capture: any, source: any): SearchDoc {
   return { capture, title: norm(capture.title), collectedAt: capture.collectedAt ?? "", text: unique([text, sourceHints(source), derivedHints(text)]).join(" ").toLowerCase() };
 }
 function sellableCapture(capture: any) {
+  if (capture?.metadata?.exposureClaim || capture?.metadata?.leakSite) return true;
   return isSellableIntelText({ text: searchableText(capture), title: capture.title, sourceId: capture.sourceId, publishedAt: capture.publishedAt, collectedAt: capture.collectedAt });
 }
 function searchableText(capture: any) {
