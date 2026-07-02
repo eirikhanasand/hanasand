@@ -90,8 +90,8 @@ describe("DWM exposure queue pipeline", () => {
     store.saveCapture(fixtureCapture({
       id: "cap_akira_refinery",
       sourceId: "src_canary_ransomwarelive",
-      title: "Akira has just published a new victim : Refinery Hotel",
-      body: "Akira has just published a new victim : Refinery Hotel. 15 GB claimed.",
+      title: "Ransomware.live Victim Feed 🏴‍☠️ Akira has just published a new victim : Refinery Hotel",
+      body: "Ransomware.live Victim Feed 🏴‍☠️ Akira has just published a new victim : Refinery Hotel. 15 GB claimed.",
       url: "https://www.ransomware.live/#/recentvictims",
       publishedAt: "2026-07-01T13:50:38.000Z",
       collectedAt: "2026-07-02T01:00:48.809Z",

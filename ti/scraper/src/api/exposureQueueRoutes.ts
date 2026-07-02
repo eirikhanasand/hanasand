@@ -40,16 +40,22 @@ export async function listExposureQueue(url: URL, options: ApiServerOptions) {
   const at = nowIso();
   const items = exposureClaimsFromStore(options.store, query)
     .slice(0, limit);
-  const latest = items[0]?.claimTime ?? items[0]?.collectedAt;
-  const ageMinutes = latest ? Math.max(0, Math.round((Date.parse(at) - Date.parse(latest)) / 60_000)) : undefined;
-  const fresh = ageMinutes !== undefined && ageMinutes <= 60;
+  const latestClaimAt = latestTime(items.map((item: any) => item.claimTime));
+  const latestCollectedAt = latestTime(items.map((item: any) => item.collectedAt));
+  const claimAgeMinutes = ageMinutes(at, latestClaimAt);
+  const collectionAgeMinutes = ageMinutes(at, latestCollectedAt);
+  const age = collectionAgeMinutes ?? claimAgeMinutes;
+  const fresh = (collectionAgeMinutes !== undefined && collectionAgeMinutes <= 60) || (claimAgeMinutes !== undefined && claimAgeMinutes <= 60);
   return json({
     schemaVersion: "dwm.exposure_queue.v1",
     generatedAt: at,
     status: fresh ? "live" : items.length ? "stale" : "waiting_for_collection",
     freshness: {
-      latestClaimAt: latest,
-      ageMinutes,
+      latestClaimAt,
+      latestCollectedAt,
+      ageMinutes: age,
+      claimAgeMinutes,
+      collectionAgeMinutes,
       maxLiveAgeMinutes: 60,
       nextExpectedCollection: nextCollectionAt(at)
     },
@@ -157,7 +163,7 @@ export function exposureClaimsFromStore(store: any, query = "") {
     .filter(({ capture, source }: any) => shouldShowExposureQueueCapture(capture, source))
     .map(({ capture, source }: any) => exposureClaimFromCapture(capture, source))
     .filter((item: any) => !needle || [item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle))
-    .sort((a: any, b: any) => String(b.claimTime ?? b.collectedAt).localeCompare(String(a.claimTime ?? a.collectedAt)));
+    .sort((a: any, b: any) => epoch(b.claimTime ?? b.collectedAt) - epoch(a.claimTime ?? a.collectedAt));
 }
 
 function saveExposureClaim(store: any, claim: any, at: string) {
@@ -355,18 +361,44 @@ function exposureClaimFromCapture(capture: any, source?: any) {
 }
 
 function parseVictimClaimTitle(title: string) {
-  const normalized = clean(title.replace(/^[^\w]+/, ""));
+  const normalized = stripVictimFeedPrefix(title);
   const direct = normalized.match(/^(.+?)\s+has just published a new victim\s*:?\s*(.+)$/i)
     || normalized.match(/^(.+?)\s+(?:claims?|claimed|listed|added|published)\s+victim\s*:?\s*(.+)$/i);
   if (!direct) return undefined;
-  const actor = clean(direct[1]);
+  const actor = stripVictimFeedPrefix(direct[1]);
   const company = clean(direct[2]);
   if (!actor || !company || actor.length > 80 || company.length > 140) return undefined;
   return { actor, company };
 }
 
+function stripVictimFeedPrefix(value: unknown) {
+  return clean(String(value ?? "")
+    .replace(/^Ransomware\.live Victim Feed\s+/i, "")
+    .replace(/^[^A-Za-z0-9]+/, ""));
+}
+
 function nextCollectionAt(at: string) {
   return new Date(Date.parse(at) + 5 * 60_000).toISOString();
+}
+
+function latestTime(values: unknown[]) {
+  const latest = values
+    .map((value) => String(value ?? ""))
+    .filter(Boolean)
+    .sort((a, b) => epoch(b) - epoch(a))[0];
+  return latest;
+}
+
+function ageMinutes(now: string, value?: string) {
+  if (!value) return undefined;
+  const then = epoch(value);
+  if (!then) return undefined;
+  return Math.max(0, Math.round((Date.parse(now) - then) / 60_000));
+}
+
+function epoch(value: unknown) {
+  const time = Date.parse(String(value ?? ""));
+  return Number.isFinite(time) ? time : 0;
 }
 
 function match(text: string, regex: RegExp) {
