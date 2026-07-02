@@ -53,4 +53,30 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].actor).toBe("Akira");
     expect(queueBody.items[0].company).toBe("Fabrikam Manufacturing");
   });
+
+  test("does not promote generic advisory or ATT&CK text as victim claims", async () => {
+    const store = new InMemoryScraperStore();
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_seed_cisa_known_exploited_vulns",
+      title: "CISA Catalog of Known Exploited Vulnerabilities",
+      rawText: "CVE entry says an attacker can obtain a technician session and may target victims in some configurations.",
+      url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+      collectedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      metadata: { adapter: "public_advisory", sourceName: "CISA Known Exploited Vulnerabilities Catalog" }
+    });
+    await saveExposureClaimFromCollectedItem(store, {
+      sourceId: "src_seed_mitre_attack_enterprise",
+      title: "MITRE ATT&CK Enterprise",
+      rawText: "Technique page mentions host information and victim environments as generic defensive context.",
+      url: "https://attack.mitre.org/",
+      collectedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      metadata: { adapter: "public_advisory", sourceName: "MITRE ATT&CK Enterprise" }
+    });
+
+    const queue = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=5"), { store, frontier: new FocusedFrontier(), port: 0 } as any);
+    const queueBody = await queue.json() as any;
+    expect(queueBody.items).toEqual([]);
+  });
 });

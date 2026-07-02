@@ -133,7 +133,7 @@ export async function exposureParserHealth() {
 }
 
 export async function saveExposureClaimFromCollectedItem(store: any, item: any, at = nowIso()) {
-  if (item?.metadata?.leakSite || !looksLikeExposureClaim(item)) return undefined;
+  if (!shouldPromoteExposureClaim(item)) return undefined;
   const claim = await parseExposureClaim({
     sourceId: item.sourceId,
     sourceName: item.source?.name || item.metadata?.sourceName,
@@ -153,7 +153,9 @@ export function exposureClaimsFromStore(store: any, query = "") {
   const needle = query.trim().toLowerCase();
   return (store.listCaptures?.() ?? [])
     .filter((capture: any) => capture?.metadata?.exposureClaim || capture?.metadata?.leakSite)
-    .map((capture: any) => exposureClaimFromCapture(capture, store.getSource?.(capture.sourceId)))
+    .map((capture: any) => ({ capture, source: store.getSource?.(capture.sourceId) }))
+    .filter(({ capture, source }: any) => shouldShowExposureQueueCapture(capture, source))
+    .map(({ capture, source }: any) => exposureClaimFromCapture(capture, source))
     .filter((item: any) => !needle || [item.actor, item.company, item.claimedData, item.sourceName, item.summary].join(" ").toLowerCase().includes(needle))
     .sort((a: any, b: any) => String(b.claimTime ?? b.collectedAt).localeCompare(String(a.claimTime ?? a.collectedAt)));
 }
@@ -287,6 +289,34 @@ function looksLikeExposureClaim(item: any) {
   const text = [item?.title, item?.rawText, item?.body].filter(Boolean).join(" ");
   return /\b(ransomware|victim|leak site|actor page|claimed|claims|listed|published|extortion|breach|data leak)\b/i.test(text)
     && /\b(company|supplier|vendor|victim|GB|TB|data|records|dump|exfiltrat)/i.test(text);
+}
+
+function shouldPromoteExposureClaim(item: any) {
+  if (item?.metadata?.leakSite) return true;
+  const title = String(item?.title ?? "");
+  const sourceName = String(item?.source?.name ?? item?.metadata?.sourceName ?? item?.sourceName ?? "");
+  const sourceId = String(item?.sourceId ?? "");
+  const sourceFamily = String(item?.metadata?.sourceFamily ?? item?.sourceFamily ?? item?.metadata?.adapter ?? "");
+  const sourceText = `${sourceId} ${sourceName} ${sourceFamily}`;
+  if (isGenericReferenceSource(sourceText)) return false;
+  const actorClaimTitle = /\b(has just published a new victim|claims victim|claim(?:ed|s)? victim|victim\s*:|added victim|listed victim|published victim)\b/i.test(title);
+  const trustedClaimSource = /\b(victim feed|ransomware\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim)\b/i.test(sourceText);
+  return (actorClaimTitle || trustedClaimSource) && looksLikeExposureClaim(item);
+}
+
+function shouldShowExposureQueueCapture(capture: any, source?: any) {
+  const leak = capture.metadata?.leakSite ?? {};
+  if (!leak.actorName || !leak.victimName) return false;
+  const sourceText = `${capture.sourceId ?? ""} ${source?.name ?? ""} ${source?.metadata?.sourceFamily ?? ""}`;
+  if (isGenericReferenceSource(sourceText)) return false;
+  if (String(capture.sourceId ?? "").startsWith("src_qa_")) return true;
+  if (/\b(victim feed|ransomware\.live victim|ransomlook|leak site|extortion|darkweb|darknet|actor claim|tor_metadata|i2p_metadata|freenet_metadata)\b/i.test(sourceText)) return true;
+  return /\b(has just published a new victim|claims victim|claim(?:ed|s)? victim|victim\s*:|added victim|listed victim|published victim)\b/i.test(String(capture.metadata?.safeExcerpt ?? capture.title ?? ""));
+}
+
+function isGenericReferenceSource(sourceText: string) {
+  if (/\b(victim feed|actor claim|leak site|extortion|darkweb|darknet)\b/i.test(sourceText)) return false;
+  return /\b(cisa known exploited|known exploited vulnerabilities|mitre att&ck|attack enterprise|groups dataset|public groups dataset|nvd recent cve|github advisory database)\b/i.test(sourceText);
 }
 
 function exposureClaimFromCapture(capture: any, source?: any) {
