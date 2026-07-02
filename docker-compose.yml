@@ -105,6 +105,31 @@ services:
     networks:
       - hanasandnet
 
+  ai-model-client:
+    container_name: hanasand_ai_model_client
+    image: hanasand_ai_model_client
+    restart: always
+    build:
+      context: .
+      dockerfile: ./ti/ai-model-client/Dockerfile
+    env_file:
+      .env
+    environment:
+      HANASAND_AI_CLIENT_API_WS: ${HANASAND_AI_CLIENT_API_WS:-ws://127.0.0.1:8080/api/client/ws/gpt}
+      HANASAND_AI_OPENAI_BASE: ${HANASAND_AI_OPENAI_BASE:-http://127.0.0.1:18081}
+      HANASAND_AI_MODEL: ${HANASAND_AI_MODEL:-hanasand}
+      HANASAND_AI_CLIENT_NAME: ${HANASAND_AI_CLIENT_NAME:-hanasand-inspur}
+      HANASAND_AI_CLIENT_HEALTH_PORT: ${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${HANASAND_AI_CLIENT_HEALTH_PORT:-18182}/health"]
+      interval: 10s
+      retries: 5
+      start_period: 10s
+    network_mode: host
+    depends_on:
+      api:
+        condition: service_healthy
+
   ti-scraper:
     container_name: hanasand_ti_scraper
     image: hanasand_ti_scraper
