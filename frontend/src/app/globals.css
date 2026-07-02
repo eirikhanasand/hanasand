@@ -47,6 +47,8 @@
   --panel-surface: rgba(13, 15, 12, 0.78);
   --card-border: rgba(247, 248, 242, 0.09);
   --card-surface: rgba(247, 248, 242, 0.04);
+  --landing-surface-border: #26364f;
+  --landing-surface-border-hover: #34445f;
   --soft-shadow: rgba(0, 0, 0, 0.34);
 }
 
@@ -72,6 +74,8 @@
   --panel-surface: rgba(255, 255, 255, 0.90);
   --card-border: rgba(24, 36, 58, 0.10);
   --card-surface: rgba(255, 255, 255, 0.72);
+  --landing-surface-border: #d9e2ef;
+  --landing-surface-border-hover: #c9d2df;
   --soft-shadow: rgba(26, 35, 55, 0.12);
 }
 
@@ -396,6 +400,14 @@ html.dark:not(.light) .enterprise-theme button:disabled[class*="disabled:bg-[#f5
 
 .landing-search-button:hover {
   background-color: #f6f8fb !important;
+}
+
+.landing-surface-border {
+  border-color: var(--landing-surface-border) !important;
+}
+
+.landing-surface-border-hover:hover {
+  border-color: var(--landing-surface-border-hover) !important;
 }
 
 html.dark:not(.light) .landing-primary-action {

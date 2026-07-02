@@ -166,7 +166,7 @@ export default async function Page({
                         {examples.map((item) => {
                             const Icon = item.icon
                             return (
-                                <Link key={item.slug} href='/ti' className='group overflow-hidden rounded-lg border border-[#e0e5ed] bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df] hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:border-[#26364f] dark:bg-[#101927] dark:hover:border-[#405579]'>
+                                <Link key={item.slug} href='/ti' className='landing-surface-border landing-surface-border-hover group overflow-hidden rounded-lg border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:bg-[#101927]' data-home-example-card='true'>
                                     <div className='grid gap-4 p-5'>
                                         <div className='flex items-start justify-between gap-3'>
                                             <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3] dark:border-[#34445f] dark:bg-[#0b1422] dark:text-[#9db6ff]'>
@@ -211,7 +211,7 @@ export default async function Page({
                         </div>
                     </div>
 
-                    <div className='overflow-hidden rounded-lg border border-[#e2e8f0] bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)]' data-exposure-queue-source='api'>
+                    <div className='landing-surface-border overflow-hidden rounded-lg border bg-white shadow-[0_20px_70px_rgba(26,35,55,0.10)]' data-exposure-queue-source='api' data-home-exposure-panel='true'>
                         <div className='flex items-center justify-between gap-4 border-b border-[#eef1f5] px-4 py-3'>
                             <div className='min-w-0'>
                                 <h3 className='text-sm font-semibold text-[#171a21]'>Exposure queue</h3>
@@ -265,7 +265,7 @@ export default async function Page({
 
                     <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
                         {solutions.map((solution) => (
-                            <Link key={solution.title} href={solution.href} className='grid gap-4 rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#c9d2df]'>
+                            <Link key={solution.title} href={solution.href} className='landing-surface-border landing-surface-border-hover grid gap-4 rounded-lg border bg-white p-5 shadow-sm transition hover:-translate-y-0.5' data-home-solution-card='true'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <h3 className='text-base font-semibold text-[#171a21]'>{solution.title}</h3>
                                     <ArrowRight className='landing-action-icon h-4 w-4' />
@@ -293,7 +293,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
 
     return (
         <div
-            className='grid w-full max-w-6xl gap-3 rounded-xl border border-[#d9e2ef] bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
+            className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
             data-home-product-readiness='true'
             data-home-readiness-state={stateLabel}
             data-home-readiness-ready-rows={scoreboard.readyRows}
@@ -328,7 +328,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
 
 function HomeReadinessFact({ label, value }: { label: string, value: string }) {
     return (
-        <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 dark:border-[#26364f] dark:bg-[#0b1422]'>
+        <div className='landing-surface-border min-w-0 rounded-lg border bg-[#fbfcfe] px-3 py-2 dark:bg-[#0b1422]' data-home-readiness-fact='true'>
             <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
             <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-[#171a21] dark:text-white'>{value}</p>
         </div>
@@ -338,7 +338,7 @@ function HomeReadinessFact({ label, value }: { label: string, value: string }) {
 function HomeWorkflowProof({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
     return (
         <section
-            className='overflow-hidden rounded-xl border border-[#d9e2ef] bg-white/95 shadow-sm backdrop-blur dark:border-[#26364f] dark:bg-[#101927]/95'
+            className='landing-surface-border overflow-hidden rounded-xl border bg-white/95 shadow-sm backdrop-blur dark:bg-[#101927]/95'
             data-home-workflow-coverage='true'
             data-home-workflow-coverage-ready-rows={scoreboard.readyRows}
             data-home-workflow-coverage-total-rows={scoreboard.totalRows}
