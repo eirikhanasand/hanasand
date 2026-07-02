@@ -161,6 +161,7 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
         dailyCoveredCount: 1
       });
       expect(body.scheduler.lastSuccessfulRun.id).toBe("run_recent");
+      expect(Date.parse(body.scheduler.nextRunAt)).toBeGreaterThan(Date.parse(generatedAt));
       expect(body.parser.aiEndpointConfigured).toBe(false);
       expect(body.sources.find((item: any) => item.sourceId === "src_due").retryCount).toBe(2);
     } finally {

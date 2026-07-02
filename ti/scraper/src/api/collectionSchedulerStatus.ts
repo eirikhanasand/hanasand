@@ -15,7 +15,15 @@ export function collectionSchedulerStatus(options: ApiServerOptions) {
   const dailyCovered = dailySources.filter((source: any) => withinDailyWindow(source.crawlState?.lastCollectedAt, generatedAt));
   const exposureItems = exposureClaimsFromStore(options.store, "");
   const canaryState = readCanaryState(options.canaryLoop);
-  const nextRunAt = canaryState?.nextCycleAt ?? nextEligibleSourceAt(activeSources);
+  const schedulerEnabled = canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false";
+  const intervalSeconds = canaryState?.intervalSeconds ?? Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300");
+  const nextRunAt = nextSchedulerRunAt({
+    generatedAt,
+    enabled: schedulerEnabled,
+    intervalSeconds,
+    canaryNextCycleAt: canaryState?.nextCycleAt,
+    nextEligibleAt: nextEligibleSourceAt(activeSources)
+  });
   const sourceTarget = Number((options.sourceBootstrap as any)?.sourceTarget ?? Bun.env.TI_SOURCE_TARGET_COUNT ?? "1000");
   const totalSourceCount = sources.length;
   const sourceShortfall = Math.max(0, sourceTarget - totalSourceCount);
@@ -36,9 +44,9 @@ export function collectionSchedulerStatus(options: ApiServerOptions) {
       dailyCoverageRatio: dailySources.length ? dailyCovered.length / dailySources.length : 0
     },
     scheduler: {
-      enabled: canaryState?.enabled ?? Bun.env.TI_CANARY_ENABLED !== "false",
+      enabled: schedulerEnabled,
       running: canaryState?.running ?? false,
-      intervalSeconds: canaryState?.intervalSeconds ?? Number(Bun.env.TI_CANARY_INTERVAL_SECONDS ?? "300"),
+      intervalSeconds,
       maxSources: canaryState?.maxSources ?? Number(Bun.env.TI_CANARY_MAX_SOURCES ?? "50"),
       maxTasks: canaryState?.maxTasks ?? Number(Bun.env.TI_CANARY_MAX_TASKS ?? "25"),
       lastRun: latestRun,
@@ -89,4 +97,11 @@ function withinDailyWindow(value: unknown, generatedAt: string) {
 
 function nextEligibleSourceAt(sources: any[]) {
   return sources.map((source) => source.crawlState?.nextEligibleAt).filter(Boolean).sort()[0];
+}
+
+function nextSchedulerRunAt(input: { generatedAt: string; enabled: boolean; intervalSeconds: number; canaryNextCycleAt?: string; nextEligibleAt?: string }) {
+  if (!input.enabled) return input.canaryNextCycleAt ?? input.nextEligibleAt;
+  if (input.canaryNextCycleAt && Date.parse(input.canaryNextCycleAt) >= Date.parse(input.generatedAt)) return input.canaryNextCycleAt;
+  const intervalMs = Math.max(5, Number(input.intervalSeconds) || 300) * 1000;
+  return new Date(Date.parse(input.generatedAt) + intervalMs).toISOString();
 }
