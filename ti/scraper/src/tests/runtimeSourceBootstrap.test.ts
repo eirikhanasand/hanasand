@@ -36,6 +36,53 @@ describe("runtime source bootstrap and scheduler monitoring", () => {
     }
   });
 
+  test("imports disabled public Telegram candidate packs as reviewed-off candidates", () => {
+    const store = new InMemoryScraperStore();
+    const dir = mkdtempSync(join(tmpdir(), "hanasand-source-bootstrap-telegram-"));
+    const seedPath = join(dir, "telegram.json");
+    writeFileSync(seedPath, JSON.stringify({
+      version: 1,
+      name: "public telegram candidates",
+      disabledByDefault: true,
+      sources: [
+        {
+          id: "tg_candidate_runtime",
+          name: "Public Runtime Channel Candidate",
+          channelHandle: "public_runtime_channel",
+          publicUrl: "https://t.me/public_runtime_channel",
+          legalNotes: "Candidate public channel; collect public posts only after source review.",
+          approvalState: "pending",
+          rateLimit: { minIntervalSeconds: 600 },
+          compliance: { approvalScope: "public_requires_review", legalBasis: "Public CTI monitoring review." },
+          trustScore: 0.55
+        }
+      ]
+    }));
+
+    try {
+      const result = bootstrapRuntimeSources(store, {
+        seedPaths: [seedPath],
+        generatedAt: "2026-07-02T00:00:00.000Z",
+        sourceTarget: 1000
+      });
+      const [sourceRecord] = store.listSources() as any[];
+
+      expect(result.importedSourceCount).toBe(1);
+      expect(result.activeSourceCount).toBe(0);
+      expect(result.shortfall).toBe(999);
+      expect(sourceRecord).toMatchObject({
+        id: "tg_candidate_runtime",
+        type: "telegram_public",
+        accessMethod: "public_http",
+        status: "candidate",
+        risk: "medium",
+        metadata: { publicTelegramCandidate: true, productionCollection: true }
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("collection scheduler status exposes source coverage, durable run state, parser state, and per-source freshness", async () => {
     const originalAiBase = Bun.env.HANASAND_AI_API_BASE;
     delete Bun.env.HANASAND_AI_API_BASE;

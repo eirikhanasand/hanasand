@@ -41,6 +41,45 @@ describe("compact source seeds", () => {
     expect(report.errors[0].message).toContain("safe public CTI");
   });
 
+  test("normalizes public Telegram candidate packs without marking them collectable", () => {
+    const report = importSeedBundle({
+      version: 1,
+      name: "public telegram candidates",
+      disabledByDefault: true,
+      sources: [
+        {
+          id: "tg_candidate_test",
+          name: "Public Test Channel Candidate",
+          channelHandle: "public_test_channel",
+          publicUrl: "https://t.me/public_test_channel",
+          legalNotes: "Candidate public channel; review before collection.",
+          approvalState: "pending",
+          topicTags: ["ransomware"],
+          focus: { ransomware: ["Akira"] },
+          rateLimit: { minIntervalSeconds: 600 },
+          compliance: { approvalScope: "public_requires_review", legalBasis: "Public CTI monitoring review." },
+          trustScore: 0.52
+        }
+      ]
+    }, { dryRun: true, importedAt: "2026-07-02T00:00:00.000Z" });
+
+    expect(report.valid).toBe(true);
+    expect(report.accepted[0]).toMatchObject({
+      id: "tg_candidate_test",
+      type: "telegram_public",
+      url: "https://t.me/public_test_channel",
+      accessMethod: "public_http",
+      status: "candidate",
+      risk: "medium",
+      governance: { approvalState: "pending", approvalRequired: true },
+      metadata: {
+        publicTelegramCandidate: true,
+        disabledByDefault: true,
+        sourceFamily: "telegram_public"
+      }
+    });
+  });
+
   test("returns buyer-visible atlas and marketplace rows", () => {
     const atlas = buildTiSourceAtlasApiResponse({ recordLimit: 25, queries: ["APT29"] });
     const manifest = buildTiSourceAtlasExportManifestApiResponse({ recordLimit: 25 });

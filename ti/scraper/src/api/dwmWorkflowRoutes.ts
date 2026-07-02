@@ -4,6 +4,7 @@ import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
+import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
 import { json, readJson } from "./http.ts";
 import { buildWebhookRequestBody, findWebhookDestination, inferWebhookKind, organizationWebhookDestinations, resolveOrganizationScope, webhookHeaders, type WebhookDestination } from "./organizationRoutes.ts";
 import type { OrganizationMember } from "./organizationRoutes.ts";
@@ -163,6 +164,7 @@ export function listDwmAlerts(url: URL, options: ApiServerOptions, request?: Req
       rebuildDwmRuntimeAlerts({ store: options.store as any, tenantId, organizationId: scope.organizationId, visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization) });
     }
   }
+  ensureExposureQueueDwmAlerts(options, { tenantId, organizationId: scope.organizationId });
   const alerts = (options.store as any).listDwmAlerts?.() ?? [];
   const visibleAlerts = alerts
     .filter((row: any) => row.tenantId === tenantId)
@@ -1253,6 +1255,181 @@ function captureVisibleForScope(capture: RawCapture, tenantId: string, sourceIds
   if (captureTenantId && captureTenantId !== tenantId) return false;
   const sourceId = String((capture as any).sourceId ?? "").trim();
   return !sourceId || sourceIds.has(sourceId);
+}
+
+function ensureExposureQueueDwmAlerts(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string }) {
+  if (typeof (options.store as any).saveDwmAlert !== "function") return { savedAlertCount: 0 };
+  const generatedAt = nowIso();
+  const existingAlerts = (options.store as any).listDwmAlerts?.() ?? [];
+  let savedAlertCount = 0;
+
+  for (const claim of exposureClaimsFromStore(options.store, "").slice(0, 50)) {
+    const claimTenantId = String((claim as any).tenantId ?? scope.tenantId ?? "default");
+    if (claimTenantId !== scope.tenantId) continue;
+    const alert = buildExposureQueueDwmAlert(options, claim, scope, generatedAt);
+    const existing = existingAlerts.find((row: any) =>
+      row.id === alert.id
+      || row.dedupeKey === alert.dedupeKey
+      || row.webhookDelivery?.dedupeKey === alert.dedupeKey
+      || row.workflowContext?.exposureQueueId === alert.workflowContext.exposureQueueId
+    );
+    (options.store as any).saveDwmAlert(mergeExposureQueueDwmAlert(existing, alert, generatedAt));
+    savedAlertCount++;
+  }
+
+  return { savedAlertCount };
+}
+
+function buildExposureQueueDwmAlert(options: ApiServerOptions, claim: any, scope: { tenantId: string; organizationId?: string }, generatedAt: string) {
+  const source = (options.store as any).getSource?.(claim.sourceId);
+  const sourceFamily = exposureAlertSourceFamily(claim, source);
+  const observedAt = String(claim.collectedAt ?? claim.claimTime ?? generatedAt);
+  const firstSeenAt = String(claim.claimTime ?? claim.collectedAt ?? generatedAt);
+  const confidence = confidencePercent(claim.confidence);
+  const dedupeKey = stableId("dwm_dedupe", `${scope.tenantId}:${scope.organizationId ?? "default"}:exposure_queue:${claim.id}`);
+  const evidenceId = String(claim.id ?? stableId("exposure_claim", `${claim.actor}:${claim.company}:${firstSeenAt}`));
+  const sourceId = String(claim.sourceId ?? source?.id ?? stableId("src_exposure", claim.sourceName ?? claim.actor ?? "unknown"));
+  const sourceName = String(claim.sourceName ?? source?.name ?? `${claim.actor ?? "Unknown actor"} exposure source`);
+  const safeExcerpt = safeExposureAlertExcerpt(claim.summary || `${claim.actor} claimed ${claim.company}. ${claim.claimedData ?? "New victim claim."}`);
+  return {
+    id: stableId("dwm_alert", dedupeKey),
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    eventType: "darkweb.exposure.claim",
+    severity: confidence >= 85 ? "high" : "medium",
+    confidence,
+    matchedTerm: { kind: "company", value: String(claim.company ?? "Unknown company") },
+    company: String(claim.company ?? "Unknown company"),
+    actor: String(claim.actor ?? "Unknown actor"),
+    artifactType: "exposure_claim",
+    sourceFamily,
+    sourceCount: 1,
+    firstSeenAt,
+    lastSeenAt: observedAt,
+    claimSummary: `${claim.actor ?? "Unknown actor"} exposure claim for ${claim.company ?? "Unknown company"}: ${claim.claimedData ?? "new victim claim"}.`,
+    matchContext: {
+      normalizedTerm: String(claim.company ?? "").toLowerCase(),
+      termKind: "company",
+      matchType: "exposure_queue_claim",
+      matchedFieldHints: ["exposure_queue.company", "exposure_queue.actor", "exposure_queue.claimedData"]
+    },
+    evidenceSummary: {
+      evidenceCount: 1,
+      sourceFamilyCounts: { [sourceFamily]: 1 },
+      metadataOnlyCount: claim.metadataOnly === false ? 0 : 1,
+      publicSafeCount: claim.metadataOnly === false ? 1 : 0,
+      firstObservedAt: firstSeenAt,
+      lastObservedAt: observedAt
+    },
+    routingContext: {
+      queue: "exposure_alert",
+      urgency: "same_day",
+      customerVisibleEvidence: claim.metadataOnly === false ? "redacted_excerpt" : "metadata_only",
+      reason: "Fresh exposure queue claim was promoted into the DWM alert workflow."
+    },
+    confidenceReasoning: [
+      "Alert was generated from the persisted exposure queue, not from a demo case.",
+      `Actor: ${claim.actor ?? "unknown"}; company: ${claim.company ?? "unknown"}; claim data: ${claim.claimedData ?? "new victim claim"}.`,
+      `Source: ${sourceName}; parser confidence ${confidence}%.`
+    ],
+    provenance: {
+      generatedAt,
+      matchBasis: "exposure_queue_claim",
+      matchedEvidenceIds: [evidenceId],
+      sourceFamilies: [sourceFamily],
+      captureIds: [evidenceId],
+      sourceIds: [sourceId],
+      extractorVersions: ["exposure-queue-alert-bridge-v1"],
+      metadataOnly: claim.metadataOnly !== false
+    },
+    dedupeKey,
+    reviewState: claim.status === "needs_review" ? "needs_review" : "new",
+    workflowStatus: "new",
+    deliveryState: "pending_review",
+    recommendedAction: "Open the exposure claim, verify the victim match, then assign or route to case/webhook.",
+    recommendedRoute: "exposure_alert",
+    evidence: [{
+      id: evidenceId,
+      sourceId,
+      sourceName,
+      sourceFamily,
+      url: claim.url,
+      firstSeenAt,
+      observedAt,
+      captureMode: "metadata_only",
+      redactionState: claim.metadataOnly === false ? "redacted" : "metadata_only",
+      contentHash: String(claim.provenanceHash ?? stableId("exposure_claim_hash", evidenceId)),
+      excerpt: safeExcerpt,
+      provenance: {
+        captureId: evidenceId,
+        sourceId,
+        sourceType: String(source?.type ?? ""),
+        collector: "exposure_queue",
+        captureMode: "metadata_only",
+        retentionClass: "leak_metadata",
+        storageKind: "metadata_only",
+        metadataOnly: claim.metadataOnly !== false
+      }
+    }],
+    webhookDelivery: {
+      recommendedRoute: "exposure_alert",
+      payloadHash: stableId("dwm_payload", dedupeKey),
+      dedupeKey
+    },
+    workflowContext: {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      source: "exposure_queue",
+      exposureQueueId: evidenceId,
+      exposureQueuePath: `/api/dwm/exposure-queue?q=${encodeURIComponent(String(claim.company ?? claim.actor ?? ""))}`,
+      alertGeneratorKeys: [`exposure_queue:${evidenceId}`],
+      captureIds: [evidenceId],
+      sourceIds: [sourceId],
+      sourceFamily
+    },
+    createdAt: generatedAt,
+    updatedAt: generatedAt
+  };
+}
+
+function mergeExposureQueueDwmAlert(existing: any | undefined, next: any, generatedAt: string) {
+  if (!existing) return next;
+  return {
+    ...next,
+    workflowEvents: existing.workflowEvents ?? [],
+    workflowStatus: existing.workflowStatus ?? next.workflowStatus,
+    reviewState: existing.reviewState ?? next.reviewState,
+    deliveryState: existing.deliveryState ?? next.deliveryState,
+    assignedOwner: existing.assignedOwner,
+    severityOverride: existing.severityOverride,
+    caseId: existing.caseId,
+    casePath: existing.casePath,
+    replayCount: existing.replayCount,
+    createdAt: existing.createdAt ?? next.createdAt,
+    updatedAt: generatedAt
+  };
+}
+
+function exposureAlertSourceFamily(claim: any, source: any): string {
+  const raw = String(claim.sourceFamily ?? source?.metadata?.sourceFamily ?? source?.type ?? "").toLowerCase();
+  if (raw.includes("telegram")) return "telegram_public";
+  if (raw.includes("advisory") || raw.includes("news") || raw.includes("public_report")) return "public_advisory";
+  if (raw.includes("clear")) return "clear_web";
+  if (raw.includes("actor") || raw.includes("ransom") || raw.includes("victim") || raw.includes("dark") || raw.includes("tor") || raw.includes("i2p") || raw.includes("freenet")) return "darkweb_metadata";
+  return "darkweb_metadata";
+}
+
+function confidencePercent(value: unknown): number {
+  const numeric = Number(value ?? 0.74);
+  if (!Number.isFinite(numeric)) return 74;
+  return Math.max(1, Math.min(99, Math.round(numeric <= 1 ? numeric * 100 : numeric)));
+}
+
+function safeExposureAlertExcerpt(value: unknown): string {
+  return String(value ?? "")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\b\d{8,}\b/g, "[number]")
+    .slice(0, 240);
 }
 
 function isUnhelpfulWatchDomain(domain: string): boolean {

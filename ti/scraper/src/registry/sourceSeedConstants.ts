@@ -1,4 +1,4 @@
-export const SAFE_TYPES = new Set(["rss", "static_web", "api", "pdf"]);
+export const SAFE_TYPES = new Set(["rss", "static_web", "api", "pdf", "telegram_public"]);
 export const SAFE_ACCESS = new Set(["public_http", "official_api"]);
 export const ACTORS = [
   "APT29",

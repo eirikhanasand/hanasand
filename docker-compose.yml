@@ -109,7 +109,7 @@ services:
       TI_CANARY_MAX_QUEUE_SIZE: 10000
       TI_SOURCE_TARGET_COUNT: 1000
       TI_SOURCE_SEED_ACTIVATE: "true"
-      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
+      TI_SOURCE_SEED_PATHS: /app/ti/scraper/seeds/public_cti_sources.json,/app/ti/scraper/seeds/public_cti_starter_pack.json,/app/ti/scraper/seeds/public_telegram_channel_packs.json,/app/ti/scraper/seeds/high_value_exposure_source_candidates.json,/app/ti/scraper/seeds/restricted_metadata_source_packs.json
       TI_IMPORT_RESTRICTED_METADATA_SOURCES: ${TI_IMPORT_RESTRICTED_METADATA_SOURCES:-false}
       TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES: ${TI_IMPORT_CREDENTIAL_REQUIRED_SOURCES:-false}
       HANASAND_AI_API_BASE: ${HANASAND_AI_API_BASE:-}

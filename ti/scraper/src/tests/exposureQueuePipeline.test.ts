@@ -36,6 +36,51 @@ describe("DWM exposure queue pipeline", () => {
     expect(searchBody.rows.some((row: any) => row.victimName === "Contoso Energy" && row.actor === "BlackSuit")).toBe(true);
   });
 
+  test("bridges exposure queue captures into persisted DWM alerts without fake case state", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    const claim = {
+      sourceName: "Example actor leak monitor",
+      title: "Akira has just published a new victim: Northwind Health",
+      text: "Akira victim: Northwind Health. 15 GB claimed from shared drives.",
+      publishedAt: "2026-07-02T00:10:00.000Z",
+      url: "https://news.example.test/northwind-health"
+    };
+
+    await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ items: [claim] })
+    }), options);
+
+    const first = await handleApiRequest(new Request("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
+    const firstBody = await first.json() as any;
+    const exposureAlert = firstBody.alerts.find((alert: any) => alert.workflowContext?.source === "exposure_queue" && alert.company === "Northwind Health");
+
+    expect(first.status).toBe(200);
+    expect(exposureAlert).toMatchObject({
+      eventType: "darkweb.exposure.claim",
+      artifactType: "exposure_claim",
+      recommendedRoute: "exposure_alert",
+      workflowStatus: "new",
+      workflowContext: {
+        source: "exposure_queue"
+      }
+    });
+    expect(exposureAlert.caseId).toBeUndefined();
+    expect(exposureAlert.caseHandoff.identity.caseIdCandidate).toMatch(/^case_/);
+    expect(exposureAlert.evidence[0]).toMatchObject({
+      sourceName: "Example actor leak monitor",
+      captureMode: "metadata_only",
+      provenance: { collector: "exposure_queue", metadataOnly: true }
+    });
+
+    const second = await handleApiRequest(new Request("http://local/v1/dwm/alerts?sourceFamily=darkweb_metadata"), options);
+    const secondBody = await second.json() as any;
+    const exposureAlerts = secondBody.alerts.filter((alert: any) => alert.workflowContext?.source === "exposure_queue" && alert.company === "Northwind Health");
+    expect(exposureAlerts).toHaveLength(1);
+  });
+
   test("promotes collected scraper findings into the exposure queue automatically", async () => {
     const store = new InMemoryScraperStore();
     await saveExposureClaimFromCollectedItem(store, {

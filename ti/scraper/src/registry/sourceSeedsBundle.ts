@@ -37,7 +37,8 @@ export function explainSourceForQuery(source: SourceRecord, query: string): any 
 function buildSeedImportReport(bundle: any, options: any) {
   const importedAt = options.importedAt ?? nowIso(), seen = new Map<string, any>();
   const duplicates: any[] = [], errors: any[] = [], accepted: SourceRecord[] = [];
-  for (const source of bundle.sources ?? []) {
+  for (const rawSource of bundle.sources ?? []) {
+    const source = normalizeSeedSource(rawSource, bundle);
     const key = seedDuplicateKey(source);
     if (seen.has(key)) duplicates.push({ key, sourceId: source.id, existingSourceId: seen.get(key)?.id });
     seen.set(key, source);
@@ -49,6 +50,51 @@ function buildSeedImportReport(bundle: any, options: any) {
   return { dryRun: options.dryRun ?? false, valid: errors.length === 0 && duplicates.length === 0, accepted, errors, duplicates, compliance: { missingCatalog: [], missingLegalNotes: errors.filter((error) => String(error.message).includes("legal")), overlappingCoverage: duplicates }, activation: { approved: accepted.length } };
 }
 
+function normalizeSeedSource(source: any, bundle: any) {
+  if (source.type || source.url || !source.publicUrl) return source;
+  const disabledByDefault = bundle.disabledByDefault === true;
+  const approvalState = source.approvalState ?? (disabledByDefault ? "pending" : "approved");
+  const minIntervalSeconds = Number(source.rateLimit?.minIntervalSeconds ?? 3600);
+  return {
+    ...source,
+    type: "telegram_public",
+    url: source.publicUrl,
+    accessMethod: "public_http",
+    status: source.status ?? "candidate",
+    risk: source.risk ?? "medium",
+    crawlFrequencySeconds: Number.isFinite(minIntervalSeconds) ? Math.max(300, minIntervalSeconds) : 3600,
+    legalNotes: source.legalNotes ?? source.compliance?.legalBasis ?? "Public Telegram candidate requires review before collection.",
+    catalog: {
+      ...(source.catalog ?? {}),
+      approvalScope: source.compliance?.approvalScope ?? "public_requires_review",
+      adapterCompatibility: ["telegram_public"],
+      collection: {
+        freshnessTargetSeconds: Number.isFinite(minIntervalSeconds) ? Math.max(300, minIntervalSeconds) : 3600
+      }
+    },
+    governance: {
+      ...(source.governance ?? {}),
+      approvalState,
+      approvalRequired: true,
+      approvalScope: source.compliance?.approvalScope ?? "public_requires_review",
+      metadataOnly: false
+    },
+    metadata: {
+      ...(source.metadata ?? {}),
+      sourceFamily: "telegram_public",
+      publicTelegramCandidate: true,
+      disabledByDefault,
+      channelHandle: source.channelHandle,
+      topicTags: source.topicTags ?? [],
+      focus: source.focus ?? {},
+      rateLimit: source.rateLimit ?? {},
+      compliance: source.compliance ?? {},
+      retentionClass: source.retentionClass,
+      approvalState
+    }
+  };
+}
+
 function toSourceRecord(source: any, at: string): SourceRecord {
-  return { id: source.id ?? stableId("src", source.url), name: source.name ?? source.url, type: source.type, url: source.url, accessMethod: source.accessMethod, status: source.status ?? "candidate", risk: source.risk ?? "low", trustScore: source.trustScore ?? 0.7, crawlFrequencySeconds: source.crawlFrequencySeconds ?? 3600, legalNotes: source.legalNotes ?? "", tenantId: source.tenantId, createdAt: source.createdAt ?? at, updatedAt: at, metadata: source.metadata ?? {}, catalog: source.catalog };
+  return { id: source.id ?? stableId("src", source.url), name: source.name ?? source.url, type: source.type, url: source.url, accessMethod: source.accessMethod, status: source.status ?? "candidate", risk: source.risk ?? "low", trustScore: source.trustScore ?? 0.7, crawlFrequencySeconds: source.crawlFrequencySeconds ?? 3600, legalNotes: source.legalNotes ?? "", tenantId: source.tenantId, language: source.language, createdAt: source.createdAt ?? at, updatedAt: at, metadata: source.metadata ?? {}, catalog: source.catalog, governance: source.governance };
 }
