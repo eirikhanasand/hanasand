@@ -779,11 +779,11 @@ async function tryScraperSearch(scraperBase: string, query: string): Promise<TiS
                 resultState: publicState,
                 headline: publicState === 'partial'
                     ? 'Instant actor context is ready while live discovery continues.'
-                    : 'Live discovery is still building an evidence-backed answer.',
+                    : 'Live discovery is still checking current sources.',
                 nextSteps: [{
                     state: 'queued',
                     label: publicState === 'partial' ? 'Searching' : 'Searching',
-                    detail: 'Live discovery is still building an evidence-backed answer.',
+                    detail: 'Live discovery is still checking current sources.',
                     tone: 'watch'
                 }]
             } satisfies TiAnalystLoop
@@ -1315,7 +1315,7 @@ function analystHeadline(state: TiResultState, meaningfulWorkCount: number, revi
     if (state === 'needs_source_activation') return 'Operator or legal approval is needed before metadata-only collection can continue.'
     if (state === 'queued') return 'Approved safe collection is queued and waiting for worker progress.'
     if (state === 'ready') return 'Reviewed evidence is ready for the public answer.'
-    return 'Live discovery is still building an evidence-backed answer.'
+    return 'Live discovery is still checking current sources.'
 }
 
 interface ParsedLeakClaim {
@@ -1491,7 +1491,7 @@ function operationalHeadline(state: TiOperationalStatus['state'], queued: number
     if (state === 'degraded') return `Scheduler is working with ${retryDebt} retry/backoff item${retryDebt === 1 ? '' : 's'}.`
     if (state === 'metadata_review') return 'Metadata-only review is waiting for analyst action.'
     if (state === 'needs_source_activation') return 'Source approval or restore action is required before collection can continue.'
-    if (state === 'partial') return 'Live public discovery returned partial evidence; scraper scheduler telemetry is not attached.'
+    if (state === 'partial') return 'Live public discovery has partial evidence; scraper scheduler telemetry is not attached.'
     if (state === 'searching') return leased > 0 ? `${leased} task${leased === 1 ? ' is' : 's are'} leased to scraper workers.` : 'Live discovery is running.'
     if (state === 'queued') return `${queued} task${queued === 1 ? ' is' : 's are'} queued and waiting for worker capacity.`
     if (state === 'ready') return 'No scheduler pressure is visible for this query.'
@@ -1631,16 +1631,16 @@ function watchlistCandidatesForKnownActor(query: string, known: KnownActorContex
     const normalized = query.trim().toLowerCase()
     const fixed = normalized === 'apt29' || normalized.includes('cozy bear') || normalized.includes('midnight blizzard')
         ? [
-            { kind: 'company' as const, value: 'Microsoft', reason: 'Public reporting and returned actor profile include Microsoft email intrusion context.', confidence: 0.78 },
-            { kind: 'vendor' as const, value: 'SolarWinds', reason: 'Public reporting and returned actor profile include SolarWinds supply-chain campaign context.', confidence: 0.78 },
-            { kind: 'company' as const, value: 'Hewlett Packard Enterprise', reason: 'Public reporting and returned actor profile include HPE cloud email intrusion context.', confidence: 0.7 },
+            { kind: 'company' as const, value: 'Microsoft', reason: 'Public reporting and the actor profile include Microsoft email intrusion context.', confidence: 0.78 },
+            { kind: 'vendor' as const, value: 'SolarWinds', reason: 'Public reporting and the actor profile include SolarWinds supply-chain campaign context.', confidence: 0.78 },
+            { kind: 'company' as const, value: 'Hewlett Packard Enterprise', reason: 'Public reporting and the actor profile include HPE cloud email intrusion context.', confidence: 0.7 },
             { kind: 'domain' as const, value: 'microsoft.com', reason: 'Domain watchlist term for Microsoft-related exposure routing.', confidence: 0.62 }
         ]
         : []
     const sectorCandidates = known.targets.slice(0, 3).map(target => ({
         kind: 'vendor' as const,
         value: target.sector,
-        reason: `Actor target sector from returned profile: ${target.rationale}`,
+        reason: `Actor target sector from this profile: ${target.rationale}`,
         confidence: Math.min(target.confidence, 0.68)
     }))
     return uniqueCandidates([...fixed, ...sectorCandidates]).slice(0, 10)
@@ -1754,7 +1754,7 @@ function knownActorProfile(query: string): KnownActorContext | null {
                 confidenceReasoning: [
                     'Aliases and attribution are corroborated across government and vendor reporting.',
                     'Victim observations include named organizations, sectors, timeframes, and source basis.',
-                    'Tradecraft aligns with returned ATT&CK techniques for credential, cloud, email, and command-and-control activity.'
+                    'Tradecraft aligns with mapped ATT&CK techniques for credential, cloud, email, and command-and-control activity.'
                 ],
                 sourceProvenance: [
                     'CISA and allied government SVR/APT29 advisories',
@@ -2344,7 +2344,7 @@ function inferBaselineTtps(summary: string): TiTtp[] {
         {
             name: 'Source-driven TTP enrichment pending',
             tactic: 'Review',
-            detail: 'The profile is known, but technique mapping waits for source-backed campaign evidence.',
+            detail: 'The profile is known, but technique mapping waits for campaign source details.',
             confidence: 0.4,
         },
     ]
@@ -2863,7 +2863,7 @@ function liveDatasets(): TiDataset[] {
         { name: 'Live clear-web search', type: 'clear_web', coverage: 'Real-time public web discovery plus approved scraper captures', status: 'available' },
         { name: 'Public Telegram/channel mentions', type: 'public_channel', coverage: 'Public channels only through official APIs', status: 'planned', url: 'https://core.telegram.org/bots/api' },
         { name: 'Darknet/leak metadata', type: 'darknet_metadata', coverage: 'Metadata-only actor/victim/date claims; no leaked file downloads', status: 'metadata_only' },
-        { name: 'STIX-like export bundle', type: 'stix_export', coverage: 'Evidence-backed indicators/entities/relationships once live captures exist', status: 'planned', url: 'https://oasis-open.github.io/cti-documentation/' }
+        { name: 'STIX-like export bundle', type: 'stix_export', coverage: 'Indicators, entities, and relationships once live captures exist', status: 'planned', url: 'https://oasis-open.github.io/cti-documentation/' }
     ]
 }
 
