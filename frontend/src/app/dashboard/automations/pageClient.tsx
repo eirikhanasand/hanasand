@@ -83,6 +83,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
 
     const selected = useMemo(() => automations.find(item => item.id === selectedId) || null, [automations, selectedId])
     const activeAutomationCount = useMemo(() => automations.filter(item => item.status === 'active').length, [automations])
+    const failingAutomationCount = useMemo(() => automations.filter(item => item.consecutiveFailures || item.lastStatus === 'failed').length, [automations])
     const selectedHealth = selected ? routeHealthFor(selected) : routeHealthForDraft(draft)
 
     useEffect(() => {
@@ -113,6 +114,7 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             setSelectedId(nextSelected)
             if (nextSelected) {
                 const details = await fetchAutomation(nextSelected)
+                setDraft(toDraft(details.automation))
                 setRuns(Array.isArray(details.runs) ? details.runs : [])
             } else {
                 setRuns([])
@@ -241,25 +243,32 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
     }
 
     return (
-        <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]'>
+        <div className='grid min-h-0 gap-3 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]'>
             <section className='rounded-lg border border-[#26344d] bg-[#101827] p-2 shadow-sm'>
                 <div className='mb-2 flex items-center justify-between gap-2 px-2 py-1'>
                     <div>
-                        <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Delivery routes</p>
-                        <h2 className='text-sm font-semibold text-[#edf4ff]'>{activeAutomationCount}/{maxActiveAutomations} active</h2>
+                        <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Route queue</p>
+                        <h2 className='text-sm font-semibold text-[#edf4ff]'>{routeQueueHeadline(automations.length, failingAutomationCount)}</h2>
+                        <p className='mt-0.5 text-xs text-[#8fa0ba]'>{activeAutomationCount}/{maxActiveAutomations} active routes</p>
                     </div>
                     <button type='button' className='inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] text-[#9db8ff] hover:bg-[#162033]' onClick={newAutomation} title='New alert' aria-label='New alert'>
                         <Plus className='h-4 w-4' />
                     </button>
                 </div>
-                <div className='mb-2 grid grid-cols-2 gap-2 px-2'>
-                    <button type='button' className='rounded-lg border border-[#27364f] bg-[#0b121e] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useMailAlertTemplate}>
-                        Mail health
-                    </button>
-                    <button type='button' className='rounded-lg border border-[#27364f] bg-[#0b121e] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useSystemAlertTemplate}>
-                        Discord alert
-                    </button>
-                </div>
+                <details className='mb-2 rounded-lg border border-[#27364f] bg-[#0b121e]'>
+                    <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-2 py-2 text-xs font-semibold text-[#dbe7ff] outline-none hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                        <span>Templates</span>
+                        <span className='text-[#8fa0ba]'>Mail, Discord</span>
+                    </summary>
+                    <div className='grid grid-cols-2 gap-2 border-t border-[#27364f] p-2'>
+                        <button type='button' className='rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useMailAlertTemplate}>
+                            Mail health
+                        </button>
+                        <button type='button' className='rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-2 text-left text-xs font-semibold text-[#dbe7ff] hover:border-[#3c5072] hover:bg-[#15284b]' onClick={useSystemAlertTemplate}>
+                            Discord alert
+                        </button>
+                    </div>
+                </details>
                 <div className='grid gap-2'>
                     {automations.map(automation => (
                         <button
@@ -274,8 +283,6 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                             <div className='mt-3 grid grid-cols-2 gap-2 text-[11px] text-[#8fa0ba]'>
                                 <QueueFact label='Next' value={shortDate(automation.nextRunAt || automation.runAt)} />
                                 <QueueFact label='Last' value={automation.lastStatus || 'checking'} tone={automation.consecutiveFailures ? 'bad' : automation.lastStatus === 'completed' ? 'ok' : 'neutral'} />
-                                <QueueFact label='Cadence' value={scheduleShort(automation)} />
-                                <QueueFact label='Issues' value={String(automation.consecutiveFailures || 0)} tone={automation.consecutiveFailures ? 'bad' : 'ok'} />
                             </div>
                             <div className='mt-2 flex items-center justify-between gap-2'>
                                 <p className='truncate text-[11px] text-[#8fa0ba]'>{alertCategoryLabel(automation.actionType)}</p>
@@ -297,7 +304,6 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                         <div className='flex flex-wrap gap-2'>
                             <IconButton label='Refresh' icon={<RefreshCw className='h-4 w-4' />} onClick={() => void load()} />
                             {selected && <IconButton label='Check now' icon={<Play className='h-4 w-4' />} onClick={() => void runNow(selected.id)} disabled={busy.startsWith('run-')} />}
-                            {selected && <IconButton label='Delete' icon={<Trash2 className='h-4 w-4' />} tone='danger' onClick={() => void removeAutomation(selected.id)} disabled={busy.startsWith('delete-')} />}
                         </div>
                     </div>
 
@@ -473,6 +479,19 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
                     </div>
 
                     {selected && (
+                        <details className={disclosureClass}>
+                            <summary className={disclosureSummaryClass}>
+                                <span>More route actions</span>
+                                <span className='text-xs font-medium text-[#8fa0ba]'>Secondary</span>
+                            </summary>
+                            <div className='flex flex-wrap items-center justify-between gap-3 border-t border-[#27364f] p-3'>
+                                <p className='text-sm text-[#aab7cc]'>Delete this alert route only when the delivery path is no longer owned or useful.</p>
+                                <IconButton label='Delete' icon={<Trash2 className='h-4 w-4' />} tone='danger' onClick={() => void removeAutomation(selected.id)} disabled={busy.startsWith('delete-')} />
+                            </div>
+                        </details>
+                    )}
+
+                    {selected && (
                         <details data-testid='automation-run-history' className={disclosureClass}>
                             <summary className={disclosureSummaryClass}>
                                 <span>Run history</span>
@@ -506,6 +525,13 @@ export default function AutomationsClient({ setup }: { setup?: 'dwm' }) {
             </section>
         </div>
     )
+}
+
+function routeQueueHeadline(total: number, failing: number) {
+    if (!total) return 'No routes yet'
+    if (failing === 1) return '1 route needs attention'
+    if (failing) return `${failing} routes need attention`
+    return 'Routes are quiet'
 }
 
 function IconButton({ label, icon, onClick, tone = 'default', disabled = false }: { label: string, icon: React.ReactNode, onClick: () => void, tone?: 'default' | 'danger', disabled?: boolean }) {
