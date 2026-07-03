@@ -379,22 +379,22 @@ function ArtifactList({
                 <details
                     key={`${artifact.kind}-${artifact.title}-${index}`}
                     open={forceExpanded || index === artifacts.length - 1}
-                    className={`rounded-xl border bg-[#202020] p-3 ${artifact.kind === 'screenshot' ? 'border-[#555550]' : index === artifacts.length - 1 ? 'border-[#444440]' : 'border-[#30302e]'}`}
+                    className='rounded-lg border border-ui-border bg-ui-panel p-3'
                 >
                     <summary className='cursor-pointer list-none'>
                         <div className='flex items-center justify-between gap-3'>
                             <div>
-                                <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{artifactKindLabel(artifact.kind)}</div>
-                                <div className='mt-1 text-sm font-medium text-[#eeeeea]'>{artifact.title}</div>
+                                <div className='text-[10px] uppercase tracking-[0.16em] text-ui-muted'>{artifactKindLabel(artifact.kind)}</div>
+                                <div className='mt-1 text-sm font-medium text-ui-text'>{artifact.title}</div>
                             </div>
                             <div className='flex items-center gap-2'>
                                 {artifact.kind === 'screenshot' ? (
-                                    <div className='rounded-full bg-[#30302e] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d3d3ce]'>
+                                    <div className='rounded-full bg-ui-raised px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-ui-muted'>
                                         Verification
                                     </div>
                                 ) : null}
                                 {index === artifacts.length - 1 ? (
-                                    <div className='rounded-full bg-[#30302e] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d3d3ce]'>
+                                    <div className='rounded-full bg-ui-raised px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-ui-muted'>
                                         Newest
                                     </div>
                                 ) : null}
@@ -402,15 +402,15 @@ function ArtifactList({
                         </div>
                     </summary>
                     {artifact.url ? (
-                        <a href={artifact.url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-xs text-[#d3d3ce] hover:underline'>
+                        <a href={artifact.url} target='_blank' rel='noopener noreferrer' className='mt-2 inline-flex items-center gap-1.5 text-xs text-ui-muted hover:underline'>
                             {artifact.url}
                             <ExternalLink className='h-3.5 w-3.5' />
                         </a>
                     ) : null}
                     {artifact.dataUrl ? (
                         <button type='button' onClick={() => onPreview(artifact)} className='mt-3 block w-full text-left'>
-                            <Image src={artifact.dataUrl} alt={artifact.title} width={1200} height={800} className='max-h-72 w-full rounded-lg object-contain outline outline-[#30302e] transition hover:opacity-92' />
-                            <div className='mt-2 text-xs text-[#9a9a95]'>Open full-size preview</div>
+                            <Image src={artifact.dataUrl} alt={artifact.title} width={1200} height={800} className='max-h-72 w-full rounded-lg object-contain outline outline-ui-border transition hover:opacity-92' />
+                            <div className='mt-2 text-xs text-ui-muted'>Open full-size preview</div>
                         </button>
                     ) : null}
                     {artifact.kind === 'diff' && artifact.content ? (
@@ -432,12 +432,12 @@ function ArtifactTextContent({ artifact }: { artifact: AIArtifact }) {
 
     return (
         <div className='mt-3'>
-            <pre className='max-h-72 overflow-auto rounded-lg bg-[#151515] p-3 text-xs leading-5 text-[#d3d3ce]'>{visibleContent}</pre>
+            <pre className='max-h-72 overflow-auto rounded-lg bg-ui-canvas p-3 text-xs leading-5 text-ui-muted'>{visibleContent}</pre>
             {shouldCollapse ? (
                 <button
                     type='button'
                     onClick={() => setExpanded((prev) => !prev)}
-                    className='mt-2 text-xs text-[#d3d3ce] hover:underline'
+                    className='mt-2 text-xs text-ui-muted hover:underline'
                 >
                     {expanded ? 'Collapse output' : `Expand full output (${lines.length} lines)`}
                 </button>
@@ -459,17 +459,17 @@ function ArtifactPreviewOverlay({
 
     return (
         <div className='fixed inset-0 z-200 flex items-center justify-center bg-ui-canvas/82 p-4 backdrop-blur-sm' onClick={onClose}>
-            <div className='w-full max-w-6xl rounded-3xl bg-[#070909] p-4 outline outline-white/10' onClick={(event) => event.stopPropagation()}>
+            <div className='w-full max-w-6xl rounded-lg bg-ui-canvas p-4 outline outline-ui-border/10' onClick={(event) => event.stopPropagation()}>
                 <div className='mb-3 flex items-center justify-between gap-3'>
                     <div>
-                        <div className='text-[10px] uppercase tracking-[0.16em] text-[#858581]'>{artifactKindLabel(artifact.kind)}</div>
-                        <div className='mt-1 text-sm font-medium text-[#eeeeea]'>{artifact.title}</div>
+                        <div className='text-[10px] uppercase tracking-[0.16em] text-ui-muted'>{artifactKindLabel(artifact.kind)}</div>
+                        <div className='mt-1 text-sm font-medium text-ui-text'>{artifact.title}</div>
                     </div>
-                    <button type='button' onClick={onClose} className='rounded-full bg-ui-panel/5 p-2 text-[#d3d3ce] outline outline-white/10 transition hover:bg-ui-panel/8'>
+                    <button type='button' onClick={onClose} className='rounded-lg bg-ui-raised p-2 text-ui-muted outline outline-ui-border/10 transition hover:text-ui-text'>
                         <X className='h-4 w-4' />
                     </button>
                 </div>
-                <div className='overflow-auto rounded-2xl bg-ui-canvas/30 p-3'>
+                <div className='overflow-auto rounded-lg bg-ui-raised p-3'>
                     <Image src={artifact.dataUrl} alt={artifact.title} width={1600} height={1200} className='max-h-[78vh] w-full object-contain' />
                 </div>
             </div>
@@ -484,7 +484,7 @@ function DiffArtifact({ content }: { content: string }) {
             {lines.map((line, index) => (
                 <div
                     key={`${line}-${index}`}
-                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-[#283026] text-[#b9c8b0]' : line.startsWith('-') ? 'bg-[#352321] text-[#d8aaa5]' : 'text-[#b7b7b2]'}`}
+                    className={`whitespace-pre-wrap break-all rounded px-2 ${line.startsWith('+') ? 'bg-ui-success/10 text-ui-success' : line.startsWith('-') ? 'bg-ui-danger/10 text-ui-danger' : 'text-ui-muted'}`}
                 >
                     {line || ' '}
                 </div>
@@ -513,9 +513,9 @@ function BrowserVerificationCard({
     const issueLines = [...summary.pageErrors, ...summary.consoleMessages].slice(0, 4)
 
     return (
-        <div className={`rounded-2xl border px-4 py-3 ${summary.status === 'passed' ? 'border-[#3b4537] bg-[#20251f] text-[#d9e3d4]' : 'border-[#4a4030] bg-[#27231d] text-[#e6d6b7]'}`}>
+        <div className={`rounded-lg border px-4 py-3 ${summary.status === 'passed' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'}`}>
             <div className='flex items-start gap-3'>
-                <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${summary.status === 'passed' ? 'bg-[#30382d] text-[#d9e3d4]' : 'bg-[#332c21] text-[#e6d6b7]'}`}>
+                <div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${summary.status === 'passed' ? 'bg-ui-success/15 text-ui-success' : 'bg-ui-warning/15 text-ui-warning'}`}>
                     {summary.status === 'passed' ? <CheckCircle2 className='h-4 w-4' /> : <AlertTriangle className='h-4 w-4' />}
                 </div>
                 <div className='min-w-0 flex-1'>
