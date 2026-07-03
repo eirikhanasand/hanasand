@@ -83,7 +83,7 @@ extension RateLimitsNativePanel {
     func issueKeyPanel(_ overview: DashboardRateLimitOverview) -> some View {
         NativeGroupPanel(title: "Issue API key", subtitle: "Create a scoped token without leaving the Desktop app.") {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 210), spacing: 10)], alignment: .leading, spacing: 10) {
-                nativeTextField("Owner user ID", text: $model.rateLimitKeyOwnerID, placeholder: "Defaults to settings user id")
+                ownerPicker
                 nativeTextField("Key name", text: $model.rateLimitKeyName, placeholder: "Desktop automation")
                 nativeTextField("Tier", text: $model.rateLimitKeyTier, placeholder: "starter")
                 nativeTextField("Scope route", text: $model.rateLimitKeyRoute, placeholder: overview.routes.first.map { "\($0.method) \($0.route)" } ?? "GET /api/")
@@ -114,6 +114,96 @@ extension RateLimitsNativePanel {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             }
         }
+    }
+
+    var ownerPicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Owner")
+                .font(.system(size: 10, weight: .black))
+                .foregroundStyle(theme.textTertiary)
+                .textCase(.uppercase)
+            TextField("Search users or paste exact ID", text: $model.rateLimitKeyOwnerID, onEditingChanged: { editing in
+                ownerPickerFocused = editing
+            })
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.text)
+                .padding(11)
+                .background(theme.field)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            if let selectedOwner {
+                Text("Selected \(selectedOwner.ownerPickerLabel)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+            } else if !model.rateLimitKeyOwnerID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text("Using exact ID \(model.rateLimitKeyOwnerID.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+            } else {
+                Text("Choose a user or paste a known user ID.")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.textTertiary)
+            }
+
+            if ownerPickerFocused {
+                VStack(alignment: .leading, spacing: 4) {
+                    if model.users.isEmpty {
+                        Text("Load users to search owners, or paste an exact ID.")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.textTertiary)
+                    } else if filteredOwnerUsers.isEmpty {
+                        Text("No matching users. Paste an exact ID to use it.")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(theme.textTertiary)
+                    } else {
+                        ForEach(filteredOwnerUsers) { user in
+                            Button {
+                                model.rateLimitKeyOwnerID = user.id
+                                ownerPickerFocused = false
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(user.displayName)
+                                        .font(.system(size: 11, weight: .bold))
+                                        .foregroundStyle(theme.text)
+                                    Text([user.organization, user.roleLabel, user.id].compactMap { value in
+                                        guard let value, !value.isEmpty else { return nil }
+                                        return value
+                                    }.joined(separator: " · "))
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(theme.textTertiary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(8)
+                            .background(theme.field.opacity(user.id == model.rateLimitKeyOwnerID ? 1 : 0.55))
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                }
+                .padding(8)
+                .background(theme.cardRaised.opacity(0.92))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+        }
+    }
+
+    var selectedOwner: DashboardUser? {
+        model.users.first { $0.id == model.rateLimitKeyOwnerID.trimmingCharacters(in: .whitespacesAndNewlines) }
+    }
+
+    var filteredOwnerUsers: [DashboardUser] {
+        let query = model.rateLimitKeyOwnerID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let candidates = model.users.sorted { first, second in
+            if first.active == false && second.active != false { return false }
+            if first.active != false && second.active == false { return true }
+            return first.displayName.localizedCaseInsensitiveCompare(second.displayName) == .orderedAscending
+        }
+        if query.isEmpty {
+            return Array(candidates.prefix(5))
+        }
+        return Array(candidates.filter { $0.ownerSearchText.contains(query) }.prefix(5))
     }
 
     func nativeTextField(_ label: String, text: Binding<String>, placeholder: String) -> some View {

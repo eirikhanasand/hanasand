@@ -67,7 +67,7 @@ extension RateLimitsNativePanel {
             }
 
             if overview.settings.overrides.isEmpty {
-                Text("No route overrides are configured.")
+                Text("No route exceptions are configured.")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
             } else {

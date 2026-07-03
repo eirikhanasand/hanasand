@@ -7,6 +7,16 @@ const srcRoot = path.join(root, 'src')
 const metadataFile = path.join(srcRoot, 'app', 'metadata.tsx')
 const errors = []
 const bannedPublicCopyPatterns = [
+    /\bGlobal API pressure\b/i,
+    /\broute overrides\b/i,
+    /\bscoped tiered tokens\b/i,
+    /\bnow live in the same surface\b/i,
+    /\btuned independently\b/i,
+    /\bwill appear here\b/i,
+    /\bIssue owner-linked keys\b/i,
+    /\bOwner user ID\b/i,
+    /\bindependent second,\s*minute,\s*hour,\s*and day budgets\b/i,
+    /\bper second,\s*minute,\s*hour,\s*and day\b/i,
     /\bcurrent proof\b/i,
     /\bcustomer workflow proof\b/i,
     /\bentitlement readiness\b/i,
@@ -15,6 +25,98 @@ const bannedPublicCopyPatterns = [
     /\bwhat is backed by loaded readiness data\b/i,
     /\binspect readiness\b/i,
     /\bopen readiness\b/i,
+    /\bscraper posts metadata\b/i,
+    /\bHanasand AI parser output\b/i,
+    /\bAI parser output\b/i,
+    /\bactor-page,\s*public-channel\b/i,
+    /\bcollection cycle\b/i,
+    /\bstatus attaching\b/i,
+    /\bsource attaching\b/i,
+    /\bsource registry is attaching\b/i,
+    /\brequest attaching\b/i,
+    /\bentity attaching\b/i,
+    /\bAttach fresh source\/capture provenance\b/i,
+    /\bSource operations are quiet\b/i,
+    /\bLog stream quiet\b/i,
+    /\bLog stream is quiet\b/i,
+    /\bQuery watcher quiet\b/i,
+    /\bHealthy quiet\b/i,
+    /\bproof jobs\b/i,
+    /\bproof failures\b/i,
+    /\bcollecting proof\b/i,
+    /\bland here\b/i,
+    /\bpins here\b/i,
+    /\bpinned here\b/i,
+    /\bstay pinned here\b/i,
+    /\brecent results are pinned\b/i,
+    /\bpin the first row\b/i,
+    /\battached here\b/i,
+    /\bstay visible here\b/i,
+    /\bpublished a snapshot\b/i,
+    /\bsnapshot poll\b/i,
+    /\bn\/a\b/i,
+    /\bafter the next scan\b/i,
+    /\binternal API checks\b/i,
+    /\bis quiet\b/i,
+    /\bare quiet\b/i,
+    /\battaches after\b/i,
+    /\bBackground jobs loaded\b/i,
+    /\bLoaded alert settings\b/i,
+    /\bNo failures recorded\b/i,
+    /\bnot scheduled\b/i,
+    /\bRoute will not check\b/i,
+    /\bOperational readiness\b/i,
+    /\bProduct readiness\b/i,
+    /\bThreat monitoring readiness\b/i,
+    /\breadiness contract\b/i,
+    /\bProof source\b/i,
+    /\bReadiness groups\b/i,
+    /\bOperational evidence\b/i,
+    /\bProduct readiness ledger\b/i,
+    /\bbackend proof rows\b/i,
+    /\bLedger state\b/i,
+    /\bReadiness source\b/i,
+    /\bProof APIs\b/i,
+    /\bfresh proof\b/i,
+    /\bsnapshot loaded\b/i,
+    /\bNo backed route returned\b/i,
+    /\bUI proof\b/i,
+    /\btraffic snapshot\b/i,
+    /\brequest snapshots\b/i,
+    /\bLive snapshot\b/i,
+    /\bSource snapshot\b/i,
+    /\bproduct snapshot\b/i,
+    /\bin this snapshot\b/i,
+    /\bbackend error\b/i,
+    /\bDocker snapshot\b/i,
+    /\bControl feed loaded\b/i,
+    /\bprofile snapshots\b/i,
+    /\bRestore readiness\b/i,
+    /\brestricted metadata\b/i,
+    /\bdraft loaded\b/i,
+    /\bparser output\b/i,
+    /\bstate unavailable\b/i,
+    /\bRequest metadata\b/i,
+    /\bparser issue\b/i,
+    /\bmetadata-only boundaries\b/i,
+    /\bwaiting on live checks\b/i,
+    /\bpublic TI action contract\b/i,
+    /\bsaved alerts loaded\b/i,
+    /\bAlert rebuild state is loading source coverage\b/i,
+    /\bWorkflow state is loading runtime data\b/i,
+    /\bloaded but not active\b/i,
+    /\bevidence item(?:s)? loaded\b/i,
+    /\bReplay waiting on live checks\b/i,
+    /\bOrganization loaded\b/i,
+    /\bWatchlist loaded\b/i,
+    /\bWebhook destination loaded\b/i,
+    /\bSupport audit trail loaded\b/i,
+    /\bSupport audit loaded\b/i,
+    /\bBacked case workflow loaded\b/i,
+    /\bSource worker status loaded\b/i,
+    /\bSource coverage loaded\b/i,
+    /\bAlerts loaded\b/i,
+    /\bDestination loaded\b/i,
 ]
 const bannedStaticExposureQueuePatterns = [
     /\bconst\s+feedRows\s*=/,
@@ -26,6 +128,22 @@ const bannedStaticExposureQueuePatterns = [
 const bannedRuntimeDwmDemoPatterns = [
     /\b2026-06-27T\b/,
     />Live<\/span>/,
+]
+const bannedLegacyBackgroundPatterns = [
+    { pattern: /\bBackgroundSketches\b/, label: 'old sketch background component' },
+    { pattern: /\bbackground-sketch\b/, label: 'old line-art sketch background class' },
+    { pattern: /\blumbermill-sketch\b/, label: 'old line-art sketch background class' },
+    { pattern: /\bfuture-cabin-sketch\b/, label: 'old line-art sketch background class' },
+    { pattern: /--grid-line\b/, label: 'old rectangular atmosphere grid token' },
+    { pattern: /linear-gradient\(var\(--grid-line\)/, label: 'old rectangular atmosphere grid background' },
+    { pattern: /linear-gradient\(90deg,\s*var\(--grid-line\)/, label: 'old rectangular atmosphere grid background' },
+]
+const bannedAiMetricsBlockerPatterns = [
+    /\bLaunch blockers\b/i,
+    /\bneeds proof\b/i,
+    /\bneeds work\b/i,
+    /\bThe product is on the right path\b/i,
+    /\bNext:\s*run more jobs\b/i,
 ]
 const canonicalSpacingScale = new Map([
     ['0rem', '0'],
@@ -107,6 +225,14 @@ const canonicalAliasClasses = new Map([
 ])
 
 const sourceFiles = await collectSourceFiles(srcRoot)
+const visualGuardFiles = [
+    ...sourceFiles,
+    path.join(srcRoot, 'app', 'globals.css'),
+]
+
+for (const filePath of visualGuardFiles) {
+    await validateLegacyBackgroundPatterns(filePath)
+}
 
 for (const filePath of sourceFiles) {
     const text = await fs.readFile(filePath, 'utf8')
@@ -119,6 +245,7 @@ for (const filePath of sourceFiles) {
 
     validateStaticExposureQueue(filePath, source, text)
     validateRuntimeDwmDemo(filePath, source, text)
+    validateAiMetricsCopy(filePath, source, text)
 
     visit(source, (node) => {
         if (ts.isJsxText(node)) {
@@ -205,6 +332,27 @@ function validateRuntimeDwmDemo(filePath, source, text) {
         if (!match || match.index === undefined) continue
         const position = source.getLineAndCharacterOfPosition(match.index)
         errors.push(`${relativePath}:${position.line + 1}:${position.character + 1}: DWM runtime demo must not present stale fixed dates or fake live labels matching ${pattern}.`)
+    }
+}
+
+function validateAiMetricsCopy(filePath, source, text) {
+    const relativePath = relative(filePath)
+    if (relativePath !== path.join('src', 'app', 'dashboard', 'system', 'ai', 'pageClient.tsx')) return
+    for (const pattern of bannedAiMetricsBlockerPatterns) {
+        const match = text.match(pattern)
+        if (!match || match.index === undefined) continue
+        const position = source.getLineAndCharacterOfPosition(match.index)
+        errors.push(`${relativePath}:${position.line + 1}:${position.character + 1}: AI Metrics must show operational evidence or exact internal action gates, not launch-blocker/prompt-answer copy matching ${pattern}.`)
+    }
+}
+
+async function validateLegacyBackgroundPatterns(filePath) {
+    const text = await fs.readFile(filePath, 'utf8')
+    for (const { pattern, label } of bannedLegacyBackgroundPatterns) {
+        const match = text.match(pattern)
+        if (!match || match.index === undefined) continue
+        const position = lineAndColumn(text, match.index)
+        errors.push(`${relative(filePath)}:${position.line}:${position.column}: ${label} is banned. Use the blue dotted site atmosphere or the clean loading spinner surface instead.`)
     }
 }
 
@@ -460,14 +608,41 @@ function relative(filePath) {
     return path.relative(root, filePath)
 }
 
+function lineAndColumn(text, index) {
+    const before = text.slice(0, index)
+    const lines = before.split(/\r?\n/)
+    return {
+        line: lines.length,
+        column: lines.at(-1).length + 1,
+    }
+}
+
 function shouldValidateStringLiteral(node) {
     if (ts.isJsxAttribute(node.parent)) {
-        return false
+        return isCopyAttribute(node.parent)
     }
 
     if (ts.isJsxExpression(node.parent) && ts.isJsxAttribute(node.parent.parent)) {
-        return false
+        return isCopyAttribute(node.parent.parent)
     }
 
     return true
+}
+
+function isCopyAttribute(attribute) {
+    const name = attribute.name?.getText?.() || ''
+    return new Set([
+        'aria-label',
+        'body',
+        'description',
+        'detail',
+        'empty',
+        'fallback',
+        'label',
+        'message',
+        'placeholder',
+        'subtitle',
+        'title',
+        'value',
+    ]).has(name)
 }

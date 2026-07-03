@@ -61,6 +61,7 @@ extension DesktopAgentModel {
                 await loadProfileSecurityData()
             } else if path == "/dashboard/system/rate-limits" {
                 await loadRateLimitApiKeys()
+                await loadDashboardUsersForOwnerPicker()
             } else if path == "/users" || path == "/dashboard/management" {
                 await loadDashboardRolesForUserManagement()
                 await loadSelectedUserRoles()
@@ -68,6 +69,22 @@ extension DesktopAgentModel {
         } catch {
             nativeDashboardStatus = error.localizedDescription
             nativeDashboardPayload = "Could not load \(endpoint.label): \(error.localizedDescription)"
+        }
+    }
+
+    func loadDashboardUsersForOwnerPicker() async {
+        guard hasHanasandAuth else {
+            users = []
+            return
+        }
+
+        do {
+            users = try await requestJSON(
+                settings.apiBaseURL.normalizedBaseURL.appendingAPIPath("users"),
+                authenticated: true
+            )
+        } catch {
+            append(meta: "Users", body: "Could not load owner picker users: \(error.localizedDescription)", kind: .error)
         }
     }
 

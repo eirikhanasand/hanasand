@@ -16,4 +16,5 @@ struct RateLimitsNativePanel: View {
     @Environment(\.desktopTheme) var theme
 
     @State var searchText = ""; @State var deletingApiKey: DashboardApiKeySummary?
+    @State var ownerPickerFocused = false
 }

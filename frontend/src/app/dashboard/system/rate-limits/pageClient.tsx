@@ -1,8 +1,8 @@
 'use client'
 
 import type { Dispatch, SetStateAction } from 'react'
-import { useMemo, useState } from 'react'
-import { Copy, Plus, Save, Trash2 } from 'lucide-react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Copy, Plus, RefreshCw, Save, Search, Trash2 } from 'lucide-react'
 import config from '@/config'
 import { getCookie } from '@/utils/cookies/cookies'
 import { DashboardPanel } from '@/components/dashboard/ui'
@@ -79,6 +79,16 @@ const emptyDraft: DraftApiKey = {
     scopes: [],
 }
 
+type OwnerUserOption = {
+    id: string
+    name: string
+    email?: string
+    organization?: string
+    organizationIds?: string
+    role?: string
+    active?: boolean
+}
+
 export default function RateLimitsPageClient({
     initialSettings,
     routes,
@@ -97,6 +107,10 @@ export default function RateLimitsPageClient({
     const [message, setMessage] = useState<string | null>(null)
     const [keyMessage, setKeyMessage] = useState<string | null>(null)
     const [issuedSecret, setIssuedSecret] = useState<string | null>(null)
+    const [ownerUsers, setOwnerUsers] = useState<OwnerUserOption[]>([])
+    const [ownerUsersLoading, setOwnerUsersLoading] = useState(false)
+    const [ownerUsersError, setOwnerUsersError] = useState<string | null>(null)
+    const [workspace, setWorkspace] = useState<'keys' | 'policy'>('keys')
     const activeTierPresets = tierPresets.length ? tierPresets : fallbackTierPresets
     const tierPresetIds = activeTierPresets.map((preset) => preset.id)
     const tierPresetMap = useMemo(
@@ -119,6 +133,53 @@ export default function RateLimitsPageClient({
     )
     const routeCount = routes.length
     const overrideCount = settings.overrides.filter((override) => override.enabled).length
+    const draftReady = Boolean(draft.ownerId.trim() && draft.name.trim() && draftScopeValidation.valid)
+    const draftReadiness = !draft.ownerId.trim()
+        ? 'Choose an owner'
+        : !draft.name.trim()
+            ? 'Name the key'
+            : !draftScopeValidation.valid
+                ? draftScopeValidation.message
+                : 'Ready to issue'
+
+    const loadOwnerUsers = useCallback(async () => {
+        const token = getCookie('access_token')
+        const id = getCookie('id')
+        if (!token || !id) {
+            setOwnerUsersError('Sign in again to search users.')
+            return
+        }
+
+        setOwnerUsersLoading(true)
+        setOwnerUsersError(null)
+        try {
+            const response = await fetch(`${config.url.api}/users`, {
+                headers: {
+                    Authorization: `Bearer ${decodeURIComponent(token)}`,
+                    id,
+                },
+            })
+            const payload = await response.json().catch(() => [])
+            if (response.status === 404) {
+                setOwnerUsers([])
+                return
+            }
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to load users.')
+            }
+            const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.users) ? payload.users : []
+            setOwnerUsers((rows.map(normalizeOwnerUser).filter(Boolean) as OwnerUserOption[]).sort(sortOwnerUsers))
+        } catch (error) {
+            setOwnerUsers([])
+            setOwnerUsersError(error instanceof Error ? error.message : 'Unable to load users.')
+        } finally {
+            setOwnerUsersLoading(false)
+        }
+    }, [])
+
+    useEffect(() => {
+        void loadOwnerUsers()
+    }, [loadOwnerUsers])
 
     async function saveSettings() {
         const token = getCookie('access_token')
@@ -169,7 +230,7 @@ export default function RateLimitsPageClient({
         }
 
         if (!draft.ownerId.trim() || !draft.name.trim()) {
-            setKeyMessage('Owner ID and key name are required.')
+            setKeyMessage('Choose an owner and enter a key name.')
             return
         }
 
@@ -416,12 +477,12 @@ export default function RateLimitsPageClient({
                 <div className='grid gap-4 2xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:items-start'>
                     <div className='max-w-3xl'>
                         <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>System</p>
-                        <h1 className='mt-1 text-xl font-semibold tracking-[-0.04em] text-bright/94'>Rate limits and API keys</h1>
+                        <h1 className='mt-1 text-xl font-semibold tracking-[-0.04em] text-bright/94'>Traffic policy and access keys</h1>
                         <p className='mt-2 text-sm leading-6 text-bright/72'>
-                            Global API pressure, route overrides, and scoped tiered tokens now live in the same surface. Each token can be narrowed to exact endpoints and tuned independently per second, minute, hour, and day.
+                            Control request pressure, route exceptions, and owner-linked integration keys from one console.
                         </p>
                         <p className='mt-2 text-xs leading-5 text-bright/42'>
-                            Enforcement happens in the Hanasand API process itself, not via nginx or Lua. Saving here updates the shared settings store and the in-process cache, so behavior changes without a proxy reload.
+                            Saves take effect immediately for live traffic. Route rows below show what is protected and which keys can use it.
                         </p>
                     </div>
                     <div className='grid gap-2 sm:grid-cols-2'>
@@ -432,33 +493,58 @@ export default function RateLimitsPageClient({
                     </div>
                 </div>
                 <div className='mt-4 flex flex-wrap items-center gap-2'>
-                    <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                        <input
-                            type='checkbox'
-                            checked={settings.enabled}
-                            onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
-                            className='h-4 w-4 accent-[#f07d33]'
-                        />
-                        Enabled
-                    </label>
-                    <div className='rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs text-bright/55'>
-                        Global updates are immediate in-process and fall through the shared settings store on the next refresh window.
+                    <div className='inline-flex rounded-xl border border-white/10 bg-black/20 p-1' role='group' aria-label='Rate-limit workspace'>
+                        {([
+                            ['keys', 'Access keys'],
+                            ['policy', 'Traffic policy'],
+                        ] as const).map(([key, label]) => (
+                            <button
+                                key={key}
+                                type='button'
+                                onClick={() => setWorkspace(key)}
+                                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                                    workspace === key ? 'bg-[#f07d33]/18 text-[#ffd2b0]' : 'text-bright/58 hover:bg-white/6 hover:text-bright/86'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
-                    <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
-                        <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                            <span className='text-xs text-bright/52'>Updated</span>
-                            <span>{settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'never'}</span>
-                        </label>
-                        <button
-                            type='button'
-                            onClick={saveSettings}
-                            disabled={saving || !overrideValidation.valid}
-                            className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
-                        >
-                            <Save className='h-4 w-4' />
-                            {saving ? 'Saving...' : 'Save'}
-                        </button>
-                    </div>
+                    {workspace === 'policy' ? (
+                        <>
+                            <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                                <input
+                                    type='checkbox'
+                                    checked={settings.enabled}
+                                    onChange={(event) => setSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
+                                    className='h-4 w-4 accent-[#f07d33]'
+                                />
+                                Enabled
+                            </label>
+                            <div className='rounded-xl border border-white/10 bg-black/15 px-3 py-2 text-xs text-bright/55'>
+                                Global changes apply to new requests immediately.
+                            </div>
+                            <div className='flex flex-wrap items-center gap-2 sm:ml-auto'>
+                                <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
+                                    <span className='text-xs text-bright/52'>Updated</span>
+                                    <span>{settings.updatedAt ? new Date(settings.updatedAt).toLocaleString() : 'never'}</span>
+                                </label>
+                                <button
+                                    type='button'
+                                    onClick={saveSettings}
+                                    disabled={saving || !overrideValidation.valid}
+                                    className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                                >
+                                    <Save className='h-4 w-4' />
+                                    {saving ? 'Saving...' : 'Save policy'}
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <div className={`rounded-xl border px-3 py-2 text-sm sm:ml-auto ${draftReady ? 'border-emerald-500/20 bg-emerald-500/8 text-emerald-100' : 'border-amber-500/20 bg-amber-500/8 text-amber-100'}`}>
+                            {draftReadiness}
+                        </div>
+                    )}
                 </div>
                 <div className='mt-3 flex flex-wrap items-center gap-3 text-xs text-bright/48'>
                     {settings.updatedBy ? <span>saved by `{settings.updatedBy}`</span> : null}
@@ -466,229 +552,258 @@ export default function RateLimitsPageClient({
                 </div>
             </DashboardPanel>
 
-            <div className='grid gap-4 xl:grid-cols-3'>
-                {scopeOrder.map((scope) => (
-                    <DashboardPanel key={scope} className='p-4 sm:p-5'>
-                        <div className='flex items-start justify-between gap-3'>
-                            <div>
-                                <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>{scope}</p>
-                                <h2 className='mt-1 text-base font-semibold text-bright/90'>Default policy</h2>
-                            </div>
-                            <div className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/55'>
-                                all API routes
-                            </div>
-                        </div>
-                        <div className='mt-4 grid gap-3'>
-                            <NumberField
-                                label='Window (ms)'
-                                value={settings.defaults[scope].windowMs}
-                                min={1000}
-                                onChange={(value) => updateDefault(scope, 'windowMs', value)}
-                            />
-                            <NumberField
-                                label='Requests per window'
-                                value={settings.defaults[scope].maxRequests}
-                                min={1}
-                                onChange={(value) => updateDefault(scope, 'maxRequests', value)}
-                            />
-                        </div>
-                    </DashboardPanel>
-                ))}
-            </div>
-
-            <DashboardPanel className='p-4 sm:p-5'>
-                <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
-                    <div>
-                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Overrides</p>
-                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Per-endpoint tuning</h2>
-                        <p className='mt-1 text-sm text-bright/60'>
-                            Tighten or loosen specific routes without changing the defaults for the rest of the API.
-                        </p>
+            {workspace === 'policy' ? (
+                <>
+                    <div className='grid gap-4 xl:grid-cols-3'>
+                        {scopeOrder.map((scope) => (
+                            <DashboardPanel key={scope} className='p-4 sm:p-5'>
+                                <div className='flex items-start justify-between gap-3'>
+                                    <div>
+                                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>{scope}</p>
+                                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Default policy</h2>
+                                    </div>
+                                    <div className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/55'>
+                                        all routes
+                                    </div>
+                                </div>
+                                <div className='mt-4 grid gap-3'>
+                                    <NumberField
+                                        label='Window (ms)'
+                                        value={settings.defaults[scope].windowMs}
+                                        min={1000}
+                                        onChange={(value) => updateDefault(scope, 'windowMs', value)}
+                                    />
+                                    <NumberField
+                                        label='Requests per window'
+                                        value={settings.defaults[scope].maxRequests}
+                                        min={1}
+                                        onChange={(value) => updateDefault(scope, 'maxRequests', value)}
+                                    />
+                                </div>
+                            </DashboardPanel>
+                        ))}
                     </div>
-                    <button
-                        type='button'
-                        onClick={addOverride}
-                        className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
-                    >
-                        <Plus className='h-4 w-4' />
-                        Add override
-                    </button>
-                </div>
 
-                <div className='mt-4 grid gap-3'>
-                    {settings.overrides.length ? settings.overrides.map((override) => (
-                        <div key={override.id} className='grid gap-3 rounded-2xl border border-white/10 bg-black/15 p-3 lg:grid-cols-[auto_minmax(0,1fr)_10rem_10rem_8rem_auto] lg:items-end'>
-                            <label className='inline-flex items-center gap-2 text-sm text-bright/70'>
+                    <DashboardPanel className='p-4 sm:p-5'>
+                        <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+                            <div>
+                                <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Overrides</p>
+                                <h2 className='mt-1 text-base font-semibold text-bright/90'>Per-endpoint tuning</h2>
+                                <p className='mt-1 text-sm text-bright/60'>
+                                    Tighten or loosen specific routes without changing the global traffic policy.
+                                </p>
+                            </div>
+                            <button
+                                type='button'
+                                onClick={addOverride}
+                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                            >
+                                <Plus className='h-4 w-4' />
+                                Add override
+                            </button>
+                        </div>
+
+                        <div className='mt-4 grid gap-3'>
+                            {settings.overrides.length ? settings.overrides.map((override) => (
+                                <div key={override.id} className='grid gap-3 rounded-2xl border border-white/10 bg-black/15 p-3 lg:grid-cols-[auto_minmax(0,1fr)_10rem_10rem_8rem_auto] lg:items-end'>
+                                    <label className='inline-flex items-center gap-2 text-sm text-bright/70'>
+                                        <input
+                                            type='checkbox'
+                                            checked={override.enabled}
+                                            onChange={(event) => updateOverride(override.id, 'enabled', event.target.checked)}
+                                            className='h-4 w-4 accent-[#f07d33]'
+                                        />
+                                        Enabled
+                                    </label>
+                                    <RouteChooser
+                                        label='Route'
+                                        routeOptions={routeOptions}
+                                        value={`${override.method} ${override.route}`}
+                                        onChange={(value) => {
+                                            const [method, ...routeParts] = value.split(' ')
+                                            updateOverride(override.id, 'method', (method || 'GET').toUpperCase())
+                                            updateOverride(override.id, 'route', routeParts.join(' ') || '/api/')
+                                        }}
+                                    />
+                                    <SelectField
+                                        label='Scope'
+                                        value={override.scope}
+                                        options={scopeOrder}
+                                        onChange={(value) => updateOverride(override.id, 'scope', value as RateLimitScope)}
+                                    />
+                                    <NumberField
+                                        label='Window (ms)'
+                                        value={override.windowMs}
+                                        min={1000}
+                                        onChange={(value) => updateOverride(override.id, 'windowMs', value)}
+                                    />
+                                    <NumberField
+                                        label='Requests'
+                                        value={override.maxRequests}
+                                        min={1}
+                                        onChange={(value) => updateOverride(override.id, 'maxRequests', value)}
+                                    />
+                                    <RemoveButton onClick={() => removeOverride(override.id)} />
+                                </div>
+                            )) : (
+                                <EmptyState message='No route exceptions. Global policy covers every route.' />
+                            )}
+                        </div>
+                        {!overrideValidation.valid ? (
+                            <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                                {overrideValidation.message}
+                            </div>
+                        ) : null}
+                    </DashboardPanel>
+                </>
+            ) : null}
+
+            {workspace === 'keys' ? (
+                <DashboardPanel className='p-4 sm:p-5'>
+                    <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
+                        <div>
+                            <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>Access keys</p>
+                            <h2 className='mt-1 text-base font-semibold text-bright/90'>Tiered tokens</h2>
+                            <p className='mt-1 text-sm text-bright/60'>
+                                Pick an owner, choose the routes this key can use, and set the budget for each scope.
+                            </p>
+                        </div>
+                        {keyMessage ? <div className='text-sm text-[#fdc89c]'>{keyMessage}</div> : null}
+                    </div>
+
+                    <div className='mt-4 rounded-2xl border border-white/10 bg-black/15 p-4'>
+                        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+                            <OwnerUserPicker
+                                label='Owner'
+                                value={draft.ownerId}
+                                users={ownerUsers}
+                                loading={ownerUsersLoading}
+                                error={ownerUsersError}
+                                onChange={(value) => setDraft((prev) => ({ ...prev, ownerId: value }))}
+                                onRefresh={loadOwnerUsers}
+                            />
+                            <TextField label='Key name' value={draft.name} onChange={(value) => setDraft((prev) => ({ ...prev, name: value }))} />
+                            <SelectField
+                                label='Tier'
+                                value={draft.tier}
+                                options={tierPresetIds}
+                                onChange={(value) => applyDraftTierPreset(value)}
+                            />
+                            <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
+                        </div>
+                        <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
+                            <TextField label='Description' value={draft.description} onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))} />
+                            <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
                                 <input
                                     type='checkbox'
-                                    checked={override.enabled}
-                                    onChange={(event) => updateOverride(override.id, 'enabled', event.target.checked)}
+                                    checked={draft.enabled}
+                                    onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))}
                                     className='h-4 w-4 accent-[#f07d33]'
                                 />
                                 Enabled
                             </label>
-                            <RouteChooser
-                                label='Route'
-                                routeOptions={routeOptions}
-                                value={`${override.method} ${override.route}`}
-                                onChange={(value) => {
-                                    const [method, ...routeParts] = value.split(' ')
-                                    updateOverride(override.id, 'method', (method || 'GET').toUpperCase())
-                                    updateOverride(override.id, 'route', routeParts.join(' ') || '/api/')
-                                }}
-                            />
-                            <SelectField
-                                label='Scope'
-                                value={override.scope}
-                                options={scopeOrder}
-                                onChange={(value) => updateOverride(override.id, 'scope', value as RateLimitScope)}
-                            />
-                            <NumberField
-                                label='Window (ms)'
-                                value={override.windowMs}
-                                min={1000}
-                                onChange={(value) => updateOverride(override.id, 'windowMs', value)}
-                            />
-                            <NumberField
-                                label='Requests'
-                                value={override.maxRequests}
-                                min={1}
-                                onChange={(value) => updateOverride(override.id, 'maxRequests', value)}
-                            />
-                            <RemoveButton onClick={() => removeOverride(override.id)} />
                         </div>
-                    )) : (
-                        <EmptyState message='No overrides yet. The defaults above already cover every API endpoint.' />
-                    )}
-                </div>
-                {!overrideValidation.valid ? (
-                    <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
-                        {overrideValidation.message}
-                    </div>
-                ) : null}
-            </DashboardPanel>
-
-            <DashboardPanel className='p-4 sm:p-5'>
-                <div className='flex flex-col gap-3 md:flex-row md:items-center md:justify-between'>
-                    <div>
-                        <p className='text-[11px] uppercase tracking-[0.24em] text-bright/35'>API Keys</p>
-                        <h2 className='mt-1 text-base font-semibold text-bright/90'>Tiered tokens</h2>
-                        <p className='mt-1 text-sm text-bright/60'>
-                            Issue owner-linked keys, scope them to exact endpoints, and give each scope independent second, minute, hour, and day budgets.
-                        </p>
-                    </div>
-                    {keyMessage ? <div className='text-sm text-[#fdc89c]'>{keyMessage}</div> : null}
-                </div>
-
-                <div className='mt-4 rounded-2xl border border-white/10 bg-black/15 p-4'>
-                    <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                        <TextField label='Owner user ID' value={draft.ownerId} onChange={(value) => setDraft((prev) => ({ ...prev, ownerId: value }))} />
-                        <TextField label='Key name' value={draft.name} onChange={(value) => setDraft((prev) => ({ ...prev, name: value }))} />
-                        <SelectField
-                            label='Tier'
-                            value={draft.tier}
-                            options={tierPresetIds}
-                            onChange={(value) => applyDraftTierPreset(value)}
-                        />
-                        <TextField label='Expires at (ISO)' value={draft.expiresAt} onChange={(value) => setDraft((prev) => ({ ...prev, expiresAt: value }))} />
-                    </div>
-                    <div className='mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end'>
-                        <TextField label='Description' value={draft.description} onChange={(value) => setDraft((prev) => ({ ...prev, description: value }))} />
-                        <label className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78'>
-                            <input
-                                type='checkbox'
-                                checked={draft.enabled}
-                                onChange={(event) => setDraft((prev) => ({ ...prev, enabled: event.target.checked }))}
-                                className='h-4 w-4 accent-[#f07d33]'
-                            />
-                            Enabled
-                        </label>
-                    </div>
-                    <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-bright/54'>
-                        <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 uppercase tracking-[0.18em] text-bright/48'>Preset</span>
-                        <span>{draftTierPreset.label}: {draftTierPreset.description}</span>
-                        <span>New scopes inherit the selected tier, and changing tier reapplies that preset across the draft key.</span>
-                    </div>
-
-                    <div className='mt-4 flex items-center justify-between gap-3'>
-                        <h3 className='text-sm font-medium text-bright/84'>Scoped endpoint limits</h3>
-                        <button
-                            type='button'
-                            onClick={addScopeToDraft}
-                            className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
-                        >
-                            <Plus className='h-4 w-4' />
-                            Add scope
-                        </button>
-                    </div>
-                    <div className='mt-3 grid gap-3'>
-                        {draft.scopes.length ? draft.scopes.map((scope, index) => (
-                            <ApiKeyScopeEditor
-                                key={scope.id}
-                                scope={scope}
-                                routeOptions={routeOptions}
-                                title={`Draft scope ${index + 1}`}
-                                onChange={(nextScope) => setDraft((prev) => ({
-                                    ...prev,
-                                    scopes: prev.scopes.map((entry) => entry.id === nextScope.id ? nextScope : entry),
-                                }))}
-                                onRemove={() => removeDraftScope(scope.id)}
-                            />
-                        )) : (
-                            <EmptyState message='No key scopes yet. Add at least one scoped route before issuing the token.' />
-                        )}
-                    </div>
-                    {!draftScopeValidation.valid ? (
-                        <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
-                            {draftScopeValidation.message}
+                        <div className='mt-3 flex flex-wrap items-center gap-2 text-xs text-bright/54'>
+                            <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 uppercase tracking-[0.18em] text-bright/48'>Preset</span>
+                            <span>{draftTierPreset.label}: {draftTierPreset.description}</span>
+                            <span>New scopes inherit this tier. Changing it updates every draft scope.</span>
                         </div>
-                    ) : null}
 
-                    <div className='mt-4 flex flex-wrap items-center gap-3'>
-                        <button
-                            type='button'
-                            onClick={createKey}
-                            disabled={saving || !draftScopeValidation.valid}
-                            className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
-                        >
-                            <Save className='h-4 w-4' />
-                            {saving ? 'Issuing...' : 'Issue API key'}
-                        </button>
-                        {issuedSecret ? (
+                        <div className='mt-4 flex items-center justify-between gap-3'>
+                            <h3 className='text-sm font-medium text-bright/84'>Scoped endpoint limits</h3>
                             <button
                                 type='button'
-                                onClick={() => navigator.clipboard.writeText(issuedSecret)}
-                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78 transition-colors hover:bg-white/8'
+                                onClick={addScopeToDraft}
+                                className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
                             >
-                                <Copy className='h-4 w-4' />
-                                Copy `{issuedSecret}`
+                                <Plus className='h-4 w-4' />
+                                Add scope
                             </button>
+                        </div>
+                        <div className='mt-3 grid gap-3'>
+                            {draft.scopes.length ? draft.scopes.map((scope, index) => (
+                                <ApiKeyScopeEditor
+                                    key={scope.id}
+                                    scope={scope}
+                                    routeOptions={routeOptions}
+                                    title={`Draft scope ${index + 1}`}
+                                    onChange={(nextScope) => setDraft((prev) => ({
+                                        ...prev,
+                                        scopes: prev.scopes.map((entry) => entry.id === nextScope.id ? nextScope : entry),
+                                    }))}
+                                    onRemove={() => removeDraftScope(scope.id)}
+                                />
+                            )) : (
+                                <div className='rounded-2xl border border-dashed border-white/12 bg-black/20 px-4 py-5'>
+                                    <p className='text-sm font-medium text-bright/82'>No endpoint scope yet.</p>
+                                    <p className='mt-1 text-sm leading-6 text-bright/55'>Add the first allowed route before issuing this key.</p>
+                                    <button
+                                        type='button'
+                                        onClick={addScopeToDraft}
+                                        className='mt-3 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                                    >
+                                        <Plus className='h-4 w-4' />
+                                        Add first scope
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {!draftScopeValidation.valid ? (
+                            <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
+                                {draftScopeValidation.message}
+                            </div>
                         ) : null}
-                    </div>
-                </div>
 
-                <div className='mt-4 grid gap-4'>
-                    {apiKeys.length ? apiKeys.map((apiKey) => (
-                        <ApiKeyCard
-                            key={apiKey.id}
-                            apiKey={apiKey}
-                            tierPresetMap={tierPresetMap}
-                            fallbackTierPresets={fallbackTierPresets}
-                            routeOptions={routeOptions}
-                            tierPresetIds={tierPresetIds}
-                            saving={saving}
-                            setApiKeys={setApiKeys}
-                            applyKeyTierPreset={applyKeyTierPreset}
-                            updateKey={updateKey}
-                            deleteKey={deleteKey}
-                            addScopeToKey={addScopeToKey}
-                            removeKeyScope={removeKeyScope}
-                        />
-                    )) : (
-                        <EmptyState message='No API keys issued yet.' />
-                    )}
-                </div>
-            </DashboardPanel>
+                        <div className='mt-4 flex flex-wrap items-center gap-3'>
+                            <button
+                                type='button'
+                                onClick={createKey}
+                                disabled={saving || !draftReady}
+                                className='inline-flex items-center gap-2 rounded-xl border border-[#f07d33]/25 bg-[#f07d33]/10 px-3 py-2 text-sm text-[#ffd2b0] transition-colors hover:bg-[#f07d33]/14 disabled:cursor-not-allowed disabled:opacity-60'
+                            >
+                                <Save className='h-4 w-4' />
+                                {saving ? 'Issuing...' : 'Issue API key'}
+                            </button>
+                            {issuedSecret ? (
+                                <button
+                                    type='button'
+                                    onClick={() => navigator.clipboard.writeText(issuedSecret)}
+                                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/78 transition-colors hover:bg-white/8'
+                                >
+                                    <Copy className='h-4 w-4' />
+                                    Copy `{issuedSecret}`
+                                </button>
+                            ) : null}
+                        </div>
+                    </div>
+
+                    <div className='mt-4 grid gap-4'>
+                        {apiKeys.length ? apiKeys.map((apiKey) => (
+                            <ApiKeyCard
+                                key={apiKey.id}
+                                apiKey={apiKey}
+                                tierPresetMap={tierPresetMap}
+                                fallbackTierPresets={fallbackTierPresets}
+                                routeOptions={routeOptions}
+                                tierPresetIds={tierPresetIds}
+                                saving={saving}
+                                ownerUsers={ownerUsers}
+                                ownerUsersLoading={ownerUsersLoading}
+                                ownerUsersError={ownerUsersError}
+                                reloadOwnerUsers={loadOwnerUsers}
+                                setApiKeys={setApiKeys}
+                                applyKeyTierPreset={applyKeyTierPreset}
+                                updateKey={updateKey}
+                                deleteKey={deleteKey}
+                                addScopeToKey={addScopeToKey}
+                                removeKeyScope={removeKeyScope}
+                            />
+                        )) : (
+                            <EmptyState message='No access keys issued yet.' />
+                        )}
+                    </div>
+                </DashboardPanel>
+            ) : null}
 
             <datalist id='rate-limit-routes'>
                 {routeOptions.map((option) => <option key={option} value={option} />)}
@@ -704,6 +819,10 @@ function ApiKeyCard({
     routeOptions,
     tierPresetIds,
     saving,
+    ownerUsers,
+    ownerUsersLoading,
+    ownerUsersError,
+    reloadOwnerUsers,
     setApiKeys,
     applyKeyTierPreset,
     updateKey,
@@ -717,6 +836,10 @@ function ApiKeyCard({
     routeOptions: string[]
     tierPresetIds: string[]
     saving: boolean
+    ownerUsers: OwnerUserOption[]
+    ownerUsersLoading: boolean
+    ownerUsersError: string | null
+    reloadOwnerUsers: () => Promise<void>
     setApiKeys: Dispatch<SetStateAction<ApiKeySummary[]>>
     applyKeyTierPreset: (keyId: string, tier: string) => void
     updateKey: (apiKey: ApiKeySummary) => Promise<void>
@@ -741,7 +864,7 @@ function ApiKeyCard({
                         </span>
                         <span className='rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-bright/50'>{apiKey.keyPrefix}</span>
                     </div>
-                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description provided.'}</p>
+                    <p className='mt-2 text-sm text-bright/60'>{apiKey.description || 'No description set.'}</p>
                     <div className='mt-2 flex flex-wrap gap-3 text-xs text-bright/45'>
                         <span>Owner `{apiKey.ownerId}`</span>
                         <span>Created {new Date(apiKey.createdAt).toLocaleString()}</span>
@@ -778,52 +901,71 @@ function ApiKeyCard({
                 </div>
             </div>
 
-            <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
-                <SelectField
-                    label='Tier'
-                    value={apiKey.tier}
-                    options={tierPresetIds}
-                    onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
-                />
-                <TextField label='Owner user ID' value={apiKey.ownerId} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))} />
-                <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
-            </div>
-            <div className='mt-3'>
-                <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
-            </div>
-            <div className='mt-3 text-xs text-bright/54'>
-                {tierPreset.description} Changing the tier reapplies the preset budget to every scope on this key. You can still fine-tune any endpoint budget afterwards.
-            </div>
-
-            <div className='mt-4 flex items-center justify-between gap-3'>
-                <h4 className='text-sm font-medium text-bright/84'>Scopes</h4>
-                <button
-                    type='button'
-                    onClick={() => addScopeToKey(apiKey.id)}
-                    className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
-                >
-                    <Plus className='h-4 w-4' />
-                    Add scope
-                </button>
-            </div>
-            <div className='mt-3 grid gap-3'>
-                {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
-                    <ApiKeyScopeEditor
-                        key={scope.id}
-                        scope={scope}
-                        routeOptions={routeOptions}
-                        title={`Scope ${index + 1}`}
-                        onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
-                            ...entry,
-                            scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
-                        } : entry))}
-                        onRemove={() => removeKeyScope(apiKey.id, scope.id)}
+            <details className='mt-4 rounded-2xl border border-white/10 bg-black/15'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-bright/84'>
+                    <span>Key settings</span>
+                    <span className='text-xs font-medium text-bright/45'>{tierPreset.label} · {apiKey.expiresAt ? 'expires' : 'no expiry'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-white/10 p-4 md:grid-cols-2 xl:grid-cols-4'>
+                    <TextField label='Name' value={apiKey.name} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, name: value } : entry))} />
+                    <SelectField
+                        label='Tier'
+                        value={apiKey.tier}
+                        options={tierPresetIds}
+                        onChange={(value) => applyKeyTierPreset(apiKey.id, value)}
                     />
-                )) : (
-                    <EmptyState message='This key has no endpoint scopes yet.' />
-                )}
-            </div>
+                    <OwnerUserPicker
+                        label='Owner'
+                        value={apiKey.ownerId}
+                        users={ownerUsers}
+                        loading={ownerUsersLoading}
+                        error={ownerUsersError}
+                        onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, ownerId: value } : entry))}
+                        onRefresh={reloadOwnerUsers}
+                    />
+                    <TextField label='Expires at (ISO)' value={apiKey.expiresAt || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, expiresAt: value || null } : entry))} />
+                    <div className='md:col-span-2 xl:col-span-4'>
+                        <TextField label='Description' value={apiKey.description || ''} onChange={(value) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? { ...entry, description: value || null } : entry))} />
+                    </div>
+                    <p className='text-xs leading-5 text-bright/54 md:col-span-2 xl:col-span-4'>
+                        {tierPreset.description}
+                    </p>
+                </div>
+            </details>
+
+            <details className='mt-3 rounded-2xl border border-white/10 bg-black/15'>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-bright/84'>
+                    <span>Endpoint scopes</span>
+                    <span className='text-xs font-medium text-bright/45'>{apiKey.scopes.length} route{apiKey.scopes.length === 1 ? '' : 's'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-white/10 p-4'>
+                    <div className='flex justify-end'>
+                        <button
+                            type='button'
+                            onClick={() => addScopeToKey(apiKey.id)}
+                            className='inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-bright/76 transition-colors hover:bg-white/8'
+                        >
+                            <Plus className='h-4 w-4' />
+                            Add scope
+                        </button>
+                    </div>
+                    {apiKey.scopes.length ? apiKey.scopes.map((scope, index) => (
+                        <ApiKeyScopeEditor
+                            key={scope.id}
+                            scope={scope}
+                            routeOptions={routeOptions}
+                            title={`Scope ${index + 1}`}
+                            onChange={(nextScope) => setApiKeys((prev) => prev.map((entry) => entry.id === apiKey.id ? {
+                                ...entry,
+                                scopes: entry.scopes.map((currentScope) => currentScope.id === nextScope.id ? nextScope : currentScope),
+                            } : entry))}
+                            onRemove={() => removeKeyScope(apiKey.id, scope.id)}
+                        />
+                    )) : (
+                        <EmptyState message='Add a scope to set endpoint limits.' />
+                    )}
+                </div>
+            </details>
             {!scopeValidation.valid ? (
                 <div className='mt-3 rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-sm text-amber-100'>
                     {scopeValidation.message}
@@ -1033,6 +1175,129 @@ function SelectField({
     )
 }
 
+function OwnerUserPicker({
+    label,
+    value,
+    users,
+    loading,
+    error,
+    onChange,
+    onRefresh,
+}: {
+    label: string
+    value: string
+    users: OwnerUserOption[]
+    loading: boolean
+    error: string | null
+    onChange: (value: string) => void
+    onRefresh: () => Promise<void>
+}) {
+    const listId = useId()
+    const rootRef = useRef<HTMLDivElement | null>(null)
+    const [query, setQuery] = useState('')
+    const [open, setOpen] = useState(false)
+    const selectedUser = users.find((user) => user.id === value.trim())
+    const exactFallback = value.trim() && !selectedUser ? value.trim() : ''
+    const filteredUsers = useMemo(() => {
+        const normalizedQuery = query.trim().toLowerCase()
+        if (!normalizedQuery) return users.slice(0, 8)
+        return users.filter((user) => ownerUserSearchText(user).includes(normalizedQuery)).slice(0, 8)
+    }, [query, users])
+
+    useEffect(() => {
+        if (open) return
+        setQuery(selectedUser ? formatOwnerUser(selectedUser) : value)
+    }, [open, selectedUser, value])
+
+    return (
+        <div
+            ref={rootRef}
+            className='relative grid gap-1.5 text-sm text-bright/68'
+            onBlur={(event) => {
+                if (!rootRef.current?.contains(event.relatedTarget as Node | null)) {
+                    setOpen(false)
+                }
+            }}
+        >
+            <span>{label}</span>
+            <div className='relative'>
+                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-bright/35' />
+                <input
+                    role='combobox'
+                    aria-label={label}
+                    aria-controls={listId}
+                    aria-expanded={open}
+                    aria-autocomplete='list'
+                    value={query}
+                    onFocus={() => setOpen(true)}
+                    onChange={(event) => {
+                        setQuery(event.target.value)
+                        setOpen(true)
+                        onChange(event.target.value)
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Escape') setOpen(false)
+                    }}
+                    placeholder='Search users or paste exact ID'
+                    className='w-full rounded-xl border border-white/10 bg-black/20 py-2 pl-9 pr-3 text-sm text-bright outline-none transition-colors focus:border-[#f07d33]/35'
+                />
+            </div>
+            {selectedUser ? (
+                <div className='text-xs text-bright/52'>Selected {formatOwnerUser(selectedUser)}</div>
+            ) : exactFallback ? (
+                <div className='text-xs text-bright/52'>Using exact ID `{exactFallback}`</div>
+            ) : (
+                <div className='text-xs text-bright/42'>Select a user or paste a known user ID.</div>
+            )}
+            {open ? (
+                <div
+                    id={listId}
+                    role='listbox'
+                    className='absolute left-0 right-0 top-[4.6rem] z-30 max-h-64 overflow-auto rounded-xl border border-white/10 bg-[#101015] p-1 shadow-2xl shadow-black/30'
+                >
+                    {loading ? (
+                        <div className='px-3 py-2 text-xs text-bright/52'>Loading users...</div>
+                    ) : error ? (
+                        <div className='grid gap-2 px-3 py-2 text-xs text-bright/58'>
+                            <span>{error}</span>
+                            <button
+                                type='button'
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => void onRefresh()}
+                                className='inline-flex w-fit items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-bright/75 transition-colors hover:bg-white/8'
+                            >
+                                <RefreshCw className='h-3.5 w-3.5' />
+                                Retry
+                            </button>
+                        </div>
+                    ) : filteredUsers.length ? (
+                        filteredUsers.map((user) => (
+                            <button
+                                key={user.id}
+                                type='button'
+                                role='option'
+                                aria-selected={user.id === value.trim()}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                    onChange(user.id)
+                                    setQuery(formatOwnerUser(user))
+                                    setOpen(false)
+                                }}
+                                className='grid w-full gap-1 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/8 aria-selected:bg-[#f07d33]/10'
+                            >
+                                <span className='text-sm text-bright/82'>{user.name || user.id}</span>
+                                <span className='text-xs text-bright/45'>{ownerUserMeta(user)}</span>
+                            </button>
+                        ))
+                    ) : (
+                        <div className='px-3 py-2 text-xs text-bright/52'>No matching users. Paste an exact ID to use it.</div>
+                    )}
+                </div>
+            ) : null}
+        </div>
+    )
+}
+
 function RouteChooser({
     label,
     routeOptions,
@@ -1056,6 +1321,59 @@ function RouteChooser({
             />
         </label>
     )
+}
+
+function normalizeOwnerUser(value: unknown): OwnerUserOption | null {
+    if (!value || typeof value !== 'object') return null
+    const entry = value as Record<string, unknown>
+    const id = stringValue(entry.id)
+    if (!id) return null
+    const name = stringValue(entry.name) || stringValue(entry.displayName) || stringValue(entry.display_name) || id
+    return {
+        id,
+        name,
+        email: stringValue(entry.email),
+        organization: stringValue(entry.organization) || stringValue(entry.organizationName) || stringValue(entry.organization_name),
+        organizationIds: stringValue(entry.organizationIds) || stringValue(entry.organization_ids),
+        role: stringValue(entry.role) || stringValue(entry.highest_role_name) || stringValue(entry.highestRoleName),
+        active: typeof entry.active === 'boolean' ? entry.active : undefined,
+    }
+}
+
+function stringValue(value: unknown) {
+    return typeof value === 'string' ? value.trim() : ''
+}
+
+function formatOwnerUser(user: OwnerUserOption) {
+    return [user.name, user.email || user.organization || user.id].filter(Boolean).join(' · ')
+}
+
+function ownerUserMeta(user: OwnerUserOption) {
+    return [
+        user.email,
+        user.organization,
+        user.organizationIds,
+        user.role,
+        user.active === false ? 'Inactive' : null,
+        user.id,
+    ].filter(Boolean).join(' · ')
+}
+
+function ownerUserSearchText(user: OwnerUserOption) {
+    return [
+        user.id,
+        user.name,
+        user.email,
+        user.organization,
+        user.organizationIds,
+        user.role,
+    ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function sortOwnerUsers(first: OwnerUserOption, second: OwnerUserOption) {
+    if (first.active === false && second.active !== false) return 1
+    if (first.active !== false && second.active === false) return -1
+    return (first.name || first.id).localeCompare(second.name || second.id)
 }
 
 function RemoveButton({ onClick }: { onClick: () => void }) {

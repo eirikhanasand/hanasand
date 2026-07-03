@@ -20,6 +20,8 @@ struct DashboardUser: Decodable, Identifiable {
     let highestRoleID: String?
     let highestRoleName: String?
     let highestRolePriority: Int?
+    let organization: String?
+    let organizationIDs: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -31,8 +33,19 @@ struct DashboardUser: Decodable, Identifiable {
         case highestRoleID = "highest_role_id"
         case highestRoleName = "highest_role_name"
         case highestRolePriority = "highest_role_priority"
+        case organization
+        case organizationIDs = "organization_ids"
     }
 
     var displayName: String { name?.isEmpty == false ? name! : id }
     var roleLabel: String { highestRoleName ?? highestRoleID ?? "No role" }
+    var ownerPickerLabel: String {
+        [displayName, organization, id].compactMap { value in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }.joined(separator: " · ")
+    }
+    var ownerSearchText: String {
+        [id, name, organization, organizationIDs, highestRoleName, highestRoleID].compactMap { $0 }.joined(separator: " ").lowercased()
+    }
 }

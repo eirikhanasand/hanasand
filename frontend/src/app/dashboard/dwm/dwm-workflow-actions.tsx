@@ -428,8 +428,8 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             <section className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#9db8ff]'>Collection command center</p>
-                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-[#edf4ff]'>First-run path</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Use this sequence when there are no alerts yet: define matching terms, ingest source evidence, rebuild alerts, open a case, then test delivery.</p>
+                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-[#edf4ff]'>Watchlist to case route</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Tune the org watchlist, collect approved sources, rebuild alerts, open cases, and test customer delivery from one path.</p>
                 </div>
                 {result ? (
                     <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>

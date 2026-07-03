@@ -49,7 +49,7 @@ extension DesktopAgentModel {
             .route("Notes", "Shared notes and operational memory.", "note.text", "/dashboard/notes"),
             .route("Traffic", "Live traffic, records, and maps.", "point.3.connected.trianglepath.dotted", "/dashboard/traffic"),
             .route("AI Metrics", "Model pool and system AI telemetry.", "sparkles", "/dashboard/system/ai"),
-            .route("Rate Limits", "API pressure, route overrides, and keys.", "gauge.with.needle", "/dashboard/system/rate-limits"),
+            .route("Rate Limits", "Traffic policy, route exceptions, and access keys.", "gauge.with.needle", "/dashboard/system/rate-limits"),
             .route("Cron Jobs", "Managed host schedules and maintenance health.", "calendar.badge.clock", "/dashboard/system/cron"),
             .route("System", "Infrastructure and VM controls.", "gearshape.2", "/dashboard/system"),
             .route("VMs", "Remote machines and access details.", "display.2", "/dashboard/vms"),
