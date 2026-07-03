@@ -62,6 +62,7 @@ assert.ok(Array.isArray(rebuild.matchedTerms) && rebuild.matchedTerms.includes(t
 
 const alerts = await getJson(`/v1/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`);
 assert.equal(alerts.response.status, 200, `alert list failed: ${alerts.response.status} ${JSON.stringify(alerts.body)}`);
+const postWatchlistAlertCount = Array.isArray(alerts.body.alerts) ? alerts.body.alerts.length : 0;
 const alert = (alerts.body.alerts ?? []).find((row: JsonRecord) => (rebuild.alertIds ?? []).includes(row.id)) ?? alerts.body.alerts?.[0];
 assert.ok(alert, "created alert was not visible through /v1/dwm/alerts.");
 assert.equal(alert.organizationId, organizationId);
@@ -90,6 +91,8 @@ console.log(JSON.stringify({
   organizationId,
   term,
   savedAlertCount: Number(rebuild.savedAlertCount ?? 0),
+  postWatchlistAlertCount,
+  alertCountDeltaFromRebuild: Number(rebuild.savedAlertCount ?? 0),
   alertIds: rebuild.alertIds,
   sourceFamilies: rebuild.sourceFamilies,
   matchedTerms: rebuild.matchedTerms,

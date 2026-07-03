@@ -110,6 +110,9 @@ try {
   assert.equal(organizationId, "org_live_probe_acme");
   assert.equal(tenantId, organizationId);
 
+  const persistedAlertCountBeforeWatchlist = store.listDwmAlerts().length;
+  assert.equal(persistedAlertCountBeforeWatchlist, 0, "captures alone should not persist alerts before a monitored term is added.");
+
   const watchlist = await postJson("/v1/dwm/watchlists", {
     organizationId,
     name: "Acme exposure watchlist",
@@ -124,6 +127,7 @@ try {
   const alerts = await getJson(`/v1/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`);
   assert.equal(alerts.response.status, 200, "alert list should return 200");
   assert.equal(alerts.body.alerts?.length, 2);
+  assert.equal(store.listDwmAlerts().length - persistedAlertCountBeforeWatchlist, 2);
   const alert = alerts.body.alerts.find((row: JsonRecord) => row.sourceFamily === "telegram_public");
   const darkwebAlert = alerts.body.alerts.find((row: JsonRecord) => row.sourceFamily === "darkweb_metadata");
   assert.ok(alert, "telegram alert should be visible.");
@@ -205,8 +209,10 @@ try {
     event: "realtime_alert_discord_smoke",
     ok: true,
     organizationId,
+    persistedAlertCountBeforeWatchlist,
     savedAlertCount: watchlist.body.alertRebuild.savedAlertCount,
     listAlertCount: alerts.body.alerts.length,
+    persistedAlertCountDelta: store.listDwmAlerts().length - persistedAlertCountBeforeWatchlist,
     deliveredCount: delivery.body.deliveredCount ?? seenDeliveries.length,
     sourceFamilies: watchlist.body.alertRebuild.sourceFamilies,
     matchedTerms: watchlist.body.alertRebuild.matchedTerms,
