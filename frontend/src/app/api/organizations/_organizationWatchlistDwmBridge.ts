@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { authApiUrl } from '@/utils/auth/authApiUrl'
 
-type MutationMethod = 'POST' | 'PUT'
+type MutationMethod = 'POST' | 'PUT' | 'DELETE'
 
 type ProxyResult = {
     payload: Record<string, any>
@@ -47,8 +47,19 @@ export function buildDwmWatchlistMirrorPayload(input: { organizationId: string, 
         name: `Org watchlist - ${value}`,
         status,
         terms: [{ id: itemId, value, kind }],
-        reason: 'organization_watchlist_saved'
+        reason: status === 'active' ? 'organization_watchlist_saved' : 'organization_watchlist_lifecycle_updated'
     }
+}
+
+export function buildDwmWatchlistMirrorPayloads(input: { organizationId: string, organizationPayload: Record<string, any> }): DwmWatchlistMirrorPayload[] {
+    const items = [
+        input.organizationPayload.watchlistItem,
+        ...arrayOfRecords(input.organizationPayload.archivedItems),
+    ].filter(Boolean) as Record<string, any>[]
+    const payloads = items
+        .map(watchlistItem => buildDwmWatchlistMirrorPayload({ organizationId: input.organizationId, watchlistItem }))
+        .filter((payload): payload is DwmWatchlistMirrorPayload => Boolean(payload))
+    return Array.from(new Map(payloads.map(payload => [payload.id, payload])).values())
 }
 
 async function forwardOrganizationMutation(request: NextRequest, path: string, method: MutationMethod, bodyText: string): Promise<ProxyResult> {
@@ -90,48 +101,67 @@ async function forwardOrganizationMutation(request: NextRequest, path: string, m
 
 async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizationId: string, organizationPayload: Record<string, any>) {
     const base = process.env.TI_SCRAPER_API_BASE?.replace(/\/$/, '')
-    const mirrorPayload = buildDwmWatchlistMirrorPayload({ organizationId, watchlistItem: organizationPayload.watchlistItem })
+    const mirrorPayloads = buildDwmWatchlistMirrorPayloads({ organizationId, organizationPayload })
     if (!base) {
-        return { ok: false, skipped: true, reason: 'ti_scraper_api_base_unset', mirrorPayload }
+        return { ok: false, skipped: true, reason: 'ti_scraper_api_base_unset', mirrorPayloads }
     }
-    if (!mirrorPayload) {
-        return { ok: false, skipped: true, reason: 'missing_watchlist_item', mirrorPayload: null }
+    if (!mirrorPayloads.length) {
+        return { ok: false, skipped: true, reason: 'missing_watchlist_item', mirrorPayloads: [] }
     }
 
     try {
         const cookieStore = await cookies()
         const token = cookieStore.get('access_token')?.value || bearerToken(request.headers.get('authorization')) || ''
         const id = cookieStore.get('id')?.value || request.headers.get('id') || ''
-        const response = await fetch(new URL('/v1/dwm/watchlists', base), {
-            method: 'POST',
-            cache: 'no-store',
-            headers: {
-                'content-type': 'application/json',
-                'x-tenant-id': organizationId,
-                'x-organization-id': organizationId,
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                ...(id ? { id } : {}),
-            },
-            body: JSON.stringify(mirrorPayload),
-            signal: AbortSignal.timeout(12000),
-        })
-        const text = await response.text()
-        const payload = parseJsonObject(text)
+        const mirrors = []
+        for (const mirrorPayload of mirrorPayloads) {
+            const response = await fetch(new URL('/v1/dwm/watchlists', base), {
+                method: 'POST',
+                cache: 'no-store',
+                headers: {
+                    'content-type': 'application/json',
+                    'x-tenant-id': organizationId,
+                    'x-organization-id': organizationId,
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    ...(id ? { id } : {}),
+                },
+                body: JSON.stringify(mirrorPayload),
+                signal: AbortSignal.timeout(12000),
+            })
+            const text = await response.text()
+            const payload = parseJsonObject(text)
+            mirrors.push({
+                ok: response.ok,
+                status: response.status,
+                watchlistId: payload.watchlist?.id ?? mirrorPayload.id,
+                watchlistStatus: mirrorPayload.status,
+                savedAlertCount: payload.alertRebuild?.savedAlertCount ?? 0,
+                alertIds: payload.alertRebuild?.alertIds ?? [],
+                sourceFamilies: payload.alertRebuild?.sourceFamilies ?? [],
+                matchedTerms: payload.alertRebuild?.matchedTerms ?? [],
+                error: response.ok ? undefined : payload.error ?? payload,
+            })
+        }
+        const first = mirrors[0]
         return {
-            ok: response.ok,
-            status: response.status,
-            watchlistId: payload.watchlist?.id ?? mirrorPayload.id,
-            savedAlertCount: payload.alertRebuild?.savedAlertCount ?? 0,
-            alertIds: payload.alertRebuild?.alertIds ?? [],
-            sourceFamilies: payload.alertRebuild?.sourceFamilies ?? [],
-            matchedTerms: payload.alertRebuild?.matchedTerms ?? [],
-            error: response.ok ? undefined : payload.error ?? payload,
+            ok: mirrors.every(item => item.ok),
+            status: mirrors.every(item => item.ok) ? first.status : mirrors.find(item => !item.ok)?.status ?? first.status,
+            watchlistId: first.watchlistId,
+            watchlistStatus: first.watchlistStatus,
+            savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
+            alertIds: Array.from(new Set(mirrors.flatMap(item => item.alertIds))),
+            sourceFamilies: Array.from(new Set(mirrors.flatMap(item => item.sourceFamilies))),
+            matchedTerms: Array.from(new Set(mirrors.flatMap(item => item.matchedTerms))),
+            mirrors,
+            error: mirrors.find(item => item.error)?.error,
         }
     } catch (error) {
+        const first = mirrorPayloads[0]
         return {
             ok: false,
             status: 502,
-            watchlistId: mirrorPayload.id,
+            watchlistId: first.id,
+            watchlistStatus: first.status,
             savedAlertCount: 0,
             alertIds: [],
             sourceFamilies: [],
@@ -142,6 +172,11 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
             },
         }
     }
+}
+
+function arrayOfRecords(value: unknown): Record<string, any>[] {
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === 'object' && !Array.isArray(item))
 }
 
 function normalizeDwmTermKind(value: unknown) {

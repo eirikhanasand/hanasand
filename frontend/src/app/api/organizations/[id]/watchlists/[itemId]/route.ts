@@ -16,5 +16,5 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ id: string, itemId: string }> }) {
     const { id, itemId } = await context.params
-    return proxyOrganizationApiRequest(request, `/organizations/${encodeURIComponent(id)}/watchlists/${encodeURIComponent(itemId)}`, { method: 'DELETE' })
+    return proxyOrganizationWatchlistMutation(request, `/organizations/${encodeURIComponent(id)}/watchlists/${encodeURIComponent(itemId)}`, { method: 'DELETE', organizationId: id })
 }
