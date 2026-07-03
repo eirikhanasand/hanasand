@@ -312,17 +312,17 @@ export default function OnionSessionPageClient() {
     }, [copySessionUrl, endSession, pasteFromClipboard, pushEvent, requestClipboardAccess, requestFullscreen, resetSession, sendBrokerEvent, startSession])
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-[#080c13] text-[#f7f9fc]'>
+        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas text-ui-text'>
             <section className='grid min-h-[calc(100vh-4.5rem)] grid-rows-[auto_minmax(0,1fr)]'>
-                <header className='border-b border-[#253044] bg-[#0e1522] px-4 py-4'>
+                <header className='border-b border-ui-border bg-ui-panel px-4 py-4'>
                     <div className='mx-auto flex max-w-[96rem] flex-wrap items-center justify-between gap-3'>
                         <div className='flex min-w-0 items-center gap-3'>
-                            <span className='grid h-10 w-10 shrink-0 place-items-center rounded-md border border-[#33445f] bg-[#111a2a] text-[#9bb7ff]'>
+                            <span className='grid h-10 w-10 shrink-0 place-items-center rounded-md border border-ui-border bg-ui-raised text-ui-primary'>
                                 <Monitor className='h-5 w-5' />
                             </span>
                             <div className='min-w-0'>
-                                <h1 className='truncate text-lg font-semibold text-white'>Remote Tor Browser</h1>
-                                <p className='truncate text-sm text-[#9aa8bd]'>Disposable remote browser for approved dark-web source review.</p>
+                                <h1 className='truncate text-lg font-semibold text-ui-text'>Remote Tor Browser</h1>
+                                <p className='truncate text-sm text-ui-muted'>Disposable remote browser for approved dark-web source review.</p>
                             </div>
                         </div>
                         <div className='flex flex-wrap items-center gap-2'>
@@ -334,11 +334,11 @@ export default function OnionSessionPageClient() {
                 </header>
 
                 <div className='mx-auto min-h-0 w-full max-w-[96rem] px-4 py-4'>
-                    <section id='tor-remote-desktop' className='grid min-h-[calc(100vh-12rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-[#33445f] bg-[#0c121d] shadow-[0_26px_90px_rgba(0,0,0,0.32)]'>
-                        <div className='flex flex-wrap items-center gap-2 border-b border-[#253044] bg-[#121b2a] px-3 py-2'>
-                            <span className='h-3 w-3 rounded-full bg-[#ff5f57]' />
-                            <span className='h-3 w-3 rounded-full bg-[#febc2e]' />
-                            <span className='h-3 w-3 rounded-full bg-[#28c840]' />
+                    <section id='tor-remote-desktop' className='grid min-h-[calc(100vh-12rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                        <div className='flex flex-wrap items-center gap-2 border-b border-ui-border bg-ui-raised px-3 py-2'>
+                            <span className='h-3 w-3 rounded-full bg-ui-danger' />
+                            <span className='h-3 w-3 rounded-full bg-ui-warning' />
+                            <span className='h-3 w-3 rounded-full bg-ui-success' />
                             <input
                                 data-onion-target-input
                                 value={target}
@@ -354,35 +354,35 @@ export default function OnionSessionPageClient() {
                                     }
                                 }}
                                 aria-label='Remote browser target URL'
-                                className='h-9 min-w-[14rem] flex-1 rounded-md border border-[#33445f] bg-[#0a101a] px-3 font-mono text-sm text-[#dbe5f4] outline-none transition focus:border-[#7698ff] focus:ring-2 focus:ring-[#7698ff]/20'
+                                className='h-9 min-w-[14rem] flex-1 rounded-md border border-ui-border bg-ui-canvas px-3 font-mono text-sm text-ui-text outline-none transition focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                             />
                             {sessionState === 'live' ? (
-                                <button type='button' data-onion-action='end' className='inline-flex h-9 items-center justify-center gap-2 rounded-md border border-[#f5b5b2] bg-[#441816] px-3 text-sm font-semibold text-[#ffd8d6]'>
+                                <button type='button' data-onion-action='end' className='inline-flex h-9 items-center justify-center gap-2 rounded-md border border-ui-danger/30 bg-ui-danger/15 px-3 text-sm font-semibold text-ui-danger'>
                                     <Square className='h-4 w-4' />
                                     End
                                 </button>
                             ) : (
-                                <button type='button' data-onion-action='start' disabled={!mounted || sessionState === 'connecting'} className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-[#6f8fff] px-3 text-sm font-semibold text-[#071020] transition hover:bg-[#88a4ff] disabled:cursor-wait disabled:opacity-70'>
+                                <button type='button' data-onion-action='start' disabled={!mounted || sessionState === 'connecting'} className='inline-flex h-9 items-center justify-center gap-2 rounded-md bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-wait disabled:opacity-70'>
                                     <Play className='h-4 w-4' />
                                     {mounted ? 'Start' : 'Loading'}
                                 </button>
                             )}
-                            <button type='button' data-onion-action='reset' className='grid h-9 w-9 place-items-center rounded-md border border-[#33445f] text-[#d8e2f2] transition hover:border-[#5c7196]' aria-label='Reset remote browser'>
+                            <button type='button' data-onion-action='reset' className='grid h-9 w-9 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='Reset remote browser'>
                                 <RefreshCw className='h-4 w-4' />
                             </button>
-                            <button type='button' data-onion-action='enable-clipboard' className={`inline-flex h-8 items-center gap-2 rounded-md border px-2 text-xs font-semibold transition ${clipboardEnabled ? 'border-[#1f7a45] bg-[#0f2f20] text-[#8ee5ad]' : 'border-[#33445f] text-[#d8e2f2] hover:border-[#5c7196]'}`}>
+                            <button type='button' data-onion-action='enable-clipboard' className={`inline-flex h-8 items-center gap-2 rounded-md border px-2 text-xs font-semibold transition ${clipboardEnabled ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-border text-ui-text hover:border-ui-primary'}`}>
                                 {clipboardEnabled ? <Check className='h-3.5 w-3.5' /> : <Clipboard className='h-3.5 w-3.5' />}
                                 Clipboard
                             </button>
-                            <button type='button' data-onion-action='paste' className='inline-flex h-8 items-center gap-2 rounded-md border border-[#33445f] px-2 text-xs font-semibold text-[#d8e2f2] transition hover:border-[#5c7196]'>
+                            <button type='button' data-onion-action='paste' className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
                                 <ClipboardPaste className='h-3.5 w-3.5' />
                                 Paste
                             </button>
-                            <button type='button' data-onion-action='pull-clipboard' className='inline-flex h-8 items-center gap-2 rounded-md border border-[#33445f] px-2 text-xs font-semibold text-[#d8e2f2] transition hover:border-[#5c7196]'>
+                            <button type='button' data-onion-action='pull-clipboard' className='inline-flex h-8 items-center gap-2 rounded-md border border-ui-border px-2 text-xs font-semibold text-ui-text transition hover:border-ui-primary'>
                                 <Clipboard className='h-3.5 w-3.5' />
                                 Copy out
                             </button>
-                            <button type='button' data-onion-action='fullscreen' className='grid h-8 w-8 place-items-center rounded-md border border-[#33445f] text-[#d8e2f2] transition hover:border-[#5c7196]' aria-label='Fullscreen remote browser'>
+                            <button type='button' data-onion-action='fullscreen' className='grid h-8 w-8 place-items-center rounded-md border border-ui-border text-ui-text transition hover:border-ui-primary' aria-label='Fullscreen remote browser'>
                                 <Expand className='h-3.5 w-3.5' />
                             </button>
                         </div>
@@ -416,17 +416,17 @@ export default function OnionSessionPageClient() {
                             }}
                         />
 
-                        <div className='border-t border-[#253044] bg-[#121b2a] px-3 py-2'>
-                            <div className='mb-2 flex flex-wrap items-center justify-between gap-3 text-xs text-[#9aa8bd]'>
+                        <div className='border-t border-ui-border bg-ui-raised px-3 py-2'>
+                            <div className='mb-2 flex flex-wrap items-center justify-between gap-3 text-xs text-ui-muted'>
                                 <div className='flex flex-wrap items-center gap-3'>
-                                    <label className='inline-flex items-center gap-2 text-[#d8e2f2]'>
-                                        <input type='checkbox' checked={readOnly} onChange={(event) => setReadOnly(event.target.checked)} className='h-4 w-4 accent-[#6f8fff]' />
+                                    <label className='inline-flex items-center gap-2 text-ui-text'>
+                                        <input type='checkbox' checked={readOnly} onChange={(event) => setReadOnly(event.target.checked)} className='h-4 w-4 accent-ui-primary' />
                                         View only
                                     </label>
                                     <select
                                         value={sessionMinutes}
                                         onChange={(event) => setSessionMinutes(Number(event.target.value))}
-                                        className='h-8 rounded-md border border-[#33445f] bg-[#0b111c] px-2 text-sm font-semibold text-[#d8e2f2] outline-none'
+                                        className='h-8 rounded-md border border-ui-border bg-ui-canvas px-2 text-sm font-semibold text-ui-text outline-none'
                                         aria-label='Session length'
                                     >
                                         {sessionLengths.map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}
@@ -435,8 +435,8 @@ export default function OnionSessionPageClient() {
                                 </div>
                                 <div className='min-w-0 truncate font-mono'>Latest: {events[0]}</div>
                             </div>
-                            <div className='h-2 overflow-hidden rounded-full bg-[#243149]'>
-                                <div className='h-full rounded-full bg-[#7ee0a1] transition-all duration-500' style={{ width: `${progress}%` }} />
+                            <div className='h-2 overflow-hidden rounded-full bg-ui-panel'>
+                                <div className='h-full rounded-full bg-ui-success transition-all duration-500' style={{ width: `${progress}%` }} />
                             </div>
                         </div>
                     </section>
@@ -448,13 +448,13 @@ export default function OnionSessionPageClient() {
 
 function StatusPill({ label, value, tone }: { label: string; value: string; tone: 'good' | 'wait' | 'warn' | 'neutral' }) {
     const toneClass = tone === 'good'
-        ? 'border-[#1f7a45] bg-[#0f2f20] text-[#8ee5ad]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : tone === 'wait'
-            ? 'border-[#8a6420] bg-[#33240d] text-[#ffd37a]'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
             : tone === 'warn'
-                ? 'border-[#8a6420] bg-[#33240d] text-[#ffd37a]'
-                : 'border-[#33445f] bg-[#0c121d] text-[#d8e2f2]'
-    return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${toneClass}`}><span className='text-[#9aa8bd]'>{label}</span>{value}</span>
+                ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                : 'border-ui-border bg-ui-panel text-ui-text'
+    return <span className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-semibold ${toneClass}`}><span className='text-ui-muted'>{label}</span>{value}</span>
 }
 
 function RemoteDesktopViewport({
@@ -723,7 +723,7 @@ function RemoteDesktopViewport({
     }
 
     return (
-        <div ref={containerRef} className='relative min-h-0 bg-[#070b12] p-2'>
+        <div ref={containerRef} className='relative min-h-0 bg-ui-canvas p-2'>
             <canvas
                 ref={canvasRef}
                 tabIndex={0}
@@ -735,7 +735,7 @@ function RemoteDesktopViewport({
                 onPaste={handlePaste}
                 onCopy={handleCopy}
                 onWheel={handleWheel}
-                className={`h-full min-h-[30rem] w-full rounded-md outline-none ring-0 focus:ring-2 focus:ring-[#7698ff] ${remoteFrame ? 'cursor-default' : 'cursor-none'}`}
+                className={`h-full min-h-[30rem] w-full rounded-md outline-none ring-0 focus:ring-2 focus:ring-ui-primary/20 ${remoteFrame ? 'cursor-default' : 'cursor-none'}`}
                 aria-label='Interactive remote Tor browser viewport'
             />
             {sessionState === 'live' && remoteFrame && (
@@ -748,10 +748,10 @@ function RemoteDesktopViewport({
                 />
             )}
             {sessionState !== 'live' && (
-                <div className='pointer-events-none absolute inset-2 grid place-items-center rounded-md border border-[#33445f] bg-[#080d15]/92'>
-                    <div className='max-w-md rounded-lg border border-[#33445f] bg-[#172033] p-5 text-center shadow-[0_18px_50px_rgba(0,0,0,0.28)]'>
-                        <p className='text-xl font-semibold text-white'>{sessionState === 'connecting' ? 'Connecting to remote Tor Browser' : sessionState === 'ended' ? 'Session closed' : 'Press Start to open the remote browser'}</p>
-                        <p className='mt-2 text-sm leading-6 text-[#aab6c8]'>Start a session, then interact with the remote browser inside this frame.</p>
+                <div className='pointer-events-none absolute inset-2 grid place-items-center rounded-md border border-ui-border bg-ui-canvas/90'>
+                    <div className='max-w-md rounded-lg border border-ui-border bg-ui-raised p-5 text-center shadow-sm'>
+                        <p className='text-xl font-semibold text-ui-text'>{sessionState === 'connecting' ? 'Connecting to remote Tor Browser' : sessionState === 'ended' ? 'Session closed' : 'Press Start to open the remote browser'}</p>
+                        <p className='mt-2 text-sm leading-6 text-ui-muted'>Start a session, then interact with the remote browser inside this frame.</p>
                     </div>
                 </div>
             )}
