@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, Edit3, Loader2, Pause, Play, Send, Webhook } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, Edit3, Loader2, Pause, Play, Send, Webhook } from 'lucide-react'
 
 export type DashboardWebhookOrganization = {
     id: string
@@ -117,6 +117,9 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
         .slice(0, 8)
     const preview = useMemo(() => buildPreview(organization, selectedDestination, selectedAlert), [organization, selectedDestination, selectedAlert])
     const canUseActions = Boolean(organization)
+    const deliveryHeadline = activeCount
+        ? `${activeCount} active destination${activeCount === 1 ? '' : 's'}`
+        : 'Destination required'
 
     async function submitDestination(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -207,14 +210,15 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
 
     return (
         <section className='rounded-lg border border-[#26344d] bg-[#101827] shadow-sm'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
                 <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
+                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Delivery routes</p>
+                    <h2 className='mt-1 flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
                         <Webhook className='h-4 w-4 text-[#9db8ff]' />
-                        Discord and webhook delivery
+                        {deliveryHeadline}
                     </h2>
                     <p className='mt-1 text-xs text-[#8fa0ba]'>
-                        {organization ? `${sanitizeDeliveryCopy(organization.name)}: ${activeCount}/${destinations.length} active destinations.` : 'Select or create an organization before configuring destinations.'}
+                        {organization ? `${sanitizeDeliveryCopy(organization.name)} · ${scopedDeliveries.length} recent delivery rows` : 'Select or create an organization before configuring destinations.'}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs font-semibold'>
@@ -225,37 +229,46 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
 
             <div className='grid gap-4 p-4 xl:grid-cols-[0.9fr_1.1fr]'>
                 <div className='grid gap-4'>
-                    <form onSubmit={submitDestination} className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <h3 className='text-sm font-semibold text-[#edf4ff]'>{editingId ? 'Edit destination' : 'Add destination'}</h3>
-                            {editingId ? (
-                                <button type='button' className='text-xs font-semibold text-[#9db8ff]' onClick={() => { setEditingId(''); setDraft(blankDestination); setMessage('') }}>
-                                    Cancel
-                                </button>
-                            ) : null}
-                        </div>
-                        <div className='mt-3 grid gap-2 sm:grid-cols-[1fr_120px]'>
-                            <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
-                                Label
-                                <input className={inputClass} value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} placeholder='SOC Discord' disabled={!canUseActions || Boolean(busy)} />
+                    <details className='rounded-lg border border-[#26344d] bg-[#0b121e]' open={Boolean(editingId)}>
+                        <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                            <span>{editingId ? 'Edit selected destination' : 'Add or edit destination'}</span>
+                            <span className='inline-flex items-center gap-2 text-xs font-medium text-[#8fa0ba]'>
+                                {destinations.length ? `${destinations.length} saved` : 'Setup'}
+                                <ChevronDown className='h-4 w-4' />
+                            </span>
+                        </summary>
+                        <form onSubmit={submitDestination} className='border-t border-[#26344d] p-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <h3 className='text-sm font-semibold text-[#edf4ff]'>{editingId ? 'Edit destination' : 'Add destination'}</h3>
+                                {editingId ? (
+                                    <button type='button' className='text-xs font-semibold text-[#9db8ff]' onClick={() => { setEditingId(''); setDraft(blankDestination); setMessage('') }}>
+                                        Cancel
+                                    </button>
+                                ) : null}
+                            </div>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-[1fr_120px]'>
+                                <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
+                                    Label
+                                    <input className={inputClass} value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} placeholder='SOC Discord' disabled={!canUseActions || Boolean(busy)} />
+                                </label>
+                                <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
+                                    Type
+                                    <select className={inputClass} value={draft.kind} onChange={event => setDraft(current => ({ ...current, kind: event.target.value }))} disabled={!canUseActions || Boolean(busy)}>
+                                        <option value='discord'>Discord</option>
+                                        <option value='generic'>Webhook</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <label className='mt-2 grid gap-1 text-xs font-semibold text-[#aab7cc]'>
+                                Endpoint URL
+                                <input className={inputClass} value={draft.url} onChange={event => setDraft(current => ({ ...current, url: event.target.value }))} placeholder={editingId ? 'Leave blank to keep existing endpoint' : 'https://discord.com/api/webhooks/...'} disabled={!canUseActions || Boolean(busy)} />
                             </label>
-                            <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
-                                Type
-                                <select className={inputClass} value={draft.kind} onChange={event => setDraft(current => ({ ...current, kind: event.target.value }))} disabled={!canUseActions || Boolean(busy)}>
-                                    <option value='discord'>Discord</option>
-                                    <option value='generic'>Webhook</option>
-                                </select>
-                            </label>
-                        </div>
-                        <label className='mt-2 grid gap-1 text-xs font-semibold text-[#aab7cc]'>
-                            Endpoint URL
-                            <input className={inputClass} value={draft.url} onChange={event => setDraft(current => ({ ...current, url: event.target.value }))} placeholder={editingId ? 'Leave blank to keep existing endpoint' : 'https://discord.com/api/webhooks/...'} disabled={!canUseActions || Boolean(busy)} />
-                        </label>
-                        <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#315fe8] px-3 text-xs font-semibold text-white transition hover:bg-[#426ef0] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
-                            {busy === 'save-destination' ? <Loader2 className='h-4 w-4 animate-spin' /> : <CheckCircle2 className='h-4 w-4' />}
-                            {editingId ? 'Save destination' : 'Create destination'}
-                        </button>
-                    </form>
+                            <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#315fe8] px-3 text-xs font-semibold text-white transition hover:bg-[#426ef0] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
+                                {busy === 'save-destination' ? <Loader2 className='h-4 w-4 animate-spin' /> : <CheckCircle2 className='h-4 w-4' />}
+                                {editingId ? 'Save destination' : 'Create destination'}
+                            </button>
+                        </form>
+                    </details>
 
                     <div className='rounded-lg border border-[#26344d]'>
                         <div className='border-b border-[#1f2c42] px-3 py-2'>
@@ -292,36 +305,48 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                 </div>
 
                 <div className='grid gap-4'>
-                    <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
-                        <div className='flex flex-wrap items-center justify-between gap-3'>
-                            <h3 className='text-sm font-semibold text-[#edf4ff]'>Dry-run payload</h3>
-                            <select className={`${inputClass} max-w-full sm:w-[280px]`} value={selectedAlertId} onChange={event => setSelectedAlertId(event.target.value)}>
-                                {alertOptions.map(alert => <option key={alert.id} value={alert.id}>{alert.severity.toUpperCase()} - {alert.title}</option>)}
-                                {!alertOptions.length ? <option>Select an alert</option> : null}
-                            </select>
-                        </div>
-                        {preview ? (
-                            <div className='mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]'>
-                                <div className='grid gap-2 text-sm text-[#dbe7ff]'>
-                                    <PreviewLine label='Alert' value={selectedAlert?.title || 'alert syncing'} />
-                                    <PreviewLine label='Watchlist' value={selectedAlert?.watchlistTerm || 'syncing'} />
-                                    <PreviewLine label='Source' value={selectedAlert?.sourceFamily || 'syncing'} />
-                                    <PreviewLine label='Route' value={selectedAlert?.routeLabel || 'syncing'} />
-                                    <PreviewLine label='Destination' value={selectedDestination?.endpointHint || selectedDestination?.endpointHash || 'destination syncing'} />
-                                </div>
-                                <pre className='max-h-[260px] overflow-auto rounded-lg border border-[#27364f] bg-[#101827] p-3 text-[11px] leading-5 text-[#dbe7ff]'>{JSON.stringify(preview, null, 2)}</pre>
+                    <details className='rounded-lg border border-[#26344d] bg-[#0b121e]'>
+                        <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                            <span>Dry-run payload</span>
+                            <span className='inline-flex items-center gap-2 text-xs font-medium text-[#8fa0ba]'>
+                                {selectedAlert ? selectedAlert.severity.toUpperCase() : 'Select alert'}
+                                <ChevronDown className='h-4 w-4' />
+                            </span>
+                        </summary>
+                        <div className='border-t border-[#26344d] p-3'>
+                            <div className='flex flex-wrap items-center justify-between gap-3'>
+                                <h3 className='text-sm font-semibold text-[#edf4ff]'>Dry-run payload</h3>
+                                <select className={`${inputClass} max-w-full sm:w-[280px]`} value={selectedAlertId} onChange={event => setSelectedAlertId(event.target.value)}>
+                                    {alertOptions.map(alert => <option key={alert.id} value={alert.id}>{alert.severity.toUpperCase()} - {alert.title}</option>)}
+                                    {!alertOptions.length ? <option>Select an alert</option> : null}
+                                </select>
                             </div>
-                        ) : (
-                            <div className='mt-3 rounded-lg border border-[#7a5618] bg-[#2a1c0e] p-3 text-sm text-[#ffd58a]'>Select an alert and destination to render the Discord body.</div>
-                        )}
-                    </div>
-
-                    <div className='rounded-lg border border-[#26344d] bg-[#101827]'>
-                        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-[#1f2c42] px-3 py-2'>
-                            <h3 className='text-sm font-semibold text-[#edf4ff]'>Delivery history</h3>
-                            {lastResult?.delivery ? <span className={statusPill(lastResult.delivery.status)}>Latest {lastResult.delivery.status}</span> : null}
+                            {preview ? (
+                                <div className='mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]'>
+                                    <div className='grid gap-2 text-sm text-[#dbe7ff]'>
+                                        <PreviewLine label='Alert' value={selectedAlert?.title || 'alert syncing'} />
+                                        <PreviewLine label='Watchlist' value={selectedAlert?.watchlistTerm || 'syncing'} />
+                                        <PreviewLine label='Source' value={selectedAlert?.sourceFamily || 'syncing'} />
+                                        <PreviewLine label='Route' value={selectedAlert?.routeLabel || 'syncing'} />
+                                        <PreviewLine label='Destination' value={selectedDestination?.endpointHint || selectedDestination?.endpointHash || 'destination syncing'} />
+                                    </div>
+                                    <pre className='max-h-[260px] overflow-auto rounded-lg border border-[#27364f] bg-[#101827] p-3 text-[11px] leading-5 text-[#dbe7ff]'>{JSON.stringify(preview, null, 2)}</pre>
+                                </div>
+                            ) : (
+                                <div className='mt-3 rounded-lg border border-[#7a5618] bg-[#2a1c0e] p-3 text-sm text-[#ffd58a]'>Select an alert and destination to render the Discord body.</div>
+                            )}
                         </div>
-                        <div className='overflow-x-auto'>
+                    </details>
+
+                    <details className='rounded-lg border border-[#26344d] bg-[#101827]'>
+                        <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#15284b] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                            <span>Delivery history</span>
+                            <span className='inline-flex items-center gap-2 text-xs font-medium text-[#8fa0ba]'>
+                                {lastResult?.delivery ? `Latest ${lastResult.delivery.status}` : `${scopedDeliveries.length} rows`}
+                                <ChevronDown className='h-4 w-4' />
+                            </span>
+                        </summary>
+                        <div className='overflow-x-auto border-t border-[#1f2c42]'>
                             <table className='min-w-full divide-y divide-[#1f2c42] text-left text-xs'>
                                 <thead className='bg-[#0b121e] text-[#8fa0ba]'>
                                     <tr>
@@ -359,7 +384,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                 </tbody>
                             </table>
                         </div>
-                    </div>
+                    </details>
 
                     {(message || error) ? (
                         <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${error ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]' : 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'}`}>
