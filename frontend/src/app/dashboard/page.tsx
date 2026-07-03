@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { BellRing, Building2, ListChecks, Radar } from 'lucide-react'
 import { DashboardPage } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, type DwmAlert, type DwmAlertAnalystAction, type DwmAlertAnalystActionReadiness, type DwmSeverity } from '@/utils/dwm/product'
+import { safeAlertSummary } from '@/utils/dwm/display'
+import type { DwmAlert, DwmAlertAnalystAction, DwmAlertAnalystActionReadiness, DwmSeverity } from '@/utils/dwm/product'
 import { decodePublicTiHandoffPayload, PUBLIC_TI_HANDOFF_SOURCE } from '@/utils/ti/actorWorkbench'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence, type WorkbenchTimelineItem } from './ti/workbench/workbenchClient'
@@ -15,7 +16,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
     title: 'Operations Workbench',
-    description: 'Start the day from a prioritized analyst queue with evidence, routing, workflow actions, notes, and source context.',
+    description: 'Start the day from prioritized analyst work with evidence, routing, review actions, notes, and source context.',
 }
 
 export default async function Page({
@@ -60,8 +61,7 @@ export default async function Page({
         loadProductProgressReadiness(Headers, scope, viewerIdentity),
     ])
     const liveAlerts = alertLoad.alerts
-    const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
-    const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
+    const alerts = liveAlerts
     const publicTiHandoff = firstParam(params?.handoff) === PUBLIC_TI_HANDOFF_SOURCE
         ? decodePublicTiHandoffPayload(firstParam(params?.payload), firstParam(params?.intent))
         : null
@@ -79,7 +79,7 @@ export default async function Page({
         deliveries,
         organizationState,
         liveAlertCount: liveAlerts.length,
-        renderedAlertCount: alerts.length,
+        renderedAlertCount: liveAlerts.length,
         alertAccessState: alertLoad.accessState,
         externalReadiness,
     })
@@ -113,8 +113,8 @@ export default async function Page({
     return (
         <DashboardPage className='gap-2 sm:gap-3'>
             {params?.notAllowed && (
-                <div className='rounded-lg border border-[#fedf89] bg-[#fffaeb] px-4 py-3 text-sm font-medium text-[#93370d] shadow-sm'>
-                    That console area is not included in this account. Start from the operations queue below.
+                <div className='rounded-lg border border-ui-primary bg-ui-primary/10 px-4 py-3 text-sm font-medium text-ui-primary shadow-sm'>
+                    That console area is not included in this account. Start from the case list below.
                 </div>
             )}
 
@@ -169,25 +169,25 @@ function OperatorTopBar({
     const sourceCoverage = orgContext.readiness.sourceCoverage
     const latestDelivery = orgContext.readiness.latestDelivery
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white px-3 py-2 shadow-sm' data-dashboard-operator-strip='true'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel px-3 py-2 shadow-sm' data-dashboard-operator-strip='true'>
             <div className='flex items-start justify-between gap-3 sm:hidden'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations</p>
-                    <h1 className='truncate text-base font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
-                    <p className='mt-0.5 truncate text-xs font-medium text-[#667085]'>{orgLabel} · {caseCount} cases · {persistentCount} API-backed</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Operations</p>
+                    <h1 className='truncate text-base font-semibold text-ui-text'>{firstName}, review today&apos;s cases.</h1>
+                    <p className='mt-0.5 truncate text-xs font-medium text-ui-muted'>{orgLabel} · {caseCount} cases · {persistentCount} live records</p>
                 </div>
-                <span className='shrink-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-2.5 py-1 text-xs font-semibold text-[#9a3412]'>{highPriorityCount} high</span>
+                <span className='shrink-0 rounded-lg border border-ui-danger bg-ui-danger/15 px-2.5 py-1 text-xs font-semibold text-ui-danger'>{highPriorityCount} high</span>
             </div>
             <div className='hidden gap-3 sm:grid xl:grid-cols-[minmax(260px,1fr)_minmax(520px,2fr)_auto] xl:items-center'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#3056d3]'>Operations workbench</p>
-                    <h1 className='truncate text-lg font-semibold text-[#171a21]'>{firstName}, work the queue.</h1>
-                    <p className='mt-0.5 truncate text-xs font-medium text-[#667085]'>{orgLabel} · {orgContext.readiness.alertVisibilityPolicy} visibility</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Operations workbench</p>
+                    <h1 className='truncate text-lg font-semibold text-ui-text'>{firstName}, review today&apos;s cases.</h1>
+                    <p className='mt-0.5 truncate text-xs font-medium text-ui-muted'>{orgLabel} · {orgContext.readiness.alertVisibilityPolicy} visibility</p>
                 </div>
                 <div className='grid min-w-0 grid-cols-2 gap-2 lg:grid-cols-4'>
                     <CompactStat label='Cases' value={String(caseCount)} />
                     <CompactStat label='High' value={String(highPriorityCount)} tone='warn' />
-                    <CompactStat label='API-backed' value={String(persistentCount)} tone='good' />
+                    <CompactStat label='Live records' value={String(persistentCount)} tone='good' />
                     <CompactStat label='Terms' value={String(watchedTerms)} />
                 </div>
                 <div className='flex flex-wrap items-center gap-2 xl:justify-end'>
@@ -197,14 +197,14 @@ function OperatorTopBar({
                 </div>
             </div>
             {activeOrg && (
-                <div className='mt-2 hidden min-w-0 items-center gap-2 border-t border-[#eef1f5] pt-2 text-xs font-medium text-[#596170] md:flex' data-dashboard-active-org={activeOrg.id}>
-                    <Building2 className='h-4 w-4 shrink-0 text-[#3056d3]' />
+                <div className='mt-2 hidden min-w-0 items-center gap-2 border-t border-ui-border pt-2 text-xs font-medium text-ui-muted md:flex' data-dashboard-active-org={activeOrg.id}>
+                    <Building2 className='h-4 w-4 shrink-0 text-ui-primary' />
                     <span className='truncate'>Org {sanitizeVisibleOperatorCopy(activeOrg.name || activeOrg.slug || activeOrg.id)}</span>
-                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='shrink-0 text-ui-muted'>·</span>
                     <span className='truncate'>{orgContext.members.length} members</span>
-                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='shrink-0 text-ui-muted'>·</span>
                     <span className='truncate'>{orgContext.pendingInvites.length} invites pending</span>
-                    <span className='shrink-0 text-[#98a2b3]'>·</span>
+                    <span className='shrink-0 text-ui-muted'>·</span>
                     <span className='truncate'>{activeWebhooks} active delivery destinations</span>
                 </div>
             )}
@@ -214,10 +214,10 @@ function OperatorTopBar({
 
 function CompactStat({ label, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'warn' | 'good' }) {
     const toneClass = tone === 'warn'
-        ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412]'
+        ? 'border-ui-danger bg-ui-danger/15 text-ui-danger'
         : tone === 'good'
-            ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'
-            : 'border-[#d8dee9] bg-[#fbfcfe] text-[#344054]'
+            ? 'border-ui-success bg-ui-success/15 text-ui-success'
+            : 'border-ui-border bg-ui-raised text-ui-text'
     return (
         <span className={`inline-flex h-9 items-center gap-2 rounded-lg border px-2.5 text-xs font-semibold ${toneClass}`}>
             <span className='text-[10px] uppercase opacity-75'>{label}</span>
@@ -240,20 +240,20 @@ function OperatorCommand({
     primary?: boolean
 }) {
     const className = primary
-        ? 'bg-[#171a21] text-white hover:bg-[#2b2f39] focus:ring-[#c7d2fe]'
-        : 'border border-[#d8dee9] bg-white text-[#344054] hover:bg-[#f2f5f9] focus:ring-[#dbe5ff]'
+        ? 'border border-ui-primary bg-ui-primary text-ui-canvas hover:opacity-90 focus:ring-ui-primary/40'
+        : 'border border-ui-border bg-ui-raised text-ui-text hover:border-ui-primary hover:bg-ui-panel focus:ring-ui-primary/30'
     return (
         <Link href={href} className={`inline-flex h-9 min-w-32 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 ${className}`}>
             <Icon className='h-4 w-4 shrink-0' />
             <span>{label}</span>
-            <span className={primary ? 'text-white/70' : 'text-[#667085]'}>{value}</span>
+            <span className={primary ? 'text-ui-canvas' : 'text-ui-muted'}>{value}</span>
         </Link>
     )
 }
 
 async function loadDwmAlerts(scope: OperatorScope, identity: DashboardViewerIdentity): Promise<{ alerts: DwmAlert[], accessState: DwmAlertAccessState }> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return { alerts: [], accessState: { status: 'unavailable', message: 'TI scraper backend is not configured.' } }
+    if (!base) return { alerts: [], accessState: { status: 'unavailable', message: 'Alert stream is syncing with the TI scraper connection.' } }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
@@ -277,7 +277,7 @@ async function loadDwmAlerts(scope: OperatorScope, identity: DashboardViewerIden
         const payload = await response.json() as { alerts?: DwmAlert[] }
         return { alerts: payload.alerts || [], accessState: { status: 'loaded', attemptedIdentity: identityPayload(identity) } }
     } catch {
-        return { alerts: [], accessState: { status: 'unavailable', message: 'DWM alerts API could not be reached.', attemptedIdentity: identityPayload(identity) } }
+        return { alerts: [], accessState: { status: 'unavailable', message: 'DWM alert stream is connecting.', attemptedIdentity: identityPayload(identity) } }
     }
 }
 
@@ -482,6 +482,7 @@ function buildWorkbenchCases(overview: TiAdminOverview, alerts: DwmAlert[], read
 
 function webhookAlertOption(alert: DwmAlert, scope: OperatorScope): DashboardWebhookAlertOption {
     const workflowAlert = alert as DwmWorkflowAlert
+    const displaySummary = safeAlertSummary(alert)
     const evidenceTimestamp = alert.evidence[0]?.observedAt || alert.evidence[0]?.firstSeenAt || alert.evidenceSummary?.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt
     const caseId = workflowAlert.caseId || workflowAlert.caseIdCandidate || workflowAlert.workflowContext?.caseIdCandidate
     const organizationId = workflowAlert.organizationId || workflowAlert.workflowContext?.organizationId || scope.organizationId
@@ -500,13 +501,14 @@ function webhookAlertOption(alert: DwmAlert, scope: OperatorScope): DashboardWeb
         routeUrl: `/api/dwm/alerts/${encodeURIComponent(alert.id)}${query}`,
         caseId,
         casePath: caseId ? `/api/cases/${encodeURIComponent(caseId)}${query}` : undefined,
-        summary: alert.claimSummary,
+        summary: displaySummary,
         dedupeKey: alert.webhookDelivery.dedupeKey,
     }
 }
 
 function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, deliveries: DwmDeliveryItem[]): WorkbenchCase {
     const workflowAlert = alert as DwmWorkflowAlert
+    const displaySummary = safeAlertSummary(alert)
     const severity = normalizeSeverity(alert.severity)
     const caseId = workflowAlert.caseId || workflowAlert.caseIdCandidate || workflowAlert.workflowContext?.caseIdCandidate
     const casePath = caseId ? `/api/cases/${encodeURIComponent(caseId)}${scope.organizationId ? `?organizationId=${encodeURIComponent(scope.organizationId)}` : ''}` : undefined
@@ -524,43 +526,43 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             id: `${alert.id}_path_org`,
             label: 'Organization',
             status: organizationId ? 'ready' : 'needs_action',
-            owner: organizationId ? 'operator' : 'backend-foundation',
-            source: 'GET /api/organizations',
+            owner: organizationId ? 'operator' : 'platform',
+            source: 'Organization roster',
             entityId: organizationId,
             href: organizationId ? `/api/organizations/${encodeURIComponent(organizationId)}/members` : '/api/organizations',
-            detail: organizationId ? `Alert scoped to organization ${organizationId}.` : 'Alert has no organization scope; using tenant fallback.',
+            detail: organizationId ? `Alert routed to organization ${organizationId}.` : 'Organization routing is loading; tenant review stays visible.',
         },
         {
             id: `${alert.id}_path_watchlist`,
             label: 'Shared watchlist',
             status: watchlistIds.length ? 'ready' : 'needs_action',
             owner: 'operator',
-            source: 'GET/POST /api/dwm/watchlists',
+            source: 'Shared watchlist',
             entityId: watchlistIds.join(', ') || undefined,
             href: dwmWorkspaceHref,
-            detail: watchlistIds.length ? `Matched watchlist ${watchlistIds.join(', ')}.` : 'No watchlist IDs returned with this alert.',
+            detail: watchlistIds.length ? `Matched watchlist ${watchlistIds.join(', ')}.` : 'Watchlist routing is syncing for this alert.',
         },
         {
             id: `${alert.id}_path_case`,
             label: 'Analyst case',
             status: liveAlert && caseId ? 'ready' : 'needs_action',
             owner: 'analyst',
-            source: 'POST /api/cases',
+            source: 'Case workspace',
             entityId: caseId,
             href: casePath,
-            detail: liveAlert ? caseId ? `Case candidate ${caseId}.` : 'Open a backed case from this alert.' : 'Tenant-default alert needs live case backing before delivery.',
+            detail: liveAlert ? caseId ? `Case candidate ${caseId}.` : 'Open an analyst case from this alert.' : 'Tenant-default alert needs a live case before delivery.',
         },
         {
             id: `${alert.id}_path_webhook`,
             label: 'Webhook delivery',
             status: deliveryState === 'delivered' ? 'ready' : webhookDestinationIds.length || workflowAlert.webhookContext?.hasWebhookRoute ? 'needs_action' : 'needs_action',
             owner: 'operator',
-            source: 'POST /api/dwm/webhooks/deliver',
+            source: 'Delivery route',
             entityId: webhookDestinationIds.join(', ') || workflowAlert.webhookDelivery.dedupeKey,
             href: deliveryHistoryHref,
             detail: latestDelivery
                 ? `Latest ${latestDelivery.status} delivery ${latestDelivery.id}; ${alertDeliveries.length} attempt${alertDeliveries.length === 1 ? '' : 's'} in the delivery ledger.`
-                : `Delivery state: ${deliveryState}. No delivery ledger row matched this alert.`,
+                : `Delivery state: ${deliveryState}. Sends and tests stream here.`,
         },
     ] satisfies WorkbenchCase['workflowPath']
     const timeline: WorkbenchTimelineItem[] = [
@@ -596,7 +598,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         kind: 'dwm_alert',
         queue: severity === 'critical' ? 'Incident response' : alert.webhookDelivery.recommendedRoute.replaceAll('_', ' '),
         title: alert.company,
-        subtitle: alert.claimSummary,
+        subtitle: displaySummary,
         severity,
         status: alert.reviewState || 'needs_review',
         priority: severityPriority(severity) + alert.confidence,
@@ -626,18 +628,18 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
         })),
         timeline,
         nextTasks: [
-            liveAlert ? `Owner: analyst. Alert ID: ${alert.id}.` : `Owner: analyst. ${alert.id} is fallback-only until live alerts load.`,
-            caseId ? `Case ID: ${caseId}. Update the backed case before closing.` : 'Open a backed analyst case before customer delivery.',
-            actionReadiness ? alertActionReadinessSummary(actionReadiness) : 'Action status is not returned with this alert.',
+            liveAlert ? `Owner: analyst. Alert ID: ${alert.id}.` : `Owner: analyst. ${alert.id} is tracking the alert stream.`,
+            caseId ? `Case ID: ${caseId}. Update the case before closing.` : 'Open an analyst case before customer delivery.',
+            actionReadiness ? alertActionReadinessSummary(actionReadiness) : 'Action state is updating for this alert.',
             latestDelivery
                 ? `Latest delivery ${latestDelivery.id} is ${latestDelivery.status}; open the ledger before notifying the customer.`
                 : webhookDestinationIds.length ? `Webhook destination IDs: ${webhookDestinationIds.join(', ')}.` : 'Configure/test webhook destination before sending.',
         ],
         relatedLinks: [
-            { href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}`, label: 'Alert API' },
-            ...(casePath ? [{ href: casePath, label: 'Case API' }] : []),
+            { href: `/api/dwm/alerts/${encodeURIComponent(alert.id)}`, label: 'Alert record' },
+            ...(casePath ? [{ href: casePath, label: 'Case record' }] : []),
             { href: deliveryHistoryHref, label: 'Delivery history' },
-            { href: dwmWorkspaceHref, label: 'Open DWM workspace' },
+            { href: dwmWorkspaceHref, label: 'Open dark web case' },
             { href: '/dashboard/automations?setup=dwm', label: 'Webhook subscription' },
         ],
         workflowPath,
@@ -655,11 +657,11 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
             error: delivery.error,
         })),
         missingDependency: !liveAlert
-            ? 'Tenant-default alert is inspectable for analyst workflow review; open a backed case and delivery route before customer notification.'
+            ? 'Tenant-default alert is inspectable for workflow review; wait for the live alert stream before customer notification.'
             : !casePath
-                ? 'No case ID is attached yet. Use Open case to create the backed /api/cases record.'
+                ? 'Case link is still attaching. Open case to create the analyst record.'
                 : !alertDeliveries.length
-                    ? 'No webhook delivery rows returned from /api/dwm/webhooks/deliveries. Run Send alert or Test org webhook to create delivery evidence.'
+                    ? 'No delivery has been sent. Run Send alert or Test org webhook to create delivery evidence.'
                     : undefined,
         actions: liveAlert ? [
             {
@@ -672,7 +674,7 @@ function alertToCase(alert: DwmAlert, liveAlert: boolean, scope: OperatorScope, 
                     alertId: alert.id,
                     sourceId: alert.id,
                     title: `${severity.toUpperCase()} ${alert.company}`,
-                    summary: alert.claimSummary,
+                    summary: displaySummary,
                     priority: severity,
                     reopen: true,
                     ...alertActionRequestGuard(actionReadiness, 'case_link', { includeIdempotencyKey: true }),
@@ -763,10 +765,9 @@ function alertAnalystActionReadiness(alert: DwmAlert): DwmAlertAnalystActionRead
 function alertActionDisabledReason(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction) {
     if (!readiness) return undefined
     const row = readiness.actions?.find(item => item.action === action)
-    if (!row) return `Backend action status did not return ${action}.`
+    if (!row) return `${formatDwmAction(action)} is syncing.`
     if (row.ready) return undefined
-    const blockers = row.blockerCodes?.length ? row.blockerCodes.join(', ') : 'not ready'
-    return `${action.replaceAll('_', ' ')} blocked by backend action status: ${blockers}.`
+    return `${formatDwmAction(action)} is waiting on ${formatActionChecks(row.blockerCodes)}.`
 }
 
 function alertActionRequestGuard(readiness: DwmAlertAnalystActionReadiness | undefined, action: DwmAlertAnalystAction, options: { includeIdempotencyKey?: boolean, includeDeliveryDedupeKey?: boolean } = {}) {
@@ -782,10 +783,19 @@ function alertActionRequestGuard(readiness: DwmAlertAnalystActionReadiness | und
 }
 
 function alertActionReadinessSummary(readiness: DwmAlertAnalystActionReadiness) {
-    const ready = readiness.readyActions?.length ? readiness.readyActions.join(', ') : 'none'
-    const blocked = readiness.blockedActions?.length ? readiness.blockedActions.join(', ') : 'none'
+    const ready = readiness.readyActions?.length ? readiness.readyActions.map(formatDwmAction).join(', ') : 'none yet'
+    const held = readiness.blockedActions?.length ? readiness.blockedActions.map(formatDwmAction).join(', ') : 'none'
     const eventCount = readiness.expectedWorkflowEventCount ?? readiness.actions?.[0]?.workflowEventCount
-    return `Ready actions: ${ready}. Blocked actions: ${blocked}.${eventCount === undefined ? '' : ` Workflow events: ${eventCount}.`}`
+    return `Available: ${ready}. Holding: ${held}.${eventCount === undefined ? '' : ` Events tracked: ${eventCount}.`}`
+}
+
+function formatDwmAction(action: DwmAlertAnalystAction | string) {
+    return action.replaceAll('_', ' ')
+}
+
+function formatActionChecks(codes?: string[]) {
+    if (!codes?.length) return 'the live workflow state'
+    return codes.map(code => code.replaceAll('_', ' ')).join(', ')
 }
 
 function latestDeliveryAttempt(deliveries: DwmDeliveryItem[]) {
@@ -851,7 +861,7 @@ function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): Workbe
         actor: latestCapture?.actor || 'Source correlation',
         sourceLabel: domain.sourceIds.map(sourceId => sourceById(sourceId)?.name || sourceId).join(', '),
         recommendedAction: domain.status === 'review'
-            ? 'Open the related captures, verify the match belongs to the customer, then route as a DWM alert or mark it quiet.'
+            ? 'Open the related captures, verify the match belongs to the customer, then route as a DWM alert or keep it on low-noise watch.'
             : 'Keep monitoring and promote only if another source corroborates the match or risk increases.',
         routeLabel: domain.status === 'review' ? 'analyst review' : 'source watch',
         persistent: false,
@@ -940,7 +950,7 @@ function captureEvidence(capture: TiAdminCapture): WorkbenchEvidence {
         sourceFamily: capture.pageType,
         captureMode: 'metadata only',
         redactionState: 'customer safe',
-        contentHash: capture.metadata.find(item => item.label === 'Dedupe key')?.value || capture.id,
+        contentHash: capture.metadata.find(item => item.label === 'Alert key')?.value || capture.id,
         excerpt: capture.resultSummary,
         observedAt: capture.capturedAt,
         provenance: `${capture.sourceId} · ${capture.pageType}`,

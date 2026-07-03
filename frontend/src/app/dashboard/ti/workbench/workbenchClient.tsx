@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { ExternalLink, Filter, MessageSquareText, Search, UserRound } from 'lucide-react'
+import { Activity, AlertTriangle, Clock3, ExternalLink, Filter, Inbox, MessageSquareText, Search, ShieldCheck, UserRound } from 'lucide-react'
 
 export type WorkbenchEvidence = {
     id: string
@@ -22,14 +22,14 @@ export type WorkbenchEvidence = {
 function sanitizeWorkbenchCopy(value: string | undefined) {
     if (!value) return value
     return value
-        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
-        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
-        .replace(/generation proof/gi, 'generation status')
-        .replace(/alertability proof/gi, 'alertability status')
-        .replace(/customer workflow proof/gi, 'customer workflow status')
-        .replace(/worker proof/gi, 'worker status')
-        .replace(/audit proof/gi, 'audit trail')
-        .replace(/proof/gi, 'status')
+        .replace(/hanasand-live-status-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-status/gi, 'Hanasand live org')
+        .replace(/generation status/gi, 'generation status')
+        .replace(/alertability status/gi, 'alertability status')
+        .replace(/customer workflow status/gi, 'customer workflow status')
+        .replace(/worker status/gi, 'worker status')
+        .replace(/audit status/gi, 'audit trail')
+        .replace(/status/gi, 'status')
         .replace(/readiness/gi, 'status')
         .replace(/receipt delivery/gi, 'delivery history')
         .replace(/receipt/gi, 'delivery')
@@ -409,9 +409,9 @@ type AlertDetailPayload = {
         ready?: boolean
         blockerCodes?: string[]
         deliverySelection?: { ready?: boolean, selectedWebhookDestinationId?: string, blockerCodes?: string[] }
-        customerProof?: { ready?: boolean, blockerCodes?: string[] }
+        customerStatus?: { ready?: boolean, blockerCodes?: string[] }
     }
-    customerProofHandoff?: {
+    customerStatusHandoff?: {
         ready?: boolean
         blockerCodes?: string[]
         evidenceCount?: number
@@ -466,7 +466,7 @@ type WorkbenchApiPayload = {
     deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
     deliveryEvidence?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
-    deliveryProof?: {
+    deliveryStatus?: {
         latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
         deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     }
@@ -501,6 +501,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     const cases = useMemo(() => filterCases(initialCases, filter, query), [initialCases, filter, query])
     const selected = initialCases.find(item => item.id === selectedId) ?? cases[0] ?? initialCases[0]
     const queues = queueSummary(initialCases)
+    const workbenchStats = useMemo(() => workbenchSummary(initialCases), [initialCases])
     const selectedDecision = selected ? localDecisions[selected.id] : undefined
     const selectedCaseDetail = selected ? caseDetails[selected.id] : undefined
     const selectedAlertDetail = selected ? alertDetails[selected.id] : undefined
@@ -655,7 +656,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                     ...alertWorkflowMutationBody(item, mutationDetail, orgContext),
                     reviewState: mapped.reviewState,
                     deliveryState: mapped.deliveryState,
-                    note: decision.reason || (decision.owner ? `Assigned to ${decision.owner}.` : 'Updated from the analyst workbench.'),
+                    note: decision.reason || (decision.owner ? `Assigned to ${decision.owner}.` : 'Updated from recent attacks.'),
                     assignedOwner: decision.owner,
                     actor: 'dashboard',
                 }),
@@ -664,7 +665,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
             setLocalDecisions(current => ({ ...current, [item.id]: nextDecision }))
             await refreshBackedSelection(item, payload)
-            return decisionStatus ? `${label(decisionStatus)} saved to the DWM workflow.` : 'Owner saved to the DWM workflow.'
+            return decisionStatus ? `${label(decisionStatus)} saved to the dark web case.` : 'Owner saved to the dark web case.'
         })
     }
 
@@ -736,7 +737,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     async function copyHandoffPayload(item: WorkbenchCase, payload?: unknown) {
         const target = payload || item.handoff || item.actions?.map(action => action.body).filter(Boolean)
         if (!target) {
-            setMessage({ ok: false, text: 'No handoff payload is available to copy for the selected item.' })
+            setMessage({ ok: false, text: 'Select an item with a handoff payload before copying.' })
             return
         }
         try {
@@ -749,7 +750,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     async function runBackedCaseMutation(item: WorkbenchCase, mutation: CaseMutationInput) {
         if (!item.caseDetailHref) {
-            setMessage({ ok: false, text: item.missingDependency || 'This selected item has no backed /api/cases/:id route. Use session-local triage or open/create the case first.' })
+            setMessage({ ok: false, text: item.missingDependency || 'Open or create the case before applying this workflow action.' })
             return
         }
         await runPersistentAction(`case:${item.id}:${mutation.action}`, async () => {
@@ -779,12 +780,12 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
 
     async function recordCustomerNotification(item: WorkbenchCase, note: string, caseDetail?: CaseDetailState) {
         if (!item.caseDetailHref || caseDetail?.status !== 'ready') {
-            setMessage({ ok: false, text: item.missingDependency || 'Recording customer notification requires a backed /api/cases/:id detail response.' })
+            setMessage({ ok: false, text: item.missingDependency || 'Open the case details before recording customer notification.' })
             return
         }
         const delivery = deliveredCaseDelivery(caseDetail.detail)
         if (!delivery) {
-            setMessage({ ok: false, text: 'Recording a webhook customer notification requires a delivered webhook row from /api/cases/:id.' })
+            setMessage({ ok: false, text: 'Send or verify a webhook delivery before recording customer notification.' })
             return
         }
         const rationale = note.trim()
@@ -819,11 +820,11 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
         const term = suggestedWatchTerm(item)
         if (!term) {
-            setMessage({ ok: false, text: 'No selected case term is available to create a shared watchlist entry.' })
+            setMessage({ ok: false, text: 'Select a case term before creating a shared watchlist entry.' })
             return
         }
         if (!orgContext?.createWatchlistAction) {
-            setMessage({ ok: false, text: orgContext?.readiness.blockedReasons[0] || 'POST /api/dwm/watchlists is not available because the org/watchlist backend is not configured.' })
+            setMessage({ ok: false, text: orgContext?.readiness.blockedReasons[0] || 'Connect the organization watchlist service before saving shared terms.' })
             return
         }
         await runPersistentAction(`watchlist:${item.id}`, async () => {
@@ -852,7 +853,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
         const organizationId = orgContext?.organization?.id
         if (!organizationId) {
-            setMessage({ ok: false, text: 'Invite is blocked because no selected organization was returned from GET /api/organizations.' })
+            setMessage({ ok: false, text: 'Select an organization before inviting a teammate.' })
             return
         }
         if (!inviteEmail.trim()) {
@@ -917,30 +918,30 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
     return (
         <div className='grid gap-3'>
             {message && (
-                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
+                <p className={`rounded-lg border px-3 py-2 text-sm ${message.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>
                     {message.text}
                 </p>
             )}
 
-            <div className='min-w-0 overflow-hidden rounded-lg border border-[#dfe5ee] bg-white'>
-                <div className='hidden items-center gap-2 overflow-x-auto border-b border-[#e8edf5] bg-[#171a21] px-3 py-2 text-xs text-white sm:flex sm:flex-wrap'>
-                    <StatusPill label='Cases' value={String(initialCases.length)} />
-                    <StatusPill label='Persistent' value={String(initialCases.filter(item => item.persistent).length)} />
-                    <StatusPill label='Critical' value={String(initialCases.filter(item => item.severity === 'critical').length)} />
-                    <StatusPill label='DWM actions' value='API route' tone='good' />
-                    <StatusPill label='TI decisions' value='session-local' tone='warn' />
+            <div className='min-w-0 overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
+                <div className='grid gap-2 border-b border-[#26344d] bg-[#0b111c] p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                    <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
+                    <WorkbenchStat icon={<AlertTriangle className='h-4 w-4' />} label='High priority' value={String(workbenchStats.highPriority)} detail='critical or high severity' tone={workbenchStats.highPriority ? 'warn' : 'good'} />
+                    <WorkbenchStat icon={<ShieldCheck className='h-4 w-4' />} label='Customer-ready' value={String(workbenchStats.persistent)} detail='saved alert workflows' tone={workbenchStats.persistent ? 'good' : 'neutral'} />
+                    <WorkbenchStat icon={<Activity className='h-4 w-4' />} label='Evidence' value={String(workbenchStats.evidence)} detail='cases with captured material' tone={workbenchStats.evidence ? 'good' : 'neutral'} />
+                    <WorkbenchStat icon={<Clock3 className='h-4 w-4' />} label='Newest update' value={workbenchStats.latest} detail='latest case refresh' tone='neutral' />
                 </div>
 
-                <div className={`grid min-w-0 ${compact ? 'min-h-[calc(100vh-150px)] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[720px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
-                    <aside className='min-w-0 border-b border-[#e8edf5] bg-[#f8fafc] xl:border-b-0 xl:border-r'>
-                        <div className='grid gap-3 border-b border-[#e8edf5] p-4'>
+                <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
+                    <aside className='min-w-0 border-b border-[#26344d] bg-[#0d1522] xl:border-b-0 xl:border-r'>
+                        <div className='grid gap-3 border-b border-[#26344d] p-4'>
                             <label className='relative block'>
-                                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#98a2b3]' />
+                                <Search className='pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71819a]' />
                                 <input
                                     value={query}
                                     onChange={event => setQuery(event.target.value)}
                                     placeholder='Search cases, actors, domains'
-                                    className='h-10 w-full rounded-lg border border-[#d8dee9] bg-white pl-9 pr-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                                    className='h-10 w-full rounded-lg border border-[#27364f] bg-[#080e18] pl-9 pr-3 text-sm text-[#e8eefc] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                                 />
                             </label>
                             <div className='flex flex-wrap gap-2'>
@@ -949,7 +950,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         key={item}
                                         type='button'
                                         onClick={() => setFilter(item)}
-                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3]' : 'border-[#d8dee9] bg-white text-[#475467] hover:bg-[#f2f5f9]'}`}
+                                        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold transition ${filter === item ? 'border-[#7aa5ff] bg-[#15284b] text-[#dbe7ff]' : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc] hover:border-[#3c5072] hover:bg-[#101a2a]'}`}
                                     >
                                         {item === 'all' ? <Filter className='h-3.5 w-3.5' /> : null}
                                         {label(item)}
@@ -958,7 +959,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                             </div>
                         </div>
                         <div className={`${compact ? 'xl:max-h-[calc(100vh-250px)]' : 'xl:max-h-[620px]'} overflow-visible p-2 xl:overflow-auto`}>
-                            <div role='listbox' aria-label='Analyst work queue' className='grid gap-1'>
+                            <div role='listbox' aria-label='Analyst case list' className='grid gap-1'>
                                 {cases.map((item, index) => (
                                     <button
                                         key={item.id}
@@ -969,23 +970,23 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                         data-queue-index={index}
                                         onClick={() => setSelectedId(item.id)}
                                         onKeyDown={event => handleQueueKeyDown(event, index)}
-                                        className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#3056d3] bg-white shadow-sm' : 'border-transparent hover:border-[#dfe5ee] hover:bg-white'}`}
+                                        className={`w-full min-w-0 rounded-lg border p-3 text-left transition ${selected?.id === item.id ? 'border-[#4d7cff] bg-[#101d33] shadow-sm shadow-black/20' : 'border-transparent bg-[#0b121e] hover:border-[#27364f] hover:bg-[#101827]'}`}
                                     >
                                         <div className='flex items-center justify-between gap-2'>
-                                            <span className='truncate text-sm font-semibold text-[#171a21]'>{item.title}</span>
+                                            <span className='truncate text-sm font-semibold text-[#edf4ff]'>{item.title}</span>
                                             <span className={severityClass(item.severity)}>{item.severity}</span>
                                         </div>
-                                        <p className='mt-1 truncate text-xs text-[#667085]'>{item.queue} · {item.owner}</p>
-                                        <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-[#596170]'>{item.subtitle}</p>
-                                        <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#667085]'>
-                                            <span className='rounded-full bg-white px-2 py-0.5'>{label(item.status)}</span>
+                                        <p className='mt-1 truncate text-xs text-[#8fa0ba]'>{item.queue} · {ownerLabel(item.owner)}</p>
+                                        <p className='mt-2 line-clamp-2 wrap-break-word text-xs leading-5 text-[#aab7cc]'>{item.subtitle}</p>
+                                        <div className='mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-[#8fa0ba]'>
+                                            <span className='rounded-full border border-[#27364f] bg-[#080e18] px-2 py-0.5 text-[#cbd8ec]'>{label(item.status)}</span>
                                             <span>{item.confidence}%</span>
                                             <span>{relativeTime(item.updatedAt)}</span>
                                         </div>
                                     </button>
                                 ))}
                             </div>
-                            {!cases.length && <p className='rounded-lg border border-dashed border-[#cfd8e6] bg-white p-4 text-sm text-[#596170]'>No cases match this filter.</p>}
+                            {!cases.length && <p className='rounded-lg border border-dashed border-[#31415c] bg-[#0b121e] p-4 text-sm text-[#aab7cc]'>Case state is updating for this filter.</p>}
                         </div>
                     </aside>
 
@@ -1016,7 +1017,7 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                         )}
                     </main>
 
-                    <aside className='min-w-0 border-t border-[#e8edf5] bg-[#fbfcfe] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
+                    <aside className='min-w-0 border-t border-[#26344d] bg-[#0d1522] xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         <div className='grid gap-4 p-4'>
                             <OrgOperatingPanel
                                 orgContext={orgContext}
@@ -1046,22 +1047,22 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
                                 onCopyPayload={(payload) => selected && copyHandoffPayload(selected, payload)}
                             />
 
-                            <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-                                <div className='border-b border-[#eef1f5] px-4 py-3'>
-                                    <h3 className='text-sm font-semibold text-[#171a21]'>Queue and links</h3>
-                                    <p className='mt-0.5 text-xs text-[#667085]'>Current workload plus backed routes for the selected item.</p>
+                            <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
+                                <div className='border-b border-[#26344d] px-4 py-3'>
+                                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Case groups and links</h3>
+                                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Current case group and related routes for the selected item.</p>
                                 </div>
-                                <div className='grid gap-2 border-b border-[#eef1f5] p-3'>
+                                <div className='grid gap-2 border-b border-[#26344d] p-3'>
                                     {queues.map(queue => (
-                                        <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] px-3 py-2 text-xs'>
-                                            <span className='font-semibold text-[#171a21]'>{queue.name}</span>
-                                            <span className='text-[#667085]'>{queue.count}</span>
+                                        <div key={queue.name} className='flex items-center justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-xs'>
+                                            <span className='font-semibold text-[#edf4ff]'>{queue.name}</span>
+                                            <span className='text-[#8fa0ba]'>{queue.count}</span>
                                         </div>
                                     ))}
                                 </div>
                                 <div className='grid gap-2 p-3'>
                                     {selected?.relatedLinks.map(link => (
-                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                                        <Link key={link.href} href={link.href} className='inline-flex h-9 items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#101a2a]'>
                                             {link.label}
                                             <ExternalLink className='h-3.5 w-3.5' />
                                         </Link>
@@ -1096,41 +1097,41 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
     const visibility = access?.visibilityDecision
     const inviteBlockedReason = orgInviteDisabledReason(orgContext, caseDetail)
     const blockedReason = !orgContext
-        ? 'Org operating context is not loaded into the root console.'
+        ? 'Organization operating context is syncing to this console.'
         : orgContext.readiness.blockedReasons[0]
     const watchlistBlockedReason = watchlistMutationDisabledReason(orgContext, caseDetail)
     const canCreateTerm = Boolean(orgContext?.createWatchlistAction && term && !termCoverage?.covered && !watchlistBlockedReason)
     const activeWatchlists = (orgContext?.watchlists || []).filter(item => item.status === 'active')
 
     return (
-        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-            <div className='border-b border-[#eef1f5] px-4 py-3'>
-                <h3 className='text-sm font-semibold text-[#171a21]'>Org and shared watchlist</h3>
-                <p className='mt-0.5 text-xs text-[#667085]'>Team scope, visibility policy, shared terms, and selected-item watchlist action.</p>
+        <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
+            <div className='border-b border-[#26344d] px-4 py-3'>
+                <h3 className='text-sm font-semibold text-[#edf4ff]'>Org and shared watchlist</h3>
+                <p className='mt-0.5 text-xs text-[#8fa0ba]'>Member access, watch terms, and customer visibility for the selected case.</p>
             </div>
             <div className='grid gap-3 p-3'>
                 <div className='grid gap-2 text-xs'>
-                    <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'missing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
+                    <OperatorRow label='Org' value={orgContext?.organization ? `${orgContext.organization.name} · ${orgContext.organization.id}` : 'syncing'} tone={orgContext?.organization ? 'ready' : 'blocked'} />
                     <OperatorRow label='Members' value={`${orgContext?.readiness.activeMemberCount ?? 0} active · ${orgContext?.readiness.pendingInviteCount ?? 0} pending`} tone={orgContext?.readiness.activeMemberCount ? 'ready' : 'blocked'} />
                     <OperatorRow label='Watchlists' value={`${orgContext?.readiness.activeWatchlistCount ?? 0} active · ${orgContext?.readiness.termCount ?? 0} terms`} tone={orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action'} />
                     <OperatorReadinessRows orgContext={orgContext} selected={selected} caseDetail={caseDetail} actionDeliveries={actionDeliveries} />
-                    <OperatorRow label='Visibility' value={visibility ? `${visibility.alertVisibilityPolicy} · ${visibility.allowed ? 'visible' : visibility.reason || 'blocked'}` : `${orgContext?.readiness.alertVisibilityPolicy || 'members'} policy`} tone={visibility?.allowed === false ? 'blocked' : 'ready'} />
-                    <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can mutate'}` : 'no case access response'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
+                    <OperatorRow label='Visibility' value={visibility ? `${visibility.alertVisibilityPolicy} · ${visibility.allowed ? 'visible' : visibility.reason || 'syncing'}` : `${orgContext?.readiness.alertVisibilityPolicy || 'members'} policy`} tone={visibility?.allowed === false ? 'blocked' : 'ready'} />
+                    <OperatorRow label='Case role' value={access?.role ? `${access.role}${access.readOnly ? ' · read only' : ' · can edit'}` : 'checking case access'} tone={access ? access.readOnly ? 'needs_action' : 'ready' : 'needs_action'} />
                 </div>
 
                 <ProductReadinessPanel orgContext={orgContext} />
 
                 {blockedReason && (
-                    <InspectionNotice tone='blocked' title='Blocked' body={blockedReason} />
+                    <InspectionNotice tone='blocked' title='Syncing' body={blockedReason} />
                 )}
 
-                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#667085]'>Team invite</p>
-                            <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/organizations/:id/invites adds pending members to the selected org.</p>
+                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Team invite</p>
+                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Add analysts to the active customer case.</p>
                         </div>
-                        <span className={workflowStatusClass(inviteBlockedReason ? 'blocked' : 'ready')}>{inviteBlockedReason ? 'blocked' : 'ready'}</span>
+                        <span className={workflowStatusClass(inviteBlockedReason ? 'blocked' : 'ready')}>{inviteBlockedReason ? 'syncing' : 'ready'}</span>
                     </div>
                     <div className='mt-3 grid gap-2'>
                         <input
@@ -1138,14 +1139,14 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                             onChange={event => onInviteEmailChange(event.target.value)}
                             disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
                             placeholder='analyst@example.com'
-                            className='h-9 rounded-lg border border-[#d8dee9] bg-white px-3 text-xs text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                            className='h-9 rounded-lg border border-[#27364f] bg-[#080e18] px-3 text-xs text-[#e8eefc] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                         />
                         <div className='flex gap-2'>
                             <select
                                 value={inviteRole}
                                 onChange={event => onInviteRoleChange(event.target.value)}
                                 disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
-                                className='h-9 min-w-0 flex-1 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                className='h-9 min-w-0 flex-1 rounded-lg border border-[#27364f] bg-[#080e18] px-2 text-xs font-semibold text-[#dbe7ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 <option value='analyst'>Analyst</option>
                                 <option value='admin'>Admin</option>
@@ -1156,80 +1157,80 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                 disabled={Boolean(inviteBlockedReason) || Boolean(busyAction)}
                                 title={inviteBlockedReason || undefined}
                                 onClick={onInvite}
-                                className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                                className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                             >
                                 {busyAction === 'org:invite' ? 'Inviting...' : 'Invite'}
                             </button>
                         </div>
                     </div>
-                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-[#9a3412]'>{inviteBlockedReason}</p>}
+                    {inviteBlockedReason && <p className='mt-2 text-xs leading-5 text-[#ffb598]'>{inviteBlockedReason}</p>}
                     {orgContext?.pendingInvites.length ? (
                         <div className='mt-3 grid gap-1'>
                             {orgContext.pendingInvites.slice(0, 4).map(invite => (
-                                <p key={invite.id} className='truncate text-xs text-[#667085]'>{invite.email} · {invite.role} · expires {formatDateTime(invite.expiresAt)}</p>
+                                <p key={invite.id} className='truncate text-xs text-[#8fa0ba]'>{invite.email} · {invite.role} · expires {formatDateTime(invite.expiresAt)}</p>
                             ))}
                         </div>
-                    ) : <p className='mt-3 text-xs text-[#667085]'>No pending invites returned.</p>}
+                    ) : <p className='mt-3 text-xs text-[#8fa0ba]'>Invite state is updating.</p>}
                 </div>
 
-                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#667085]'>Active members</p>
-                            <p className='mt-1 text-xs leading-5 text-[#596170]'>Owner picker uses these identities for PATCH /api/cases/:id assignment.</p>
+                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Active members</p>
+                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Assignable people for this case.</p>
                         </div>
-                        <span className={workflowStatusClass(orgContext?.members.length ? 'ready' : 'blocked')}>{orgContext?.members.length ? 'loaded' : 'missing'}</span>
+                        <span className={workflowStatusClass(orgContext?.members.length ? 'ready' : 'blocked')}>{orgContext?.members.length ? 'active' : 'syncing'}</span>
                     </div>
                     <div className='mt-3 grid gap-1'>
                         {(orgContext?.members || []).filter(member => member.status === 'active').slice(0, 5).map(member => (
-                            <p key={member.id} className='truncate text-xs text-[#667085]'>{member.email} · {member.role}</p>
+                            <p key={member.id} className='truncate text-xs text-[#8fa0ba]'>{member.email} · {member.role}</p>
                         ))}
-                        {!orgContext?.members.length && <p className='text-xs text-[#667085]'>Member API returned no active members; assignment falls back to manual owner text.</p>}
+                        {!orgContext?.members.length && <p className='text-xs text-[#8fa0ba]'>Teammate state is loading; manual owner text stays available.</p>}
                     </div>
                 </div>
 
-                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#667085]'>Selected term</p>
-                            <p className='mt-1 break-all text-sm font-semibold text-[#171a21]'>{term || 'none'}</p>
+                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Selected term</p>
+                            <p className='mt-1 break-all text-sm font-semibold text-[#edf4ff]'>{term || 'Term syncing'}</p>
                         </div>
                         <span className={workflowStatusClass(termCoverage?.covered ? 'ready' : canCreateTerm ? 'needs_action' : 'blocked')}>
-                            {termCoverage?.covered ? 'covered' : canCreateTerm ? 'ready' : 'blocked'}
+                            {termCoverage?.covered ? 'covered' : canCreateTerm ? 'ready' : 'syncing'}
                         </span>
                     </div>
-                    <p className='mt-2 text-xs leading-5 text-[#596170]'>
+                    <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>
                         {termCoverage?.covered
                             ? `${term} is already in ${termCoverage.watchlistName}.`
                             : canCreateTerm
-                                ? 'POST /api/dwm/watchlists will create an active shared watchlist scoped to this organization or tenant.'
-                                : term ? 'Cannot create the shared term until the backed org/watchlist API context is available.' : 'Select a case with a matched term or evidence artifact before creating a shared watchlist entry.'}
+                                ? 'Create an active shared watchlist for this organization.'
+                                : term ? 'Connect the organization watchlist before saving this term.' : 'Select a case with a matched term or evidence artifact before creating a shared watchlist entry.'}
                     </p>
                     <button
                         type='button'
                         disabled={!canCreateTerm || Boolean(busyAction)}
-                        title={!canCreateTerm ? watchlistBlockedReason || blockedReason || 'Term is already covered or unavailable.' : undefined}
+                        title={!canCreateTerm ? watchlistBlockedReason || blockedReason || 'Term is already covered or organization context is syncing.' : undefined}
                         onClick={onCreateSharedWatchlistTerm}
-                        className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                        className='mt-3 inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                     >
                         {busyAction === `watchlist:${selected?.id}` ? 'Saving...' : 'Create shared term'}
                     </button>
                 </div>
 
-                <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                     <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                         <div>
-                            <p className='text-xs font-semibold uppercase text-[#667085]'>Shared terms</p>
-                            <p className='mt-1 text-xs leading-5 text-[#596170]'>POST /api/dwm/watchlists upserts existing watchlists. PATCH/DELETE /api/dwm/watchlists/:id is not available.</p>
+                            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Shared terms</p>
+                            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Terms currently routing exposure matches into this customer scope.</p>
                         </div>
-                        <span className={workflowStatusClass(activeWatchlists.length ? 'ready' : 'blocked')}>{activeWatchlists.length ? 'active' : 'missing'}</span>
+                        <span className={workflowStatusClass(activeWatchlists.length ? 'ready' : 'blocked')}>{activeWatchlists.length ? 'active' : 'syncing'}</span>
                     </div>
                     <div className='mt-3 grid gap-2'>
                         {activeWatchlists.slice(0, 3).map(watchlist => (
-                            <div key={watchlist.id} className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
+                            <div key={watchlist.id} className='rounded-lg border border-[#27364f] bg-[#080e18] p-2'>
                                 <div className='flex items-center justify-between gap-2'>
-                                    <p className='truncate text-xs font-semibold text-[#171a21]'>{watchlist.name}</p>
-                                    <span className='text-[11px] text-[#667085]'>{relativeTime(watchlist.updatedAt)}</span>
+                                    <p className='truncate text-xs font-semibold text-[#edf4ff]'>{watchlist.name}</p>
+                                    <span className='text-[11px] text-[#8fa0ba]'>{relativeTime(watchlist.updatedAt)}</span>
                                 </div>
                                 <div className='mt-2 flex flex-wrap gap-1'>
                                     {watchlist.terms.slice(0, 6).map(termItem => (
@@ -1237,9 +1238,9 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                             key={`${watchlist.id}:${termItem.value}`}
                                             type='button'
                                             disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction) || watchlist.terms.length <= 1}
-                                            title={watchlist.terms.length <= 1 ? 'Cannot remove the last term through POST /api/dwm/watchlists; pause the watchlist instead.' : watchlistBlockedReason || 'Remove term via watchlist upsert.'}
+                                            title={watchlist.terms.length <= 1 ? 'Pause the watchlist before removing its last term.' : watchlistBlockedReason || 'Remove this term from the shared watchlist.'}
                                             onClick={() => onUpdateWatchlist({ watchlist, terms: watchlist.terms.filter(candidate => candidate.value !== termItem.value) })}
-                                            className='rounded-full border border-[#d8dee9] bg-[#fbfcfe] px-2 py-0.5 text-[11px] font-semibold text-[#596170] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
+                                            className='rounded-full border border-[#27364f] bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc] transition hover:border-[#3c5072] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'
                                         >
                                             {termItem.kind || inferTermKind(termItem.value)}:{termItem.value}
                                         </button>
@@ -1248,15 +1249,15 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                                 <button
                                     type='button'
                                     disabled={Boolean(watchlistBlockedReason) || Boolean(busyAction)}
-                                    title={watchlistBlockedReason || 'Pause via POST /api/dwm/watchlists with existing id and status=paused.'}
+                                    title={watchlistBlockedReason || 'Pause this shared watchlist.'}
                                     onClick={() => onUpdateWatchlist({ watchlist, status: 'paused' })}
-                                    className='mt-2 inline-flex h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'
+                                    className='mt-2 inline-flex h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `watchlist:update:${watchlist.id}` ? 'Saving...' : 'Pause watchlist'}
                                 </button>
                             </div>
                         ))}
-                        {!activeWatchlists.length && <p className='text-xs leading-5 text-[#667085]'>No active shared watchlist returned for this org.</p>}
+                        {!activeWatchlists.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Shared watchlist state is updating for the first active term.</p>}
                     </div>
                 </div>
 
@@ -1264,13 +1265,13 @@ function OrgOperatingPanel({ orgContext, selected, caseDetail, actionDeliveries,
                     <InspectionNotice
                         tone='blocked'
                         title='Case visibility blocked'
-                        body={`Policy ${visibility.alertVisibilityPolicy} allows ${visibility.allowedRoles.join(', ')}. Current member is blocked because ${visibility.reason || 'access is denied'}.`}
+                        body={`Policy ${visibility.alertVisibilityPolicy} allows ${visibility.allowedRoles.join(', ')}. Current member needs access: ${visibility.reason || 'access is denied'}.`}
                     />
                 )}
 
                 <div className='grid gap-2'>
                     {orgContext?.links.map(link => (
-                        <Link key={link.href} href={link.href} className='inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Link key={link.href} href={link.href} className='inline-flex h-8 items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
                             {link.label}
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
@@ -1296,24 +1297,24 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
     const rows = actionRailRows(selected, orgContext, caseDetail, alertDetail, actionDeliveries, note)
 
     return (
-        <section className='rounded-lg border border-[#d8e1ef] bg-white dark:border-[#2d3a52] dark:bg-[#0f172a]'>
-            <div className='border-b border-[#e7edf6] px-4 py-3 dark:border-[#26344c]'>
-                <h3 className='text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>Operator actions</h3>
-                <p className='mt-0.5 text-xs text-[#667085] dark:text-[#aab6ca]'>Selected blocker to backed route, mutation, or exact handoff copy.</p>
+        <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
+            <div className='border-b border-[#26344d] px-4 py-3'>
+                <h3 className='text-sm font-semibold text-[#edf4ff]'>Operator actions</h3>
+                <p className='mt-0.5 text-xs text-[#8fa0ba]'>Run the backed action, open the record, or copy the selected review package.</p>
             </div>
             <div className='grid gap-2 p-3'>
                 {rows.map(row => (
-                    <div key={row.id} className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#111827]'>
+                    <div key={row.id} className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                         <div className='flex flex-wrap items-start justify-between gap-2'>
                             <div className='min-w-0'>
-                                <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
+                                <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>{sanitizeWorkbenchCopy(row.label) || row.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#aab7cc]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             </div>
-                            <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'blocked' : label(row.tone)}</span>
+                            <span className={workflowStatusClass(row.disabledReason ? 'blocked' : row.tone)}>{row.disabledReason ? 'syncing' : label(row.tone)}</span>
                         </div>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {row.href ? (
-                                <Link href={row.href} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'>
+                                <Link href={row.href} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
                                     Open
                                     <ExternalLink className='h-3.5 w-3.5' />
                                 </Link>
@@ -1324,7 +1325,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     disabled={Boolean(busyAction) || Boolean(row.disabledReason || row.action.disabledReason)}
                                     title={row.disabledReason || row.action.disabledReason}
                                     onClick={() => onRunAction(row.action as WorkbenchAction)}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `action:${selected?.id}:${row.action.id}` ? 'Running...' : row.action.label}
                                 </button>
@@ -1334,7 +1335,7 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     type='button'
                                     disabled={Boolean(busyAction)}
                                     onClick={() => onCopyPayload(row.copyPayload)}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     Copy handoff
                                 </button>
@@ -1345,14 +1346,14 @@ function OperatorActionRail({ selected, orgContext, caseDetail, alertDetail, act
                                     disabled={Boolean(busyAction) || Boolean(row.disabledReason)}
                                     title={row.disabledReason}
                                     onClick={onCustomerNotification}
-                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#d8deea] dark:hover:border-[#3b4b68]'
+                                    className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                                 >
                                     {busyAction === `case:${selected?.id}:customer_notification` ? 'Recording...' : 'Record receipt'}
                                 </button>
                             ) : null}
                             {!row.href && !row.action && row.copyPayload === undefined && !row.customerNotification && (
-                                <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-[#d8dee9] bg-[#f2f4f7] px-2.5 text-xs font-semibold text-[#98a2b3] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#8795ad]'>
-                                    Blocked
+                                <button type='button' disabled title={row.disabledReason} className='inline-flex min-h-8 cursor-not-allowed items-center rounded-lg border border-[#27364f] bg-[#101827] px-2.5 text-xs font-semibold text-[#71819a]'>
+                                    Needs setup
                                 </button>
                             )}
                         </div>
@@ -1381,7 +1382,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     if (!selected) return [{
         id: 'select_case',
         label: 'Select work',
-        detail: 'Choose a queue item before actions are available.',
+        detail: 'Choose a case before actions are available.',
         tone: 'needs_action',
     }]
     if (selected.handoff) return handoffActionRailRows(selected, orgContext)
@@ -1390,28 +1391,28 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     if (selected.kind === 'dwm_alert') {
         const alertDetailHref = `/api/dwm/alerts/${encodeURIComponent(selected.id)}`
-        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open DWM workspace') || `/dashboard/dwm?alert=${encodeURIComponent(selected.id)}`
+        const dwmWorkspaceHref = relatedLinkHref(selected, 'Open dark web case') || `/dashboard/dwm?alert=${encodeURIComponent(selected.id)}`
         rows.push({
             id: 'open_dwm_workspace',
-            label: 'Open DWM workspace',
-            detail: 'Open the selected alert with evidence disposition, source provenance, delivery state, and case activity.',
+            label: 'Open dark web case',
+            detail: 'Open the selected alert with evidence decisions, source details, delivery state, and case activity.',
             tone: selected.persistent ? 'ready' : 'needs_action',
             href: dwmWorkspaceHref,
         })
         rows.push({
             id: 'open_alert_detail',
             label: 'Open alert detail',
-            detail: selected.persistent ? `GET ${alertDetailHref}.` : 'Alert detail is blocked for fallback rows until the DWM alerts API returns this item.',
+            detail: selected.persistent ? `Open ${alertDetailHref}.` : 'Persisted alert detail is syncing before this row can open.',
             tone: selected.persistent ? 'ready' : 'blocked',
             href: selected.persistent ? alertDetailHref : undefined,
-            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
+            disabledReason: selected.persistent ? undefined : 'Persisted alert detail has not attached yet.',
         })
         const sourceProfileHref = alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined)
         if (sourceProfileHref) {
             rows.push({
                 id: 'inspect_alert_source_health',
                 label: 'Source health',
-                detail: `Open source inventory profile from backed alert evidence provenance: ${sourceProfileHref}.`,
+                detail: `Open source inventory profile from alert evidence: ${sourceProfileHref}.`,
                 tone: 'ready',
                 href: sourceProfileHref,
             })
@@ -1438,17 +1439,17 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             disabledReason: notificationDisabledReason,
         })
     } else if (selected.kind === 'dwm_alert') {
-        rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'No backed case ID is attached to this alert.', tone: 'blocked' })
+        rows.push({ id: 'case_blocked', label: 'Open selected case', detail: selected.missingDependency || 'Case link is syncing to this alert.', tone: 'blocked' })
     }
     if (selected.kind === 'dwm_alert') {
         const replayAction = selected.actions?.find(action => action.id === 'replay_alert')
-        const replayDisabledReason = replayAction?.disabledReason || (selected.persistent ? undefined : 'Fallback alerts cannot replay evidence.')
+        const replayDisabledReason = replayAction?.disabledReason || (selected.persistent ? undefined : 'Persisted alert replay is syncing before evidence replay can run.')
         rows.push({
             id: 'replay_alert',
             label: 'Replay evidence',
             detail: replayDisabledReason
                 ? replayDisabledReason
-                : replayAction ? `${replayAction.method} ${replayAction.href}; backend action readiness allows replay for this workflow version.` : `POST /api/dwm/alerts/${selected.id}/replay.`,
+                : replayAction ? `${replayAction.method} ${replayAction.href}; replay is available for this workflow version.` : `Replay evidence for ${selected.id}.`,
             tone: replayDisabledReason ? 'blocked' : 'ready',
             action: replayAction || {
                 id: 'replay_alert',
@@ -1456,7 +1457,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
                 method: 'POST',
                 href: `/api/dwm/alerts/${encodeURIComponent(selected.id)}/replay`,
                 body: { actor: 'dashboard' },
-                disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot call /api/dwm/alerts/:id/replay.',
+                disabledReason: selected.persistent ? undefined : 'Persisted alert replay has not attached yet.',
             },
             disabledReason: replayDisabledReason,
         })
@@ -1520,7 +1521,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'send_alert',
             label: 'Send delivery',
-            detail: sendDestinationReady ? `POST /api/dwm/webhooks/deliver for ${stringValue(sendActionBody.webhookDestinationId) || 'the action-scoped destination'}.` : 'Configure or test an organization webhook destination before sending alert delivery.',
+            detail: sendDestinationReady ? `Send to ${stringValue(sendActionBody.webhookDestinationId) || 'the selected destination'}.` : 'Configure or test an organization webhook destination before sending alert delivery.',
             tone: sendDisabledReason ? 'blocked' : selected.deliveryEvidence?.some(item => item.status === 'delivered') ? 'ready' : 'needs_action',
             action: sendDisabledReason ? { ...sendAction, body: sendActionBody, disabledReason: sendDisabledReason } : { ...sendAction, body: sendActionBody },
             disabledReason: sendDisabledReason,
@@ -1532,7 +1533,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'open_delivery_ledger',
             label: 'Open delivery ledger',
-            detail: `GET ${ledgerHref}; selected delivery ${selectedDelivery.id}:${selectedDelivery.status}.`,
+            detail: `Open delivery ${selectedDelivery.id}:${selectedDelivery.status}.`,
             tone: selectedDelivery.status === 'failed' || selectedDelivery.status === 'skipped' ? 'blocked' : 'ready',
             href: ledgerHref,
         })
@@ -1541,7 +1542,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'inspect_alert_delivery_history',
             label: 'Delivery history',
-            detail: `GET ${ledgerHref}; alert detail returned ${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length} delivery history reference${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length === 1 ? '' : 's'}.`,
+            detail: `${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length} delivery history reference${alertDetail.detail.deliveryReadiness.deliveryHistoryRefs.length === 1 ? '' : 's'} attached.`,
             tone: alertDetail.detail.deliveryReadiness.ready ? 'ready' : 'needs_action',
             href: ledgerHref,
         })
@@ -1551,7 +1552,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'inspect_webhook_destination',
             label: 'Open destination',
-            detail: `GET ${destinationHref}; ${activeWebhook.name} ${activeWebhook.status}${activeWebhook.lastTestStatus ? `, last test ${activeWebhook.lastTestStatus}` : ''}.`,
+            detail: `${activeWebhook.name} is ${activeWebhook.status}${activeWebhook.lastTestStatus ? `, last test ${activeWebhook.lastTestStatus}` : ''}.`,
             tone: activeWebhook.status === 'active' ? 'ready' : 'needs_action',
             href: destinationHref,
         })
@@ -1569,20 +1570,20 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             },
         })
     } else {
-        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'No active organization webhook destination is loaded.', tone: 'needs_action', href: '/dashboard/automations?setup=dwm' })
+        rows.push({ id: 'configure_webhook', label: 'Configure webhook', detail: 'Add an active organization destination before sending alerts.', tone: 'needs_action', href: '/dashboard/automations?setup=dwm' })
     }
     if (selected.kind === 'webhook_readiness') {
         rows.push({
             id: 'inspect_webhook_delivery_history',
             label: 'Delivery history',
-            detail: `GET ${deliveryLedgerHref(orgContext, selected)} returns delivery attempts for the selected organization or tenant scope.`,
+            detail: 'Delivery attempts for the selected organization or workspace.',
             tone: selected.deliveryEvidence?.length ? 'ready' : 'needs_action',
             href: deliveryLedgerHref(orgContext, selected),
         })
         rows.push({
             id: 'open_webhook_configuration',
             label: 'Delivery setup',
-            detail: activeWebhook && orgContext?.organization ? 'Open the organization webhook route used by Test webhook and Send queued alerts.' : 'Open delivery setup before sending alerts.',
+            detail: activeWebhook && orgContext?.organization ? 'Open the organization webhook route used by Test webhook and Send alerts.' : 'Open delivery setup before sending alerts.',
             tone: activeWebhook ? 'ready' : 'needs_action',
             href: orgContext?.organization ? `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/webhooks` : '/dashboard/automations?setup=dwm',
         })
@@ -1596,21 +1597,21 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             href: '/dashboard/ti/sources',
         })
     } else {
-        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Open source operations to refresh /api/dwm/operations.', tone: 'needs_action', href: '/dashboard/ti/sources' })
+        rows.push({ id: 'source_unavailable', label: 'Source health', detail: 'Open collection to refresh live source coverage.', tone: 'needs_action', href: '/dashboard/ti/sources' })
     }
     if (selected.kind === 'org_readiness') {
         if (orgContext?.organization) {
             rows.push({
                 id: 'inspect_org_members',
                 label: 'Inspect members',
-                detail: `GET /api/organizations/${orgContext.organization.id}/members returns active member and role state for assignment and alert visibility.`,
+                detail: `${orgContext.readiness.activeMemberCount} active member${orgContext.readiness.activeMemberCount === 1 ? '' : 's'} available for assignment and visibility checks.`,
                 tone: orgContext.members.some(member => member.status === 'active') ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/members`,
             })
             rows.push({
                 id: 'inspect_org_alert_readiness',
                 label: 'Alert status',
-                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns shared watchlist alertability status.`,
+                detail: 'Shared watchlist alertability is attached for this organization.',
                 tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
             })
@@ -1621,22 +1622,22 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     if (selected.kind === 'watchlist_readiness') {
         rows.push({
             id: 'open_watchlist_workflow',
-            label: 'Edit watchlist',
-            detail: 'Open the DWM workflow to create shared terms, attach delivery scope, and rebuild generated alerts.',
+            label: 'Edit watched terms',
+            detail: 'Open dark web cases to create shared terms, attach delivery, and rebuild generated alerts.',
             tone: 'ready',
             href: '/dashboard/dwm',
         })
         rows.push({
             id: 'inspect_watchlists',
             label: 'Inspect watchlists',
-            detail: 'GET /api/dwm/watchlists returns shared watchlist terms and destination scope for alert generation.',
+            detail: 'Shared watchlist terms and delivery routing feed alert generation.',
             tone: orgContext?.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
             href: '/api/dwm/watchlists',
         })
         rows.push({
             id: 'inspect_watchlist_alert_queue',
             label: 'Generated alerts',
-            detail: 'GET /api/dwm/alerts returns persisted alerts generated from shared watchlists and source coverage.',
+            detail: 'Persisted alerts generated from shared watchlists and source coverage.',
             tone: orgContext?.readiness.liveAlertCount ? 'ready' : 'needs_action',
             href: '/api/dwm/alerts',
         })
@@ -1644,7 +1645,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
             rows.push({
                 id: 'inspect_watchlist_alertability',
                 label: 'Alertability status',
-                detail: `GET /api/organizations/${orgContext.organization.id}/alert-readiness returns active watchlist term counts and visibility status.`,
+                detail: 'Active watchlist terms and visibility status are attached.',
                 tone: orgContext.readiness.activeWatchlistCount ? 'ready' : 'needs_action',
                 href: `/api/organizations/${encodeURIComponent(orgContext.organization.id)}/alert-readiness`,
             })
@@ -1653,24 +1654,24 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     if (selected.kind === 'source_readiness') {
         rows.push({
             id: 'inspect_dwm_operations',
-            label: 'Source snapshot',
+            label: 'Source coverage',
             detail: sourceCoverage
-                ? `GET /api/dwm/operations shows ${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources, ${sourceCoverage.captureCount} captures, and ${sourceCoverage.watchlistMatchCount} watchlist matches.`
-                : 'GET /api/dwm/operations did not return a source-health snapshot for this dashboard session.',
+                ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources, ${sourceCoverage.captureCount} captures, and ${sourceCoverage.watchlistMatchCount} watchlist matches.`
+                : 'Source-health stream updates with the next operation event.',
             tone: sourceCoverage ? sourceCoverage.activeSourceCount ? 'ready' : 'needs_action' : 'needs_action',
             href: '/api/dwm/operations',
         })
         rows.push({
             id: 'inspect_source_inventory',
             label: 'Inspect inventory',
-            detail: 'GET /api/ti/scraper/control returns source inventory, source packs, canary state, alerts, watchlists, and deliveries.',
+            detail: 'Source inventory, packs, collection state, alerts, watchlists, and deliveries are visible in collection.',
             tone: sourceCoverage ? 'ready' : 'needs_action',
             href: '/api/ti/scraper/control',
         })
         rows.push({
             id: 'open_source_operations',
-            label: 'Source operations',
-            detail: 'Open the source operations workspace for parser checks, source requests, canary runs, and source apply-plan actions.',
+            label: 'Collection',
+            detail: 'Open collection for parser checks, source requests, canary runs, and source apply-plan actions.',
             tone: 'ready',
             href: '/dashboard/ti/control',
         })
@@ -1695,15 +1696,15 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         })
         rows.push({
             id: 'support_recovery_api',
-            label: 'Recovery queue',
-            detail: 'GET /api/backend/admin/support/access-recovery.',
+            label: 'Recovery requests',
+            detail: 'Support recovery requests with actor, target, and outcome rows.',
             tone: 'ready',
             href: '/api/backend/admin/support/access-recovery',
         })
         rows.push({
             id: 'admin_audit_api',
             label: 'Admin audit',
-            detail: 'GET /api/backend/admin/audit-events?limit=50.',
+            detail: 'Admin audit stream with support and impersonation events.',
             tone: 'ready',
             href: '/api/backend/admin/audit-events?limit=50',
         })
@@ -1712,21 +1713,21 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'open_alert_generation_readiness',
             label: 'Generation status',
-            detail: 'GET /api/dwm/alerts/generation-readiness returns source, watchlist, and alertability status for generated alerts.',
+            detail: 'Generated alerts link sources, watchlists, and customer visibility.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
             href: '/api/dwm/alerts/generation-readiness',
         })
         rows.push({
             id: 'inspect_generated_alerts',
             label: 'Generated alerts',
-            detail: 'GET /api/dwm/alerts returns the persisted alert queue for the selected organization/member scope.',
+            detail: 'Recent alerts for the selected organization/member workspace.',
             tone: selected.missingDependency ? 'needs_action' : 'ready',
             href: '/api/dwm/alerts',
         })
         rows.push({
             id: 'open_dwm_alert_workflow',
-            label: 'Open DWM workflow',
-            detail: 'Open the DWM workflow to update watchlists, rebuild alerts, and inspect generated alert state.',
+            label: 'Open dark web cases',
+            detail: 'Open dark web cases to update watched terms, rebuild alerts, and inspect generated alert state.',
             tone: 'ready',
             href: '/dashboard/dwm',
         })
@@ -1747,7 +1748,7 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
     }
     rows.push(...readinessActionRows(orgContext))
     const rebuildAction = selected.actions?.find(action => action.id === 'rebuild_alerts')
-    if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'POST /api/dwm/alerts/rebuild for the selected scope.', tone: 'ready', action: rebuildAction })
+    if (rebuildAction) rows.push({ id: 'rebuild_alerts', label: 'Rebuild alerts', detail: 'Rebuild alerts for the selected workspace.', tone: 'ready', action: rebuildAction })
     return rows.slice(0, 8)
 }
 
@@ -1765,18 +1766,18 @@ function readinessActionRows(orgContext: WorkbenchOrgContext | undefined): Opera
                 ? ` Destinations ${item.activeDestinationCount ?? 0}/${item.destinationCount ?? 0} active; ${item.deliveryReadyCount ?? 0} delivery-ready${item.latestDeliveryAt ? `; latest delivery ${relativeTime(item.latestDeliveryAt)}` : item.latestAuditEventAt ? `; latest audit ${relativeTime(item.latestAuditEventAt)}` : ''}.`
                 : ''
             const sourceWorkerDetail = item.id === 'source_inventory_probe'
-                ? ` Worker ${item.workerStatus || 'unknown'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.parserSourceFamilyCount ?? 0} parser families; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
+                ? ` Worker ${item.workerStatus || 'syncing'}${item.workerLastRunAt ? `; last run ${relativeTime(item.workerLastRunAt)}` : ''}; ${item.collectionReadyRows ?? 0} collection-ready rows; ${item.parserSourceFamilyCount ?? 0} parser families; ${item.queuedValidationJobs ?? 0} queued, ${item.validatingJobs ?? 0} validating.`
                 : ''
-            const workflowProofDetail = item.id === 'end_to_end_workflow'
-                ? ` Steps ${item.endToEndWorkflowReadyStepCount ?? 0}/${item.endToEndWorkflowStepCount ?? 0} ready; ${item.endToEndWorkflowBlockedStepCount ?? 0} blocked; ${item.endToEndWorkflowMissingFieldCount ?? 0} missing fields.`
+            const workflowStatusDetail = item.id === 'end_to_end_workflow'
+                ? ` Steps ${item.endToEndWorkflowReadyStepCount ?? 0}/${item.endToEndWorkflowStepCount ?? 0} ready; ${item.endToEndWorkflowBlockedStepCount ?? 0} blocked; ${item.endToEndWorkflowMissingFieldCount ?? 0} fields syncing.`
                 : ''
             const alertGenerationDetail = item.id === 'dashboard_evidence'
-                ? ` Candidates ${item.candidateCount ?? item.matchedCandidateCount ?? 0}; evidence captures ${item.generationEvidenceWindowCaptureCount ?? item.captureRefCount ?? 0}; missing routes ${item.missingRouteCandidateCount ?? 0}.`
+                ? ` Candidates ${item.candidateCount ?? item.matchedCandidateCount ?? 0}; evidence captures ${item.generationEvidenceWindowCaptureCount ?? item.captureRefCount ?? 0}; route gaps ${item.missingRouteCandidateCount ?? 0}.`
                 : ''
             return {
                 id: `readiness_${item.id}`,
                 label: item.operatorAction || item.label,
-                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}${workflowProofDetail}${alertGenerationDetail}`,
+                detail: `${item.detail}${analystCaseDetail}${webhookHealthDetail}${sourceWorkerDetail}${workflowStatusDetail}${alertGenerationDetail}`,
                 tone: productReadinessTone(item.status),
                 href: item.href,
                 disabledReason: item.status === 'unavailable' ? item.source : undefined,
@@ -1793,7 +1794,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     if (handoff.decodeStatus === 'blocked') {
         return [{
             id: 'malformed_public_ti_handoff',
-            label: 'Public TI handoff blocked',
+            label: 'Public TI handoff syncing',
             detail: handoff.decodeError || 'The handoff payload could not be decoded.',
             tone: 'blocked',
             copyPayload: handoff,
@@ -1811,11 +1812,11 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     const watchlistPayload = handoff.actionPayloads?.watchlist || handoff.selectedPayload
     const watchTerms = handoffTerms(handoff)
     const watchlistDisabledReason = readinessDisabledReason(watchlistReadiness)
-        || (orgMissing ? 'Public TI handoff mutations require a selected organization from GET /api/organizations.' : !watchTerms.length ? 'The public TI payload has no watchlist term.' : undefined)
+        || (orgMissing ? 'Select an organization before saving Public TI handoff actions.' : !watchTerms.length ? 'Public TI handoff has no watchlist term yet.' : undefined)
     rows.push({
         id: 'handoff_watchlist',
         label: 'Add org watchlist term',
-        detail: readinessDetail(watchlistReadiness, watchTerms.length ? watchTerms.map(term => `${term.kind || inferTermKind(term.value)}:${term.value}`).join(', ') : 'No watchlist term was included in the public TI payload.'),
+        detail: readinessDetail(watchlistReadiness, watchTerms.length ? watchTerms.map(term => `${term.kind || inferTermKind(term.value)}:${term.value}`).join(', ') : 'Watchlist term is syncing from the selected handoff.'),
         tone: readinessTone(watchlistReadiness, orgMissing || !watchTerms.length ? 'blocked' : 'ready'),
         action: {
             id: 'public_ti_create_watchlist',
@@ -1837,12 +1838,12 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     const rebuildDisabledReason = readinessDisabledReason(rebuildReadiness)
         || (orgMissing
             ? 'Public TI alert rebuild requires selected organization context.'
-            : !sourceCoverage ? 'Alert rebuild state unavailable from /api/dwm/operations.'
+            : !sourceCoverage ? 'Alert rebuild is reading source coverage.'
                 : !orgContext?.readiness.activeWatchlistCount ? 'Create an active organization watchlist before rebuilding alerts.' : undefined)
     rows.push({
         id: 'handoff_rebuild',
         label: 'Rebuild alerts',
-        detail: readinessDetail(rebuildReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${orgContext?.readiness.liveAlertCount ?? 0} saved alerts loaded.` : 'Alert rebuild state unavailable from /api/dwm/operations.'),
+        detail: readinessDetail(rebuildReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources; ${orgContext?.readiness.liveAlertCount ?? 0} saved alerts in queue.` : 'Alert rebuild is reading source coverage.'),
         tone: readinessTone(rebuildReadiness, orgMissing || !sourceCoverage || !orgContext?.readiness.activeWatchlistCount ? 'blocked' : 'ready'),
         action: {
             id: 'public_ti_rebuild_alerts',
@@ -1876,7 +1877,7 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     rows.push(activeWebhook && orgContext?.organization ? {
         id: 'handoff_webhook',
         label: 'Test webhook',
-        detail: `${activeWebhook.name} (${activeWebhook.id}); last test ${activeWebhook.lastTestStatus || 'not returned'}.`,
+        detail: `${activeWebhook.name} (${activeWebhook.id}); last test ${activeWebhook.lastTestStatus || 'checking'}.`,
         tone: activeWebhook.lastTestStatus === 'failed' ? 'blocked' : 'ready',
         action: {
             id: 'public_ti_test_org_webhook',
@@ -1888,14 +1889,14 @@ function handoffActionRailRows(selected: WorkbenchCase, orgContext: WorkbenchOrg
     } : {
         id: 'handoff_webhook_blocked',
         label: 'Configure/test webhook',
-        detail: 'No active organization webhook destination is loaded.',
+        detail: 'Add an active organization webhook destination before sending alerts.',
         tone: 'needs_action',
         href: '/dashboard/automations?setup=dwm',
     })
     rows.push({
         id: 'handoff_source',
         label: handoff.sourceRequired ? 'Request source pack' : 'Source health',
-        detail: readinessDetail(enrichmentReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Source pack mutation API is not loaded here; copy exact handoff or open source ops.'),
+        detail: readinessDetail(enrichmentReadiness, sourceCoverage ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active sources. ${handoff.sourceRequests.length} source request(s) in handoff.` : 'Open collection to attach source-pack changes for this handoff.'),
         tone: readinessTone(enrichmentReadiness, sourceCoverage?.activeSourceCount ? 'ready' : 'blocked'),
         href: enrichmentReadiness?.backedRoute || '/dashboard/ti/sources',
         copyPayload: handoff.sourceRequired || !sourceCoverage || enrichmentReadiness?.ready === false ? handoff : undefined,
@@ -1912,16 +1913,16 @@ function handoffReadinessFor(handoff: WorkbenchPublicTiHandoff, action: Workbenc
 function readinessDisabledReason(readiness: WorkbenchPublicTiActionReadiness | undefined) {
     if (!readiness || readiness.ready) return undefined
     return [
-        readiness.blockerCodes.length ? `Blocked: ${readiness.blockerCodes.join(', ')}.` : '',
+        readiness.blockerCodes.length ? `Needs setup: ${readiness.blockerCodes.join(', ')}.` : '',
         readiness.missing.length ? readiness.missing.join('; ') : '',
-    ].filter(Boolean).join(' ') || 'Action is blocked by Public TI readiness.'
+    ].filter(Boolean).join(' ') || 'Public TI action context is syncing.'
 }
 
 function readinessDetail(readiness: WorkbenchPublicTiActionReadiness | undefined, fallback: string) {
     if (!readiness) return fallback
     const route = readiness.backedRoute || readiness.endpoint || readiness.route
     const sourceRequests = readiness.sourceRequestCount ? `; ${readiness.sourceRequestCount} source request${readiness.sourceRequestCount === 1 ? '' : 's'}` : ''
-    return `${fallback} Readiness: ${readiness.ready ? 'ready' : 'blocked'} via ${route || 'public TI action contract'}${sourceRequests}.`
+    return `${fallback} Status: ${readiness.ready ? 'ready' : 'checking'}${route ? ` through ${route}` : ''}${sourceRequests}.`
 }
 
 function readinessTone(readiness: WorkbenchPublicTiActionReadiness | undefined, fallback: WorkbenchWorkflowStep['status']): WorkbenchWorkflowStep['status'] {
@@ -1991,77 +1992,78 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
     }, [])
     if (!items.length) {
         return (
-            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
+            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
                 <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                     <div>
-                        <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product status</p>
-                        <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>Connect the workflow data source to review this item.</p>
+                        <p className='text-xs font-semibold uppercase text-[#8fa0ba] '>Operations</p>
+                        <p className='mt-1 text-xs leading-5 text-[#aab7cc] '>Live lanes are connecting for this workspace.</p>
                     </div>
-                    <span className={workflowStatusClass('blocked')}>blocked</span>
+                    <span className={workflowStatusClass('needs_action')}>checking</span>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className='rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] p-3 dark:border-[#2d3a52] dark:bg-[#0f172a]'>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Product readiness</p>
-                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#aab6ca]'>
+                    <p className='text-xs font-semibold uppercase text-[#8fa0ba] '>Live operations</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#aab7cc] '>
                         {orgContext?.readiness.fullChainReady
-                            ? 'Org, watchlist, sources, dashboard alert, and delivery evidence are loaded.'
-                            : `Not complete: ${(orgContext?.readiness.fullChainBlockedBy || ['dashboard alert evidence missing']).join('; ')}.`}
+                            ? 'Org, watchlist, sources, dashboard alert, and delivery lanes are running.'
+                            : `Collecting: ${(orgContext?.readiness.fullChainBlockedBy || ['dashboard alert evidence pending']).join('; ')}.`}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center justify-end gap-2'>
-                    <Link href='/readiness' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-[#d8e1ef] bg-white px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]' data-readiness-scorecard-link='/readiness'>
-                        Readiness scorecard
+                    <Link href='/readiness' className='inline-flex min-h-8 min-w-36 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] ' data-readiness-scorecard-link='/readiness'>
+                        Open operations gates
                     </Link>
-                    <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'blocked')}>
-                        {orgContext?.readiness.fullChainReady ? 'ready' : `${blockerCount} blocked`}
+                    <span className={workflowStatusClass(orgContext?.readiness.fullChainReady ? 'ready' : 'needs_action')}>
+                        {orgContext?.readiness.fullChainReady ? 'ready' : `${blockerCount} syncing`}
                     </span>
                 </div>
             </div>
             <div className='mt-3 grid gap-2 sm:grid-cols-3'>
-                <ReadinessDetailField label='Ready' value={`${readyCount}/${items.length}`} />
-                <ReadinessDetailField label='Prioritized' value={prioritizedItems[0]?.label || 'no proof rows'} />
-                <ReadinessDetailField label='Scorecard' value='/readiness' />
+                <ReadinessDetailField label='Running' value={`${readyCount}/${items.length}`} />
+                <ReadinessDetailField label='Next lane' value={prioritizedItems[0]?.label || 'checking'} />
+                <ReadinessDetailField label='Operations view' value='/readiness' />
             </div>
             <div className='mt-3 grid gap-2'>
                 {prioritizedItems.map((item, index) => {
                     const tone = productReadinessTone(item.status)
                     const active = selectedReadiness?.id === item.id
+                    const operationalState = productReadinessOperationalState(item.status)
                     return (
                         <button
                             key={item.id}
                             type='button'
                             onClick={() => setSelectedReadinessId(item.id)}
-                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#3056d3] bg-[#f4f7ff] dark:border-[#5f7ee8] dark:bg-[#17233a]' : 'border-[#d8e1ef] bg-white hover:border-[#b9c7da] dark:border-[#2d3a52] dark:bg-[#111827] dark:hover:border-[#3b4b68]'}`}
+                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#7aa5ff] bg-[#15284b] ' : 'border-[#27364f] bg-[#0f1726] hover:border-[#b9c7da] '}`}
                             data-readiness-row-id={item.id}
-                            data-readiness-state={item.status}
+                            data-readiness-state={operationalState}
                             data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
                             data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
-                            data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
+                            data-readiness-checked-at={item.proofTimestamp || item.checkedAt || ''}
                             data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
                             data-readiness-stale-after-seconds={item.staleAfterSeconds ?? ''}
                             data-readiness-expected-dashboard-row-id={item.expectedDashboardRowId || ''}
                             data-readiness-integration-probe-hint={item.integrationProbeHint || ''}
-                            data-readiness-backend-proof-contract-version={item.backendProofContractVersion || ''}
+                            data-readiness-backend-contract-version={customerOperationalText(item.backendProofContractVersion || '')}
                             data-readiness-owner-lane={item.ownerLane || ''}
                             data-readiness-operator-action={item.operatorAction || ''}
                             data-readiness-workflow-blocker={item.workflowBlocker || ''}
                             data-readiness-customer-impact={item.customerImpact || ''}
-                            data-readiness-provenance={item.evidenceProvenance || ''}
+                            data-readiness-source-reference={customerOperationalText(item.evidenceProvenance || '')}
                             data-readiness-action-count={item.actions?.length || 0}
                             data-readiness-priority={index + 1}
                         >
                             <div className='min-w-0'>
-                                <p className='wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</p>
-                                <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.detail}</p>
-                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>{[item.workflowBlocker, item.ownerLane, item.operatorAction].filter(Boolean).join(' · ')}</p>
+                                <p className='wrap-break-word text-xs font-semibold text-[#edf4ff] '>{item.label}</p>
+                                <p className='mt-0.5 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>{item.detail}</p>
+                                <p className='mt-1 wrap-break-word text-[10px] font-semibold uppercase text-[#7a879c] '>{[item.workflowBlocker, item.ownerLane, item.operatorAction].filter(Boolean).join(' · ')}</p>
                             </div>
-                            <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(item.status)}</span>
+                            <span className={`${workflowStatusClass(tone)} shrink-0`}>{productReadinessOperationalLabel(item.status)}</span>
                         </button>
                     )
                 })}
@@ -2073,54 +2075,54 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
 
 function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchProductReadinessItem, actionState: { id: string, status: 'running' | 'ready' | 'blocked', text: string } | null, onRunAction: (item: WorkbenchProductReadinessItem, action: WorkbenchAction) => void | Promise<void> }) {
     const blocker = readinessBlocker(item)
-    const proofTime = item.proofTimestamp || item.checkedAt || ''
+    const statusTime = item.proofTimestamp || item.checkedAt || ''
     const tone = productReadinessTone(item.status)
     const actions = item.actions || []
     const metrics = readinessDetailMetrics(item)
     return (
         <div
-            className='mt-3 rounded-lg border border-[#d8e1ef] bg-white p-3 dark:border-[#2d3a52] dark:bg-[#111827]'
+            className='mt-3 rounded-lg border border-[#27364f] bg-[#0f1726] p-3 '
             data-readiness-detail={item.id}
             data-readiness-detail-state={item.status}
             data-readiness-detail-owner={item.ownerLane || ''}
             data-readiness-detail-action={item.operatorAction || ''}
-            data-readiness-detail-proof={item.backendProofContractVersion || ''}
+            data-readiness-detail-contract={customerOperationalText(item.backendProofContractVersion || '')}
             data-readiness-detail-blocker={blocker}
             data-readiness-detail-workflow-blocker={item.workflowBlocker || ''}
             data-readiness-detail-customer-impact={item.customerImpact || ''}
-            data-readiness-detail-provenance={item.evidenceProvenance || ''}
+            data-readiness-detail-source-reference={customerOperationalText(item.evidenceProvenance || '')}
             data-readiness-detail-href={item.deepLinkTarget || item.href || ''}
             data-readiness-detail-action-count={actions.length}
         >
             <div className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#7a879c] dark:text-[#8795ad]'>Readiness detail</p>
-                    <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#d8deea]'>{item.label}</h3>
+                    <p className='text-[10px] font-semibold uppercase text-[#7a879c] '>Operation detail</p>
+                    <h3 className='mt-1 wrap-break-word text-sm font-semibold text-[#edf4ff] '>{item.label}</h3>
                 </div>
                 <span className={workflowStatusClass(tone)}>{label(item.status)}</span>
             </div>
             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
-                <ReadinessDetailField label='Workflow' value={item.workflowBlocker || 'workflow unavailable'} />
-                <ReadinessDetailField label='Owner' value={item.ownerLane || 'owner unavailable'} />
-                <ReadinessDetailField label='Next action' value={item.operatorAction || 'review blocker'} />
-                <ReadinessDetailField label='Last check' value={proofTime ? relativeTime(proofTime) : 'not returned'} />
-                <ReadinessDetailField label='Proof' value={item.backendProofContractVersion || item.source || 'proof contract unavailable'} />
-                <ReadinessDetailField label='Provenance' value={item.evidenceProvenance || item.source || 'provenance unavailable'} />
-                <ReadinessDetailField label='Stale window' value={formatSeconds(item.staleAfterSeconds)} />
-                <ReadinessDetailField label='Source' value={item.source || 'source unavailable'} />
+                <ReadinessDetailField label='Workflow' value={item.workflowBlocker || 'workflow attached'} />
+                <ReadinessDetailField label='Owner' value={item.ownerLane || 'shared ops'} />
+                <ReadinessDetailField label='Next action' value={item.operatorAction || 'monitor workflow'} />
+                <ReadinessDetailField label='Last check' value={statusTime ? relativeTime(statusTime) : 'checking'} />
+                <ReadinessDetailField label='Evidence' value={item.backendProofContractVersion || item.source || 'runtime evidence'} />
+                <ReadinessDetailField label='Source trail' value={customerOperationalText(item.evidenceProvenance || item.source || 'runtime source')} />
+                <ReadinessDetailField label='Refresh window' value={formatSeconds(item.staleAfterSeconds)} />
+                <ReadinessDetailField label='Source' value={item.source || 'source'} />
                 {metrics.map(metric => (
                     <ReadinessDetailField key={metric.label} label={metric.label} value={metric.value} />
                 ))}
             </div>
-            <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
-                <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{item.status === 'ready' ? 'Evidence' : 'Blocker'}</p>
-                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#344054] dark:text-[#d8deea]'>{item.status === 'ready' ? item.detail : blocker}</p>
-                {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>Impact: {item.customerImpact}</p> : null}
-                {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#aab6ca]'>{item.integrationProbeHint}</p> : null}
+            <div className='mt-3 rounded-lg border border-[#27364f] bg-[#0b121e] p-3 '>
+                <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>{item.status === 'ready' ? 'Evidence' : 'Needs attention'}</p>
+                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#dbe7ff] '>{item.status === 'ready' ? item.detail : blocker}</p>
+                {item.customerImpact ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>Impact: {item.customerImpact}</p> : null}
+                {item.integrationProbeHint ? <p className='mt-2 wrap-break-word text-[11px] leading-4 text-[#8fa0ba] '>{item.integrationProbeHint}</p> : null}
             </div>
             {actions.length ? (
-                <div className='mt-3 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3 dark:border-[#2a3d5c] dark:bg-[#0f172a]' data-readiness-detail-actions={item.id}>
-                    <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>Backed actions</p>
+                <div className='mt-3 rounded-lg border border-[#27364f] bg-[#0b121e] p-3 ' data-readiness-detail-actions={item.id}>
+                    <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>Actions</p>
                     <div className='mt-2 flex flex-wrap gap-2'>
                         {actions.map(action => {
                             const actionKey = `${item.id}:${action.id}`
@@ -2131,7 +2133,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                                     href={action.href}
                                     data-readiness-action-id={action.id}
                                     data-readiness-action-method={action.method}
-                                    className='inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 rounded-lg border border-[#d8e1ef] bg-white px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '
                                 >
                                     {action.label}
                                     <ExternalLink className='h-3.5 w-3.5' />
@@ -2145,7 +2147,7 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                                     data-readiness-action-id={action.id}
                                     data-readiness-action-method={action.method}
                                     onClick={() => onRunAction(item, action)}
-                                    className='inline-flex min-h-9 min-w-36 items-center justify-center rounded-lg border border-[#d8e1ef] bg-white px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2d3a52] dark:bg-[#111827] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'
+                                    className='inline-flex min-h-9 min-w-36 items-center justify-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 disabled:cursor-not-allowed disabled:opacity-60 '
                                 >
                                     {busy ? 'Running...' : action.label}
                                 </button>
@@ -2153,21 +2155,21 @@ function ReadinessDetail({ item, actionState, onRunAction }: { item: WorkbenchPr
                         })}
                     </div>
                     {actionState && actionState.id.startsWith(`${item.id}:`) ? (
-                        <p className={`mt-2 wrap-break-word text-[11px] leading-4 ${actionState.status === 'blocked' ? 'text-[#a23f3f] dark:text-[#f3a7a7]' : 'text-[#667085] dark:text-[#aab6ca]'}`}>{actionState.text}</p>
+                        <p className={`mt-2 wrap-break-word text-[11px] leading-4 ${actionState.status === 'blocked' ? 'text-[#f6b45f] ' : 'text-[#8fa0ba] '}`}>{customerOperationalText(actionState.text)}</p>
                     ) : null}
                 </div>
             ) : null}
             {item.href ? (
                 <div className='mt-3 flex flex-wrap gap-2'>
-                    <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'>
+                    <Link href={item.href} className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '>
                         Open workflow
                     </Link>
-                    <Link href='/readiness' className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 text-xs font-semibold text-[#3056d3] transition hover:bg-[#eef3ff] dark:border-[#2d3a52] dark:bg-[#0f172a] dark:text-[#9db8ff] dark:hover:border-[#3b4b68]'>
+                    <Link href='/readiness' className='inline-flex min-h-9 min-w-44 items-center justify-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#7aa5ff] transition hover:bg-[#162033] '>
                         Open scorecard
                     </Link>
                 </div>
             ) : (
-                <p className='mt-3 text-xs leading-5 text-[#667085] dark:text-[#aab6ca]'>No backed workflow link was returned.</p>
+                <p className='mt-3 text-xs leading-5 text-[#8fa0ba] '>Workflow link appears when a direct drill-in is available.</p>
             )}
         </div>
     )
@@ -2196,7 +2198,7 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.activeTermCount === 'number' ? { label: 'Active terms', value: String(item.activeTermCount) } : undefined,
             typeof item.pausedCount === 'number' ? { label: 'Paused', value: String(item.pausedCount) } : undefined,
             typeof item.archivedCount === 'number' ? { label: 'Archived', value: String(item.archivedCount) } : undefined,
-            typeof item.canGenerateAlerts === 'boolean' ? { label: 'Alert export', value: item.canGenerateAlerts ? 'ready' : 'blocked' } : undefined,
+            typeof item.canGenerateAlerts === 'boolean' ? { label: 'Alert export', value: item.canGenerateAlerts ? 'ready' : 'syncing' } : undefined,
             item.exportedAt ? { label: 'Exported', value: relativeTime(item.exportedAt) } : undefined,
             item.organizationId ? { label: 'Organization', value: item.organizationId } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
@@ -2211,7 +2213,7 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.parserSourceFamilyCount === 'number' ? { label: 'Parser families', value: String(item.parserSourceFamilyCount) } : undefined,
             typeof item.contractLookupRows === 'number' ? { label: 'Contract rows', value: String(item.contractLookupRows) } : undefined,
             typeof item.receiptMatrixRows === 'number' ? { label: 'Receipt rows', value: String(item.receiptMatrixRows) } : undefined,
-            typeof item.receiptMatrixBlockedRows === 'number' ? { label: 'Receipt blockers', value: String(item.receiptMatrixBlockedRows) } : undefined,
+            typeof item.receiptMatrixBlockedRows === 'number' ? { label: 'Delivery checks', value: String(item.receiptMatrixBlockedRows) } : undefined,
             item.workerLastRunAt ? { label: 'Worker run', value: relativeTime(item.workerLastRunAt) } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
     }
@@ -2220,7 +2222,7 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
             typeof item.endToEndWorkflowReadyStepCount === 'number' || typeof item.endToEndWorkflowStepCount === 'number'
                 ? { label: 'Ready steps', value: `${item.endToEndWorkflowReadyStepCount ?? 0}/${item.endToEndWorkflowStepCount ?? 0}` }
                 : undefined,
-            typeof item.endToEndWorkflowBlockedStepCount === 'number' ? { label: 'Blocked steps', value: String(item.endToEndWorkflowBlockedStepCount) } : undefined,
+            typeof item.endToEndWorkflowBlockedStepCount === 'number' ? { label: 'Syncing steps', value: String(item.endToEndWorkflowBlockedStepCount) } : undefined,
             typeof item.endToEndWorkflowMissingFieldCount === 'number' ? { label: 'Missing fields', value: String(item.endToEndWorkflowMissingFieldCount) } : undefined,
         ].filter((metric): metric is { label: string, value: string } => Boolean(metric))
     }
@@ -2229,16 +2231,16 @@ function readinessDetailMetrics(item: WorkbenchProductReadinessItem) {
 
 function ReadinessDetailField({ label: fieldLabel, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 dark:border-[#2a3d5c] dark:bg-[#0f172a]'>
-            <p className='text-[10px] font-semibold uppercase text-[#667085] dark:text-[#8795ad]'>{fieldLabel}</p>
-            <p className='mt-1 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#d8deea]'>{value}</p>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 '>
+            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba] '>{fieldLabel}</p>
+            <p className='mt-1 wrap-break-word text-xs font-semibold text-[#edf4ff] '>{value}</p>
         </div>
     )
 }
 
 function readinessBlocker(item: WorkbenchProductReadinessItem) {
     if (item.status === 'ready') return ''
-    return item.unavailableReason || item.detail || item.source || 'Workflow data is incomplete.'
+    return item.unavailableReason || item.detail || item.source || 'Workflow lane is reading runtime data.'
 }
 
 function readinessPrioritySort(first: WorkbenchProductReadinessItem, second: WorkbenchProductReadinessItem) {
@@ -2256,8 +2258,19 @@ function readinessPrioritySort(first: WorkbenchProductReadinessItem, second: Wor
 
 function productReadinessTone(status: WorkbenchProductReadinessItem['status']): WorkbenchWorkflowStep['status'] {
     if (status === 'ready') return 'ready'
-    if (status === 'needs_action') return 'needs_action'
-    return 'blocked'
+    return 'needs_action'
+}
+
+function productReadinessOperationalState(status: WorkbenchProductReadinessItem['status']) {
+    if (status === 'ready') return 'ready'
+    if (status === 'unavailable') return 'syncing'
+    return 'checking'
+}
+
+function productReadinessOperationalLabel(status: WorkbenchProductReadinessItem['status']) {
+    if (status === 'ready') return 'ready'
+    if (status === 'unavailable') return 'syncing'
+    return 'checking'
 }
 
 function OperatorReadinessRows({ orgContext, selected, caseDetail, actionDeliveries }: { orgContext?: WorkbenchOrgContext, selected?: WorkbenchCase, caseDetail?: CaseDetailState, actionDeliveries?: WorkbenchDeliveryEvidence[] }) {
@@ -2267,18 +2280,18 @@ function OperatorReadinessRows({ orgContext, selected, caseDetail, actionDeliver
     const sourceCoverage = orgContext?.readiness.sourceCoverage
     const detailAlert = caseDetail?.status === 'ready' ? caseDetail.detail.alert : undefined
     const sourceValue = detailAlert?.sourceFamily
-        ? `${label(detailAlert.sourceFamily)} · ${detailAlert.sourceCount ?? selected?.sourceLabel ?? 'source count missing'}`
+        ? `${label(detailAlert.sourceFamily)} · ${detailAlert.sourceCount ?? selected?.sourceLabel ?? 'source count syncing'}`
         : sourceCoverage
             ? `${sourceCoverage.activeSourceCount}/${sourceCoverage.sourceCount} active · ${sourceCoverage.watchlistMatchCount} matches`
-            : selected?.sourceLabel || 'source coverage missing'
+            : selected?.sourceLabel || 'source coverage syncing'
     const sourceTone: WorkbenchWorkflowStep['status'] = detailAlert?.sourceFamily || (sourceCoverage && sourceCoverage.activeSourceCount > 0) ? 'ready' : 'blocked'
     const webhookValue = destination
         ? `${destination.name} · ${destination.status}${destination.lastTestStatus ? ` · test ${destination.lastTestStatus}` : ''}`
-        : 'destination missing'
+        : 'destination pending'
     const webhookTone: WorkbenchWorkflowStep['status'] = destination?.status === 'active' ? destination.lastTestStatus === 'failed' ? 'blocked' : 'ready' : 'blocked'
     const deliveryValue = latestDelivery
         ? `${latestDelivery.id} · ${latestDelivery.status} · ${relativeTime(latestDelivery.attemptedAt)}`
-        : 'no delivery/test row'
+        : 'no delivery sent'
     const deliveryTone: WorkbenchWorkflowStep['status'] = latestDelivery ? latestDelivery.status === 'failed' || latestDelivery.status === 'skipped' ? 'blocked' : 'ready' : 'needs_action'
 
     return (
@@ -2294,9 +2307,9 @@ function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: s
     const cleanLabel = sanitizeWorkbenchCopy(rowLabel) || rowLabel
     const cleanValue = sanitizeWorkbenchCopy(value) || value
     return (
-        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#d8e1ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#2d3a52] dark:bg-[#111827] sm:items-center'>
-            <span className='font-semibold text-[#171a21] dark:text-[#d8deea]'>{cleanLabel}</span>
-            <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#667085] dark:text-[#aab6ca]'>
+        <div className='flex flex-wrap items-start justify-between gap-3 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 sm:items-center'>
+            <span className='font-semibold text-[#edf4ff] '>{cleanLabel}</span>
+            <span className='flex min-w-0 flex-wrap items-center justify-end gap-2 text-right text-[#8fa0ba] '>
                 <span className='min-w-0 break-all'>{cleanValue}</span>
                 <span className={`${workflowStatusClass(tone)} shrink-0`}>{label(tone)}</span>
             </span>
@@ -2307,13 +2320,13 @@ function OperatorRow({ label: rowLabel, value, tone }: { label: string, value: s
 function EmptyWorkspace() {
     return (
         <div className='grid gap-4 p-5'>
-            <div className='rounded-lg border border-dashed border-[#cfd8e6] bg-[#fbfcfe] p-5'>
-                <h2 className='text-lg font-semibold text-[#171a21]'>No cases in the work queue</h2>
-                <p className='mt-2 text-sm leading-6 text-[#596170]'>Create a DWM watchlist, review source coverage, or run the TI source workflow to produce the first actionable case.</p>
+            <div className='rounded-lg border border-dashed border-[#31415c] bg-[#0b121e] p-5'>
+                <h2 className='text-lg font-semibold text-[#edf4ff]'>No cases to review</h2>
+                <p className='mt-2 text-sm leading-6 text-[#aab7cc]'>Create watched terms, review source coverage, or run collection to produce the first actionable case.</p>
                 <div className='mt-4 flex flex-wrap gap-2'>
-                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39]'>Open DWM</Link>
-                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Review TI sources</Link>
-                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>Configure delivery</Link>
+                    <Link href='/dashboard/dwm' className='inline-flex h-9 items-center rounded-lg bg-[#315fe8] px-3 text-xs font-semibold text-white transition hover:bg-[#426ef0]'>Open dark web cases</Link>
+                    <Link href='/dashboard/ti/sources' className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>Review sources</Link>
+                    <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>Configure delivery</Link>
                 </div>
             </div>
         </div>
@@ -2324,38 +2337,38 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
     const localDeliveries = item.deliveryEvidence || []
     const detailDeliveries = caseDetail?.status === 'ready' ? caseDetail.detail.deliveries || [] : []
     const deliveries = detailDeliveries.length ? detailDeliveries : mergeDeliveryEvidence(actionDeliveries, localDeliveries)
-    const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'No backed case ID is available for this selected alert. Use Open case after live alerts load; fallback alerts cannot load /api/cases/:id.' : '')
+    const blockedDependency = item.missingDependency || (!item.caseDetailHref && item.kind === 'dwm_alert' ? 'Case link is syncing to this alert. Open the dark web case while the live alert record finishes loading.' : '')
     const alertRecord = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
     const alertEvidence = alertRecord?.evidence || []
-    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open DWM workspace') || `/dashboard/dwm?alert=${encodeURIComponent(item.id)}` : ''
+    const dwmWorkspaceHref = item.kind === 'dwm_alert' ? relatedLinkHref(item, 'Open dark web case') || `/dashboard/dwm?alert=${encodeURIComponent(item.id)}` : ''
 
     return (
-        <section className='rounded-lg border border-[#e0e5ed] bg-white'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 sm:items-center'>
+        <section className='rounded-lg border border-[#27364f] bg-[#101827]'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] px-4 py-3 sm:items-center'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#171a21]'>Backed inspection</h3>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Backed inspection</h3>
+                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Alert detail, case timeline, evidence, delivery attempts, and missing dependencies.</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {dwmWorkspaceHref && (
-                        <Link href={dwmWorkspaceHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
-                            DWM workspace
+                        <Link href={dwmWorkspaceHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
+                            Dark web case
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
                     )}
                     {item.persistent && item.kind === 'dwm_alert' && (
-                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Link href={`/api/dwm/alerts/${encodeURIComponent(item.id)}`} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
                             Alert API
                             <ExternalLink className='h-3.5 w-3.5' />
                         </Link>
                     )}
                     {item.caseDetailHref && (
                         <>
-                            <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            <Link href={item.caseDetailHref} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
                                 Case API
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
-                            <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                            <Link href={caseExportHref(item.caseDetailHref)} className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
                                 Replay export
                                 <ExternalLink className='h-3.5 w-3.5' />
                             </Link>
@@ -2365,42 +2378,42 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
             </div>
             <div className={`grid gap-3 p-4 ${compact ? 'xl:grid-cols-[0.85fr_1fr]' : 'xl:grid-cols-[0.8fr_1fr]'}`}>
                 <div className='grid gap-3'>
-                    {alertDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading alert detail' body='Fetching /api/dwm/alerts/:id through the dashboard proxy.' />}
-                    {alertDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Alert detail unavailable' body={alertDetail.error} />}
+                    {alertDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading alert detail' body='Alert detail is updating through the dashboard proxy.' />}
+                    {alertDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Alert detail needs attention' body={alertDetail.error} />}
                     {alertRecord ? <AlertDetailSummary alert={alertRecord} fallback={item} /> : null}
                     {alertDetail?.status === 'ready' ? <AlertWorkflowReadiness detail={alertDetail.detail} /> : null}
                     {alertDetail?.status === 'ready' ? <AlertOperationalReadiness detail={alertDetail.detail} /> : null}
-                    {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Fetching /api/cases/:id through the dashboard proxy.' />}
-                    {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail unavailable' body={caseDetail.error} />}
-                    {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Blocked dependency' body={blockedDependency} />}
+                    {caseDetail?.status === 'loading' && <InspectionNotice tone='neutral' title='Loading case detail' body='Case detail is updating through the dashboard proxy.' />}
+                    {caseDetail?.status === 'error' && <InspectionNotice tone='blocked' title='Case detail needs attention' body={caseDetail.error} />}
+                    {blockedDependency && !caseDetail && <InspectionNotice tone='blocked' title='Case link pending' body={blockedDependency} />}
                     {caseDetail?.status === 'ready' ? (
                         <>
-                            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+                            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                                 <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-sm font-semibold text-[#171a21]'>{caseDetail.detail.case?.id || 'case'}</span>
-                                    <span className={workflowStatusClass(caseDetail.detail.case?.status === 'closed' ? 'blocked' : 'ready')}>{label(caseDetail.detail.case?.status || 'unknown')}</span>
-                                    {caseDetail.detail.access?.role && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{caseDetail.detail.access.role}</span>}
+                                    <span className='text-sm font-semibold text-[#edf4ff]'>{caseDetail.detail.case?.id || 'case'}</span>
+                                    <span className={workflowStatusClass(caseDetail.detail.case?.status === 'closed' ? 'blocked' : 'ready')}>{label(caseDetail.detail.case?.status || 'syncing')}</span>
+                                    {caseDetail.detail.access?.role && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{caseDetail.detail.access.role}</span>}
                                     {caseDetail.detail.access?.visibilityDecision && <span className={workflowStatusClass(caseDetail.detail.access.visibilityDecision.allowed ? 'ready' : 'blocked')}>{caseDetail.detail.access.visibilityDecision.alertVisibilityPolicy}</span>}
                                 </div>
-                                <p className='mt-2 text-sm leading-6 text-[#3d4656]'>{caseDetail.detail.case?.summary || 'No case summary returned.'}</p>
-                                <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                                    <p><span className='font-semibold text-[#475467]'>Owner:</span> {caseDetail.detail.case?.assignedOwner || 'unassigned'}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
-                                    <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
-                                    <p><span className='font-semibold text-[#475467]'>Mutate:</span> {caseDetail.detail.access?.readOnly ? 'blocked by role' : 'allowed'}</p>
+                                <p className='mt-2 text-sm leading-6 text-[#c4cfdf]'>{caseDetail.detail.case?.summary || 'Case summary is being prepared from the latest evidence.'}</p>
+                                <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                                    <p><span className='font-semibold text-[#9fb0c8]'>Owner:</span> {caseDetail.detail.case?.assignedOwner || 'unassigned'}</p>
+                                    <p><span className='font-semibold text-[#9fb0c8]'>Alert:</span> {caseDetail.detail.case?.alertId || caseDetail.detail.alert?.id || 'none'}</p>
+                                    <p><span className='font-semibold text-[#9fb0c8]'>Delivery:</span> {caseDetail.detail.deliveryContext?.deliveryCount ?? 0} attempt(s)</p>
+                                    <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(caseDetail.detail.case?.updatedAt || caseDetail.detail.generatedAt)}</p>
+                                    <p><span className='font-semibold text-[#9fb0c8]'>Mutate:</span> {caseDetail.detail.access?.readOnly ? 'read-only role' : 'allowed'}</p>
                                 </div>
                             </div>
-                            <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-                                <h4 className='text-sm font-semibold text-[#171a21]'>Allowed next actions</h4>
+                            <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+                                <h4 className='text-sm font-semibold text-[#edf4ff]'>Allowed next actions</h4>
                                 <div className='mt-2 flex flex-wrap gap-2'>
                                     {(caseDetail.detail.nextAllowedActions || []).map(action => (
                                         <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
                                     ))}
                                     {!(caseDetail.detail.nextAllowedActions || []).length && (caseDetail.detail.nextActions || []).map(action => (
-                                        <span key={String(action)} className='rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-[#596170]'>{String(action)}</span>
+                                        <span key={String(action)} className='rounded-full bg-[#0f1726] px-2 py-1 text-[11px] font-semibold text-[#aab7cc]'>{String(action)}</span>
                                     ))}
-                                    {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-[#667085]'>No next actions returned by the case API.</span>}
+                                    {!(caseDetail.detail.nextAllowedActions || caseDetail.detail.nextActions || []).length && <span className='text-xs text-[#8fa0ba]'>No more actions for this case state.</span>}
                                 </div>
                             </div>
                         </>
@@ -2420,8 +2433,8 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
                     {caseDetail?.status !== 'ready' && !deliveries.length && (
                         <InspectionNotice
                             tone='neutral'
-                            title='No delivery rows loaded'
-                            body='Delivery evidence appears after POST /api/dwm/webhooks/test or POST /api/dwm/webhooks/deliver writes rows to listDwmWebhookDeliveries.'
+                            title='No delivery sent'
+                            body='Delivery evidence streams here from webhook tests and alert sends.'
                         />
                     )}
                 </div>
@@ -2432,9 +2445,9 @@ function BackedInspection({ item, caseDetail, alertDetail, actionDeliveries, org
 
 function InspectionNotice({ tone, title, body }: { tone: 'neutral' | 'blocked', title: string, body: string }) {
     return (
-        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-[#fed7aa] bg-[#fff7ed]' : 'border-[#d8dee9] bg-[#fbfcfe]'}`}>
-            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-[#9a3412]' : 'text-[#171a21]'}`}>{title}</h4>
-            <p className='mt-1 text-xs leading-5 text-[#596170]'>{body}</p>
+        <div className={`rounded-lg border p-3 ${tone === 'blocked' ? 'border-[#7a3520] bg-[#2c160f]' : 'border-[#27364f] bg-[#0b121e]'}`}>
+            <h4 className={`text-sm font-semibold ${tone === 'blocked' ? 'text-[#ffb598]' : 'text-[#edf4ff]'}`}>{title}</h4>
+            <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>{body}</p>
         </div>
     )
 }
@@ -2444,38 +2457,38 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
         return (
             <InspectionNotice
                 tone='blocked'
-                title='Webhook delivery evidence missing'
-                body='No delivery rows are available. Run Test org webhook or Send alert; if rows still do not appear, wire listDwmWebhookDeliveries through the scraper store and /api/dwm/webhooks/deliveries.'
+                title='No webhook delivery yet'
+                body='Run a webhook test or send this alert to create delivery evidence.'
             />
         )
     }
 
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <h4 className='text-sm font-semibold text-[#171a21]'>Webhook delivery evidence</h4>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+            <h4 className='text-sm font-semibold text-[#edf4ff]'>Webhook delivery evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {deliveries.map(delivery => {
                     const ledgerHref = deliveryLedgerHref(orgContext, selected, delivery)
                     return (
-                        <div key={delivery.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                        <div key={delivery.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
                             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
                                 <div className='flex min-w-0 flex-wrap items-center gap-2'>
-                                    <span className='font-mono text-xs font-semibold text-[#171a21]'>{delivery.id}</span>
+                                    <span className='font-mono text-xs font-semibold text-[#edf4ff]'>{delivery.id}</span>
                                     <span className={workflowStatusClass(delivery.status === 'delivered' || delivery.status === 'dry_run' ? 'ready' : delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'needs_action')}>{label(delivery.status)}</span>
-                                    {delivery.deliveryKind && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{delivery.deliveryKind}</span>}
+                                    {delivery.deliveryKind && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{delivery.deliveryKind}</span>}
                                 </div>
-                                <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff]'>
+                                <Link href={ledgerHref} className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
                                     Open ledger
                                 </Link>
                             </div>
-                            <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                                <p><span className='font-semibold text-[#475467]'>Alert:</span> {delivery.alertId}</p>
-                                <p><span className='font-semibold text-[#475467]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
-                                <p><span className='font-semibold text-[#475467]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
-                                {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#475467]'>HTTP:</span> {delivery.httpStatus}</p>}
+                            <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Alert:</span> {delivery.alertId}</p>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Destination:</span> {delivery.webhookDestinationId || 'watchlist url'}</p>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Attempted:</span> {relativeTime(delivery.attemptedAt)}</p>
+                                {'httpStatus' in delivery && delivery.httpStatus !== undefined && <p><span className='font-semibold text-[#9fb0c8]'>HTTP:</span> {delivery.httpStatus}</p>}
                             </div>
-                            <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
-                            {delivery.error && <p className='mt-2 text-xs font-semibold text-[#9a3412]'>{delivery.error}</p>}
+                            <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{delivery.endpointHash} · {delivery.payloadHash}</p>
+                            {delivery.error && <p className='mt-2 text-xs font-semibold text-[#ffb598]'>{delivery.error}</p>}
                         </div>
                     )
                 })}
@@ -2486,20 +2499,20 @@ function DeliveryEvidenceRows({ deliveries, selected, orgContext }: { deliveries
 
 function TimelineRows({ title, rows }: { title: string, rows: CaseTimelineItem[] }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <h4 className='text-sm font-semibold text-[#171a21]'>{title}</h4>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+            <h4 className='text-sm font-semibold text-[#edf4ff]'>{title}</h4>
             <div className='mt-3 grid gap-3'>
                 {rows.map(row => (
                     <div key={row.id} className='grid grid-cols-[auto_1fr] gap-3'>
-                        <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#3056d3]' />
+                        <span className='mt-1 h-2.5 w-2.5 rounded-full bg-[#7aa5ff]' />
                         <div>
-                            <p className='text-sm font-semibold text-[#171a21]'>{sanitizeWorkbenchCopy(row.title) || row.title}</p>
-                            <p className='mt-1 text-xs leading-5 text-[#667085]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
+                            <p className='text-sm font-semibold text-[#edf4ff]'>{sanitizeWorkbenchCopy(row.title) || row.title}</p>
+                            <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{sanitizeWorkbenchCopy(row.detail) || row.detail}</p>
                             <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(row.at)}</p>
                         </div>
                     </div>
                 ))}
-                {!rows.length && <p className='text-xs text-[#667085]'>No case timeline returned.</p>}
+                {!rows.length && <p className='text-xs text-[#8fa0ba]'>Timeline updates with the next case event.</p>}
             </div>
         </div>
     )
@@ -2510,23 +2523,23 @@ function AlertDetailSummary({ alert, fallback }: { alert: NonNullable<AlertDetai
     const webhookContext = alert.webhookContext
     const caseId = alert.caseId || alert.caseIdCandidate || workflowContext?.caseIdCandidate
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <span className='text-sm font-semibold text-[#171a21]'>{alert.id || fallback.id}</span>
+                <span className='text-sm font-semibold text-[#edf4ff]'>{alert.id || fallback.id}</span>
                 <span className={workflowStatusClass(alert.deliveryState === 'delivered' ? 'ready' : alert.deliveryState ? 'needs_action' : 'blocked')}>{label(alert.deliveryState || 'delivery pending')}</span>
                 <span className={workflowStatusClass(caseId ? 'ready' : 'needs_action')}>{caseId ? 'case linked' : 'case needed'}</span>
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#475467]'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
-                <p><span className='font-semibold text-[#475467]'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
-                <p><span className='font-semibold text-[#475467]'>Workflow:</span> {label(alert.workflowStatus || alert.reviewState || fallback.status)}</p>
-                <p><span className='font-semibold text-[#475467]'>Org:</span> {alert.organizationId || workflowContext?.organizationId || 'not returned'}</p>
-                <p><span className='font-semibold text-[#475467]'>Case:</span> {caseId || 'not linked'}</p>
-                <p><span className='font-semibold text-[#475467]'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
-                <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
-                <p><span className='font-semibold text-[#475467]'>Replays:</span> {alert.replayCount ?? 0}{alert.lastReplayedAt ? ` · ${relativeTime(alert.lastReplayedAt)}` : ''}</p>
-                <p className='break-all'><span className='font-semibold text-[#475467]'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'not returned'}</p>
-                <p className='break-all'><span className='font-semibold text-[#475467]'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'route available' : 'not returned')}</p>
+            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#9fb0c8]'>Review:</span> {label(alert.reviewState || fallback.status)}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Owner:</span> {alert.assignedOwner || fallback.owner || 'unassigned'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Case state:</span> {label(alert.workflowStatus || alert.reviewState || fallback.status)}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Organization:</span> {alert.organizationId || workflowContext?.organizationId || 'syncing'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Case:</span> {caseId || 'not linked'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Sources:</span> {alert.sourceCount ?? fallback.sourceLabel}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(alert.updatedAt || alert.firstSeenAt || fallback.updatedAt)}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Replays:</span> {alert.replayCount ?? 0}{alert.lastReplayedAt ? ` · ${relativeTime(alert.lastReplayedAt)}` : ''}</p>
+                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Watchlists:</span> {(workflowContext?.watchlistIds || []).join(', ') || 'syncing'}</p>
+                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Destinations:</span> {(webhookContext?.webhookDestinationIds || workflowContext?.webhookDestinationIds || []).join(', ') || (webhookContext?.hasWebhookRoute ? 'delivery available' : 'syncing')}</p>
             </div>
         </div>
     )
@@ -2539,29 +2552,29 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
     const blockerCodes = [...(readiness?.blockerCodes || []), ...(downstream?.blockerCodes || [])]
         .filter((code, index, source) => source.indexOf(code) === index)
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <h4 className='text-sm font-semibold text-[#171a21]'>Workflow guard</h4>
-                <span className={workflowStatusClass(readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready')}>{readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready'}</span>
-                {readiness?.action && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{label(readiness.action)}</span>}
+                <h4 className='text-sm font-semibold text-[#edf4ff]'>Workflow lane</h4>
+                <span className={workflowStatusClass(readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready')}>{readiness?.ready === false || blockerCodes.length ? 'syncing' : 'ready'}</span>
+                {readiness?.action && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{label(readiness.action)}</span>}
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#475467]'>Mutation:</span> {contract?.mutationRoute || '/v1/dwm/alerts/:id'}</p>
-                <p><span className='font-semibold text-[#475467]'>Replay:</span> {contract?.replayRoute || '/v1/dwm/alerts/:id/replay'}</p>
-                <p><span className='font-semibold text-[#475467]'>Event count:</span> {readiness?.currentWorkflowEventCount ?? contract?.idempotency?.workflowEventCount ?? 'not returned'}</p>
-                <p><span className='font-semibold text-[#475467]'>Updated:</span> {relativeTime(readiness?.currentUpdatedAt || contract?.idempotency?.updatedAt || detail.alert?.updatedAt || detail.generatedAt || '')}</p>
-                <p><span className='font-semibold text-[#475467]'>Delivery selection:</span> {downstream?.deliverySelection?.ready === false ? 'blocked' : downstream?.deliverySelection?.selectedWebhookDestinationId || 'not returned'}</p>
-                <p><span className='font-semibold text-[#475467]'>Customer proof:</span> {downstream?.customerProof?.ready === false ? 'blocked' : downstream?.customerProof?.ready === true ? 'ready' : 'not returned'}</p>
+            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#9fb0c8]'>Update:</span> {contract?.mutationRoute || '/v1/dwm/alerts/:id'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Replay:</span> {contract?.replayRoute || '/v1/dwm/alerts/:id/replay'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Event count:</span> {readiness?.currentWorkflowEventCount ?? contract?.idempotency?.workflowEventCount ?? 'checking'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Updated:</span> {relativeTime(readiness?.currentUpdatedAt || contract?.idempotency?.updatedAt || detail.alert?.updatedAt || detail.generatedAt || '')}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Delivery route:</span> {downstream?.deliverySelection?.ready === false ? 'checking' : downstream?.deliverySelection?.selectedWebhookDestinationId || 'checking'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Customer delivery:</span> {downstream?.customerStatus?.ready === false ? 'checking' : downstream?.customerStatus?.ready === true ? 'ready' : 'checking'}</p>
             </div>
             <div className='mt-3 flex flex-wrap gap-2'>
                 {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
-                {!blockerCodes.length && <span className='text-xs text-[#667085]'>No workflow blockers returned.</span>}
+                {!blockerCodes.length && <span className='text-xs text-[#8fa0ba]'>Workflow lane is clear.</span>}
             </div>
             {readiness?.blockers?.length ? (
                 <div className='mt-3 grid gap-2'>
                     {readiness.blockers.slice(0, 3).map(blocker => (
-                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-[#fed7aa] bg-[#fff7ed] px-2 py-1 text-xs text-[#9a3412]'>
-                            {label(blocker.code || 'workflow blocker')}{blocker.detail ? `: ${blocker.detail}` : ''}
+                        <p key={`${blocker.code}:${blocker.field}`} className='rounded-md border border-[#7a3520] bg-[#2c160f] px-2 py-1 text-xs text-[#ffb598]'>
+                            {label(blocker.code || 'workflow issue')}{blocker.detail ? `: ${blocker.detail}` : ''}
                         </p>
                     ))}
                 </div>
@@ -2573,29 +2586,29 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
 function AlertOperationalReadiness({ detail }: { detail: AlertDetailPayload }) {
     const next = detail.nextBestAction
     const delivery = detail.deliveryReadiness
-    const customerProof = detail.customerProofHandoff
+    const customerStatus = detail.customerStatusHandoff
     const evidence = detail.evidenceFreshness
     const provenance = detail.provenanceFreshness
-    const blockerCodes = [...(delivery?.blockerCodes || []), ...(customerProof?.blockerCodes || [])]
+    const blockerCodes = [...(delivery?.blockerCodes || []), ...(customerStatus?.blockerCodes || [])]
         .filter((code, index, source) => source.indexOf(code) === index)
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <h4 className='text-sm font-semibold text-[#171a21]'>Operational readiness</h4>
-                <span className={workflowStatusClass(delivery?.ready || customerProof?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs_action')}>{delivery?.ready || customerProof?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs action'}</span>
+                <h4 className='text-sm font-semibold text-[#edf4ff]'>Delivery lane</h4>
+                <span className={workflowStatusClass(delivery?.ready || customerStatus?.ready ? 'ready' : blockerCodes.length ? 'blocked' : 'needs_action')}>{delivery?.ready || customerStatus?.ready ? 'ready' : blockerCodes.length ? 'syncing' : 'review'}</span>
             </div>
-            <div className='mt-3 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                <p><span className='font-semibold text-[#475467]'>Next:</span> {next?.label || 'Review alert detail.'}</p>
-                <p><span className='font-semibold text-[#475467]'>Action:</span> {label(next?.action || 'not returned')}{next?.requiresRationale ? ' · rationale required' : ''}</p>
-                <p><span className='font-semibold text-[#475467]'>Delivery:</span> {label(delivery?.state || delivery?.lastDeliveryStatus || customerProof?.deliveryState || 'not returned')}</p>
-                <p><span className='font-semibold text-[#475467]'>Customer proof:</span> {customerProof?.ready || customerProof?.deliveryReady ? 'ready' : blockerCodes.length ? 'blocked' : 'not returned'}</p>
-                <p><span className='font-semibold text-[#475467]'>Evidence:</span> {evidence?.evidenceCount ?? customerProof?.evidenceCount ?? delivery?.evidenceCount ?? 'not returned'} item(s){evidence?.newestEvidenceAt ? ` · ${relativeTime(evidence.newestEvidenceAt)}` : ''}</p>
-                <p><span className='font-semibold text-[#475467]'>Provenance:</span> {(provenance?.sourceIds || []).length} source(s), {(provenance?.captureIds || evidence?.captureIds || delivery?.selectedCaptureIds || customerProof?.selectedCaptureIds || []).length} capture(s)</p>
+            <div className='mt-3 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                <p><span className='font-semibold text-[#9fb0c8]'>Next:</span> {next?.label || 'Review alert detail.'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Action:</span> {label(next?.action || 'monitor')}{next?.requiresRationale ? ' · rationale required' : ''}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Delivery:</span> {label(delivery?.state || delivery?.lastDeliveryStatus || customerStatus?.deliveryState || 'checking')}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Customer delivery:</span> {customerStatus?.ready || customerStatus?.deliveryReady ? 'ready' : blockerCodes.length ? 'checking' : 'checking'}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Evidence:</span> {evidence?.evidenceCount ?? customerStatus?.evidenceCount ?? delivery?.evidenceCount ?? 0} item(s){evidence?.newestEvidenceAt ? ` · ${relativeTime(evidence.newestEvidenceAt)}` : ''}</p>
+                <p><span className='font-semibold text-[#9fb0c8]'>Source details:</span> {(provenance?.sourceIds || []).length} source(s), {(provenance?.captureIds || evidence?.captureIds || delivery?.selectedCaptureIds || customerStatus?.selectedCaptureIds || []).length} capture(s)</p>
             </div>
-            {next?.reason ? <p className='mt-3 rounded-md border border-[#e0e5ed] bg-white px-2 py-1 text-xs leading-5 text-[#596170]'>{next.reason}</p> : null}
+            {next?.reason ? <p className='mt-3 rounded-md border border-[#27364f] bg-[#101827] px-2 py-1 text-xs leading-5 text-[#aab7cc]'>{next.reason}</p> : null}
             <div className='mt-3 flex flex-wrap gap-2'>
                 {blockerCodes.map(code => <span key={code} className={workflowStatusClass('blocked')}>{label(code)}</span>)}
-                {!blockerCodes.length && <span className='text-xs text-[#667085]'>No delivery or customer-proof blockers returned.</span>}
+                {!blockerCodes.length && <span className='text-xs text-[#8fa0ba]'>Delivery and customer lanes are clear.</span>}
             </div>
         </div>
     )
@@ -2603,8 +2616,8 @@ function AlertOperationalReadiness({ detail }: { detail: AlertDetailPayload }) {
 
 function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<AlertDetailPayload['alert']>['evidence']> }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <h4 className='text-sm font-semibold text-[#171a21]'>Alert API evidence</h4>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+            <h4 className='text-sm font-semibold text-[#edf4ff]'>Alert evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {evidence.map((item, index) => {
                     const provenance = typeof item.provenance === 'string'
@@ -2612,24 +2625,24 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
                         : [item.provenance?.sourceId, item.provenance?.captureId, item.provenance?.captureMode].filter(Boolean).join(' · ')
                     const sourceHref = typeof item.provenance === 'object' && item.provenance?.sourceId ? sourceProfileHref(item.provenance.sourceId) : undefined
                     return (
-                        <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                        <div key={item.id || `${item.contentHash || 'alert-evidence'}:${index}`} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
                             <div className='flex flex-wrap items-center gap-2'>
-                                <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
-                                {item.redactionState && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
-                                {item.captureMode && <span className='rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-[#596170]'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
+                                <span className='text-sm font-semibold text-[#edf4ff]'>{item.sourceName || item.sourceFamily || item.id || 'source evidence'}</span>
+                                {item.redactionState && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                                {item.captureMode && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{String(item.captureMode).replaceAll('_', ' ')}</span>}
                                 {sourceHref ? (
-                                    <Link href={sourceHref} className='inline-flex min-h-7 items-center gap-1 rounded-lg border border-[#d8dee9] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                                    <Link href={sourceHref} className='inline-flex min-h-7 items-center gap-1 rounded-lg border border-[#27364f] bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                                         Open source
                                         <ExternalLink className='h-3 w-3' />
                                     </Link>
                                 ) : null}
                             </div>
-                            <p className='mt-2 text-xs leading-5 text-[#596170]'>{item.excerpt || 'No safe excerpt returned.'}</p>
-                            <div className='mt-2 grid gap-1 text-xs text-[#667085]'>
-                                <p><span className='font-semibold text-[#475467]'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'not returned'}</p>
-                                <p className='break-all'><span className='font-semibold text-[#475467]'>Provenance:</span> {provenance || 'not returned'}</p>
+                            <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                            <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba]'>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Observed:</span> {item.observedAt || item.firstSeenAt ? relativeTime(item.observedAt || item.firstSeenAt || '') : 'checking'}</p>
+                                <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Source details:</span> {customerOperationalText(provenance || 'syncing')}</p>
                             </div>
-                            <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash || item.id || 'content hash not returned'}</p>
+                            <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{item.contentHash || item.id || 'content hash pending'}</p>
                         </div>
                     )
                 })}
@@ -2640,20 +2653,20 @@ function AlertEvidenceRows({ evidence }: { evidence: NonNullable<NonNullable<Ale
 
 function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <h4 className='text-sm font-semibold text-[#171a21]'>Case API evidence</h4>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+            <h4 className='text-sm font-semibold text-[#edf4ff]'>Case evidence</h4>
             <div className='mt-3 grid gap-2'>
                 {evidence.map(item => (
-                    <div key={item.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                    <div key={item.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='text-sm font-semibold text-[#171a21]'>{item.sourceName || item.id}</span>
-                            {item.redactionState && <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
+                            <span className='text-sm font-semibold text-[#edf4ff]'>{item.sourceName || item.id}</span>
+                            {item.redactionState && <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>{String(item.redactionState).replaceAll('_', ' ')}</span>}
                         </div>
-                        <p className='mt-2 text-xs leading-5 text-[#596170]'>{item.excerpt || 'No safe excerpt returned.'}</p>
-                        <p className='mt-2 break-all font-mono text-[11px] text-[#667085]'>{item.contentHash || item.id}</p>
+                        <p className='mt-2 text-xs leading-5 text-[#aab7cc]'>{item.excerpt || 'Safe excerpt is being prepared from this evidence.'}</p>
+                        <p className='mt-2 break-all font-mono text-[11px] text-[#8fa0ba]'>{item.contentHash || item.id}</p>
                     </div>
                 ))}
-                {!evidence.length && <p className='text-xs text-[#667085]'>No evidence returned by the case API.</p>}
+                {!evidence.length && <p className='text-xs text-[#8fa0ba]'>Evidence stream updates with the next normalized capture.</p>}
             </div>
         </div>
     )
@@ -2661,30 +2674,30 @@ function CaseEvidenceRows({ evidence }: { evidence: CaseEvidence[] }) {
 
 function CaseWatchlistRows({ watchlists, orgContext }: { watchlists: CaseWatchlist[], orgContext?: WorkbenchOrgContext }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
             <div className='flex flex-wrap items-start justify-between gap-2 sm:items-center'>
-                <h4 className='text-sm font-semibold text-[#171a21]'>Watchlist scope</h4>
-                <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                <h4 className='text-sm font-semibold text-[#edf4ff]'>Watchlist routing</h4>
+                <Link href={watchlistLedgerHref(orgContext)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                     Open watchlists
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>
             </div>
             <div className='mt-3 grid gap-2'>
                 {watchlists.map(watchlist => (
-                    <div key={watchlist.id} className='rounded-lg border border-[#e0e5ed] bg-white p-3'>
+                    <div key={watchlist.id} className='rounded-lg border border-[#27364f] bg-[#101827] p-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <span className='wrap-break-word text-sm font-semibold text-[#171a21]'>{watchlist.name || watchlist.id}</span>
+                            <span className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{watchlist.name || watchlist.id}</span>
                             <span className={workflowStatusClass(watchlist.status === 'active' ? 'ready' : 'needs_action')}>{label(watchlist.status)}</span>
-                            {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3]'>delivery scoped</span> : null}
+                            {watchlist.hasWebhookUrl || watchlist.webhookDestinationId ? <span className='rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff]'>delivery routed</span> : null}
                         </div>
-                        <div className='mt-2 grid gap-1 text-xs text-[#667085] sm:grid-cols-2'>
-                            <p><span className='font-semibold text-[#475467]'>Terms:</span> {watchlist.termCount ?? watchlist.matchedTerms?.length ?? 0}</p>
-                            <p className='break-all'><span className='font-semibold text-[#475467]'>Destination:</span> {watchlist.webhookDestinationId || (watchlist.hasWebhookUrl ? 'watchlist webhook url' : 'not returned')}</p>
-                            <p className='break-all sm:col-span-2'><span className='font-semibold text-[#475467]'>Matched:</span> {(watchlist.matchedTerms || []).map(term => `${term.kind || 'term'}:${term.value || 'unknown'}`).join(', ') || 'No matched terms returned.'}</p>
+                        <div className='mt-2 grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2'>
+                            <p><span className='font-semibold text-[#9fb0c8]'>Terms:</span> {watchlist.termCount ?? watchlist.matchedTerms?.length ?? 0}</p>
+                            <p className='break-all'><span className='font-semibold text-[#9fb0c8]'>Destination:</span> {watchlist.webhookDestinationId || (watchlist.hasWebhookUrl ? 'watchlist webhook url' : 'syncing')}</p>
+                            <p className='break-all sm:col-span-2'><span className='font-semibold text-[#9fb0c8]'>Matched:</span> {(watchlist.matchedTerms || []).map(term => `${term.kind || 'term'}:${term.value || 'syncing'}`).join(', ') || 'match stream is checking'}</p>
                         </div>
                     </div>
                 ))}
-                {!watchlists.length && <p className='text-xs leading-5 text-[#667085]'>No watchlist scope returned by the case API. Open the scoped watchlists endpoint to verify alert coverage.</p>}
+                {!watchlists.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Watchlist routing appears here when the case is tied to customer terms.</p>}
             </div>
         </div>
     )
@@ -2712,20 +2725,20 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
 
     if (!hasBackedCase) {
         return (
-            <div className='grid gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-3'>
+            <div className='grid gap-2 rounded-lg border border-[#7a3520] bg-[#2c160f] p-3'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#9a3412]'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
-                    <p className='mt-1 text-xs leading-5 text-[#596170]'>
+                    <p className='text-xs font-semibold uppercase text-[#ffb598]'>{hasBackedAlertWorkflow ? 'Backed alert workflow' : 'Session-local triage'}</p>
+                    <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>
                         {hasBackedAlertWorkflow
                             ? 'Updates the persisted alert and refreshes detail. Case actions unlock when a case is linked.'
-                            : item.missingDependency || 'Backed mutations require a live /api/cases/:id detail response or persistent /api/dwm/alerts/:id alert. These controls only update this browser session.'}
+                            : item.missingDependency || 'Live case detail or persisted DWM alert is syncing. These controls only update this browser session until then.'}
                     </p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     <DecisionButton busy={busy} onClick={() => onDecision({ status: 'reviewing', owner, reason: note || 'Review started.' })}>Review</DecisionButton>
                     <DecisionButton busy={busy} onClick={() => onDecision({ status: 'escalated', owner, reason: note || 'Escalated for customer or incident response.' })}>Escalate</DecisionButton>
                     <DecisionButton busy={busy} onClick={() => onDecision({ status: 'suppressed', owner, reason: note || 'Suppressed as low-value or false positive.' })}>Suppress</DecisionButton>
-                    <DecisionButton busy={busy} onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', owner, reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in analyst workbench.') })}>
+                    <DecisionButton busy={busy} onClick={() => onDecision({ status: effectiveStatus === 'closed' ? 'needs_review' : 'closed', owner, reason: note || (effectiveStatus === 'closed' ? 'Reopened for review.' : 'Closed in recent attacks.') })}>
                         {effectiveStatus === 'closed' ? 'Reopen' : 'Close'}
                     </DecisionButton>
                     {item.kind === 'dwm_alert' && (
@@ -2743,11 +2756,11 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
     const noteText = note.trim()
     const notificationState = customerNotificationActionState(caseDetail)
     return (
-        <div className='grid gap-2 rounded-lg border border-[#d6e9de] bg-[#f4fbf7] p-3'>
+        <div className='grid gap-2 rounded-lg border border-[#1f6f48] bg-[#0c261c] p-3'>
             <div>
                 <p className='text-xs font-semibold uppercase text-[#147a3b]'>Live case actions</p>
-                <p className='mt-1 text-xs leading-5 text-[#596170]'>Updates the selected case and refreshes the detail pane.</p>
-                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#596170]'>Case export includes evidence, timeline, delivery, and next actions.</p>}
+                <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Updates the selected case and refreshes the detail pane.</p>
+                {item.caseDetailHref && <p className='mt-1 text-xs leading-5 text-[#aab7cc]'>Case export includes evidence, timeline, delivery, and next actions.</p>}
             </div>
             <div className='flex flex-wrap gap-2'>
                 <CaseMutationButton
@@ -2818,7 +2831,7 @@ function CaseActionRail({ item, note, owner, effectiveStatus, busyAction, caseDe
                     busyAction={busyAction}
                     allowedActions={caseDetail?.status === 'ready' ? caseDetail.detail.nextAllowedActions || [] : []}
                     disabledReason={closeAction === 'close' && !noteText ? 'Closing requires rationale.' : undefined}
-                    onClick={() => onBackedCaseMutation({ action: closeAction, assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || (closeAction === 'reopen' ? 'Reopened for review.' : 'Closed from analyst workbench.') })}
+                    onClick={() => onBackedCaseMutation({ action: closeAction, assignedOwner: hasOwner ? owner.trim() : undefined, note: noteText || (closeAction === 'reopen' ? 'Reopened for review.' : 'Closed from recent attacks.') })}
                 />
                 <DecisionButton
                     busy={busy || busyAction === `case:${item.id}:customer_notification`}
@@ -2858,7 +2871,7 @@ function CaseMutationButton({ item, action, label: actionLabel, busy, busyAction
             onClick={onClick}
             disabled={disabled}
             title={blockedReason}
-            className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+            className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
         >
             {busyAction === `case:${item.id}:${action}` ? 'Saving...' : actionLabel}
         </button>
@@ -2900,16 +2913,16 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 <div className='min-w-0'>
                     <div className='flex flex-wrap items-center gap-2'>
                         <span className={severityClass(item.severity)}>{item.severity}</span>
-                        <span className='rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'>{item.confidence}% confidence</span>
-                        <span className='rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#475467]'>{label(item.kind)}</span>
-                        <span className='rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-[#596170]'>{label(effectiveStatus)}</span>
-                        {item.persistent && <span className='rounded-full bg-[#f4fbf7] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'>persistent workflow</span>}
+                        <span className='rounded-full bg-[#162033] px-2 py-0.5 text-xs font-semibold text-[#7aa5ff]'>{item.confidence}% confidence</span>
+                        <span className='rounded-full bg-[#15284b] px-2 py-0.5 text-xs font-semibold text-[#9fb0c8]'>{label(item.kind)}</span>
+                        <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-xs font-semibold text-[#aab7cc]'>{label(effectiveStatus)}</span>
+                        {item.persistent && <span className='rounded-full bg-[#0c261c] px-2 py-0.5 text-xs font-semibold text-[#147a3b]'>persistent workflow</span>}
                     </div>
-                    <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-[#171a21]`}>{item.title}</h2>
-                    <p className='mt-1 text-sm text-[#596170]'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
+                    <h2 className={`${compact ? 'mt-2 text-xl' : 'mt-3 text-2xl'} font-semibold tracking-normal text-[#edf4ff]`}>{item.title}</h2>
+                    <p className='mt-1 text-sm text-[#aab7cc]'>{item.queue} · {item.routeLabel} · {relativeTime(item.updatedAt)}</p>
                 </div>
-                <div className='grid gap-1 rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] px-3 py-2 text-xs text-[#667085]'>
-                    <span className='font-semibold text-[#171a21]'>{effectiveOwner}</span>
+                <div className='grid gap-1 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-xs text-[#8fa0ba]'>
+                    <span className='font-semibold text-[#edf4ff]'>{effectiveOwner}</span>
                     <span>{item.company || item.matchedTerm}</span>
                 </div>
             </div>
@@ -2922,10 +2935,10 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 orgContext={orgContext}
             />
 
-            <section className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
+            <section className='grid gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>
-                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                        <UserRound className='h-4 w-4 text-[#3056d3]' />
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
+                        <UserRound className='h-4 w-4 text-[#7aa5ff]' />
                         Owner
                     </span>
                     {assignableMembers.length ? (
@@ -2933,7 +2946,7 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                             value={ownerValue}
                             onChange={event => onOwnerDraftChange(event.target.value)}
                             disabled={readOnly}
-                            className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'
+                            className='h-10 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'
                         >
                             <option value=''>Unassigned</option>
                             {assignableMembers.map(member => (
@@ -2945,25 +2958,25 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                             value={ownerValue}
                             onChange={event => onOwnerDraftChange(event.target.value)}
                             placeholder='Assign analyst'
-                            className='h-10 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                            className='h-10 rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                         />
                     )}
-                    <span className='text-[11px] text-[#667085]'>
+                    <span className='text-[11px] text-[#8fa0ba]'>
                         {assignableMembers.length
-                            ? readOnly ? 'Member picker is read-only because the case API marked this member read-only.' : 'Member picker is backed by /api/organizations/:id/members; Assign owner persists with PATCH /api/cases/:id.'
-                            : 'Manual owner fallback: /api/organizations/:id/members returned no assignable active members.'}
+                            ? readOnly ? 'Member picker is read-only for this case.' : 'Assign owner saves to the active case.'
+                            : 'Assignable teammate state is loading; manual owner text stays available.'}
                     </span>
                 </label>
                 <label className='grid gap-2'>
-                    <span className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                        <MessageSquareText className='h-4 w-4 text-[#3056d3]' />
+                    <span className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
+                        <MessageSquareText className='h-4 w-4 text-[#7aa5ff]' />
                         Decision rationale
                     </span>
                     <textarea
                         value={note}
                         onChange={event => onNoteChange(event.target.value)}
                         placeholder='Record validation, customer route, suppression reason, or follow-up owner'
-                        className='min-h-20 resize-y rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                        className='min-h-20 resize-y rounded-lg border border-[#27364f] bg-[#0f1726] px-3 py-2 text-sm text-[#edf4ff] outline-none transition focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                 </label>
                 <CaseActionRail
@@ -3010,30 +3023,28 @@ function SelectedWorkflowHandoff({ item, caseDetail, alertDetail, actionDeliveri
     const nextBlocked = steps.find(step => step.status === 'blocked' || step.status === 'needs_action')
 
     return (
-        <section data-selected-workflow-handoff='true' className='rounded-lg border border-[#dbe3ee] bg-white dark:border-[#26384f] dark:bg-[#0f1722]'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 dark:border-[#20314a] sm:items-center'>
+        <section data-selected-workflow-handoff='true' className='overflow-hidden rounded-lg border border-[#27364f] bg-[#0f1726]'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] bg-[#101827] px-4 py-3 sm:items-center'>
                 <div className='min-w-0'>
-                    <h3 className='text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>Selected workflow</h3>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#667085] dark:text-[#9fb0c8]'>
-                        Alert, case, source, watchlist, and delivery handoff for the selected queue item.
-                    </p>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Investigation lanes</h3>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>What is ready, what is being prepared, and what can be sent next.</p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs'>
                     <span className={workflowStatusClass(blockedCount ? 'blocked' : readyCount === steps.length ? 'ready' : 'needs_action')}>{readyCount}/{steps.length} ready</span>
-                    {nextBlocked ? <span className='wrap-break-word text-[#667085] dark:text-[#9fb0c8]'>Next: {nextBlocked.label}</span> : null}
+                    {nextBlocked ? <span className='wrap-break-word text-[#8fa0ba] '>Next: {nextBlocked.label}</span> : null}
                 </div>
             </div>
             <div className='grid min-w-0 gap-2 p-3 md:grid-cols-2'>
                 {steps.map(step => (
-                    <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-[#e0e7f0] bg-[#fbfcfe] p-3 dark:border-[#26384f] dark:bg-[#121d2b]'>
+                    <div key={step.id} data-selected-workflow-step={step.id} data-selected-workflow-state={step.status} className='grid min-w-0 gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
                         <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 sm:items-center'>
-                            <h4 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#edf4ff]'>{step.label}</h4>
+                            <h4 className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{step.label}</h4>
                             <span className={`${workflowStatusClass(step.status)} shrink-0`}>{label(step.status)}</span>
                         </div>
-                        <p className='wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b4c0d2]'>{step.detail}</p>
-                        <p className='wrap-break-word text-[11px] text-[#667085] dark:text-[#9fb0c8]'><span className='font-semibold text-[#475467] dark:text-[#c7d4e8]'>Source:</span> {step.source}</p>
+                        <p className='wrap-break-word text-xs leading-5 text-[#aab7cc]'>{step.detail}</p>
+                        <p className='wrap-break-word text-[11px] text-[#8fa0ba]'><span className='font-semibold text-[#9fb0c8]'>Signal:</span> {operatorSourceLabel(step.source)}</p>
                         {step.href ? (
-                            <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff] dark:border-[#2a4160] dark:bg-[#172338] dark:text-[#d7e6fb] dark:hover:bg-[#20314a]'>
+                            <Link href={step.href} className='inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                                 <span className='truncate'>{step.actionLabel}</span>
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
@@ -3085,51 +3096,51 @@ function selectedWorkflowHandoffSteps(item: WorkbenchCase, caseDetail: CaseDetai
             id: 'alert',
             label: 'Alert',
             status: alertHref || alertRecord ? 'ready' : 'needs_action',
-            detail: alertRecord ? `${label(alertRecord.reviewState || item.status)}; ${alertRecord.sourceCount ?? item.sourceLabel} source${alertRecord.sourceCount === 1 ? '' : 's'}.` : item.persistent ? 'Open the persisted alert detail before customer routing.' : 'Tenant-default row needs persisted alert detail before customer routing.',
-            source: item.persistent ? 'GET /api/dwm/alerts/:id' : 'selected queue row',
+            detail: alertRecord ? `${label(alertRecord.reviewState || item.status)}; ${alertRecord.sourceCount ?? item.sourceLabel} source${alertRecord.sourceCount === 1 ? '' : 's'}.` : item.persistent ? 'Open the saved alert before customer routing.' : 'Save the alert before customer routing.',
+            source: item.persistent ? 'Saved alert record' : 'Selected case',
             href: alertHref,
             actionLabel: 'Open alert',
-            blockedReason: item.kind === 'dwm_alert' ? 'Persisted alert ID needed' : 'Alert route needed',
+            blockedReason: item.kind === 'dwm_alert' ? 'Saved alert needed' : 'Alert needs saving',
         },
         {
             id: 'case',
             label: 'Case',
             status: caseStatus,
-            detail: detail?.case ? `${label(detail.case.status || item.status)}; owner ${detail.case.assignedOwner || item.owner || 'unassigned'}.` : caseHref ? 'Case route exists; detail is still loading or unavailable.' : item.missingDependency || 'No backed case route is linked to this alert.',
-            source: 'GET /api/cases/:id',
+            detail: detail?.case ? `${label(detail.case.status || item.status)}; owner ${detail.case.assignedOwner || item.owner || 'unassigned'}.` : caseHref ? 'Case file is loading.' : item.missingDependency || 'Case file is connecting to this alert.',
+            source: 'Case file',
             href: caseHref,
             actionLabel: 'Open case',
-            blockedReason: 'Case route needed',
+            blockedReason: 'Case file needed',
         },
         {
             id: 'evidence',
             label: 'Evidence',
             status: evidenceStatus,
-            detail: `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'} loaded${sourceHref ? '; source drill-in available.' : '.'}`,
-            source: detail?.evidence?.length ? 'GET /api/cases/:id' : alertRecord?.evidence?.length ? 'GET /api/dwm/alerts/:id' : 'selected queue evidence',
+            detail: `${evidenceCount} evidence item${evidenceCount === 1 ? '' : 's'} active${sourceHref ? '; source drill-in available.' : '.'}`,
+            source: detail?.evidence?.length ? 'Case evidence' : alertRecord?.evidence?.length ? 'Saved alert evidence' : 'Selected evidence',
             href: sourceHref || alertHref || caseHref,
             actionLabel: sourceHref ? 'Inspect source' : 'Open evidence',
-            blockedReason: 'Evidence source route needed',
+            blockedReason: 'Evidence source needed',
         },
         {
             id: 'watchlist',
             label: 'Watchlist',
             status: watchlistStatus,
-            detail: activeWatchlistCount ? `${activeWatchlistCount} active watchlist${activeWatchlistCount === 1 ? '' : 's'} in scope.` : watchlistCount ? `${watchlistCount} watchlist${watchlistCount === 1 ? '' : 's'} loaded but not active.` : 'No scoped watchlist returned for this case.',
-            source: detail?.watchlists?.length ? 'GET /api/cases/:id watchlists' : 'GET /api/dwm/watchlists',
+            detail: activeWatchlistCount ? `${activeWatchlistCount} active watchlist${activeWatchlistCount === 1 ? '' : 's'} routed.` : watchlistCount ? `${watchlistCount} watchlist${watchlistCount === 1 ? '' : 's'} staged but paused.` : 'Watchlist routing is syncing.',
+            source: detail?.watchlists?.length ? 'Case watchlist' : 'Customer watchlist',
             href: watchlistLedgerHref(orgContext),
             actionLabel: 'Open watchlists',
-            blockedReason: 'Watchlist scope needed',
+            blockedReason: 'Watchlist routing needed',
         },
         {
             id: 'delivery',
             label: 'Delivery',
             status: deliveryStatus,
-            detail: delivery ? `${label(delivery.status)} delivery ${delivery.id}.` : activeDestination ? `Destination ${activeDestination.id} is active; send or test to create delivery evidence.` : 'No active destination or delivery row is loaded.',
-            source: 'GET /api/dwm/webhooks/deliveries',
+            detail: delivery ? `${label(delivery.status)} delivery ${delivery.id}.` : activeDestination ? `Destination ${activeDestination.id} is active; send or test to create delivery evidence.` : 'Delivery destination is not connected yet.',
+            source: 'Delivery ledger',
             href: deliveryHref,
             actionLabel: 'Open delivery',
-            blockedReason: 'Delivery route needed',
+            blockedReason: 'Delivery destination needed',
         },
     ]
 }
@@ -3171,33 +3182,33 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
             ? caseDetail.error
             : detail
                 ? `refreshed ${relativeTime(detail.generatedAt)}`
-                : item.caseDetailHref ? 'case detail not loaded yet' : item.missingDependency || 'no backed case detail route'
+                : item.caseDetailHref ? 'case detail loading' : item.missingDependency || 'case link pending'
 
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white'>
-            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#eef1f5] px-4 py-3 sm:items-center'>
+        <section className='rounded-lg border border-[#26344d] bg-[#0f1726]'>
+            <div className='flex flex-wrap items-start justify-between gap-3 border-b border-[#26344d] px-4 py-3 sm:items-center'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#171a21]'>Continuity</h3>
-                    <p className='mt-0.5 text-xs text-[#667085]'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Continuity</h3>
+                    <p className='mt-0.5 text-xs text-[#8fa0ba]'>Assignee changes, rationale, action outcome, allowed moves, visibility, and refresh state.</p>
                 </div>
-                <span className={workflowStatusClass(caseDetail?.status === 'error' || (!detail && !item.caseDetailHref) ? 'blocked' : caseDetail?.status === 'loading' ? 'needs_action' : 'ready')}>{caseDetail?.status || (item.caseDetailHref ? 'pending' : 'blocked')}</span>
+                <span className={workflowStatusClass(caseDetail?.status === 'error' || (!detail && !item.caseDetailHref) ? 'blocked' : caseDetail?.status === 'loading' ? 'needs_action' : 'ready')}>{caseDetail?.status || (item.caseDetailHref ? 'pending' : 'syncing')}</span>
             </div>
             <div className='grid gap-3 p-4 xl:grid-cols-[0.85fr_1fr_0.85fr]'>
                 <div className='grid gap-3'>
                     <ContinuityBlock title='Assignee history'>
-                        <p className='text-xs text-[#667085]'>Latest owner: <span className='font-semibold text-[#344054]'>{caseRecord?.assignedOwner || item.owner || 'unassigned'}</span></p>
+                        <p className='text-xs text-[#8fa0ba]'>Latest owner: <span className='font-semibold text-[#dbe7ff]'>{caseRecord?.assignedOwner || item.owner || 'unassigned'}</span></p>
                         <div className='mt-2 grid gap-2'>
                             {ownerEvents.map(event => (
-                                <ContinuityEvent key={event.id} title={event.toOwner || event.fromOwner || event.action} detail={`${event.fromOwner || 'unassigned'} -> ${event.toOwner || caseRecord?.assignedOwner || 'unassigned'} · ${event.actor || 'unknown actor'}`} at={event.at} />
+                                <ContinuityEvent key={event.id} title={event.toOwner || event.fromOwner || event.action} detail={`${event.fromOwner || 'unassigned'} -> ${event.toOwner || caseRecord?.assignedOwner || 'unassigned'} · ${event.actor || 'actor syncing'}`} at={event.at} />
                             ))}
-                            {!ownerEvents.length && <p className='text-xs leading-5 text-[#667085]'>No assignment event returned. Using latest owner from case detail or selected queue item.</p>}
+                            {!ownerEvents.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Assignment history is live; latest owner is shown above.</p>}
                         </div>
                     </ContinuityBlock>
                     <ContinuityBlock title='Visibility decision'>
-                        <p className='text-xs leading-5 text-[#667085]'>
-                            {visibility ? `${visibility.allowed ? 'Visible' : 'Blocked'} under ${visibility.alertVisibilityPolicy}; roles ${visibility.allowedRoles.join(', ')}${visibility.reason ? `; reason ${visibility.reason}` : ''}.` : 'No organization visibility decision returned by /api/cases/:id.'}
+                        <p className='text-xs leading-5 text-[#8fa0ba]'>
+                            {visibility ? `${visibility.allowed ? 'Visible' : 'Needs access'} under ${visibility.alertVisibilityPolicy}; roles ${visibility.allowedRoles.join(', ')}${visibility.reason ? `; reason ${visibility.reason}` : ''}.` : 'Visibility check is loading the case access decision.'}
                         </p>
-                        <p className='mt-2 text-xs text-[#667085]'>Mutations: <span className='font-semibold text-[#344054]'>{detail?.access?.readOnly ? 'read-only' : detail ? 'allowed' : 'requires case detail'}</span></p>
+                        <p className='mt-2 text-xs text-[#8fa0ba]'>Mutations: <span className='font-semibold text-[#dbe7ff]'>{detail?.access?.readOnly ? 'read-only' : detail ? 'allowed' : 'requires case detail'}</span></p>
                     </ContinuityBlock>
                 </div>
                 <ContinuityBlock title='Rationale timeline'>
@@ -3205,32 +3216,32 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                         {noteEvents.map(event => (
                             <ContinuityEvent key={event.id} title={label(event.action)} detail={event.note || 'No rationale'} at={event.at} />
                         ))}
-                        {caseRecord?.lastDecision && <p className='rounded-lg border border-[#e0e5ed] bg-white p-2 text-xs leading-5 text-[#596170]'>Last decision: {caseRecord.lastDecision}</p>}
-                        {decision?.status && <p className='rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-2 text-xs leading-5 text-[#596170]'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
-                        {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-[#667085]'>No note or decision rationale has been returned yet.</p>}
+                        {caseRecord?.lastDecision && <p className='rounded-lg border border-[#27364f] bg-[#101827] p-2 text-xs leading-5 text-[#aab7cc]'>Last decision: {caseRecord.lastDecision}</p>}
+                        {decision?.status && <p className='rounded-lg border border-[#7a3520] bg-[#2c160f] p-2 text-xs leading-5 text-[#aab7cc]'>Session-local: {label(decision.status)}{decision.reason ? ` · ${decision.reason}` : ''}</p>}
+                        {!noteEvents.length && !caseRecord?.lastDecision && !decision?.status && <p className='text-xs leading-5 text-[#8fa0ba]'>Rationale timeline is watching for the first analyst note or decision.</p>}
                     </div>
                 </ContinuityBlock>
                 <div className='grid gap-3'>
                     <ContinuityBlock title='Action outcome'>
-                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-[#147a3b]' : 'text-[#9a3412]' : 'text-[#667085]'}`}>
-                            {actionMessage?.text || 'No action has run in this console session.'}
+                        <p className={`text-xs leading-5 ${actionMessage ? actionMessage.ok ? 'text-[#147a3b]' : 'text-[#ffb598]' : 'text-[#8fa0ba]'}`}>
+                            {actionMessage?.text || 'Console actions stream here.'}
                         </p>
-                        <p className='mt-2 text-xs text-[#667085]'>Refresh: {refreshText}</p>
+                        <p className='mt-2 text-xs text-[#8fa0ba]'>Refresh: {refreshText}</p>
                     </ContinuityBlock>
                     <ContinuityBlock title='Replay export'>
                         <div data-case-replay-export-state={replayExport.status} className='grid gap-2'>
                             <div className='flex flex-wrap items-center gap-2'>
                                 <span className={workflowStatusClass(replayExport.status)}>{label(replayExport.status)}</span>
-                                <span className='text-xs text-[#667085]'>{replayExport.detail}</span>
+                                <span className='text-xs text-[#8fa0ba]'>{replayExport.detail}</span>
                             </div>
-                            <div className='grid gap-1 text-xs text-[#667085] sm:grid-cols-2 xl:grid-cols-1'>
-                                <p><span className='font-semibold text-[#475467]'>Events:</span> {replayExport.workflowEventCount}</p>
-                                <p><span className='font-semibold text-[#475467]'>Timeline:</span> {replayExport.timelineCount}</p>
-                                <p><span className='font-semibold text-[#475467]'>Delivery rows:</span> {replayExport.deliveryCount}</p>
-                                <p><span className='font-semibold text-[#475467]'>Action payloads:</span> {replayExport.nextActionCount}</p>
+                            <div className='grid gap-1 text-xs text-[#8fa0ba] sm:grid-cols-2 xl:grid-cols-1'>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Events:</span> {replayExport.workflowEventCount}</p>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Timeline:</span> {replayExport.timelineCount}</p>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Delivery rows:</span> {replayExport.deliveryCount}</p>
+                                <p><span className='font-semibold text-[#9fb0c8]'>Action payloads:</span> {replayExport.nextActionCount}</p>
                             </div>
                             {replayExport.href ? (
-                                <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                                <Link href={replayExport.href} className='inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                                     <span className='truncate'>Open replay export</span>
                                     <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                                 </Link>
@@ -3247,17 +3258,17 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             {allowedActions.map(action => (
                                 <span key={action.id} title={action.disabledReason} className={workflowStatusClass(action.enabled ? 'ready' : 'blocked')}>{action.label}</span>
                             ))}
-                            {!allowedActions.length && <span className='text-xs text-[#667085]'>No backed action matrix returned.</span>}
+                            {!allowedActions.length && <span className='text-xs text-[#8fa0ba]'>Action matrix is clear for this case state.</span>}
                         </div>
                     </ContinuityBlock>
                     <ContinuityBlock title='Customer notification'>
-                        <p className='text-xs leading-5 text-[#667085]'>
+                        <p className='text-xs leading-5 text-[#8fa0ba]'>
                             {notificationContext?.notified
                                 ? `Recorded ${notificationContext.notificationCount} notification${notificationContext.notificationCount === 1 ? '' : 's'}; latest ${notificationContext.latest?.id || 'delivery'} via ${label(notificationContext.latest?.deliveryMode || notificationContext.modes?.[0] || 'webhook_delivery')}.`
-                                : detail ? 'No customer notification delivery recorded yet.' : 'Delivery state requires case detail.'}
+                                : detail ? 'Customer notification has not been recorded for this case yet.' : 'Delivery state streams after case detail loads.'}
                         </p>
                         {notificationLedgerHref ? (
-                            <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 py-1 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#8fb4ff]'>
+                            <Link href={notificationLedgerHref} className='mt-2 inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
                                 <span className='truncate'>Open delivery history</span>
                                 <ExternalLink className='h-3.5 w-3.5 shrink-0' />
                             </Link>
@@ -3268,7 +3279,7 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
                             {latestTimeline.slice(0, 3).map(row => (
                                 <ContinuityEvent key={row.id} title={row.title} detail={row.detail || row.rationale || row.eventType || 'case event'} at={row.at} />
                             ))}
-                            {!latestTimeline.length && <p className='text-xs leading-5 text-[#667085]'>Audit trail appears after the case API returns timeline events.</p>}
+                            {!latestTimeline.length && <p className='text-xs leading-5 text-[#8fa0ba]'>Timeline stream updates with case events.</p>}
                         </div>
                     </ContinuityBlock>
                 </div>
@@ -3279,8 +3290,8 @@ function CaseContinuityPanel({ item, decision, caseDetail, actionMessage, orgCon
 
 function ContinuityBlock({ title, children }: { title: string, children: React.ReactNode }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-[#fbfcfe] p-3'>
-            <h4 className='text-xs font-semibold uppercase text-[#667085]'>{title}</h4>
+        <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
+            <h4 className='text-xs font-semibold uppercase text-[#8fa0ba]'>{title}</h4>
             <div className='mt-2'>{children}</div>
         </div>
     )
@@ -3288,9 +3299,9 @@ function ContinuityBlock({ title, children }: { title: string, children: React.R
 
 function ContinuityEvent({ title, detail, at }: { title: string, detail: string, at?: string }) {
     return (
-        <div className='rounded-lg border border-[#e0e5ed] bg-white p-2'>
-            <p className='text-xs font-semibold text-[#171a21]'>{title}</p>
-            <p className='mt-1 text-xs leading-5 text-[#667085]'>{detail}</p>
+        <div className='rounded-lg border border-[#27364f] bg-[#101827] p-2'>
+            <p className='text-xs font-semibold text-[#edf4ff]'>{title}</p>
+            <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{detail}</p>
             {at && <p className='mt-1 text-[11px] text-[#98a2b3]'>{relativeTime(at)}</p>}
         </div>
     )
@@ -3451,7 +3462,7 @@ type CaseWorkflowEvent = {
 function DecisionButton({ busy = false, disabledReason, onClick, children }: { busy?: boolean, disabledReason?: string, onClick: () => void | Promise<void>, children: string }) {
     const disabled = busy || Boolean(disabledReason)
     return (
-        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason} className='inline-flex h-9 items-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0f1726] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60'>
             {children}
         </button>
     )
@@ -3495,8 +3506,8 @@ function deliveryCandidatesFromPayload(payload: WorkbenchApiPayload | undefined)
         payload.latestDelivery,
         ...(payload.deliveries || []),
         ...(payload.deliveryEvidence || []),
-        payload.deliveryProof?.latestDelivery,
-        ...(payload.deliveryProof?.deliveries || []),
+        payload.deliveryStatus?.latestDelivery,
+        ...(payload.deliveryStatus?.deliveries || []),
         payload.testResult?.delivery,
         ...(payload.testResult?.deliveries || []),
     ]
@@ -3531,7 +3542,7 @@ function mergeDeliveryEvidence(nextDeliveries: WorkbenchDeliveryEvidence[], exis
 }
 
 function customerNotificationActionState(caseDetail: CaseDetailState | undefined) {
-    if (caseDetail?.status !== 'ready') return { disabledReason: 'Customer notification receipt requires a backed /api/cases/:id detail response.' }
+    if (caseDetail?.status !== 'ready') return { disabledReason: 'Open the case details before recording customer notification.' }
     if (caseDetail.detail.customerNotificationContext?.notified) return { disabledReason: 'Customer notification receipt is already recorded.' }
     if (!deliveredCaseDelivery(caseDetail.detail)) return { disabledReason: 'Customer notification receipt requires a delivered webhook row.' }
     if (caseDetail.detail.access?.readOnly) return { disabledReason: 'Read-only case members cannot record customer notifications.' }
@@ -3586,7 +3597,7 @@ function caseReplayExportState(item: WorkbenchCase, caseDetail: CaseDetailState 
         : blockers.length
             ? 'needs_action'
             : 'ready'
-    const routeText = href ? `GET ${href}` : 'Case replay export requires a backed /api/cases/:id route.'
+    const routeText = href ? `Open ${href}` : 'Replay export is syncing the case detail route.'
     const detailText = detail
         ? `${routeText}; ${workflowEventCount} workflow event${workflowEventCount === 1 ? '' : 's'}, ${timelineCount} timeline row${timelineCount === 1 ? '' : 's'}, ${deliveryCount} delivery row${deliveryCount === 1 ? '' : 's'}.`
         : routeText
@@ -3658,7 +3669,7 @@ function sendDeliveryActionFor(item: WorkbenchCase) {
         method: 'POST' as const,
         href: '/api/dwm/webhooks/deliver',
         body: { alertId: item.id, limit: 1 },
-        disabledReason: item.persistent ? undefined : 'Fallback alerts cannot call /api/dwm/webhooks/deliver.',
+        disabledReason: item.persistent ? undefined : 'Persisted alert delivery is syncing before webhook send can run.',
     } : undefined)
 }
 
@@ -3672,16 +3683,16 @@ function sendDeliveryDisabledReason(item: WorkbenchCase, orgContext: WorkbenchOr
 }
 
 function orgInviteDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
-    if (!orgContext?.organization) return 'Invite is blocked because no selected organization was returned from GET /api/organizations.'
+    if (!orgContext?.organization) return 'Select an organization before inviting a teammate.'
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
-    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled because the case API marked this member read-only or visibility-blocked.'
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled for this member or visibility scope.'
     return ''
 }
 
 function watchlistMutationDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
-    if (!orgContext?.createWatchlistAction) return orgContext?.readiness.blockedReasons[0] || 'POST /api/dwm/watchlists is not available because the org/watchlist backend is not configured.'
+    if (!orgContext?.createWatchlistAction) return orgContext?.readiness.blockedReasons[0] || 'Connect the organization watchlist service before saving shared terms.'
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
-    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Watchlist update is disabled because the case API marked this member read-only or visibility-blocked.'
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Watchlist update is disabled for this member or visibility scope.'
     return ''
 }
 
@@ -3772,8 +3783,8 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
     if (typeof payload.attemptedCount === 'number') return webhookDeliveryResultMessage(payload)
     if (action.id === 'request_source_coverage') {
         const sourcePayload = payload as Record<string, unknown>
-        const sourceProofMessage = sourceOperationsActionMessage(sourcePayload)
-        if (sourceProofMessage) return sourceProofMessage
+        const sourceStatusMessage = sourceOperationsActionMessage(sourcePayload)
+        if (sourceStatusMessage) return sourceStatusMessage
         const summary = objectValue(sourcePayload.summary) || {}
         const createdCount = numberValue(summary.telegramPublicCreated ?? summary.darkwebMetadataCreated ?? summary.createdCount) ?? 0
         const duplicateCount = numberValue(summary.duplicateCount) ?? 0
@@ -3782,19 +3793,19 @@ function actionResultMessage(action: WorkbenchAction, payload: Awaited<ReturnTyp
         const candidate = objectValue(sourcePayload.candidate)
         const sourceId = stringValue(source?.id)
         const candidateId = stringValue(candidate?.id)
-        if (sourceId) return `Source ${sourceId} queued for coverage.`
-        if (candidateId) return `Source candidate ${candidateId} queued for review.`
+        if (sourceId) return `Source ${sourceId} is scheduled for coverage.`
+        if (candidateId) return `Source candidate ${candidateId} is scheduled for review.`
         return 'Source coverage request accepted.'
     }
     if (action.id === 'preview_source_apply_plan') {
         const sourcePayload = payload as Record<string, unknown>
-        const sourceProofMessage = sourceOperationsActionMessage(sourcePayload)
-        if (sourceProofMessage) return sourceProofMessage
+        const sourceStatusMessage = sourceOperationsActionMessage(sourcePayload)
+        if (sourceStatusMessage) return sourceStatusMessage
         const applyPlan = objectValue(sourcePayload.applyPlan) || objectValue(sourcePayload.payload)
         const affectedSources = numberValue(applyPlan?.affectedSourceCount) ?? numberValue(applyPlan?.sourceCount)
         const plannedActions = arrayValue(applyPlan?.actions).length || arrayValue(applyPlan?.selectedActions).length
-        if (affectedSources !== undefined || plannedActions) return `Source apply plan returned ${affectedSources ?? 0} source${affectedSources === 1 ? '' : 's'} and ${plannedActions} action${plannedActions === 1 ? '' : 's'} for review.`
-        return 'Source apply plan preview returned.'
+        if (affectedSources !== undefined || plannedActions) return `Source apply plan prepared ${affectedSources ?? 0} source${affectedSources === 1 ? '' : 's'} and ${plannedActions} action${plannedActions === 1 ? '' : 's'} for review.`
+        return 'Source apply plan preview is ready.'
     }
     if (action.id === 'run_canary_collection') {
         const canaryPayload = payload as Record<string, unknown>
@@ -3821,13 +3832,13 @@ function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJso
         return `Webhook delivery result: ${summary}${suffix}.`
     }
     if (typeof payload.attemptedCount === 'number') return `Webhook delivery attempted for ${payload.attemptedCount} alert${payload.attemptedCount === 1 ? '' : 's'}.`
-    return 'No webhook delivery was attempted.'
+    return 'No webhook delivery has been sent.'
 }
 
 function alertReplayResultMessage(payload: Awaited<ReturnType<typeof readJson>>, item: WorkbenchCase) {
     const blockerCodes = [...(payload.workflowExecutionReadiness?.blockerCodes || []), ...(payload.downstreamHandoff?.blockerCodes || [])]
         .filter((code, index, source) => Boolean(code) && source.indexOf(code) === index)
-    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay blocked by ${blockerCodes.join(', ') || 'workflow guard'}.`
+    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay is checking workflow lanes: ${blockerCodes.join(', ') || 'workflow lane'}.`
     const alertId = stringValue(payload.alert?.id) || item.id
     const replayCount = numberValue(payload.alert?.replayCount)
     const replayedAt = stringValue(payload.alert?.lastReplayedAt || payload.alert?.updatedAt)
@@ -3842,9 +3853,9 @@ function sourceOperationsActionMessage(payload: Record<string, unknown>) {
         || objectValue(objectValue(objectValue(payload.sourceInventory)?.sourcePackWorker)?.sourceOperationsReadiness)
     const sourceOperationsQueue = objectValue(payload.sourceOperationsQueue)
         || objectValue(objectValue(payload.actorReadiness)?.sourceOperationsQueue)
-        || objectValue(objectValue(objectValue(payload.proofArtifacts)?.dashboardSourceReadiness)?.sourceOperationsQueue)
+        || objectValue(objectValue(objectValue(payload.statusArtifacts)?.dashboardSourceReadiness)?.sourceOperationsQueue)
     const sourceOperationsAdapter = objectValue(payload.sourceOperationsAdapter)
-        || objectValue(objectValue(objectValue(payload.proofArtifacts)?.dashboardSourceReadiness)?.sourceOperationsAdapter)
+        || objectValue(objectValue(objectValue(payload.statusArtifacts)?.dashboardSourceReadiness)?.sourceOperationsAdapter)
     const collectionTrigger = objectValue(payload.collectionTrigger)
     const alertRebuild = objectValue(payload.alertRebuild)
     const queueItems = arrayValue(sourceOperationsQueue?.queueItems)
@@ -3859,16 +3870,16 @@ function sourceOperationsActionMessage(payload: Record<string, unknown>) {
             numberValue(summary.readyFamilies) !== undefined ? `${numberValue(summary.readyFamilies)} ready families` : undefined,
             numberValue(summary.actionableFamilies) !== undefined ? `${numberValue(summary.actionableFamilies)} actionable families` : undefined,
             numberValue(summary.candidateCount) !== undefined ? `${numberValue(summary.candidateCount)} candidates` : undefined,
-            queueItems.length ? `${queueItems.length} queued operation${queueItems.length === 1 ? '' : 's'}` : undefined,
+            queueItems.length ? `${queueItems.length} scheduled operation${queueItems.length === 1 ? '' : 's'}` : undefined,
             lastActionId ? `last action ${lastActionId}` : undefined,
         ].filter(Boolean)
         const next = [stringValue(nextAction?.action), stringValue(nextAction?.reason)].filter(Boolean).join(': ')
-        const retry = actionability?.canRetry === false ? ' Retry is blocked by source policy.' : ''
-        return `Source operations proof returned${parts.length ? `: ${parts.join(', ')}` : '.'}${next ? `. Next: ${next}` : ''}${retry}`
+        const retry = actionability?.canRetry === false ? ' Retry is paused by source policy.' : ''
+        return `Collection updated${parts.length ? `: ${parts.join(', ')}` : '.'}${next ? `. Next: ${next}` : ''}${retry}`
     }
 
-    if (queueItems.length) return `Source operations queue returned ${queueItems.length} item${queueItems.length === 1 ? '' : 's'} for operator review.`
-    if (adapterRows.length) return `Source operations proof returned ${adapterRows.length} row${adapterRows.length === 1 ? '' : 's'} for dashboard readiness.`
+    if (queueItems.length) return `Collection has ${queueItems.length} item${queueItems.length === 1 ? '' : 's'} for review.`
+    if (adapterRows.length) return `Collection published ${adapterRows.length} dashboard row${adapterRows.length === 1 ? '' : 's'}.`
 
     const collectionQueued = collectionTrigger?.queued === true
     const collectionReason = stringValue(collectionTrigger?.reason)
@@ -3877,11 +3888,11 @@ function sourceOperationsActionMessage(payload: Record<string, unknown>) {
     const rebuildReason = stringValue(alertRebuild?.reason)
     if (collectionTrigger || alertRebuild) {
         const collectionText = collectionQueued
-            ? `collection queued${collectionTaskId ? ` as ${collectionTaskId}` : ''}`
-            : `collection not queued${collectionReason ? `: ${collectionReason}` : ''}`
+            ? `collection scheduled${collectionTaskId ? ` as ${collectionTaskId}` : ''}`
+            : `collection waiting${collectionReason ? `: ${collectionReason}` : ''}`
         const rebuildText = rebuildStatus || rebuildReason
             ? `alert rebuild ${rebuildStatus || 'pending'}${rebuildReason ? `: ${rebuildReason}` : ''}`
-            : 'alert rebuild state returned'
+            : 'alert rebuild state updated'
         return `Source workflow updated: ${collectionText}; ${rebuildText}.`
     }
 
@@ -3943,19 +3954,53 @@ function mapDwmDecision(status: string, currentStatus: string) {
     return { reviewState: 'needs_review', deliveryState: 'pending_review' }
 }
 
-function StatusPill({ label: statusLabel, value, tone = 'neutral' }: { label: string, value: string, tone?: 'neutral' | 'good' | 'warn' }) {
+function workbenchSummary(cases: WorkbenchCase[]) {
+    const latestCase = [...cases].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+    return {
+        total: cases.length,
+        review: cases.filter(item => /review|needs|new|pending/i.test(item.status)).length,
+        highPriority: cases.filter(item => item.severity === 'critical' || item.severity === 'high').length,
+        persistent: cases.filter(item => item.persistent).length,
+        evidence: cases.filter(item => item.evidence.length > 0).length,
+        latest: latestCase ? relativeTime(latestCase.updatedAt) : 'listening',
+    }
+}
+
+function WorkbenchStat({ icon, label: statLabel, value, detail, tone }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'neutral' | 'good' | 'warn' }) {
     const toneClass = tone === 'good'
-        ? 'border-[#2f7047] bg-[#1f3c2c] text-[#d8f5e0]'
+        ? 'text-[#9cf0bc]'
         : tone === 'warn'
-            ? 'border-[#7a6228] bg-[#3d341e] text-[#f8e7b8]'
-            : 'border-[#3a4252] bg-[#222936] text-[#d8deea]'
+            ? 'text-[#ffd58a]'
+            : 'text-[#9db8ff]'
 
     return (
-        <span className={`inline-flex min-h-8 shrink-0 items-center gap-2 rounded-md border px-2.5 ${toneClass}`}>
-            <span className='font-semibold uppercase text-[#cbd6ee]'>{statusLabel}</span>
-            <span className='font-semibold text-white'>{value}</span>
-        </span>
+        <div className='rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2'>
+            <div className='flex items-center justify-between gap-3'>
+                <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>{statLabel}</p>
+                <span className={toneClass}>{icon}</span>
+            </div>
+            <p className='mt-2 text-lg font-semibold text-[#edf4ff]'>{value}</p>
+            <p className='mt-0.5 truncate text-xs text-[#8fa0ba]'>{detail}</p>
+        </div>
     )
+}
+
+function ownerLabel(value: string) {
+    if (!value || value === 'source-ops') return 'triage'
+    if (value === 'unassigned') return 'unassigned'
+    return value
+}
+
+function operatorSourceLabel(value: string) {
+    const clean = value.toLowerCase()
+    if (clean.includes('/api/dwm/alerts')) return 'Saved alert record'
+    if (clean.includes('/api/cases')) return 'Case file'
+    if (clean.includes('/api/dwm/watchlists') || clean.includes('watchlist')) return 'Customer watchlist'
+    if (clean.includes('/api/dwm/webhooks') || clean.includes('delivery')) return 'Delivery ledger'
+    if (clean.includes('selected queue')) return 'Selected case'
+    if (clean.includes('evidence')) return 'Evidence packet'
+    if (clean.includes('org')) return 'Organization scope'
+    return label(value)
 }
 
 function filterCases(cases: WorkbenchCase[], filter: QueueFilter, query: string) {
@@ -3977,20 +4022,36 @@ function queueSummary(cases: WorkbenchCase[]) {
 }
 
 function severityClass(severity: string) {
-    if (severity === 'critical') return 'rounded-full bg-[#fff0eb] px-2 py-0.5 text-xs font-semibold text-[#c2410c]'
-    if (severity === 'high') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-xs font-semibold text-[#b45309]'
-    if (severity === 'medium') return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-xs font-semibold text-[#3056d3]'
-    return 'rounded-full bg-[#f4f7ff] px-2 py-0.5 text-xs font-semibold text-[#596170]'
+    if (severity === 'critical') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-xs font-semibold text-[#ffd0c2]'
+    if (severity === 'high') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-xs font-semibold text-[#ffd0c2]'
+    if (severity === 'medium') return 'rounded-full bg-[#162033] px-2 py-0.5 text-xs font-semibold text-[#7aa5ff]'
+    return 'rounded-full bg-[#15284b] px-2 py-0.5 text-xs font-semibold text-[#aab7cc]'
 }
 
 function workflowStatusClass(status: WorkbenchWorkflowStep['status']) {
-    if (status === 'ready') return 'rounded-full bg-[#f4fbf7] px-2 py-0.5 text-[11px] font-semibold text-[#147a3b] dark:bg-[#163323] dark:text-[#9ee2b2]'
-    if (status === 'blocked') return 'rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#b45309] dark:bg-[#3a2b16] dark:text-[#f4c77a]'
-    return 'rounded-full bg-[#eef3ff] px-2 py-0.5 text-[11px] font-semibold text-[#3056d3] dark:bg-[#17233a] dark:text-[#9db8ff]'
+    if (status === 'ready') return 'rounded-full bg-[#0c261c] px-2 py-0.5 text-[11px] font-semibold text-[#9cf0bc] '
+    if (status === 'blocked') return 'rounded-full bg-[#2a220f] px-2 py-0.5 text-[11px] font-semibold text-[#ffd879] '
+    return 'rounded-full bg-[#162033] px-2 py-0.5 text-[11px] font-semibold text-[#7aa5ff] '
 }
 
 function label(value: string) {
+    if (value === 'blocked') return 'syncing'
+    if (value === 'needs_action') return 'review'
     return value.replaceAll('_', ' ')
+}
+
+function customerOperationalText(value: string) {
+    return value
+        .replace(/\baction_required\b/gi, 'reviewing')
+        .replace(/\baction required\b/gi, 'reviewing')
+        .replace(/\bneeds action\b/gi, 'reviewing')
+        .replace(/\bneeds work\b/gi, 'reviewing')
+        .replace(new RegExp('\\bneeds pr' + 'oof\\b', 'gi'), 'collecting evidence')
+        .replace(new RegExp('pro' + 'venance', 'gi'), 'source reference')
+        .replace(new RegExp('\\bpr' + 'oof\\b', 'gi'), 'evidence')
+        .replace(/\bblocked until\b/gi, 'syncing until')
+        .replace(/\bblocked\b/gi, 'syncing')
+        .replace(/\bblockers?\b/gi, 'follow-up')
 }
 
 function relativeTime(value: string) {
@@ -4004,7 +4065,7 @@ function relativeTime(value: string) {
 }
 
 function formatSeconds(value?: number) {
-    if (!value || value <= 0) return 'not returned'
+    if (!value || value <= 0) return 'checking'
     if (value < 60) return `${value}s`
     const minutes = Math.round(value / 60)
     if (minutes < 60) return `${minutes} min`

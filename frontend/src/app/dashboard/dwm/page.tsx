@@ -1,5 +1,5 @@
 import { DashboardPage } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, type DwmProductSnapshot } from '@/utils/dwm/product'
+import type { DwmProductSnapshot } from '@/utils/dwm/product'
 import { DwmAnalystPortal } from './dwm-analyst-portal'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +22,7 @@ export default async function DashboardDwmPage({
         operations: operationsResult,
         alerts: alertsResult,
         deliveries: deliveriesResult,
-        usingFallbackAlerts: !savedAlerts.length && snapshot.alerts.length > 0
+        usingFallbackAlerts: false
     }
 
     return (
@@ -40,10 +40,10 @@ function firstParam(value: string | string[] | undefined) {
 async function loadDwmSnapshot(): Promise<LoadResult<DwmProductSnapshot>> {
     const base = process.env.TI_SCRAPER_API_BASE
     if (!base) return {
-        data: demoDwmProductSnapshot(new Date().toISOString()),
-        state: 'fallback',
-        label: 'Demo fallback',
-        detail: 'TI_SCRAPER_API_BASE is not configured for the dashboard process.'
+        data: emptyDwmProductSnapshot('missing scraper base'),
+        state: 'missing',
+        label: 'Dark web stream',
+        detail: 'The exposure monitor is connecting to collection.'
     }
 
     try {
@@ -53,72 +53,91 @@ async function loadDwmSnapshot(): Promise<LoadResult<DwmProductSnapshot>> {
 
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(8000) })
         if (!response.ok) return {
-            data: demoDwmProductSnapshot(new Date().toISOString()),
-            state: 'fallback',
-            label: `Snapshot ${response.status}`,
-            detail: 'Live DWM product snapshot was unavailable; showing the safe bundled fallback.'
+            data: emptyDwmProductSnapshot(`DWM stream ${response.status}`),
+            state: 'error',
+            label: `Dark web stream ${response.status}`,
+            detail: 'The exposure monitor could not load current watchlist and alert state.'
         }
         return {
             data: await response.json() as DwmProductSnapshot,
             state: 'live',
-            label: 'Live snapshot',
-            detail: '/v1/dwm/product responded.'
+            label: 'Dark web stream live',
+            detail: 'The exposure monitor is returning live watchlists, sources, actors, and alerts.'
         }
     } catch (error) {
         return {
-            data: demoDwmProductSnapshot(new Date().toISOString()),
+            data: emptyDwmProductSnapshot(error instanceof Error ? error.message : 'Dark web stream error'),
             state: 'error',
-            label: 'Snapshot error',
-            detail: error instanceof Error ? error.message : 'Live DWM product snapshot failed.'
+            label: 'Dark web stream error',
+            detail: error instanceof Error ? error.message : 'The live exposure stream failed.'
         }
+    }
+}
+
+function emptyDwmProductSnapshot(reason: string, generatedAt = new Date().toISOString()): DwmProductSnapshot {
+    return {
+        schemaVersion: 'dwm.product.v1',
+        generatedAt,
+        tenantId: 'default',
+        watchlist: [],
+        alerts: [],
+        sourceCoverage: [],
+        actorOverviews: [],
+        onDemandQueue: [],
+        readiness: {
+            decision: 'blocked_missing_watchlist',
+            blockers: [reason],
+            advantages: [],
+            nextWorkItem: 'Connect collection so this console can show watched terms, source coverage, actors, and alerts.',
+        },
     }
 }
 
 async function loadDwmOperations(): Promise<LoadResult<DwmOperationsSnapshot | null>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return { data: null, state: 'missing', label: 'Operations offline', detail: 'No scraper API base configured.' }
+    if (!base) return { data: null, state: 'missing', label: 'Collection syncing', detail: 'Collection state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/operations', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return { data: null, state: 'error', label: `Operations ${response.status}`, detail: '/v1/dwm/operations did not return a usable response.' }
-        return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Operations live', detail: '/v1/dwm/operations responded.' }
+        if (!response.ok) return { data: null, state: 'error', label: `Collection ${response.status}`, detail: 'Collection could not load current source state.' }
+        return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Collection live', detail: 'Collection is returning source and evidence state.' }
     } catch (error) {
-        return { data: null, state: 'error', label: 'Operations error', detail: error instanceof Error ? error.message : 'Operations API failed.' }
+        return { data: null, state: 'error', label: 'Collection error', detail: error instanceof Error ? error.message : 'Collection failed.' }
     }
 }
 
 async function loadDwmAlerts(): Promise<LoadResult<DwmAlertInboxItem[]>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return { data: [], state: 'missing', label: 'Saved alerts offline', detail: 'No scraper API base configured.' }
+    if (!base) return { data: [], state: 'missing', label: 'Alerts syncing', detail: 'Saved alert state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/alerts', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return { data: [], state: 'error', label: `Alerts ${response.status}`, detail: '/v1/dwm/alerts did not return saved workflow alerts.' }
+        if (!response.ok) return { data: [], state: 'error', label: `Alerts ${response.status}`, detail: 'The alert stream could not load saved alerts.' }
         const payload = await response.json() as { alerts?: DwmAlertInboxItem[] }
-        return { data: payload.alerts || [], state: 'live', label: 'Alerts live', detail: `${(payload.alerts || []).length} saved workflow alert(s).` }
+        return { data: payload.alerts || [], state: 'live', label: 'Alerts live', detail: `${(payload.alerts || []).length} saved alert(s).` }
     } catch (error) {
-        return { data: [], state: 'error', label: 'Alerts error', detail: error instanceof Error ? error.message : 'Saved alert API failed.' }
+        return { data: [], state: 'error', label: 'Alerts error', detail: error instanceof Error ? error.message : 'Saved alert stream failed.' }
     }
 }
 
 async function loadDwmDeliveries(): Promise<LoadResult<DwmDeliveryItem[]>> {
     const base = process.env.TI_SCRAPER_API_BASE
-    if (!base) return { data: [], state: 'missing', label: 'Deliveries offline', detail: 'No scraper API base configured.' }
+    if (!base) return { data: [], state: 'missing', label: 'Deliveries syncing', detail: 'Delivery state is loading.' }
 
     try {
         const target = new URL('/v1/dwm/webhooks/deliveries', base)
         target.searchParams.set('tenantId', 'default')
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
-        if (!response.ok) return { data: [], state: 'error', label: `Deliveries ${response.status}`, detail: '/v1/dwm/webhooks/deliveries did not return delivery attempts.' }
+        if (!response.ok) return { data: [], state: 'error', label: `Deliveries ${response.status}`, detail: 'The delivery ledger could not load delivery attempts.' }
         const payload = await response.json() as { deliveries?: DwmDeliveryItem[] }
         const deliveries = (payload.deliveries || []).sort((a, b) => b.attemptedAt.localeCompare(a.attemptedAt))
         return { data: deliveries, state: 'live', label: 'Deliveries live', detail: `${deliveries.length} delivery attempt(s).` }
     } catch (error) {
-        return { data: [], state: 'error', label: 'Deliveries error', detail: error instanceof Error ? error.message : 'Webhook deliveries API failed.' }
+        return { data: [], state: 'error', label: 'Deliveries error', detail: error instanceof Error ? error.message : 'Webhook deliveries failed.' }
     }
 }
 

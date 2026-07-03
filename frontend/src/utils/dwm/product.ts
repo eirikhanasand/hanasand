@@ -189,12 +189,12 @@ export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): 
                     },
                     {
                         id: 'ev_dark_acme_actor',
-                        sourceName: 'Actor-page metadata mirror',
+                        sourceName: 'Leak-site metadata mirror',
                         sourceFamily: 'darkweb_metadata',
                         captureMode: 'metadata_only',
                         redactionState: 'metadata_only',
                         contentHash: 'a52c113e',
-                        excerpt: 'Metadata-only actor page includes Acme Payments as claimed victim with financial records category.',
+                        excerpt: 'Metadata-only leak-site entry includes Acme Payments as claimed victim with financial records category.',
                     },
                 ],
                 webhookDelivery: {
@@ -215,18 +215,18 @@ export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): 
                 sourceFamily: 'darkweb_metadata',
                 sourceCount: 3,
                 firstSeenAt: secondAlertAt,
-                claimSummary: 'Restricted metadata sources claim a watched supplier appears in an actor-page update with procurement and customer-record categories.',
+                claimSummary: 'Sensitive leak-site sources claim a watched supplier appears with procurement and customer-record categories.',
                 reviewState: 'needs_review',
                 recommendedAction: 'Route to vendor-risk workflow, ask the supplier owner for confirmation, and keep actor mirrors on 30-minute watch.',
                 evidence: [
                     {
                         id: 'ev_dark_northwind',
-                        sourceName: 'Restricted actor-page metadata',
+                        sourceName: 'Restricted leak-site metadata',
                         sourceFamily: 'darkweb_metadata',
                         captureMode: 'metadata_only',
                         redactionState: 'metadata_only',
                         contentHash: 'c61be8a1',
-                        excerpt: 'Northwind Supplier appears in actor-page metadata with claimed procurement data.',
+                        excerpt: 'Northwind Supplier appears in leak-site metadata with claimed procurement data.',
                     },
                 ],
                 webhookDelivery: {
@@ -238,14 +238,14 @@ export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): 
         ],
         sourceCoverage: [
             { family: 'telegram_public', label: 'Public Telegram', sourceCount: 54, activeCount: 38, approvalState: 'active', health: 'partial', detail: 'Broker rooms, ransomware mirrors, combo-list drops, stealer-log shops, and phishing-kit seller channels.' },
-            { family: 'darkweb_metadata', label: 'Dark web metadata', sourceCount: 18, activeCount: 12, approvalState: 'active', health: 'partial', detail: 'Actor pages, leak-site mirrors, first-seen times, screenshots, hashes, and victim/data-type metadata.' },
-            { family: 'actor_page', label: 'Actor pages', sourceCount: 11, activeCount: 9, approvalState: 'active', health: 'partial', detail: 'Ransomware and extortion actor pages normalized into victim, sector, country, and mirror-state fields.' },
+            { family: 'darkweb_metadata', label: 'Dark web metadata', sourceCount: 18, activeCount: 12, approvalState: 'active', health: 'partial', detail: 'Leak sites, mirrors, first-seen times, screenshots, hashes, and victim/data-type metadata.' },
+            { family: 'actor_page', label: 'Leak sites', sourceCount: 11, activeCount: 9, approvalState: 'active', health: 'partial', detail: 'Ransomware and extortion leak sites normalized into victim, sector, country, and mirror-state fields.' },
             { family: 'public_advisory', label: 'Public advisories', sourceCount: 32, activeCount: 32, approvalState: 'active', health: 'healthy', detail: 'CERT, vendor reports, GitHub advisories, malware infrastructure feeds, and corroborating public reports.' },
             { family: 'clear_web', label: 'Clear-web corroboration', sourceCount: 27, activeCount: 25, approvalState: 'active', health: 'partial', detail: 'Searchable public context used to reduce false positives before customer delivery.' },
         ],
         actorOverviews: [
             { actor: 'Lumma C2', aliases: [], sourceFamilies: ['telegram_public'], sourceCount: 5, captureCount: 5, latestSeenAt: firstAlertAt, confidence: 91, watchState: 'active_monitoring', summary: 'Lumma C2 is tracked across broker-room and stealer-log public Telegram sources with identity exposure context.' },
-            { actor: 'RansomHouse', aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 3, captureCount: 3, latestSeenAt: secondAlertAt, confidence: 84, watchState: 'metadata_only', summary: 'RansomHouse is tracked through metadata-only actor-page coverage and vendor-risk claims.' },
+            { actor: 'RansomHouse', aliases: [], sourceFamilies: ['darkweb_metadata'], sourceCount: 3, captureCount: 3, latestSeenAt: secondAlertAt, confidence: 84, watchState: 'metadata_only', summary: 'RansomHouse is tracked through metadata-only leak-site coverage and vendor-risk claims.' },
         ],
         onDemandQueue: [
             { id: 'req_session_replay_market', target: 't.me/session_replay_market', type: 'telegram_channel', priority: 'high', scope: 'acme.com plus subsidiaries', approvalState: 'queued', nextAction: 'Run public-channel compliance checks and promote approved messages to continuous polling.' },
@@ -257,7 +257,7 @@ export function demoDwmProductSnapshot(generatedAt = new Date().toISOString()): 
             blockers: [
                 'Persist tenant-specific DWM watchlists instead of using the preview snapshot.',
                 'Schedule live public Telegram polling and source health rollups for approved channels.',
-                'Persist webhook delivery attempts and replay state per alert dedupe key.',
+                'Persist webhook delivery attempts and replay state per alert key.',
             ],
             advantages: [
                 'Telegram is modeled as a first-class source family, not a keyword side feed.',

@@ -1,4 +1,5 @@
 import type { DwmAlert, DwmSeverity } from '@/utils/dwm/product'
+import { safeAlertSummary } from '@/utils/dwm/display'
 import type { WorkbenchAction, WorkbenchCase, WorkbenchEvidence, WorkbenchTimelineItem } from './workbenchClient'
 
 type RuntimeDwmAlert = DwmAlert & {
@@ -142,7 +143,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
         kind: 'dwm_alert',
         queue: severity === 'critical' ? 'Incident response' : route.replaceAll('_', ' '),
         title: alert.company,
-        subtitle: alert.claimSummary,
+        subtitle: safeAlertSummary(alert),
         severity,
         status: workflowStatus,
         priority: severityPriority(severity) + alert.confidence + (workflowStatus === 'new' ? 20 : 0),
@@ -171,7 +172,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
                 label: 'Persisted alert',
                 status: 'ready',
                 owner: 'alert',
-                source: 'GET /api/dwm/alerts/:id',
+                source: 'Saved alert record',
                 detail: `${selectedCaptureIds.length || evidence.length} capture-backed evidence item${(selectedCaptureIds.length || evidence.length) === 1 ? '' : 's'} retained.`,
                 entityId: alert.id,
                 href: alertHref,
@@ -182,7 +183,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
                 status: watchlistIds.length ? 'ready' : 'blocked',
                 owner: 'org',
                 source: 'orgWatchlistScope',
-                detail: watchlistIds.length ? `${watchlistIds.length} watchlist ref${watchlistIds.length === 1 ? '' : 's'}; ${watchlistItemIds.length} item ref${watchlistItemIds.length === 1 ? '' : 's'}.` : 'No org/shared watchlist reference returned.',
+                detail: watchlistIds.length ? `${watchlistIds.length} watchlist ref${watchlistIds.length === 1 ? '' : 's'}; ${watchlistItemIds.length} item ref${watchlistItemIds.length === 1 ? '' : 's'}.` : 'Org/shared watchlist reference is syncing.',
                 entityId: watchlistItemIds[0] ?? watchlistIds[0],
                 href: watchlistIds.length ? watchlistLedgerHref(organizationId, alert.tenantId) : undefined,
             },
@@ -192,7 +193,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
                 status: caseDetailHref ? 'ready' : 'needs_action',
                 owner: 'case',
                 source: 'caseHandoff',
-                detail: caseDetailHref ? `Case detail route ${caseDetailHref}.` : 'No case id or case path is attached yet.',
+                detail: caseDetailHref ? `Case detail route ${caseDetailHref}.` : 'Case id and path are syncing.',
                 entityId: caseId,
                 href: caseDetailHref,
             },
@@ -210,7 +211,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
         actions: buildAlertActions(alert, organizationId),
         caseDetailHref,
         deliveryEvidence,
-        missingDependency: caseDetailHref ? undefined : 'No backed case id is attached to this alert yet.',
+        missingDependency: caseDetailHref ? undefined : 'Backed case id is syncing to this alert.',
     }
 }
 
@@ -265,7 +266,7 @@ function buildAlertTimeline(alert: RuntimeDwmAlert, selectedCaptureIds: string[]
             id: `${alert.id}_watchlist`,
             at: alert.updatedAt ?? alert.lastSeenAt ?? alert.firstSeenAt,
             title: 'Watchlist scope',
-            body: watchlistIds.length ? `${watchlistIds.join(', ')} / ${watchlistItemIds.join(', ') || 'watchlist item not returned'}` : 'No org watchlist scope returned.',
+            body: watchlistIds.length ? `${watchlistIds.join(', ')} / ${watchlistItemIds.join(', ') || 'watchlist item syncing'}` : 'Org watchlist scope is syncing.',
         },
         {
             id: `${alert.id}_route`,

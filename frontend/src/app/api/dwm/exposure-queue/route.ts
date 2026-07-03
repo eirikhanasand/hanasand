@@ -12,27 +12,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
         schemaVersion: 'dwm.exposure_queue.v1',
         generatedAt: new Date().toISOString(),
-        status: 'waiting_for_collection',
+        status: 'checking',
         freshness: {
             latestClaimAt: null,
             ageMinutes: null,
             maxLiveAgeMinutes: 60,
         },
-        parser: {
-            service: 'hanasand-ai',
-            aiEndpointConfigured: false,
-            fallbackParser: 'metadata-safe-ransomware-claim-parser:v1',
-        },
         scheduler: {
-            state: 'due',
+            state: 'checking',
             cadenceSeconds: 300,
-            sourceFamilies: ['darkweb_metadata', 'telegram_public', 'public_advisory'],
-            ingestEndpoint: '/v1/dwm/exposure-claims/ingest',
         },
         counts: {
             visible: 0,
+            total: 0,
             needsReview: 0,
             metadataOnly: 0,
+        },
+        page: {
+            limit: Number(request.nextUrl.searchParams.get('limit') || 20),
+            offset: Number(request.nextUrl.searchParams.get('offset') || 0),
+            total: 0,
+            nextOffset: null,
+            hasMore: false,
         },
         items: [],
     }, { status: 202, headers: { 'cache-control': 'no-store' } })

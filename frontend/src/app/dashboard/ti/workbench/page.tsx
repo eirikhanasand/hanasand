@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { ArrowUpRight, Inbox, Radar } from 'lucide-react'
 import { DashboardHeader, DashboardPage } from '@/components/dashboard/ui'
-import { demoDwmProductSnapshot, type DwmAlert } from '@/utils/dwm/product'
+import type { DwmAlert } from '@/utils/dwm/product'
 import { formatTiDate, getTiAdminOverview, sourceById, type TiAdminCapture, type TiAdminDomain, type TiAdminOverview } from '@/utils/tiAdmin/ops'
 import AnalystWorkbenchClient, { type WorkbenchCase, type WorkbenchEvidence } from './workbenchClient'
 import { dwmAlertToWorkbenchCase } from './dwmAlertAdapter'
@@ -11,25 +11,23 @@ export const dynamic = 'force-dynamic'
 export default async function TiAnalystWorkbenchPage() {
     const overview = getTiAdminOverview()
     const liveAlerts = await loadDwmAlerts()
-    const fallbackAlerts = demoDwmProductSnapshot(new Date().toISOString()).alerts
-    const alerts = liveAlerts.length ? liveAlerts : fallbackAlerts
-    const cases = buildWorkbenchCases(overview, alerts)
+    const cases = buildWorkbenchCases(overview, liveAlerts)
 
     return (
         <DashboardPage>
             <DashboardHeader
-                eyebrow='Analyst portal'
-                title='Threat intelligence workbench'
-                description='Prioritize alerts, inspect safe evidence, record decisions, and route customer-ready findings from one operator surface.'
+                eyebrow='Attack review'
+                title='Recent attacks'
+                description='Triage active exposure cases, inspect evidence, assign owners, and send findings when they are ready.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9]'>
+                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#26344d] bg-[#0f1726] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
                             <Radar className='h-4 w-4' />
-                            DWM console
+                            Dark web cases
                         </Link>
-                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-3 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#315fe8] px-3 text-sm font-semibold text-white transition hover:bg-[#426ef0]'>
                             <Inbox className='h-4 w-4' />
-                            Source queues
+                            Sources
                             <ArrowUpRight className='h-4 w-4' />
                         </Link>
                     </div>
@@ -90,7 +88,7 @@ function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): Workbe
         actor: latestCapture?.actor || 'Source correlation',
         sourceLabel: domain.sourceIds.map(id => sourceById(id)?.name || id).join(', '),
         recommendedAction: domain.status === 'review'
-            ? 'Open the related captures, verify the match belongs to the customer, then route as a DWM alert or mark it quiet.'
+            ? 'Open the related captures, verify the match belongs to the customer, then route as a DWM alert or keep it on low-noise watch.'
             : 'Keep monitoring and promote only if another source corroborates the match or risk increases.',
         routeLabel: domain.status === 'review' ? 'analyst review' : 'source watch',
         persistent: false,
@@ -179,7 +177,7 @@ function captureEvidence(capture: TiAdminCapture): WorkbenchEvidence {
         sourceFamily: capture.pageType,
         captureMode: 'metadata only',
         redactionState: 'customer safe',
-        contentHash: capture.metadata.find(item => item.label === 'Dedupe key')?.value || capture.id,
+        contentHash: capture.metadata.find(item => item.label === 'Alert key')?.value || capture.id,
         excerpt: capture.resultSummary,
         metadata: capture.metadata,
     }

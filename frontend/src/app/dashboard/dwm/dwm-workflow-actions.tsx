@@ -201,102 +201,142 @@ export function DwmWorkflowActions({ initialTerms }: { initialTerms: string[] })
     const termCount = countTerms(terms)
     const webhookConfigured = /^https?:\/\//i.test(webhookUrl.trim())
     const sourceReady = sourceTarget.trim().length > 0
+    const busy = busyAction !== null
+    const saveDisabledReason = termCount ? '' : 'Add at least one company, domain, supplier, or product term first.'
+    const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
+    const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
 
     return (
-        <div className='grid gap-4'>
+        <div data-dwm-workflow-runbook className='grid gap-4'>
             <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                <RouteStateCard label='Watch terms' value={String(termCount)} detail={termCount ? 'ready for matching' : 'add terms'} tone={termCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Webhook route' value={webhookConfigured ? 'configured' : 'not set'} detail={webhookConfigured ? 'test before send' : 'optional but needed for delivery'} tone={webhookConfigured ? 'ok' : 'warn'} />
-                <RouteStateCard label='Source target' value={sourceReady ? 'queued input' : 'empty'} detail={sourceReady ? sourceTarget.trim() : 'add public channel'} tone={sourceReady ? 'ok' : 'neutral'} />
-                <RouteStateCard label='Last action' value={result ? result.ok ? 'ok' : 'blocked' : 'idle'} detail={result?.message || 'no action run'} tone={result ? result.ok ? 'ok' : 'bad' : 'neutral'} />
+                <RouteStateCard label='Watch terms' value={String(termCount)} detail={termCount ? 'Ready for matching' : 'Add terms before saving'} tone={termCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Webhook URL' value={webhookConfigured ? 'Ready to test' : 'Not entered'} detail={webhookConfigured ? 'Test before customer send' : 'Optional, but required for test send'} tone={webhookConfigured ? 'ok' : 'warn'} />
+                <RouteStateCard label='Source target' value={sourceReady ? 'Ready to submit' : 'No input'} detail={sourceReady ? sourceTarget.trim() : 'Add a public channel or use source expansion'} tone={sourceReady ? 'ok' : 'neutral'} />
+                <RouteStateCard label='Last action' value={result ? result.ok ? 'Completed' : 'Review' : 'Waiting'} detail={result?.message || 'Run a step below to see the outcome here'} tone={result ? result.ok ? 'ok' : 'bad' : 'neutral'} />
+            </section>
+
+            <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
+                <div className='flex flex-wrap items-start justify-between gap-3'>
+                    <div>
+                        <h2 className='text-base font-semibold text-ui-text'>First-run path</h2>
+                        <p className='mt-1 text-sm leading-6 text-ui-muted'>Use this sequence when there are no alerts yet: define matching terms, collect approved sources, rebuild cases, then test delivery.</p>
+                    </div>
+                    {result ? (
+                        <p data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
+                            {result.message}
+                        </p>
+                    ) : null}
+                </div>
+                <div className='mt-4 grid gap-2 md:grid-cols-4'>
+                    <RunbookStep step='1' title='Terms' detail='Name the company, domains, suppliers, brands, and products that should open a case.' state={termCount ? 'ready' : 'needed'} />
+                    <RunbookStep step='2' title='Sources' detail='Use approved public Telegram and metadata sources; private invites stay manual.' state='ready' />
+                    <RunbookStep step='3' title='Cases' detail='Rebuild alerts after changing terms or collecting sources.' state={termCount ? 'ready' : 'waiting'} />
+                    <RunbookStep step='4' title='Delivery' detail='Test an HTTPS webhook before sending customer notifications.' state={webhookConfigured ? 'ready' : 'waiting'} />
+                </div>
             </section>
 
             <div className='grid gap-4 xl:grid-cols-[1.05fr_0.95fr]'>
-                <form onSubmit={saveWatchlist} className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+                <form onSubmit={saveWatchlist} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#171a21]'>Customer watchlist</h2>
-                            <p className='mt-1 text-sm leading-6 text-[#596170]'>Terms matched against collected evidence before an alert can enter review or delivery.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Customer watchlist</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Terms matched against collected evidence before an alert enters review or delivery.</p>
                         </div>
-                        <BellRing className='h-5 w-5 text-[#3056d3]' />
+                        <BellRing className='h-5 w-5 text-ui-primary' />
                     </div>
                     <textarea
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
                         placeholder={'acme.com\nAcme Payments\nNorthwind Supplier'}
-                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-3 py-2 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <input
                         value={webhookUrl}
                         onChange={event => setWebhookUrl(event.target.value)}
                         placeholder='Webhook URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busyAction !== null} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(saveDisabledReason)} title={saveDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Save and rebuild alerts
                         </button>
-                        <WorkflowButton busy={busyAction === 'collection'} disabled={busyAction !== null} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busyAction !== null} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'darkweb'} disabled={busyAction !== null} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'delivery'} disabled={busyAction !== null} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busyAction !== null} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                     </div>
+                    {saveDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-warning'>{saveDisabledReason}</p> : null}
+                    {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-muted'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={submitSource} className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
+                <form onSubmit={submitSource} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#171a21]'>Telegram source request</h2>
-                            <p className='mt-1 text-sm leading-6 text-[#596170]'>Add a public @handle or t.me URL. Private invites are blocked.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Telegram source request</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
                         </div>
-                        <Plus className='h-5 w-5 text-[#3056d3]' />
+                        <Plus className='h-5 w-5 text-ui-primary' />
                     </div>
                     <input
                         value={sourceTarget}
                         onChange={event => setSourceTarget(event.target.value)}
                         placeholder='@breach_drop_house or https://t.me/channel'
-                        className='mt-4 h-10 w-full rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-3 text-sm text-[#171a21] outline-none transition focus:border-[#3056d3] focus:ring-2 focus:ring-[#dbe5ff]'
+                        className='mt-4 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
-                    <button disabled={busyAction !== null || !sourceTarget.trim()} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-[#3056d3] px-4 text-sm font-semibold text-white transition hover:bg-[#2446b6] disabled:cursor-not-allowed disabled:opacity-60'>
+                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                         {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                         Submit source
                     </button>
-                    {result && (
-                        <p className={`mt-4 rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-[#d6e9de] bg-[#f4fbf7] text-[#147a3b]' : 'border-[#fde2d6] bg-[#fff7f3] text-[#9a3412]'}`}>
-                            {result.message}
-                        </p>
-                    )}
+                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{sourceDisabledReason}</p> : null}
                 </form>
             </div>
+        </div>
+    )
+}
+
+function RunbookStep({ step, title, detail, state }: { step: string, title: string, detail: string, state: 'ready' | 'needed' | 'waiting' }) {
+    const toneClass = state === 'ready'
+        ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
+        : state === 'needed'
+            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
+            : 'border-ui-border bg-ui-raised text-ui-muted'
+    return (
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <div className='flex items-center justify-between gap-3'>
+                <span className='grid h-7 w-7 place-items-center rounded-full bg-ui-panel text-xs font-semibold text-ui-text'>{step}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>{state}</span>
+            </div>
+            <h3 className='mt-3 text-sm font-semibold text-ui-text'>{title}</h3>
+            <p className='mt-1 line-clamp-3 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
-        ? 'text-[#147a3b]'
+        ? 'text-ui-success'
         : tone === 'warn'
-            ? 'text-[#b45309]'
+            ? 'text-ui-warning'
             : tone === 'bad'
-                ? 'text-[#9a3412]'
-                : 'text-[#3056d3]'
+                ? 'text-ui-danger'
+                : 'text-ui-primary'
     return (
-        <div className='rounded-lg border border-[#dfe5ee] bg-white p-4'>
-            <div className='flex items-center justify-between gap-3 text-[#667085]'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>
+            <div className='flex items-center justify-between gap-3 text-ui-muted'>
                 <p className='text-xs font-semibold uppercase'>{label}</p>
                 <Activity className='h-4 w-4' />
             </div>
             <p className={`mt-2 truncate text-lg font-semibold ${toneClass}`}>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#667085]'>{detail}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{detail}</p>
         </div>
     )
 }
 
-function WorkflowButton({ busy, disabled, icon, onClick, children }: { busy: boolean, disabled: boolean, icon: React.ReactNode, onClick: () => void, children: string }) {
+function WorkflowButton({ busy, disabled, disabledReason, icon, onClick, children }: { busy: boolean, disabled: boolean, disabledReason?: string, icon: React.ReactNode, onClick: () => void, children: string }) {
     return (
-        <button type='button' onClick={onClick} disabled={disabled} className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-4 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'>
             {busy ? <Loader2 className='h-4 w-4 animate-spin' /> : icon}
             {children}
         </button>
