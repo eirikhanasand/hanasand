@@ -12,7 +12,6 @@ export interface DwmOperationsSnapshot {
     activeSourceCount: number;
     telegramSourceCount: number;
     darkwebMetadataSourceCount: number;
-    publicAdvisorySourceCount: number;
     captureCount: number;
     latestCaptureCount: number;
     watchlistMatchCount: number;
@@ -48,33 +47,11 @@ export interface DwmOperationsSnapshot {
     lastCollectedAt?: string;
     approvedMetadataOnly: boolean;
   }>;
-  sourceFamilies: Array<{
-    family: string;
-    label: string;
-    sourceCount: number;
-    activeCount: number;
-    captureCount: number;
-    latestCaptureAt?: string;
-    metadataOnlyCount: number;
-    health: "healthy" | "partial" | "missing";
-    nextAction: string;
-  }>;
   zeroAlertExplanation: {
     state: "matches_found" | "monitoring_no_matches" | "missing_watchlist" | "missing_sources";
     message: string;
   };
 }
-
-const sourceFamilyLabels: Record<string, string> = {
-  telegram_public: "Public Telegram",
-  darkweb_metadata: "Dark web metadata",
-  actor_page: "Actor pages",
-  public_advisory: "Public advisories",
-  clear_web: "Clear web",
-  unknown: "Unknown source"
-};
-
-const sourceFamilyOrder = ["telegram_public", "darkweb_metadata", "actor_page", "public_advisory", "clear_web", "unknown"];
 
 export function buildDwmOperationsSnapshot(input: {
   tenantId?: string;
@@ -112,7 +89,6 @@ export function buildDwmOperationsSnapshot(input: {
       activeSourceCount,
       telegramSourceCount: sources.filter((source) => classifySourceFamily(source) === "telegram_public").length,
       darkwebMetadataSourceCount: sources.filter((source) => classifySourceFamily(source) === "darkweb_metadata").length,
-      publicAdvisorySourceCount: sources.filter((source) => classifySourceFamily(source) === "public_advisory").length,
       captureCount: captures.length,
       latestCaptureCount: latestCaptures.length,
       watchlistMatchCount,
@@ -141,57 +117,8 @@ export function buildDwmOperationsSnapshot(input: {
         lastCollectedAt: source.crawlState?.lastCollectedAt,
         approvedMetadataOnly: Boolean(source.governance?.metadataOnly || source.metadata?.metadataOnlyApproved)
       })),
-    sourceFamilies: sourceFamilyRows({ sources, captures, sourceById }),
     zeroAlertExplanation: explainZeroAlerts({ terms, activeSourceCount, watchlistMatchCount })
   };
-}
-
-function sourceFamilyRows(input: { sources: SourceRecord[]; captures: RawCapture[]; sourceById: Map<string, SourceRecord> }): DwmOperationsSnapshot["sourceFamilies"] {
-  const families = new Set<string>(sourceFamilyOrder);
-  for (const source of input.sources) families.add(classifySourceFamily(source));
-  for (const capture of input.captures) families.add(classifySourceFamily(input.sourceById.get(String(capture.sourceId)), capture));
-
-  return Array.from(families)
-    .sort((first, second) => familySortIndex(first) - familySortIndex(second))
-    .map((family) => {
-      const familySources = input.sources.filter((source) => classifySourceFamily(source) === family);
-      const activeSources = familySources.filter((source: any) => ["active", "canary", "approved"].includes(String(source.status ?? "").toLowerCase()));
-      const familyCaptures = input.captures.filter((capture: any) => classifySourceFamily(input.sourceById.get(String(capture.sourceId)), capture) === family);
-      const latestCaptureAt = familyCaptures
-        .map((capture: any) => String(capture.collectedAt ?? ""))
-        .filter(Boolean)
-        .sort()
-        .at(-1);
-      const metadataOnlyCount = familySources.filter((source: any) => source.governance?.metadataOnly || source.metadata?.metadataOnlyApproved).length;
-      return {
-        family,
-        label: sourceFamilyLabels[family] ?? family,
-        sourceCount: familySources.length,
-        activeCount: activeSources.length,
-        captureCount: familyCaptures.length,
-        latestCaptureAt,
-        metadataOnlyCount,
-        health: activeSources.length ? (familyCaptures.length || family === "public_advisory" ? "healthy" : "partial") : familySources.length ? "partial" : "missing",
-        nextAction: sourceFamilyNextAction(family, familySources.length, activeSources.length, familyCaptures.length)
-      };
-    });
-}
-
-function familySortIndex(family: string): number {
-  const index = sourceFamilyOrder.indexOf(family);
-  return index === -1 ? sourceFamilyOrder.length : index;
-}
-
-function sourceFamilyNextAction(family: string, sourceCount: number, activeCount: number, captureCount: number): string {
-  if (!sourceCount) {
-    if (family === "telegram_public") return "Seed public Telegram pack";
-    if (family === "darkweb_metadata") return "Approve metadata pack";
-    if (family === "public_advisory") return "Enable advisory pack";
-    return "Add source";
-  }
-  if (!activeCount) return "Activate approved sources";
-  if (!captureCount && family !== "public_advisory") return "Run collection";
-  return "Monitor matches";
 }
 
 function captureDto(capture: any, source: any, terms: string[]): DwmOperationsSnapshot["latestCaptures"][number] {

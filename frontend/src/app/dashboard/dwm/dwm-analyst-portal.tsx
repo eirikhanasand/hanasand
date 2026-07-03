@@ -49,7 +49,6 @@ type OperationsSnapshot = {
         activeSourceCount: number
         telegramSourceCount: number
         darkwebMetadataSourceCount: number
-        publicAdvisorySourceCount: number
         captureCount: number
         watchlistMatchCount: number
     }
@@ -77,29 +76,10 @@ type OperationsSnapshot = {
         lastCollectedAt?: string
         approvedMetadataOnly: boolean
     }>
-    sourceFamilies: Array<{
-        family: string
-        label: string
-        sourceCount: number
-        activeCount: number
-        captureCount: number
-        latestCaptureAt?: string
-        metadataOnlyCount: number
-        health: 'healthy' | 'partial' | 'missing'
-        nextAction: string
-    }>
     zeroAlertExplanation: {
         message: string
     }
 }
-
-const SOURCE_FAMILY_FALLBACK: OperationsSnapshot['sourceFamilies'] = [
-    { family: 'telegram_public', label: 'Public Telegram', sourceCount: 0, activeCount: 0, captureCount: 0, metadataOnlyCount: 0, health: 'missing', nextAction: 'Seed public Telegram pack' },
-    { family: 'darkweb_metadata', label: 'Dark web metadata', sourceCount: 0, activeCount: 0, captureCount: 0, metadataOnlyCount: 0, health: 'missing', nextAction: 'Approve metadata pack' },
-    { family: 'actor_page', label: 'Actor pages', sourceCount: 0, activeCount: 0, captureCount: 0, metadataOnlyCount: 0, health: 'missing', nextAction: 'Add actor-page source' },
-    { family: 'public_advisory', label: 'Public advisories', sourceCount: 0, activeCount: 0, captureCount: 0, metadataOnlyCount: 0, health: 'missing', nextAction: 'Enable advisory pack' },
-    { family: 'clear_web', label: 'Clear web', sourceCount: 0, activeCount: 0, captureCount: 0, metadataOnlyCount: 0, health: 'missing', nextAction: 'Add source' },
-]
 
 type DeliveryItem = {
     id: string
@@ -1406,7 +1386,7 @@ function DeliveryCaseActivityRail({ alert, deliveries, timeline, workflowContext
                     <ActionStatus label='Destination' value={workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : workflowContext.hasWebhookRoute ? 'delivery available' : 'checking delivery'} tone={workflowContext.hasWebhookRoute ? 'neutral' : 'warn'} />
                 </div>
                 {failedDelivery?.error && <p className='rounded-lg border border-[#7a3520] bg-[#2c160f] px-3 py-2 text-xs text-[#ffb598]'>{failedDelivery.error}</p>}
-                <div className='overflow-x-auto rounded-lg border border-[#1f2c42]'>
+                <div className='overflow-hidden rounded-lg border border-[#1f2c42]'>
                     <table className='w-full text-left text-xs'>
                         <thead className='bg-[#0b121e] text-[10px] uppercase text-[#8fa0ba]'>
                             <tr>
@@ -1617,62 +1597,18 @@ function NoCaseWorkspace({ latestCaptures, workflowActions }: { latestCaptures: 
 
 function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot, operations: OperationsSnapshot | null }) {
     const sourceRows = operations?.sourceHealth ?? []
-    const familyRows = operations?.sourceFamilies?.length
-        ? operations.sourceFamilies
-        : snapshot.sourceCoverage.length ? snapshot.sourceCoverage.map(source => ({
-            family: source.family,
-            label: source.label,
-            sourceCount: source.sourceCount,
-            activeCount: source.activeCount,
-            captureCount: 0,
-            latestCaptureAt: undefined,
-            metadataOnlyCount: source.family === 'darkweb_metadata' ? source.activeCount : 0,
-            health: source.health as 'healthy' | 'partial' | 'missing',
-            nextAction: source.sourceCount ? (source.activeCount ? 'Monitor matches' : 'Activate approved sources') : 'Add source',
-        })) : SOURCE_FAMILY_FALLBACK
     return (
         <section className='rounded-lg border border-[#26344d] bg-[#101827]'>
             <div className='flex items-center justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Source family coverage</h3>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Source health</h3>
                     <p className='mt-0.5 text-xs text-[#8fa0ba]'>{operations ? `${operations.counts.activeSourceCount}/${operations.counts.sourceCount} active sources` : 'Source inventory'}</p>
                 </div>
                 <SlidersHorizontal className='h-4 w-4 text-[#9db8ff]' />
             </div>
-            <div className='grid gap-3 p-3'>
-                <div className='overflow-x-auto rounded-lg border border-[#1f2c42]'>
-                    <table className='w-full min-w-[620px] text-left text-xs'>
-                        <thead className='bg-[#0b121e] text-[10px] uppercase text-[#8fa0ba]'>
-                            <tr>
-                                <th className='px-3 py-2 font-semibold'>Family</th>
-                                <th className='px-3 py-2 font-semibold'>Active</th>
-                                <th className='px-3 py-2 font-semibold'>Captures</th>
-                                <th className='px-3 py-2 font-semibold'>Newest</th>
-                                <th className='px-3 py-2 font-semibold'>Mode</th>
-                                <th className='px-3 py-2 font-semibold'>Next action</th>
-                            </tr>
-                        </thead>
-                        <tbody className='divide-y divide-[#1f2c42]'>
-                            {familyRows.map(row => (
-                                <tr key={row.family} className='bg-[#101827] align-top'>
-                                    <td className='px-3 py-2'>
-                                        <div className='flex min-w-0 items-center gap-2'>
-                                            <span className={sourceFamilyHealthClass(row.health)}>{stateLabel(row.health)}</span>
-                                            <span className='truncate font-semibold text-[#edf4ff]' title={row.label}>{row.label}</span>
-                                        </div>
-                                    </td>
-                                    <td className='px-3 py-2 font-semibold text-[#aab7cc]'>{row.activeCount}/{row.sourceCount}</td>
-                                    <td className='px-3 py-2 font-semibold text-[#aab7cc]'>{row.captureCount}</td>
-                                    <td className='px-3 py-2 font-semibold text-[#aab7cc]'>{row.latestCaptureAt ? relativeTimeLabel(row.latestCaptureAt) : 'none'}</td>
-                                    <td className='px-3 py-2 text-[#8fa0ba]'>{row.metadataOnlyCount ? `${row.metadataOnlyCount} metadata only` : 'message capture'}</td>
-                                    <td className='px-3 py-2 font-semibold text-[#9db8ff]'>{row.nextAction}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+            <div className='p-3'>
                 {sourceRows.length ? (
-                    <div className='overflow-x-auto rounded-lg border border-[#1f2c42]'>
+                    <div className='overflow-hidden rounded-lg border border-[#1f2c42]'>
                         <table className='w-full text-left text-xs'>
                             <thead className='bg-[#0b121e] text-[10px] uppercase text-[#8fa0ba]'>
                                 <tr>
@@ -1701,13 +1637,13 @@ function SourcePosture({ snapshot, operations }: { snapshot: DwmProductSnapshot,
                     </div>
                 ) : (
                     <div className='grid gap-2'>
-                        {familyRows.map(source => (
+                        {snapshot.sourceCoverage.map(source => (
                             <div key={source.family} className='rounded-lg border border-[#1f2c42] bg-[#0b121e] p-3'>
                                 <div className='flex items-center justify-between gap-3'>
                                     <span className='text-sm font-semibold text-[#edf4ff]'>{source.label}</span>
                                     <span className='rounded-full bg-[#101827] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{source.activeCount}/{source.sourceCount}</span>
                                 </div>
-                                <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#8fa0ba]'>{source.nextAction}</p>
+                                <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#8fa0ba]'>{source.detail}</p>
                             </div>
                         ))}
                     </div>
@@ -2211,12 +2147,6 @@ function deliveryClass(status: string) {
     if (status === 'delivered') return 'rounded-full bg-[#0c261c] px-2 py-0.5 text-xs font-semibold text-[#9cf0bc]'
     if (status === 'failed') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-xs font-semibold text-[#ffb598]'
     return 'rounded-full bg-[#122449] px-2 py-0.5 text-xs font-semibold text-[#9db8ff]'
-}
-
-function sourceFamilyHealthClass(health: string) {
-    if (health === 'healthy') return 'rounded-full bg-[#0c261c] px-2 py-0.5 text-[11px] font-semibold text-[#9cf0bc]'
-    if (health === 'missing') return 'rounded-full bg-[#2c160f] px-2 py-0.5 text-[11px] font-semibold text-[#ffb598]'
-    return 'rounded-full bg-[#2a1c0e] px-2 py-0.5 text-[11px] font-semibold text-[#ffd58a]'
 }
 
 function dispositionClass(state?: EvidenceDispositionState) {

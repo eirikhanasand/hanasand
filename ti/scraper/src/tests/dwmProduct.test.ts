@@ -33,22 +33,6 @@ const darkwebSource: SourceRecord = {
   updatedAt: "2026-06-27T00:00:00.000Z"
 } as SourceRecord;
 
-const publicAdvisorySource: SourceRecord = {
-  id: "src_cisa_kev",
-  name: "CISA KEV advisory feed",
-  type: "public_advisory",
-  url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
-  accessMethod: "public_http_metadata",
-  status: "active",
-  risk: "medium",
-  trustScore: 0.88,
-  legalNotes: "Public advisory metadata only.",
-  governance: { metadataOnly: true },
-  metadata: { metadataOnlyApproved: true },
-  createdAt: "2026-06-27T00:00:00.000Z",
-  updatedAt: "2026-06-27T00:00:00.000Z"
-} as SourceRecord;
-
 const telegramCapture: RawCapture = {
   id: "cap_telegram_1",
   sourceId: "src_telegram_lumma",
@@ -120,20 +104,6 @@ const darkwebCapture: RawCapture = {
   }
 } as RawCapture;
 
-const publicAdvisoryCapture: RawCapture = {
-  id: "cap_advisory_1",
-  sourceId: "src_cisa_kev",
-  url: "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
-  collectedAt: "2026-06-27T08:22:00.000Z",
-  mediaType: "text/plain",
-  storageKind: "metadata_only",
-  contentHash: "hash-advisory",
-  sensitive: false,
-  title: "CISA KEV advisory mentions Acme supplier exposure",
-  body: "Public advisory metadata references supplier access risk for acme.com dependencies.",
-  metadata: { adapter: "public_advisory", safeExcerpt: "Known-exploited vulnerability metadata references Acme supplier exposure." }
-} as RawCapture;
-
 describe("dwm product snapshot", () => {
   test("normalizes watchlists and classifies source families", () => {
     expect(normalizeWatchlist([" acme.com ", "acme.com", "Acme Payments"])).toEqual([
@@ -142,7 +112,6 @@ describe("dwm product snapshot", () => {
     ]);
     expect(classifySourceFamily(telegramSource)).toBe("telegram_public");
     expect(classifySourceFamily(darkwebSource)).toBe("darkweb_metadata");
-    expect(classifySourceFamily(publicAdvisorySource)).toBe("public_advisory");
   });
 
   test("builds workflow-ready alerts from Telegram and metadata-only darkweb captures", () => {
@@ -248,10 +217,8 @@ describe("dwm product snapshot", () => {
     const store = new InMemoryScraperStore();
     store.saveSource(telegramSource);
     store.saveSource(darkwebSource);
-    store.saveSource(publicAdvisorySource);
     store.saveCapture(telegramCapture);
     store.saveCapture(darkwebCapture);
-    store.saveCapture(publicAdvisoryCapture);
 
     const response = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/operations?watchlist=quiet.example"), {
       store,
@@ -261,19 +228,9 @@ describe("dwm product snapshot", () => {
 
     expect(response.status).toBe(200);
     expect(body.schemaVersion).toBe("dwm.operations.v1");
-    expect(body.counts.latestCaptureCount).toBe(3);
-    expect(body.counts.publicAdvisorySourceCount).toBe(1);
+    expect(body.counts.latestCaptureCount).toBe(2);
     expect(body.zeroAlertExplanation.state).toBe("monitoring_no_matches");
     expect(body.latestCaptures.some((capture: any) => capture.redactionState === "metadata_only")).toBe(true);
-    expect(body.sourceFamilies.find((row: any) => row.family === "public_advisory")).toMatchObject({
-      label: "Public advisories",
-      sourceCount: 1,
-      activeCount: 1,
-      captureCount: 1,
-      metadataOnlyCount: 1,
-      health: "healthy",
-      nextAction: "Monitor matches"
-    });
     expect(JSON.stringify(body)).not.toContain(".onion/acme");
   });
 });
