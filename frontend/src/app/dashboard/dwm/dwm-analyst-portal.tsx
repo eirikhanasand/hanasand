@@ -142,9 +142,14 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
     const freshCount = alerts.filter(isFreshAlert).length
     const highConfidenceCount = alerts.filter(alert => alert.confidence >= 80).length
     const latestCaptures = operations?.latestCaptures ?? []
+    const activeSourceCount = operations?.counts.activeSourceCount ?? 0
+    const sourceCount = operations?.counts.sourceCount ?? 0
+    const captureCount = operations?.counts.captureCount ?? latestCaptures.length
+    const watchlistMatchCount = operations?.counts.watchlistMatchCount ?? 0
+    const caseCount = alerts.filter(alert => alert.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate).length
     const latestRunLabel = operations?.latestRun
         ? `${operations.latestRun.captureCount} captures`
-        : operations?.counts.activeSourceCount
+        : activeSourceCount
             ? 'collecting'
             : 'source'
     const watchTermCount = snapshot.watchlist.length
@@ -265,10 +270,23 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                         </div>
                         <div className='min-w-0 text-left sm:shrink-0 sm:text-right'>
                             <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Monitoring state</p>
-                            <p className='mt-1 text-sm font-semibold text-white'>{operations?.counts.activeSourceCount ?? 0}/{operations?.counts.sourceCount ?? 0} sources active</p>
+                            <p className='mt-1 text-sm font-semibold text-white'>{activeSourceCount}/{sourceCount} sources active</p>
                         </div>
                     </div>
                 </div>
+
+                <WorkflowRouteStrip
+                    watchTermCount={watchTermCount}
+                    activeSourceCount={activeSourceCount}
+                    sourceCount={sourceCount}
+                    captureCount={captureCount}
+                    watchlistMatchCount={watchlistMatchCount}
+                    alertCount={alerts.length}
+                    caseCount={caseCount}
+                    deliveryCount={deliveries.length}
+                    latestRunLabel={latestRunLabel}
+                    webhookState={webhookState}
+                />
 
                 <div className='grid min-h-[480px] min-w-0 xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_340px]'>
                     <aside className='order-2 min-w-0 border-b border-[#26344d] bg-[#0b121e] xl:order-none xl:border-b-0 xl:border-r'>
@@ -374,7 +392,21 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
             </section>
 
             <section id='dwm-workflow-actions' className='scroll-mt-24'>
-                <DwmWorkflowActions tenantId={tenantId} organizationId={selectedOrganizationId} initialTerms={snapshot.watchlist.map(term => term.value)} />
+                <DwmWorkflowActions
+                    tenantId={tenantId}
+                    organizationId={selectedOrganizationId}
+                    initialTerms={snapshot.watchlist.map(term => term.value)}
+                    telemetry={{
+                        activeSourceCount: operations?.counts.activeSourceCount ?? 0,
+                        sourceCount: operations?.counts.sourceCount ?? 0,
+                        captureCount,
+                        watchlistMatchCount: operations?.counts.watchlistMatchCount ?? 0,
+                        latestRunStatus: operations?.latestRun?.status,
+                        latestRunCaptureCount: operations?.latestRun?.captureCount,
+                        alertCount: alerts.length,
+                        deliveryCount: deliveries.length,
+                    }}
+                />
             </section>
         </div>
     )
@@ -386,6 +418,56 @@ function alertOrganizationId(alert: PortalAlert, fallback?: string) {
 
 function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {
     return organizationId ? { ...body, tenantId, organizationId } : { ...body, tenantId }
+}
+
+function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, captureCount, watchlistMatchCount, alertCount, caseCount, deliveryCount, latestRunLabel, webhookState }: {
+    watchTermCount: number
+    activeSourceCount: number
+    sourceCount: number
+    captureCount: number
+    watchlistMatchCount: number
+    alertCount: number
+    caseCount: number
+    deliveryCount: number
+    latestRunLabel: string
+    webhookState: string
+}) {
+    const cells = [
+        { label: 'Watchlist', value: `${watchTermCount}`, detail: watchTermCount ? 'terms scoped' : 'add terms', tone: watchTermCount ? 'ready' : 'blocked' },
+        { label: 'Sources', value: `${activeSourceCount}/${sourceCount}`, detail: sourceCount ? 'active coverage' : 'load source pack', tone: activeSourceCount ? 'ready' : 'blocked' },
+        { label: 'Captures', value: `${captureCount}`, detail: latestRunLabel, tone: captureCount ? 'ready' : 'waiting' },
+        { label: 'Matches', value: `${watchlistMatchCount}`, detail: alertCount ? `${alertCount} alerts` : 'watching', tone: alertCount ? 'ready' : 'waiting' },
+        { label: 'Cases', value: `${caseCount}`, detail: caseCount ? 'linked' : 'open from alert', tone: caseCount ? 'ready' : alertCount ? 'waiting' : 'blocked' },
+        { label: 'Delivery', value: deliveryCount ? `${deliveryCount}` : webhookState, detail: deliveryCount ? 'attempts' : 'test route', tone: deliveryCount || webhookState === 'Tested' ? 'ready' : 'waiting' },
+    ] as const
+
+    return (
+        <section data-dwm-workflow-snapshot className='border-b border-[#26344d] bg-[#0d1624] px-4 py-3'>
+            <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                <div>
+                    <p className='text-[10px] font-semibold uppercase text-[#9db4ff]'>Workflow route</p>
+                    <p className='mt-1 text-sm font-semibold text-[#edf4ff]'>Watchlist to source, alert, case, and delivery.</p>
+                </div>
+                <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#bfd0ff] transition hover:bg-[#18305f] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                    Run path
+                </a>
+            </div>
+            <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6'>
+                {cells.map(cell => (
+                    <div key={cell.label} className='min-w-0 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2'>
+                        <div className='flex items-center justify-between gap-2'>
+                            <p className='truncate text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-[#6ee7a8]' : cell.tone === 'blocked' ? 'bg-[#ffb86b]' : 'bg-[#7aa5ff]'}`} />
+                        </div>
+                        <div className='mt-2 flex min-w-0 items-end justify-between gap-2'>
+                            <p className='truncate text-lg font-semibold text-[#edf4ff]' title={cell.value}>{cell.value}</p>
+                            <p className='truncate pb-0.5 text-xs text-[#8fa0ba]' title={cell.detail}>{cell.detail}</p>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </section>
+    )
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
