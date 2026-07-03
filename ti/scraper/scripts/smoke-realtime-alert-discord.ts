@@ -186,16 +186,48 @@ try {
   assert.deepEqual(preservedDetail.body.alert?.workflowContext?.captureIds, [capture.id]);
   assert.ok(!JSON.stringify(preservedDetail.body).includes(duplicateCapture.id), "duplicate capture should not inflate alert evidence.");
 
-  const delivery = await postJson("/v1/dwm/webhooks/deliver", { organizationId });
+  const caseHandoff = await postJson(`/v1/dwm/alerts/${encodeURIComponent(String(alert.id))}/case-handoff`, {
+    organizationId,
+    assignedOwner: "analyst@acme.example",
+    note: "Open a case for validated Telegram exposure evidence.",
+    idempotencyKey: "live-probe-alert-case-handoff"
+  });
+  assert.equal(caseHandoff.response.status, 201, "alert case handoff should return 201");
+  assert.equal(caseHandoff.body.case?.organizationId, organizationId);
+  assert.equal(caseHandoff.body.case?.alertId, alert.id);
+  assert.equal(caseHandoff.body.case?.status, "open");
+  assert.equal(caseHandoff.body.alertCaseHandoff?.caseId, caseHandoff.body.case?.id);
+  assert.equal(caseHandoff.body.alertCaseHandoff?.provenance?.captureIds?.[0], capture.id);
+  assert.equal(caseHandoff.body.alertCaseHandoff?.consumerActions?.webhookDryRun?.route, "/v1/dwm/webhooks/deliver");
+  const caseId = String(caseHandoff.body.case?.id ?? "");
+  const casePath = String(caseHandoff.body.alertCaseHandoff?.casePath ?? `/v1/cases/${caseId}?alertId=${alert.id}`);
+
+  const caseDetailBeforeDelivery = await getJson(`/v1/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organizationId)}`);
+  assert.equal(caseDetailBeforeDelivery.response.status, 200, "case detail should return 200 before delivery");
+  assert.equal(caseDetailBeforeDelivery.body.case?.id, caseId);
+  assert.equal(caseDetailBeforeDelivery.body.alertContext?.id, alert.id);
+  assert.equal(caseDetailBeforeDelivery.body.alertCaseHandoffContext?.caseId, caseId);
+  assert.equal(caseDetailBeforeDelivery.body.evidence?.[0]?.provenance?.captureId, capture.id);
+  assert.equal(caseDetailBeforeDelivery.body.watchlists?.[0]?.organizationId, organizationId);
+  assert.equal(caseDetailBeforeDelivery.body.timeline?.some((event: JsonRecord) => event.eventType === "case.created"), true);
+
+  const delivery = await postJson("/v1/dwm/webhooks/deliver", {
+    organizationId,
+    alertId: alert.id,
+    caseId,
+    casePath
+  });
   assert.equal(delivery.response.status, 200, "webhook delivery should return 200");
-  assert.equal(delivery.body.deliveredCount ?? delivery.body.deliveries?.filter((row: JsonRecord) => row.status === "delivered").length, 2);
+  assert.equal(delivery.body.deliveredCount ?? delivery.body.deliveries?.filter((row: JsonRecord) => row.status === "delivered").length, 1);
   const deliveredRoutes = (delivery.body.deliveries ?? []).filter((row: JsonRecord) => row.status === "delivered");
   assert.equal(deliveredRoutes[0]?.organizationId, organizationId);
   assert.equal(deliveredRoutes[0]?.tenantId, tenantId);
   assert.equal(deliveredRoutes[0]?.watchlistId, watchlist.body.watchlist.id);
+  assert.equal(deliveredRoutes[0]?.alertId, alert.id);
+  assert.equal(deliveredRoutes[0]?.caseId, caseId);
   assert.equal(deliveredRoutes[0]?.deliveryKind, "discord");
   assert.ok(deliveredRoutes[0]?.endpointHash);
-  assert.equal(seenDeliveries.length, 2);
+  assert.equal(seenDeliveries.length, 1);
   assert.equal(seenDeliveries[0].url, "https://discord.com/api/webhooks/live-probe/token");
   assert.equal(seenDeliveries[0].headers.get("x-hanasand-event"), "darkweb.monitoring.match");
   assert.match(String(seenDeliveries[0].body.content ?? ""), new RegExp(organizationId));
@@ -208,6 +240,9 @@ try {
   assert.equal(payload.eventType, "darkweb.monitoring.match");
   assert.equal(payload.organizationId, organizationId);
   assert.equal(payload.tenantId, tenantId);
+  assert.equal(payload.caseId, caseId);
+  assert.equal(payload.caseIdCandidate, caseId);
+  assert.equal(payload.casePath, casePath);
   assert.equal(payload.sourceFamily, "telegram_public");
   assert.deepEqual(payload.captureIds, [capture.id]);
   assert.equal(payload.evidenceCount, 1);
@@ -219,6 +254,37 @@ try {
   assert.equal(payload.notificationTarget?.tenantId, tenantId);
   assert.equal(payload.notificationTarget?.watchlistId, watchlist.body.watchlist.id);
   assert.equal(payload.notificationTarget?.deliveryKind, "discord");
+
+  const customerNotification = await postJson(`/v1/cases/${encodeURIComponent(caseId)}/customer-notification`, {
+    organizationId,
+    webhookDeliveryId: deliveredRoutes[0]?.id,
+    rationale: "Customer SOC received the delivered webhook and case evidence."
+  });
+  assert.equal(customerNotification.response.status, 201, "customer notification receipt should return 201");
+  assert.equal(customerNotification.body.receipt?.caseId, caseId);
+  assert.equal(customerNotification.body.receipt?.alertId, alert.id);
+  assert.equal(customerNotification.body.receipt?.webhookDeliveryId, deliveredRoutes[0]?.id);
+  assert.equal(customerNotification.body.detail?.customerNotificationContext?.notified, true);
+  assert.equal(customerNotification.body.detail?.timeline?.some((event: JsonRecord) => event.eventType === "case.customer_notified"), true);
+
+  const caseDetailAfterDelivery = await getJson(`/v1/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organizationId)}`);
+  assert.equal(caseDetailAfterDelivery.response.status, 200, "case detail should return 200 after delivery");
+  assert.equal(caseDetailAfterDelivery.body.deliveryContext?.delivered, true);
+  assert.equal(caseDetailAfterDelivery.body.deliveryContext?.latestDelivery?.id, deliveredRoutes[0]?.id);
+  assert.equal(caseDetailAfterDelivery.body.customerNotificationContext?.latest?.id, customerNotification.body.receipt?.id);
+  assert.equal(caseDetailAfterDelivery.body.timeline?.some((event: JsonRecord) => event.eventType === "webhook.delivered" && event.related?.webhookDeliveryId === deliveredRoutes[0]?.id), true);
+  assert.equal(caseDetailAfterDelivery.body.timeline?.some((event: JsonRecord) => event.eventType === "case.customer_notified"), true);
+
+  const caseExport = await getJson(`/v1/cases/${encodeURIComponent(caseId)}/export?organizationId=${encodeURIComponent(organizationId)}`);
+  assert.equal(caseExport.response.status, 200, "case export should return 200");
+  assert.equal(caseExport.body.schemaVersion, "analyst.case_export.v1");
+  assert.equal(caseExport.body.summary?.caseId, caseId);
+  assert.equal(caseExport.body.summary?.alertId, alert.id);
+  assert.equal(caseExport.body.summary?.delivered, true);
+  assert.equal(caseExport.body.matchedWatchlistTerms?.[0]?.value, "acme.com");
+  assert.equal(caseExport.body.deliveryEvidence?.[0]?.deliveryId, deliveredRoutes[0]?.id);
+  assert.equal(caseExport.body.customerNotifications?.[0]?.webhookDeliveryId, deliveredRoutes[0]?.id);
+  assert.equal(caseExport.body.evidence?.[0]?.provenance?.captureId, capture.id);
 
   console.log(JSON.stringify({
     event: "realtime_alert_discord_smoke",
@@ -233,6 +299,10 @@ try {
     matchedTerms: watchlist.body.alertRebuild.matchedTerms,
     alertId: alert.id,
     alertDetailPath: alert.alertDetailPath,
+    caseId,
+    casePath,
+    deliveryId: deliveredRoutes[0]?.id,
+    customerNotificationId: customerNotification.body.receipt?.id,
     workflowPreservedAfterDuplicateRebuild: true
   }));
 } finally {

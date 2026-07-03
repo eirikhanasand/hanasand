@@ -492,6 +492,8 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
   const dryRun = body.dryRun === true;
   const explicitWebhookUrl = body.webhookUrl === undefined ? undefined : normalizeWebhookUrl(body.webhookUrl);
   if (body.webhookUrl && !explicitWebhookUrl) return json({ error: { code: "invalid_webhook_url", message: "Webhook URL must start with http:// or https://." }, visibilityDecision: access.visibilityDecision }, 400);
+  const requestedCaseId = normalizeCaseValue(body.caseId);
+  const requestedCasePath = normalizeCaseValue(body.casePath);
   const fetcher = typeof options.webhookFetch === "function" ? options.webhookFetch as typeof fetch : fetch;
   const watchlists = ((options.store as any).listDwmWatchlists?.() ?? []).filter((row: DwmWatchlist) => row.tenantId === tenantId && row.status === "active");
   const orgDestinations = organizationWebhookDestinations(options, scope.organizationId);
@@ -605,11 +607,15 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
     const payload = buildWebhookPayload(alert, watchlist, generatedAt, destination, downstreamHandoff);
     const requestBody = buildWebhookRequestBody(deliveryKind, payload);
     const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:${destination?.id ?? watchlist.id}:${alert.webhookDelivery?.dedupeKey ?? ""}`);
+    const deliveryCaseId = requestedCaseId ?? alert.caseId ?? alert.workflowContext?.caseId;
+    const deliveryCasePath = requestedCasePath ?? alert.casePath ?? alert.workflowContext?.casePath;
     const baseDelivery = {
       id: deliveryId,
       organizationId: deliveryOrgId,
       tenantId,
       alertId: alert.id,
+      caseId: deliveryCaseId,
+      casePath: deliveryCasePath,
       watchlistId: watchlist.id,
       webhookDestinationId: destination?.id,
       endpointHash: stableId("endpoint", webhookUrl),

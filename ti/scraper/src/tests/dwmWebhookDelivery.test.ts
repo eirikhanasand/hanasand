@@ -69,16 +69,20 @@ describe("dwm webhook delivery", () => {
       sourceFamilies: ["telegram_public"],
       matchedTerms: ["acme.com"]
     });
+    const alertBeforeDelivery = (store as any).listDwmAlerts()[0];
+    const caseId = alertBeforeDelivery.caseIdCandidate;
+    const casePath = alertBeforeDelivery.casePath;
 
     const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
       method: "POST",
-      body: JSON.stringify({ tenantId: "tenant_acme" })
+      body: JSON.stringify({ tenantId: "tenant_acme", alertId: alertBeforeDelivery.id, caseId, casePath })
     }), options);
     const delivered = await deliverResponse.json() as any;
 
     expect(deliverResponse.status).toBe(200);
     expect(delivered.attemptedCount).toBe(1);
     expect(delivered.deliveries[0].status).toBe("delivered");
+    expect(delivered.deliveries[0]).toMatchObject({ alertId: alertBeforeDelivery.id, caseId, casePath });
     expect(delivered.deliveries[0].deliveryKind).toBe("discord");
     expect(seen[0].url).toBe("https://discord.com/api/webhooks/dwm/token");
     expect(seen[0].body.content).toContain("Hanasand alert");
