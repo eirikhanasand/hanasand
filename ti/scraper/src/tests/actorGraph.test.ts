@@ -71,6 +71,32 @@ describe("actor result graph", () => {
     expect(dto.graph.relationships.every((relationship) => relationship.provenance.length > 0)).toBe(true);
   });
 
+  test("extracts cloud identity actor evidence into public TI facts with provenance", () => {
+    const dto = buildActorResultDto([
+      result(
+        "Midnight Blizzard targeted Northwind Cloud Services in the technology sector in Canada. Operators used MFA fatigue, OAuth abuse, token theft, password spraying, and cloud identity abuse from https://login-northwind.example.com.",
+        "2026-05-23T00:00:00.000Z",
+        "APT29 cloud identity advisory"
+      )
+    ], {
+      actor: "APT29",
+      aliases: ["midnight blizzard", "nobelium"],
+      generatedAt: "2026-05-24T00:00:00.000Z",
+      staleAfterDays: 30
+    });
+
+    expect(dto.actor.value).toBe("APT29");
+    expect(dto.rankings["supported-target"].some((item) => item.label === "Northwind Cloud Services")).toBe(true);
+    expect(dto.rankings["target-sector"].some((item) => item.label.toLowerCase() === "technology")).toBe(true);
+    expect(dto.rankings["target-region"].some((item) => item.label.toLowerCase() === "canada")).toBe(true);
+    expect(dto.rankings["confident-ttp"].some((item) => item.label === "mfa fatigue")).toBe(true);
+    expect(dto.rankings["confident-ttp"].some((item) => item.label === "oauth abuse")).toBe(true);
+    expect(dto.rankings["confident-ttp"].some((item) => item.label === "token theft")).toBe(true);
+    expect(dto.rankings["confident-ttp"].some((item) => item.label === "password spraying")).toBe(true);
+    expect(dto.rankings["emerging-infrastructure"].some((item) => item.label.includes("login-northwind.example.com"))).toBe(true);
+    expect(dto.graph.relationships.every((relationship) => relationship.provenance.length > 0)).toBe(true);
+  });
+
   test("aggregates confidence from repeated support and marks conflicting attribution as contested", () => {
     const dto = buildActorResultDto([
       result("APT29 target: Fjord Energy AS\nsector: energy\ncountry: Norway\nused phishing and Cobalt Strike from https://one.example.com.", "2026-05-20T00:00:00.000Z", "Support one"),
