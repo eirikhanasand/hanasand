@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Clock3, Copy, Fingerprint, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, Fingerprint, FolderOpen, Loader2, MessageSquareText, Play, Radar, RotateCcw, Search, Send, ShieldCheck, SlidersHorizontal, UserRound, Webhook, XCircle } from 'lucide-react'
 import type { DwmAlert, DwmAlertAnalystAction, DwmProductSnapshot } from '@/utils/dwm/product'
 import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 import { DwmWorkflowActions } from './dwm-workflow-actions'
@@ -181,6 +181,26 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
         })
     }
 
+    async function openCase(alert: PortalAlert, assignedOwner?: string, note?: string) {
+        await runAction(`case:${alert.id}`, async () => {
+            const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    tenantId: 'default',
+                    organizationId: alert.organizationId || alert.workflowContext?.organizationId,
+                    actor: 'dashboard',
+                    assignedOwner,
+                    note: note?.trim() || 'Case opened from DWM alert.',
+                    idempotencyKey: `dashboard-case-handoff:${alert.id}`,
+                }),
+            })
+            const payload = await readPayload(response)
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            return payload.case?.id ? `Case ${payload.case.id} is ready.` : 'Case is ready.'
+        })
+    }
+
     async function sendAlert(alertId: string) {
         await runAction(`send:${alertId}`, async () => {
             const response = await fetch('/api/dwm/webhooks/deliver', {
@@ -328,6 +348,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
                                     }))
                                 }}
                                 onUpdate={updateAlert}
+                                onOpenCase={openCase}
                                 onReplay={replayAlert}
                                 onTest={testDelivery}
                                 onSend={sendAlert}
@@ -354,7 +375,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     )
 }
 
-function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onReplay, onTest, onSend }: {
+function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     sourceCoverage: DwmProductSnapshot['sourceCoverage']
@@ -364,6 +385,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
     actionMessage: { ok: boolean, text: string } | null
     onLocalStateChange: (patch: LocalCaseState) => void
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
+    onOpenCase: (alert: PortalAlert, assignedOwner?: string, note?: string) => Promise<void>
     onReplay: (alertId: string) => Promise<void>
     onTest: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
@@ -429,6 +451,17 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
 
             <AnalystBriefPanel brief={analystBrief} />
 
+            <WorkflowSpine
+                alert={alert}
+                deliveries={deliveries}
+                workflowContext={workflowContext}
+                evidenceSummary={evidenceSummary}
+                busyAction={busyAction}
+                note={analystNote}
+                assignee={persistedOwner}
+                onOpenCase={onOpenCase}
+            />
+
             <SelectedActionBar
                 alert={alert}
                 deliveries={deliveries}
@@ -436,6 +469,7 @@ function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localS
                 busyAction={busyAction}
                 actionMessage={actionMessage}
                 onUpdate={onUpdate}
+                onOpenCase={() => onOpenCase(alert, persistedOwner, analystNote)}
                 onReplay={onReplay}
                 onTest={onTest}
                 onSend={onSend}
@@ -693,6 +727,135 @@ function BriefFact({ label, value }: { label: string, value: string }) {
             <p className='mt-1 text-sm leading-6 text-[#aab7cc]'>{value}</p>
         </div>
     )
+}
+
+function WorkflowSpine({ alert, deliveries, workflowContext, evidenceSummary, busyAction, note, assignee, onOpenCase }: {
+    alert: PortalAlert
+    deliveries: DeliveryItem[]
+    workflowContext: ReturnType<typeof selectedWorkflowContext>
+    evidenceSummary: NonNullable<PortalAlert['evidenceSummary']>
+    busyAction: string | null
+    note: string
+    assignee?: string
+    onOpenCase: (alert: PortalAlert, assignedOwner?: string, note?: string) => Promise<void>
+}) {
+    const latestDelivery = [...deliveries].sort((first, second) => second.attemptedAt.localeCompare(first.attemptedAt))[0]
+    const actualCaseId = alert.caseId
+    const caseCandidate = alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || alert.webhookContext?.caseIdCandidate
+    const casePath = alert.sourceHandoffReadiness?.analystWorkflowConsumer?.actionReadiness?.actions?.find(action => action.action === 'case_link' && action.casePath)?.casePath
+    const canOpenCase = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
+    const steps: WorkflowStepModel[] = [
+        {
+            id: 'watchlist',
+            label: 'Watchlist',
+            value: alert.matchedTerm.value,
+            detail: `${stateLabel(alert.matchedTerm.kind)} · ${workflowContext.watchlistIds.length ? `${workflowContext.watchlistIds.length} scoped list${workflowContext.watchlistIds.length === 1 ? '' : 's'}` : 'default scope'}`,
+            state: 'ready',
+            href: workflowContext.organizationId ? `/organizations?organizationId=${encodeURIComponent(workflowContext.organizationId)}` : '/organizations',
+        },
+        {
+            id: 'source-match',
+            label: 'Source match',
+            value: `${evidenceSummary.evidenceCount} evidence row${evidenceSummary.evidenceCount === 1 ? '' : 's'}`,
+            detail: `${stateLabel(alert.sourceFamily)} · newest ${relativeTimeLabel(evidenceSummary.lastObservedAt || alert.lastSeenAt || alert.firstSeenAt)}`,
+            state: evidenceSummary.evidenceCount ? 'ready' : 'blocked',
+        },
+        {
+            id: 'alert',
+            label: 'Action status',
+            value: stateLabel(alert.reviewState),
+            detail: `${stateLabel(alert.severity)} · ${stateLabel(alert.deliveryState || 'pending_review')}`,
+            state: alert.deliveryState === 'muted' || alert.reviewState === 'false_positive' ? 'blocked' : 'ready',
+        },
+        {
+            id: 'case',
+            label: 'Case',
+            value: actualCaseId || caseCandidate || 'not opened',
+            detail: actualCaseId ? 'Case file is linked to this alert.' : canOpenCase ? 'Open the case to preserve analyst work.' : 'Evidence is required before case handoff.',
+            state: actualCaseId ? 'ready' : canOpenCase ? 'action' : 'blocked',
+            action: actualCaseId || !canOpenCase ? undefined : {
+                label: 'Open case',
+                busy: busyAction === `case:${alert.id}`,
+                onClick: () => onOpenCase(alert, assignee, note),
+            },
+            href: casePath,
+        },
+        {
+            id: 'delivery',
+            label: 'Webhook',
+            value: latestDelivery ? stateLabel(latestDelivery.status) : workflowContext.hasWebhookRoute ? 'ready to test' : 'not configured',
+            detail: latestDelivery ? `${relativeTimeLabel(latestDelivery.attemptedAt)} · ${latestDelivery.endpointHash}` : workflowContext.webhookDestinationIds.length ? `${workflowContext.webhookDestinationIds.length} destination${workflowContext.webhookDestinationIds.length === 1 ? '' : 's'}` : 'Add or test a destination before sending.',
+            state: latestDelivery?.status === 'delivered' || latestDelivery?.status === 'dry_run' ? 'ready' : workflowContext.hasWebhookRoute ? 'action' : 'blocked',
+        },
+        {
+            id: 'audit',
+            label: 'Audit trail',
+            value: `${(alert.workflowEvents?.length ?? 0) + deliveries.length} event${(alert.workflowEvents?.length ?? 0) + deliveries.length === 1 ? '' : 's'}`,
+            detail: alert.replayCount ? `${alert.replayCount} replay${alert.replayCount === 1 ? '' : 's'} recorded` : 'Timeline updates after case, replay, and delivery actions.',
+            state: (alert.workflowEvents?.length || deliveries.length || alert.replayCount) ? 'ready' : 'action',
+        },
+    ]
+
+    return (
+        <section data-dwm-workflow-spine className='rounded-lg border border-[#334762] bg-[#0b121e]'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
+                <div>
+                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>Workflow</p>
+                    <h3 className='mt-0.5 text-base font-semibold text-[#edf4ff]'>Watchlist match to customer handoff</h3>
+                </div>
+                <a href='#dwm-workflow-actions' className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#101827] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
+                    Run first setup
+                </a>
+            </div>
+            <div className='grid gap-2 p-3 md:grid-cols-2 xl:grid-cols-6'>
+                {steps.map((step, index) => (
+                    <WorkflowSpineStep key={step.id} step={step} index={index + 1} />
+                ))}
+            </div>
+        </section>
+    )
+}
+
+type WorkflowStepModel = {
+    id: string
+    label: string
+    value: string
+    detail: string
+    state: 'ready' | 'action' | 'blocked'
+    href?: string
+    action?: {
+        label: string
+        busy: boolean
+        onClick: () => void
+    }
+}
+
+function WorkflowSpineStep({ step, index }: { step: WorkflowStepModel, index: number }) {
+    const toneClass = step.state === 'ready'
+        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        : step.state === 'action'
+            ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]'
+            : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
+    const body = (
+        <div className='min-h-[136px] rounded-lg border border-[#26344d] bg-[#101827] p-3'>
+            <div className='flex items-center justify-between gap-2'>
+                <span className='grid h-7 w-7 place-items-center rounded-full border border-[#27364f] bg-[#0b121e] text-xs font-semibold text-[#edf4ff]'>{index}</span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{step.state}</span>
+            </div>
+            <p className='mt-3 text-[10px] font-semibold uppercase text-[#8fa0ba]'>{step.label}</p>
+            <p className='mt-1 truncate text-sm font-semibold text-[#edf4ff]' title={step.value}>{step.value}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#8fa0ba]'>{step.detail}</p>
+            {step.action ? (
+                <button type='button' disabled={step.action.busy} onClick={(event) => { event.preventDefault(); step.action?.onClick() }} className='mt-3 inline-flex h-8 items-center rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] disabled:cursor-not-allowed disabled:opacity-60'>
+                    {step.action.busy ? 'Opening' : step.action.label}
+                </button>
+            ) : null}
+        </div>
+    )
+    if (step.href && !step.action) {
+        return <a href={step.href} className='block rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>{body}</a>
+    }
+    return body
 }
 
 function InvestigationTabs({ active, onChange }: { active: InvestigationTab, onChange: (tab: InvestigationTab) => void }) {
@@ -1159,13 +1322,14 @@ function SourceFilterChip({ label, active, onClick }: { label: string, active: b
     )
 }
 
-function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMessage, onUpdate, onReplay, onTest, onSend }: {
+function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMessage, onUpdate, onOpenCase, onReplay, onTest, onSend }: {
     alert: PortalAlert
     deliveries: DeliveryItem[]
     assignee: string
     busyAction: string | null
     actionMessage: { ok: boolean, text: string } | null
     onUpdate: (alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) => Promise<void>
+    onOpenCase: () => Promise<void>
     onReplay: (alertId: string) => Promise<void>
     onTest: (alertId: string) => Promise<void>
     onSend: (alertId: string) => Promise<void>
@@ -1179,6 +1343,8 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
     const suppressReady = actionReady(alert, 'suppress')
     const closeReady = actionReady(alert, 'close')
     const reopenReady = actionReady(alert, 'reopen')
+    const hasCase = Boolean(alert.caseId)
+    const caseReady = Boolean(alert.id && alert.evidence?.some(item => item.id || item.provenance?.captureId))
     return (
         <section className='grid min-w-0 gap-3 rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
             <div className='grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4'>
@@ -1197,6 +1363,7 @@ function SelectedActionBar({ alert, deliveries, assignee, busyAction, actionMess
                 <div className='grid grid-cols-2 gap-2 sm:flex sm:flex-wrap'>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='review' onClick={() => onUpdate(alert.id, 'reviewing', 'pending_review', 'Analyst review started.', persistedOwner)}>Review</CaseButton>
                     <CaseButton busy={busyAction === `update:${alert.id}`} disabled={!transitionReady} icon='ready' onClick={() => onUpdate(alert.id, 'route_to_customer', 'ready_to_send', 'Escalated for customer delivery.', persistedOwner)}>Escalate</CaseButton>
+                    <CaseButton busy={busyAction === `case:${alert.id}`} disabled={hasCase || !caseReady} icon='case' onClick={onOpenCase}>{hasCase ? 'Case open' : 'Open case'}</CaseButton>
                     <CaseButton busy={busyAction === `replay:${alert.id}`} disabled={!replayReady} icon='replay' onClick={() => onReplay(alert.id)}>Replay</CaseButton>
                     <CaseButton busy={busyAction === `test:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onTest(alert.id)}>Test</CaseButton>
                     <CaseButton busy={busyAction === `send:${alert.id}`} disabled={!deliverReady} icon='send' onClick={() => onSend(alert.id)}>Send</CaseButton>
@@ -1662,8 +1829,8 @@ function WorkTile({ title, body, state }: { title: string, body: string, state: 
     )
 }
 
-function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false', onClick: () => void, children: string }) {
-    const Icon = busy ? Loader2 : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
+function CaseButton({ busy, disabled = false, icon, onClick, children }: { busy: boolean, disabled?: boolean, icon: 'review' | 'ready' | 'replay' | 'send' | 'false' | 'case', onClick: () => void, children: string }) {
+    const Icon = busy ? Loader2 : icon === 'case' ? FolderOpen : icon === 'send' ? Send : icon === 'false' ? XCircle : icon === 'replay' ? RotateCcw : icon === 'ready' ? CheckCircle2 : Play
     return (
         <button type='button' onClick={onClick} disabled={busy || disabled} title={disabled ? 'Action is not available for this alert state.' : undefined} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#101827] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60 sm:px-3'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />
@@ -1870,7 +2037,7 @@ function actionReady(alert: PortalAlert, action: DwmAlertAnalystAction) {
     return true
 }
 
-async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number }> {
+async function readPayload(response: Response): Promise<{ error?: { message?: string }, attemptedCount?: number, case?: { id?: string } }> {
     return await response.json().catch(() => ({}))
 }
 
