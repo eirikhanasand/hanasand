@@ -491,7 +491,13 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
     const terms = matchedTerms(detail)
     const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
     const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
-    const label = routeRun === 'metadata_claim' ? 'Metadata intake' : routeRun === 'source_pack' ? 'Source pack route' : 'Route handoff'
+    const label = routeRun === 'metadata_claim'
+        ? 'Metadata intake'
+        : routeRun === 'source_pack'
+            ? 'Source pack route'
+            : routeRun === 'alert_queue'
+                ? 'Alert queue'
+                : 'Route handoff'
     const nextAction = deliveryCount ? 'Record decision' : latestDelivery ? 'Review delivery' : 'Test webhook'
     const cells = [
         { label: 'Route', value: label },
