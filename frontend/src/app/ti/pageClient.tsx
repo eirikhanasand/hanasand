@@ -186,12 +186,14 @@ function Results({ result }: { result: TiSearchResponse }) {
     const [queueConfidenceFilter, setQueueConfidenceFilter] = useState<'all' | 'high' | 'medium'>('all')
     const [queueSort, setQueueSort] = useState<'priority' | 'confidence' | 'freshness'>('priority')
     const [showMoreAnalysis, setShowMoreAnalysis] = useState(false)
+    const [showFullQueue, setShowFullQueue] = useState(false)
     const filteredWorkItems = useMemo(() => filteredAnalystWorkItems(workItems, {
         kind: queueKindFilter,
         source: queueSourceFilter,
         confidence: queueConfidenceFilter,
         sort: queueSort,
     }), [queueConfidenceFilter, queueKindFilter, queueSort, queueSourceFilter, workItems])
+    const visibleQueueItems = showFullQueue ? filteredWorkItems : filteredWorkItems.slice(0, 8)
     const queueSourceOptions = useMemo(() => unique(workItems.map(item => item.source).filter(Boolean)).sort((a, b) => a.localeCompare(b)).slice(0, 8), [workItems])
     const queueSourceCounts = useMemo(() => sourceCountsFor(filteredWorkItems), [filteredWorkItems])
     const selected = filteredWorkItems.find(item => item.id === selectedId) ?? filteredWorkItems[0] ?? workItems.find(item => item.id === selectedId) ?? workItems[0]
@@ -387,7 +389,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             />
                         </div>
                         <div className='p-2 lg:max-h-[40rem] lg:overflow-y-auto'>
-                            {filteredWorkItems.map(item => {
+                            {visibleQueueItems.map(item => {
                                 const decision = localDecisions[item.id]
                                 const active = selected?.id === item.id
                                 return (
@@ -412,6 +414,24 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     </button>
                                 )
                             })}
+                            {filteredWorkItems.length > visibleQueueItems.length ? (
+                                <button
+                                    type='button'
+                                    onClick={() => setShowFullQueue(true)}
+                                    className='mt-2 flex min-h-9 w-full items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'
+                                >
+                                    Show {filteredWorkItems.length - visibleQueueItems.length} more findings
+                                </button>
+                            ) : null}
+                            {showFullQueue && filteredWorkItems.length > 8 ? (
+                                <button
+                                    type='button'
+                                    onClick={() => setShowFullQueue(false)}
+                                    className='mt-2 flex min-h-9 w-full items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'
+                                >
+                                    Show top findings only
+                                </button>
+                            ) : null}
                             {!filteredWorkItems.length ? <p className='rounded-lg border border-dashed border-[#d8dee9] bg-white p-4 text-sm text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'>{workItems.length ? 'No results match the current filters.' : 'No recent activity yet.'}</p> : null}
                         </div>
                     </aside>
@@ -528,24 +548,37 @@ function Results({ result }: { result: TiSearchResponse }) {
                     <aside className='order-3 grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-hidden border-t border-[#e8edf5] bg-[#fbfcfe] p-4 lg:order-none lg:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-t-0'>
                         {alertPacket ? <AlertPacketPanel packet={alertPacket} /> : null}
                         <div data-ti-actions='true'>
-                            <ActionPanel
-                                note={selectedNote}
-                                decision={selectedDecision}
-                                relevance={selectedRelevance}
-                                reviewHandoff={reviewHandoff}
-                                caseDraft={selectedCaseDraft}
-                                caseActionTrail={selectedCaseActionTrail}
-                                caseOwnership={selectedCaseOwnership}
-                                caseCreateRequest={selectedCaseCreateRequest}
-                                watchlistPlan={selectedWatchlistPlan}
-                                alertPlan={selectedAlertPlan}
-                                deliveryPlan={selectedDeliveryPlan}
-                                enrichmentTriage={selectedEnrichmentTriage}
-                                onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
-                                onDecision={applyDecision}
-                                onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
-                                onStage={stageSelectedHandoff}
-                            />
+                            {showMoreAnalysis ? (
+                                <ActionPanel
+                                    note={selectedNote}
+                                    decision={selectedDecision}
+                                    relevance={selectedRelevance}
+                                    reviewHandoff={reviewHandoff}
+                                    caseDraft={selectedCaseDraft}
+                                    caseActionTrail={selectedCaseActionTrail}
+                                    caseOwnership={selectedCaseOwnership}
+                                    caseCreateRequest={selectedCaseCreateRequest}
+                                    watchlistPlan={selectedWatchlistPlan}
+                                    alertPlan={selectedAlertPlan}
+                                    deliveryPlan={selectedDeliveryPlan}
+                                    enrichmentTriage={selectedEnrichmentTriage}
+                                    onNoteChange={value => selected && setNotes(current => ({ ...current, [selected.id]: value }))}
+                                    onDecision={applyDecision}
+                                    onRelevance={state => selected && setRelevanceMarks(current => ({ ...current, [selected.id]: relevanceMarkFor(state, selected, watchlist, actionability, selectedNote) }))}
+                                    onStage={stageSelectedHandoff}
+                                />
+                            ) : (
+                                <SelectedWorkflowSummaryPanel
+                                    selected={selected}
+                                    reviewHandoff={reviewHandoff}
+                                    caseDraft={selectedCaseDraft}
+                                    caseOwnership={selectedCaseOwnership}
+                                    alertPlan={selectedAlertPlan}
+                                    deliveryPlan={selectedDeliveryPlan}
+                                    sourceDrilldown={selectedSourceDrilldown}
+                                    onOpenDetails={() => setShowMoreAnalysis(true)}
+                                />
+                            )}
                         </div>
                         <StagedHandoffQueuePanel
                             items={Object.values(stagedHandoffs)}
@@ -5016,6 +5049,63 @@ function caseReviewCandidatePayloadFor(row: CaseReviewIntakeItem, query: string)
         recommendedAction: row.recommendedAction,
         nextAction: row.nextAction,
     }
+}
+
+function SelectedWorkflowSummaryPanel({
+    selected,
+    reviewHandoff,
+    caseDraft,
+    caseOwnership,
+    alertPlan,
+    deliveryPlan,
+    sourceDrilldown,
+    onOpenDetails,
+}: {
+    selected?: AnalystWorkItem
+    reviewHandoff: SelectedReviewHandoff | null
+    caseDraft: SelectedCaseDraft | null
+    caseOwnership: SelectedCaseOwnershipPlan | null
+    alertPlan: SelectedAlertActionPlan | null
+    deliveryPlan: SelectedDeliveryReadinessPlan | null
+    sourceDrilldown: ReturnType<typeof selectedSourceDrilldownFor> | null
+    onOpenDetails: () => void
+}) {
+    const alertReady = Boolean(reviewHandoff?.alertHandoff.ready || alertPlan?.ready)
+    const caseReady = Boolean(reviewHandoff?.caseHandoff.ready || caseDraft)
+    const deliveryReady = deliveryPlan?.state === 'ready'
+    const sourceCount = sourceDrilldown?.rows.length ?? 0
+    const owner = caseOwnership?.owner.label ?? 'unassigned'
+    return (
+        <Panel title='Selected workflow' description='Compact action state for the selected finding.' icon={<ShieldAlert className='h-4 w-4' />}>
+            <div className='grid gap-3'>
+                <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                    <p className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected?.title ?? 'Select a finding'}</p>
+                    <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
+                        {selected ? `${selected.source} · ${sourceBasisLabel(selected.confidence)} · ${selected.timestamp}` : 'Choose a row to inspect source and case context.'}
+                    </p>
+                </div>
+                <div className='grid grid-cols-2 gap-2'>
+                    <EvidenceMetric label='Source rows' value={String(sourceCount)} />
+                    <EvidenceMetric label='Owner' value={owner} />
+                    <EvidenceMetric label='Alerts' value={String(deliveryPlan?.summary.alerts ?? alertPlan?.readiness.matchedCandidateCount ?? 0)} />
+                    <EvidenceMetric label='Case routes' value={String(deliveryPlan?.summary.caseRoutes ?? caseOwnership?.summary.caseCandidates ?? 0)} />
+                </div>
+                <div className='flex min-w-0 flex-wrap gap-1.5'>
+                    <span className={decisionStepStatusClass(alertReady ? 'ready' : 'review')}>alert {alertReady ? 'linked' : 'review'}</span>
+                    <span className={decisionStepStatusClass(caseReady ? 'ready' : 'review')}>case {caseReady ? 'ready' : 'review'}</span>
+                    <span className={decisionStepStatusClass(deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'blocked')}>delivery {deliveryReady ? 'ready' : deliveryPlan ? 'review' : 'pending'}</span>
+                </div>
+                <button
+                    type='button'
+                    onClick={onOpenDetails}
+                    className='inline-flex min-h-9 w-fit max-w-full items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#d8dee9] bg-white px-3 py-2 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#dbe5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'
+                >
+                    <ClipboardList className='h-3.5 w-3.5' />
+                    Open workflow details
+                </button>
+            </div>
+        </Panel>
+    )
 }
 
 function ActionPanel({ note, decision, relevance, reviewHandoff, caseDraft, caseActionTrail, caseOwnership, caseCreateRequest, watchlistPlan, alertPlan, deliveryPlan, enrichmentTriage, onNoteChange, onDecision, onRelevance, onStage }: {
