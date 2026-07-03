@@ -5,7 +5,7 @@ import { getCookie } from '@/utils/cookies/cookies'
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import config from '@/config'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, KeyRound } from 'lucide-react'
 import { reservedUsernames } from '@/utils/auth/reservedUsernames'
 import ErrorNotice from '@/components/error/errorNotice'
 
@@ -120,6 +120,7 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
     const { condition: internal } = useClearStateAfter({ initialState: serverInternal })
     const { condition: expired } = useClearStateAfter({ initialState: serverExpired, timeout: 8000 })
     const redirectPath = safeRedirectPath(path)
+    const ssoHref = `/api/auth/sso/start?redirectPath=${encodeURIComponent(redirectPath)}`
 
     function changeMode(nextMode: typeof mode) {
         setError(null)
@@ -211,6 +212,15 @@ export default function LoginPage({ path, serverInternal, serverExpired }: Login
                                     </button>
                                 </div>
                             </form>
+                            <div className='grid gap-2 border-t border-ui-border pt-3'>
+                                <a
+                                    href={ssoHref}
+                                    className='inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel focus:outline-none focus:ring-4 focus:ring-ui-primary/20'
+                                >
+                                    <KeyRound className='h-4 w-4 text-ui-primary' />
+                                    Continue with SSO
+                                </a>
+                            </div>
                         </div>
                     )}
 
