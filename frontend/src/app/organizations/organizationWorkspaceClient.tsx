@@ -804,7 +804,6 @@ export default function OrganizationWorkspaceClient() {
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
                                     <div className='grid gap-5'>
-                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                         <WatchlistPanel
                                             watchlists={bundle.watchlists}
                                             activeTerms={bundle.alertTerms}
@@ -831,6 +830,7 @@ export default function OrganizationWorkspaceClient() {
                                             selectedSubject={selectedActivitySubject}
                                             onSelectSubject={setSelectedActivitySubject}
                                         />
+                                        <SettingsPanel settingsDraft={settingsDraft} setSettingsDraft={setSettingsDraft} settingsDirty={settingsDirty} canManage={canManage} busy={busy} onSave={() => void saveSettings()} onReset={() => setSettingsDraft(bundle.settings || {})} />
                                     </div>
                                     <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
@@ -1076,9 +1076,14 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
 
 function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canManage, busy, onSave, onReset }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, settingsDirty: boolean, canManage: boolean, busy: string, onSave: () => void, onReset: () => void }) {
     return (
-        <section id='settings' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<Settings className='h-4 w-4' />} title='Settings' detail={canManage ? 'Owner and admin policy controls.' : 'Read-only policy view.'} />
-            <div className='mt-4 grid gap-3 md:grid-cols-2'>
+        <details id='settings' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-settings-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<Settings className='h-4 w-4' />} title='Advanced organization settings' detail={canManage ? 'Policy controls stay here when workspace setup needs them.' : 'Read-only policy view.'} />
+                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                    {settingsDirty ? 'Unsaved changes' : 'Policy controls'}
+                </span>
+            </summary>
+            <div className='grid gap-3 border-t border-[#e6ebf2] p-4 dark:border-[#26344a] md:grid-cols-2'>
                 <Field label='Name' value={settingsDraft.name || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, name: value })} />
                 <Field label='Slug' value={settingsDraft.slug || ''} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, slug: value })} />
                 <SelectField label='Webhook policy' value={settingsDraft.defaultWebhookPolicy || 'active_destinations'} options={webhookPolicies} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, defaultWebhookPolicy: value })} />
@@ -1086,7 +1091,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                 <SelectField label='Lifecycle' value={settingsDraft.lifecycleStatus || 'active'} options={lifecycleStatuses} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, lifecycleStatus: value })} />
                 <Field label='Retention days' type='number' value={String(settingsDraft.retentionDays || 365)} disabled={!canManage} onChange={value => setSettingsDraft({ ...settingsDraft, retentionDays: Number(value) || 365 })} />
             </div>
-            <div className='mt-4 flex flex-wrap items-center justify-end gap-2'>
+            <div className='flex flex-wrap items-center justify-end gap-2 border-t border-[#e6ebf2] px-4 py-3 dark:border-[#26344a]'>
                 {settingsDirty && <span className='mr-auto rounded-md bg-[#fff7d6] px-2 py-1 text-xs font-semibold text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]'>Unsaved changes</span>}
                 <button type='button' className={secondaryButtonClass} disabled={!canManage || !settingsDirty || Boolean(busy)} onClick={onReset}>
                     Reset
@@ -1096,7 +1101,7 @@ function SettingsPanel({ settingsDraft, setSettingsDraft, settingsDirty, canMana
                     Save settings
                 </button>
             </div>
-        </section>
+        </details>
     )
 }
 
@@ -1165,9 +1170,14 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
 function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
     const [pendingRoles, setPendingRoles] = useState<Record<string, OrganizationRole>>({})
     return (
-        <section id='members' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, removal.' />
-            <div className='mt-4 overflow-x-auto'>
+        <details id='members' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-members-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, and removal are available when access needs review.' />
+                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                    {members.length} member{members.length === 1 ? '' : 's'}
+                </span>
+            </summary>
+            <div className='overflow-x-auto border-t border-[#e6ebf2] p-4 dark:border-[#26344a]'>
                 {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
@@ -1232,15 +1242,20 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                     </table>
                 )}
             </div>
-        </section>
+        </details>
     )
 }
 
 function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onTest, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onDelete: (destination: WebhookDestination) => void }) {
     return (
-        <section id='destinations' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Destinations' detail='Saved routes, tests, removal.' />
-            <div className='mt-4 grid gap-2'>
+        <details id='destinations' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-destinations-disclosure>
+            <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Saved destinations' detail='Inventory, tests, and removal stay available after a route is attached.' />
+                <span className='shrink-0 rounded-md border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs font-semibold text-[#667085] dark:border-[#26344a] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                    {destinations.length} route{destinations.length === 1 ? '' : 's'}
+                </span>
+            </summary>
+            <div className='grid gap-2 border-t border-[#e6ebf2] p-4 dark:border-[#26344a]'>
                 {destinations.length === 0 && <EmptyLine text='Saved watchlist destinations appear here after a route is tested and attached.' />}
                 {destinations.map(destination => (
                     <div
@@ -1278,7 +1293,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                     </div>
                 ))}
             </div>
-        </section>
+        </details>
     )
 }
 
