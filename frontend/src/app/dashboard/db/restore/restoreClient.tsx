@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useTransition } from 'react'
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw, Search, X } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { restoreBackupAction } from '../actions'
 import { dashboardPanelClass } from '@/components/dashboard/ui'
@@ -39,12 +39,40 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
         })
         return Object.values(groups)
     }, [backups])
+    const serviceCount = useMemo(() => new Set(groupedBackups.map(backup => backup.service)).size, [groupedBackups])
+    const newestBackup = useMemo(() => groupedBackups.reduce<GroupedBackup | null>((newest, backup) => {
+        if (!newest) return backup
+        const newestTime = new Date(newest.mtime || '').getTime()
+        const backupTime = new Date(backup.mtime || '').getTime()
+        const safeNewestTime = Number.isFinite(newestTime) ? newestTime : -Infinity
+        return Number.isFinite(backupTime) && backupTime > safeNewestTime ? backup : newest
+    }, null), [groupedBackups])
+    const activeFilterCount = Number(Boolean(serviceFilter)) + Number(Boolean(dateFilter))
+    const primaryTitle = groupedBackups.length
+        ? 'Select a restore point'
+        : activeFilterCount
+            ? 'No restore points match the filters'
+            : 'Restore index is empty'
+    const primaryDetail = groupedBackups.length
+        ? `${groupedBackups.length} restore point${groupedBackups.length === 1 ? '' : 's'} across ${serviceCount} service${serviceCount === 1 ? '' : 's'}. Newest file: ${newestBackup?.file || 'syncing'}.`
+        : activeFilterCount
+            ? 'Clear filters or adjust the service/date search to widen the restore set.'
+            : 'Restore files appear here after the backup service indexes a verified file.'
+    const primaryHref = groupedBackups.length ? '#restore-points' : activeFilterCount ? '#restore-filters' : '/dashboard/db/backups'
+    const primaryActionLabel = groupedBackups.length ? 'Review restore points' : activeFilterCount ? 'Adjust filters' : 'Open backup health'
 
     function updateParam(key: string, value: string) {
         const params = new URLSearchParams(searchParams.toString())
         if (value) params.set(key, value)
         else params.delete(key)
-        router.push(`${pathname}?${params.toString()}`)
+        const query = params.toString()
+        router.push(query ? `${pathname}?${query}` : pathname)
+    }
+
+    function clearFilters() {
+        setServiceFilter('')
+        setDateFilter('')
+        router.push(pathname)
     }
 
     function handleRestore(backup: GroupedBackup) {
@@ -59,31 +87,78 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
 
     return (
         <div className='grid gap-4'>
-            <div className='flex flex-wrap items-center gap-3'>
-                <input
-                    value={serviceFilter}
-                    onChange={(event) => {
-                        const value = event.target.value
-                        setServiceFilter(value)
-                        updateParam('service', value)
-                    }}
-                    placeholder='Filter by service'
-                    className='min-w-60 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
-                />
-                <input
-                    type='date'
-                    value={dateFilter}
-                    onChange={(event) => {
-                        const value = event.target.value
-                        setDateFilter(value)
-                        updateParam('date', value)
-                    }}
-                    className='rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
-                />
-                {message && <p className='text-sm text-[#aab7cc]'>{message}</p>}
-            </div>
+            <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-restore-primary-flow>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
+                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{groupedBackups.length} restore points</span>
+                        {activeFilterCount > 0 && <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{activeFilterCount} active filters</span>}
+                    </div>
+                    <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                </div>
+                <a
+                    href={primaryHref}
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                    data-restore-primary-action
+                >
+                    {primaryActionLabel}
+                </a>
+            </section>
 
-            <div className='grid gap-4'>
+            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' open={activeFilterCount > 0} id='restore-filters' data-restore-filters-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span className='inline-flex items-center gap-2'>
+                        <Search className='h-4 w-4 text-[#7aa5ff]' />
+                        Filter restore points
+                    </span>
+                    <span className='text-xs font-medium text-[#8fa0ba]'>{activeFilterCount ? `${activeFilterCount} active` : 'All indexed files'}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-[#26344d] p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end'>
+                    <label className='grid gap-1.5 text-sm'>
+                        <span className='text-xs font-semibold uppercase text-[#8fa0ba]'>Service</span>
+                        <input
+                            value={serviceFilter}
+                            onChange={(event) => {
+                                const value = event.target.value
+                                setServiceFilter(value)
+                                updateParam('service', value)
+                            }}
+                            placeholder='Filter by service'
+                            className='min-h-10 min-w-0 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
+                            data-restore-service-filter
+                        />
+                    </label>
+                    <label className='grid gap-1.5 text-sm'>
+                        <span className='text-xs font-semibold uppercase text-[#8fa0ba]'>Date</span>
+                        <input
+                            type='date'
+                            value={dateFilter}
+                            onChange={(event) => {
+                                const value = event.target.value
+                                setDateFilter(value)
+                                updateParam('date', value)
+                            }}
+                            className='min-h-10 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none focus:border-[#7aa5ff]'
+                            data-restore-date-filter
+                        />
+                    </label>
+                    <button
+                        type='button'
+                        onClick={clearFilters}
+                        disabled={!activeFilterCount}
+                        className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#122449] disabled:cursor-not-allowed disabled:opacity-50'
+                        data-restore-clear-filters
+                    >
+                        <X className='h-4 w-4' />
+                        Clear
+                    </button>
+                </div>
+            </details>
+
+            {message && <p className='rounded-lg border border-[#26344d] bg-[#101827] px-4 py-3 text-sm text-[#aab7cc]'>{message}</p>}
+
+            <div className='grid gap-4' id='restore-points' data-restore-points>
                 {groupedBackups.map((backup) => {
                     const key = `${backup.service}-${backup.file}`
                     return (
@@ -104,15 +179,15 @@ export default function RestoreClient({ backups }: { backups: BackupFile[] }) {
                                 </button>
                             </div>
                             <div className='mt-4 grid gap-3 text-sm text-[#aab7cc] md:grid-cols-3'>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-4'>
+                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
                                     <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Locations</p>
                                     <p className='mt-2 font-medium text-[#edf4ff]'>{backup.locations.join(', ') || 'Storage location syncing'}</p>
                                 </div>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-4'>
+                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
                                     <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Modified</p>
                                     <p className='mt-2 font-medium text-[#edf4ff]'>{formatDate(backup.mtime)}</p>
                                 </div>
-                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-4'>
+                                <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
                                     <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>Size</p>
                                     <p className='mt-2 font-medium text-[#edf4ff]'>{backup.size || 'Measuring size'}</p>
                                 </div>
