@@ -10,7 +10,7 @@ import { nowIso } from "../utils.ts";
 import { cancelActorOrgRelevanceReviewPreparedHandoff, createActorOrgRelevanceReviewAlertGenerationRequest, createActorOrgRelevanceReviewCaseHandoffRequest, createActorOrgRelevanceReviewCustomerNotification, createActorOrgRelevanceReviewSourceCollectionRequest, createActorOrgRelevanceReviewWebhookTriggerRequest, getActorOrgRelevanceReview, listActorOrgRelevanceHandoffQueue, listActorOrgRelevanceReviews, listActorOrgRelevanceSourceCollectionQueue, materializeActorOrgRelevanceReviewWatchlist, submitActorOrgRelevanceReview, updateActorOrgRelevanceReview, updateActorOrgRelevanceReviewEvidence } from "./actorOrgRelevanceRoutes.ts";
 import { canaryActivation, canaryOperator, canaryReadiness, canaryRun } from "./canaryRoutes.ts";
 import { createCase, createCaseFromDwmAlert, exportCaseActionReplay, exportCaseEvidence, getCaseDetail, getCaseWebhookReplayReadiness, listCaseHandoffActions, listCaseWorkflowTransitions, listCases, recordCaseCustomerNotification, recordCaseHandoffAction, updateCase } from "./caseRoutes.ts";
-import { collectionSchedulerStatus } from "./collectionSchedulerStatus.ts";
+import { collectionSchedulerStatus, updateCollectionSchedulerControl } from "./collectionSchedulerStatus.ts";
 import { contractIndex } from "./contractsRoute.ts";
 import { exposureParserHealth, ingestExposureClaims, listExposureQueue } from "./exposureQueueRoutes.ts";
 import { error, json, numberQuery, page, readJson } from "./http.ts";
@@ -40,7 +40,8 @@ export async function handleApiRequest(request: Request, options: ApiServerOptio
     if (url.pathname === "/v1/health") return json({ ok: true, service: "ti-scraper", generatedAt: nowIso() });
     if (url.pathname === "/v1/contracts") return json(contractIndex());
     if (url.pathname === "/v1/metrics") return json(metrics(options));
-    if (url.pathname === "/v1/ops/collection-scheduler") return collectionSchedulerStatus(options);
+    if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "GET") return collectionSchedulerStatus(options);
+    if (url.pathname === "/v1/ops/collection-scheduler" && request.method === "POST") return updateCollectionSchedulerControl(request, options);
     if (url.pathname === "/v1/organizations" && request.method === "GET") return listOrganizations(url, options);
     if (url.pathname === "/v1/organizations" && request.method === "POST") return createOrganization(request, options);
     if (/^\/v1\/organizations\/[^/]+\/members$/.test(url.pathname) && request.method === "GET") return listOrganizationMembers(url, options, url.pathname.split("/")[3]);
