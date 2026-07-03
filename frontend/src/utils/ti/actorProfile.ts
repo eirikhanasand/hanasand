@@ -64,21 +64,32 @@ export function actorGeoProfile(result: TiSearchResponse) {
     const origin = operatorOriginFor(result)
     if (origin) points.set(`operator:${origin.code}`, { ...origin, role: 'operator', count: 1, detail: operatorOriginDetail(result) })
 
-    const targetCountries = [
-        ...result.recentActivity.flatMap(item => item.countries ?? []),
-        ...result.targets.flatMap(target => target.regions),
-        ...victimObservationsFor(result).map(item => item.country),
-    ]
-
-    for (const value of targetCountries) {
+    const targetCounts = new Map<string, { country: MapCountry; victims: Set<string>; fallbackCount: number }>()
+    const addTarget = (value: string, victim?: string) => {
         const country = countryFromValue(value)
-        if (!country || country.code === origin?.code) continue
+        if (!country || country.code === origin?.code) return
         const key = `target:${country.code}`
-        const existing = points.get(key)
-        points.set(key, {
+        const existing = targetCounts.get(key) ?? { country, victims: new Set<string>(), fallbackCount: 0 }
+        if (victim?.trim()) existing.victims.add(victim.trim())
+        else existing.fallbackCount += 1
+        targetCounts.set(key, existing)
+    }
+
+    for (const observation of victimObservationsFor(result)) {
+        addTarget(observation.country, observation.victim)
+    }
+    for (const item of result.recentActivity) {
+        for (const country of item.countries ?? []) addTarget(country, item.victimName || item.title)
+    }
+    for (const target of result.targets) {
+        for (const region of target.regions) addTarget(region, target.sector)
+    }
+
+    for (const { country, victims, fallbackCount } of targetCounts.values()) {
+        points.set(`target:${country.code}`, {
             ...country,
             role: 'target',
-            count: (existing?.count ?? 0) + 1,
+            count: victims.size || fallbackCount || 1,
             detail: targetCountryDetail(result, country.label),
         })
     }
@@ -89,7 +100,7 @@ export function actorGeoProfile(result: TiSearchResponse) {
             if (!point) continue
             const key = `target:${point.code}`
             const existing = points.get(key)
-            points.set(key, { ...point, role: 'target', count: existing?.count ?? 1, detail: targetCountryDetail(result, point.label) })
+            points.set(key, { ...point, role: 'target', count: existing?.count ?? targetCountryDetailCount(result, point.label), detail: targetCountryDetail(result, point.label) })
         }
     }
 
@@ -187,6 +198,10 @@ function targetCountryDetail(result: TiSearchResponse, country: string) {
     const activities = result.recentActivity.filter(item => item.countries?.some(countryValue => countryFromValue(countryValue)?.label === country))
     if (activities.length) return activities[0]?.title ?? 'Country-level targeting mentioned in recent activity.'
     return 'Country-level observation from reported activity.'
+}
+
+function targetCountryDetailCount(result: TiSearchResponse, country: string) {
+    return Math.max(1, new Set(victimObservationsFor(result).filter(item => item.country === country).map(item => item.victim)).size)
 }
 
 function apt29VictimObservations(): VictimObservation[] {
