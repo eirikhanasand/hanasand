@@ -2947,6 +2947,14 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
                 orgContext={orgContext}
             />
 
+            <CaseRouteStrip
+                item={item}
+                caseDetail={caseDetail}
+                alertDetail={alertDetail}
+                actionDeliveries={actionDeliveries}
+                orgContext={orgContext}
+            />
+
             <section className='grid gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 lg:grid-cols-[0.48fr_minmax(0,1fr)]'>
                 <label className='grid gap-2'>
                     <span className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
@@ -3019,6 +3027,112 @@ function CaseDetail({ item, decision, note, ownerDraft, busyAction, compact, cas
             </section>
 
         </div>
+    )
+}
+
+function CaseRouteStrip({ item, caseDetail, alertDetail, actionDeliveries, orgContext }: {
+    item: WorkbenchCase
+    caseDetail?: CaseDetailState
+    alertDetail?: AlertDetailState
+    actionDeliveries: WorkbenchDeliveryEvidence[]
+    orgContext?: WorkbenchOrgContext
+}) {
+    const detail = caseDetail?.status === 'ready' ? caseDetail.detail : undefined
+    const alert = alertDetail?.status === 'ready' ? alertDetail.detail.alert : undefined
+    const delivery = latestDeliveryForActionRail(item, caseDetail, actionDeliveries, orgContext)
+    const evidenceCount = (detail?.evidence?.length || 0) + item.evidence.length + (alert?.evidence?.length || 0)
+    const timelineCount = detail?.timeline?.length || item.timeline.length
+    const workflowEventCount = detail ? (detail.case?.workflowEvents || []).length + (detail.alertContext?.workflowEvents || []).length : 0
+    const activeDestination = orgContext?.webhookDestinations.find(destination => destination.status === 'active')
+    const nextAllowedAction = detail?.nextAllowedActions?.find(action => action.enabled)
+    const nextAction = nextAllowedAction?.label
+        || alertDetail?.status === 'ready' && alertDetail.detail.nextBestAction?.label
+        || item.recommendedAction
+    const watchlistRefs = [
+        ...(detail?.watchlists?.map(watchlist => watchlist.id) || []),
+        ...((item.workflowPath || []).filter(step => step.id.includes('watchlist')).map(step => step.entityId || step.detail)),
+    ].filter(Boolean)
+    const caseHref = item.caseDetailHref
+    const routeCells: Array<{ id: string, label: string, value: string, tone: WorkbenchWorkflowStep['status'], href?: string }> = [
+        {
+            id: 'case_state',
+            label: 'Case state',
+            value: `${label(detail?.case?.status || item.status)} · ${detail?.case?.assignedOwner || item.owner || 'unassigned'}`,
+            tone: detail?.case?.status === 'closed' ? 'blocked' : caseHref || detail ? 'ready' : 'needs_action',
+            href: caseHref,
+        },
+        {
+            id: 'watchlist_scope',
+            label: 'Watchlist',
+            value: watchlistRefs.length ? `${watchlistRefs.length} ref${watchlistRefs.length === 1 ? '' : 's'}` : item.matchedTerm || 'syncing',
+            tone: watchlistRefs.length || item.matchedTerm ? 'ready' : 'needs_action',
+            href: watchlistLedgerHref(orgContext),
+        },
+        {
+            id: 'evidence_scope',
+            label: 'Evidence',
+            value: `${evidenceCount} item${evidenceCount === 1 ? '' : 's'}`,
+            tone: evidenceCount ? 'ready' : 'needs_action',
+            href: alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined) || relatedLinkHref(item, 'Open source'),
+        },
+        {
+            id: 'delivery_scope',
+            label: 'Delivery',
+            value: delivery ? `${label(delivery.status)} · ${relativeTime(delivery.attemptedAt)}` : activeDestination ? `${activeDestination.name} ready` : 'destination needed',
+            tone: delivery ? delivery.status === 'failed' || delivery.status === 'skipped' ? 'blocked' : 'ready' : activeDestination ? 'needs_action' : 'blocked',
+            href: deliveryLedgerHref(orgContext, item, delivery),
+        },
+        {
+            id: 'audit_scope',
+            label: 'Audit',
+            value: `${timelineCount} rows · ${workflowEventCount} events`,
+            tone: timelineCount || workflowEventCount ? 'ready' : caseHref ? 'needs_action' : 'blocked',
+            href: caseHref ? caseExportHref(caseHref) : undefined,
+        },
+    ]
+
+    return (
+        <section data-case-route-strip='true' className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Case route</h3>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#8fa0ba]'>Current owner, matched scope, evidence, delivery, audit, and next action.</p>
+                </div>
+                <span className={workflowStatusClass(routeCells.every(cell => cell.tone === 'ready') ? 'ready' : routeCells.some(cell => cell.tone === 'blocked') ? 'blocked' : 'needs_action')}>
+                    {routeCells.filter(cell => cell.tone === 'ready').length}/{routeCells.length} ready
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5'>
+                {routeCells.map(cell => (
+                    <Link
+                        key={cell.id}
+                        href={cell.href || '#'}
+                        aria-disabled={!cell.href}
+                        onClick={event => {
+                            if (!cell.href) event.preventDefault()
+                        }}
+                        className={`min-w-0 rounded-lg border border-[#27364f] bg-[#101827] px-3 py-2 transition focus:outline-none focus:ring-2 focus:ring-[#7aa5ff] ${cell.href ? 'hover:bg-[#162033]' : 'cursor-default'}`}
+                    >
+                        <div className='flex min-w-0 items-center justify-between gap-2'>
+                            <p className='truncate text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
+                            <span className={`${workflowStatusClass(cell.tone)} shrink-0`}>{label(cell.tone)}</span>
+                        </div>
+                        <p className='mt-1 wrap-break-word text-xs font-semibold text-[#edf4ff]'>{cell.value}</p>
+                    </Link>
+                ))}
+            </div>
+            <div className='mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[#27364f] bg-[#101827] px-3 py-2'>
+                <p className='min-w-0 wrap-break-word text-xs leading-5 text-[#aab7cc]'>
+                    <span className='font-semibold text-[#dbe7ff]'>Next:</span> {nextAction}
+                </p>
+                {caseHref ? (
+                    <Link href={caseExportHref(caseHref)} className='inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#0f1726] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]'>
+                        Case package
+                        <ExternalLink className='h-3.5 w-3.5' />
+                    </Link>
+                ) : null}
+            </div>
+        </section>
     )
 }
 

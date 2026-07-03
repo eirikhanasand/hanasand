@@ -193,6 +193,15 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
     const webhookDeliveryIds = row.webhookDeliveryIds || []
     const updatedAt = row.updatedAt || row.latestEvent?.at || row.createdAt || new Date().toISOString()
     const watchlistItemIds = row.watchlistItemIds || []
+    const deliveryEvidence = webhookDeliveryIds.map((deliveryId, index) => ({
+        id: deliveryId,
+        alertId: alertId || rowId,
+        status: webhookStatuses[index] || webhookStatuses[0] || 'recorded',
+        attemptedAt: updatedAt,
+        webhookDestinationId: undefined,
+        endpointHash: 'endpoint_hash_not_returned',
+        payloadHash: 'payload_hash_not_returned',
+    }))
     const timeline = (row.timeline || [])
         .slice(0, 8)
         .map((event, index) => ({
@@ -269,7 +278,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
             { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { organizationId: row.organizationId, alertId: rowId, limit: 1 }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before delivery can run.' },
         ],
         caseDetailHref: caseApiHref(row),
-        deliveryEvidence: [],
+        deliveryEvidence,
     }
 }
 
