@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
     buildDwmWatchlistMirrorAlertPreview,
@@ -6,6 +7,18 @@ import {
     buildDwmWatchlistMirrorPayloads,
     mirrorOrganizationWatchlistToDwmResult,
 } from '@/app/api/organizations/_organizationWatchlistDwmBridge'
+
+const organizationWorkspaceSource = readFileSync(new URL('../src/app/organizations/organizationWorkspaceClient.tsx', import.meta.url), 'utf8')
+
+test('organization workspace exposes destination lifecycle controls safely', () => {
+    assert.match(organizationWorkspaceSource, /validDestinationUrl\(url\)/, 'destination save should validate URL shape before dry-run.')
+    assert.match(organizationWorkspaceSource, /\/api\/organizations\/\$\{encodeURIComponent\(selectedOrganization\.id\)\}\/webhooks\/\$\{encodeURIComponent\(destination\.id\)\}/, 'saved destination updates should use the org-scoped destination proxy.')
+    assert.match(organizationWorkspaceSource, /method: 'PATCH'/, 'saved destination edits should use PATCH through the frontend org proxy.')
+    assert.match(organizationWorkspaceSource, /aria-label='Edit destination'/, 'saved destinations should expose an edit action.')
+    assert.match(organizationWorkspaceSource, /Disable/, 'active destinations should expose disable action.')
+    assert.match(organizationWorkspaceSource, /Enable/, 'paused destinations should expose enable action.')
+    assert.doesNotMatch(organizationWorkspaceSource, /token=[^'"]+|discord-secret|webhook secret/i, 'workspace source should not hard-code webhook secrets.')
+})
 
 test('builds DWM mirror payloads for org watchlist mutations', () => {
     const mirror = buildDwmWatchlistMirrorPayload({

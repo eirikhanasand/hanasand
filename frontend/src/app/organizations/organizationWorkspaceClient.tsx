@@ -1338,7 +1338,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
     )
 }
 
-function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onTest, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onDelete: (destination: WebhookDestination) => void }) {
+function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, editing, setEditing, onSelectSubject, onTest, onUpdate, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, editing: Record<string, DestinationEditDraft>, setEditing: (next: Record<string, DestinationEditDraft> | ((current: Record<string, DestinationEditDraft>) => Record<string, DestinationEditDraft>)) => void, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onUpdate: (destination: WebhookDestination, draft: DestinationEditDraft) => void, onDelete: (destination: WebhookDestination) => void }) {
     return (
         <details id='destinations' className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-destinations-disclosure>
             <summary className='flex cursor-pointer list-none flex-col gap-3 p-4 outline-none transition hover:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-[#3056d3]/25 dark:hover:bg-[#101b2d] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
@@ -1349,41 +1349,92 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
             </summary>
             <div className='grid gap-2 border-t border-[#e6ebf2] p-4 dark:border-[#26344a]'>
                 {destinations.length === 0 && <EmptyLine text='Saved watchlist destinations appear here after a route is tested and attached.' />}
-                {destinations.map(destination => (
-                    <div
-                        role='button'
-                        tabIndex={0}
-                        key={destination.id}
-                        onClick={() => onSelectSubject({ type: 'destination', id: destination.id })}
-                        onKeyDown={event => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                onSelectSubject({ type: 'destination', id: destination.id })
-                            }
-                        }}
-                        className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] hover:bg-[#f8fafc] dark:border-[#26344a] dark:hover:bg-[#111d2d]'}`}
-                    >
-                        <span className='flex min-w-0 items-start justify-between gap-2'>
-                            <span className='min-w-0'>
-                                <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
-                                <span className='mt-1 block truncate font-mono text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
+                {destinations.map(destination => {
+                    const draft = editing[destination.id]
+                    const destinationStatus = destination.status || (destination.deliveryReady ? 'active' : 'configured')
+                    const draftUrl = draft?.url.trim() || ''
+                    const draftUrlInvalid = Boolean(draftUrl) && !validDestinationUrl(draftUrl)
+                    return (
+                        <div
+                            role='button'
+                            tabIndex={0}
+                            key={destination.id}
+                            onClick={() => onSelectSubject({ type: 'destination', id: destination.id })}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault()
+                                    onSelectSubject({ type: 'destination', id: destination.id })
+                                }
+                            }}
+                            className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] hover:bg-[#f8fafc] dark:border-[#26344a] dark:hover:bg-[#111d2d]'}`}
+                        >
+                            <span className='flex min-w-0 items-start justify-between gap-2'>
+                                <span className='min-w-0'>
+                                    <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
+                                    <span className='mt-1 block truncate font-mono text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
+                                </span>
+                                <StatusPill status={destinationStatus} />
                             </span>
-                            <StatusPill status={destination.status || (destination.deliveryReady ? 'active' : 'configured')} />
-                        </span>
-                        <span className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
-                            <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
-                            <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
-                        </span>
-                        <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
-                            <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
-                                <RefreshCw className='h-4 w-4' />
-                                Test
-                            </button>
-                            <ConfirmActionButton ariaLabel='Remove destination' disabled={!canManage || Boolean(busy)} onConfirm={() => onDelete(destination)} icon={<Trash2 className='h-4 w-4' />} />
-                            <RowStatus message={rowMessages[`destination-${destination.id}`]} />
-                        </span>
-                    </div>
-                ))}
+                            {draft ? (
+                                <div className='grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_8rem]'>
+                                    <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                                        Name
+                                        <input value={draft.name} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, name: event.target.value } }))} className={inputClass} />
+                                    </label>
+                                    <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, kind: value as DestinationEditDraft['kind'] } }))} />
+                                    <SelectField label='Status' value={draft.status} options={['active', 'paused']} disabled={Boolean(busy)} onChange={value => setEditing(current => ({ ...current, [destination.id]: { ...draft, status: value } }))} />
+                                    <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1] md:col-span-3'>
+                                        Rotate URL
+                                        <input value={draft.url} disabled={Boolean(busy)} onChange={event => setEditing(current => ({ ...current, [destination.id]: { ...draft, url: event.target.value } }))} className={inputClass} placeholder='Leave blank to keep the stored redacted endpoint' />
+                                        {draftUrlInvalid && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Use a valid HTTPS URL.</span>}
+                                    </label>
+                                    <div className='flex flex-wrap gap-2 md:col-span-3' onClick={event => event.stopPropagation()}>
+                                        <button type='button' className={primaryButtonClass} disabled={draftUrlInvalid || Boolean(busy)} onClick={() => onUpdate(destination, draft)}>
+                                            <CheckCircle2 className='h-4 w-4' />
+                                            Save
+                                        </button>
+                                        <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => setEditing(current => {
+                                            const next = { ...current }
+                                            delete next[destination.id]
+                                            return next
+                                        })}>Cancel</button>
+                                        <RowStatus message={rowMessages[`destination-${destination.id}`]} />
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <span className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
+                                        <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
+                                        <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
+                                    </span>
+                                    <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
+                                        <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
+                                            <RefreshCw className='h-4 w-4' />
+                                            Test
+                                        </button>
+                                        <button type='button' aria-label='Edit destination' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => setEditing(current => ({ ...current, [destination.id]: { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: destination.status || 'active' } }))}>
+                                            <Pencil className='h-4 w-4' />
+                                            Edit
+                                        </button>
+                                        {destinationStatus === 'active' ? (
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: 'paused' })}>
+                                                <Pause className='h-4 w-4' />
+                                                Disable
+                                            </button>
+                                        ) : (
+                                            <button type='button' className={secondaryButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onUpdate(destination, { name: destination.name || destination.id, kind: (destination.kind || destination.type || 'webhook') === 'discord' ? 'discord' : 'webhook', url: '', status: 'active' })}>
+                                                <Play className='h-4 w-4' />
+                                                Enable
+                                            </button>
+                                        )}
+                                        <ConfirmActionButton ariaLabel='Remove destination' disabled={!canManage || Boolean(busy)} onConfirm={() => onDelete(destination)} icon={<Trash2 className='h-4 w-4' />} />
+                                        <RowStatus message={rowMessages[`destination-${destination.id}`]} />
+                                    </span>
+                                </>
+                            )}
+                        </div>
+                    )
+                })}
             </div>
         </details>
     )
