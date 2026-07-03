@@ -1,0 +1,12 @@
+{
+  "name": "hanasand-db-dashboard-monitor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node db-dashboard-monitor.mjs",
+    "self-test": "node db-dashboard-monitor.mjs --self-test"
+  },
+  "dependencies": {
+    "playwright": "^1.53.1"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "hanasand-login-ui-monitor",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node login-ui-monitor.mjs",
+    "self-test": "node login-ui-monitor.mjs --self-test"
+  },
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}
