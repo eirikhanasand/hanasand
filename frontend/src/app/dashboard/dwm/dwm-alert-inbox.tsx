@@ -111,51 +111,72 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
 
     return (
         <div className='grid gap-2'>
-            {alerts.map((alert) => (
-                <div key={alert.id} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
-                    <div className='min-w-0'>
-                        <div className='flex flex-wrap items-center gap-2'>
-                            <h3 className='font-semibold text-ui-text'>{alert.company}</h3>
-                            {alert.actor && <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'>{alert.actor}</span>}
-                            <span className={severityClass(alert.severity)}>{alert.severity}</span>
-                            <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-text'>{alert.confidence}% confidence</span>
-                            <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{(alert.deliveryState || 'pending_review').replaceAll('_', ' ')}</span>
-                            <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{alert.workflowEvents?.length || 0} events</span>
-                        </div>
-                        <p className='mt-1 text-sm text-ui-muted'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {alert.sourceFamily.replaceAll('_', ' ')} · {alert.artifactType.replaceAll('_', ' ')}</p>
-                        <p className='mt-2 line-clamp-2 text-sm leading-6 text-ui-text'>{safeAlertSummary(alert)}</p>
-                        {alert.workflowNote && <p className='mt-2 text-sm font-semibold text-ui-primary'>{alert.workflowNote}</p>}
-                    </div>
-
-                    <div className='grid gap-2 md:grid-cols-2'>
-                        {alert.evidence.slice(0, 3).map(item => (
-                            <div key={item.id} className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-                                <div className='flex flex-wrap items-center gap-2'>
-                                    <span className='text-xs font-semibold text-ui-text'>{item.sourceName}</span>
-                                    <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{item.redactionState.replaceAll('_', ' ')}</span>
-                                </div>
-                                <p className='mt-2 line-clamp-2 text-xs leading-5 text-ui-muted'>{safeEvidenceExcerpt(item.excerpt)}</p>
-                                <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash}</p>
+            {alerts.map((alert) => {
+                const evidencePreview = alert.evidence.slice(0, 3)
+                const eventCount = alert.workflowEvents?.length || 0
+                return (
+                    <article key={alert.id} className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-3' data-dwm-alert-row>
+                        <div className='min-w-0'>
+                            <div className='flex flex-wrap items-center gap-2'>
+                                <h3 className='font-semibold text-ui-text'>{alert.company}</h3>
+                                {alert.actor && <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-xs font-semibold text-ui-primary'>{alert.actor}</span>}
+                                <span className={severityClass(alert.severity)}>{alert.severity}</span>
+                                <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-text'>{alert.confidence}% confidence</span>
+                                <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{(alert.deliveryState || 'pending_review').replaceAll('_', ' ')}</span>
+                                <span className='rounded-full border border-ui-border bg-ui-raised px-2 py-0.5 text-xs font-semibold text-ui-muted'>{alert.workflowEvents?.length || 0} events</span>
                             </div>
-                        ))}
-                    </div>
-
-                    {alert.workflowEvents?.length ? (
-                        <div className='rounded-lg border border-ui-border bg-ui-raised p-3 text-xs text-ui-muted'>
-                            Latest: {latestEventLabel(alert.workflowEvents)}
+                            <p className='mt-1 text-sm text-ui-muted'>Matched <span className='font-mono'>{alert.matchedTerm.value}</span> from {alert.sourceFamily.replaceAll('_', ' ')} · {alert.artifactType.replaceAll('_', ' ')}</p>
+                            <p className='mt-2 line-clamp-2 text-sm leading-6 text-ui-text'>{safeAlertSummary(alert)}</p>
+                            {alert.workflowNote && <p className='mt-2 text-sm font-semibold text-ui-primary'>{alert.workflowNote}</p>}
                         </div>
-                    ) : null}
 
-                    <div className='flex flex-wrap gap-2'>
-                        {alertCaseId(alert) ? <a href={caseDetailHref(alert, tenantId, organizationId)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>Open case</a> : null}
-                        <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')} icon='review'>Review</ActionButton>
-                        <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'route_to_customer', 'ready_to_send', 'Ready for customer delivery.')} icon='send'>Ready</ActionButton>
-                        <ActionButton busy={busyAlert === alert.id} onClick={() => replayAlert(alert.id)} icon='replay'>Replay</ActionButton>
-                        <ActionButton busy={busyAlert === alert.id} onClick={() => sendAlert(alert.id)} icon='send'>Send</ActionButton>
-                        <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'false_positive', 'muted', 'Marked false positive.')} icon='false'>False</ActionButton>
-                    </div>
-                </div>
-            ))}
+                        <div className='flex flex-wrap gap-2' data-dwm-alert-primary-actions>
+                            {alertCaseId(alert) ? <a href={caseDetailHref(alert, tenantId, organizationId)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>Open case</a> : null}
+                            <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')} icon='review'>Review</ActionButton>
+                            <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'route_to_customer', 'ready_to_send', 'Ready for customer delivery.')} icon='send'>Ready</ActionButton>
+                            <ActionButton busy={busyAlert === alert.id} onClick={() => sendAlert(alert.id)} icon='send'>Send</ActionButton>
+                        </div>
+
+                        <details className='rounded-lg border border-ui-border bg-ui-raised' data-dwm-alert-evidence-disclosure>
+                            <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                                <span>Evidence and history</span>
+                                <span className='font-medium text-ui-muted'>{alert.evidence.length} evidence rows, {eventCount} workflow events</span>
+                            </summary>
+                            <div className='grid gap-2 border-t border-ui-border p-3 md:grid-cols-2'>
+                                {evidencePreview.map(item => (
+                                    <div key={item.id} className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+                                        <div className='flex flex-wrap items-center gap-2'>
+                                            <span className='text-xs font-semibold text-ui-text'>{item.sourceName}</span>
+                                            <span className='rounded-full border border-ui-primary/35 bg-ui-primary/10 px-2 py-0.5 text-[11px] font-semibold text-ui-primary'>{item.redactionState.replaceAll('_', ' ')}</span>
+                                        </div>
+                                        <p className='mt-2 line-clamp-2 text-xs leading-5 text-ui-muted'>{safeEvidenceExcerpt(item.excerpt)}</p>
+                                        <p className='mt-2 break-all font-mono text-[11px] text-ui-muted'>{item.contentHash}</p>
+                                    </div>
+                                ))}
+                                {!evidencePreview.length && (
+                                    <p className='rounded-lg border border-dashed border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>Evidence rows are syncing for this alert.</p>
+                                )}
+                                {alert.workflowEvents?.length ? (
+                                    <div className='rounded-lg border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted md:col-span-2'>
+                                        Latest: {latestEventLabel(alert.workflowEvents)}
+                                    </div>
+                                ) : null}
+                            </div>
+                        </details>
+
+                        <details className='rounded-lg border border-ui-border bg-ui-raised' data-dwm-alert-secondary-actions>
+                            <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-xs font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                                <span>Secondary actions</span>
+                                <span className='font-medium text-ui-muted'>Replay evidence or mute as false positive</span>
+                            </summary>
+                            <div className='flex flex-wrap gap-2 border-t border-ui-border p-3'>
+                                <ActionButton busy={busyAlert === alert.id} onClick={() => replayAlert(alert.id)} icon='replay'>Replay</ActionButton>
+                                <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'false_positive', 'muted', 'Marked false positive.')} icon='false'>False</ActionButton>
+                            </div>
+                        </details>
+                    </article>
+                )
+            })}
             {message && <p className='text-sm text-ui-muted'>{message}</p>}
         </div>
     )
