@@ -865,33 +865,31 @@ function EmptyWorkspacePreview() {
     ]
 
     return (
-        <div className='grid gap-4'>
-            <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-empty-focused-create='true'>
-                <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start'>
-                    <div className='min-w-0'>
-                        <div className='flex min-w-0 items-start gap-3'>
-                            <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>
-                                <Building2 className='h-5 w-5' />
-                            </div>
-                            <div className='min-w-0'>
-                                <h2 className='text-xl font-semibold text-[#171a21] dark:text-white'>Create the first organization</h2>
-                                <p className='mt-1 max-w-2xl text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
-                                    Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
-                                </p>
-                            </div>
+        <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-empty-focused-create='true'>
+            <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start'>
+                <div className='min-w-0'>
+                    <div className='flex min-w-0 items-start gap-3'>
+                        <div className='grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>
+                            <Building2 className='h-5 w-5' />
+                        </div>
+                        <div className='min-w-0'>
+                            <h2 className='text-xl font-semibold text-[#171a21] dark:text-white'>Create the first organization</h2>
+                            <p className='mt-1 max-w-2xl text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
+                                Start with the workspace. Team access, shared watchlists, destinations, cases, and activity appear after the organization exists.
+                            </p>
                         </div>
                     </div>
-                    <ol className='grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
-                        {nextSteps.map((step, index) => (
-                            <li key={step} className='flex gap-3 rounded-md border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
-                                <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
-                                <span>{step}</span>
-                            </li>
-                        ))}
-                    </ol>
                 </div>
-            </section>
-        </div>
+                <ol className='grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
+                    {nextSteps.map((step, index) => (
+                        <li key={step} className='flex gap-3 rounded-md border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
+                            <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
+                            <span>{step}</span>
+                        </li>
+                    ))}
+                </ol>
+            </div>
+        </section>
     )
 }
 
