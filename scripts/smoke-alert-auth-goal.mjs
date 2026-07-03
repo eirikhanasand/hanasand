@@ -96,8 +96,9 @@ console.log(JSON.stringify({
   startedAt,
   finishedAt: new Date().toISOString(),
   coverage: [
-    "monitored term creates persisted org DWM alert",
-    "Discord webhook payload dispatch is exercised with mocked fetch",
+    "monitored term creates persisted org DWM alerts from Telegram and darkweb metadata captures",
+    "duplicate capture rebuild preserves analyst workflow state and does not inflate evidence",
+    "Discord webhook payload dispatch is exercised with mocked fetch for each generated alert",
     "organization tenant/RBAC and outsider isolation smoke passes",
     "frontend tenant switching and org watchlist bridge tests pass",
     "SSO OIDC and passkey contracts pass"
