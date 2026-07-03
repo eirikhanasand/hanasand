@@ -68,15 +68,57 @@ type TimingRow = {
 
 type DeploymentReadinessRow = {
     deployment_count: string | number
+    recent_deployment_count: string | number
     completed_deployments: string | number
     healthchecked_deployments: string | number
     explained_failures: string | number
+    deployments_with_sync_events: string | number
+    deployments_with_stack: string | number
+    deployments_with_access_policy: string | number
+    last_deployment_at: string | null
 }
 
 type ReleaseReadinessRow = {
     release_count: string | number
+    recent_release_count: string | number
     rollback_ready_releases: string | number
     current_releases: string | number
+    superseded_releases: string | number
+    failed_releases: string | number
+    last_release_at: string | null
+}
+
+type LatestVerificationJobRow = {
+    kind: string
+    id: string
+    status: string
+    current_step: string
+    error: string | null
+    updated_at: string
+    completed_at: string | null
+    cancelled_at: string | null
+}
+
+type LatestDeploymentRow = {
+    id: string
+    status: string
+    vm_name: string
+    service_name: string
+    stack_type: string | null
+    access_policy: string | null
+    healthcheck_url: string | null
+    failure_reason: string | null
+    updated_at: string
+    completed_at: string | null
+}
+
+type LatestReleaseRow = {
+    id: string
+    status: string
+    deployment_id: string | null
+    preview_url: string | null
+    notes: string | null
+    updated_at: string
 }
 
 export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
@@ -87,7 +129,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
 
     const days = clampDays(Number((req.query as { days?: string })?.days) || 30)
     const since = `${days} days`
-    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, designQualityResult, failedProofResult, firstOutputResult, deployTimingResult, deploymentReadinessResult, releaseReadinessResult] = await Promise.all([
+    const [summaryResult, trendResult, recentResult, cacheResult, queueResult, verificationLatencyResult, buildDeployResult, designQualityResult, failedProofResult, firstOutputResult, deployTimingResult, deploymentReadinessResult, releaseReadinessResult, latestVerificationResult, latestDeploymentResult, latestReleaseResult] = await Promise.all([
         run(`
             SELECT
                 COUNT(*)::int AS event_count,
@@ -122,7 +164,7 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
             SELECT id, kind, units, billable_units, estimated_cost_nok, billing_mode, outcome, metadata, created_at
             FROM ai_usage_events
             WHERE owner_id = $1
-              AND kind IN ('ai_run_completed', 'ai_run_failed', 'ai_run_platform_error', 'deployment_started', 'browser_proof_completed', 'build_minutes_recorded', 'deploy_minutes_recorded')
+              AND kind IN ('ai_run_completed', 'ai_run_failed', 'ai_run_platform_error', 'deployment_started', 'release_recorded', 'browser_proof_completed', 'build_minutes_recorded', 'deploy_minutes_recorded')
             ORDER BY created_at DESC
             LIMIT 20
         `, [userId]),
@@ -228,22 +270,58 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         run(`
             SELECT
                 COUNT(*)::int AS deployment_count,
+                COUNT(*) FILTER (WHERE created_at >= NOW() - $2::interval)::int AS recent_deployment_count,
                 COUNT(*) FILTER (WHERE status = 'running')::int AS completed_deployments,
                 COUNT(*) FILTER (WHERE healthcheck_url IS NOT NULL)::int AS healthchecked_deployments,
-                COUNT(*) FILTER (WHERE failure_reason IS NOT NULL)::int AS explained_failures
+                COUNT(*) FILTER (WHERE failure_reason IS NOT NULL)::int AS explained_failures,
+                COUNT(*) FILTER (
+                    WHERE EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(events) AS event
+                        WHERE event->>'stage' IN ('sync', 'build', 'run', 'healthcheck', 'healthcheck_failed', 'blocked')
+                    )
+                )::int AS deployments_with_sync_events,
+                COUNT(*) FILTER (WHERE stack_type IS NOT NULL AND stack_type <> 'unknown')::int AS deployments_with_stack,
+                COUNT(*) FILTER (WHERE access_policy IS NOT NULL)::int AS deployments_with_access_policy,
+                MAX(updated_at) AS last_deployment_at
             FROM ai_deployments
             WHERE owner_id = $1
-              AND created_at >= NOW() - $2::interval
         `, [userId, since]),
         run(`
             SELECT
                 COUNT(*)::int AS release_count,
-                COUNT(*) FILTER (WHERE deployment_id IS NOT NULL)::int AS rollback_ready_releases,
-                COUNT(*) FILTER (WHERE status = 'current')::int AS current_releases
+                COUNT(*) FILTER (WHERE created_at >= NOW() - $2::interval)::int AS recent_release_count,
+                COUNT(*) FILTER (WHERE deployment_id IS NOT NULL AND preview_url IS NOT NULL)::int AS rollback_ready_releases,
+                COUNT(*) FILTER (WHERE status = 'current')::int AS current_releases,
+                COUNT(*) FILTER (WHERE status = 'superseded')::int AS superseded_releases,
+                COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_releases,
+                MAX(updated_at) AS last_release_at
             FROM ai_releases
             WHERE owner_id = $1
-              AND created_at >= NOW() - $2::interval
         `, [userId, since]),
+        run(`
+            SELECT DISTINCT ON (kind)
+                kind, id, status, current_step, error, updated_at, completed_at, cancelled_at
+            FROM ai_verification_jobs
+            WHERE owner_id = $1
+            ORDER BY kind, updated_at DESC, created_at DESC
+        `, [userId]),
+        run(`
+            SELECT
+                id, status, vm_name, service_name, stack_type, access_policy,
+                healthcheck_url, failure_reason, updated_at, completed_at
+            FROM ai_deployments
+            WHERE owner_id = $1
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+        `, [userId]),
+        run(`
+            SELECT id, status, deployment_id, preview_url, notes, updated_at
+            FROM ai_releases
+            WHERE owner_id = $1
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+        `, [userId]),
     ])
 
     const summary = summaryResult.rows[0] || {}
@@ -270,6 +348,9 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
         deployment: deploymentReadinessResult.rows[0] as DeploymentReadinessRow | undefined,
         release: releaseReadinessResult.rows[0] as ReleaseReadinessRow | undefined,
         designQuality: designQualityResult.rows[0] as DesignQualityRow | undefined,
+        latestVerificationJobs: latestVerificationResult.rows as LatestVerificationJobRow[],
+        latestDeployment: latestDeploymentResult.rows[0] as LatestDeploymentRow | undefined,
+        latestRelease: latestReleaseResult.rows[0] as LatestReleaseRow | undefined,
         eventCount,
         verifiedUnits,
         costNok,
@@ -323,179 +404,291 @@ export async function getAiEconomics(req: FastifyRequest, res: FastifyReply) {
     })
 }
 
-function buildCommercialReadiness({ reliability, deployment, release, designQuality, eventCount, verifiedUnits, costNok, productiveMinutes }: {
+export function buildCommercialReadiness({ reliability, deployment, release, designQuality, latestVerificationJobs = [], latestDeployment, latestRelease, eventCount, verifiedUnits, costNok, productiveMinutes }: {
     reliability: ReturnType<typeof buildReliability>
     deployment?: DeploymentReadinessRow
     release?: ReleaseReadinessRow
     designQuality?: DesignQualityRow
+    latestVerificationJobs?: LatestVerificationJobRow[]
+    latestDeployment?: LatestDeploymentRow
+    latestRelease?: LatestReleaseRow
     eventCount: number
     verifiedUnits: number
     costNok: number
     productiveMinutes: number
 }) {
     const deploymentCount = numberValue(deployment?.deployment_count)
+    const recentDeploymentCount = numberValue(deployment?.recent_deployment_count)
     const completedDeployments = numberValue(deployment?.completed_deployments)
     const healthcheckedDeployments = numberValue(deployment?.healthchecked_deployments)
+    const deploymentsWithSyncEvents = numberValue(deployment?.deployments_with_sync_events)
+    const deploymentsWithStack = numberValue(deployment?.deployments_with_stack)
+    const deploymentsWithAccessPolicy = numberValue(deployment?.deployments_with_access_policy)
     const releaseCount = numberValue(release?.release_count)
+    const recentReleaseCount = numberValue(release?.recent_release_count)
     const rollbackReadyReleases = numberValue(release?.rollback_ready_releases)
+    const currentReleases = numberValue(release?.current_releases)
+    const supersededReleases = numberValue(release?.superseded_releases)
+    const failedReleases = numberValue(release?.failed_releases)
     const designCompleted = numberValue(designQuality?.completed)
     const designFailed = numberValue(designQuality?.failed)
     const designTotal = numberValue(designQuality?.total)
     const designAvgScore = numberValue(designQuality?.avg_score)
+    const latestVerificationByKind = new Map(latestVerificationJobs.map((row) => [row.kind, row]))
+    const lastVerificationAttempt = latestAttempt(latestVerificationJobs)
     const hasVerificationSamples = reliability.verificationLatency.some((row) => row.sampleCount > 0) || reliability.buildDeploy.some((row) => row.total > 0)
     const hasQueueTelemetry = reliability.queueDepth.length > 0 || reliability.capacity.totalAvailableSessions > 0
     const hasMeasuredEconomics = eventCount > 0 && (verifiedUnits > 0 || costNok > 0 || productiveMinutes > 0)
-    const hasDeploymentOwnership = deploymentCount > 0 && (completedDeployments > 0 || healthcheckedDeployments > 0 || releaseCount > 0)
-    const hasTrustRecovery = releaseCount > 0 && rollbackReadyReleases > 0
+    const hasDeploymentOwnership = deploymentCount > 0 && deploymentsWithSyncEvents > 0 && deploymentsWithAccessPolicy > 0 && (completedDeployments > 0 || healthcheckedDeployments > 0 || releaseCount > 0)
+    const hasTrustRecovery = releaseCount > 0 && rollbackReadyReleases > 0 && currentReleases > 0
     const hasDesignProof = designTotal > 0
     const designPassRate = designTotal > 0 ? designCompleted / designTotal : 0
+    const timingSampleCount = reliability.verificationLatency.reduce((sum, row) => sum + row.sampleCount, 0)
+    const hasPromptUxEvidence = reliability.promptTiming.sampleCount > 0
+    const hasDeployTimingEvidence = reliability.deployTiming.sampleCount > 0
     const items = [
         readinessItem({
             id: 'durable_async_verification',
             priority: 1,
             label: 'Durable async verification jobs',
-            achieved: hasVerificationSamples && hasQueueTelemetry,
-            partial: hasQueueTelemetry || hasVerificationSamples,
+            status: hasVerificationSamples && hasQueueTelemetry ? 'operational' : hasVerificationSamples || hasQueueTelemetry ? 'evidence_gap' : 'internal_action',
             evidence: [
-                'Verification jobs are tracked with queue, running, retry, cancel, artifact, and latency fields.',
-                `${reliability.verificationLatency.reduce((sum, row) => sum + row.sampleCount, 0)} completed verification timing samples in this window.`,
-                `${reliability.capacity.totalQueued} queued and ${reliability.capacity.totalAvailableSessions} available lane slots now.`,
+                'Control is wired through ai_verification_jobs: queue position, running state, retry count, cancel time, artifacts, and latency timestamps are persisted.',
+                timingSampleCount > 0
+                    ? `${timingSampleCount} completed verification timing samples are inside the selected usage window.`
+                    : 'No completed verification timing samples are recorded for this owner in the selected usage window.',
+                hasQueueTelemetry
+                    ? `${formatCountLabel(reliability.capacity.totalQueued, 'queued job')} and ${formatCountLabel(reliability.capacity.totalAvailableSessions, 'live lane slot')} are visible now.`
+                    : 'No queued jobs or live lane capacity is reported for this owner.',
             ],
-            next: hasVerificationSamples ? 'Keep increasing real build/browser/deploy samples.' : 'Run production build/browser/deploy jobs so p50/p95 readiness is based on live proof.',
+            action: hasVerificationSamples ? 'Keep build, browser, deploy, and design verification jobs flowing through the durable queue.' : 'Enqueue browser/build/deploy verification jobs through POST /api/tools/verification-jobs so p50/p95 latency has current samples.',
+            owner: 'AI platform',
+            control: '/api/tools/verification-jobs plus ai_verification_jobs',
+            lastAttempt: formatVerificationAttempt(lastVerificationAttempt),
             measurable: hasVerificationSamples || hasQueueTelemetry,
         }),
         readinessItem({
             id: 'deployment_ownership',
             priority: 2,
             label: 'Deployment ownership: domain, env, build, logs, rollback',
-            achieved: hasDeploymentOwnership && hasTrustRecovery,
-            partial: hasDeploymentOwnership || releaseCount > 0,
+            status: hasDeploymentOwnership && hasTrustRecovery ? 'operational' : deploymentCount || releaseCount ? 'evidence_gap' : 'internal_action',
             evidence: [
-                `${deploymentCount} deployment records and ${completedDeployments} completed deploys in this window.`,
-                `${healthcheckedDeployments} deploys have health-check evidence.`,
-                `${releaseCount} releases and ${rollbackReadyReleases} rollback-ready releases are recorded.`,
+                deploymentCount > 0
+                    ? `${formatDeploymentWindow(deploymentCount, recentDeploymentCount)}; ${formatEvidenceParts([
+                        countPhrase(completedDeployments, 'running'),
+                        countPhrase(healthcheckedDeployments, 'with health-check URLs'),
+                    ], 'ownership details are still being captured')}.`
+                    : 'No deployment records are linked for this owner.',
+                deploymentCount > 0
+                    ? formatEvidenceParts([
+                        countPhrase(deploymentsWithSyncEvents, 'with sync/build/run/health event logs'),
+                        countPhrase(deploymentsWithStack, 'with detected stack type'),
+                        countPhrase(deploymentsWithAccessPolicy, 'with access policy'),
+                    ], 'Deployment records exist, but event logs, stack type, and access policy are still being captured.')
+                    : 'No deploy sync/build/health event log has been captured for this owner.',
+                releaseCount > 0
+                    ? `${formatDeploymentWindow(releaseCount, recentReleaseCount, 'release')}; ${formatEvidenceParts([
+                        countPhrase(currentReleases, 'current'),
+                        countPhrase(supersededReleases, 'superseded'),
+                        countPhrase(failedReleases, 'failed'),
+                        countPhrase(rollbackReadyReleases, 'linked to deploy preview records'),
+                    ], 'rollback state is still being captured')}.`
+                    : 'No release record is linked to a deploy preview for this owner.',
             ],
-            next: hasDeploymentOwnership ? 'Use real customer deploys to prove env diagnosis, health checks, and rollback under load.' : 'Push more one-click deploys through the owned deployment path.',
+            action: hasDeploymentOwnership && hasTrustRecovery ? 'Keep release records linked to deployment ids so rollback state remains auditable.' : 'Run POST /api/ai/deployments for an owned repo and confirm ai_deployments.events contains sync/build/health entries plus an ai_releases current record.',
+            owner: 'Deploy ops',
+            control: '/api/ai/deployments, ai_deployments, ai_releases',
+            lastAttempt: formatDeploymentAttempt(latestDeployment, latestRelease),
             measurable: deploymentCount > 0 || releaseCount > 0,
         }),
         readinessItem({
             id: 'safety_enforcement',
             priority: 3,
             label: 'Real safety enforcement',
-            achieved: true,
+            status: 'operational',
             evidence: [
                 'Backend action policy blocks secrets, broad deletes, production DB writes, SSH keys, and destructive actions.',
                 'Risky tool calls require checkpoints or safe alternatives before execution.',
                 'Tool metadata can be audited against policy outcome and approval state.',
             ],
-            next: 'Keep expanding policy coverage as new tools and deployment targets are added.',
+            action: 'Add every new tool or deploy target to the action-policy smoke contract before exposing it.',
+            owner: 'Security',
+            control: 'AI action policy and smoke-ai-action-policy.ts',
+            lastAttempt: 'Policy contract is part of the API smoke suite.',
             measurable: true,
         }),
         readinessItem({
             id: 'verified_outcome_economics',
             priority: 4,
             label: 'Cost and queue metrics tied to verified outcomes',
-            achieved: hasMeasuredEconomics && hasQueueTelemetry,
-            partial: hasMeasuredEconomics || hasQueueTelemetry,
+            status: hasMeasuredEconomics && (hasQueueTelemetry || hasVerificationSamples) ? 'operational' : hasMeasuredEconomics || hasQueueTelemetry ? 'evidence_gap' : 'internal_action',
             evidence: [
-                `Key metric is verified useful project progress per minute per NOK, currently ${formatNumber(reliability.costPerSuccessfulVerifiedBuildNok)} NOK per successful verified build/deploy proof.`,
-                `${verifiedUnits} verified units, ${productiveMinutes} productive minutes, and ${formatNumber(costNok)} NOK estimated cost in this window.`,
-                `${reliability.capacity.totalQueued} queued jobs are tied to live lane capacity.`,
+                `Key metric is verified useful project progress per minute per NOK, currently ${formatNumber(reliability.costPerSuccessfulVerifiedBuildNok)} NOK per successful verified build or deploy check.`,
+                hasMeasuredEconomics
+                    ? `${verifiedUnits} verified units, ${productiveMinutes} productive minutes, and ${formatNumber(costNok)} NOK estimated cost in this window.`
+                    : 'No verified cost events are recorded for this owner in the selected usage window.',
+                hasQueueTelemetry
+                    ? `${formatCountLabel(reliability.capacity.totalQueued, 'queued job')} are tied to live lane capacity.`
+                    : 'No live queue capacity record is available for this owner.',
             ],
-            next: hasMeasuredEconomics ? 'Tie pricing decisions to verified outcome cohorts, not token volume.' : 'Generate more verified runs so pricing is based on real unit economics.',
+            action: hasMeasuredEconomics ? 'Review pricing cohorts against verified outcome events, not raw token totals.' : 'Record ai_usage_events with outcome=verified from verification/deploy flows before changing pricing.',
+            owner: 'Product analytics',
+            control: 'ai_usage_events joined to verification and deployment outcomes',
+            lastAttempt: `${eventCount} AI usage events in the selected window.`,
             measurable: hasMeasuredEconomics || hasQueueTelemetry,
         }),
         readinessItem({
             id: 'non_developer_ux',
             priority: 5,
             label: 'Non-developer UX polish',
-            achieved: true,
+            status: hasPromptUxEvidence ? 'operational' : 'internal_action',
             evidence: [
                 'User-facing states separate planning, editing, verification, needs-you, publish-ready, and failed-with-fix flows.',
-                'Advanced logs remain secondary to plain next actions, summaries, screenshots, and deploy diagnosis.',
-                'The AI build workflow is additive so regular developers can still use the normal editor.',
+                'Advanced logs remain secondary to plain operator actions, summaries, screenshots, and deploy diagnosis.',
+                hasPromptUxEvidence
+                    ? `${reliability.promptTiming.sampleCount} prompt-to-first-output timing samples are recorded in this window.`
+                    : 'No prompt-to-first-output timing sample is recorded for this owner in the selected usage window.',
             ],
-            next: 'Validate with mobile-heavy first-time users and measure prompt-to-next-obvious-action time.',
-            measurable: false,
+            action: 'Store prompt-to-next-action timing and first-run completion in ai_usage_events.metadata before promoting this gate to operational.',
+            owner: 'Product',
+            control: 'AI workspace UX state model and ai_usage_events.metadata',
+            lastAttempt: `${reliability.promptTiming.sampleCount} prompt timing samples in the selected window.`,
+            measurable: reliability.promptTiming.sampleCount > 0,
         }),
         readinessItem({
             id: 'design_quality',
             priority: 6,
             label: 'Better design QA and less generic output',
-            achieved: hasDesignProof && designPassRate >= 0.8 && designAvgScore >= 72,
-            partial: true,
+            status: hasDesignProof && designPassRate >= 0.8 && designAvgScore >= 72 ? 'operational' : hasDesignProof ? 'evidence_gap' : 'internal_action',
             evidence: [
-                `${designTotal} durable design QA jobs, ${designCompleted} passed, ${designFailed} failed in this window.`,
-                `Average design QA score is ${formatNumber(designAvgScore)} out of 100.`,
-                'Checks cover spacing signals, hierarchy, mobile viewport, generic copy, repeated patterns, asset direction, and design-token evidence.',
+                'Design QA worker fetches pages, scores hierarchy/spacing/generic-copy signals, captures mobile and desktop screenshots, and persists design_quality_report artifacts.',
+                hasDesignProof
+                    ? `${designTotal} durable design QA jobs in this window: ${designCompleted} passed and ${designFailed} failed.`
+                    : 'No durable design QA job is recorded for this owner in the selected usage window.',
+                hasDesignProof
+                    ? `Average design QA score is ${formatNumber(designAvgScore)} out of 100.`
+                    : 'No design QA score is available for this owner.',
             ],
-            next: hasDesignProof ? 'Attach screenshot diffing to the design worker for stronger visual proof.' : 'Run design QA verification jobs on generated pages before calling visual work ready.',
+            action: hasDesignProof ? 'Attach before/after screenshot diff baselines to design_quality_report artifacts.' : 'Enqueue kind=design verification jobs for generated pages before marking visual work ready.',
+            owner: 'Design systems',
+            control: 'kind=design verification jobs and frontend copy guardrails',
+            lastAttempt: formatVerificationAttempt(latestVerificationByKind.get('design')),
             measurable: hasDesignProof,
         }),
         readinessItem({
             id: 'tiered_pricing',
             priority: 7,
             label: 'Tiered pricing around verification and deploy capacity',
-            achieved: true,
+            status: 'operational',
             evidence: [
                 'Free, Starter, Pro, Agency, and Business tiers are modeled around verified outcomes, queue priority, deploy features, concurrency, rollback, audit, and approvals.',
                 'Cost controls include draft, standard, verified, and priority modes.',
                 'Failed platform infrastructure runs are discounted separately from user value.',
             ],
-            next: 'Calibrate allowances against real verified progress per minute per NOK.',
+            action: 'Calibrate allowances only from verified outcome cohorts recorded in ai_usage_events.',
+            owner: 'Product analytics',
+            control: 'pricingModes, subscriptionTiers, ai_usage_events economics',
+            lastAttempt: `${verifiedUnits} verified units in the selected window.`,
             measurable: true,
         }),
         readinessItem({
             id: 'model_routing_after_measurement',
             priority: 8,
             label: 'Stronger model routing only after the pipeline is measurable',
-            achieved: hasVerificationSamples && hasMeasuredEconomics,
-            partial: true,
+            status: hasVerificationSamples && hasMeasuredEconomics ? 'operational' : hasVerificationSamples || hasMeasuredEconomics ? 'evidence_gap' : 'internal_action',
             evidence: [
                 'Task routing already distinguishes tool-first deterministic paths, small local edits/summaries, and stronger architecture/refactor/bug-hunt work.',
-                `${reliability.promptTiming.sampleCount} prompt timing samples and ${reliability.deployTiming.sampleCount} deploy timing samples exist in this window.`,
+                hasPromptUxEvidence || hasDeployTimingEvidence
+                    ? `${formatCountLabel(reliability.promptTiming.sampleCount, 'prompt timing sample')} and ${formatCountLabel(reliability.deployTiming.sampleCount, 'deploy timing sample')} exist in this window.`
+                    : 'No prompt or deploy timing sample is recorded for this owner in the selected usage window.',
                 'Routing should be promoted based on verified useful progress, not raw tokens/sec.',
             ],
-            next: hasVerificationSamples && hasMeasuredEconomics ? 'Use measured outcome deltas to decide when stronger models are worth the cost.' : 'Keep stronger-model expansion gated until verification/economics samples are dense enough.',
+            action: hasVerificationSamples && hasMeasuredEconomics ? 'Promote routing changes only when verified outcome deltas beat cost deltas.' : 'Keep stronger-model expansion gated until verification and economics samples are dense enough.',
+            owner: 'AI platform',
+            control: 'task routing plus verified economics counters',
+            lastAttempt: formatVerificationAttempt(lastVerificationAttempt),
             measurable: hasVerificationSamples || hasMeasuredEconomics,
         }),
     ]
-    const achievedCount = items.filter((item) => item.status === 'achieved').length
-    const partialCount = items.filter((item) => item.status === 'partial').length
+    const achievedCount = items.filter((item) => item.status === 'operational').length
+    const partialCount = items.filter((item) => item.status === 'evidence_gap').length
+    const internalActionCount = items.filter((item) => item.status === 'internal_action').length
     const measurableCount = items.filter((item) => item.measurable).length
-    const overallState = achievedCount >= 6 && measurableCount >= 6 ? 'commercially_ready' : achievedCount + partialCount >= 7 ? 'on_track' : 'needs_work'
+    const overallState = internalActionCount > 0
+        ? 'internal_action_required'
+        : partialCount > 0
+            ? 'evidence_gaps'
+            : achievedCount >= 6 && measurableCount >= 6
+                ? 'commercially_ready'
+                : 'evidence_gaps'
     return {
         overallState,
         conclusion: overallState === 'commercially_ready'
-            ? 'The service has the right commercial control loops in place; keep proving them with real user cohorts.'
-            : 'The product is on the right path, but design QA and measured production samples still decide whether it is commercially strong.',
+            ? 'Operational controls have current evidence across verification, deployment, economics, design, safety, and pricing.'
+            : 'Internal gates list the exact owner, control, and last attempt for any capability without current evidence.',
         achievedCount,
         partialCount,
+        internalActionCount,
         measurableCount,
         totalCount: items.length,
         items,
     }
 }
 
-function readinessItem({ id, priority, label, achieved, partial, evidence, next, measurable }: {
+function readinessItem({ id, priority, label, status, evidence, action, owner, control, lastAttempt, measurable }: {
     id: string
     priority: number
     label: string
-    achieved: boolean
-    partial?: boolean
+    status: 'operational' | 'evidence_gap' | 'internal_action'
     evidence: string[]
-    next: string
+    action: string
+    owner: string
+    control: string
+    lastAttempt: string
     measurable: boolean
 }) {
     return {
         id,
         priority,
         label,
-        status: achieved ? 'achieved' : partial ? 'partial' : 'needs_work',
+        status,
         evidence,
-        next,
+        action,
+        owner,
+        control,
+        lastAttempt,
         measurable,
     }
+}
+
+function latestAttempt(rows: LatestVerificationJobRow[]) {
+    return rows.reduce<LatestVerificationJobRow | undefined>((latest, row) => {
+        if (!latest) return row
+        return new Date(row.updated_at).getTime() > new Date(latest.updated_at).getTime() ? row : latest
+    }, undefined)
+}
+
+function formatVerificationAttempt(row?: LatestVerificationJobRow) {
+    if (!row) {
+        return 'No durable verification job attempt is recorded for this owner.'
+    }
+    const finishedAt = row.completed_at || row.cancelled_at || row.updated_at
+    const detail = row.error ? `; ${row.error.slice(0, 160)}` : ''
+    return `${row.kind} job ${row.id} is ${row.status} (${row.current_step}) at ${finishedAt}${detail}.`
+}
+
+function formatDeploymentAttempt(deployment?: LatestDeploymentRow, release?: LatestReleaseRow) {
+    if (!deployment && !release) {
+        return 'No deployment or release attempt is recorded for this owner.'
+    }
+    const deploymentPart = deployment
+        ? `deployment ${deployment.id} is ${deployment.status} on ${deployment.vm_name}/${deployment.service_name} at ${deployment.completed_at || deployment.updated_at}`
+        : 'no deployment record'
+    const releasePart = release
+        ? `release ${release.id} is ${release.status}${release.deployment_id ? ` linked to ${release.deployment_id}` : ''} at ${release.updated_at}`
+        : 'no release record'
+    const failure = deployment?.failure_reason ? `; ${deployment.failure_reason.slice(0, 160)}` : ''
+    return `${deploymentPart}; ${releasePart}${failure}.`
 }
 
 function buildReliability({ estimatedCostNok, queueRows, latencyRows, buildDeployRows, failedProofRows, firstOutput, deployTiming }: {
@@ -643,6 +836,30 @@ function formatNumber(value: number) {
     return Number.isFinite(value) ? value.toFixed(value >= 10 ? 1 : 2) : '0'
 }
 
+function formatDeploymentWindow(total: number, recent: number, noun = 'deployment record') {
+    const totalLabel = formatCountLabel(total, noun)
+    return recent > 0
+        ? `${totalLabel}, ${formatCountLabel(recent, noun)} in this usage window`
+        : `${totalLabel}, most recent activity is outside this usage window`
+}
+
+function countPhrase(value: number, phrase: string) {
+    return value > 0 ? `${value} ${phrase}` : null
+}
+
+function formatEvidenceParts(parts: Array<string | null>, fallback: string) {
+    const visibleParts = parts.filter((part): part is string => Boolean(part))
+    if (!visibleParts.length) {
+        return fallback
+    }
+    return visibleParts.join('; ')
+}
+
+function formatCountLabel(value: number, singular: string) {
+    if (value === 0) return `no ${singular}s`
+    return `${value} ${singular}${value === 1 ? '' : 's'}`
+}
+
 function estimatePlatformDiscount(rows: RecentRunRow[]) {
     return rows
         .filter((row) => row.outcome === 'platform_error')
@@ -653,7 +870,7 @@ function pricingModes() {
     return [
         { id: 'draft', label: 'Cheap draft', priority: 0, concurrency: 1, verification: 'none', discountFailedPlatformRuns: true },
         { id: 'standard', label: 'Standard', priority: 1, concurrency: 2, verification: 'basic build and smoke', discountFailedPlatformRuns: true },
-        { id: 'verified', label: 'Verified', priority: 2, concurrency: 3, verification: 'browser proof, build, mobile, a11y basics', discountFailedPlatformRuns: true },
+        { id: 'verified', label: 'Verified', priority: 2, concurrency: 3, verification: 'browser check, build, mobile, a11y basics', discountFailedPlatformRuns: true },
         { id: 'priority', label: 'Priority', priority: 4, concurrency: 5, verification: 'verified lane plus faster queue', discountFailedPlatformRuns: true },
     ]
 }

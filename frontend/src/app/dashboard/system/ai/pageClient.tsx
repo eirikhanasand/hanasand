@@ -119,15 +119,19 @@ type AIEconomics = {
         conclusion: string
         achievedCount: number
         partialCount: number
+        internalActionCount: number
         measurableCount: number
         totalCount: number
         items: {
             id: string
             priority: number
             label: string
-            status: 'achieved' | 'partial' | 'needs_work'
+            status: 'operational' | 'evidence_gap' | 'internal_action'
             evidence: string[]
-            next: string
+            action: string
+            owner: string
+            control: string
+            lastAttempt: string
             measurable: boolean
         }[]
     }
@@ -191,8 +195,9 @@ export default function GPT_Page() {
                 <div className='mx-auto flex w-full max-w-330 flex-col gap-4 px-4 pb-4 pt-6 sm:px-6 md:px-8 md:pt-8'>
                     <div className='flex items-center justify-between gap-4'>
                         <div>
-                            <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>System</p>
-                            <h1 className='mt-1 text-2xl font-semibold text-bright/90'>AI</h1>
+                            <p className='text-xs uppercase tracking-[0.22em] text-bright/35'>Model operations</p>
+                            <h1 className='mt-1 text-2xl font-semibold text-bright/90'>AI worker console</h1>
+                            <p className='mt-1 text-sm text-bright/48'>Live sessions, GPU lanes, verification jobs, and spend pressure.</p>
                         </div>
                         <Link
                             href='/dashboard/system'
@@ -233,7 +238,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
     if (!economics) {
         return (
             <section className='rounded-xl bg-dark/35 p-4 outline outline-dark'>
-                <p className='text-sm text-bright/50'>Loading pricing and usage economics...</p>
+                <p className='text-sm text-bright/50'>Connecting AI worker telemetry...</p>
             </section>
         )
     }
@@ -245,10 +250,10 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
         <section className='space-y-4 rounded-xl bg-dark/35 p-4 outline outline-dark'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Pricing and unit economics</p>
-                    <h2 className='mt-1 text-xl font-semibold text-bright/90'>Verified outcomes, not raw messages</h2>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Worker output</p>
+                    <h2 className='mt-1 text-xl font-semibold text-bright/90'>Verified work, live capacity, and spend</h2>
                     <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>
-                        Key metric: {economics.keyMetric}. Failed platform infrastructure runs stay visible operationally, but are not treated like successful user value.
+                        Primary signal: {operationsCopy(economics.keyMetric)}. Failed platform runs stay visible for operators without being counted as user value.
                     </p>
                 </div>
                 <span className='w-fit rounded-full bg-[#f07d33]/12 px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-[#f07d33] outline outline-[#f07d33]/20'>
@@ -257,25 +262,25 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
             </div>
 
             <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Estimated cost' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable units`} />
-                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified progress / min / NOK' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
-                <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token usage' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units discounted`} />
+                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Spend' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable work units`} />
+                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified output' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
+                <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token flow' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units excluded from value`} />
                 <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
             </div>
 
             <ReliabilityPanel reliability={economics.reliability} />
-            <ServiceGatePanel readiness={economics.commercialReadiness} />
+            <OperationsPanel readiness={economics.commercialReadiness} />
 
             <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
                     <div className='mb-3 flex items-center justify-between'>
-                        <h3 className='text-sm font-semibold text-bright/84'>Usage over time</h3>
-                        <span className='text-xs text-bright/35'>tokens · cost · verified outcomes</span>
+                        <h3 className='text-sm font-semibold text-bright/84'>Worker output over time</h3>
+                        <span className='text-xs text-bright/35'>tokens · spend · verified outcomes</span>
                     </div>
                     <UsageTrendChart trend={economics.trend} />
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Cost controls</h3>
+                    <h3 className='text-sm font-semibold text-bright/84'>Lane controls</h3>
                     <div className='mt-3 grid gap-2'>
                         {economics.modes.map((mode) => (
                             <div key={mode.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
@@ -292,7 +297,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
 
             <div className='grid gap-4 xl:grid-cols-2'>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Outcome-based tiers</h3>
+                    <h3 className='text-sm font-semibold text-bright/84'>Customer lanes</h3>
                     <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
                         {economics.subscriptionTiers.map((tier) => (
                             <article key={tier.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
@@ -301,7 +306,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                                     <h4 className='text-sm font-semibold'>{tier.label}</h4>
                                 </div>
                                 {tier.fit ? <p className='mt-2 text-xs font-medium text-bright/62'>{tier.fit}</p> : null}
-                                <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent lane{tier.concurrency === 1 ? '' : 's'}.</p>
+                                <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
                                 {tier.features?.length ? (
                                     <div className='mt-2 flex flex-wrap gap-1'>
                                         {tier.features.map((feature) => (
@@ -316,7 +321,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                     </div>
                 </div>
                 <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Recent run economics</h3>
+                    <h3 className='text-sm font-semibold text-bright/84'>Recent worker runs</h3>
                     <div className='mt-3 max-h-64 space-y-2 overflow-auto'>
                         {economics.recentRuns.length ? economics.recentRuns.map((run) => (
                             <div key={run.id} className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] p-3 text-xs text-bright/52 sm:grid-cols-[1fr_auto]'>
@@ -329,7 +334,7 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                                     {formatNok(run.estimatedCostNok)} NOK
                                 </div>
                             </div>
-                        )) : <p className='text-sm text-bright/45'>No recorded AI economics yet.</p>}
+                        )) : <p className='text-sm text-bright/45'>Worker telemetry updates as verified jobs finish.</p>}
                     </div>
                 </div>
             </div>
@@ -360,10 +365,10 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
             </div>
 
             <div className='mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across lanes`} />
+                <EconomicsStat icon={<Activity className='h-4 w-4' />} label='Queue capacity' value={`${reliability.capacity.totalAvailableSessions} open`} detail={`${reliability.capacity.totalActiveSessions} active, ${reliability.capacity.totalQueued} queued across workers`} />
                 <EconomicsStat icon={<Timer className='h-4 w-4' />} label='First output' value={formatDuration(reliability.promptTiming.p50FirstUsefulOutputMs)} detail={`p95 ${formatDuration(reliability.promptTiming.p95FirstUsefulOutputMs)} · ${reliability.promptTiming.sampleCount} runs`} />
                 <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified deploy' value={formatDuration(reliability.deployTiming.p50PromptToVerifiedDeployMs)} detail={`p95 ${formatDuration(reliability.deployTiming.p95PromptToVerifiedDeployMs)} · ${reliability.deployTiming.sampleCount} deploys`} />
-                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Cost / verified build' value={`${formatNok(reliability.costPerSuccessfulVerifiedBuildNok)} NOK`} detail='Cost per successful build or deploy proof' />
+                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Cost / verified build' value={`${formatNok(reliability.costPerSuccessfulVerifiedBuildNok)} NOK`} detail='Cost per successful build or deploy run' />
             </div>
 
             <div className='mt-4 grid gap-4 xl:grid-cols-[1fr_1.1fr]'>
@@ -379,7 +384,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                                     <span className='capitalize text-bright/76'>{row.kind}</span>
                                     <span className='text-bright/48'>{formatDuration(row.p50Ms)} / {formatDuration(row.p95Ms)} · {row.sampleCount}</span>
                                 </div>
-                            )) : <p className='text-sm text-bright/45'>No completed verification jobs yet.</p>}
+                            )) : <p className='text-sm text-bright/45'>Verification jobs are metering; p50/p95 rows update from completed runs.</p>}
                         </div>
                     </div>
 
@@ -392,13 +397,13 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                     </div>
 
                     <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
-                        <h4 className='text-sm font-semibold text-bright/84'>Failed proof categories</h4>
+                        <h4 className='text-sm font-semibold text-bright/84'>Failed verification categories</h4>
                         <div className='mt-3 flex flex-wrap gap-2'>
                             {reliability.failedProofCategories.length ? reliability.failedProofCategories.map((row) => (
                                 <span key={`${row.kind}-${row.category}`} className='rounded-full border border-red-300/15 bg-red-400/8 px-2.5 py-1 text-xs text-red-100/72'>
                                     {formatKind(row.category)} · {row.kind} · {row.count}
                                 </span>
-                            )) : <span className='rounded-full border border-emerald-300/15 bg-emerald-400/8 px-2.5 py-1 text-xs text-emerald-100/72'>No proof failures in this window</span>}
+                            )) : <span className='rounded-full border border-emerald-300/15 bg-emerald-400/8 px-2.5 py-1 text-xs text-emerald-100/72'>No verification failures in this window</span>}
                         </div>
                     </div>
                 </div>
@@ -406,7 +411,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                 <div className='grid gap-4'>
                     <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-bright/84'>Queue depth by lane/model</h4>
+                            <h4 className='text-sm font-semibold text-bright/84'>Queue depth by worker/model</h4>
                             <span className='text-xs text-bright/35'>{queuedRows.length} active buckets</span>
                         </div>
                         <div className='mt-3 max-h-52 space-y-2 overflow-auto'>
@@ -418,14 +423,14 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                                     </div>
                                     <span className='self-center text-sm font-semibold text-bright/82'>{row.count}</span>
                                 </div>
-                            )) : <p className='text-sm text-bright/45'>No queued or running verification jobs.</p>}
+                            )) : <p className='text-sm text-bright/45'>Verification queue is clear; active and queued runs stream here.</p>}
                         </div>
                     </div>
 
                     <div className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
                         <div className='flex items-center justify-between gap-3'>
-                            <h4 className='text-sm font-semibold text-bright/84'>GPU lane health</h4>
-                            <span className='text-xs text-bright/35'>{reliability.gpuLanes.length} lanes</span>
+                            <h4 className='text-sm font-semibold text-bright/84'>GPU worker health</h4>
+                            <span className='text-xs text-bright/35'>{reliability.gpuLanes.length} workers</span>
                         </div>
                         <div className='mt-3 grid gap-2 md:grid-cols-2'>
                             {reliability.gpuLanes.length ? reliability.gpuLanes.map((lane) => (
@@ -444,7 +449,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
                                         <LaneMetric icon={<Timer className='h-3.5 w-3.5' />} value={formatCompact(lane.contextMaxTokens)} label='context' />
                                     </div>
                                 </article>
-                            )) : <p className='text-sm text-bright/45'>No live GPU lane metrics are connected.</p>}
+                            )) : <p className='text-sm text-bright/45'>GPU telemetry updates with load, power, and session capacity for connected model workers.</p>}
                         </div>
                     </div>
                 </div>
@@ -453,10 +458,10 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
     )
 }
 
-function ServiceGatePanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
+function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialReadiness'] }) {
     const tone = readiness.overallState === 'commercially_ready'
         ? 'bg-emerald-400/8 text-emerald-100/80 outline-emerald-300/15'
-        : readiness.overallState === 'on_track'
+        : readiness.overallState === 'evidence_gaps'
             ? 'bg-sky-400/8 text-sky-100/80 outline-sky-300/15'
             : 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
 
@@ -464,14 +469,14 @@ function ServiceGatePanel({ readiness }: { readiness: AIEconomics['commercialRea
         <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
-                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Service gates</p>
-                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Launch blockers and next actions</h3>
-                    <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>{readiness.conclusion}</p>
+                    <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Worker operations</p>
+                    <h3 className='mt-1 text-lg font-semibold text-bright/90'>Autonomous job lanes</h3>
+                    <p className='mt-2 max-w-3xl text-sm leading-6 text-bright/52'>{operationsConclusion(readiness.conclusion)}</p>
                 </div>
                 <div className={`rounded-lg px-3 py-2 text-sm font-semibold outline ${tone}`}>
-                    {formatKind(readiness.overallState)}
+                    {operationsStateLabel(readiness.overallState)}
                     <p className='mt-1 text-xs font-normal opacity-80'>
-                        {readiness.achievedCount} achieved · {readiness.partialCount} partial · {readiness.measurableCount}/{readiness.totalCount} measurable
+                        {readiness.achievedCount} live · {readiness.partialCount} under review · {readiness.internalActionCount} operator actions · {readiness.measurableCount}/{readiness.totalCount} tracked
                     </p>
                 </div>
             </div>
@@ -481,19 +486,33 @@ function ServiceGatePanel({ readiness }: { readiness: AIEconomics['commercialRea
                     <article key={item.id} className='rounded-lg border border-bright/8 bg-bright/[0.025] p-4'>
                         <div className='flex items-start justify-between gap-3'>
                             <div>
-                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-bright/35'>Priority {item.priority}</p>
+                                <p className='text-xs font-medium uppercase tracking-[0.16em] text-bright/35'>Lane {item.priority}</p>
                                 <h4 className='mt-1 text-sm font-semibold text-bright/86'>{item.label}</h4>
                             </div>
                             <ReadinessBadge status={item.status} measurable={item.measurable} />
                         </div>
                         <div className='mt-3 space-y-1.5'>
                             {item.evidence.slice(0, 3).map((line) => (
-                                <p key={line} className='text-xs leading-5 text-bright/48'>{line}</p>
+                                <p key={line} className='text-xs leading-5 text-bright/48'>{operationsCopy(line)}</p>
                             ))}
                         </div>
-                        <div className='mt-3 rounded-md border border-bright/8 bg-black/18 px-3 py-2'>
-                            <p className='text-xs font-medium text-bright/72'>Next</p>
-                            <p className='mt-1 text-xs leading-5 text-bright/48'>{item.next}</p>
+                        <div className='mt-3 grid gap-2 rounded-md border border-bright/8 bg-black/18 px-3 py-2 text-xs leading-5'>
+                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
+                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Owner</span>
+                                <span className='text-bright/62'>{item.owner}</span>
+                            </div>
+                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
+                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Runner</span>
+                                <span className='text-bright/62'>{operationsCopy(item.control)}</span>
+                            </div>
+                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
+                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Last run</span>
+                                <span className='text-bright/48'>{item.lastAttempt}</span>
+                            </div>
+                            <div className='grid gap-1 sm:grid-cols-[5.5rem_1fr]'>
+                                <span className='font-medium uppercase tracking-[0.12em] text-bright/36'>Now</span>
+                                <span className='text-bright/48'>{operationsCopy(item.action)}</span>
+                            </div>
                         </div>
                     </article>
                 ))}
@@ -503,18 +522,40 @@ function ServiceGatePanel({ readiness }: { readiness: AIEconomics['commercialRea
 }
 
 function ReadinessBadge({ status, measurable }: { status: AIEconomics['commercialReadiness']['items'][number]['status'], measurable: boolean }) {
-    const label = status === 'achieved' ? 'Achieved' : status === 'partial' ? 'Partial' : 'Needs work'
-    const tone = status === 'achieved'
+    const label = status === 'operational' ? 'Live' : status === 'evidence_gap' ? 'Warming up' : 'Action queued'
+    const tone = status === 'operational'
         ? 'border-emerald-300/15 bg-emerald-400/8 text-emerald-100/76'
-        : status === 'partial'
+        : status === 'evidence_gap'
             ? 'border-sky-300/15 bg-sky-400/8 text-sky-100/76'
             : 'border-amber-300/15 bg-amber-400/8 text-amber-100/76'
     return (
         <div className='flex flex-col items-end gap-1'>
             <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>{label}</span>
-            <span className='text-[10px] uppercase tracking-[0.12em] text-bright/32'>{measurable ? 'measured' : 'needs proof'}</span>
+            <span className='text-[10px] uppercase tracking-[0.12em] text-bright/32'>{measurable ? 'tracked' : 'connecting'}</span>
         </div>
     )
+}
+
+function operationsConclusion(value: string) {
+    return operationsCopy(value)
+        .replace(/\bdesign QA\b/gi, 'design checks')
+        .replace(/\bmeasured production samples\b/gi, 'live production samples')
+        .replace(/\bcommercially strong\b/gi, 'ready for customers')
+}
+
+function operationsStateLabel(value: AIEconomics['commercialReadiness']['overallState']) {
+    if (value === 'commercially_ready') return 'Customer-ready'
+    if (value === 'internal_action_required') return 'Operator action'
+    return 'Operator review'
+}
+
+function operationsCopy(value: string) {
+    return value
+        .replace(/\binstrumented\b/gi, 'tracked')
+        .replace(/\binstrumenting\b/gi, 'connecting')
+        .replace(/\bService gates\b/gi, 'Worker operations')
+        .replace(/\bgates\b/gi, 'lanes')
+        .replace(/\bgate\b/gi, 'lane')
 }
 
 function SuccessRate({ row, fallback }: { row?: AIEconomics['reliability']['buildDeploy'][number], fallback: string }) {
@@ -626,7 +667,7 @@ function formatDate(value: string) {
 }
 
 function formatDuration(value: number) {
-    if (!value) return 'n/a'
+    if (!value) return 'metering'
     if (value < 1000) return `${Math.round(value)} ms`
     const seconds = value / 1000
     if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)} s`
