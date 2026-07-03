@@ -9,7 +9,18 @@ type WorkflowResult = {
     message: string
 }
 
-export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: { tenantId: string, organizationId?: string, initialTerms: string[] }) {
+type WorkflowTelemetry = {
+    activeSourceCount: number
+    sourceCount: number
+    captureCount: number
+    watchlistMatchCount: number
+    latestRunStatus?: string
+    latestRunCaptureCount?: number
+    alertCount: number
+    deliveryCount: number
+}
+
+export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
     const [terms, setTerms] = useState(initialTerms.join('\n'))
     const [webhookUrl, setWebhookUrl] = useState('')
@@ -61,7 +72,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
 
         const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim() || 'new victim claim'
+        const claimedData = claimData.trim() || 'new exposure report'
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
@@ -69,7 +80,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
             const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
             if (!ingest.ok) throw new Error(ingest.message)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('No claim was accepted. Check the actor and victim fields.')
+            if (!accepted) throw new Error('No exposure report was accepted. Check the actor and company fields.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -79,7 +90,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
             setTerms(nextTerms)
             setClaimData('')
             setClaimUrl('')
-            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} claim(s). Rebuilt ${savedAlertCount} alert(s).` : rebuild.message })
+            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report(s). Rebuilt ${savedAlertCount} alert(s).` : rebuild.message })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -94,14 +105,14 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
 
         const actor = claimActor.trim()
         const company = claimCompany.trim()
-        const claimedData = claimData.trim() || 'new victim claim'
+        const claimedData = claimData.trim() || 'new exposure report'
         const url = claimUrl.trim()
         const nextTerms = ensureTerm(terms, company)
 
         try {
             const ingest = await ingestClaim({ actor, company, claimedData, url }, scope)
             const accepted = typeof ingest.accepted === 'number' ? ingest.accepted : 0
-            if (!accepted) throw new Error('No claim was accepted. Check the actor and victim fields.')
+            if (!accepted) throw new Error('No exposure report was accepted. Check the actor and company fields.')
 
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
@@ -140,7 +151,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
             setTerms(nextTerms)
             setClaimData('')
             setClaimUrl('')
-            setResult({ ok: true, message: `Ingested ${accepted} claim(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            setResult({ ok: true, message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId))
             } else {
@@ -400,63 +411,86 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
     const sourceReady = sourceTarget.trim().length > 0
     const claimReady = claimActor.trim().length > 0 && claimCompany.trim().length > 0
     const busy = busyAction !== null
+    const sourceCount = telemetry?.sourceCount ?? 0
+    const activeSourceCount = telemetry?.activeSourceCount ?? 0
+    const captureCount = telemetry?.captureCount ?? 0
+    const alertCount = telemetry?.alertCount ?? 0
+    const deliveryCount = telemetry?.deliveryCount ?? 0
+    const latestRunStatus = telemetry?.latestRunStatus || ''
+    const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
     const saveDisabledReason = termCount ? '' : 'Add at least one company, domain, supplier, or product term first.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
     const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
 
     return (
-        <div data-dwm-workflow-runbook className='grid gap-4'>
-            <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                <RouteStateCard label='Watch terms' value={String(termCount)} detail={termCount ? 'Ready for matching' : 'Add terms before saving'} tone={termCount ? 'ok' : 'warn'} />
-                <RouteStateCard label='Webhook URL' value={webhookConfigured ? 'Ready to test' : 'Not entered'} detail={webhookConfigured ? 'Test before customer send' : 'Optional, but required for test send'} tone={webhookConfigured ? 'ok' : 'warn'} />
-                <RouteStateCard label='Source target' value={sourceReady ? 'Ready to submit' : 'No input'} detail={sourceReady ? sourceTarget.trim() : 'Add a public channel or use source expansion'} tone={sourceReady ? 'ok' : 'neutral'} />
-                <RouteStateCard label='Last action' value={result ? result.ok ? 'Completed' : 'Review' : 'Waiting'} detail={result?.message || 'Run a step below to see the outcome here'} tone={result ? result.ok ? 'ok' : 'bad' : 'neutral'} />
+        <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 text-[#edf4ff]'>
+            <section className='flex flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>Collection command center</p>
+                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-[#edf4ff]'>First-run path</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Use this sequence when there are no alerts yet: define matching terms, ingest source evidence, rebuild alerts, open a case, then test delivery.</p>
+                </div>
+                {result ? (
+                    <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>
+                        {result.message}
+                    </p>
+                ) : null}
             </section>
 
-            <section className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-                <div className='flex flex-wrap items-start justify-between gap-3'>
-                    <div>
-                        <h2 className='text-base font-semibold text-ui-text'>First-run path</h2>
-                        <p className='mt-1 text-sm leading-6 text-ui-muted'>Define matching terms, ingest source evidence, rebuild alerts, open a case, then test delivery.</p>
-                    </div>
-                    {result ? (
-                        <p data-dwm-workflow-result className={`rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'}`}>
-                            {result.message}
-                        </p>
-                    ) : null}
-                </div>
-                <div className='mt-4 grid gap-2 md:grid-cols-4'>
-                    <RunbookStep step='1' title='Terms' detail='Name the company, domains, suppliers, brands, and products that should open a case.' state={termCount ? 'ready' : 'needed'} />
-                    <RunbookStep step='2' title='Sources' detail='Use approved public Telegram and metadata sources; private invites stay manual.' state='ready' />
-                    <RunbookStep step='3' title='Cases' detail='Rebuild alerts after changing terms or collecting sources.' state={termCount ? 'ready' : 'waiting'} />
-                    <RunbookStep step='4' title='Delivery' detail='Test an HTTPS webhook before sending customer notifications.' state={webhookConfigured ? 'ready' : 'waiting'} />
+            <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-5'>
+                <RouteStateCard label='Watch terms' value={String(termCount)} detail={termCount ? 'Ready for matching' : 'Add terms before saving'} tone={termCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
+                <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
+                <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
+            </section>
+
+            <section className='overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
+                <div className='overflow-x-auto'>
+                    <table className='w-full min-w-[820px] text-left text-xs'>
+                        <thead className='bg-[#0b121e] text-[10px] uppercase text-[#8fa0ba]'>
+                            <tr>
+                                <th className='px-3 py-2 font-semibold'>Stage</th>
+                                <th className='px-3 py-2 font-semibold'>Current state</th>
+                                <th className='px-3 py-2 font-semibold'>Use next</th>
+                                <th className='px-3 py-2 font-semibold'>Operator command</th>
+                            </tr>
+                        </thead>
+                        <tbody className='divide-y divide-[#1f2c42]'>
+                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'No terms staged'} next='Company, domain, supplier, brand, and product terms define alert scope.' command='Save and rebuild alerts' tone={termCount ? 'ok' : 'warn'} />
+                            <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
+                            <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
+                            <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts in queue` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with provenance.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
+                            <RouteStepRow stage='5. Delivery' state={deliveryCount ? `${deliveryCount} delivery attempts` : webhookConfigured ? 'Webhook URL staged' : 'No delivery tested'} next='Use dry-run before sending customer notifications.' command='Test webhook / Send webhooks' tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
+                        </tbody>
+                    </table>
                 </div>
             </section>
 
             <div className='grid gap-4 xl:grid-cols-2 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]'>
-                <form onSubmit={saveWatchlist} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <form onSubmit={saveWatchlist} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Customer watchlist</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Terms matched against collected evidence before an alert enters review or delivery.</p>
+                            <h2 className='text-base font-semibold text-[#edf4ff]'>Customer watchlist</h2>
+                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Terms matched against collected evidence before an alert enters review or delivery.</p>
                         </div>
-                        <BellRing className='h-5 w-5 text-ui-primary' />
+                        <BellRing className='h-5 w-5 text-[#9db8ff]' />
                     </div>
                     <textarea
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
                         placeholder={'acme.com\nAcme Payments\nNorthwind Supplier'}
-                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <input
                         value={webhookUrl}
                         onChange={event => setWebhookUrl(event.target.value)}
                         placeholder='Webhook URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(saveDisabledReason)} title={saveDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(saveDisabledReason)} title={saveDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Save and rebuild alerts
                         </button>
@@ -467,46 +501,46 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                     </div>
-                    {saveDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-warning'>{saveDisabledReason}</p> : null}
-                    {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-muted'>{webhookTestDisabledReason}</p> : null}
+                    {saveDisabledReason ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>{saveDisabledReason}</p> : null}
+                    {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Metadata claim intake</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Create a metadata-only source capture, add the victim to the watchlist, and rebuild alerts.</p>
+                            <h2 className='text-base font-semibold text-[#edf4ff]'>Exposure intake</h2>
+                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Create a metadata-only capture, add the affected company to the watchlist, and rebuild alerts.</p>
                         </div>
-                        <ShieldCheck className='h-5 w-5 text-ui-primary' />
+                        <ShieldCheck className='h-5 w-5 text-[#9db8ff]' />
                     </div>
                     <div className='mt-4 grid gap-3 sm:grid-cols-2'>
                         <input
                             value={claimActor}
                             onChange={event => setClaimActor(event.target.value)}
                             placeholder='Actor'
-                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                            className='h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                         />
                         <input
                             value={claimCompany}
                             onChange={event => setClaimCompany(event.target.value)}
                             placeholder='Affected company or domain'
-                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                            className='h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                         />
                     </div>
                     <input
                         value={claimData}
                         onChange={event => setClaimData(event.target.value)}
-                        placeholder='Claimed data, sector, or access type'
-                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        placeholder='Exposure details, sector, or access type'
+                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <input
                         value={claimUrl}
                         onChange={event => setClaimUrl(event.target.value)}
                         placeholder='Source URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
                             Ingest and rebuild
                         </button>
@@ -514,28 +548,28 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
                             Open case
                         </WorkflowButton>
                     </div>
-                    {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{claimDisabledReason}</p> : null}
+                    {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{claimDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={submitSource} className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+                <form onSubmit={submitSource} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-ui-text'>Telegram source request</h2>
-                            <p className='mt-1 text-sm leading-6 text-ui-muted'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
+                            <h2 className='text-base font-semibold text-[#edf4ff]'>Telegram source request</h2>
+                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
                         </div>
-                        <Plus className='h-5 w-5 text-ui-primary' />
+                        <Plus className='h-5 w-5 text-[#9db8ff]' />
                     </div>
                     <input
                         value={sourceTarget}
                         onChange={event => setSourceTarget(event.target.value)}
                         placeholder='@breach_drop_house or https://t.me/channel'
-                        className='mt-4 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
+                        className='mt-4 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
-                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
+                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
                         {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                         Submit source
                     </button>
-                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-muted'>{sourceDisabledReason}</p> : null}
+                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{sourceDisabledReason}</p> : null}
                 </form>
             </div>
         </div>
@@ -596,47 +630,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function RunbookStep({ step, title, detail, state }: { step: string, title: string, detail: string, state: 'ready' | 'needed' | 'waiting' }) {
-    const toneClass = state === 'ready'
-        ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
-        : state === 'needed'
-            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
-            : 'border-ui-border bg-ui-raised text-ui-muted'
+function RouteStepRow({ stage, state, next, command, tone }: { stage: string, state: string, next: string, command: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
+    const toneClass = tone === 'ok'
+        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        : tone === 'warn'
+            ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]'
+            : tone === 'bad'
+                ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
+                : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
-            <div className='flex items-center justify-between gap-3'>
-                <span className='grid h-7 w-7 place-items-center rounded-full bg-ui-panel text-xs font-semibold text-ui-text'>{step}</span>
-                <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>{state}</span>
-            </div>
-            <h3 className='mt-3 text-sm font-semibold text-ui-text'>{title}</h3>
-            <p className='mt-1 line-clamp-3 text-xs leading-5 text-ui-muted'>{detail}</p>
-        </div>
+        <tr className='align-top transition hover:bg-[#111b2b]'>
+            <td className='px-3 py-3'>
+                <p className='text-sm font-semibold text-[#edf4ff]'>{stage}</p>
+            </td>
+            <td className='px-3 py-3'>
+                <span className={`inline-flex max-w-full rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>
+                    <span className='truncate' title={state}>{state}</span>
+                </span>
+            </td>
+            <td className='px-3 py-3 text-sm leading-5 text-[#aab7cc]'>{next}</td>
+            <td className='px-3 py-3 font-semibold text-[#dbe7ff]'>{command}</td>
+        </tr>
     )
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
-        ? 'text-ui-success'
+        ? 'text-[#9cf0bc]'
         : tone === 'warn'
-            ? 'text-ui-warning'
+            ? 'text-[#ffd58a]'
             : tone === 'bad'
-                ? 'text-ui-danger'
-                : 'text-ui-primary'
+                ? 'text-[#ffb598]'
+                : 'text-[#9db8ff]'
     return (
-        <div className='rounded-lg border border-ui-border bg-ui-panel p-4'>
-            <div className='flex items-center justify-between gap-3 text-ui-muted'>
+        <div className='rounded-lg border border-[#26344d] bg-[#101827] p-4'>
+            <div className='flex items-center justify-between gap-3 text-[#8fa0ba]'>
                 <p className='text-xs font-semibold uppercase'>{label}</p>
                 <Activity className='h-4 w-4' />
             </div>
             <p className={`mt-2 truncate text-lg font-semibold ${toneClass}`}>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-muted'>{detail}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#8fa0ba]'>{detail}</p>
         </div>
     )
 }
 
 function WorkflowButton({ busy, disabled, disabledReason, icon, onClick, children }: { busy: boolean, disabled: boolean, disabledReason?: string, icon: React.ReactNode, onClick: () => void, children: string }) {
     return (
-        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-4 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'>
             {busy ? <Loader2 className='h-4 w-4 animate-spin' /> : icon}
             {children}
         </button>

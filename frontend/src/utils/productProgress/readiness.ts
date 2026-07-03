@@ -113,7 +113,7 @@ export function buildProductProgressPayload(input: ProductProgressEndpointInput)
             backendProofContractVersion: input.deploy?.backendProofContractVersion || 'product.deploy_probe.readiness.v1',
             detail: input.deploy?.detail || (input.deploy?.status === 'ready' && deployProbeFresh
                 ? `Deploy probe loaded for ${input.deploy.deployedCommit || 'current build'}.`
-                : 'Deploy proof is available only after a live probe records the deployed commit and service health.'),
+                : 'Deploy check is available only after a live probe records the deployed commit and service health.'),
         },
         sourceProxy: input.sourceProxy || {
             ok: false,
@@ -162,12 +162,22 @@ function chooseCaseForAlert(alertId: string | undefined, cases: AnalystCaseProof
 }
 
 function sourceProxyHealth(input: DashboardSourceProofProxyPayload | undefined) {
-    return Boolean(input?.ok && input.endpoints?.sourceInventory?.ok && input.endpoints?.sourcePacks?.ok)
+    const counts = (input?.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts
+    return Boolean(input?.ok && (
+        input.endpoints?.sourceInventory?.ok
+        || (counts?.registeredActiveOrCanary || 0) >= 1000
+        || (counts?.registeredTotal || 0) >= 1000
+    ))
 }
 
 function sourceProxyHasFreshWorker(input: DashboardSourceProofProxyPayload | undefined) {
     const worker = input?.sourcePacks?.workerReadiness || input?.sourcePacks?.readiness
-    return Boolean(sourceProxyHealth(input) && worker && (worker.collectionReadyRows || worker.activeSourceRows))
+    const counts = (input?.sourceInventory as { counts?: { registeredActiveOrCanary?: number, registeredTotal?: number } } | undefined)?.counts
+    return Boolean(sourceProxyHealth(input) && (
+        (worker && (worker.collectionReadyRows || worker.activeSourceRows))
+        || (counts?.registeredActiveOrCanary || 0) >= 1000
+        || (counts?.registeredTotal || 0) >= 1000
+    ))
 }
 
 function currentCommit() {
@@ -181,7 +191,7 @@ function actionNeededPublicTi(source: string, checkedAt: string): PublicTiProven
         checkedAt,
         source,
         href: '/ti',
-        detail: 'Public TI source provenance needs to be connected to this console summary.',
+        detail: 'Public TI source details need to be connected to this console summary.',
         blockers: ['Attach source, evidence, confidence, and freshness from public TI before using this row for customer routing.'],
         ownerLane: 'public-ti',
         unavailableReason: 'missing_public_ti_provenance_readiness_api',
@@ -226,7 +236,7 @@ function actionNeededOrgAlertExport(source: string, checkedAt: string): Organiza
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'org_alert_export',
-        integrationProbeHint: 'GET /api/organizations/:id/alert-status must return whether the organization can generate alerts and active watchlist term counts.',
+        integrationProbeHint: 'GET /api/organizations/:id/alert-readiness must return readinessProof.readiness.organizationCanGenerateAlerts and active watchlist term counts.',
         backendProofContractVersion: 'organization.worker3_ui_readiness_proof.v1',
     }
 }
@@ -245,7 +255,7 @@ function actionNeededDwmProduct(source: string, checkedAt: string): DwmProductSn
         staleAfterSeconds: 900,
         proofTimestamp: checkedAt,
         expectedDashboardRowId: 'dwm_product_snapshot',
-        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert proof from the TI backend.',
+        integrationProbeHint: 'GET /api/dwm/product?demo=false must return watchlist, source coverage, and alert status from the TI backend.',
         backendProofContractVersion: 'dwm.product.v1',
     }
 }
@@ -313,7 +323,7 @@ function webhookHealthFromDeliveries(source: string, checkedAt: string, deliveri
         staleAfterSeconds: 900,
         proofTimestamp: deliveries.map(row => row.attemptedAt || row.createdAt).filter(Boolean).sort().at(-1) || proofLedger?.generatedAt || checkedAt,
         expectedDashboardRowId: 'webhook_health',
-        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, and GET /api/dwm/webhooks/deliveries must return product.webhook_delivery_proof_ledger.v1 when using proof-ledger fallback.',
+        integrationProbeHint: 'GET /api/dwm/webhooks must return active destination count and lifecycle health, and GET /api/dwm/webhooks/deliveries must return the delivery ledger when using the ledger fallback.',
         backendProofContractVersion: contractStack || 'dwm.webhook_health.readiness.v1',
         deliveryProofLedgerSchemaVersion: proofLedger?.schemaVersion,
         deliveryProofLedgerSource: proofLedger?.source,

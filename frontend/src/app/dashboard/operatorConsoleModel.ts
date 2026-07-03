@@ -2337,7 +2337,7 @@ function productReadinessBlockerMetadata(item: WorkbenchProductReadinessItem): {
                 workflowBlocker: 'Alert generation',
                 customerImpact: item.status === 'ready'
                     ? 'Analysts can select live alerts with evidence from the dashboard queue.'
-                    : 'Analysts wait for live alert and evidence lanes before using rows as customer evidence.',
+                    : 'Inspect generation readiness before treating fallback rows as customer evidence.',
                 evidenceProvenance,
             }
         case 'webhook_delivery':

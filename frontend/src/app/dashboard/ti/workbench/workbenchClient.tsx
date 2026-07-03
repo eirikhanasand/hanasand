@@ -470,6 +470,10 @@ type WorkbenchApiPayload = {
         latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
         deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
     }
+    deliveryProof?: {
+        latestDelivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
+        deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
+    }
     testResult?: {
         delivery?: Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }
         deliveries?: Array<Partial<WorkbenchDeliveryEvidence> & { dryRun?: boolean }>
@@ -1402,10 +1406,10 @@ function actionRailRows(selected: WorkbenchCase | undefined, orgContext: Workben
         rows.push({
             id: 'open_alert_detail',
             label: 'Open alert detail',
-            detail: selected.persistent ? `Open ${alertDetailHref}.` : 'Persisted alert detail is syncing before this row can open.',
+            detail: selected.persistent ? `Open ${alertDetailHref}.` : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
             tone: selected.persistent ? 'ready' : 'blocked',
             href: selected.persistent ? alertDetailHref : undefined,
-            disabledReason: selected.persistent ? undefined : 'Persisted alert detail has not attached yet.',
+            disabledReason: selected.persistent ? undefined : 'Fallback alerts cannot load /api/dwm/alerts/:id.',
         })
         const sourceProfileHref = alertSourceProfileHref(alertDetail?.status === 'ready' ? alertDetail.detail : undefined)
         if (sourceProfileHref) {
@@ -2039,17 +2043,17 @@ function ProductReadinessPanel({ orgContext }: { orgContext?: WorkbenchOrgContex
                             key={item.id}
                             type='button'
                             onClick={() => setSelectedReadinessId(item.id)}
-                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#7aa5ff] bg-[#15284b] ' : 'border-[#27364f] bg-[#0f1726] hover:border-[#b9c7da] '}`}
+                            className={`flex min-w-0 flex-wrap items-start justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus:ring-2 focus:ring-[#9db8ff]/50 ${active ? 'border-[#7aa5ff] bg-[#15284b] dark:border-[#2d3a52] ' : 'border-[#27364f] bg-[#0f1726] hover:border-[#b9c7da] dark:border-[#2d3a52] dark:hover:border-[#3b4b68] '}`}
                             data-readiness-row-id={item.id}
                             data-readiness-state={operationalState}
                             data-readiness-blocker-count={item.blockerCount ?? (item.status === 'ready' ? 0 : 1)}
                             data-readiness-deep-link-target={item.deepLinkTarget || item.href || ''}
-                            data-readiness-checked-at={item.proofTimestamp || item.checkedAt || ''}
+                            data-readiness-proof-timestamp={item.proofTimestamp || item.checkedAt || ''}
                             data-readiness-unavailable-reason={item.unavailableReason || (item.status === 'unavailable' ? item.source : '')}
                             data-readiness-stale-after-seconds={item.staleAfterSeconds ?? ''}
                             data-readiness-expected-dashboard-row-id={item.expectedDashboardRowId || ''}
                             data-readiness-integration-probe-hint={item.integrationProbeHint || ''}
-                            data-readiness-backend-contract-version={customerOperationalText(item.backendProofContractVersion || '')}
+                            data-readiness-backend-proof-contract-version={customerOperationalText(item.backendProofContractVersion || '')}
                             data-readiness-owner-lane={item.ownerLane || ''}
                             data-readiness-operator-action={item.operatorAction || ''}
                             data-readiness-workflow-blocker={item.workflowBlocker || ''}
@@ -2554,7 +2558,7 @@ function AlertWorkflowReadiness({ detail }: { detail: AlertDetailPayload }) {
     return (
         <div className='rounded-lg border border-[#27364f] bg-[#0b121e] p-3'>
             <div className='flex flex-wrap items-center gap-2'>
-                <h4 className='text-sm font-semibold text-[#edf4ff]'>Workflow lane</h4>
+                <h4 className='text-sm font-semibold text-[#edf4ff]'>Workflow guard</h4>
                 <span className={workflowStatusClass(readiness?.ready === false || blockerCodes.length ? 'blocked' : 'ready')}>{readiness?.ready === false || blockerCodes.length ? 'syncing' : 'ready'}</span>
                 {readiness?.action && <span className='rounded-full bg-[#0f1726] px-2 py-0.5 text-[11px] font-semibold text-[#aab7cc]'>{label(readiness.action)}</span>}
             </div>
@@ -3508,6 +3512,8 @@ function deliveryCandidatesFromPayload(payload: WorkbenchApiPayload | undefined)
         ...(payload.deliveryEvidence || []),
         payload.deliveryStatus?.latestDelivery,
         ...(payload.deliveryStatus?.deliveries || []),
+        payload.deliveryProof?.latestDelivery,
+        ...(payload.deliveryProof?.deliveries || []),
         payload.testResult?.delivery,
         ...(payload.testResult?.deliveries || []),
     ]
@@ -3685,14 +3691,14 @@ function sendDeliveryDisabledReason(item: WorkbenchCase, orgContext: WorkbenchOr
 function orgInviteDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
     if (!orgContext?.organization) return 'Select an organization before inviting a teammate.'
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
-    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled for this member or visibility scope.'
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Invite is disabled because the case API marked this member read-only or visibility-blocked.'
     return ''
 }
 
 function watchlistMutationDisabledReason(orgContext: WorkbenchOrgContext | undefined, caseDetail: CaseDetailState | undefined) {
     if (!orgContext?.createWatchlistAction) return orgContext?.readiness.blockedReasons[0] || 'Connect the organization watchlist service before saving shared terms.'
     const access = caseDetail?.status === 'ready' ? caseDetail.detail.access : undefined
-    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Watchlist update is disabled for this member or visibility scope.'
+    if (access?.readOnly === true || access?.visibilityDecision?.allowed === false) return 'Watchlist update is disabled because the case API marked this member read-only or visibility-blocked.'
     return ''
 }
 
@@ -3838,7 +3844,7 @@ function webhookDeliveryResultMessage(payload: Awaited<ReturnType<typeof readJso
 function alertReplayResultMessage(payload: Awaited<ReturnType<typeof readJson>>, item: WorkbenchCase) {
     const blockerCodes = [...(payload.workflowExecutionReadiness?.blockerCodes || []), ...(payload.downstreamHandoff?.blockerCodes || [])]
         .filter((code, index, source) => Boolean(code) && source.indexOf(code) === index)
-    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay is checking workflow lanes: ${blockerCodes.join(', ') || 'workflow lane'}.`
+    if (payload.workflowExecutionReadiness?.ready === false || blockerCodes.length) return `Replay blocked by ${blockerCodes.join(', ') || 'workflow lane'}.`
     const alertId = stringValue(payload.alert?.id) || item.id
     const replayCount = numberValue(payload.alert?.replayCount)
     const replayedAt = stringValue(payload.alert?.lastReplayedAt || payload.alert?.updatedAt)

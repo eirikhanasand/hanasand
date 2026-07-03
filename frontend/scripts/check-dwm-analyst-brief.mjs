@@ -66,7 +66,7 @@ for (const token of [
     'Use this sequence when there are no alerts yet',
     'Add at least one company, domain, supplier, or product term first.',
     'Enter an HTTPS webhook URL before testing delivery.',
-    'RunbookStep',
+    'RouteStepRow',
     'disabledReason',
 ]) {
     assert.ok(workflowSource.includes(token), `DWM workflow actions missing practical runbook token: ${token}`)
