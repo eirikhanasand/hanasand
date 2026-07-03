@@ -290,6 +290,36 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
         }
     }
 
+    async function sendWebhook(dryRun: boolean) {
+        const targetAlertId = caseRecord?.alertId || alertId
+        if (!targetAlertId) {
+            setMessage({ ok: false, text: 'This case is missing an alert id.' })
+            return
+        }
+        setBusy(dryRun ? 'webhook-test' : 'webhook-send')
+        setMessage(null)
+        try {
+            const response = await fetch('/api/dwm/webhooks/deliver', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    organizationId: caseRecord?.organizationId || organizationId,
+                    alertId: targetAlertId,
+                    limit: 1,
+                    dryRun,
+                }),
+            })
+            const payload = await response.json().catch(() => ({}))
+            if (!response.ok) throw new Error(payload.error?.message || response.statusText)
+            setMessage({ ok: true, text: dryRun ? 'Webhook test recorded.' : 'Webhook delivery sent.' })
+            await load()
+        } catch (error) {
+            setMessage({ ok: false, text: error instanceof Error ? error.message : 'Webhook delivery failed.' })
+        } finally {
+            setBusy(null)
+        }
+    }
+
     if (state.loading && !state.detail) {
         return (
             <main className='grid min-h-[70vh] place-items-center rounded-lg border border-[#26344d] bg-[#0b121e] text-[#dbe7ff]'>
@@ -406,6 +436,14 @@ export function DwmCaseDetailClient({ caseId, organizationId, alertId }: { caseI
                                     {latestDelivery.error ? <p className='rounded-lg border border-[#7a3520] bg-[#2c160f] p-2 text-[#ffb598]'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
+                            <div className='mt-3 grid grid-cols-2 gap-2'>
+                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'>
+                                    {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
+                                </button>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] disabled:cursor-not-allowed disabled:opacity-60'>
+                                    {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Send
+                                </button>
+                            </div>
                         </Panel>
 
                         <Panel title='Case export' action={state.exportPayload?.exportChecksum ? 'ready' : 'pending'}>
