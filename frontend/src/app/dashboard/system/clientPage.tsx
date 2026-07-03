@@ -310,18 +310,18 @@ export default function SystemDashboard({
                     <div>
                         <div className='flex flex-wrap items-center gap-2'>
                             <StatusBadge fresh={telemetryFresh} />
-                            <span className='rounded-full border border-[#26344d] bg-[#0b121e] px-2.5 py-1 text-xs font-semibold text-[#dbe7ff]'>
+                            <span className='rounded-full border border-ui-border bg-ui-raised px-2.5 py-1 text-xs font-semibold text-ui-text'>
                                 Source: {sourceLabel(dockerTelemetry.source)}
                             </span>
                         </div>
-                        <p className='mt-2 text-sm text-[#aab7cc]'>Live poll {formatDateTime(lastUpdated)}</p>
+                        <p className='mt-2 text-sm text-ui-muted'>Live poll {formatDateTime(lastUpdated)}</p>
                         {dockerTelemetry.unavailable_reason && (
-                            <p className='mt-2 rounded-md border border-[#7a5618] bg-[#2a1c0e] px-3 py-2 text-sm text-[#ffd58a]'>
+                            <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 Docker telemetry degraded: {dockerTelemetry.unavailable_reason}
                             </p>
                         )}
                         {systemUnavailableReason && !systemSnapshot && (
-                            <p className='mt-2 rounded-md border border-[#7a5618] bg-[#2a1c0e] px-3 py-2 text-sm text-[#ffd58a]'>
+                            <p className='mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                                 Host telemetry degraded: {systemUnavailableReason}
                             </p>
                         )}
@@ -330,7 +330,7 @@ export default function SystemDashboard({
                         <button
                             type='button'
                             onClick={() => void refreshAll()}
-                            className='inline-flex h-9 items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 text-sm font-semibold text-[#dbe7ff] shadow-sm transition hover:border-[#5f86ff] hover:bg-[#162033]'
+                            className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised'
                         >
                             <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                             {refreshing ? 'Refreshing' : 'Refresh'}
@@ -339,14 +339,14 @@ export default function SystemDashboard({
                             type='button'
                             onClick={() => setAutoRefresh((value) => !value)}
                             className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold shadow-sm transition ${
-                                autoRefresh ? 'border-[#5f86ff] bg-[#122449] text-[#9db8ff]' : 'border-[#26344d] bg-[#101827] text-[#dbe7ff] hover:bg-[#162033]'
+                                autoRefresh ? 'border-ui-primary/35 bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:bg-ui-raised'
                             }`}
                         >
                             {autoRefresh ? <PauseCircle className='h-4 w-4' /> : <PlayCircle className='h-4 w-4' />}
                             Auto
                         </button>
-                        <label className='flex h-9 items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 text-sm font-semibold text-[#dbe7ff] shadow-sm'>
-                            <Timer className='h-4 w-4 text-[#8fa0ba]' />
+                        <label className='flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm'>
+                            <Timer className='h-4 w-4 text-ui-muted' />
                             <select
                                 value={refreshSeconds}
                                 onChange={(event) => setRefreshSeconds(Number(event.target.value))}
@@ -365,29 +365,29 @@ export default function SystemDashboard({
 
             <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
                 <div className='min-w-0'>
-                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
-                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
-                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{runningContainers}/{containers.length || 0} containers running</span>
-                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{runningVms} VMs running</span>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{runningContainers}/{containers.length || 0} containers running</span>
+                        <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{runningVms} VMs running</span>
                     </div>
-                    <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
                 </div>
                 <a
                     href={primaryHref}
-                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/35 sm:w-auto'
                     data-system-primary-action
                 >
                     {primaryActionLabel}
                 </a>
             </DashboardPanel>
 
-            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' data-system-summary-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-summary-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Host, container, and VM counters</span>
-                    <span className='text-xs font-medium text-[#8fa0ba]'>{sourceLabel(dockerTelemetry.source)}, {formatDateTime(lastUpdated)}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{sourceLabel(dockerTelemetry.source)}, {formatDateTime(lastUpdated)}</span>
                 </summary>
-                <section className='grid gap-3 border-t border-[#26344d] p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
+                <section className='grid gap-3 border-t border-ui-border p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
                     {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
                 </section>
             </details>
@@ -396,15 +396,15 @@ export default function SystemDashboard({
                 <DashboardPanel className='p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#edf4ff]'>Docker containers</h2>
-                            <p className='mt-1 text-sm text-[#aab7cc]'>{containers.length} reporting, {unavailableStats} streaming partial resource stats.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Docker containers</h2>
+                            <p className='mt-1 text-sm text-ui-muted'>{containers.length} reporting, {unavailableStats} streaming partial resource stats.</p>
                         </div>
                         <LinkButton href='/dashboard/logs' icon={<TerminalSquare className='h-4 w-4' />} label='Open Logs' />
                     </div>
                     {containers.length ? (
                         <div className='mt-4 overflow-x-auto'>
                             <table className='min-w-full text-left text-sm'>
-                                <thead className='border-b border-[#26344d] text-xs uppercase text-[#8fa0ba]'>
+                                <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                                     <tr>
                                         <th className='py-2 pr-3 font-semibold'>Container</th>
                                         <th className='px-3 py-2 font-semibold'>Health</th>
@@ -414,7 +414,7 @@ export default function SystemDashboard({
                                         <th className='py-2 pl-3 text-right font-semibold'>Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className='divide-y divide-[#1f2c42]'>
+                                <tbody className='divide-y divide-ui-border'>
                                     {containers.map((container) => (
                                         <ContainerRow
                                             key={container.id}
@@ -446,12 +446,12 @@ export default function SystemDashboard({
                 />
             </section>
 
-            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' data-system-related-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-system-related-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-panel sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Related operations</span>
-                    <span className='text-xs font-medium text-[#8fa0ba]'>{relatedLinks.length} linked consoles</span>
+                    <span className='text-xs font-medium text-ui-muted'>{relatedLinks.length} linked consoles</span>
                 </summary>
-                <div className='flex flex-wrap gap-2 border-t border-[#26344d] p-3' data-system-related-links>
+                <div className='flex flex-wrap gap-2 border-t border-ui-border p-3' data-system-related-links>
                     {relatedLinks.map((link) => <LinkButton key={link.href} {...link} />)}
                 </div>
             </details>
@@ -459,13 +459,13 @@ export default function SystemDashboard({
             <DashboardPanel className='p-4' id='system-vms' data-system-vms>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div>
-                        <h2 className='text-base font-semibold text-[#edf4ff]'>Virtual machines</h2>
-                        <p className='mt-1 text-sm text-[#aab7cc]'>{runningVms} running, {stoppedVms} stopped, {normalizedVms.length - runningVms - stoppedVms} checking status.</p>
+                        <h2 className='text-base font-semibold text-ui-text'>Virtual machines</h2>
+                        <p className='mt-1 text-sm text-ui-muted'>{runningVms} running, {stoppedVms} stopped, {normalizedVms.length - runningVms - stoppedVms} checking status.</p>
                     </div>
                     <button
                         type='button'
                         onClick={handleStopAll}
-                        className='inline-flex h-9 items-center gap-2 rounded-md border border-[#7a3520] bg-[#2c160f] px-3 text-sm font-semibold text-[#ffb598] transition hover:bg-[#371d14]'
+                        className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-danger/35 bg-ui-danger/10 px-3 text-sm font-semibold text-ui-danger transition hover:bg-ui-danger/15'
                     >
                         <StopCircle className='h-4 w-4' />
                         Stop all
@@ -474,7 +474,7 @@ export default function SystemDashboard({
                 {normalizedVms.length ? (
                     <div className='mt-4 overflow-x-auto'>
                         <table className='min-w-full text-left text-sm'>
-                            <thead className='border-b border-[#26344d] text-xs uppercase text-[#8fa0ba]'>
+                            <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                                 <tr>
                                     <th className='py-2 pr-3 font-semibold'>Name</th>
                                     <th className='px-3 py-2 font-semibold'>Owner</th>
@@ -484,7 +484,7 @@ export default function SystemDashboard({
                                     <th className='py-2 pl-3 text-right font-semibold'>Open</th>
                                 </tr>
                             </thead>
-                            <tbody className='divide-y divide-[#1f2c42]'>
+                            <tbody className='divide-y divide-ui-border'>
                                 {normalizedVms.map((vm) => {
                                     const latestMetrics = normalizedMetrics
                                         .filter((metric) => metric.name === vm.name)
@@ -522,11 +522,11 @@ function ContainerRow({
     const health = containerHealth(container)
 
     return (
-        <tr className={`align-top text-[#dbe7ff] ${selected ? 'bg-[#122449]' : ''}`}>
+        <tr className={`align-top text-ui-text ${selected ? 'bg-ui-primary/10' : ''}`}>
             <td className='py-3 pr-3'>
                 <button type='button' onClick={onSelect} className='text-left'>
-                    <span className='block font-semibold text-[#edf4ff]'>{container.name}</span>
-                    <span className='mt-1 block max-w-72 truncate text-xs text-[#8fa0ba]'>{container.image || container.id}</span>
+                    <span className='block font-semibold text-ui-text'>{container.name}</span>
+                    <span className='mt-1 block max-w-72 truncate text-xs text-ui-muted'>{container.image || container.id}</span>
                 </button>
             </td>
             <td className='px-3 py-3'><HealthPill health={health} /></td>
@@ -579,8 +579,8 @@ function ContainerDetails({
         <DashboardPanel className='p-4'>
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h2 className='truncate text-base font-semibold text-[#edf4ff]'>{container.name}</h2>
-                    <p className='mt-1 truncate text-sm text-[#aab7cc]'>{container.image || 'image pending'}</p>
+                    <h2 className='truncate text-base font-semibold text-ui-text'>{container.name}</h2>
+                    <p className='mt-1 truncate text-sm text-ui-muted'>{container.image || 'image pending'}</p>
                 </div>
                 <HealthPill health={health} />
             </div>
@@ -594,46 +594,46 @@ function ContainerDetails({
                 <Fact label='Stats updated' value={formatDateTime(container.stats_updated_at)} />
             </div>
 
-            <div className='mt-3 rounded-md border border-[#26344d] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
-                <p className='font-semibold text-[#edf4ff]'>Ports</p>
+            <div className='mt-3 rounded-md border border-ui-border bg-ui-raised p-3 text-sm text-ui-muted'>
+                <p className='font-semibold text-ui-text'>Ports</p>
                 <p className='mt-1'>{portLabel(container.ports)}</p>
             </div>
 
             <div className='mt-3 flex flex-wrap gap-2'>
-                <button type='button' onClick={onRefreshLogs} className='inline-flex h-9 items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 text-sm font-semibold text-[#dbe7ff] shadow-sm hover:bg-[#162033]'>
+                <button type='button' onClick={onRefreshLogs} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm hover:bg-ui-raised'>
                     <RefreshCcw className={`h-4 w-4 ${logsLoading ? 'animate-spin' : ''}`} />
                     Logs
                 </button>
-                <button type='button' onClick={onCopy} className='inline-flex h-9 items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 text-sm font-semibold text-[#dbe7ff] shadow-sm hover:bg-[#162033]'>
+                <button type='button' onClick={onCopy} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm hover:bg-ui-raised'>
                     <Copy className='h-4 w-4' />
                     Copy
                 </button>
-                <button type='button' onClick={onRestart} className='inline-flex h-9 items-center gap-2 rounded-md border border-[#7a5618] bg-[#2a1c0e] px-3 text-sm font-semibold text-[#ffd58a] shadow-sm hover:bg-[#342410]'>
+                <button type='button' onClick={onRestart} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 text-sm font-semibold text-ui-warning shadow-sm hover:bg-ui-warning/15'>
                     <RefreshCcw className='h-4 w-4' />
                     Restart
                 </button>
             </div>
 
-            <details className='mt-4 overflow-hidden rounded-md border border-[#26344d] bg-[#080f1a]' data-system-container-logs-disclosure>
-                <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#101827] focus-visible:ring-2 focus-visible:ring-[#7aa5ff]/35 [&::-webkit-details-marker]:hidden'>
+            <details className='mt-4 overflow-hidden rounded-md border border-ui-border bg-ui-canvas' data-system-container-logs-disclosure>
+                <summary className='flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/35 [&::-webkit-details-marker]:hidden'>
                     <span>Recent logs</span>
-                    <Link href={`/dashboard/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-[#9db8ff] hover:underline'>
+                    <Link href={`/dashboard/logs?service=${encodeURIComponent(container.name)}`} className='inline-flex items-center gap-1 text-xs font-semibold text-ui-primary hover:underline'>
                         Open feed
                         <ExternalLink className='h-3.5 w-3.5' />
                     </Link>
                 </summary>
                 {logsReason && (
-                    <p className='mx-3 mt-2 rounded-md border border-[#7a5618] bg-[#2a1c0e] px-3 py-2 text-sm text-[#ffd58a]'>{logsReason}</p>
+                    <p className='mx-3 mt-2 rounded-md border border-ui-warning/35 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>{logsReason}</p>
                 )}
-                <div className='max-h-72 overflow-auto border-t border-[#26344d] p-3 font-mono text-xs text-[#e4e7ec]' data-system-container-log-tail>
+                <div className='max-h-72 overflow-auto border-t border-ui-border p-3 font-mono text-xs text-ui-text' data-system-container-log-tail>
                     {logs.length ? logs.slice(0, 24).map((log) => (
                         <p key={log.id} className='mb-2 wrap-break-word'>
-                            <span className='text-[#98a2b3]'>{formatLogTime(log.created_at)}</span>{' '}
+                            <span className='text-ui-muted'>{formatLogTime(log.created_at)}</span>{' '}
                             <span className={logLevelClass(log.level)}>{log.level}</span>{' '}
                             {log.message}
                         </p>
                     )) : (
-                        <p className='text-[#98a2b3]'>{logsLoading ? 'Loading logs...' : 'Log stream is live; no recent line for this container.'}</p>
+                        <p className='text-ui-muted'>{logsLoading ? 'Loading logs...' : 'Log stream is live; no recent line for this container.'}</p>
                     )}
                 </div>
             </details>
@@ -644,14 +644,14 @@ function ContainerDetails({
 function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
     const owner = vm.owner || vm.created_by || 'Unassigned'
     return (
-        <tr className='text-[#dbe7ff]'>
-            <td className='py-3 pr-3 font-semibold text-[#edf4ff]'>{vm.name}</td>
+        <tr className='text-ui-text'>
+            <td className='py-3 pr-3 font-semibold text-ui-text'>{vm.name}</td>
             <td className='px-3 py-3'>{owner}</td>
             <td className='px-3 py-3'>{metrics ? formatPercent(metrics.cpu_usage_percent) : vm.limits_cpu || 'checking'}</td>
             <td className='px-3 py-3'>{metrics ? `${metrics.ram_used_mb}/${metrics.ram_total_mb} MB` : vm.limits_memory || 'checking'}</td>
             <td className='px-3 py-3'>{vm.status || 'Checking'}</td>
             <td className='py-3 pl-3 text-right'>
-                <Link href={`/dashboard/vms/${vm.name}`} className='text-sm font-semibold text-[#9db8ff] hover:underline'>Open</Link>
+                <Link href={`/dashboard/vms/${vm.name}`} className='text-sm font-semibold text-ui-primary hover:underline'>Open</Link>
             </td>
         </tr>
     )
@@ -659,28 +659,28 @@ function VmTableRow({ vm, metrics }: { vm: VM, metrics?: VMMetrics }) {
 
 function SummaryCard({ item }: { item: SystemSummary }) {
     const tone = item.tone === 'bad'
-        ? 'text-[#ffb598]'
+        ? 'text-ui-danger'
         : item.tone === 'warn'
-            ? 'text-[#ffd58a]'
+            ? 'text-ui-warning'
             : item.tone === 'ok'
-                ? 'text-[#9cf0bc]'
-                : 'text-[#9db8ff]'
+                ? 'text-ui-success'
+                : 'text-ui-primary'
 
     return (
         <DashboardPanel className='p-4'>
-            <div className='flex items-center justify-between gap-3 text-[#8fa0ba]'>
+            <div className='flex items-center justify-between gap-3 text-ui-muted'>
                 <span className='text-sm font-semibold'>{item.label}</span>
                 <span className={tone}>{item.icon}</span>
             </div>
-            <p className='mt-3 text-2xl font-semibold text-[#edf4ff]'>{item.value}</p>
-            <p className='mt-1 text-xs font-medium text-[#8fa0ba]'>{item.note}</p>
+            <p className='mt-3 text-2xl font-semibold text-ui-text'>{item.value}</p>
+            <p className='mt-1 text-xs font-medium text-ui-muted'>{item.note}</p>
         </DashboardPanel>
     )
 }
 
 function MetricText({ metric }: { metric: MetricState }) {
     return (
-        <span className={metric.unavailable ? 'text-[#ffd58a]' : 'text-[#dbe7ff]'} title={metric.reason || metric.value}>
+        <span className={metric.unavailable ? 'text-ui-warning' : 'text-ui-text'} title={metric.reason || metric.value}>
             {metric.value}
         </span>
     )
@@ -688,22 +688,22 @@ function MetricText({ metric }: { metric: MetricState }) {
 
 function Fact({ label, value, reason }: { label: string, value: string, reason?: string }) {
     return (
-        <div className='rounded-md border border-[#26344d] bg-[#0b121e] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#8fa0ba]'>{label}</p>
-            <p className='mt-1 wrap-break-word text-sm font-semibold text-[#edf4ff]'>{value}</p>
-            {reason && <p className='mt-1 text-xs text-[#ffd58a]'>{reason}</p>}
+        <div className='rounded-md border border-ui-border bg-ui-raised p-3'>
+            <p className='text-xs font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 wrap-break-word text-sm font-semibold text-ui-text'>{value}</p>
+            {reason && <p className='mt-1 text-xs text-ui-warning'>{reason}</p>}
         </div>
     )
 }
 
 function HealthPill({ health }: { health: ReturnType<typeof containerHealth> }) {
     const tone = health.tone === 'ok'
-        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        ? 'border-ui-success/35 bg-ui-success/10 text-ui-success'
         : health.tone === 'warn'
-            ? 'border-[#7a5618] bg-[#2a1c0e] text-[#ffd58a]'
+            ? 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
             : health.tone === 'bad'
-                ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-                : 'border-[#26344d] bg-[#0b121e] text-[#dbe7ff]'
+                ? 'border-ui-danger/35 bg-ui-danger/10 text-ui-danger'
+                : 'border-ui-border bg-ui-raised text-ui-text'
 
     return (
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
@@ -716,7 +716,7 @@ function HealthPill({ health }: { health: ReturnType<typeof containerHealth> }) 
 function StatusBadge({ fresh }: { fresh: boolean }) {
     return (
         <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-            fresh ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a5618] bg-[#2a1c0e] text-[#ffd58a]'
+            fresh ? 'border-ui-success/35 bg-ui-success/10 text-ui-success' : 'border-ui-warning/35 bg-ui-warning/10 text-ui-warning'
         }`}>
             {fresh ? <CheckCircle2 className='h-3.5 w-3.5' /> : <AlertTriangle className='h-3.5 w-3.5' />}
             {fresh ? 'Fresh' : 'Stale'}
@@ -731,7 +731,7 @@ function IconButton({ label, onClick, children }: { label: string, onClick: () =
             onClick={onClick}
             aria-label={label}
             title={label}
-            className='grid h-8 w-8 place-items-center rounded-md border border-[#26344d] bg-[#101827] text-[#aab7cc] shadow-sm transition hover:border-[#5f86ff] hover:bg-[#162033] hover:text-[#9db8ff]'
+            className='grid h-8 w-8 place-items-center rounded-md border border-ui-border bg-ui-panel text-ui-muted shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised hover:text-ui-primary'
         >
             {children}
         </button>
@@ -740,7 +740,7 @@ function IconButton({ label, onClick, children }: { label: string, onClick: () =
 
 function LinkButton({ href, icon, label }: { href: string, icon: ReactNode, label: string }) {
     return (
-        <Link href={href} className='inline-flex h-9 items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 text-sm font-semibold text-[#dbe7ff] shadow-sm transition hover:border-[#5f86ff] hover:bg-[#162033] hover:text-[#9db8ff]'>
+        <Link href={href} className='inline-flex h-9 items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-raised hover:text-ui-primary'>
             {icon}
             {label}
         </Link>
@@ -749,8 +749,8 @@ function LinkButton({ href, icon, label }: { href: string, icon: ReactNode, labe
 
 function EmptyState({ title, body }: { title: string, body: string }) {
     return (
-        <div className='rounded-md border border-dashed border-[#26344d] bg-[#0b121e] px-4 py-6 text-sm text-[#8fa0ba]'>
-            <p className='font-semibold text-[#dbe7ff]'>{title}</p>
+        <div className='rounded-md border border-dashed border-ui-border bg-ui-raised px-4 py-6 text-sm text-ui-muted'>
+            <p className='font-semibold text-ui-text'>{title}</p>
             <p className='mt-1'>{body}</p>
         </div>
     )
@@ -781,10 +781,10 @@ function formatLogTime(value: string) {
 }
 
 function logLevelClass(level: RuntimeLog['level']) {
-    if (level === 'error' || level === 'fatal') return 'text-[#fda29b]'
-    if (level === 'warn') return 'text-[#ffd58a]'
-    if (level === 'debug') return 'text-[#93c5fd]'
-    return 'text-[#9cf0bc]'
+    if (level === 'error' || level === 'fatal') return 'text-ui-danger'
+    if (level === 'warn') return 'text-ui-warning'
+    if (level === 'debug') return 'text-ui-primary'
+    return 'text-ui-success'
 }
 
 async function responseErrorMessage(response: Response, label: string) {
