@@ -13,7 +13,7 @@ const dashboardRoutes = [
     { path: '/dashboard', heading: /Good|You're|It’s/ },
     { path: '/dashboard/overview', heading: 'Operations Overview', screenshot: 'dashboard-overview.png' },
     { path: '/dashboard/dwm', heading: 'Company and vendor exposure alerts' },
-    { path: '/dashboard/load-testing', heading: 'Permitted endpoint checks and launch confidence' },
+    { path: '/dashboard/load-testing', heading: 'Load testing and endpoint evidence' },
     { path: '/dashboard/subscription', heading: 'Enable product access' },
     { path: '/dashboard/vms', heading: 'Virtual Machines', screenshot: 'dashboard-vms.png' },
     { path: '/dashboard/projects', heading: 'Projects', screenshot: 'dashboard-projects.png' },
