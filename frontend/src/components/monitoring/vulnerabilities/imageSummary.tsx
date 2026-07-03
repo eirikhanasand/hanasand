@@ -24,7 +24,7 @@ export default function ImageSummary({
             }}
             aria-expanded={isExpanded}
             aria-label={isExpanded ? `Collapse ${image.image}` : `Expand ${image.image}`}
-            className='flex w-full cursor-pointer items-center gap-3 text-left'
+            className='flex w-full cursor-pointer items-center gap-2 text-left'
         >
             <ImageSummaryInfo image={image} />
             <ImageSummaryActions image={image} isExpanded={isExpanded} onToggle={onToggle} />

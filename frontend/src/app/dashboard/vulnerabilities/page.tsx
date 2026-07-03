@@ -20,7 +20,7 @@ export default async function Page({
             <DashboardHeader
                 title='Vulnerabilities'
                 eyebrow='Security'
-                description='Docker Scout findings across the running image set.'
+                description='Operate the continuous image scanner, review hot images, and rerun checks when exposure changes.'
             />
             <PageClient
                 initialData={data}

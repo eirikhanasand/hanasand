@@ -15,5 +15,5 @@ export const severityClasses: Record<SeverityLevel, string> = {
     high: 'border-orange-400/25 bg-orange-500/10 text-orange-200',
     medium: 'border-amber-400/25 bg-amber-500/10 text-amber-200',
     low: 'border-sky-400/25 bg-sky-500/10 text-sky-200',
-    unknown: 'border-white/10 bg-white/5 text-white/60',
+    unknown: 'border-[#35445f] bg-[#111827] text-[#c8d3e3]',
 }

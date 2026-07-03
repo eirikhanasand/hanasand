@@ -30,12 +30,12 @@ export default function ImageFindings({ image }: { image: ImageVulnerabilityRepo
     }
 
     return (
-        <div className='rounded-xl border border-white/10 bg-white/5 p-4'>
+        <div className='rounded-xl border border-[#26354d] bg-[#101a29] p-4'>
             <div className='flex items-center justify-between gap-3'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em] text-white/60'>
+                <span className='text-xs font-medium uppercase tracking-[0.18em] text-[#91a1b8]'>
                     Vulnerability Details
                 </span>
-                <span className='text-xs uppercase tracking-[0.18em] text-white/60'>
+                <span className='text-xs uppercase tracking-[0.18em] text-[#91a1b8]'>
                     {image.vulnerabilities.length} findings
                 </span>
             </div>
@@ -46,8 +46,8 @@ export default function ImageFindings({ image }: { image: ImageVulnerabilityRepo
                         vulnerability={vulnerability}
                     />
                 )) : (
-                    <div className='rounded-xl border border-white/10 bg-black/50 px-4 py-6 text-sm text-white/80'>
-                        No per-vulnerability details are stored for this image yet. Run a new scan to populate them.
+                    <div className='rounded-xl border border-[#26354d] bg-[#070d15] px-4 py-6 text-sm text-[#c8d3e3]'>
+                        Scanner is tracking this image. Package findings stream here as soon as the current pass resolves them.
                     </div>
                 )}
                 {image.vulnerabilities.length > PAGE_SIZE ? (
@@ -75,8 +75,8 @@ function FindingPagination({
     totalResults: number
 }) {
     return (
-        <div className='flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/50 px-4 py-3'>
-            <div className='text-sm text-white/60'>
+        <div className='flex items-center justify-between gap-3 rounded-xl border border-[#26354d] bg-[#070d15] px-4 py-3'>
+            <div className='text-sm text-[#91a1b8]'>
                 Page {page} of {totalPages} • {totalResults} findings
             </div>
             <div className='flex items-center gap-2'>
@@ -84,8 +84,8 @@ function FindingPagination({
                     type='button'
                     onClick={() => setPage((current) => Math.max(1, current - 1))}
                     disabled={page === 1}
-                    className='rounded-full border border-white/10 bg-white/5 px-3 py-1.5
-                        text-sm text-white disabled:cursor-not-allowed disabled:opacity-40'
+                    className='rounded-full border border-[#2a3d5c] bg-[#111827] px-3 py-1.5
+                        text-sm text-[#e8eef8] disabled:cursor-not-allowed disabled:opacity-40'
                 >
                     Previous
                 </button>
@@ -93,8 +93,8 @@ function FindingPagination({
                     type='button'
                     onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                     disabled={page === totalPages}
-                    className='rounded-full border border-white/10 bg-white/5 px-3 py-1.5
-                        text-sm text-white disabled:cursor-not-allowed disabled:opacity-40'
+                    className='rounded-full border border-[#2a3d5c] bg-[#111827] px-3 py-1.5
+                        text-sm text-[#e8eef8] disabled:cursor-not-allowed disabled:opacity-40'
                 >
                     Next
                 </button>

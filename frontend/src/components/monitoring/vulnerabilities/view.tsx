@@ -27,7 +27,7 @@ export default function VulnerabilityView(props: Props) {
                     ? <ErrorState error={props.error} />
                     : props.sorting.images.length
                         ? <VulnerabilityList images={props.sorting.images} expansion={props.expansion} />
-                        : <EmptyState />}
+                        : <EmptyState scanStatus={props.scanStatus} />}
             </div>
         </div>
     )

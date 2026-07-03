@@ -12,6 +12,18 @@ export function getFallbackStatus(): GetVulnerabilities['scanStatus'] {
         completedImages: 0,
         currentImage: null,
         estimatedCompletionAt: null,
+        enabled: true,
+        paused: false,
+        schedule: 'Watching',
+        cadenceSeconds: 0,
+        nextRunAt: null,
+        targetCount: 0,
+        failureCount: 0,
+        stale: true,
+        staleReason: 'Scanner status is refreshing.',
+        blocker: null,
+        blockerAction: null,
+        logs: [],
     }
 }
 
@@ -29,10 +41,7 @@ export function toPageState(payload: GetVulnerabilities | string): Vulnerability
             ...payload,
             imageCount: Number(payload.imageCount) || payload.images.length,
             images: payload.images.map(normalizeImageReport),
-            scanStatus: {
-                ...getFallbackStatus(),
-                ...payload.scanStatus,
-            },
+            scanStatus: normalizeScanStatus(payload.scanStatus),
         },
         error: null,
     }
@@ -56,14 +65,15 @@ function normalizeSeverity(value: Partial<ImageVulnerabilityReport['severity']> 
 }
 
 function normalizeImageReport(image: Partial<ImageVulnerabilityReport>): ImageVulnerabilityReport {
+    const scanError = normalizeScanError(image.scanError)
     return {
-        image: image.image || 'Unknown image',
+        image: image.image || 'Image checking',
         scannedAt: image.scannedAt || '',
         totalVulnerabilities: Number(image.totalVulnerabilities) || 0,
         severity: normalizeSeverity(image.severity),
         groups: Array.isArray(image.groups)
             ? image.groups.map((group) => ({
-                source: group.source || 'Unknown source',
+                source: group.source || 'Source checking',
                 total: Number(group.total) || 0,
                 severity: normalizeSeverity(group.severity),
             }))
@@ -82,8 +92,36 @@ function normalizeImageReport(image: Partial<ImageVulnerabilityReport>): ImageVu
                 references: Array.isArray(vulnerability.references) ? vulnerability.references : [],
             }))
             : [],
-        scanError: image.scanError || null,
+        scanError,
     }
+}
+
+function normalizeScanStatus(status: Partial<GetVulnerabilities['scanStatus']>): GetVulnerabilities['scanStatus'] {
+    const fallback = getFallbackStatus()
+    return {
+        ...fallback,
+        ...status,
+        targetCount: Number(status.targetCount) || Number(status.totalImages) || fallback.targetCount,
+        failureCount: Number(status.failureCount) || 0,
+        logs: Array.isArray(status.logs)
+            ? status.logs.map(log => ({
+                at: log.at || '',
+                level: log.level === 'error' || log.level === 'warn' || log.level === 'info' ? log.level : severityFromLogLine(log.message),
+                message: log.message || '',
+            })).filter(log => log.message)
+            : [],
+    }
+}
+
+function normalizeScanError(value: string | null | undefined) {
+    if (!value) return null
+    return severityFromLogLine(value) === 'info' ? null : value
+}
+
+function severityFromLogLine(value: string) {
+    if (/\b(?:error|fatal|failed|failure|denied|blocked|unavailable)\b/i.test(value)) return 'error'
+    if (/\bwarn(?:ing)?\b/i.test(value)) return 'warn'
+    return 'info'
 }
 
 function formatDuration(totalSeconds: number) {

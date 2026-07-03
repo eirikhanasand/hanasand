@@ -1,12 +1,12 @@
 import { Container } from 'lucide-react'
 
 const tones = {
-    blue: 'border-sky-400/15 bg-sky-500/10 text-sky-200',
-    amber: 'border-amber-400/15 bg-amber-500/10 text-amber-200',
-    emerald: 'border-emerald-400/15 bg-emerald-500/10 text-emerald-200',
-    violet: 'border-violet-400/15 bg-violet-500/10 text-violet-200',
-    rose: 'border-rose-400/15 bg-rose-500/10 text-rose-200',
-    slate: 'border-white/10 bg-white/5 text-white/60',
+    blue: 'border-[#315b92] bg-[#10223d] text-[#9db4ff]',
+    amber: 'border-[#6f4a19] bg-[#281a0b] text-[#f6b45f]',
+    emerald: 'border-[#285c3b] bg-[#102318] text-[#7bd39a]',
+    violet: 'border-[#3a4f84] bg-[#111f3a] text-[#9db4ff]',
+    rose: 'border-[#6d3a20] bg-[#29130b] text-[#ff9b6b]',
+    slate: 'border-[#22334d] bg-[#0b1220] text-[#aab7cc]',
 } as const
 
 export default function SummaryCard({
@@ -21,14 +21,14 @@ export default function SummaryCard({
     tone: keyof typeof tones
 }) {
     return (
-        <div className='rounded-xl border border-white/10 bg-white/5 p-4'>
+        <div className='rounded-lg border border-[#22334d] bg-[#0f172a] p-3'>
             <div className='flex items-center justify-between'>
-                <span className='text-xs font-medium uppercase tracking-[0.18em] text-white/60'>{title}</span>
-                <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${tones[tone]}`}>
+                <span className='text-[10px] font-semibold uppercase text-[#8795ad]'>{title}</span>
+                <div className={`flex h-7 w-7 items-center justify-center rounded-md border ${tones[tone]}`}>
                     <Icon className='h-4 w-4' />
                 </div>
             </div>
-            <div className='mt-3 text-sm font-medium text-white'>{value}</div>
+            <div className='mt-2 line-clamp-1 text-sm font-semibold text-[#edf4ff]'>{value}</div>
         </div>
     )
 }
