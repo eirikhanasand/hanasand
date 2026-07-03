@@ -1,3 +1,5 @@
+import { safeAlertSummary } from './display'
+
 export type DwmSourceFamily = 'telegram_public' | 'darkweb_metadata' | 'actor_page' | 'public_advisory' | 'clear_web'
 export type DwmSeverity = 'critical' | 'high' | 'medium' | 'low'
 
@@ -289,7 +291,7 @@ export function dwmWebhookPayload(alert: DwmAlert) {
         sourceFamily: alert.sourceFamily,
         sourceCount: alert.sourceCount,
         firstSeenAt: alert.firstSeenAt,
-        claimSummary: alert.claimSummary,
+        claimSummary: safeAlertSummary(alert),
         reviewState: alert.reviewState,
         recommendedAction: alert.recommendedAction,
         evidence: alert.evidence.map(item => ({
