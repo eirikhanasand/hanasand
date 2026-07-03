@@ -64,6 +64,93 @@ const darkwebCapture: RawCapture = {
 } as RawCapture;
 
 describe("DWM source-matched alert bootstrap", () => {
+  test("backfills delivery routing for an existing source-matched watchlist before readiness", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveSource(darkwebSource);
+    store.saveCapture(telegramCapture);
+    store.saveCapture(darkwebCapture);
+    (store as any).saveDwmWatchlist({
+      id: "dwm_watchlist_existing_source_matched",
+      tenantId: "default",
+      name: "Existing source-matched exposure watchlist",
+      terms: [{ value: "acme.com", kind: "domain" }],
+      status: "active",
+      createdAt: "2026-06-30T10:10:00.000Z",
+      updatedAt: "2026-06-30T10:10:00.000Z"
+    });
+
+    const options = { store, frontier: new FocusedFrontier() };
+    const readiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/generation-readiness"), options);
+    const readinessPayload = await readiness.json() as any;
+
+    expect(readiness.status).toBe(200);
+    expect(readinessPayload.readiness.readyForCustomerDelivery).toBe(true);
+    expect(readinessPayload.readiness.webhookReadiness).toMatchObject({
+      ready: true,
+      missingRouteCandidateCount: 0
+    });
+    const savedWatchlist = (store as any).getDwmWatchlist("dwm_watchlist_existing_source_matched");
+    expect(savedWatchlist.webhookDestinationId).toEqual(expect.any(String));
+    expect(savedWatchlist.orgWatchlistTerms).toEqual([expect.objectContaining({
+      organizationId: "default",
+      value: "acme.com",
+      alertGeneratorKey: expect.stringContaining("org:default:watchlist:")
+    })]);
+  });
+
+  test("attaches generated source-matched terms to the default delivery route for public intake", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(telegramSource);
+    store.saveSource(darkwebSource);
+    store.saveCapture(telegramCapture);
+    store.saveCapture(darkwebCapture);
+
+    const options = { store, frontier: new FocusedFrontier() };
+    const list = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts"), options);
+    const payload = await list.json() as any;
+
+    expect(list.status).toBe(200);
+    expect(payload.alerts.length).toBeGreaterThan(0);
+    const savedWatchlist = (store as any).listDwmWatchlists()[0];
+    const webhookDestinationId = String(savedWatchlist.webhookDestinationId);
+    expect(savedWatchlist).toMatchObject({
+      tenantId: "default",
+      status: "active",
+      webhookDestinationId: expect.any(String),
+      orgWatchlistTerms: [expect.objectContaining({
+        organizationId: "default",
+        alertGeneratorKey: expect.stringContaining("org:default:watchlist:")
+      })]
+    });
+
+    const destinations = (store as any).listWebhookDestinations();
+    expect(destinations).toEqual([expect.objectContaining({
+      organizationId: "default",
+      tenantId: "default",
+      status: "active",
+      url: "https://hanasand.com/api/dwm/webhook-sink"
+    })]);
+
+    const acmeAlert = payload.alerts.find((alert: any) => alert.matchedTerm?.value === "acme.com");
+    expect(acmeAlert).toBeTruthy();
+    expect(acmeAlert.workflowContext.alertGeneratorKeys).toEqual([expect.stringContaining("org:default:watchlist:")]);
+    expect(acmeAlert.workflowContext.webhookDestinationIds).toEqual([webhookDestinationId]);
+    expect(acmeAlert.deliveryReadinessContext.blockerCodes).not.toContain("missing_org_ref");
+    expect(acmeAlert.deliveryReadinessContext.blockerCodes).not.toContain("delivery_disabled");
+
+    const readiness = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/generation-readiness"), options);
+    const readinessText = await readiness.text();
+    expect(`${readiness.status} ${readinessText}`).toStartWith("200 ");
+    const readinessPayload = JSON.parse(readinessText) as any;
+    expect(readinessPayload.readiness.readyForCustomerDelivery).toBe(true);
+    expect(readinessPayload.readiness.webhookReadiness).toMatchObject({
+      ready: true,
+      missingRouteCandidateCount: 0
+    });
+    expect(readinessPayload.readiness.webhookReadiness.candidateIdsMissingRoute).toEqual([]);
+  });
+
   test("persists an org-scoped alert from recent captures when saved watchlists miss, then preserves workflow on rebuild", async () => {
     const store = new InMemoryScraperStore();
     store.saveOrganization({

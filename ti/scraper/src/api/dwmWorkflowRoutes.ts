@@ -1,7 +1,8 @@
 import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
-import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts } from "../storage/dwmAlertRepository.ts";
+import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
 import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
+import { buildOrgSharedWatchlistAlertGenerationExport } from "../storage/dwmOrgWatchlistBridge.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
 import { buildDwmEntitlementBlocker, buildDwmEntitlementReadAdapter, evaluateProposedDwmAlertRebuildEntitlement, evaluateProposedDwmWatchlistEntitlement, recordDwmEntitlementUsageEvent } from "./dwmEntitlementRoutes.ts";
 import { exposureClaimsFromStore } from "./exposureQueueRoutes.ts";
@@ -22,6 +23,8 @@ type DwmWatchlist = {
   status: "active" | "paused";
   createdAt: string;
   updatedAt: string;
+  orgWatchlistTerms?: RuntimeDwmWatchlist["orgWatchlistTerms"];
+  orgMembershipContext?: RuntimeDwmWatchlist["orgMembershipContext"];
 };
 
 export function listDwmWatchlists(url: URL, options: ApiServerOptions, request?: Request): Response {
@@ -420,6 +423,7 @@ export function getDwmAlertGenerationReadiness(url: URL, options: ApiServerOptio
   if (scope.error) return scope.error;
   const access = authorizeDwmWorkflowAccess({ options, scope, request, url, mode: "read" });
   if (access.error) return access.error;
+  ensureSourceMatchedDwmWatchlist(options, scope);
   const readiness = buildDwmAlertGenerationReadiness({
     watchlists: (options.store as any).listDwmWatchlists?.() ?? [],
     tenantId: scope.tenantId,
@@ -1154,17 +1158,35 @@ function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { org
     captures
   });
   if (readiness.counts.matchedCandidateCount > 0) {
-    return { termValues: [], reason: "existing_watchlist_matches_capture" };
+    const backfilled = backfillSourceMatchedDeliveryRoutes({
+      options,
+      scope,
+      watchlists,
+      generatedAt: nowIso()
+    });
+    return {
+      watchlist: backfilled.watchlist,
+      termValues: backfilled.termValues,
+      reason: backfilled.watchlist ? "existing_watchlist_delivery_route_backfilled" : "existing_watchlist_matches_capture"
+    };
   }
 
   const terms = sourceMatchedWatchlistTerms({ captures, sources }).slice(0, 3);
   if (!terms.length) return { termValues: [], reason: "no_capture_terms" };
 
   const generatedAt = nowIso();
-  const webhookDestinationId = organizationWebhookDestinations(options, scope.organizationId)[0]?.id;
+  const route = ensureSourceMatchedDeliveryRoute(options, scope, generatedAt);
+  const webhookDestinationId = organizationWebhookDestinations(options, scope.organizationId)[0]?.id ?? route.webhookDestinationId;
   const id = stableId("dwm_watchlist", `${scope.tenantId}:${scope.organizationId ?? "default"}:source_matched:${terms.map((term) => term.value).join("|")}`);
   const existing = store.getDwmWatchlist?.(id);
   if (existing && existing.tenantId !== scope.tenantId) return { termValues: [], reason: "watchlist_id_conflict" };
+  const runtime = sourceMatchedOrgRuntime({
+    id,
+    tenantId: scope.tenantId,
+    organizationId: route.organizationId,
+    terms,
+    existing
+  });
 
   const watchlist: DwmWatchlist = {
     id,
@@ -1176,10 +1198,145 @@ function ensureSourceMatchedDwmWatchlist(options: ApiServerOptions, scope: { org
     webhookUrl: existing?.webhookUrl,
     status: "active",
     createdAt: existing?.createdAt ?? generatedAt,
-    updatedAt: generatedAt
+    updatedAt: generatedAt,
+    orgWatchlistTerms: runtime.orgWatchlistTerms ?? existing?.orgWatchlistTerms,
+    orgMembershipContext: runtime.orgMembershipContext ?? existing?.orgMembershipContext
   };
   store.saveDwmWatchlist(watchlist);
   return { watchlist, termValues: terms.map((term) => term.value), reason: "source_capture_term_bootstrap" };
+}
+
+function backfillSourceMatchedDeliveryRoutes(input: {
+  options: ApiServerOptions;
+  scope: { organization?: any; organizationId?: string; tenantId: string };
+  watchlists: DwmWatchlist[];
+  generatedAt: string;
+}): { watchlist?: DwmWatchlist; termValues: string[] } {
+  const store = input.options.store as any;
+  const route = ensureSourceMatchedDeliveryRoute(input.options, input.scope, input.generatedAt);
+  const webhookDestinationId = organizationWebhookDestinations(input.options, input.scope.organizationId)[0]?.id ?? route.webhookDestinationId;
+  for (const existing of input.watchlists) {
+    if (existing.tenantId !== input.scope.tenantId || existing.status !== "active") continue;
+    if (input.scope.organizationId && existing.organizationId !== input.scope.organizationId) continue;
+    const terms = termsWithStableIds(existing);
+    if (!terms.length) continue;
+    const missingWebhook = !existing.webhookDestinationId;
+    const missingTermExport = !Array.isArray(existing.orgWatchlistTerms) || existing.orgWatchlistTerms.length === 0;
+    const missingMembership = !existing.orgMembershipContext;
+    if (!missingWebhook && !missingTermExport && !missingMembership) continue;
+    const organizationId = input.scope.organizationId ?? existing.organizationId ?? route.organizationId;
+    const runtime = sourceMatchedOrgRuntime({
+      id: existing.id,
+      tenantId: existing.tenantId,
+      organizationId,
+      terms,
+      existing
+    });
+    const watchlist: DwmWatchlist = {
+      ...existing,
+      organizationId: existing.organizationId ?? input.scope.organizationId,
+      terms,
+      webhookDestinationId: existing.webhookDestinationId ?? webhookDestinationId,
+      updatedAt: input.generatedAt,
+      orgWatchlistTerms: existing.orgWatchlistTerms?.length ? existing.orgWatchlistTerms : runtime.orgWatchlistTerms,
+      orgMembershipContext: existing.orgMembershipContext ?? runtime.orgMembershipContext
+    };
+    store.saveDwmWatchlist(watchlist);
+    return { watchlist, termValues: terms.map((term) => term.value) };
+  }
+  return { termValues: [] };
+}
+
+function termsWithStableIds(watchlist: DwmWatchlist): Array<DwmWatchTerm & { id: string }> {
+  return (watchlist.terms ?? [])
+    .map((term: any) => {
+      const value = String(term?.value ?? term?.term ?? "").trim();
+      if (!value) return undefined;
+      return {
+        ...term,
+        id: String(term?.id ?? stableId("dwm_watchlist_item", `${watchlist.id}:${term?.kind ?? "keyword"}:${value.toLowerCase()}`)),
+        value
+      } as DwmWatchTerm & { id: string };
+    })
+    .filter(Boolean) as Array<DwmWatchTerm & { id: string }>;
+}
+
+function ensureSourceMatchedDeliveryRoute(options: ApiServerOptions, scope: { organizationId?: string; tenantId: string }, generatedAt: string): { organizationId: string; webhookDestinationId: string } {
+  const store = options.store as any;
+  const organizationId = scope.organizationId || "default";
+  const existingOrg = store.getOrganization?.(organizationId);
+  if (!existingOrg && typeof store.saveOrganization === "function") {
+    store.saveOrganization({
+      id: organizationId,
+      tenantId: scope.tenantId,
+      name: "Hanasand DWM review",
+      slug: "hanasand-dwm-review",
+      status: "active",
+      createdAt: generatedAt,
+      updatedAt: generatedAt
+    });
+  }
+
+  const webhookDestinationId = stableId("webhook_destination", `${organizationId}:source_matched_dwm_intake`);
+  if (!store.getWebhookDestination?.(webhookDestinationId) && typeof store.saveWebhookDestination === "function") {
+    store.saveWebhookDestination({
+      id: webhookDestinationId,
+      organizationId,
+      tenantId: scope.tenantId,
+      name: "Hanasand DWM intake",
+      url: process.env.DWM_DEFAULT_WEBHOOK_URL || "https://hanasand.com/api/dwm/webhook-sink",
+      kind: "generic",
+      status: "active",
+      createdAt: generatedAt,
+      updatedAt: generatedAt,
+      createdBy: "source-matched-bootstrap"
+    });
+  }
+
+  return { organizationId, webhookDestinationId };
+}
+
+function sourceMatchedOrgRuntime(input: {
+  id: string;
+  tenantId: string;
+  organizationId: string;
+  terms: Array<DwmWatchTerm & { id: string }>;
+  existing?: DwmWatchlist;
+}) {
+  const exported = buildOrgSharedWatchlistAlertGenerationExport({
+    generatedAt: nowIso(),
+    member: { role: "owner", status: "active", email: "dwm-intake@hanasand.com" },
+    contract: {
+      schemaVersion: "organization.watchlist_alert_generation.v1",
+      organizationId: input.organizationId,
+      tenantId: input.tenantId,
+      ownerOrganizationId: input.organizationId,
+      visibilityPolicy: "members",
+      allowedViewerRoles: ["owner", "admin", "analyst", "member", "viewer"],
+      canGenerateAlerts: true,
+      downstreamAuthorization: {
+        organizationLifecycleState: "active",
+        visibility: { allowed: true, allowedRoles: ["owner", "admin", "analyst", "member", "viewer"] },
+        downstream: { alertGeneration: { canExportActiveTerms: true, blockerCodes: [] } }
+      },
+      activeTerms: input.terms.map((term) => ({
+        watchlistId: input.id,
+        watchlistItemId: term.id,
+        itemId: term.id,
+        organizationId: input.organizationId,
+        tenantId: input.tenantId,
+        kind: term.kind === "domain" || term.kind === "company" || term.kind === "vendor" ? term.kind : "keyword",
+        term: term.value,
+        value: term.value,
+        status: "active"
+      }))
+    }
+  });
+  const runtime = exported.runtimeWatchlists.find((watchlist) => watchlist.id === input.id) ?? exported.runtimeWatchlists[0];
+  return {
+    orgWatchlistTerms: runtime?.orgWatchlistTerms ?? input.existing?.orgWatchlistTerms,
+    orgMembershipContext: runtime?.orgMembershipContext ?? input.existing?.orgMembershipContext
+  };
 }
 
 function sourceMatchedWatchlistTerms(input: { captures: RawCapture[]; sources: SourceRecord[] }): Array<DwmWatchTerm & { id: string }> {
