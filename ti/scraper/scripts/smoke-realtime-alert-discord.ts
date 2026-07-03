@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:net";
 import { startApiServer } from "../src/api/server.ts";
 import { FocusedFrontier } from "../src/frontier/frontier.ts";
 import { InMemoryScraperStore } from "../src/storage/memoryStore.ts";
@@ -38,7 +39,7 @@ store.saveSource(source);
 store.saveCapture(capture);
 
 const server = startApiServer({
-  port: 0,
+  port: await getFreePort(),
   store,
   frontier: new FocusedFrontier(),
   webhookFetch: async (url: string, init: RequestInit) => {
@@ -157,4 +158,21 @@ async function getJson(pathOrUrl: string) {
     }
   });
   return { response, body: await response.json() as JsonRecord };
+}
+
+async function getFreePort() {
+  return await new Promise<number>((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (typeof address === "object" && address && typeof address.port === "number") {
+          resolve(address.port);
+          return;
+        }
+        reject(new Error("Could not allocate a free localhost port."));
+      });
+    });
+  });
 }
