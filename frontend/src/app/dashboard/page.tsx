@@ -268,7 +268,7 @@ async function loadDwmAlerts(scope: OperatorScope, identity: DashboardViewerIden
                         ? identity.source === 'anonymous' ? 'identity_missing' : 'visibility_denied'
                         : 'unavailable',
                     code: failure.code,
-                    message: failure.message || `DWM alerts returned HTTP ${response.status}.`,
+                    message: failure.message || `DWM alerts reported HTTP ${response.status}.`,
                     reason: failure.reason,
                     attemptedIdentity: identityPayload(identity),
                 },

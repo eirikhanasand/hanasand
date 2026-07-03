@@ -80,7 +80,7 @@ async function loadDwmSnapshot(scope: DwmPageScope): Promise<LoadResult<DwmProdu
             data: await response.json() as DwmProductSnapshot,
             state: 'live',
             label: 'Dark web stream live',
-            detail: 'The exposure monitor is returning live watchlists, sources, actors, and alerts.'
+            detail: 'The exposure monitor is showing live watchlists, sources, actors, and alerts.'
         }
     } catch (error) {
         return {
@@ -120,7 +120,7 @@ async function loadDwmOperations(scope: DwmPageScope): Promise<LoadResult<DwmOpe
         setDwmScopeParams(target, scope)
         const response = await fetch(target, { cache: 'no-store', signal: AbortSignal.timeout(2500) })
         if (!response.ok) return { data: null, state: 'error', label: `Collection ${response.status}`, detail: 'Collection could not load current source state.' }
-        return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Collection live', detail: 'Collection is returning source and evidence state.' }
+        return { data: await response.json() as DwmOperationsSnapshot, state: 'live', label: 'Collection live', detail: 'Collection is showing source and evidence state.' }
     } catch (error) {
         return { data: null, state: 'error', label: 'Collection error', detail: error instanceof Error ? error.message : 'Collection failed.' }
     }
