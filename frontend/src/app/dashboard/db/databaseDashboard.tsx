@@ -24,43 +24,43 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
         : longRunningQueries.length
             ? `${longRunningQueries.length} query${longRunningQueries.length === 1 ? '' : 'ies'} exceeded the ${formatTime(overview.longRunningThresholdSeconds)} watch threshold.`
             : activeQueryCount > 0
-                ? `${activeQueryCount} active query${activeQueryCount === 1 ? '' : 'ies'} are running with no long-running rows yet.`
+                ? `${activeQueryCount} active query${activeQueryCount === 1 ? '' : 'ies'} are running with no long-running rows right now.`
                 : `${overview.databaseCount ?? databaseRows.length} databases are indexed; use the inventory to confirm storage and backup context.`
 
     return (
         <DashboardPage>
             <DashboardHeader eyebrow='Operations' title='Database' actions={<DatabaseActions />} />
 
-            <DashboardPanel className={`p-4 ${unavailable ? 'border-[#7a3520] bg-[#2c160f]' : 'border-[#1f6f48] bg-[#0c261c]'}`}>
+            <DashboardPanel className={`p-4 ${unavailable ? 'border-ui-danger/30 bg-ui-danger/10' : 'border-ui-success/30 bg-ui-success/10'}`}>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='flex min-w-0 gap-3'>
-                        {unavailable ? <AlertTriangle className='mt-0.5 h-5 w-5 shrink-0 text-[#ffb598]' /> : <ShieldCheck className='mt-0.5 h-5 w-5 shrink-0 text-[#9cf0bc]' />}
+                        {unavailable ? <AlertTriangle className='mt-0.5 h-5 w-5 shrink-0 text-ui-danger' /> : <ShieldCheck className='mt-0.5 h-5 w-5 shrink-0 text-ui-success' />}
                         <div className='min-w-0'>
-                            <p className={`mb-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${unavailable ? 'border-[#7a3520] bg-[#3a1c12] text-[#ffb598]' : 'border-[#1f6f48] bg-[#103322] text-[#9cf0bc]'}`}>
+                            <p className={`mb-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${unavailable ? 'border-ui-danger/30 bg-ui-danger/15 text-ui-danger' : 'border-ui-success/30 bg-ui-success/15 text-ui-success'}`}>
                                 {unavailable ? 'Unavailable' : 'Live'}
                             </p>
-                            <p className='text-sm font-semibold text-[#edf4ff]'>{overview.health.message}</p>
-                            {overview.health.detail && <p className='mt-1 text-sm text-[#aab7cc]'>{overview.health.detail}</p>}
+                            <p className='text-sm font-semibold text-ui-text'>{overview.health.message}</p>
+                            {overview.health.detail && <p className='mt-1 text-sm text-ui-muted'>{overview.health.detail}</p>}
                         </div>
                     </div>
-                    <p className='shrink-0 text-xs font-medium text-[#8fa0ba]'>Checked {formatDateTime(overview.generatedAt)}</p>
+                    <p className='shrink-0 text-xs font-medium text-ui-muted'>Checked {formatDateTime(overview.generatedAt)}</p>
                 </div>
             </DashboardPanel>
 
             <DashboardPanel className='p-4'>
                 <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-db-primary-triage>
                     <div className='min-w-0'>
-                        <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
-                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
-                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{activeQueryCount} active</span>
-                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{longRunningQueries.length} long-running</span>
+                        <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>Recommended next</span>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{activeQueryCount} active</span>
+                            <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-1'>{longRunningQueries.length} long-running</span>
                         </div>
-                        <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
-                        <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                        <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                        <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
                     </div>
                     <Link
                         href={primaryHref}
-                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
                         data-db-primary-action
                     >
                         {primaryAction}
@@ -68,12 +68,12 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                 </div>
             </DashboardPanel>
 
-            <details className='overflow-hidden rounded-lg border border-[#22334d] bg-[#0f172a]' data-db-telemetry-disclosure>
-                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-db-telemetry-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                     <span>Telemetry details and counters</span>
-                    <span className='text-xs font-medium text-[#8fa0ba]'>{overview.clusterCount ?? 0} clusters, {overview.databaseCount ?? databaseRows.length} databases, {formatBytes(overview.totalSizeBytes)}</span>
+                    <span className='text-xs font-medium text-ui-muted'>{overview.clusterCount ?? 0} clusters, {overview.databaseCount ?? databaseRows.length} databases, {formatBytes(overview.totalSizeBytes)}</span>
                 </summary>
-                <div className='grid gap-3 border-t border-[#22334d] p-3'>
+                <div className='grid gap-3 border-t border-ui-border p-3'>
                     <section className='grid gap-3 xl:grid-cols-3' data-db-operation-lanes>
                         <OperationLane
                             icon={<Radio className='h-4 w-4' />}
@@ -99,12 +99,12 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                     </section>
 
                     <div className='grid gap-3 md:grid-cols-3 xl:grid-cols-6' data-db-metrics>
-                        <MetricCard icon={<Server className='h-4 w-4 text-[#9db8ff]' />} label='Clusters' value={formatNumberMetric(overview.clusterCount)} />
-                        <MetricCard icon={<Database className='h-4 w-4 text-[#9cf0bc]' />} label='Databases' value={formatNumberMetric(overview.databaseCount)} />
-                        <MetricCard icon={<HardDrive className='h-4 w-4 text-[#ffd58a]' />} label='Storage' value={overview.totalSizeBytes === null ? 'Metering' : formatBytes(overview.totalSizeBytes)} />
-                        <MetricCard icon={<PlayCircle className='h-4 w-4 text-[#bca8ff]' />} label='Active queries' value={String(activeQueryCount)} />
-                        <MetricCard icon={<Clock3 className='h-4 w-4 text-[#bca8ff]' />} label='Avg active runtime' value={formatTime(overview.averageQuerySeconds)} />
-                        <MetricCard icon={<AlertTriangle className='h-4 w-4 text-[#ffb598]' />} label='Long-running' value={String(longRunningQueries.length)} />
+                        <MetricCard icon={<Server className='h-4 w-4 text-ui-primary' />} label='Clusters' value={formatNumberMetric(overview.clusterCount)} />
+                        <MetricCard icon={<Database className='h-4 w-4 text-ui-success' />} label='Databases' value={formatNumberMetric(overview.databaseCount)} />
+                        <MetricCard icon={<HardDrive className='h-4 w-4 text-ui-warning' />} label='Storage' value={overview.totalSizeBytes === null ? 'Metering' : formatBytes(overview.totalSizeBytes)} />
+                        <MetricCard icon={<PlayCircle className='h-4 w-4 text-ui-primary' />} label='Active queries' value={String(activeQueryCount)} />
+                        <MetricCard icon={<Clock3 className='h-4 w-4 text-ui-primary' />} label='Avg active runtime' value={formatTime(overview.averageQuerySeconds)} />
+                        <MetricCard icon={<AlertTriangle className='h-4 w-4 text-ui-danger' />} label='Long-running' value={String(longRunningQueries.length)} />
                     </div>
                 </div>
             </details>
@@ -113,8 +113,8 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                 <DashboardPanel className='p-4' id='active-queries'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#edf4ff]'>Active and long-running queries</h2>
-                            <p className='mt-1 text-xs text-[#8fa0ba]'>Long-running threshold: {formatTime(overview.longRunningThresholdSeconds)}. Last checked {formatDateTime(overview.generatedAt)}.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Active and long-running queries</h2>
+                            <p className='mt-1 text-xs text-ui-muted'>Long-running threshold: {formatTime(overview.longRunningThresholdSeconds)}. Last checked {formatDateTime(overview.generatedAt)}.</p>
                         </div>
                     </div>
                     {unavailable ? (
@@ -125,14 +125,14 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                         <EmptyState title='Query watcher live' body='Active and long-running query rows stream here as PostgreSQL reports them.' />
                     )}
                     {!unavailable && overview.queries.length > 0 && longRunningQueries.length === 0 && (
-                        <p className='mt-3 rounded-md border border-[#26344d] bg-[#0b121e] px-3 py-2 text-sm font-medium text-[#dbe7ff]'>
+                        <p className='mt-3 rounded-md border border-ui-border bg-ui-canvas px-3 py-2 text-sm font-medium text-ui-text'>
                             Live watch: no long-running queries right now.
                         </p>
                     )}
                 </DashboardPanel>
 
                 <DashboardPanel className='p-4'>
-                    <h2 className='text-base font-semibold text-[#edf4ff]'>Longest running query</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Longest running query</h2>
                     {overview.longestQuery ? (
                         <LongestQuery query={overview.longestQuery} />
                     ) : (
@@ -143,11 +143,11 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.7fr]'>
                 <DashboardPanel className='p-4' id='storage-inventory'>
-                    <h2 className='text-base font-semibold text-[#edf4ff]'>Storage and databases</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Storage and databases</h2>
                     {overview.clusters.length ? (
                         <div className='mt-3 overflow-x-auto'>
                             <table className='min-w-full text-left text-sm'>
-                                <thead className='border-b border-[#26344d] text-xs uppercase text-[#8fa0ba]'>
+                                <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                                     <tr>
                                         <th className='py-2 pr-3 font-semibold'>Database</th>
                                         <th className='px-3 py-2 font-semibold'>Tables</th>
@@ -155,10 +155,10 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                                         <th className='py-2 pl-3 text-right font-semibold'>Size</th>
                                     </tr>
                                 </thead>
-                                <tbody className='divide-y divide-[#1f2c42]'>
+                                <tbody className='divide-y divide-ui-border'>
                                     {overview.clusters.flatMap(cluster => cluster.databases.map(database => (
-                                        <tr key={`${cluster.id}-${database.name}`} className='text-[#dbe7ff]'>
-                                            <td className='py-2 pr-3 font-semibold text-[#edf4ff]'>{database.name}</td>
+                                        <tr key={`${cluster.id}-${database.name}`} className='text-ui-text'>
+                                            <td className='py-2 pr-3 font-semibold text-ui-text'>{database.name}</td>
                                             <td className='px-3 py-2'>{database.tableCount ?? 'Counting'}</td>
                                             <td className='px-3 py-2'>{database.activeConnections ?? 0}</td>
                                             <td className='py-2 pl-3 text-right'>{formatBytes(database.sizeBytes)}</td>
@@ -173,12 +173,12 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                 </DashboardPanel>
 
                 <DashboardPanel className='p-4'>
-                    <h2 className='text-base font-semibold text-[#edf4ff]'>Cluster context</h2>
+                    <h2 className='text-base font-semibold text-ui-text'>Cluster context</h2>
                     {overview.clusters.length ? overview.clusters.map(cluster => (
-                        <div key={cluster.id} className='mt-3 rounded-md border border-[#26344d] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
-                            <p className='font-semibold text-[#edf4ff]'>{cluster.name || cluster.id}</p>
+                        <div key={cluster.id} className='mt-3 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
+                            <p className='font-semibold text-ui-text'>{cluster.name || cluster.id}</p>
                             <p className='mt-1'>{[cluster.engine, cluster.version, cluster.host].filter(Boolean).join(' · ')}</p>
-                            <div className='mt-3 grid grid-cols-3 gap-2 text-xs font-semibold text-[#dbe7ff]'>
+                            <div className='mt-3 grid grid-cols-3 gap-2 text-xs font-semibold text-ui-text'>
                                 <span>{cluster.databaseCount} DBs</span>
                                 <span>{cluster.activeQueries} active</span>
                                 <span>{formatBytes(cluster.totalSizeBytes)}</span>
@@ -188,8 +188,8 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                     )) : (
                         <EmptyState title='Cluster stream retrying' body='Cluster context returns when the API database host and credentials can read telemetry.' />
                     )}
-                    <div className='mt-3 rounded-md border border-[#26344d] bg-[#101827] p-3 text-sm text-[#aab7cc]'>
-                        <p className='font-semibold text-[#edf4ff]'>Backup actions</p>
+                    <div className='mt-3 rounded-md border border-ui-border bg-ui-panel p-3 text-sm text-ui-muted'>
+                        <p className='font-semibold text-ui-text'>Backup actions</p>
                         <p className='mt-1'>Backups shows the active backup lane and schedule. Restore opens indexed restore files once the database and backup service are connected.</p>
                     </div>
                 </DashboardPanel>
@@ -200,17 +200,17 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
 
 function OperationLane({ icon, title, value, detail, tone }: { icon: ReactNode, title: string, value: string, detail: string, tone: 'ok' | 'watch' | 'bad' }) {
     return (
-        <DashboardPanel className='overflow-hidden p-0 border-[#22334d] bg-[#0f172a]'>
-            <div className='flex items-center justify-between gap-3 border-b border-[#22334d] bg-[#101722] px-4 py-3'>
-                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-[#d8deea]'>
+        <DashboardPanel className='overflow-hidden p-0 border-ui-border bg-ui-panel'>
+            <div className='flex items-center justify-between gap-3 border-b border-ui-border bg-ui-panel px-4 py-3'>
+                <div className='flex min-w-0 items-center gap-2 text-sm font-semibold text-ui-text'>
                     <span className={operationToneText(tone)}>{icon}</span>
                     <span className='truncate'>{title}</span>
                 </div>
                 <span className={`h-2 w-2 rounded-full ${operationToneDot(tone)}`} />
             </div>
             <div className='p-4'>
-                <p className='line-clamp-1 text-lg font-semibold text-[#f4f7fb]'>{value}</p>
-                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-[#aab6ca]'>{detail}</p>
+                <p className='line-clamp-1 text-lg font-semibold text-ui-text'>{value}</p>
+                <p className='mt-1 line-clamp-2 min-h-10 text-sm leading-5 text-ui-muted'>{detail}</p>
             </div>
         </DashboardPanel>
     )
@@ -229,7 +229,7 @@ function ActionLink({ href, icon, label }: { href: string, icon: ReactNode, labe
     return (
         <Link
             href={href}
-            className='inline-flex items-center gap-2 rounded-md border border-[#26344d] bg-[#101827] px-3 py-2 text-sm font-semibold text-[#dbe7ff] shadow-sm transition hover:border-[#3c5072] hover:bg-[#122449]'
+            className='inline-flex items-center gap-2 rounded-md border border-ui-border bg-ui-panel px-3 py-2 text-sm font-semibold text-ui-text shadow-sm transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
         >
             {icon}
             {label}
@@ -240,32 +240,32 @@ function ActionLink({ href, icon, label }: { href: string, icon: ReactNode, labe
 function MetricCard({ icon, label, value }: { icon: ReactNode, label: string, value: string }) {
     return (
         <DashboardPanel className='p-3'>
-            <div className='flex items-center justify-between gap-2 text-[#aab7cc]'>
+            <div className='flex items-center justify-between gap-2 text-ui-muted'>
                 <span className='text-xs font-medium uppercase'>{label}</span>
                 {icon}
             </div>
-            <p className='mt-2 text-xl font-semibold text-[#edf4ff]'>{value}</p>
+            <p className='mt-2 text-xl font-semibold text-ui-text'>{value}</p>
         </DashboardPanel>
     )
 }
 
 function operationToneText(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'text-[#7bd39a]'
-    if (tone === 'watch') return 'text-[#f6b45f]'
-    return 'text-[#ff9b6b]'
+    if (tone === 'ok') return 'text-ui-success'
+    if (tone === 'watch') return 'text-ui-warning'
+    return 'text-ui-danger'
 }
 
 function operationToneDot(tone: 'ok' | 'watch' | 'bad') {
-    if (tone === 'ok') return 'bg-[#31c48d] shadow-[0_0_14px_rgba(49,196,141,0.65)]'
-    if (tone === 'watch') return 'bg-[#f6b45f] shadow-[0_0_14px_rgba(246,180,95,0.45)]'
-    return 'bg-[#ff7a59] shadow-[0_0_14px_rgba(255,122,89,0.45)]'
+    if (tone === 'ok') return 'bg-ui-success shadow-sm'
+    if (tone === 'watch') return 'bg-ui-warning shadow-sm'
+    return 'bg-ui-danger shadow-sm'
 }
 
 function QueryTable({ queries }: { queries: DatabaseQueryActivity[] }) {
     return (
         <div className='mt-3 overflow-x-auto'>
             <table className='min-w-full text-left text-sm'>
-                <thead className='border-b border-[#26344d] text-xs uppercase text-[#8fa0ba]'>
+                <thead className='border-b border-ui-border text-xs uppercase text-ui-muted'>
                     <tr>
                         <th className='py-2 pr-3 font-semibold'>Duration</th>
                         <th className='px-3 py-2 font-semibold'>Database</th>
@@ -275,18 +275,18 @@ function QueryTable({ queries }: { queries: DatabaseQueryActivity[] }) {
                         <th className='py-2 pl-3 font-semibold'>Query</th>
                     </tr>
                 </thead>
-                <tbody className='divide-y divide-[#1f2c42]'>
+                <tbody className='divide-y divide-ui-border'>
                     {queries.map((query, index) => (
-                        <tr key={`${query.database}-${query.user}-${query.durationSeconds}-${index}`} className='align-top text-[#dbe7ff]'>
-                            <td className='whitespace-nowrap py-2 pr-3 font-semibold text-[#edf4ff]'>
+                        <tr key={`${query.database}-${query.user}-${query.durationSeconds}-${index}`} className='align-top text-ui-text'>
+                            <td className='whitespace-nowrap py-2 pr-3 font-semibold text-ui-text'>
                                 {formatTime(query.durationSeconds)}
-                                {query.isLongRunning && <span className='ml-2 rounded-full bg-[#2c160f] px-2 py-0.5 text-xs text-[#ffb598]'>Long</span>}
+                                {query.isLongRunning && <span className='ml-2 rounded-full bg-ui-danger/10 px-2 py-0.5 text-xs text-ui-danger'>Long</span>}
                             </td>
                             <td className='px-3 py-2'>{query.database || 'Database syncing'}</td>
                             <td className='px-3 py-2'>{query.user || 'User syncing'}</td>
                             <td className='px-3 py-2'>{query.state || 'State syncing'}</td>
                             <td className='px-3 py-2'>{[query.waitEventType, query.waitEvent].filter(Boolean).join(' / ') || 'Clear'}</td>
-                            <td className='max-w-[28rem] py-2 pl-3 text-xs text-[#aab7cc]'>
+                            <td className='max-w-[28rem] py-2 pl-3 text-xs text-ui-muted'>
                                 <code className='wrap-break-word'>{query.query || 'Query text unavailable'}</code>
                             </td>
                         </tr>
@@ -299,7 +299,7 @@ function QueryTable({ queries }: { queries: DatabaseQueryActivity[] }) {
 
 function LongestQuery({ query }: { query: DatabaseQueryActivity }) {
     return (
-        <div className='mt-3 rounded-md border border-[#26344d] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
+        <div className='mt-3 rounded-md border border-ui-border bg-ui-canvas p-3 text-sm text-ui-muted'>
             <div className='grid grid-cols-2 gap-2'>
                 <Fact label='Database' value={query.database || 'Database syncing'} />
                 <Fact label='User' value={query.user || 'User syncing'} />
@@ -307,7 +307,7 @@ function LongestQuery({ query }: { query: DatabaseQueryActivity }) {
                 <Fact label='Duration' value={formatTime(query.durationSeconds)} />
                 <Fact label='Wait' value={[query.waitEventType, query.waitEvent].filter(Boolean).join(' / ') || 'Clear'} />
             </div>
-            <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-[#26344d] bg-[#101827] p-3 text-xs text-[#aab7cc]'>
+            <pre className='mt-3 max-h-40 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md border border-ui-border bg-ui-panel p-3 text-xs text-ui-muted'>
                 {query.query || 'Query text unavailable'}
             </pre>
         </div>
@@ -317,16 +317,16 @@ function LongestQuery({ query }: { query: DatabaseQueryActivity }) {
 function Fact({ label, value }: { label: string, value: string }) {
     return (
         <p>
-            <span className='font-semibold text-[#dbe7ff]'>{label}:</span> {value}
+            <span className='font-semibold text-ui-text'>{label}:</span> {value}
         </p>
     )
 }
 
 function EmptyState({ title, body }: { title: string, body: string }) {
     return (
-        <div className='mt-3 rounded-md border border-dashed border-[#334762] bg-[#0b121e] px-3 py-3 text-sm'>
-            <p className='font-semibold text-[#edf4ff]'>{title}</p>
-            <p className='mt-1 text-[#aab7cc]'>{body}</p>
+        <div className='mt-3 rounded-md border border-dashed border-ui-border bg-ui-canvas px-3 py-3 text-sm'>
+            <p className='font-semibold text-ui-text'>{title}</p>
+            <p className='mt-1 text-ui-muted'>{body}</p>
         </div>
     )
 }
