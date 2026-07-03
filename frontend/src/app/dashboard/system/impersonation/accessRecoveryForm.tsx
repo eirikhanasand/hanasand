@@ -65,24 +65,56 @@ type ImpersonationPayload = {
     detail?: { code?: string, message?: string }
 }
 
-const inputClass = 'h-9 min-w-0 rounded-md border border-[#d8e0ec] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#7b8494] focus:border-[#3056d3] focus:ring-2 focus:ring-[#3056d3]/15'
-const textAreaClass = 'min-h-20 rounded-md border border-[#d8e0ec] bg-white px-3 py-2 text-sm text-[#171a21] outline-none transition placeholder:text-[#7b8494] focus:border-[#3056d3] focus:ring-2 focus:ring-[#3056d3]/15'
-const primaryButton = 'h-9 rounded-md bg-[#3056d3] px-3 text-sm font-semibold text-white transition hover:bg-[#2848b5] disabled:cursor-not-allowed disabled:opacity-55'
-const secondaryButton = 'h-9 rounded-md border border-[#ccd6e4] px-3 text-sm font-semibold text-[#344054] transition hover:bg-[#f2f6fc] disabled:cursor-not-allowed disabled:opacity-55'
+type SupportOperation = 'impersonation' | 'recovery' | 'decision' | 'queue'
+
+const inputClass = 'h-9 min-w-0 rounded-md border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+const textAreaClass = 'min-h-20 rounded-md border border-[#27364f] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+const primaryButton = 'h-9 rounded-md bg-[#315bd8] px-3 text-sm font-semibold text-white transition hover:bg-[#244bbf] disabled:cursor-not-allowed disabled:opacity-55'
+const secondaryButton = 'h-9 rounded-md border border-[#31466b] bg-[#111827] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:bg-[#172033] disabled:cursor-not-allowed disabled:opacity-55'
+const operationTabs: Array<{ id: SupportOperation, label: string, detail: string }> = [
+    { id: 'impersonation', label: 'Session', detail: 'Start or end scoped access' },
+    { id: 'recovery', label: 'Recovery', detail: 'Generate an invite' },
+    { id: 'decision', label: 'Review', detail: 'Approve or deny' },
+    { id: 'queue', label: 'Queue', detail: 'Find recovery requests' },
+]
 
 function Message({ value, tone = 'neutral' }: { value: string, tone?: 'neutral' | 'error' | 'success' }) {
     if (!value) return null
     const toneClass = tone === 'error'
-        ? 'border-[#fecdca] bg-[#fff1f0] text-[#b42318]'
+        ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
         : tone === 'success'
-            ? 'border-[#abefc6] bg-[#ecfdf3] text-[#067647]'
-            : 'border-[#d8e0ec] bg-[#f8fafc] text-[#475467]'
+            ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+            : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
     return <p className={`rounded-md border px-3 py-2 text-sm ${toneClass}`}>{value}</p>
 }
 
 function CopyBlock({ value }: { value?: string }) {
     if (!value) return null
-    return <pre className='max-h-36 overflow-auto rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-xs leading-5 text-[#344054]'>{value}</pre>
+    return <pre className='max-h-36 overflow-auto rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-xs leading-5 text-[#dbe7ff]'>{value}</pre>
+}
+
+function OperationTab({
+    active,
+    label,
+    detail,
+    onClick,
+}: {
+    active: boolean
+    label: string
+    detail: string
+    onClick: () => void
+}) {
+    return (
+        <button
+            type='button'
+            aria-pressed={active}
+            className={`rounded-md border px-3 py-2 text-left transition ${active ? 'border-[#b8c5ff] bg-[#122449] text-[#9db8ff]' : 'border-[#26344d] bg-[#0b121e] text-[#aab7cc] hover:bg-[#162033]'}`}
+            onClick={onClick}
+        >
+            <span className='block text-sm font-semibold'>{label}</span>
+            <span className='mt-0.5 block text-xs text-[#8fa0ba]'>{detail}</span>
+        </button>
+    )
 }
 
 function auditHref(requestId: string, action?: string) {
@@ -92,6 +124,7 @@ function auditHref(requestId: string, action?: string) {
 }
 
 export default function AccessRecoveryForm() {
+    const [operation, setOperation] = useState<SupportOperation>('impersonation')
     const [recoveryResult, setRecoveryResult] = useState<RecoveryPayload | null>(null)
     const [decisionResult, setDecisionResult] = useState<DecisionPayload | null>(null)
     const [searchResult, setSearchResult] = useState<ApprovalSearchPayload | null>(null)
@@ -267,10 +300,22 @@ export default function AccessRecoveryForm() {
 
     return (
         <div className='grid gap-4'>
-            <section className='grid gap-3'>
+            <div className='grid gap-2 sm:grid-cols-2' role='group' aria-label='Support operation'>
+                {operationTabs.map(tab => (
+                    <OperationTab
+                        key={tab.id}
+                        active={operation === tab.id}
+                        label={tab.label}
+                        detail={tab.detail}
+                        onClick={() => setOperation(tab.id)}
+                    />
+                ))}
+            </div>
+
+            {operation === 'impersonation' && <section className='grid gap-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#171a21]'>Scoped impersonation</h3>
-                    <p className='mt-1 text-xs leading-5 text-[#667085]'>Start or end a support session with a reason, target, duration, scope, and audit trail.</p>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Scoped impersonation</h3>
+                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Start or end a support session with a reason, target, duration, scope, and audit trail.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitImpersonation}>
                     <div className='grid gap-2 sm:grid-cols-2'>
@@ -285,14 +330,14 @@ export default function AccessRecoveryForm() {
                             <option value='240'>240 minutes</option>
                         </select>
                     </div>
-                    <div className='flex flex-wrap gap-2 rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-2 text-xs text-[#475467]'>
+                    <div className='flex flex-wrap gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-2 text-xs text-[#aab7cc]'>
                         {[
                             ['read_profile', 'Profile'],
                             ['read_org', 'Organization'],
                             ['support_debug', 'Debug'],
                         ].map(([value, label]) => (
-                            <label className='inline-flex items-center gap-2 rounded-md bg-white px-2 py-1' key={value}>
-                                <input className='accent-[#3056d3]' defaultChecked={value !== 'support_debug'} name='scope' type='checkbox' value={value} />
+                            <label className='inline-flex items-center gap-2 rounded-md bg-[#101827] px-2 py-1' key={value}>
+                                <input className='accent-[#7aa5ff]' defaultChecked={value !== 'support_debug'} name='scope' type='checkbox' value={value} />
                                 {label}
                             </label>
                         ))}
@@ -300,24 +345,27 @@ export default function AccessRecoveryForm() {
                     <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
                     <button className={primaryButton} disabled={submitting === 'impersonation'} type='submit'>{submitting === 'impersonation' ? 'Starting...' : 'Start scoped session'}</button>
                 </form>
-                <form className='grid gap-2 border-t border-[#e7edf5] pt-3' onSubmit={stopImpersonation}>
-                    <input className={inputClass} name='context' placeholder='Stop context' />
-                    <textarea className={textAreaClass} name='reason' placeholder='Stop reason' required />
-                    <button className={secondaryButton} disabled={submitting === 'stop'} type='submit'>{submitting === 'stop' ? 'Ending...' : 'End current session'}</button>
-                </form>
+                <details className='rounded-md border border-[#26344d] bg-[#0b121e]'>
+                    <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-[#dbe7ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>End current session</summary>
+                    <form className='grid gap-2 border-t border-[#26344d] p-3' onSubmit={stopImpersonation}>
+                        <input className={inputClass} name='context' placeholder='Stop context' />
+                        <textarea className={textAreaClass} name='reason' placeholder='Stop reason' required />
+                        <button className={secondaryButton} disabled={submitting === 'stop'} type='submit'>{submitting === 'stop' ? 'Ending...' : 'End current session'}</button>
+                    </form>
+                </details>
                 <Message value={impersonationMessage} tone={impersonationMessage.includes('failed') || impersonationResult?.error ? 'error' : 'success'} />
                 {impersonationResult?.session ? (
-                    <div className='rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-xs leading-5 text-[#475467]'>
-                        <div className='font-semibold text-[#171a21]'>{impersonationResult.session.target?.name || impersonationResult.session.target?.id}</div>
-                        <div>expires {impersonationResult.session.expires_at || 'unknown'} · scope {(impersonationResult.session.scope || []).join(', ') || 'none'}</div>
+                    <div className='rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-xs leading-5 text-[#aab7cc]'>
+                        <div className='font-semibold text-[#edf4ff]'>{impersonationResult.session.target?.name || impersonationResult.session.target?.id}</div>
+                        <div>expires {impersonationResult.session.expires_at || 'active session'} · scope {(impersonationResult.session.scope || []).join(', ') || 'default'}</div>
                     </div>
                 ) : null}
-            </section>
+            </section>}
 
-            <section className='grid gap-3 border-t border-[#e7edf5] pt-4'>
+            {operation === 'recovery' && <section className='grid gap-3'>
                 <div>
-                    <h3 className='text-sm font-semibold text-[#171a21]'>Access recovery</h3>
-                    <p className='mt-1 text-xs leading-5 text-[#667085]'>Generate a controlled recovery invite, then review its audit trail.</p>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Access recovery</h3>
+                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Generate a controlled recovery invite, then review its audit trail.</p>
                 </div>
                 <form className='grid gap-2' onSubmit={submitRecovery}>
                     <div className='grid gap-2 sm:grid-cols-2'>
@@ -332,29 +380,29 @@ export default function AccessRecoveryForm() {
                     <input className={inputClass} name='caseId' placeholder='Case id' />
                     <input className={inputClass} name='context' placeholder='Context' />
                     <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
-                    <label className='flex items-center gap-2 text-sm text-[#475467]'>
-                        <input className='h-4 w-4 accent-[#3056d3]' name='approvalRequired' type='checkbox' />
+                    <label className='flex items-center gap-2 text-sm text-[#aab7cc]'>
+                        <input className='h-4 w-4 accent-[#7aa5ff]' name='approvalRequired' type='checkbox' />
                         Require second review
                     </label>
                     <button className={primaryButton} disabled={submitting === 'recovery'} type='submit'>{submitting === 'recovery' ? 'Generating...' : 'Generate recovery invite'}</button>
                 </form>
                 <Message value={recoveryMessage} tone={recoveryResult?.error ? 'error' : recoveryMessage ? 'success' : 'neutral'} />
                 {recoveryResult?.recovery ? (
-                    <div className='grid gap-2 rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-sm text-[#475467]'>
-                        <div className='flex flex-wrap gap-2 font-medium text-[#171a21]'>
+                    <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
+                        <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
                             <span>Request {recoveryResult.recovery.requestId}</span>
                             <span>{recoveryResult.recovery.invite.email}</span>
                             <span>{recoveryResult.recovery.approvalStatus}</span>
                         </div>
                         <div>{recoveryResult.recovery.invite.role} until {recoveryResult.recovery.invite.expiresAt}</div>
                         <CopyBlock value={recoveryResult.recovery.copyText} />
-                        <a className='text-sm font-semibold text-[#3056d3] hover:text-[#2848b5]' href={auditHref(recoveryResult.recovery.requestId, recoveryResult.recovery.audit.actionType)}>Open audit trail</a>
+                        <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(recoveryResult.recovery.requestId, recoveryResult.recovery.audit.actionType)}>Open audit trail</a>
                     </div>
                 ) : null}
-            </section>
+            </section>}
 
-            <section className='grid gap-3 border-t border-[#e7edf5] pt-4'>
-                <h3 className='text-sm font-semibold text-[#171a21]'>Recovery decision</h3>
+            {operation === 'decision' && <section className='grid gap-3'>
+                <h3 className='text-sm font-semibold text-[#edf4ff]'>Recovery decision</h3>
                 <form className='grid gap-2' onSubmit={submitDecision}>
                     <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]'>
                         <input className={inputClass} name='requestId' placeholder='Recovery request id' required />
@@ -369,20 +417,20 @@ export default function AccessRecoveryForm() {
                 </form>
                 <Message value={decisionMessage} tone={decisionResult?.error ? 'error' : decisionMessage ? 'success' : 'neutral'} />
                 {decisionResult?.decision ? (
-                    <div className='grid gap-2 rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-sm text-[#475467]'>
-                        <div className='flex flex-wrap gap-2 font-medium text-[#171a21]'>
+                    <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
+                        <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
                             <span>{decisionResult.decision.status}</span>
                             <span>{decisionResult.decision.invite.email}</span>
                             <span>{decisionResult.decision.invite.status}</span>
                         </div>
                         <CopyBlock value={decisionResult.decision.copyText} />
-                        <a className='text-sm font-semibold text-[#3056d3] hover:text-[#2848b5]' href={auditHref(decisionResult.decision.requestId)}>Open decision audit</a>
+                        <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(decisionResult.decision.requestId)}>Open decision audit</a>
                     </div>
                 ) : null}
-            </section>
+            </section>}
 
-            <section className='grid gap-3 border-t border-[#e7edf5] pt-4'>
-                <h3 className='text-sm font-semibold text-[#171a21]'>Recovery queue</h3>
+            {operation === 'queue' && <section className='grid gap-3'>
+                <h3 className='text-sm font-semibold text-[#edf4ff]'>Recovery queue</h3>
                 <form className='grid gap-2' onSubmit={submitSearch}>
                     <div className='grid gap-2 sm:grid-cols-2'>
                         <input className={inputClass} name='request' placeholder='Request id' />
@@ -409,21 +457,21 @@ export default function AccessRecoveryForm() {
                 {searchResult?.approvals?.length ? (
                     <div className='grid gap-2'>
                         {searchResult.approvals.map(approval => (
-                            <div className='grid gap-2 rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-sm text-[#475467]' key={approval.requestId}>
-                                <div className='flex flex-wrap gap-2 font-medium text-[#171a21]'>
+                            <div className='grid gap-2 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]' key={approval.requestId}>
+                                <div className='flex flex-wrap gap-2 font-medium text-[#edf4ff]'>
                                     <span>{approval.status}</span>
                                     <span>{approval.outcome}</span>
                                     <span>{approval.invite.email}</span>
                                 </div>
                                 <div className='text-xs'>request {approval.requestId} · audit {approval.auditEventIds?.join(', ') || 'pending'}</div>
-                                <a className='text-sm font-semibold text-[#3056d3] hover:text-[#2848b5]' href={auditHref(approval.requestId)}>Open request audit</a>
+                                <a className='text-sm font-semibold text-[#9db8ff] hover:text-[#2848b5]' href={auditHref(approval.requestId)}>Open request audit</a>
                             </div>
                         ))}
                     </div>
                 ) : searchResult ? (
-                    <p className='rounded-md border border-[#d8e0ec] bg-[#f8fafc] p-3 text-sm text-[#667085]'>No recovery requests matched those filters.</p>
+                    <p className='rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#8fa0ba]'>Recovery request filters are clear.</p>
                 ) : null}
-            </section>
+            </section>}
         </div>
     )
 }
