@@ -130,52 +130,7 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...(id ? { id } : {}),
         }
-        const mirrors = []
-        for (const mirrorPayload of mirrorPayloads) {
-            const response = await fetch(new URL('/v1/dwm/watchlists', base), {
-                method: 'POST',
-                cache: 'no-store',
-                headers: {
-                    'content-type': 'application/json',
-                    'x-tenant-id': organizationId,
-                    'x-organization-id': organizationId,
-                    ...authHeaders,
-                },
-                body: JSON.stringify(mirrorPayload),
-                signal: AbortSignal.timeout(12000),
-            })
-            const text = await response.text()
-            const payload = parseJsonObject(text)
-            mirrors.push({
-                ok: response.ok,
-                status: response.status,
-                watchlistId: payload.watchlist?.id ?? mirrorPayload.id,
-                watchlistStatus: mirrorPayload.status,
-                savedAlertCount: payload.alertRebuild?.savedAlertCount ?? 0,
-                alertIds: payload.alertRebuild?.alertIds ?? [],
-                sourceFamilies: payload.alertRebuild?.sourceFamilies ?? [],
-                matchedTerms: payload.alertRebuild?.matchedTerms ?? [],
-                error: response.ok ? undefined : payload.error ?? payload,
-            })
-        }
-        const first = mirrors[0]
-        const alertIds = Array.from(new Set(mirrors.flatMap(item => item.alertIds)))
-        const firstAlert = alertIds[0]
-            ? await fetchDwmAlertPreview(base, alertIds[0], organizationId, authHeaders)
-            : undefined
-        return {
-            ok: mirrors.every(item => item.ok),
-            status: mirrors.every(item => item.ok) ? first.status : mirrors.find(item => !item.ok)?.status ?? first.status,
-            watchlistId: first.watchlistId,
-            watchlistStatus: first.watchlistStatus,
-            savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
-            alertIds,
-            sourceFamilies: Array.from(new Set(mirrors.flatMap(item => item.sourceFamilies))),
-            matchedTerms: Array.from(new Set(mirrors.flatMap(item => item.matchedTerms))),
-            firstAlert,
-            mirrors,
-            error: mirrors.find(item => item.error)?.error,
-        }
+        return mirrorOrganizationWatchlistToDwmResult({ base, organizationId, mirrorPayloads, authHeaders })
     } catch (error) {
         const first = mirrorPayloads[0]
         return {
@@ -195,11 +150,67 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
     }
 }
 
-async function fetchDwmAlertPreview(base: string, alertId: string, organizationId: string, authHeaders: Record<string, string>) {
+export async function mirrorOrganizationWatchlistToDwmResult(input: {
+    base: string
+    organizationId: string
+    mirrorPayloads: DwmWatchlistMirrorPayload[]
+    authHeaders?: Record<string, string>
+    fetchImpl?: typeof fetch
+}) {
+    const fetchImpl = input.fetchImpl ?? fetch
+    const mirrors = []
+    for (const mirrorPayload of input.mirrorPayloads) {
+        const response = await fetchImpl(new URL('/v1/dwm/watchlists', input.base), {
+            method: 'POST',
+            cache: 'no-store',
+            headers: {
+                'content-type': 'application/json',
+                'x-tenant-id': input.organizationId,
+                'x-organization-id': input.organizationId,
+                ...input.authHeaders,
+            },
+            body: JSON.stringify(mirrorPayload),
+            signal: AbortSignal.timeout(12000),
+        })
+        const text = await response.text()
+        const payload = parseJsonObject(text)
+        mirrors.push({
+            ok: response.ok,
+            status: response.status,
+            watchlistId: payload.watchlist?.id ?? mirrorPayload.id,
+            watchlistStatus: mirrorPayload.status,
+            savedAlertCount: payload.alertRebuild?.savedAlertCount ?? 0,
+            alertIds: payload.alertRebuild?.alertIds ?? [],
+            sourceFamilies: payload.alertRebuild?.sourceFamilies ?? [],
+            matchedTerms: payload.alertRebuild?.matchedTerms ?? [],
+            error: response.ok ? undefined : payload.error ?? payload,
+        })
+    }
+    const first = mirrors[0]
+    const alertIds = Array.from(new Set(mirrors.flatMap(item => item.alertIds)))
+    const firstAlert = alertIds[0]
+        ? await fetchDwmAlertPreview(input.base, alertIds[0], input.organizationId, input.authHeaders ?? {}, fetchImpl)
+        : undefined
+    return {
+        ok: mirrors.every(item => item.ok),
+        status: mirrors.every(item => item.ok) ? first.status : mirrors.find(item => !item.ok)?.status ?? first.status,
+        watchlistId: first.watchlistId,
+        watchlistStatus: first.watchlistStatus,
+        savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
+        alertIds,
+        sourceFamilies: Array.from(new Set(mirrors.flatMap(item => item.sourceFamilies))),
+        matchedTerms: Array.from(new Set(mirrors.flatMap(item => item.matchedTerms))),
+        firstAlert,
+        mirrors,
+        error: mirrors.find(item => item.error)?.error,
+    }
+}
+
+async function fetchDwmAlertPreview(base: string, alertId: string, organizationId: string, authHeaders: Record<string, string>, fetchImpl: typeof fetch = fetch) {
     const target = new URL(`/v1/dwm/alerts/${encodeURIComponent(alertId)}`, base)
     target.searchParams.set('tenantId', organizationId)
     target.searchParams.set('organizationId', organizationId)
-    const response = await fetch(target, {
+    const response = await fetchImpl(target, {
         cache: 'no-store',
         headers: {
             'x-tenant-id': organizationId,
