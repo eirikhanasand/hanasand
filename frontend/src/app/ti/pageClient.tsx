@@ -6160,10 +6160,6 @@ function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected
                 <p className='wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
                     {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready` : 'Attach source rows before alert or case handoff.'}
                 </p>
-                <div className='flex flex-wrap gap-1.5'>
-                    <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>Open detail</a>
-                    <a href='#ti-activity' className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>Queue</a>
-                </div>
             </div>
         </section>
     )
