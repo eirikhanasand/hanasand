@@ -10,7 +10,7 @@ export type AgentAutomation = {
     intervalMinutes: number | null
     runAt: string | null
     status: 'active' | 'paused' | 'archived'
-    actionType: 'agent_prompt' | 'echo'
+    actionType: 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert'
     timezone: string
     modelName: string | null
     notifyOn: 'never' | 'failure' | 'always'
@@ -47,7 +47,7 @@ export type AutomationPayload = {
     intervalMinutes?: number | null
     runAt?: string | null
     status: 'active' | 'paused'
-    actionType: 'agent_prompt' | 'echo'
+    actionType: 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert'
     timezone?: string
     modelName?: string | null
     notifyOn?: 'never' | 'failure' | 'always'

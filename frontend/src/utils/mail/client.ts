@@ -42,10 +42,10 @@ export async function fetchMailOverview(params: { mailboxUser?: string, mailboxI
         search.set('messageId', params.messageId)
     }
 
-    const response = await fetch(`/api/backend/mail/overview?${search.toString()}`, {
+    const response = await fetchWithTimeout(`/api/backend/mail/overview?${search.toString()}`, {
         headers,
         cache: 'no-store',
-    })
+    }, 15_000)
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) {
         throw new Error((payload as { error?: string }).error || 'Mail is unavailable right now. The rest of the console is still ready.')
@@ -133,6 +133,22 @@ async function postJson(path: string, body: Record<string, unknown>) {
     }
 
     return payload
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs: number) {
+    const controller = new AbortController()
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+    try {
+        return await fetch(input, { ...init, signal: controller.signal })
+    } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('Mail did not respond in time. Message and folder actions are temporarily paused.', { cause: error })
+        }
+
+        throw error
+    } finally {
+        window.clearTimeout(timeout)
+    }
 }
 
 function normalizeMailOverview(payload: Partial<MailOverview>): MailOverview {

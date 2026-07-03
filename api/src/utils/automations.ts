@@ -1,9 +1,11 @@
 import run from '#db'
+import { deliverDiscordWebhookFile, discordWebhookFileModelLabel, redactSecretBearingText } from '#utils/alerts/discordWebhookFile.ts'
+import { getMailHealth } from '#utils/mail/health.ts'
 import { listGptClients, requestGptCompletion } from '#utils/ws/handleGptMessage.ts'
 
 export type AutomationScheduleKind = 'once' | 'interval'
 export type AutomationStatus = 'active' | 'paused' | 'archived'
-export type AutomationActionType = 'agent_prompt' | 'echo'
+export type AutomationActionType = 'agent_prompt' | 'echo' | 'mail_health_check' | 'system_alert'
 
 export type AutomationRow = {
     id: string
@@ -79,7 +81,7 @@ type NormalizedAutomationInput = {
 }
 
 const ACTIVE_STATUSES = new Set(['active', 'paused', 'archived'])
-const ACTION_TYPES = new Set(['agent_prompt', 'echo'])
+const ACTION_TYPES = new Set(['agent_prompt', 'echo', 'mail_health_check', 'system_alert'])
 const NOTIFY_OPTIONS = new Set(['never', 'failure', 'always'])
 const MAX_AUTOMATION_RUNTIME_MS = 10 * 60_000
 const STALE_RUNNING_AFTER_MS = MAX_AUTOMATION_RUNTIME_MS + 2 * 60_000
@@ -317,6 +319,47 @@ async function runAutomationAction(automation: AutomationRow) {
         }
     }
 
+    if (automation.action_type === 'mail_health_check') {
+        const health = await getMailHealth().catch(error => ({
+            status: 'error' as const,
+            checkedAt: new Date().toISOString(),
+            queueDepth: 0,
+            smtpBannerLatencyMs: null,
+            checks: [{
+                id: 'mail-overview',
+                label: 'Mail overview',
+                status: 'error' as const,
+                detail: error instanceof Error ? redactSecretBearingText(error.message) : 'Mail health check failed.',
+            }],
+        }))
+        const unhealthyChecks = health.checks.filter(check => check.status !== 'healthy')
+        const summary = [
+            `Mail health ${health.status} at ${health.checkedAt}.`,
+            unhealthyChecks.length
+                ? `Issues: ${unhealthyChecks.map(check => `${check.label}: ${check.detail}`).join('; ')}`
+                : 'All checks are healthy.',
+        ].join(' ')
+
+        if (health.status !== 'healthy' || automation.notify_on === 'always') {
+            await deliverDiscordIfConfigured(automation, `Hanasand mail alert: ${summary}`)
+        }
+
+        return {
+            provider: 'hanasand-alerts',
+            model: automation.model_name ? discordWebhookFileModelLabel(automation.model_name) : 'mail-health',
+            message: summary,
+        }
+    }
+
+    if (automation.action_type === 'system_alert') {
+        await deliverDiscordIfConfigured(automation, `Hanasand alert: ${automation.prompt}`)
+        return {
+            provider: 'hanasand-alerts',
+            model: automation.model_name ? discordWebhookFileModelLabel(automation.model_name) : 'system-alert',
+            message: 'System alert delivered.',
+        }
+    }
+
     const clients = listGptClients('gpt')
     const availableClients = clients.filter((client) => client.model.status !== 'error')
     const preferredClient = automation.model_name
@@ -351,6 +394,10 @@ async function runAutomationAction(automation: AutomationRow) {
         model: preferredClient.name,
         message: completion.content || 'Automation completed without a text result.',
     }
+}
+
+async function deliverDiscordIfConfigured(automation: AutomationRow, content: string) {
+    await deliverDiscordWebhookFile(automation.model_name, content)
 }
 
 async function withAutomationTimeout<T>(promise: Promise<T>) {

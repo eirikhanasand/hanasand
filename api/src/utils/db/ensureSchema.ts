@@ -368,7 +368,7 @@ export default async function ensureSchema() {
             interval_minutes INT,
             run_at TIMESTAMPTZ,
             status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
-            action_type TEXT NOT NULL DEFAULT 'agent_prompt' CHECK (action_type IN ('agent_prompt', 'echo')),
+            action_type TEXT NOT NULL DEFAULT 'agent_prompt' CHECK (action_type IN ('agent_prompt', 'echo', 'mail_health_check', 'system_alert')),
             timezone TEXT NOT NULL DEFAULT 'UTC',
             model_name TEXT,
             notify_on TEXT NOT NULL DEFAULT 'failure' CHECK (notify_on IN ('never', 'failure', 'always')),
@@ -390,6 +390,8 @@ export default async function ensureSchema() {
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS notify_on TEXT NOT NULL DEFAULT \'failure\'')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS consecutive_failures INT NOT NULL DEFAULT 0')
     await run('ALTER TABLE agent_automations ADD COLUMN IF NOT EXISTS paused_reason TEXT')
+    await run('ALTER TABLE agent_automations DROP CONSTRAINT IF EXISTS agent_automations_action_type_check')
+    await run('ALTER TABLE agent_automations ADD CONSTRAINT agent_automations_action_type_check CHECK (action_type IN (\'agent_prompt\', \'echo\', \'mail_health_check\', \'system_alert\'))')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automations_owner_updated ON agent_automations(owner_id, updated_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_agent_automations_due ON agent_automations(status, next_run_at)')
     await run(`

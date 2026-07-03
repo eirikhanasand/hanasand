@@ -20,6 +20,8 @@ const hopByHopHeaders = new Set([
     'upgrade',
 ])
 
+const BACKEND_PROXY_TIMEOUT_MS = Number(process.env.BACKEND_PROXY_TIMEOUT_MS || 12_000)
+
 async function handler(req: NextRequest, context: Context) {
     const cookieStore = await cookies()
     const token = cookieStore.get('access_token')?.value || bearerToken(req.headers.get('authorization')) || ''
@@ -48,13 +50,24 @@ async function handler(req: NextRequest, context: Context) {
         headers.set('x-impersonation-token', impersonationToken)
     }
 
-    const response = await fetch(target, {
-        method: req.method,
-        headers,
-        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body,
-        duplex: 'half',
-        cache: 'no-store',
-    } as RequestInit & { duplex: 'half' })
+    let response: Response
+    try {
+        response = await fetch(target, {
+            method: req.method,
+            headers,
+            body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body,
+            duplex: 'half',
+            cache: 'no-store',
+            signal: AbortSignal.timeout(BACKEND_PROXY_TIMEOUT_MS),
+        } as RequestInit & { duplex: 'half' })
+    } catch (error) {
+        const isTimeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+        return NextResponse.json({
+            error: isTimeout
+                ? 'The backend service did not respond in time. Try again shortly; the dashboard is still available.'
+                : 'The backend service is unavailable right now. Try again shortly.',
+        }, { status: 503 })
+    }
 
     const responseHeaders = new Headers()
     response.headers.forEach((value, key) => {

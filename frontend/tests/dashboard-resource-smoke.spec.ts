@@ -296,14 +296,14 @@ test.describe('dashboard resource routes', () => {
             await page.goto('/dashboard/automations', { waitUntil: 'domcontentloaded' })
             await expect(page).toHaveURL(/\/dashboard\/automations$/)
             await automationsLoaded
-            await expect(page.getByText('No automations yet.')).toBeVisible()
+            await expect(page.getByText('No alerts yet.')).toBeVisible()
 
-            await page.getByRole('button', { name: 'New automation' }).click()
+            await page.getByRole('button', { name: 'New alert' }).click()
             await expect(page.getByText('Draft ready.')).toBeVisible()
 
-            await page.getByLabel('Name').fill(title)
-            await page.getByRole('textbox', { name: 'Prompt', exact: true }).fill('Echo this dashboard smoke without running it.')
-            await page.getByLabel('Task type').selectOption('echo')
+            await page.getByLabel('Alert name').fill(title)
+            await page.getByRole('textbox', { name: 'Matching rules', exact: true }).fill('Echo this dashboard smoke without running it.')
+            await page.getByLabel('Alert type').selectOption('echo')
             await page.getByLabel('Status').selectOption('paused')
 
             await Promise.all([
@@ -312,16 +312,16 @@ test.describe('dashboard resource routes', () => {
                     response.request().method() === 'POST' &&
                     response.ok()
                 ),
-                page.getByRole('button', { name: 'Create automation' }).click(),
+                page.getByRole('button', { name: 'Create alert' }).click(),
             ])
 
-            await expect(page.getByText('Automation created.')).toBeVisible()
+            await expect(page.getByText('Alert created.')).toBeVisible()
             await expect(page.getByRole('button', { name: new RegExp(title) })).toBeVisible()
 
-            await page.getByLabel('Name').fill(canceledTitle)
+            await page.getByLabel('Alert name').fill(canceledTitle)
             await page.getByRole('button', { name: 'Cancel', exact: true }).click()
             await expect(page.getByText('Changes discarded.')).toBeVisible()
-            await expect(page.getByLabel('Name')).toHaveValue(title)
+            await expect(page.getByLabel('Alert name')).toHaveValue(title)
             await expect(page.getByRole('button', { name: new RegExp(canceledTitle) })).toHaveCount(0)
 
             await Promise.all([
@@ -333,8 +333,8 @@ test.describe('dashboard resource routes', () => {
                 page.getByRole('button', { name: 'Delete', exact: true }).click(),
             ])
 
-            await expect(page.getByText('Automation removed.')).toBeVisible()
-            await expect(page.getByText('No automations yet.')).toBeVisible()
+            await expect(page.getByText('Alert removed.')).toBeVisible()
+            await expect(page.getByText('No alerts yet.')).toBeVisible()
             await expect(page.getByRole('button', { name: new RegExp(title) })).toHaveCount(0)
         } finally {
             await context.close()
