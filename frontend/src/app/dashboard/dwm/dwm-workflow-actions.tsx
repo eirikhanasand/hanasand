@@ -35,7 +35,7 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-const STARTER_WATCH_TERMS = ['customer.example', 'Example Supplier'] as const
+const STARTER_WATCH_TERMS = ['your-company.com', 'Primary supplier', 'Customer brand'] as const
 
 export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
@@ -563,7 +563,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     function seedStarterWatchlist() {
         if (countTerms(terms)) return
         setTerms(starterWatchTerms())
-        setResult({ ok: true, message: 'Example watchlist staged. Replace the sample terms, then save or run to case.' })
+        setResult({ ok: true, message: 'Starter watchlist prepared. Replace each line with real customer terms before saving or running to case.' })
     }
 
     const termCount = countTerms(terms)
@@ -580,6 +580,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const latestRunStatus = telemetry?.latestRunStatus || ''
     const latestRunCaptureCount = telemetry?.latestRunCaptureCount ?? 0
     const starterTermsActive = termCount === 0
+    const watchlistDisabledReason = termCount ? '' : 'Add watchlist terms or prepare the starter list first.'
     const sourceDisabledReason = sourceReady ? '' : 'Add a public Telegram handle or t.me URL first.'
     const claimDisabledReason = claimReady ? '' : 'Add the actor name and affected company before ingesting evidence.'
     const webhookTestDisabledReason = webhookConfigured ? '' : 'Enter an HTTPS webhook URL before testing delivery.'
@@ -587,24 +588,25 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         {
             id: 'full_route',
             label: 'Run full route',
-            state: alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
+            state: !termCount ? 'watchlist needed' : alertCount ? `${alertCount} alerts ready` : captureCount ? `${captureCount} captures ready` : 'source pack ready',
             detail: 'Enable source packs, collect captures, rebuild alerts, open a case, and dry-run delivery when a webhook is staged.',
             tone: alertCount ? 'ok' : captureCount ? 'warn' : 'neutral',
             command: 'Run to case',
             busy: busyAction === 'source-case',
-            disabled: busy,
+            disabled: busy || Boolean(watchlistDisabledReason),
+            disabledReason: watchlistDisabledReason,
             onClick: runSourcePackToCase,
         },
         {
             id: 'watchlist',
             label: 'Watchlist match',
-            state: effectiveTermCount ? `${effectiveTermCount} terms` : 'example terms ready',
-            detail: 'Save the customer terms and rebuild matching alerts from collected evidence.',
+            state: termCount ? `${termCount} terms` : 'terms needed',
+            detail: termCount ? 'Save the customer terms and rebuild matching alerts from collected evidence.' : 'Prepare an editable starter list, then replace each line with customer-owned terms.',
             tone: effectiveTermCount ? 'ok' : 'warn',
-            command: 'Save and rebuild',
+            command: termCount ? 'Save and rebuild' : 'Prepare starter list',
             busy: busyAction === 'watchlist',
             disabled: busy,
-            onClick: saveAndRebuildWatchlist,
+            onClick: termCount ? saveAndRebuildWatchlist : seedStarterWatchlist,
         },
         {
             id: 'capture',
@@ -686,7 +688,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             </section>
 
             <section className='grid grid-cols-2 gap-3 xl:grid-cols-5'>
-                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Example terms staged'} tone={termCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Customer terms needed'} tone={termCount ? 'ok' : 'warn'} />
                 <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
                 <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
                 <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
@@ -705,7 +707,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-[#1f2c42]'>
-                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Example terms staged on action'} next='Company, domain, supplier, brand, and product terms define alert scope.' command='Save and rebuild alerts' tone={termCount ? 'ok' : 'warn'} />
+                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Customer terms needed'} next='Company, domain, supplier, brand, and product terms define alert scope.' command={termCount ? 'Save and rebuild alerts' : 'Prepare starter list'} tone={termCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
                             <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts in queue` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with provenance.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
@@ -727,7 +729,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <textarea
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
-                        placeholder={'customer.example\nExample Payments\nExample Supplier'}
+                        placeholder={'your-company.com\nPrimary supplier\nCustomer brand'}
                         className='mt-4 min-h-36 w-full resize-y rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <input
@@ -737,19 +739,19 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Save and rebuild alerts
                         </button>
                         <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
-                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(watchlistDisabledReason)} disabledReason={watchlistDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
-                        {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Use example terms</WorkflowButton> : null}
+                        {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Prepare starter list</WorkflowButton> : null}
                     </div>
-                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>No saved terms yet. Example terms are staged only when you choose them.</p> : null}
+                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.</p> : null}
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
@@ -1031,7 +1033,7 @@ function starterWatchTerms() {
 }
 
 function workflowTerms(value: string) {
-    return countTerms(value) ? value : starterWatchTerms()
+    return value.split(/[\n,]/).map(term => term.trim()).filter(Boolean).join('\n')
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { ok: boolean, message: string }> {
