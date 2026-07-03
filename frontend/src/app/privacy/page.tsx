@@ -36,7 +36,7 @@ export default function PrivacyPage() {
                 },
                 {
                     title: '5. API, webhook, and integration data',
-                    body: 'When customers use APIs, webhooks, email, ticketing, chat, SIEM, or other integrations, Hanasand may process request metadata, endpoint configuration, delivery payloads, response status, retry state, signing or authentication metadata, and diagnostic logs needed to deliver and verify the integration.',
+                    body: 'When customers use APIs, webhooks, email, ticketing, chat, SIEM, or other integrations, Hanasand may process request details, endpoint configuration, delivery payloads, response status, retry state, signing or authentication details, and diagnostic logs needed to deliver and verify the integration.',
                 },
                 {
                     title: '6. Technical and usage information',
