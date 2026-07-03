@@ -34,7 +34,7 @@ export default async function TiQueryPage({ params }: TiQueryPageProps) {
 
     return (
         <ConsoleRouteShell>
-            <main className='min-h-full w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] transition-colors dark:bg-[#07101c] dark:text-[#eef4ff] md:px-8'>
+            <main className='min-h-full w-full bg-ui-canvas px-4 py-8 text-ui-text transition-colors md:px-8'>
                 <TiPageClient initialQuery={query} initialResult={initialResult} />
             </main>
         </ConsoleRouteShell>

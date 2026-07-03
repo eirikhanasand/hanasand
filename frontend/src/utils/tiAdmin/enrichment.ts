@@ -242,9 +242,9 @@ function unavailableOverview(reason: string): TiEnrichmentOverview {
             actorId: 'system',
             actorName: 'Actor refresh worker',
             happenedAt: now,
-            title: 'Actor enrichment state unavailable',
-            detail: `The dashboard could not read live worker state from the API: ${reason}.`,
-            source: 'frontend enrichment dashboard',
+            title: 'Actor profile stream reconnecting',
+            detail: `The dashboard is reconnecting to the live worker stream: ${reason}.`,
+            source: 'frontend actor profiles dashboard',
             tone: 'bad',
         }],
         auditLog: [{

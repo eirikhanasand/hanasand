@@ -83,15 +83,15 @@ export type TiAdminOverview = {
 const sources: TiAdminSource[] = [
     {
         id: 'direct_actor_pages',
-        name: 'Direct actor page verification',
+        name: 'Direct leak-site verification',
         family: 'ransomware_actor_infrastructure',
         type: 'restricted_metadata',
-        accessMethod: 'approved metadata-only fetch',
+        accessMethod: 'approved safe-field fetch',
         status: 'active',
         risk: 'restricted',
         owner: 'source-ops',
-        url: 'metadata-only actor infrastructure registry',
-        domain: 'actor pages',
+        url: 'safe-field actor infrastructure registry',
+        domain: 'leak sites',
         lastRunAt: '2026-06-27T16:41:00.000Z',
         nextRunAt: '2026-06-27T17:11:00.000Z',
         monitoredSince: '2026-06-21T08:00:00.000Z',
@@ -99,7 +99,7 @@ const sources: TiAdminSource[] = [
         usefulRows: 2432,
         domains: ['ntdapparel.com', 'irec-sas.com', 'fjordenergy.example'],
         resultTypes: ['victim_claim', 'actor_page_change', 'claimed_data_description'],
-        buyerValue: 'Confirms whether a company or vendor appears on monitored actor pages before a buyer gets a forwarded screenshot.',
+        buyerValue: 'Confirms whether a company or vendor appears on monitored leak sites before a buyer gets a forwarded screenshot.',
         legalNotes: 'Metadata-only collection. No account access, actor interaction, credential values, or leaked-file retrieval.',
         screenshotIds: ['cap-akira-ntd', 'cap-ransomhouse-irec'],
     },
@@ -121,7 +121,7 @@ const sources: TiAdminSource[] = [
         usefulRows: 29000,
         domains: ['ntdapparel.com', 'aerospace-composites.example', 'irec-sas.com'],
         resultTypes: ['victim_claim_seed', 'actor_group_profile', 'claim_date'],
-        buyerValue: 'Useful as a seed and corroboration layer, then direct actor-page checks decide whether it becomes an alert.',
+        buyerValue: 'Useful as a seed and corroboration layer, then direct leak-site checks decide whether it becomes an alert.',
         legalNotes: 'Public metadata only; not resold as public-row bulk data.',
         screenshotIds: ['cap-ransomlive-akira'],
     },
@@ -238,21 +238,21 @@ const captures: TiAdminCapture[] = [
         sourceId: 'direct_actor_pages',
         domain: 'ntdapparel.com',
         actor: 'Akira',
-        title: 'Ntd Apparel victim claim',
+        title: 'Ntd Apparel ransomware listing',
         publishedAt: '2026-06-27T15:52:00.000Z',
         capturedAt: '2026-06-27T16:41:00.000Z',
         monitoredSince: '2026-06-21T08:00:00.000Z',
         owner: 'source-ops',
-        pageUrl: 'restricted metadata page reference',
-        pageType: 'actor victim claim',
-        screenshotLabel: 'Actor page listing with company name and claimed-data amount.',
+        pageUrl: 'sensitive leak-site reference',
+        pageType: 'actor ransomware listing',
+        screenshotLabel: 'Leak-site listing with company name and data amount.',
         screenshotTakenAt: '2026-06-27T16:41:04.000Z',
         resultSummary: 'Company name, actor name, claimed size, claim status, and page timing were extracted for review.',
         metadata: [
-            { label: 'Claimed data', value: '62 GB claimed' },
+            { label: 'Data mentioned', value: '62 GB listed' },
             { label: 'Status', value: 'current' },
-            { label: 'Collection boundary', value: 'metadata only' },
-            { label: 'Dedupe key', value: 'akira:ntdapparel.com:2026-06-27' },
+            { label: 'Safety rule', value: 'safe fields only' },
+            { label: 'Alert key', value: 'akira:ntdapparel.com:2026-06-27' },
         ],
     },
     {
@@ -260,21 +260,21 @@ const captures: TiAdminCapture[] = [
         sourceId: 'direct_actor_pages',
         domain: 'irec-sas.com',
         actor: 'RansomHouse',
-        title: 'Irec Sas victim claim',
+        title: 'Irec Sas ransomware listing',
         publishedAt: '2026-06-27T11:23:00.000Z',
         capturedAt: '2026-06-27T12:00:00.000Z',
         monitoredSince: '2026-06-21T08:00:00.000Z',
         owner: 'source-ops',
-        pageUrl: 'restricted metadata page reference',
-        pageType: 'actor victim claim',
-        screenshotLabel: 'Actor claim row with company name, actor, and status.',
+        pageUrl: 'sensitive leak-site reference',
+        pageType: 'actor ransomware listing',
+        screenshotLabel: 'Actor listing row with company name, actor, and status.',
         screenshotTakenAt: '2026-06-27T12:00:08.000Z',
-        resultSummary: 'New victim-claim page row was captured and routed to company watchlist review.',
+        resultSummary: 'New ransomware listing was captured and routed to company watchlist review.',
         metadata: [
-            { label: 'Claimed data', value: 'new victim claim' },
+            { label: 'Data mentioned', value: 'new company mention' },
             { label: 'Status', value: 'recent' },
-            { label: 'Collection boundary', value: 'metadata only' },
-            { label: 'Dedupe key', value: 'ransomhouse:irec-sas.com:2026-06-27' },
+            { label: 'Safety rule', value: 'safe fields only' },
+            { label: 'Alert key', value: 'ransomhouse:irec-sas.com:2026-06-27' },
         ],
     },
     {
@@ -296,7 +296,7 @@ const captures: TiAdminCapture[] = [
             { label: 'Verdict', value: 'suspicious page signal' },
             { label: 'First seen', value: '2026-06-27T13:40:00.000Z' },
             { label: 'Signals', value: 'page title, final domain, screenshot hash' },
-            { label: 'Dedupe key', value: 'urlscan:acme-payments.example:pagehash' },
+            { label: 'Alert key', value: 'urlscan:acme-payments.example:pagehash' },
         ],
     },
 ]
@@ -312,7 +312,7 @@ const runs: TiAdminRun[] = [
         rows: 47,
         captures: 9,
         screenshots: 4,
-        message: 'Metadata-only actor-page verification completed.',
+        message: 'Metadata-only leak-site verification completed.',
     },
     {
         id: 'run-ransomlive-20260627-1555',
@@ -415,7 +415,7 @@ function projectDomain(domain: TiAdminDomain, sourceById: Map<string, TiAdminSou
             reviewedAt: new Date(now.getTime() - 11 * 60000).toISOString(),
             qualityScore: 91,
             summary: 'Matched company and domain evidence across bounded metadata sources; routed to monitoring with customer-safe provenance.',
-            checks: ['company/domain match', 'metadata-only boundary', 'dedupe key present', 'customer-safe excerpt'],
+            checks: ['company/domain match', 'safe-field rule', 'alert key present', 'customer-safe excerpt'],
         }
         : undefined
     return {
@@ -454,8 +454,8 @@ function projectRun(source: TiAdminSource, index: number): TiAdminRun {
         captures,
         screenshots: Math.max(source.screenshotIds.length, historical?.screenshots || 0),
         message: source.aiReview
-            ? `Hanasand AI reviewed source quality (${source.aiReview.qualityScore}%) and kept the cadence run active.`
-            : 'Scheduled cadence run completed.',
+            ? `Hanasand AI reviewed source quality (${source.aiReview.qualityScore}%) and kept the run active.`
+            : 'Scheduled run completed.',
     }
 }
 
@@ -468,10 +468,10 @@ function sourceAiReview(source: TiAdminSource, reviewedNear: Date): TiAdminAiRev
         reviewedAt: new Date(reviewedNear.getTime() - 90_000).toISOString(),
         qualityScore: paidPlanRestricted ? 88 : source.risk === 'low' ? 96 : 92,
         summary: paidPlanRestricted
-            ? 'Approved for authorized-domain metadata only; credential values and unverified domains stay excluded.'
-            : 'Approved for automated monitoring after provenance, safety boundary, cadence, and buyer-value checks passed.',
+            ? 'Approved for authorized-domain safe fields; credential values and unchecked domains stay excluded.'
+            : 'Approved for automated monitoring after source details, safety rules, timing, and buyer value checks passed.',
         checks: paidPlanRestricted
-            ? ['domain authorization required', 'metadata-only storage', 'paid-plan boundary', 'no credential values']
-            : ['public or approved API', 'source provenance present', 'customer-safe fields only', 'cadence under SLA'],
+            ? ['domain authorization required', 'safe-field storage', 'paid-plan access', 'no credential values']
+            : ['public or approved API', 'source details present', 'customer-safe fields only', 'run timing under SLA'],
     }
 }

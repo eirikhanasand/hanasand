@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = buildRouteMetadata({
     title: 'Threat Actor Source Map',
-    description: 'Search monitored actor pages, company mentions, review states, and alert-ready dark web monitoring metadata.',
+    description: 'Search monitored leak sites, company mentions, review states, and dark web monitoring details.',
     path: '/ti/darkweb/index',
     keywords: ['threat actor source map', 'dark web index', 'company exposure monitoring'],
 })
@@ -100,17 +100,17 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
     const records = searchIndex?.records ?? []
 
     return (
-        <main className='min-h-[90.5vh] w-full bg-[#f7f8fb] px-4 py-8 text-[#171a21] md:px-8'>
+        <main className='min-h-[90.5vh] w-full bg-ui-canvas px-4 py-8 text-ui-text md:px-8'>
             <div className='mx-auto grid w-full max-w-7xl gap-6'>
-                <section className='grid gap-4 rounded-lg border border-[#dfe5ee] bg-white p-5 shadow-sm lg:grid-cols-[1.2fr_0.8fr]'>
+                <section className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm lg:grid-cols-[1.2fr_0.8fr]'>
                     <div className='grid gap-3'>
                         <div className='flex flex-wrap items-center gap-2'>
-                            <h1 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>Threat actor source map</h1>
+                            <h1 className='text-3xl font-semibold text-ui-text md:text-4xl'>Threat actor source map</h1>
                             <Badge tone='ok'>company alerts</Badge>
-                            <Badge tone='watch'>actor pages</Badge>
+                            <Badge tone='watch'>leak sites</Badge>
                         </div>
-                        <p className='max-w-4xl text-sm leading-6 text-[#596170]'>
-                            Search monitored actor pages, victim-claim seeds, and captured page summaries for company names, actor names, claimed dates, sectors, countries, and claimed-data descriptions. This is the working index behind fast customer notifications and UI-friendly actor overviews.
+                        <p className='max-w-4xl text-sm leading-6 text-ui-muted'>
+                            Search monitored leak sites, recent attacks, and captured page summaries for company names, actor names, posted dates, sectors, countries, and data descriptions. This is the working index behind fast customer notifications and UI-friendly actor overviews.
                         </p>
                     </div>
                     <div className='grid gap-2 text-sm'>
@@ -125,12 +125,12 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                     <ProductTile
                         icon={<Radar className='h-4 w-4' />}
                         title='Direct actor checks'
-                        detail='Use public indexes as seeds, then verify fresh actor-page changes directly where collection is approved.'
+                        detail='Use public indexes as seeds, then verify fresh leak-site changes directly where collection is approved.'
                     />
                     <ProductTile
                         icon={<Building2 className='h-4 w-4' />}
                         title='Company watchlists'
-                        detail='Match customers, subsidiaries, vendors, domains, and brands against new victim claims and captured page text.'
+                        detail='Match customers, subsidiaries, vendors, domains, and brands against new actor posts and captured page text.'
                     />
                     <ProductTile
                         icon={<Globe2 className='h-4 w-4' />}
@@ -139,13 +139,13 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                     />
                 </section>
 
-                <form className='grid gap-3 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm' action='/ti/darkweb/index'>
+                <form className='grid gap-3 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm' action='/ti/darkweb/index'>
                     <div className='grid gap-3 md:grid-cols-[1.2fr_0.7fr_0.7fr_0.7fr_auto] md:items-end'>
                         <Input label='Search' name='q' defaultValue={query} placeholder='company, actor, domain, sector...' />
                         <Input label='Network' name='network' defaultValue={network} placeholder='tor, i2p, clear web' />
                         <Input label='Review type' name='legalTriage' defaultValue={legalTriage} placeholder='approved, review' />
                         <Input label='Status' name='reviewState' defaultValue={reviewState} placeholder='ready, watching' />
-                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-4 text-sm font-semibold text-white transition hover:bg-[#2b2f39]'>
+                        <button className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-white transition hover:opacity-90 dark:text-ui-canvas'>
                             <Filter className='h-4 w-4' />
                             Find
                         </button>
@@ -155,12 +155,12 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
 
                 <section className='grid gap-3'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
-                        <h2 className='text-lg font-semibold text-[#171a21]'>Actor and company activity</h2>
-                        <p className='text-xs text-[#667085]'>{records.length} shown{searchIndex?.nextCursor ? ' · more available' : ''}</p>
+                        <h2 className='text-lg font-semibold text-ui-text'>Actor and company activity</h2>
+                        <p className='text-xs text-ui-muted'>{records.length} shown{searchIndex?.nextCursor ? ' · more available' : ''}</p>
                     </div>
                     {records.length ? (
-                        <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
-                            <div className='hidden grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr] gap-3 border-b border-[#eef1f5] bg-[#f8fafc] px-3 py-2 text-xs font-semibold uppercase text-[#667085] lg:grid'>
+                        <div className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm'>
+                            <div className='hidden grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr] gap-3 border-b border-ui-border bg-ui-raised px-3 py-2 text-xs font-semibold uppercase text-ui-muted lg:grid'>
                                 <span>Mention</span>
                                 <span>Activity type</span>
                                 <span>Review</span>
@@ -171,11 +171,11 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
                             {records.map(record => <RecordRow key={record.id} record={record} />)}
                         </div>
                     ) : (
-                        <div className='grid min-h-[28vh] place-items-center rounded-lg border border-[#dfe5ee] bg-white px-5 py-10 text-center shadow-sm'>
+                        <div className='grid min-h-[28vh] place-items-center rounded-lg border border-ui-border bg-ui-panel px-5 py-10 text-center shadow-sm'>
                             <div className='grid max-w-xl gap-3'>
-                                <Search className='mx-auto h-7 w-7 text-[#3056d3]' />
-                                <h2 className='text-xl font-semibold text-[#171a21]'>{query ? 'No matching activity in the current index' : 'Search company and actor activity'}</h2>
-                                <p className='text-sm leading-6 text-[#667085]'>
+                                <Search className='mx-auto h-7 w-7 text-ui-primary' />
+                                <h2 className='text-xl font-semibold text-ui-text'>{query ? 'No matching activity in the current index' : 'Search company and actor activity'}</h2>
+                                <p className='text-sm leading-6 text-ui-muted'>
                                     {query
                                         ? 'Try a broader company, actor, sector, or domain. Alerts are useful when a watched term appears; empty searches stay quiet.'
                                         : 'Enter a company, actor, domain, supplier, or sector to review monitored exposure records.'}
@@ -198,14 +198,14 @@ export default async function DarkwebIndexPage({ searchParams }: DarkwebIndexPag
 
 function RecordRow({ record }: { record: DarkwebRecord }) {
     return (
-        <article className='grid gap-3 border-b border-[#eef1f5] px-3 py-4 last:border-b-0 lg:grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr]'>
+        <article className='grid gap-3 border-b border-ui-border px-3 py-4 last:border-b-0 lg:grid-cols-[1fr_0.55fr_0.7fr_0.55fr_0.5fr_0.55fr]'>
             <div className='grid gap-2'>
                 <div className='grid gap-1'>
-                    <h3 className='wrap-break-word text-sm font-semibold text-[#171a21]'>{record.title || record.redactedDisplayUrl}</h3>
-                    <p className='text-xs text-[#667085]'>{record.redactedDisplayUrl}</p>
+                    <h3 className='wrap-break-word text-sm font-semibold text-ui-text'>{record.title || record.redactedDisplayUrl}</h3>
+                    <p className='text-xs text-ui-muted'>{record.redactedDisplayUrl}</p>
                 </div>
-                <p className='text-sm leading-6 text-[#596170]'>{record.safeSummary}</p>
-                <div className='flex flex-wrap gap-2 text-xs text-[#667085]'>
+                <p className='text-sm leading-6 text-ui-muted'>{record.safeSummary}</p>
+                <div className='flex flex-wrap gap-2 text-xs text-ui-muted'>
                     <span>{record.network}</span>
                     <span>{formatLabel(record.reviewState)}</span>
                     <span>{sourceCountText(record)}</span>
@@ -214,17 +214,17 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
                 <Hints label='Actors' values={record.actorHints} />
                 <Hints label='Companies' values={record.victimHints} />
                 <Hints label='TTPs' values={record.ttpHints} />
-                {record.blockedReason ? <p className='text-xs text-[#8a5a00]'>Needs analyst review before customer alerting.</p> : null}
-                {record.classification?.reasons?.length ? <p className='text-xs leading-5 text-[#667085]'>{record.classification.reasons.join(' · ')}</p> : null}
+                {record.blockedReason ? <p className='text-xs text-ui-warning'>Needs analyst review before customer alerting.</p> : null}
+                {record.classification?.reasons?.length ? <p className='text-xs leading-5 text-ui-muted'>{record.classification.reasons.join(' · ')}</p> : null}
             </div>
             <Cell label='Activity type' value={formatLabel(record.category)} />
             <Cell label='Review' value={formatLabel(record.legalTriage)} />
             <Cell label='Freshness' value={formatLabel(record.liveness)} />
             <Cell label='Language' value={record.language} />
-            <div className='grid content-start gap-1 text-sm text-[#596170]'>
-                <span className='text-xs uppercase text-[#667085] lg:hidden'>Last seen</span>
+            <div className='grid content-start gap-1 text-sm text-ui-muted'>
+                <span className='text-xs uppercase text-ui-muted lg:hidden'>Last seen</span>
                 <span>{formatDate(record.lastSeen)}</span>
-                <span className='text-xs text-[#667085]'>checked {formatDate(record.lastChecked)}</span>
+                <span className='text-xs text-ui-muted'>checked {formatDate(record.lastChecked)}</span>
             </div>
         </article>
     )
@@ -233,12 +233,12 @@ function RecordRow({ record }: { record: DarkwebRecord }) {
 function Input({ label, name, defaultValue, placeholder }: { label: string; name: string; defaultValue: string; placeholder: string }) {
     return (
         <label className='grid gap-2'>
-            <span className='text-xs font-semibold uppercase text-[#3056d3]'>{label}</span>
+            <span className='text-xs font-semibold uppercase text-ui-primary'>{label}</span>
             <input
                 name={name}
                 defaultValue={defaultValue}
                 placeholder={placeholder}
-                className='h-11 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                className='h-11 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
             />
         </label>
     )
@@ -246,8 +246,8 @@ function Input({ label, name, defaultValue, placeholder }: { label: string; name
 
 function Cell({ label, value }: { label: string; value: string }) {
     return (
-        <div className='grid content-start gap-1 text-sm text-[#596170]'>
-            <span className='text-xs uppercase text-[#667085] lg:hidden'>{label}</span>
+        <div className='grid content-start gap-1 text-sm text-ui-muted'>
+            <span className='text-xs uppercase text-ui-muted lg:hidden'>{label}</span>
             <span>{value}</span>
         </div>
     )
@@ -255,9 +255,9 @@ function Cell({ label, value }: { label: string; value: string }) {
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
     return (
-        <div className='flex items-center justify-between gap-3 border border-[#dfe5ee] bg-white px-3 py-2'>
-            <span className='inline-flex items-center gap-2 text-[#667085]'>{icon}{label}</span>
-            <span className='font-semibold text-[#171a21]'>{value}</span>
+        <div className='flex items-center justify-between gap-3 border border-ui-border bg-ui-panel px-3 py-2'>
+            <span className='inline-flex items-center gap-2 text-ui-muted'>{icon}{label}</span>
+            <span className='font-semibold text-ui-text'>{value}</span>
         </div>
     )
 }
@@ -265,14 +265,14 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
 function Breakdown({ title, values }: { title: string; values?: Record<string, number> }) {
     const entries = Object.entries(values ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8)
     return (
-        <section className='grid content-start gap-2 rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm'>
-            <h2 className='text-sm font-semibold text-[#171a21]'>{title}</h2>
+        <section className='grid content-start gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 shadow-sm'>
+            <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
             {entries.length ? entries.map(([key, count]) => (
                 <div key={key} className='flex items-center justify-between gap-3 text-sm'>
-                    <span className='text-[#596170]'>{formatLabel(key)}</span>
-                    <span className='font-semibold text-[#171a21]'>{formatNumber(count)}</span>
+                    <span className='text-ui-muted'>{formatLabel(key)}</span>
+                    <span className='font-semibold text-ui-text'>{formatNumber(count)}</span>
                 </div>
-            )) : <p className='text-sm text-[#667085]'>Available after matching records are returned.</p>}
+            )) : <p className='text-sm text-ui-muted'>Available once matching exposure records are in the current index.</p>}
         </section>
     )
 }
@@ -281,27 +281,27 @@ function Hints({ label, values }: { label: string; values?: string[] }) {
     if (!values?.length) return null
     return (
         <div className='flex flex-wrap gap-2'>
-            <span className='text-xs text-[#667085]'>{label}</span>
-            {values.map(value => <span key={value} className='rounded-md bg-[#f8fafc] px-2 py-1 text-xs text-[#596170]'>{value}</span>)}
+            <span className='text-xs text-ui-muted'>{label}</span>
+            {values.map(value => <span key={value} className='rounded-md bg-ui-raised px-2 py-1 text-xs text-ui-muted'>{value}</span>)}
         </div>
     )
 }
 
 function Badge({ children, tone }: { children: React.ReactNode; tone: 'ok' | 'watch' }) {
     const className = tone === 'ok'
-        ? 'border-[#b8c5ff] bg-[#eef3ff] text-[#3056d3]'
-        : 'border-[#dfe5ee] bg-[#f8fafc] text-[#596170]'
+        ? 'border-ui-primary bg-ui-raised text-ui-primary'
+        : 'border-ui-border bg-ui-raised text-ui-muted'
     return <span className={`rounded-md border px-2 py-1 text-xs font-medium uppercase ${className}`}>{children}</span>
 }
 
 function ProductTile({ icon, title, detail }: { icon: React.ReactNode; title: string; detail: string }) {
     return (
-        <article className='grid gap-2 rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm'>
-            <div className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                <span className='text-[#3056d3]'>{icon}</span>
+        <article className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-4 shadow-sm'>
+            <div className='flex items-center gap-2 text-sm font-semibold text-ui-text'>
+                <span className='text-ui-primary'>{icon}</span>
                 {title}
             </div>
-            <p className='text-sm leading-6 text-[#596170]'>{detail}</p>
+            <p className='text-sm leading-6 text-ui-muted'>{detail}</p>
         </article>
     )
 }
