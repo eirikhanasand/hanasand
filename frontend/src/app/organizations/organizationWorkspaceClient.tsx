@@ -97,6 +97,9 @@ type WebhookDestination = {
     name?: string
     status?: string
     endpointHash?: string
+    endpointHint?: string
+    kind?: string
+    type?: string
     deliveryReady?: boolean
     createdAt?: string
     updatedAt?: string
@@ -179,6 +182,7 @@ type ActivityItem = {
     ok: boolean
     subjectType?: ActivitySubjectType
     subjectId?: string
+    relatedSubjectIds?: string[]
     metadata?: Array<{ label: string, value: string }>
 }
 
@@ -600,6 +604,29 @@ export default function OrganizationWorkspaceClient() {
         return withUrl ? 'Destination tested and saved.' : 'Saved route tested.'
     }, `watchlist-${item.id}`)
 
+    const testSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('test-destination', async () => {
+        const result = await requestJson<DeliveryResult>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/test`, {
+            method: 'POST',
+            body: JSON.stringify({
+                destinationId: destination.id,
+                alertId: selectedAlertId,
+                organizationId: selectedOrganization.id,
+                tenantId: selectedOrganization.tenantId || 'default',
+                dryRun: true,
+                requestId: `org-ui-${Date.now()}`,
+            }),
+        })
+        const delivery = firstDelivery(result)
+        return delivery?.status ? `Destination test ${delivery.status}.` : 'Destination test sent.'
+    }, `destination-${destination.id}`)
+
+    const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
+            method: 'DELETE',
+        })
+        return 'Destination removed.'
+    }, `destination-${destination.id}`)
+
     return (
         <section className='min-h-full overflow-x-hidden bg-[#f7f8fb] text-[#171a21] dark:bg-[#0e1520] dark:text-[#f5f7fb]'>
             <div className='mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8'>
@@ -739,6 +766,7 @@ export default function OrganizationWorkspaceClient() {
                                     <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
+                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onTest={destination => void testSavedDestination(destination)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
@@ -1028,6 +1056,54 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                         </tbody>
                     </table>
                 )}
+            </div>
+        </section>
+    )
+}
+
+function DestinationPanel({ destinations, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onTest, onDelete }: { destinations: WebhookDestination[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onTest: (destination: WebhookDestination) => void, onDelete: (destination: WebhookDestination) => void }) {
+    return (
+        <section id='destinations' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+            <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Destinations' detail='Saved routes, tests, removal.' />
+            <div className='mt-4 grid gap-2'>
+                {destinations.length === 0 && <EmptyLine text='Saved watchlist destinations appear here after a route is tested and attached.' />}
+                {destinations.map(destination => (
+                    <div
+                        role='button'
+                        tabIndex={0}
+                        key={destination.id}
+                        onClick={() => onSelectSubject({ type: 'destination', id: destination.id })}
+                        onKeyDown={event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                onSelectSubject({ type: 'destination', id: destination.id })
+                            }
+                        }}
+                        className={`grid min-w-0 gap-3 rounded-lg border p-3 text-left transition ${selectedSubject.type === 'destination' && selectedSubject.id === destination.id ? 'border-[#8fb2ff] bg-[#f5f8ff] dark:border-[#4267a7] dark:bg-[#101b2d]' : 'border-[#e6ebf2] hover:bg-[#f8fafc] dark:border-[#26344a] dark:hover:bg-[#111d2d]'}`}
+                    >
+                        <span className='flex min-w-0 items-start justify-between gap-2'>
+                            <span className='min-w-0'>
+                                <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(destination.name || destination.id)}</span>
+                                <span className='mt-1 block truncate font-mono text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(destination.endpointHint || destination.endpointHash || 'redacted_destination')}</span>
+                            </span>
+                            <StatusPill status={destination.status || (destination.deliveryReady ? 'active' : 'configured')} />
+                        </span>
+                        <span className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
+                            <span className='truncate'>Type: {destination.kind || destination.type || 'webhook'}</span>
+                            <span className='truncate'>Hash: {sanitizeOrganizationDisplayCopy(destination.endpointHash || 'not returned')}</span>
+                        </span>
+                        <span className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
+                            <button type='button' className={secondaryButtonClass} disabled={Boolean(busy)} onClick={() => onTest(destination)}>
+                                <RefreshCw className='h-4 w-4' />
+                                Test
+                            </button>
+                            <button type='button' className={iconDangerButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onDelete(destination)} aria-label='Remove destination'>
+                                <Trash2 className='h-4 w-4' />
+                            </button>
+                            <RowStatus message={rowMessages[`destination-${destination.id}`]} />
+                        </span>
+                    </div>
+                ))}
             </div>
         </section>
     )
@@ -1496,9 +1572,11 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
         detail: `${delivery.status || 'delivery'} · ${delivery.watchlistId || delivery.alertId || 'watchlist'}`,
         ok: !delivery.error && delivery.status !== 'failed',
         subjectType: 'destination',
-        subjectId: delivery.watchlistItemId || delivery.watchlistId || delivery.webhookDestinationId || delivery.alertId,
+        subjectId: delivery.webhookDestinationId || delivery.watchlistItemId || delivery.watchlistId || delivery.alertId,
+        relatedSubjectIds: [delivery.webhookDestinationId, delivery.watchlistItemId, delivery.watchlistId, ...(delivery.watchlistItemIds || [])].filter(Boolean) as string[],
         metadata: compactMetadata([
             ['Endpoint', delivery.endpointHint || delivery.endpointHash],
+            ['Destination', delivery.webhookDestinationId],
             ['Alert', delivery.alertId],
             ['Kind', delivery.deliveryKind],
         ]),
@@ -1543,7 +1621,20 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
             ['Ref', item.alertGenerationRef],
         ]),
     }))
-    return [...local, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows]
+    const destinationRows: ActivityItem[] = bundle.webhooks.map(destination => ({
+        id: `destination-${destination.id}`,
+        at: destination.updatedAt || destination.createdAt || new Date(0).toISOString(),
+        title: 'Destination route',
+        detail: `${destination.status || (destination.deliveryReady ? 'active' : 'configured')} · ${destination.endpointHint || destination.endpointHash || destination.id}`,
+        ok: destination.status !== 'disabled' && destination.status !== 'deleted',
+        subjectType: 'destination',
+        subjectId: destination.id,
+        metadata: compactMetadata([
+            ['Type', destination.kind || destination.type],
+            ['Hash', destination.endpointHash],
+        ]),
+    }))
+    return [...local, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
         .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
         .slice(0, 12)
 }
@@ -1553,6 +1644,7 @@ function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: s
     if (rowKey.startsWith('invite-')) return { type: 'invite', id: rowKey.replace(/^invite-/, '') }
     if (rowKey.startsWith('member-')) return { type: 'member', id: rowKey.replace(/^member-/, '') }
     if (rowKey.startsWith('watchlist-')) return { type: 'watchlist', id: rowKey.replace(/^watchlist-/, '') }
+    if (rowKey.startsWith('destination-')) return { type: 'destination', id: rowKey.replace(/^destination-/, '') }
     return organizationId ? { type: 'organization', id: organizationId } : null
 }
 
@@ -1563,9 +1655,9 @@ function activityItemSubject(subject: ActivitySubject | null) {
 function activityRowsForSubject(activity: ActivityItem[], subject: ActivitySubject) {
     if (subject.type === 'organization') return activity
     if (subject.type === 'destination') {
-        return activity.filter(item => (item.subjectType === 'destination' || item.subjectType === 'watchlist') && item.subjectId === subject.id)
+        return activity.filter(item => (item.subjectType === 'destination' || item.subjectType === 'watchlist') && (item.subjectId === subject.id || item.relatedSubjectIds?.includes(subject.id)))
     }
-    return activity.filter(item => item.subjectType === subject.type && item.subjectId === subject.id)
+    return activity.filter(item => item.subjectType === subject.type && (item.subjectId === subject.id || item.relatedSubjectIds?.includes(subject.id)))
 }
 
 function selectedSubjectLabel(subject: ActivitySubject, organization: OrganizationSummary, bundle: OrgBundle) {
@@ -1579,6 +1671,8 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
         return member?.name || member?.userId || subject.id
     }
     const watchlist = bundle.watchlists.find(item => item.id === subject.id)
+    const destination = bundle.webhooks.find(item => item.id === subject.id)
+    if (destination) return destination.name || destination.id
     if (subject.type === 'destination') return watchlist ? `Destination · ${watchlist.value}` : subject.id
     return watchlist?.value || subject.id
 }
@@ -1610,6 +1704,20 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Role', member?.role],
             ['Status', member?.status],
             ['Joined', member?.joinedAt ? formatDate(member.joinedAt) : undefined],
+        ])
+    }
+    const destination = subject.type === 'destination' ? bundle.webhooks.find(row => row.id === subject.id) : undefined
+    if (destination) {
+        const delivery = bundle.deliveries
+            .filter(row => row.webhookDestinationId === destination.id)
+            .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+        return compactMetadata([
+            ['Destination', destination.id],
+            ['Name', destination.name],
+            ['Type', destination.kind || destination.type || 'webhook'],
+            ['Status', destination.status || (destination.deliveryReady ? 'active' : 'configured')],
+            ['Endpoint', destination.endpointHint || destination.endpointHash],
+            ['Last delivery', delivery?.status],
         ])
     }
     const item = bundle.watchlists.find(row => row.id === subject.id)
