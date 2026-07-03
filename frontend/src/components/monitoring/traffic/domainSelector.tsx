@@ -26,13 +26,13 @@ export default function DomainSelector({ domains, selectedDomain }: DomainSelect
     }
 
     return (
-        <label className='flex max-w-xs flex-col gap-2 text-sm text-bright/65'>
+        <label className='flex max-w-xs flex-col gap-2 text-sm text-ui-muted'>
             <span>Select Domain</span>
             <select
                 name='domain-select'
                 value={value}
                 onChange={(event) => handleChange(event.target.value)}
-                className='rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-bright outline-none transition focus:border-[#f07d33]/50'
+                className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-ui-text outline-none transition focus:border-ui-primary'
             >
                 <option value=''>All Domains</option>
                 {domains.map((domain) => (

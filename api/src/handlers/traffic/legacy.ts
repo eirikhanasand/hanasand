@@ -240,7 +240,17 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
     const domain = typeof query.domain === 'string' && query.domain.trim() ? query.domain.trim() : null
     const [records, total] = await Promise.all([
         safeQuery(`
-            SELECT id, user_agent, domain, path, method, referer, request_time_ms AS request_time, status, created_at AS timestamp
+            SELECT
+                id,
+                user_agent,
+                domain,
+                path,
+                method,
+                referer,
+                request_time_ms AS request_time,
+                status,
+                country_iso,
+                created_at AS timestamp
             FROM traffic_events
             WHERE ($1::text IS NULL OR domain = $1)
             ORDER BY created_at DESC
@@ -254,6 +264,69 @@ export async function getLegacyTrafficRecords(req: FastifyRequest, res: FastifyR
     ])
 
     return res.send({ result: records.rows, total: Number(total.rows[0]?.total || 0) })
+}
+
+export async function getLegacyTrafficLive(_req: FastifyRequest, res: FastifyReply) {
+    res.hijack()
+    const raw = res.raw
+    raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+    })
+
+    let closed = false
+    let lastSeenId = 0
+    const initialWindowStartedAt = new Date(Date.now() - 2 * 60 * 1000)
+
+    const send = (event: string, data: unknown) => {
+        if (closed) return
+        raw.write(`event: ${event}\n`)
+        raw.write(`data: ${JSON.stringify(data)}\n\n`)
+    }
+
+    const sendBatch = async () => {
+        const result = await safeQuery(`
+            WITH recent AS (
+                SELECT id, country_iso, created_at
+                FROM traffic_events
+                WHERE country_iso <> ''
+                  AND id > $1
+                  AND ($1::bigint > 0 OR created_at >= $2)
+                ORDER BY created_at ASC
+                LIMIT 1000
+            )
+            SELECT country_iso AS iso, COUNT(*)::int AS count, MAX(id)::text AS max_id, MAX(created_at)::text AS timestamp
+            FROM recent
+            GROUP BY country_iso
+            ORDER BY count DESC
+            LIMIT 40
+        `, [lastSeenId, initialWindowStartedAt])
+
+        if (result.rows.length) {
+            lastSeenId = Math.max(lastSeenId, ...result.rows.map((row: { max_id: string }) => Number(row.max_id || 0)))
+            send('traffic', result.rows)
+        } else {
+            raw.write(': heartbeat\n\n')
+        }
+    }
+
+    send('ready', { status: 'connected' })
+    void sendBatch()
+
+    const interval = setInterval(() => {
+        void sendBatch().catch(error => {
+            send('traffic-error', {
+                message: error instanceof Error ? error.message : 'Traffic stream query failed',
+            })
+        })
+    }, 3000)
+
+    raw.on('close', () => {
+        closed = true
+        clearInterval(interval)
+    })
 }
 
 export function getLegacyBlocklistOverview(_req: FastifyRequest, res: FastifyReply) {

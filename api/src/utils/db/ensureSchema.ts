@@ -263,15 +263,20 @@ export default async function ensureSchema() {
             method TEXT NOT NULL DEFAULT '',
             status INT NOT NULL DEFAULT 0,
             ip TEXT NOT NULL DEFAULT '',
+            country_iso TEXT NOT NULL DEFAULT '',
             user_agent TEXT NOT NULL DEFAULT '',
             referer TEXT NOT NULL DEFAULT '',
             request_time_ms INT NOT NULL DEFAULT 0,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `)
+    if (!await columnExists('traffic_events', 'country_iso')) {
+        await run('ALTER TABLE traffic_events ADD COLUMN country_iso TEXT NOT NULL DEFAULT \'\'')
+    }
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_created_at ON traffic_events(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_domain_created_at ON traffic_events(domain, created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_path_created_at ON traffic_events(path, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_traffic_events_country_created_at ON traffic_events(country_iso, created_at DESC)')
     await run(`
         CREATE TABLE IF NOT EXISTS desktop_agent_presence (
             owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -916,4 +921,16 @@ export default async function ensureSchema() {
         )
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_mail_recent_recipients_lookup ON mail_recent_recipients(owner_user_id, mailbox_user, last_used_at DESC)')
+}
+
+async function columnExists(tableName: string, columnName: string) {
+    const result = await run(`
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = $1
+          AND column_name = $2
+        LIMIT 1
+    `, [tableName, columnName])
+    return result.rows.length > 0
 }

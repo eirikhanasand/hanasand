@@ -101,6 +101,7 @@ import {
     getLegacyTrafficSummary,
     getLegacyTrafficTps,
     getLegacyTrafficUserAgents,
+    getLegacyTrafficLive,
 } from './handlers/traffic/legacy.ts'
 import getAiWorkspace from './handlers/ai/getWorkspace.ts'
 import getAiRuntime from './handlers/ai/getRuntime.ts'
@@ -428,6 +429,7 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
     fastify.get('/traffic/domains', getLegacyTrafficDomains)
     fastify.get('/traffic/metrics', getLegacyTrafficMetrics)
     fastify.get('/traffic/records', getLegacyTrafficRecords)
+    fastify.get('/traffic/live', getLegacyTrafficLive)
     fastify.get('/blocklist/overview', getLegacyBlocklistOverview)
 
     // Desktop agent direct-connect discovery

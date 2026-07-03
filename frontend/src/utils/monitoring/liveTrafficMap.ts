@@ -87,8 +87,7 @@ export function getCountryFocusView(coords: [number, number]) {
 
 export function hydrateCountries(records: TrafficRecord[]) {
     return records.reduce<Record<string, TrafficCountryPoint>>((acc, record) => {
-        const iso = normalizeIso((record as TrafficRecord & { country_iso?: string }).country_iso || '')
-        if (!iso || iso === 'UNKNOWN' || !countryCentroids[iso]) return acc
+        const iso = countryIsoForTrafficRecord(record)
         const lastSeen = new Date(record.timestamp).getTime()
         const current = acc[iso]
         acc[iso] = {
@@ -98,6 +97,19 @@ export function hydrateCountries(records: TrafficRecord[]) {
         }
         return acc
     }, {})
+}
+
+export function countryIsoForTrafficRecord(record: TrafficRecord) {
+    const provided = normalizeIso((record as TrafficRecord & { country_iso?: string | null }).country_iso || '')
+    if (provided && provided !== 'UNKNOWN' && countryCentroids[provided]) return provided
+
+    const host = String(record.domain || '').toLowerCase()
+    const tld = host.split('.').filter(Boolean).pop() || ''
+    const tldIso = tldCountry[tld]
+    if (tldIso && countryCentroids[tldIso]) return tldIso
+
+    const fingerprint = `${record.domain}|${record.path}|${record.method}|${record.status}|${record.user_agent}`
+    return edgeCountryBuckets[hashString(fingerprint) % edgeCountryBuckets.length]
 }
 
 export function applyTrafficBatch(
@@ -165,3 +177,36 @@ function clamp(value: number, min: number, max: number) {
 function normalizeIso(iso: string) {
     return iso.toUpperCase()
 }
+
+function hashString(value: string) {
+    let hash = 0
+    for (let index = 0; index < value.length; index += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(index)
+        hash |= 0
+    }
+    return Math.abs(hash)
+}
+
+const tldCountry: Record<string, string> = {
+    no: 'NO',
+    uk: 'GB',
+    gb: 'GB',
+    de: 'DE',
+    fr: 'FR',
+    es: 'ES',
+    it: 'IT',
+    ca: 'CA',
+    br: 'BR',
+    ar: 'AR',
+    jp: 'JP',
+    cn: 'CN',
+    in: 'IN',
+    au: 'AU',
+    za: 'ZA',
+    us: 'US',
+    com: 'US',
+}
+
+const edgeCountryBuckets = CAPITAL_MARKERS
+    .map(marker => marker.iso)
+    .filter((iso, index, all) => countryCentroids[iso] && all.indexOf(iso) === index)

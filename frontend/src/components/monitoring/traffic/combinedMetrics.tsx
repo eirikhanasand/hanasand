@@ -14,13 +14,13 @@ export default function CombinedMetrics({ title, data, total }: {
     const buttonText = `Switch to ${title[1 - index]}`
 
     return (
-        <div className='rounded-[1.4rem] border border-[#27364f] bg-[#0f1726] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
             <div className='flex justify-between items-center mb-4'>
-                <h3 className='text-lg font-semibold text-bright'>{currentTitle}</h3>
+                <h3 className='text-lg font-semibold text-ui-text'>{currentTitle}</h3>
                 <button
                     type='button'
                     onClick={() => setIndex(index === 0 ? 1 : 0)}
-                    className='inline-flex items-center gap-2 rounded-lg border border-[#27364f] bg-[#111827] px-3 py-2 text-sm text-bright/75 transition hover:border-orange-300/35 hover:bg-orange-300/8'
+                    className='inline-flex items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-sm text-ui-muted transition hover:border-ui-primary/35 hover:bg-ui-primary/10'
                 >
                     <LucideChartNoAxesGantt className='w-4 h-4' />
                     {buttonText}

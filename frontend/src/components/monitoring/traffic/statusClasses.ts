@@ -1,11 +1,11 @@
 export default function statusClasses(status: number) {
     if (status >= 400) {
-        return 'bg-red-500/20 text-red-400'
+        return 'bg-ui-danger/10 text-ui-danger'
     }
 
     if (status >= 300) {
-        return 'bg-yellow-500/20 text-yellow-400'
+        return 'bg-ui-warning/10 text-ui-warning'
     }
 
-    return 'bg-green-500/20 text-green-400'
+    return 'bg-ui-success/10 text-ui-success'
 }
