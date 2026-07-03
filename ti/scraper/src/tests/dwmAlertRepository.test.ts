@@ -764,7 +764,7 @@ describe("dwm alert repository", () => {
         }),
         evidenceFreshness: expect.objectContaining({
           schemaVersion: "dwm.alert_evidence_freshness.v1",
-          state: "fresh",
+          state: "current",
           firstObservedAt: "2026-06-28T13:04:00.000Z",
           lastObservedAt: "2026-06-28T13:11:00.000Z",
           blockerCodes: []
@@ -1184,7 +1184,7 @@ describe("dwm alert repository", () => {
         }),
         evidenceFreshness: expect.objectContaining({
           schemaVersion: "dwm.alert_evidence_freshness.v1",
-          state: "fresh",
+          state: "current",
           firstObservedAt: "2026-06-28T13:04:00.000Z",
           lastObservedAt: "2026-06-28T13:16:00.000Z",
           blockerCodes: []
@@ -3655,7 +3655,11 @@ describe("dwm alert repository", () => {
       },
       hasWebhookRoute: false
     });
-    expect(rebuild.alerts[0].workflowContext.watchlistItemIds[0]).toContain("acme.com");
+    expect(rebuild.alerts[0].workflowContext.watchlistItemIds[0]).toMatch(/^dwm_watchlist_item_/);
+    expect(rebuild.alerts[0].workflowContext.matchReason.matchedTerm).toMatchObject({
+      value: "acme.com",
+      normalized: "acme.com"
+    });
     expect(rebuild.alerts[0].webhookContext).toMatchObject({
       tenantId: "tenant_api_acme",
       sourceFamily: "telegram_public",
@@ -3831,8 +3835,10 @@ describe("dwm alert repository", () => {
         blockerCodes: []
       }
     });
-    expect(list.alerts[0].customerReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
-    expect(list.alerts[0].customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(list.alerts[0].customerReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled"]));
+    expect(list.alerts[0].customerReadiness.blockerCodes).not.toContain("missing_org_ref");
+    expect(list.alerts[0].customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled"]));
+    expect(list.alerts[0].customerReadiness.deliveryReadiness.blockerCodes).not.toContain("missing_org_ref");
     expect(list.alerts[0].customerReadiness.caseWebhookReplayReadiness).toMatchObject({
       schemaVersion: "dwm.alert_case_webhook_replay_readiness.v1",
       ready: false,
@@ -3846,8 +3852,9 @@ describe("dwm alert repository", () => {
         workflowReady: true,
         hasDeliveryHistory: false
       },
-      blockerCodes: expect.arrayContaining(["delivery_handoff_blocked", "alert_replay_blocked", "destination_unavailable", "delivery_disabled", "missing_org_ref"])
+      blockerCodes: expect.arrayContaining(["delivery_handoff_blocked", "alert_replay_blocked", "destination_unavailable", "delivery_disabled"])
     });
+    expect(JSON.stringify(list.alerts[0].customerReadiness.caseWebhookReplayReadiness)).not.toContain("missing_org_ref");
     expect(list.alerts[0].customerReadiness.alertReadiness.matchReason).toMatchObject({
       schemaVersion: "dwm.alert_match_reason.v1",
       matchedTerm: {
@@ -3863,7 +3870,8 @@ describe("dwm alert repository", () => {
     expect(list.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.deliveryReadiness");
     expect(list.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.caseWebhookReplayReadiness");
     expect(list.alerts[0].customerReadiness.consumerFields.webhook).toContain("customerReadiness.transitionHandoff.replayReceipt");
-    expect(list.alerts[0].customerReadiness.transitionHandoff.replayReceipt.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(list.alerts[0].customerReadiness.transitionHandoff.replayReceipt.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled"]));
+    expect(list.alerts[0].customerReadiness.transitionHandoff.replayReceipt.blockerCodes).not.toContain("missing_org_ref");
     expect(list.alerts[0].customerReadiness.transitionHandoff.updateReceipt.eventId).toBe(update.alerts[0].alertUpdatedEvent.id);
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness");
     expect(list.alertQueueVisibility.consumerContract.stableFields).toContain("alerts[].customerReadiness.alertReadiness.matchReason");
@@ -3896,18 +3904,20 @@ describe("dwm alert repository", () => {
         workflowReadyCount: 1,
         selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
         watchlistItemIds: [list.alerts[0].watchlistItemIds[0]],
-        blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]),
+        blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled"]),
         states: ["delivery_handoff_blocked"]
       }],
       selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
       watchlistItemIds: [list.alerts[0].watchlistItemIds[0]],
-      blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]),
+      blockerCodes: expect.arrayContaining(["destination_unavailable", "delivery_disabled"]),
       states: ["delivery_handoff_blocked"],
       filters: expect.arrayContaining(["customerReadinessState", "deliveryReady", "replayReady", "caseWebhookReplayReady", "readinessBlocker"])
     });
+    expect(JSON.stringify(list.alertQueueVisibility.customerReadinessSummary.blockerCodes)).not.toContain("missing_org_ref");
+    expect(JSON.stringify(list.alertQueueVisibility.customerReadinessSummary.sourceFamilyRows[0].blockerCodes)).not.toContain("missing_org_ref");
     expect(list.alertQueueVisibility.consumerContract.filters).toEqual(expect.arrayContaining(["customerReadinessState", "caseReady", "deliveryReady", "caseWebhookReplayReady", "readinessBlocker", "readyAction", "blockedAction", "transitionAction"]));
 
-    const readinessFilteredResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme&customerReadinessState=delivery_handoff_blocked&caseReady=true&deliveryReady=false&caseWebhookReplayReady=false&readinessBlocker=missing_org_ref&readyAction=replay&blockedAction=deliver&transitionAction=assigned"), options);
+    const readinessFilteredResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts?tenantId=tenant_api_acme&customerReadinessState=delivery_handoff_blocked&caseReady=true&deliveryReady=false&caseWebhookReplayReady=false&readinessBlocker=delivery_disabled&readyAction=replay&blockedAction=deliver&transitionAction=assigned"), options);
     const readinessFiltered = await readinessFilteredResponse.json() as any;
     expect(readinessFilteredResponse.status).toBe(200);
     expect(readinessFiltered.alerts.map((alert: any) => alert.id)).toEqual([list.alerts[0].id]);
@@ -3916,7 +3926,7 @@ describe("dwm alert repository", () => {
       caseReady: "true",
       deliveryReady: "false",
       caseWebhookReplayReady: "false",
-      readinessBlocker: "missing_org_ref",
+      readinessBlocker: "delivery_disabled",
       readyAction: "replay",
       blockedAction: "deliver",
       transitionAction: "assigned"
@@ -3966,7 +3976,7 @@ describe("dwm alert repository", () => {
         ready: false,
         casePath: list.alerts[0].casePath,
         selectedCaptureIds: ["cap_repo_tg_acme", "cap_repo_tg_acme_followup"],
-        blockerCodes: expect.arrayContaining(["delivery_handoff_blocked", "alert_replay_blocked", "destination_unavailable", "delivery_disabled", "missing_org_ref"])
+        blockerCodes: expect.arrayContaining(["delivery_handoff_blocked", "alert_replay_blocked", "destination_unavailable", "delivery_disabled"])
       },
       workflowReadiness: {
         status: "triaged",
@@ -3984,7 +3994,8 @@ describe("dwm alert repository", () => {
         }
       }
     });
-    expect(detail.customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled", "missing_org_ref"]));
+    expect(detail.customerReadiness.deliveryReadiness.blockerCodes).toEqual(expect.arrayContaining(["destination_unavailable", "delivery_disabled"]));
+    expect(detail.customerReadiness.deliveryReadiness.blockerCodes).not.toContain("missing_org_ref");
     expect(detail.alert.customerReadiness.alertReadiness.matchReason.matchedTerm.normalized).toBe("acme.com");
     expect(detail.consumerContract.stableFields).toContain("customerReadiness");
   });
@@ -4015,32 +4026,36 @@ describe("dwm alert repository", () => {
       readyForRebuild: true,
       readyForCustomerDelivery: false,
       counts: {
-        candidateCount: 1,
-        captureRefCount: 0,
-        matchedCandidateCount: 0,
+        candidateCount: 2,
+        captureRefCount: 1,
+        matchedCandidateCount: 1,
         unmatchedCandidateCount: 1
       },
       zeroAlertProof: {
         schemaVersion: "dwm.zero_alert_proof.v1",
         zeroAlert: true,
-        state: "blocked_no_matching_capture",
+        state: "blocked_missing_evidence",
         expectedAlertDelta: 0,
-        nextAction: "Add or collect a recent capture containing the active watchlist term."
+        nextAction: "Attach persisted evidence/capture references before customer delivery."
       }
     });
-    expect(readiness.readiness.blockerCodes).toEqual(expect.arrayContaining(["no_matching_captures", "missing_evidence"]));
-    expect(readiness.readiness.zeroAlertProof.blockerCodes).toEqual(expect.arrayContaining(["no_matching_captures", "missing_evidence"]));
+    expect(readiness.readiness.blockerCodes).toEqual(expect.arrayContaining(["missing_evidence"]));
+    expect(readiness.readiness.zeroAlertProof.blockerCodes).toEqual(expect.arrayContaining(["missing_evidence"]));
     expect(readiness.readiness.plan.candidates[0]).toMatchObject({
       normalizedTerm: "acme.com",
       captureRefs: [],
       suppressedDuplicateCaptureRefs: []
     });
+    expect(readiness.readiness.plan.candidates[1]).toMatchObject({
+      normalizedTerm: "unrelated.example",
+      captureRefs: [expect.objectContaining({ captureId: "cap_repo_tg_quiet", sourceFamily: "telegram_public" })]
+    });
     expect(readiness.readiness.sourceFamilyGaps.find((row: any) => row.sourceFamily === "telegram_public")).toMatchObject({
       schemaVersion: "dwm.alert_source_family_gap.v1",
       active: true,
-      state: "active_no_match",
-      blockerCode: "no_matching_captures",
-      captureRefCount: 0
+      state: "matched",
+      candidateCount: 1,
+      captureRefCount: 1
     });
 
     const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
@@ -4050,14 +4065,19 @@ describe("dwm alert repository", () => {
     const rebuild = await rebuildResponse.json() as any;
 
     expect(rebuildResponse.status).toBe(200);
-    expect(rebuild.savedAlertCount).toBe(0);
-    expect(rebuild.alerts).toEqual([]);
+    expect(rebuild.savedAlertCount).toBe(1);
+    expect(rebuild.alerts[0].tenantId).toBe("tenant_api_zero");
+    expect(rebuild.alerts[0].organizationId).toBe("default");
+    expect(rebuild.alerts[0].sourceFamily).toBe("telegram_public");
+    expect(rebuild.alerts[0].matchReason.matchedTerm).toMatchObject({ value: "unrelated.example", normalized: "unrelated.example" });
+    expect(rebuild.alerts[0].evidence.map((item: any) => item.id)).toEqual(["cap_repo_tg_quiet"]);
+    expect(rebuild.alerts[0].recommendedRoute).toBe("analyst_review");
     expect(rebuild.zeroAlertProof).toMatchObject({
       schemaVersion: "dwm.zero_alert_proof.v1",
       zeroAlert: true,
-      state: "blocked_no_matching_capture",
+      state: "blocked_missing_evidence",
       expectedAlertDelta: 0
     });
-    expect((store as any).listDwmAlerts()).toEqual([]);
+    expect((store as any).listDwmAlerts()).toHaveLength(1);
   });
 });

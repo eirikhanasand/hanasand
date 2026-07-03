@@ -1525,12 +1525,14 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     .map((alert) => {
     const generationCandidate = findGenerationCandidate(generationPlan, alert);
     const scopedAlert = scopeAlertForGenerationCandidate(alert, generationCandidate, input);
-    const existing = findExistingAlert(input.store, scopedAlert, input.tenantId, input.organizationId);
+    const candidateOrganizationId = generationCandidate?.watchlistTermContexts?.[0]?.organizationId;
+    const existing = findExistingAlert(input.store, scopedAlert, input.tenantId, input.organizationId ?? candidateOrganizationId);
     const alertId = existing?.id ?? scopedAlert.id;
+    const routedOrganizationId = input.organizationId ?? candidateOrganizationId ?? existing?.organizationId;
     const generatedWorkflowContext = buildDwmAlertWorkflowContext({
       alert: { ...scopedAlert, id: alertId },
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       generationCandidate
     });
     const baseWorkflowContext = {
@@ -1541,7 +1543,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     const matchReason = buildDwmAlertMatchReason({
       alert: { ...scopedAlert, id: alertId },
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       workflowContext: baseWorkflowContext
     });
     const workflowContext = {
@@ -1551,7 +1553,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     const deliveryReadinessContext = buildDwmPersistedDeliveryReadinessContext({
       alert: { ...scopedAlert, id: alertId },
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       workflowContext,
       existing,
       generatedAt: snapshot.generatedAt
@@ -1560,7 +1562,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       alert: scopedAlert,
       alertId,
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       workflowContext,
       generatedAt: snapshot.generatedAt
     });
@@ -1582,7 +1584,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
     const sourceProvenanceSummary = buildDwmAlertSourceProvenanceSummary({
       alert: { ...scopedAlert, id: alertId },
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       workflowContext
     });
     const orgWatchlistScope = buildDwmAlertOrgWatchlistScope(workflowContext);
@@ -1590,7 +1592,7 @@ export function rebuildDwmRuntimeAlerts(input: RebuildDwmRuntimeAlertsInput): Re
       ...scopedAlert,
       id: alertId,
       tenantId: input.tenantId,
-      organizationId: input.organizationId ?? existing?.organizationId,
+      organizationId: routedOrganizationId,
       alertDetailPath: workflowContext.alertDetailPath,
       watchlistIds: workflowContext.watchlistIds,
       watchlistItemIds: workflowContext.watchlistItemIds,
@@ -1659,6 +1661,7 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
   const evidenceCount = Number(input.workflowContext.evidenceCount ?? input.alert.evidence?.length ?? 0);
   const webhookDestinationIds = uniqueStrings((input.workflowContext.webhookDestinationIds ?? []).map(String).filter(Boolean));
   const alertGeneratorKeys = uniqueStrings((input.workflowContext.alertGeneratorKeys ?? []).map(String).filter(Boolean));
+  const routingScopeReady = Boolean(input.organizationId || input.workflowContext.organizationId || input.workflowContext.watchlistIds?.length || input.workflowContext.watchlistTermContexts?.length || alertGeneratorKeys.length);
   const deliveryDedupeKey = String(input.alert.webhookDelivery?.dedupeKey ?? input.alert.dedupeKey ?? input.workflowContext.dedupeKey ?? input.alert.id);
   const deliveryHistoryRefs = uniqueStrings([
     ...(previousContext.deliveryHistoryRefs ?? []),
@@ -1671,7 +1674,7 @@ export function buildDwmPersistedDeliveryReadinessContext(input: {
   const suppressed = input.existing?.workflowStatus === "suppressed" || input.existing?.deliveryState === "muted";
   const closed = input.existing?.workflowStatus === "closed";
   const blockerInputs: Array<DwmPersistedDeliveryReadinessContext["blockers"][number] | undefined> = [
-    !input.organizationId || alertGeneratorKeys.length === 0 ? readinessBlocker("missing_org_ref", "workflowContext.alertGeneratorKeys", "Org alert generation reference is required before delivery.", true) : undefined,
+    !routingScopeReady || alertGeneratorKeys.length === 0 ? readinessBlocker("missing_org_ref", "workflowContext.alertGeneratorKeys", "Org alert generation reference is required before delivery.", true) : undefined,
     !selectedCaptureIds.length || evidenceCount === 0 ? readinessBlocker("missing_capture_evidence", "workflowContext.captureIds", "Delivery requires selected capture ids and evidence.", true) : undefined,
     !input.workflowContext.casePath || !input.workflowContext.caseIdCandidate ? readinessBlocker("case_route_unavailable", "workflowContext.casePath", "Case route/id candidate must be available for analyst handoff.", true) : undefined,
     !input.workflowContext.hasWebhookRoute && webhookDestinationIds.length === 0 ? readinessBlocker("delivery_disabled", "workflowContext.webhookDestinationIds", "No webhook destination or route is configured.", true) : undefined,
@@ -1891,7 +1894,13 @@ export function buildDwmAlertGenerationReadiness(input: {
       ready: plan.candidateCount > 0 && candidateIdsMissingRoute.length === 0,
       routedCandidateCount: plan.candidates.filter((candidate) => candidate.hasWebhookRoute).length,
       missingRouteCandidateCount: candidateIdsMissingRoute.length,
-      webhookDestinationIds: uniqueStrings(plan.candidates.flatMap((candidate) => candidate.webhookDestinationIds)),
+      webhookDestinationIds: uniqueStrings([
+        ...plan.candidates.flatMap((candidate) => candidate.webhookDestinationIds),
+        ...input.watchlists
+          .filter((watchlist) => watchlist.tenantId === input.tenantId && watchlist.status === "active" && (!watchlist.organizationId || watchlist.organizationId === input.organizationId))
+          .map((watchlist) => watchlist.webhookDestinationId)
+          .filter(Boolean)
+      ] as string[]),
       candidateIdsMissingRoute
     },
     caseReadiness: {
@@ -2658,7 +2667,7 @@ function buildSourceProjectionAlertReadinessBlockers(
       "missing_org_scope",
       "org_foundation",
       "/v1/dwm/alerts/generation-readiness",
-      "Org scope is required before source-backed alert readiness can be shared.",
+      "Org scope is required before alert source details can be shared.",
       true
     ));
   } else if (sourceProjection.organizationId !== alertPipeline.organizationId) {
@@ -2684,7 +2693,7 @@ function buildSourceProjectionAlertReadinessBlockers(
       "source_projection_blocked",
       "source_operations",
       sourceProjection.publicTiRoute,
-      "Source-backed public TI projection is blocked.",
+      "Public TI source projection is blocked.",
       true
     ));
   } else if (sourceProjection.pageReadiness.state === "partial") {
@@ -2692,7 +2701,7 @@ function buildSourceProjectionAlertReadinessBlockers(
       "source_projection_partial",
       "source_operations",
       sourceProjection.publicTiRoute,
-      "Source-backed public TI projection is only partially ready.",
+      "Public TI source projection is only partially ready.",
       true
     ));
   }
@@ -3017,7 +3026,7 @@ function buildOrgAlertPipelineGaps(input: {
         route: "/v1/dwm/alerts/rebuild",
         candidateId: candidate.candidateId,
         blockerCodes: candidate.blockerCodes,
-        detail: "Candidate has source-backed watchlist evidence but no persisted alert yet."
+        detail: "Candidate has watchlist source details but no persisted alert yet."
       });
       continue;
     }
@@ -3182,10 +3191,10 @@ export function buildDwmAlertCustomerProofHandoffRow(input: {
   });
   const blockers = [
     ...((context.blockers ?? []) as DwmAlertCustomerProofHandoffRow["typedBlockers"]),
-    !alert.organizationId ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert proof requires an organization id.", true) : undefined,
+    !(alert.organizationId ?? context.organizationId) ? customerProofBlocker("no_org_export", "organizationId", "Org/customer alert handoff requires an organization id.", true) : undefined,
     !alertGeneratorKeys.length ? customerProofBlocker("org_export_unavailable", "workflowContext.alertGeneratorKeys", "Org watchlist export reference is missing from the persisted alert.", true) : undefined,
-    !selectedCaptureIds.length ? customerProofBlocker("no_matching_captures", "selectedCaptureIds", "No matching captures are attached to this alert proof.", true) : undefined,
-    evidenceCount === 0 ? customerProofBlocker("missing_evidence", "evidence", "Customer proof requires persisted evidence.", true) : undefined,
+    !selectedCaptureIds.length ? customerProofBlocker("no_matching_captures", "selectedCaptureIds", "No matching captures are attached to this alert handoff.", true) : undefined,
+    evidenceCount === 0 ? customerProofBlocker("missing_evidence", "evidence", "Customer handoff requires persisted evidence.", true) : undefined,
     !hasCaseRoute ? customerProofBlocker("case_route_unavailable", "casePath", "Case handoff route is unavailable for this alert.", true) : undefined,
     input.webhookDestinationLifecycle && input.webhookDestinationLifecycle.verified === false ? customerProofBlocker("webhook_destination_not_verified", "webhookDestinationLifecycle.verified", "Webhook destination exists but is not verified for customer delivery.", true) : undefined,
     redactionRequired ? customerProofBlocker("support_only_redaction_needed", "evidence.redactionState", "Support/helpdesk consumers must use redacted evidence only.", true) : undefined,
@@ -4196,15 +4205,16 @@ export function buildDwmAlertWorkflowContext(input: {
   const watchlistIds = input.generationCandidate?.watchlistIds ?? watchlists.map((watchlist) => watchlist.id);
   const watchlistItemIds = input.generationCandidate?.watchlistItemIds ?? watchlists.flatMap((watchlist) => watchlistItemIdsFor(watchlist, input.alert.matchedTerm?.value));
   const dedupeKey = String(input.alert.dedupeKey ?? input.alert.webhookDelivery?.dedupeKey);
+  const routedOrganizationId = input.organizationId ?? input.generationCandidate?.watchlistTermContexts?.[0]?.organizationId;
   const caseIdCandidate = stableId("case", `${input.tenantId}:${input.alert.id}`);
   const alertDetailPath = buildDwmAlertDetailPath(input.alert.id, {
-    organizationId: input.organizationId,
+    organizationId: routedOrganizationId,
     tenantId: input.tenantId,
     dedupeKey
   });
   return {
     tenantId: input.tenantId,
-    organizationId: input.organizationId,
+    organizationId: routedOrganizationId,
     visibilityPolicy: input.generationCandidate?.visibilityPolicy,
     membershipContext: input.generationCandidate?.membershipContext,
     generationCandidateId: input.generationCandidate?.id,
@@ -4810,14 +4820,18 @@ function candidateAlertsForGeneration(plan: DwmAlertGenerationPlan, input: Rebui
   return plan.candidates
     .filter((candidate) => candidate.captureRefs.length > 0)
     .filter((candidate) => !candidate.alertGeneratorKeys.length || !candidate.alertGenerationRefs.length)
-    .map((candidate) => alertFromGenerationCandidate(candidate, sources, captures, input))
+    .flatMap((candidate) => {
+      const sourceFamilies = candidate.sourceFamilies.length ? candidate.sourceFamilies : uniqueStrings(candidate.captureRefs.map((ref) => ref.sourceFamily).filter(Boolean));
+      return sourceFamilies.map((sourceFamily) => alertFromGenerationCandidate(candidate, sources, captures, input, sourceFamily));
+    })
     .filter(Boolean) as DwmAlert[];
 }
 
-function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, sources: SourceRecord[], captures: RawCapture[], input: RebuildDwmRuntimeAlertsInput): DwmAlert | undefined {
+function alertFromGenerationCandidate(candidate: DwmAlertGenerationCandidate, sources: SourceRecord[], captures: RawCapture[], input: RebuildDwmRuntimeAlertsInput, sourceFamilyFilter?: string): DwmAlert | undefined {
   const captureById = new Map(captures.map((capture) => [String(capture.id), capture]));
   const sourceById = new Map(sources.map((source) => [String(source.id), source]));
   const evidence = candidate.captureRefs
+    .filter((ref) => !sourceFamilyFilter || ref.sourceFamily === sourceFamilyFilter)
     .slice(0, 25)
     .map((ref) => evidenceFromGenerationCaptureRef(ref, captureById.get(String(ref.captureId)), sourceById.get(String(ref.sourceId)), input))
     .filter(Boolean) as DwmAlert["evidence"];
@@ -4969,7 +4983,7 @@ function mergeGeneratedAlert(current: DwmAlert, next: DwmAlert): DwmAlert {
 function mergeGeneratedEvidence(evidence: any[]): any[] {
   const byIdentity = new Map<string, any>();
   for (const item of evidence) {
-    const identity = item.contentHash ? `${item.sourceFamily}:${item.contentHash}` : `capture:${item.provenance?.captureId ?? item.id}`;
+    const identity = item.provenance?.captureId ? `capture:${item.provenance.captureId}` : item.contentHash ? `${item.sourceFamily}:${item.contentHash}` : `evidence:${item.id}`;
     byIdentity.set(identity, byIdentity.get(identity) ?? item);
   }
   return [...byIdentity.values()].sort((a, b) => String(a.observedAt ?? a.firstSeenAt ?? "").localeCompare(String(b.observedAt ?? b.firstSeenAt ?? "")));
@@ -4986,7 +5000,12 @@ function watchlistTermContextsFor(watchlist: RuntimeDwmWatchlist, matchedTerm: s
   if (!matchedTerm) return [];
   const normalized = matchedTerm.toLowerCase();
   return (watchlist.orgWatchlistTerms ?? [])
-    .filter((term) => term.normalizedTerm === normalized || term.value.toLowerCase() === normalized || term.terms.some((value) => value.toLowerCase() === normalized));
+    .filter((term) => {
+      const termNormalized = typeof term.normalizedTerm === "string" ? term.normalizedTerm.toLowerCase() : "";
+      const value = typeof term.value === "string" ? term.value.toLowerCase() : "";
+      const values = Array.isArray(term.terms) ? term.terms.map((item) => String(item).toLowerCase()) : [];
+      return termNormalized === normalized || value === normalized || values.includes(normalized);
+    });
 }
 
 function captureRefsForTerm(input: { term: DwmWatchTerm; sources: SourceRecord[]; captures: RawCapture[] }): DwmAlertGenerationCaptureRef[] {
