@@ -263,6 +263,76 @@ describe("dwm webhook delivery", () => {
     });
   });
 
+  test("sends Discord alert notifications with customer-safe summaries and evidence excerpts", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(source);
+    store.saveCapture(capture);
+    const seen: Array<{ url: string; body: any }> = [];
+    const options = {
+      store,
+      frontier: new FocusedFrontier(),
+      webhookFetch: async (url: string, init: RequestInit) => {
+        seen.push({ url, body: JSON.parse(String(init.body)) });
+        return new Response("ok", { status: 204 });
+      }
+    };
+
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+      method: "POST",
+      body: JSON.stringify({
+        tenantId: "tenant_discord_safe",
+        terms: ["acme.com"],
+        webhookUrl: "https://discord.com/api/webhooks/discord-safe/discord-secret-token"
+      })
+    }), options);
+    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_discord_safe" })
+    }), options);
+
+    const alert = (store as any).listDwmAlerts()[0];
+    (store as any).saveDwmAlert({
+      ...alert,
+      claimSummary: JSON.stringify({
+        actorName: "BlackCat",
+        victimName: "Acme Corp",
+        claimedData: "Okta tokens exposed",
+        sourceFamily: "telegram_public"
+      }),
+      evidence: [{
+        ...alert.evidence[0],
+        excerpt: JSON.stringify({
+          actorName: "BlackCat",
+          victimName: "Acme Corp",
+          claimedData: "Okta tokens exposed",
+          raw: "unsafe backend details"
+        })
+      }]
+    });
+
+    const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
+      method: "POST",
+      body: JSON.stringify({ tenantId: "tenant_discord_safe", alertId: alert.id })
+    }), options);
+    const delivered = await deliverResponse.json() as any;
+
+    expect(deliverResponse.status).toBe(200);
+    expect(delivered.deliveries[0].status).toBe("delivered");
+    expect(seen).toHaveLength(1);
+    expect(seen[0].body.embeds[0].description).toContain("BlackCat exposure claim for Acme Corp");
+    expect(seen[0].body.embeds[0].fields.find((field: any) => field.name === "Evidence excerpt")?.value).toContain("Okta tokens exposed");
+    expect(seen[0].body.hanasand.claimSummary).toContain("BlackCat exposure claim for Acme Corp");
+    expect(seen[0].body.hanasand.evidence[0].excerpt).toContain("Okta tokens exposed");
+    const customerVisibleText = [
+      seen[0].body.embeds[0].description,
+      seen[0].body.embeds[0].fields.map((field: any) => field.value).join(" "),
+      seen[0].body.hanasand.claimSummary,
+      seen[0].body.hanasand.evidence[0].excerpt
+    ].join(" ");
+    expect(customerVisibleText).not.toMatch(/actorName|victimName|claimedData|unsafe backend details|[{}]/);
+    expect(JSON.stringify(seen[0].body)).not.toContain("discord-secret-token");
+  });
+
   test("uses alert delivery selection for org webhook destination choice", async () => {
     const store = new InMemoryScraperStore();
     store.saveSource(source);

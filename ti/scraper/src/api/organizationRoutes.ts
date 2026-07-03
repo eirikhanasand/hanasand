@@ -1,4 +1,5 @@
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
+import { sanitizeDwmCustomerEvidenceExcerpt, sanitizeDwmCustomerText } from "../product/dwmCustomerDisplay.ts";
 import { json, readJson } from "./http.ts";
 import type { ApiServerOptions } from "./serverTypes.ts";
 
@@ -352,7 +353,7 @@ export function buildWebhookRequestBody(kind: WebhookKind, payload: any): any {
       : "Hanasand organization webhook test.",
     embeds: [{
       title,
-      description: payload.claimSummary ?? payload.message ?? "Webhook route is configured.",
+      description: sanitizeDwmCustomerText(payload.claimSummary, payload.message ?? "Webhook route is configured."),
       timestamp: evidenceTimestamp,
       color: payload.severity === "critical" ? 13_938_440 : payload.severity === "high" ? 15_813_888 : 3_168_467,
       fields: [
@@ -467,8 +468,8 @@ function discordEvidenceExcerpt(payload: any): string | undefined {
     ?? evidence.find((item: any) => typeof item?.contentHash === "string" && item.contentHash.trim());
   if (!first) return undefined;
   const source = first.sourceName || first.sourceFamily || "Evidence";
-  const excerpt = first.excerpt || first.contentHash;
-  return `${source}: ${String(excerpt).replace(/\s+/g, " ").slice(0, 500)}`;
+  const excerpt = sanitizeDwmCustomerEvidenceExcerpt(first.excerpt, first.contentHash);
+  return excerpt ? `${source}: ${excerpt}` : undefined;
 }
 
 function firstString(value: unknown): string | undefined {

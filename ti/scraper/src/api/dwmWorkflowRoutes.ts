@@ -1,6 +1,7 @@
 import { classifySourceFamily, normalizeWatchlist, type DwmWatchTerm } from "../product/dwmProduct.ts";
 import { buildDwmAlertCustomerProofHandoffRow, buildDwmAlertDownstreamHandoff, buildDwmAlertGenerationReadiness, buildDwmAlertRetentionAudit, buildDwmAlertWorkflowExecutionReadiness, buildDwmPersistedDeliveryReadinessContext, rebuildDwmRuntimeAlerts, type RuntimeDwmWatchlist } from "../storage/dwmAlertRepository.ts";
 import { buildAlertCaseHandoff } from "../product/analystHandoff.ts";
+import { buildDwmCustomerAlertSummary, sanitizeDwmCustomerEvidenceExcerpt } from "../product/dwmCustomerDisplay.ts";
 import { buildOrgAlertWorkflowBridgeReport } from "../product/orgAlertWorkflowBridge.ts";
 import { buildOrgSharedWatchlistAlertGenerationExport } from "../storage/dwmOrgWatchlistBridge.ts";
 import { nowIso, stableId, uniqueStrings } from "../utils.ts";
@@ -742,7 +743,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     sourceCount: alert.sourceCount,
     firstSeenAt: alert.firstSeenAt,
     lastSeenAt: alert.lastSeenAt,
-    claimSummary: alert.claimSummary,
+    claimSummary: buildDwmCustomerAlertSummary(alert),
     matchContext: alert.matchContext,
     evidenceSummary: alert.evidenceSummary,
     routingContext: alert.routingContext,
@@ -760,7 +761,7 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
       observedAt: item.observedAt ?? item.firstSeenAt,
       captureMode: item.captureMode,
       redactionState: item.redactionState,
-      excerpt: item.excerpt,
+      excerpt: sanitizeDwmCustomerEvidenceExcerpt(item.excerpt, item.contentHash),
       contentHash: item.contentHash,
       provenance: item.provenance
     })),
