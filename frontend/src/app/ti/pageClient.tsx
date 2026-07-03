@@ -345,8 +345,6 @@ function Results({ result }: { result: TiSearchResponse }) {
                         </div>
                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </div>
-                    <TiCommandBar links={commandLinks} />
-                    <SectionOverviewRail items={sectionOverview} />
                 </div>
                 <ActorActionStrip
                     actor={actorIntel}
@@ -495,6 +493,10 @@ function Results({ result }: { result: TiSearchResponse }) {
 
                                 {showMoreAnalysis ? (
                                     <>
+                                        <div id='ti-secondary-analysis' className='grid gap-3'>
+                                            <TiCommandBar links={commandLinks} />
+                                            <SectionOverviewRail items={sectionOverview} />
+                                        </div>
                                         <ActorIntelligenceDossier
                                             actor={actorIntel}
                                             actionability={actionability}
@@ -6053,7 +6055,7 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     ] as const
 
     return (
-        <section data-ti-actor-highlights='true' className='rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm dark:border-[#273244] dark:bg-[#0f1621]'>
+        <section data-ti-actor-glance='true' data-ti-actor-highlights='true' className='rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor at a glance</p>
