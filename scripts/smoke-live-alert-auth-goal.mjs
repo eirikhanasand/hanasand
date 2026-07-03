@@ -69,8 +69,10 @@ const checks = [
     args: ["run", "smoke:live-alert-discord"],
     requiredEnv: [
       "DWM_LIVE_API_BASE_URL",
-      "DWM_LIVE_PROBE_TERM",
-      "DWM_LIVE_DISCORD_WEBHOOK_URL"
+      "DWM_LIVE_PROBE_TERM"
+    ],
+    requiredAnyEnv: [
+      ["DWM_LIVE_DISCORD_WEBHOOK_URL", "DWM_LIVE_WEBHOOK_DESTINATION_ID"]
     ]
   },
   {
@@ -108,6 +110,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
     "  AUTH_LIVE_API_BASE_URL=... bun scripts/smoke-live-alert-auth-goal.mjs",
     "",
     "Optional variables are passed through to the underlying probes:",
+    "  DWM_LIVE_WEBHOOK_DESTINATION_ID may be used instead of DWM_LIVE_DISCORD_WEBHOOK_URL when an org Discord destination already exists.",
     "  DWM_LIVE_AUTHORIZATION DWM_LIVE_ORGANIZATION_ID DWM_LIVE_ACTOR_ID DWM_LIVE_OWNER_EMAIL DWM_LIVE_CREATE_ORGANIZATION=false",
     "  API_LIVE_OUTSIDER_ID API_LIVE_OUTSIDER_TOKEN API_LIVE_ORGANIZATION_ID API_LIVE_CREATE_ORGANIZATION=false",
     "  AUTH_LIVE_FRONTEND_BASE_URL AUTH_LIVE_PASSKEY_USERNAME AUTH_LIVE_AUTHORIZATION AUTH_LIVE_ACTOR_ID",
@@ -124,9 +127,13 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const liveChecks = checks.filter(check => !check.localFallback);
 const skipped = liveChecks.flatMap(check => {
-  const missing = check.requiredEnv
-    .filter(name => !process.env[name]?.trim())
+  const missingRequired = check.requiredEnv
+    .filter(name => !hasEnv(name))
     .map(variable => ({ check: check.name, variable }));
+  const missingEither = (check.requiredAnyEnv ?? [])
+    .filter(group => !group.some(hasEnv))
+    .map(group => ({ check: check.name, variable: group.join("|") }));
+  const missing = [...missingRequired, ...missingEither];
   return missing.length > 0 ? [{
     name: check.name,
     cwd: check.cwd,
@@ -140,7 +147,7 @@ const startedAt = new Date().toISOString();
 const results = [];
 
 for (const check of checks.filter(check => (
-  check.localFallback || check.requiredEnv.every(name => process.env[name]?.trim())
+  check.localFallback || (check.requiredEnv.every(hasEnv) && (check.requiredAnyEnv ?? []).every(group => group.some(hasEnv)))
 ))) {
   const result = spawnSync(check.command, check.args, {
     cwd: resolve(root, check.cwd),
@@ -183,3 +190,7 @@ console.log(JSON.stringify({
     : "Local goal coverage passed. Live groups without required env were skipped; provide those env vars to complete production verification.",
   checks: results
 }, null, 2));
+
+function hasEnv(name) {
+  return Boolean(process.env[name]?.trim());
+}

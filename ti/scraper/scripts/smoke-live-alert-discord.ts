@@ -11,6 +11,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
     "  bun run smoke:live-alert-discord",
     "",
     "Optional:",
+    "  DWM_LIVE_WEBHOOK_DESTINATION_ID=webhook_destination_...",
     "  DWM_LIVE_AUTHORIZATION='Bearer ...'",
     "  DWM_LIVE_ORGANIZATION_ID=org_...",
     "  DWM_LIVE_ACTOR_ID=user_...",
@@ -22,14 +23,16 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 
 const baseUrl = requiredEnv("DWM_LIVE_API_BASE_URL").replace(/\/+$/, "");
 const term = requiredEnv("DWM_LIVE_PROBE_TERM").trim();
-const webhookUrl = requiredEnv("DWM_LIVE_DISCORD_WEBHOOK_URL").trim();
+const webhookUrl = env("DWM_LIVE_DISCORD_WEBHOOK_URL");
+const webhookDestinationId = env("DWM_LIVE_WEBHOOK_DESTINATION_ID");
 const organizationId = env("DWM_LIVE_ORGANIZATION_ID") || `org_live_alert_probe_${Date.now()}`;
 const ownerEmail = env("DWM_LIVE_OWNER_EMAIL") || "live-alert-probe@hanasand.example";
 const actorId = env("DWM_LIVE_ACTOR_ID") || "live-alert-probe";
 const authHeader = env("DWM_LIVE_AUTHORIZATION");
 const createOrganization = env("DWM_LIVE_CREATE_ORGANIZATION") !== "false";
 
-assert.match(webhookUrl, /^https:\/\/discord(?:app)?\.com\/api\/webhooks\//, "DWM_LIVE_DISCORD_WEBHOOK_URL must be a Discord webhook URL.");
+assert.ok(webhookUrl || webhookDestinationId, "Provide DWM_LIVE_DISCORD_WEBHOOK_URL or DWM_LIVE_WEBHOOK_DESTINATION_ID.");
+if (webhookUrl) assert.match(webhookUrl, /^https:\/\/discord(?:app)?\.com\/api\/webhooks\//, "DWM_LIVE_DISCORD_WEBHOOK_URL must be a Discord webhook URL.");
 assert.ok(term.length >= 3, "DWM_LIVE_PROBE_TERM must be at least 3 characters.");
 
 const startedAt = new Date().toISOString();
@@ -50,6 +53,7 @@ const watchlist = await postJson("/v1/dwm/watchlists", {
   name: `Live probe - ${term}`,
   terms: [term],
   webhookUrl,
+  webhookDestinationId,
   reason: "live_alert_probe"
 });
 assert.equal(watchlist.response.status, 201, `watchlist create failed: ${watchlist.response.status} ${JSON.stringify(watchlist.body)}`);
@@ -77,7 +81,7 @@ assert.equal(detail.body.schemaVersion, "dwm.alert_detail.v1");
 assert.ok(detail.body.evidenceReplay?.length > 0, "alert detail has no evidence replay.");
 assert.ok(detail.body.evidenceReplay?.[0]?.provenance?.captureId, "alert detail evidence is missing capture provenance.");
 
-const delivery = await postJson("/v1/dwm/webhooks/deliver", { organizationId, alertId: alert.id });
+const delivery = await postJson("/v1/dwm/webhooks/deliver", { organizationId, alertId: alert.id, webhookDestinationId });
 assert.equal(delivery.response.status, 200, `webhook delivery failed: ${delivery.response.status} ${JSON.stringify(delivery.body)}`);
 const delivered = (delivery.body.deliveries ?? []).filter((row: JsonRecord) => row.status === "delivered");
 assert.ok(delivered.length > 0 || Number(delivery.body.deliveredCount ?? 0) > 0, `Discord delivery was not accepted: ${JSON.stringify(delivery.body)}`);
@@ -96,6 +100,8 @@ console.log(JSON.stringify({
   baseUrl,
   organizationId,
   term,
+  webhookDestinationId: webhookDestinationId ?? null,
+  webhookUrlProvided: Boolean(webhookUrl),
   savedAlertCount: Number(rebuild.savedAlertCount ?? 0),
   postWatchlistAlertCount,
   alertCountDeltaFromRebuild: Number(rebuild.savedAlertCount ?? 0),
@@ -167,7 +173,7 @@ function env(name: string) {
 function requiredEnv(name: string) {
   const value = env(name);
   if (!value) {
-    throw new Error(`Missing ${name}. Required live probe vars: DWM_LIVE_API_BASE_URL, DWM_LIVE_PROBE_TERM, DWM_LIVE_DISCORD_WEBHOOK_URL. Optional: DWM_LIVE_AUTHORIZATION, DWM_LIVE_ORGANIZATION_ID, DWM_LIVE_ACTOR_ID, DWM_LIVE_OWNER_EMAIL, DWM_LIVE_CREATE_ORGANIZATION=false.`);
+    throw new Error(`Missing ${name}. Required live probe vars: DWM_LIVE_API_BASE_URL, DWM_LIVE_PROBE_TERM, plus DWM_LIVE_DISCORD_WEBHOOK_URL or DWM_LIVE_WEBHOOK_DESTINATION_ID. Optional: DWM_LIVE_AUTHORIZATION, DWM_LIVE_ORGANIZATION_ID, DWM_LIVE_ACTOR_ID, DWM_LIVE_OWNER_EMAIL, DWM_LIVE_CREATE_ORGANIZATION=false.`);
   }
   return value;
 }
