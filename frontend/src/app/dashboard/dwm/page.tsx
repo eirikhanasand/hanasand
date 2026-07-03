@@ -186,6 +186,7 @@ type DwmOperationsSnapshot = {
         activeSourceCount: number
         telegramSourceCount: number
         darkwebMetadataSourceCount: number
+        publicAdvisorySourceCount: number
         captureCount: number
         latestCaptureCount: number
         watchlistMatchCount: number
@@ -220,6 +221,17 @@ type DwmOperationsSnapshot = {
         trustScore?: number
         lastCollectedAt?: string
         approvedMetadataOnly: boolean
+    }>
+    sourceFamilies: Array<{
+        family: string
+        label: string
+        sourceCount: number
+        activeCount: number
+        captureCount: number
+        latestCaptureAt?: string
+        metadataOnlyCount: number
+        health: 'healthy' | 'partial' | 'missing'
+        nextAction: string
     }>
     zeroAlertExplanation: {
         state: string
