@@ -54,12 +54,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const create = await saveWatchlistTerms(nextTerms)
             if (!create.ok) throw new Error(create.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await alertRebuildFromWatchlistOrRequest(create, scope)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
             setResult({
                 ok: rebuild.ok,
-                message: rebuild.ok ? `Watchlist saved. Rebuilt ${savedAlertCount} alerts.` : rebuild.message,
+                message: rebuild.ok ? `Watchlist saved. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message,
             })
             router.refresh()
         } catch (error) {
@@ -89,12 +89,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const watchlist = await saveWatchlistTerms(nextTerms)
             if (!watchlist.ok) throw new Error(watchlist.message)
 
-            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            const rebuild = await alertRebuildFromWatchlistOrRequest(watchlist, scope)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
             setClaimData('')
             setClaimUrl('')
-            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report(s). Rebuilt ${savedAlertCount} alert(s).` : rebuild.message })
+            setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -741,6 +741,18 @@ async function postJson(path: string, body: Record<string, unknown>): Promise<Re
         ok: response.ok,
         message: error?.message || response.statusText,
     }
+}
+
+async function alertRebuildFromWatchlistOrRequest(payload: Record<string, unknown>, scope: { tenantId: string, organizationId?: string }) {
+    const inlineRebuild = isRecord(payload.alertRebuild) ? payload.alertRebuild : null
+    if (inlineRebuild) {
+        return {
+            ...inlineRebuild,
+            ok: true,
+            message: 'Watchlist matched against collected evidence.',
+        }
+    }
+    return postJson('/api/dwm/alerts/rebuild', scope)
 }
 
 function readNumber(value: unknown, key: string) {
