@@ -874,7 +874,7 @@ function EmptyWorkspacePreview() {
                     ))}
                 </ol>
             </section>
-            <section className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-scope-starters='true'>
+            <section id='watchlists' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-scope-starters='true'>
                 <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Watchlist scope starters' detail='Pick the type first, then enter a real organization-owned term after the workspace exists.' />
                 <div className='mt-3 grid gap-2 sm:grid-cols-2'>
                     {watchlistTemplates.map(template => (
@@ -884,6 +884,19 @@ function EmptyWorkspacePreview() {
                         </div>
                     ))}
                 </div>
+            </section>
+            <section id='destinations' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-destination-flow='true'>
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Destination workflow' detail='After the first watchlist is saved, add a Discord or webhook route, run a dry-run test, and inspect the delivery result.' />
+                <div className='mt-3 grid gap-2 sm:grid-cols-3'>
+                    {['Add endpoint', 'Run dry-run', 'Inspect history'].map(step => (
+                        <div key={step} className='rounded-lg border border-[#cfd7e6] bg-white px-3 py-2 text-sm font-semibold text-[#202838] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb]'>
+                            {step}
+                        </div>
+                    ))}
+                </div>
+            </section>
+            <section id='audit' className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-4 shadow-sm dark:border-[#2a3b58] dark:bg-[#101b2d]' data-org-empty-audit-flow='true'>
+                <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='Activity trail' detail='Invite, watchlist, destination test, replay, and case routing actions appear here with the selected row context.' />
             </section>
         </div>
     )
@@ -1131,7 +1144,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                                 <span className='flex gap-1 sm:justify-end'>
                                     <span role='button' aria-label='Copy invite link' className={iconButtonClass} aria-disabled={Boolean(busy) || !inviteLink(invite)} onClick={event => { event.stopPropagation(); if (!busy && inviteLink(invite)) onCopyInvite(invite) }}><Copy className='h-4 w-4' /></span>
                                     <span role='button' aria-label='Resend invite' className={iconButtonClass} aria-disabled={!canManage || Boolean(busy)} onClick={event => { event.stopPropagation(); if (canManage && !busy) onInviteAction(invite, 'resend') }}><RefreshCw className='h-4 w-4' /></span>
-                                    <span role='button' aria-label='Revoke invite' className={iconDangerButtonClass} aria-disabled={!canManage || Boolean(busy)} onClick={event => { event.stopPropagation(); if (canManage && !busy) onInviteAction(invite, 'revoke') }}><Trash2 className='h-4 w-4' /></span>
+                                    <ConfirmActionButton ariaLabel='Revoke invite' disabled={!canManage || Boolean(busy)} onConfirm={() => onInviteAction(invite, 'revoke')} icon={<Trash2 className='h-4 w-4' />} />
                                 </span>
                             </span>
                         </div>
@@ -1179,9 +1192,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                         </div>
                                     </td>
                                     <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
-                                        <button type='button' className={iconDangerButtonClass} disabled={!canManage || member.role === 'owner' || Boolean(busy)} onClick={() => onRemove(member)} aria-label='Remove member'>
-                                            <Trash2 className='h-4 w-4' />
-                                        </button>
+                                        <ConfirmActionButton ariaLabel='Remove member' disabled={!canManage || member.role === 'owner' || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
                                     </td>
                                 </tr>
                             ))}
@@ -1229,9 +1240,7 @@ function DestinationPanel({ destinations, canManage, busy, rowMessages, selected
                                 <RefreshCw className='h-4 w-4' />
                                 Test
                             </button>
-                            <button type='button' className={iconDangerButtonClass} disabled={!canManage || Boolean(busy)} onClick={() => onDelete(destination)} aria-label='Remove destination'>
-                                <Trash2 className='h-4 w-4' />
-                            </button>
+                            <ConfirmActionButton ariaLabel='Remove destination' disabled={!canManage || Boolean(busy)} onConfirm={() => onDelete(destination)} icon={<Trash2 className='h-4 w-4' />} />
                             <RowStatus message={rowMessages[`destination-${destination.id}`]} />
                         </span>
                     </div>
@@ -1350,7 +1359,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
                                                 {item.status === 'active' && <button type='button' aria-label='Pause watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'pause')}><Pause className='h-4 w-4' /></button>}
                                                 {item.status === 'paused' && <button type='button' aria-label='Resume watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'resume')}><Play className='h-4 w-4' /></button>}
                                                 {item.status === 'archived' && <button type='button' aria-label='Restore watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onAction(item, 'restore')}><Archive className='h-4 w-4' /></button>}
-                                                {item.status !== 'archived' && <button type='button' aria-label='Archive watchlist term' className={iconButtonClass} disabled={Boolean(busy)} onClick={() => onDelete(item)}><Trash2 className='h-4 w-4' /></button>}
+                                                {item.status !== 'archived' && <ConfirmActionButton ariaLabel='Archive watchlist term' disabled={Boolean(busy)} onConfirm={() => onDelete(item)} icon={<Trash2 className='h-4 w-4' />} />}
                                             </div>
                                         )}
                                     </div>
@@ -1628,6 +1637,31 @@ function RowStatus({ message }: { message?: RowMessage }) {
         ? 'bg-[#ecfdf3] text-[#067647] dark:bg-[#102b1a] dark:text-[#86efac]'
         : 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
     return <span className={`inline-flex max-w-full truncate rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{sanitizeOrganizationDisplayCopy(message.text) || message.text}</span>
+}
+
+function ConfirmActionButton({ ariaLabel, disabled, onConfirm, icon }: { ariaLabel: string, disabled?: boolean, onConfirm: () => void, icon: ReactNode }) {
+    const [confirming, setConfirming] = useState(false)
+    return (
+        <button
+            type='button'
+            className={confirming ? dangerConfirmButtonClass : iconDangerButtonClass}
+            disabled={disabled}
+            aria-label={confirming ? `Confirm ${ariaLabel.toLowerCase()}` : ariaLabel}
+            onBlur={() => setConfirming(false)}
+            onClick={event => {
+                event.stopPropagation()
+                if (confirming) {
+                    setConfirming(false)
+                    onConfirm()
+                    return
+                }
+                setConfirming(true)
+            }}
+        >
+            {confirming ? <CheckCircle2 className='h-4 w-4' /> : icon}
+            {confirming && <span>Confirm</span>}
+        </button>
+    )
 }
 
 function EmptyLine({ text }: { text: string }) {
@@ -2060,3 +2094,4 @@ const primaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 r
 const secondaryButtonClass = 'inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
 const iconButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-[#cfd7e6] bg-white text-[#344054] transition hover:bg-[#f2f5f9] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
 const iconDangerButtonClass = 'grid h-10 w-10 place-items-center rounded-lg border border-[#fecdca] bg-[#fffbfa] text-[#b42318] transition hover:bg-[#fff1f0] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#7f1d1d] dark:bg-[#2a1010] dark:text-[#fecaca] dark:hover:bg-[#3b1414]'
+const dangerConfirmButtonClass = 'inline-flex h-10 min-w-28 items-center justify-center gap-2 rounded-lg border border-[#fecdca] bg-[#fff1f0] px-3 text-sm font-semibold text-[#b42318] transition hover:bg-[#ffe4e0] disabled:cursor-not-allowed disabled:opacity-55 dark:border-[#7f1d1d] dark:bg-[#3b1414] dark:text-[#fecaca] dark:hover:bg-[#4a1717]'
