@@ -82,7 +82,8 @@ export async function createDwmWatchlist(request: Request, options: ApiServerOpt
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "create_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access) }, 201);
+  const alertRebuild = rebuildDwmAlertsAfterWatchlistMutation(options, scope);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access), alertRebuild }, 201);
 }
 
 export function getDwmWatchlistDetail(url: URL, options: ApiServerOptions, watchlistId: string | undefined, request?: Request): Response {
@@ -132,7 +133,24 @@ export async function updateDwmWatchlist(request: Request, options: ApiServerOpt
   const entitlement = enforceDwmWatchlistEntitlement({ options, request, body, scope, access, watchlist, action: "update_dwm_watchlist" });
   if (entitlement.error) return entitlement.error;
   (options.store as any).saveDwmWatchlist(watchlist);
-  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access) });
+  const alertRebuild = rebuildDwmAlertsAfterWatchlistMutation(options, scope);
+  return json({ organization: scope.organization, visibilityDecision: access.visibilityDecision, entitlement: entitlement.adapter, watchlist: buildDwmWatchlistDetail(watchlist, options, access), alertRebuild });
+}
+
+function rebuildDwmAlertsAfterWatchlistMutation(options: ApiServerOptions, scope: { tenantId: string; organizationId?: string; organization?: unknown }) {
+  const rebuilt = rebuildDwmRuntimeAlerts({
+    store: options.store as any,
+    tenantId: scope.tenantId,
+    organizationId: scope.organizationId,
+    visibilityPolicy: organizationAlertVisibilityPolicy(scope.organization)
+  });
+  return {
+    savedAlertCount: rebuilt.savedAlertCount,
+    alertIds: rebuilt.alerts.map((alert: any) => alert.id),
+    sourceFamilies: uniqueStrings(rebuilt.alerts.map((alert: any) => alert.sourceFamily).filter(Boolean)),
+    matchedTerms: uniqueStrings(rebuilt.alerts.map((alert: any) => alert.matchedTerm?.value).filter(Boolean)),
+    zeroAlertProof: rebuilt.zeroAlertProof
+  };
 }
 
 export async function disableDwmWatchlist(request: Request, options: ApiServerOptions, watchlistId: string | undefined): Promise<Response> {

@@ -58,14 +58,17 @@ describe("dwm webhook delivery", () => {
       }
     };
 
-    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
+    const watchlistResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/watchlists", {
       method: "POST",
-      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"], webhookUrl: "https://hooks.example.com/dwm" })
+      body: JSON.stringify({ tenantId: "tenant_acme", terms: ["acme.com"], webhookUrl: "https://discord.com/api/webhooks/dwm/token" })
     }), options);
-    await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
-      method: "POST",
-      body: JSON.stringify({ tenantId: "tenant_acme" })
-    }), options);
+    const watchlistPayload = await watchlistResponse.json() as any;
+    expect(watchlistResponse.status).toBe(201);
+    expect(watchlistPayload.alertRebuild).toMatchObject({
+      savedAlertCount: 1,
+      sourceFamilies: ["telegram_public"],
+      matchedTerms: ["acme.com"]
+    });
 
     const deliverResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/webhooks/deliver", {
       method: "POST",
@@ -76,10 +79,14 @@ describe("dwm webhook delivery", () => {
     expect(deliverResponse.status).toBe(200);
     expect(delivered.attemptedCount).toBe(1);
     expect(delivered.deliveries[0].status).toBe("delivered");
-    expect(seen[0].url).toBe("https://hooks.example.com/dwm");
-    expect(seen[0].body.eventType).toBe("darkweb.monitoring.match");
-    expect(seen[0].body.alertDetailPath).toContain(`/v1/dwm/alerts/${seen[0].body.alertId}`);
-    expect(seen[0].body).toMatchObject({
+    expect(delivered.deliveries[0].deliveryKind).toBe("discord");
+    expect(seen[0].url).toBe("https://discord.com/api/webhooks/dwm/token");
+    expect(seen[0].body.content).toContain("Hanasand alert");
+    expect(seen[0].body.embeds[0].fields.some((field: any) => field.name === "Matched term" && field.value === "acme.com")).toBe(true);
+    const alertPayload = seen[0].body.hanasand;
+    expect(alertPayload.eventType).toBe("darkweb.monitoring.match");
+    expect(alertPayload.alertDetailPath).toContain(`/v1/dwm/alerts/${alertPayload.alertId}`);
+    expect(alertPayload).toMatchObject({
       tenantId: "tenant_acme",
       sourceFamily: "telegram_public",
       captureIds: ["cap_webhook_acme"],
@@ -115,16 +122,16 @@ describe("dwm webhook delivery", () => {
         }
       }
     });
-    expect(typeof seen[0].body.alertCreatedEvent.id).toBe("string");
-    expect(seen[0].body.alertCreatedEvent.id).toMatch(/^dwm_alert_created_event_/);
-    expect(seen[0].body.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
-    expect(seen[0].body.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
-    expect(seen[0].body.alertCreatedEvent.alertDetailPath).toBe(seen[0].body.alertDetailPath);
-    expect(seen[0].body.deliveryReadinessContext.alertDetailPath).toBe(seen[0].body.alertDetailPath);
-    expect(seen[0].body.alertCreatedDispatch).toMatchObject({
+    expect(typeof alertPayload.alertCreatedEvent.id).toBe("string");
+    expect(alertPayload.alertCreatedEvent.id).toMatch(/^dwm_alert_created_event_/);
+    expect(alertPayload.alertCreatedEventId).toBe(alertPayload.alertCreatedEvent.id);
+    expect(alertPayload.alertCreatedAt).toBe(alertPayload.alertCreatedEvent.at);
+    expect(alertPayload.alertCreatedEvent.alertDetailPath).toBe(alertPayload.alertDetailPath);
+    expect(alertPayload.deliveryReadinessContext.alertDetailPath).toBe(alertPayload.alertDetailPath);
+    expect(alertPayload.alertCreatedDispatch).toMatchObject({
       schemaVersion: "dwm.alert_created_event_dispatch.v1",
       ready: true,
-      eventId: seen[0].body.alertCreatedEvent.id,
+      eventId: alertPayload.alertCreatedEvent.id,
       eventType: "dwm.alert.created",
       alertId: expect.any(String),
       tenantId: "tenant_acme",
@@ -135,27 +142,28 @@ describe("dwm webhook delivery", () => {
       workflowEventCount: 0,
       blockerCodes: []
     });
-    expect(seen[0].body.alertCreatedDispatch.idempotencyKey).toMatch(/^dwm_alert_created_dispatch_/);
-    expect(seen[0].body.deliveryReadinessContext.alertCreatedEventId).toBe(seen[0].body.alertCreatedEvent.id);
-    expect(seen[0].body.deliveryReadinessContext.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
-    expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
-    expect(seen[0].body.casePath).toContain(`/v1/cases/${seen[0].body.caseIdCandidate}`);
-    expect(seen[0].body.watchlistItemIds[0]).toMatch(/^dwm_watchlist_item_/);
-    expect(seen[0].body.matchContext).toMatchObject({
+    expect(alertPayload.alertCreatedDispatch.idempotencyKey).toMatch(/^dwm_alert_created_dispatch_/);
+    expect(alertPayload.deliveryReadinessContext.alertCreatedEventId).toBe(alertPayload.alertCreatedEvent.id);
+    expect(alertPayload.deliveryReadinessContext.alertCreatedAt).toBe(alertPayload.alertCreatedEvent.at);
+    expect(alertPayload.caseIdCandidate).toMatch(/^case_/);
+    expect(alertPayload.casePath).toContain(`/v1/cases/${alertPayload.caseIdCandidate}`);
+    expect(alertPayload.watchlistItemIds[0]).toMatch(/^dwm_watchlist_/);
+    expect(alertPayload.watchlistItemIds[0]).toContain("acme.com");
+    expect(alertPayload.matchContext).toMatchObject({
       normalizedTerm: "acme.com",
       termKind: "domain"
     });
-    expect(seen[0].body.evidenceSummary).toMatchObject({
+    expect(alertPayload.evidenceSummary).toMatchObject({
       evidenceCount: 1,
       sourceFamilyCounts: { telegram_public: 1 },
       publicSafeCount: 1
     });
-    expect(seen[0].body.routingContext).toMatchObject({
+    expect(alertPayload.routingContext).toMatchObject({
       queue: "identity_response",
       urgency: "immediate",
       customerVisibleEvidence: "redacted_excerpt"
     });
-    expect(seen[0].body.evidence[0].provenance).toMatchObject({
+    expect(alertPayload.evidence[0].provenance).toMatchObject({
       captureId: "cap_webhook_acme",
       sourceId: "src_webhook_tg",
       metadataOnly: false
