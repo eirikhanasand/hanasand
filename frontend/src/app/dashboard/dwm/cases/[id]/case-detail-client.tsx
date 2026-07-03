@@ -188,7 +188,7 @@ type LoadState = {
 
 const primaryActions = ['review', 'assign', 'escalate', 'suppress', 'false_positive', 'close', 'reopen', 'note']
 
-export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId }: { caseId: string, tenantId?: string, organizationId?: string, alertId?: string }) {
+export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId, routeRun }: { caseId: string, tenantId?: string, organizationId?: string, alertId?: string, routeRun?: string }) {
     const [state, setState] = useState<LoadState>({ loading: true })
     const [busy, setBusy] = useState<string | null>(null)
     const [message, setMessage] = useState<{ ok: boolean, text: string } | null>(null)
@@ -378,6 +378,15 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId 
                             readOnly={readOnly}
                         />
 
+                        {routeRun ? (
+                            <RouteHandoffStrip
+                                routeRun={routeRun}
+                                detail={state.detail}
+                                exportPayload={state.exportPayload}
+                                latestDelivery={latestDelivery}
+                            />
+                        ) : null}
+
                         <div className='grid gap-2 md:grid-cols-4'>
                             <Metric label='Watch terms' value={`${matchedTerms(state.detail).length}`} detail={matchedTerms(state.detail).slice(0, 2).join(', ') || 'none'} />
                             <Metric label='Evidence' value={`${evidence.length}`} detail={hashList(evidence.map(item => item.contentHash || item.provenance?.contentHash)).slice(0, 1).join(', ') || 'no hash'} />
@@ -475,6 +484,41 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId 
                 </div>
             </section>
         </main>
+    )
+}
+
+function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: { routeRun: string, detail: CaseDetail, exportPayload?: CaseExport, latestDelivery?: DeliveryRow }) {
+    const terms = matchedTerms(detail)
+    const evidenceCount = detail.evidence?.length ?? exportPayload?.summary?.evidenceCount ?? 0
+    const deliveryCount = detail.deliveries?.length ?? exportPayload?.summary?.deliveryCount ?? 0
+    const label = routeRun === 'metadata_claim' ? 'Metadata intake' : routeRun === 'source_pack' ? 'Source pack route' : 'Route handoff'
+    const nextAction = deliveryCount ? 'Record decision' : latestDelivery ? 'Review delivery' : 'Test webhook'
+    const cells = [
+        { label: 'Route', value: label },
+        { label: 'Match', value: terms[0] || detail.alert?.matchedTerm?.value || 'term pending' },
+        { label: 'Evidence', value: `${evidenceCount} rows` },
+        { label: 'Delivery', value: latestDelivery?.status ? stateLabel(latestDelivery.status) : deliveryCount ? `${deliveryCount} attempts` : 'not sent' },
+        { label: 'Next', value: nextAction },
+    ]
+
+    return (
+        <section data-dwm-case-route-handoff className='rounded-lg border border-[#334762] bg-[#0f1a2c] p-3'>
+            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Route handoff</p>
+                    <h2 className='mt-1 text-sm font-semibold text-[#edf4ff]'>Case opened from {label.toLowerCase()}</h2>
+                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
+                </div>
+                <div className='grid grid-cols-2 gap-2 sm:grid-cols-5'>
+                    {cells.map(cell => (
+                        <div key={cell.label} className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
+                            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
+                            <p className='mt-1 truncate text-xs font-semibold text-[#edf4ff]' title={cell.value}>{cell.value}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </section>
     )
 }
 

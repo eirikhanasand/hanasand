@@ -14,10 +14,11 @@ export default async function DwmCaseDetailPage({
     const tenantId = firstParam(query?.tenantId)
     const organizationId = firstParam(query?.organizationId)
     const alertId = firstParam(query?.alertId)
+    const routeRun = firstParam(query?.route)
 
     return (
         <DashboardPage className='gap-2 sm:gap-3'>
-            <DwmCaseDetailClient caseId={id} tenantId={tenantId} organizationId={organizationId} alertId={alertId} />
+            <DwmCaseDetailClient caseId={id} tenantId={tenantId} organizationId={organizationId} alertId={alertId} routeRun={routeRun} />
         </DashboardPage>
     )
 }

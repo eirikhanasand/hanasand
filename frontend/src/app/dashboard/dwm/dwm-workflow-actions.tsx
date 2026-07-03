@@ -208,13 +208,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 alertCount: 1,
                 alertId: alert.id,
                 caseId: caseId || undefined,
-                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId) : undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim') : undefined,
                 deliveryAttempts: deliveryText ? (deliveryText.includes('recorded') ? 1 : 0) : undefined,
                 deliveryState: deliveryText ? deliveryText.trim() : undefined,
             })
             setResult({ ok: true, message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
-                router.push(caseDetailPath(caseId, alert.id, organizationId))
+                router.push(caseDetailPath(caseId, alert.id, organizationId, 'metadata_claim'))
             } else {
                 router.refresh()
             }
@@ -327,13 +327,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 alertCount: savedAlertCount,
                 alertId: alert.id,
                 caseId: caseId || undefined,
-                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId) : undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId, 'source_pack') : undefined,
                 deliveryAttempts,
                 deliveryState: deliveryText ? deliveryText.trim() : undefined,
             })
             setResult({ ok: true, message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
-                router.push(caseDetailPath(caseId, alert.id, organizationId))
+                router.push(caseDetailPath(caseId, alert.id, organizationId, 'source_pack'))
             } else {
                 router.refresh()
             }
@@ -847,10 +847,11 @@ function selectRebuiltAlert(payload: Record<string, unknown>, company: string, t
     return id ? { id } : undefined
 }
 
-function caseDetailPath(caseId: string, alertId: string, organizationId?: string) {
+function caseDetailPath(caseId: string, alertId: string, organizationId?: string, route?: string) {
     const params = new URLSearchParams()
     if (organizationId) params.set('organizationId', organizationId)
     params.set('alertId', alertId)
+    if (route) params.set('route', route)
     return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
 }
 
