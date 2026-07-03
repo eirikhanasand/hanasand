@@ -4468,7 +4468,7 @@ export function buildSourceProvenanceActorProfileContract(input: {
       code: `missing_${field.field}` as const,
       field: field.field,
       ownerLane: "publicTI" as const,
-      message: `Public TI actor profile is missing source-backed ${field.field}.`,
+      message: `Public TI actor profile is missing source detail for ${field.field}.`,
       retryable: true
     }))
   ];
@@ -7652,7 +7652,7 @@ function sourceFreshnessConsumers(
     consumer: "publicTI",
     ownerLane: "publicTI",
     ready: publicReady,
-    reason: publicReady ? "Actor page can show source-backed coverage." : "Actor page needs fresh, case-ready source evidence.",
+    reason: publicReady ? "Actor page can show current source coverage." : "Actor page needs fresh, case-ready source details.",
     route: {
       method: "GET",
       path: lifecycle.publicTiRoute ?? `/ti/${encodeURIComponent(lifecycle.actor)}`,
@@ -13667,7 +13667,7 @@ function sourceProvenanceAlertRebuildActions(
     return [{
       action: "materialize_watchlist_terms",
       ownerLane: "org",
-      reason: "Source-backed watchlist terms must be materialized before alert rebuild can be requested.",
+      reason: "Watchlist terms with source details must be materialized before alert rebuild can be requested.",
       route: {
         method: "POST",
         path: "/v1/organizations/watchlists/terms",

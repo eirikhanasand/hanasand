@@ -36,11 +36,13 @@ type ParsedExposureClaim = ExposureClaimItem & {
 
 export async function listExposureQueue(url: URL, options: ApiServerOptions) {
   const limit = numberQuery(url.searchParams.get("limit")) ?? 25;
+  const offset = Math.max(0, Math.floor(numberQuery(url.searchParams.get("offset")) ?? 0));
   const query = url.searchParams.get("q") ?? "";
   const at = nowIso();
-  const items = exposureClaimsFromStore(options.store, query, { limit });
-  const latestClaimAt = latestTime(items.map((item: any) => item.claimTime));
-  const latestCollectedAt = latestTime(items.map((item: any) => item.collectedAt));
+  const allItems = exposureClaimsFromStore(options.store, query);
+  const items = exposureClaimsFromStore(options.store, query, { limit, offset });
+  const latestClaimAt = latestTime(allItems.map((item: any) => item.claimTime));
+  const latestCollectedAt = latestTime(allItems.map((item: any) => item.collectedAt));
   const claimAgeMinutes = ageMinutes(at, latestClaimAt);
   const collectionAgeMinutes = ageMinutes(at, latestCollectedAt);
   const age = collectionAgeMinutes ?? claimAgeMinutes;
@@ -48,7 +50,7 @@ export async function listExposureQueue(url: URL, options: ApiServerOptions) {
   return json({
     schemaVersion: "dwm.exposure_queue.v1",
     generatedAt: at,
-    status: fresh ? "live" : items.length ? "stale" : "waiting_for_collection",
+    status: fresh ? "live" : items.length ? "stale" : "empty",
     freshness: {
       latestClaimAt,
       latestCollectedAt,
@@ -71,8 +73,16 @@ export async function listExposureQueue(url: URL, options: ApiServerOptions) {
     },
     counts: {
       visible: items.length,
-      needsReview: items.filter((item) => item.status === "needs_review").length,
-      metadataOnly: items.filter((item) => item.metadataOnly).length
+      total: allItems.length,
+      needsReview: allItems.filter((item) => item.status === "needs_review").length,
+      metadataOnly: allItems.filter((item) => item.metadataOnly).length
+    },
+    page: {
+      limit,
+      offset,
+      total: allItems.length,
+      nextOffset: offset + items.length < allItems.length ? offset + items.length : null,
+      hasMore: offset + items.length < allItems.length
     },
     items
   });
@@ -154,10 +164,11 @@ export async function saveExposureClaimFromCollectedItem(store: any, item: any, 
   return saveExposureClaim(store, claim, at);
 }
 
-export function exposureClaimsFromStore(store: any, query = "", options: { limit?: number } = {}) {
+export function exposureClaimsFromStore(store: any, query = "", options: { limit?: number; offset?: number } = {}) {
   const needle = query.trim().toLowerCase();
   const limit = Number(options.limit ?? 0);
   const boundedLimit = Number.isFinite(limit) && limit > 0 ? Math.min(250, Math.max(1, Math.floor(limit))) : undefined;
+  const offset = Math.max(0, Math.floor(Number(options.offset ?? 0)));
   const items: any[] = [];
 
   for (const capture of store.listCaptures?.() ?? []) {
@@ -170,7 +181,8 @@ export function exposureClaimsFromStore(store: any, query = "", options: { limit
   }
 
   items.sort((a: any, b: any) => epoch(b.claimTime ?? b.collectedAt) - epoch(a.claimTime ?? a.collectedAt));
-  return boundedLimit ? items.slice(0, boundedLimit) : items;
+  const windowed = offset ? items.slice(offset) : items;
+  return boundedLimit ? windowed.slice(0, boundedLimit) : windowed;
 }
 
 function saveExposureClaim(store: any, claim: any, at: string) {

@@ -1812,7 +1812,7 @@ export function buildBetaReadinessArtifact(input: Array<{
     betaRowFromProduct({
       id: "public_ti_actor_relevance",
       ownerLane: "publicTI",
-      capabilityLabel: "Source-backed threat intelligence coverage",
+      capabilityLabel: "Threat intelligence source coverage",
       productRow: publicTi,
       requiredNextAction: "verify_source_backed_ti_coverage",
       persistenceMode: "real_persistence",

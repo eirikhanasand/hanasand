@@ -1088,7 +1088,7 @@ function alertProvenanceConsumerBlockers(
     blockers.push(alertProvenanceBlocker("missing_case_route", "case", !contract.caseId ? "caseId" : "casePath", "Case workflow consumers require case id and route."));
   }
   if (provenanceScore(contract) === 0 || contract.provenance.evidenceCount === 0 || !contract.provenance.captureIds.length) {
-    blockers.push(alertProvenanceBlocker("missing_source_provenance", "source", "provenance", "Alert provenance consumers require source-backed evidence."));
+    blockers.push(alertProvenanceBlocker("missing_source_provenance", "source", "provenance", "Alert source consumers require source details."));
   }
   if (input.staleBefore && contract.provenance.lastObservedAt && contract.provenance.lastObservedAt < input.staleBefore) {
     blockers.push(alertProvenanceBlocker("stale_source_provenance", "source", "provenance.lastObservedAt", "Alert provenance is older than the requested freshness boundary."));

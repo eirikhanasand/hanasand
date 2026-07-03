@@ -44,7 +44,28 @@ const fields = [
 const sourceCoverageStats = [
     { label: 'Active monitored sources', value: activeSourceCount.toString(), detail: `${totalSourceCount} mapped across source families` },
     { label: 'Public Telegram sources', value: String(telegramCoverage?.activeCount || 0), detail: 'Broker rooms, mirrors, stealer-log shops' },
-    { label: 'Metadata-only sources', value: String(darkwebCoverage?.activeCount || 0), detail: 'Actor pages, mirrors, hashes, screenshots' },
+    { label: 'Sources without stolen files', value: String(darkwebCoverage?.activeCount || 0), detail: 'Leak sites, mirrors, hashes, screenshots' },
+]
+
+const coverageEvidenceTiers = [
+    {
+        label: 'Verified today',
+        detail: 'Public intelligence search returns recent ransomware and extortion records with source links, first-seen timing, aliases, and safe summaries.',
+        items: ['Recent source records', 'First-seen timing', 'Safe source context'],
+        tone: 'text-[#53d18f] border-[#53d18f]/30 bg-[#53d18f]/10',
+    },
+    {
+        label: 'Example alert shape',
+        detail: 'Session, token, API-key, and webhook examples show the alert shape. They become customer-visible only when a tenant watchlist and approved source record support them.',
+        items: ['Sample alert format', 'Webhook payload shape', 'Identity-risk workflow'],
+        tone: 'text-[#b68cff] border-[#7f5af0]/35 bg-[#7f5af0]/10',
+    },
+    {
+        label: 'Needs tenant connection',
+        detail: 'Invite-only Telegram rooms, infostealer logs, session cookies, OAuth tokens, API keys, and non-human identities require approved collection scope before alerts are treated as confirmed.',
+        items: ['Approved scope', 'Customer watchlist match', 'Safe-field review'],
+        tone: 'text-[#ff8c6a] border-[#ff4d1d]/35 bg-[#ff4d1d]/10',
+    },
 ]
 
 const exposureTypes = [
@@ -52,7 +73,33 @@ const exposureTypes = [
     { title: 'Infostealer log', detail: 'Browser dumps, saved logins, cookies, autofill, corporate URLs, and seat-based resale.', icon: Fingerprint },
     { title: 'Session replay', detail: 'Live cookies, OAuth tokens, MFA bypass risk, and short-lived session artifacts.', icon: Bot },
     { title: 'Phishing-kit credentials', detail: 'Telegram exfil drops, AiTM kit posts, lures, hosting, and brand impersonation.', icon: ShieldAlert },
-    { title: 'NHI compromise', detail: 'API keys, service accounts, OAuth apps, tokens, and machine identities.', icon: LockKeyhole },
+    { title: 'Service account or API-key exposure', detail: 'API keys, service accounts, OAuth apps, tokens, and machine identities. Security teams often call these non-human identities.', icon: LockKeyhole },
+]
+
+const plainLanguageTerms = [
+    {
+        term: 'Threat actor',
+        meaning: 'A criminal group, broker, or seller posting about stolen access, leaked data, or an extortion claim.',
+    },
+    {
+        term: 'Source family',
+        meaning: 'The type of place the mention came from, such as a leak site, Telegram-like public channel, public advisory, or security feed.',
+    },
+    {
+        term: 'Metadata-only',
+        meaning: 'Hanasand records safe facts about a claim, such as source, timing, title, hash, and screenshot state, without storing stolen files.',
+    },
+    {
+        term: 'Webhook',
+        meaning: 'An automatic delivery to tools your team already uses, such as Slack, Jira, a SIEM, SOAR, or vendor-risk workflow.',
+    },
+]
+
+const sampleAlertSummary = [
+    ['What happened', 'A monitored company or supplier was named in a new leak or extortion post.'],
+    ['Why it matters', 'The claim may affect incident response, vendor risk, legal review, or customer communications.'],
+    ['Source context', 'Source name, first-seen time, matched term, claim summary, confidence, and redacted context.'],
+    ['What to do next', 'Confirm the match, check identity/session exposure, open a case, and route the alert to the owner.'],
 ]
 
 const workflow = [
@@ -63,7 +110,7 @@ const workflow = [
     },
     {
         title: 'Monitor',
-        detail: 'Continuously match across public Telegram, forums, markets, leak pages, advisories, and approved metadata sources.',
+        detail: 'Continuously match across public Telegram, forums, markets, leak pages, advisories, and approved sources.',
         icon: Radar,
     },
     {
@@ -73,21 +120,21 @@ const workflow = [
     },
     {
         title: 'Integrate',
-        detail: 'Push reviewed alerts to webhooks, Slack, Jira, SIEM, SOAR, vendor-risk workflows, or the API.',
+        detail: 'Push reviewed alerts to webhooks, Slack, Jira, SIEM, SOAR, vendor-risk tools, or the API.',
         icon: Webhook,
     },
 ]
 
 const requestTypes = [
-    { title: 'Telegram channels', detail: 'Public and approved invite-review queues for broker rooms, ransomware mirrors, and stealer-log markets.' },
+    { title: 'Telegram channels', detail: 'Public channels and approved invite reviews for broker rooms, ransomware mirrors, and stealer-log markets.' },
     { title: 'New forums and markets', detail: 'Source onboarding packets for newly launched communities before they appear in generic indexes.' },
     { title: 'Actor or sector scopes', detail: 'Language, region, campaign, actor alias, industry, vendor, product, or portfolio monitoring windows.' },
-    { title: 'Evidence-safe captures', detail: 'Metadata, hashes, screenshots, source timing, and redaction state without downloading stolen files.' },
+    { title: 'Safe source records', detail: 'Page details, hashes, screenshots, source timing, and redaction state without downloading stolen files.' },
 ]
 
 const pricingTiers = [
     { name: 'Pilot', price: '$49/mo', detail: '25 watched names or domains, recent actor-claim matches, email notification packets.', href: '/contact?plan=pilot' },
-    { name: 'Company Monitor', price: '$149/mo', detail: '250 watched names or domains, faster refresh cadence, structured alert export.', href: '/contact?plan=company-monitor', featured: true },
+    { name: 'Company Monitor', price: '$149/mo', detail: '250 watched names or domains, faster refreshes, structured alert export.', href: '/contact?plan=company-monitor', featured: true },
     { name: 'Portfolio', price: '$499/mo', detail: '1,500 watched names or domains, priority source expansion, custom delivery format.', href: '/contact?plan=portfolio' },
 ]
 
@@ -106,18 +153,19 @@ const faqItems = [
     },
     {
         question: 'Do you store stolen data?',
-        answer: 'No. The product is built around metadata-only restricted collection, redaction, provenance, hashes, screenshots when approved, and customer-specific alert context. The goal is response speed without raw leaked-data bloat.',
+        answer: 'No. The product is built around source records, redaction, hashes, screenshots when approved, and customer-specific alert context. The goal is response speed without raw leaked-data bloat.',
     },
 ]
 
 const apiUseCases = [
-    'Create tickets when a watched supplier appears in a new victim claim.',
+    'Create tickets when a watched supplier appears in a new ransomware post.',
     'Route Telegram-originated hints into analyst review before they become customer-visible facts.',
-    'Attach actor, company, claimed-data text, first-seen time, source family, and recommended action.',
-    'Trigger identity-response workflows for session, OAuth, API-key, or infostealer-log exposure.',
+    'Attach actor, company, data mentioned, first-seen time, source family, and recommended action.',
+    'Trigger identity-response work for session, OAuth, API-key, or infostealer-log exposure.',
 ]
 
 const dwmWebhookDraftKey = 'hanasand:dwm-webhook-subscription'
+const samplePayloadDeliveredAt = '2026-07-03T02:14:00.000Z'
 
 export default function DarkWebMonitoringPage() {
     const [endpoint, setEndpoint] = useState('https://hooks.example.com/hanasand/dwm')
@@ -125,16 +173,20 @@ export default function DarkWebMonitoringPage() {
     const [requestTarget, setRequestTarget] = useState('t.me/broker_room_watch, Lumma, Okta session cookies')
     const [status, setStatus] = useState('')
     const [subscriptionId, setSubscriptionId] = useState('')
+    const [testingWebhook, setTestingWebhook] = useState(false)
+    const [webhookReceipt, setWebhookReceipt] = useState<{ eventId: string, receivedAt: string } | null>(null)
     const payload = useMemo(() => samplePayload(watchlist), [watchlist])
 
     function updateEndpoint(value: string) {
         setEndpoint(value)
         setSubscriptionId('')
+        setWebhookReceipt(null)
     }
 
     function updateWatchlist(value: string) {
         setWatchlist(value)
         setSubscriptionId('')
+        setWebhookReceipt(null)
     }
 
     function prepareWebhookAlert() {
@@ -161,8 +213,36 @@ export default function DarkWebMonitoringPage() {
         })
         writeWebhookDraft(draft)
         setSubscriptionId(nextSubscriptionId)
-        setStatus(`Webhook setup saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Create the alert in the console to start monitoring.`)
-        window.location.assign('/dashboard/automations?setup=dwm')
+        setStatus(`Webhook draft saved for ${terms.length} watched term${terms.length === 1 ? '' : 's'}. Review the payload here, then create the alert in the console when ready.`)
+    }
+
+    async function testWebhookPreview() {
+        setTestingWebhook(true)
+        setStatus('')
+        setWebhookReceipt(null)
+        try {
+            const response = await fetch('/api/dwm/webhook-sink', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-hanasand-event-id': `preview_${Date.now().toString(36)}`,
+                },
+                body: JSON.stringify(payload),
+            })
+            const body = await response.json().catch(() => ({})) as { eventId?: string, receivedAt?: string, error?: string }
+            if (!response.ok || body.error) {
+                throw new Error(body.error || 'The sample webhook receiver did not accept the payload.')
+            }
+            setWebhookReceipt({
+                eventId: body.eventId || 'accepted',
+                receivedAt: body.receivedAt || new Date().toISOString(),
+            })
+            setStatus('Sample delivery accepted by the public receiver.')
+        } catch (error) {
+            setStatus(error instanceof Error ? error.message : 'The sample webhook receiver did not accept the payload.')
+        } finally {
+            setTestingWebhook(false)
+        }
     }
 
     function submitCollectionRequest(event: FormEvent<HTMLFormElement>) {
@@ -172,12 +252,12 @@ export default function DarkWebMonitoringPage() {
             setStatus('Add a Telegram channel, actor, market, source, sector, or search scope.')
             return
         }
-        setStatus(`Collection request staged: ${target}. The console will turn this into an approval packet before collection starts.`)
+        setStatus(`Collection request staged: ${target}. The console will turn this into a scoped source review before collection starts.`)
     }
 
     async function copyPayload() {
         await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
-        setStatus('Example webhook payload copied.')
+        setStatus('Webhook payload copied.')
     }
 
     return (
@@ -191,7 +271,7 @@ export default function DarkWebMonitoringPage() {
                                 Find company exposure before a buyer, journalist, or attacker does.
                             </h1>
                             <p className='max-w-2xl text-lg leading-8 text-[#c8d2e4]'>
-                                Hanasand monitors Telegram, actor pages, leak-site metadata, public advisories, and security feeds for the names that matter to you. Every alert ships with source tracking, confidence, enrichment, and a review-ready next action.
+                                Hanasand monitors leak and extortion sources for the companies, domains, suppliers, and executives you care about. Every alert explains what was found, why it matters, source context, severity, and the next review step.
                             </p>
                         </div>
                         <div className='flex flex-wrap gap-3'>
@@ -202,16 +282,55 @@ export default function DarkWebMonitoringPage() {
                             <Link href='/ti' className='inline-flex h-12 items-center gap-2 rounded-lg border border-[#5d6b86] bg-[#121722] px-5 text-sm font-semibold text-white transition hover:border-[#8ca2cf] hover:bg-[#182033]'>
                                 Search intelligence
                             </Link>
+                            <Link href='#sample-alert' className='inline-flex h-12 items-center gap-2 rounded-lg border border-[#5d6b86] bg-[#121722] px-5 text-sm font-semibold text-white transition hover:border-[#8ca2cf] hover:bg-[#182033]'>
+                                Inspect alert
+                            </Link>
                             <Link href='#webhooks' className='inline-flex h-12 items-center gap-2 rounded-lg border border-[#5d6b86] bg-[#121722] px-5 text-sm font-semibold text-white transition hover:border-[#8ca2cf] hover:bg-[#182033]'>
-                                Preview webhook
+                                Inspect webhook
                             </Link>
                         </div>
                         <div className='grid gap-3 border-t border-white/10 pt-5 text-sm text-[#d7dff0] sm:grid-cols-3'>
                             {sourceCoverageStats.map(stat => <Metric key={stat.label} label={stat.label} value={stat.value} detail={stat.detail} />)}
                         </div>
+                        <CoverageEvidenceBoundary />
                     </div>
 
                     <ThreatConsole payload={payload} />
+                </div>
+            </section>
+
+            <section id='sample-alert' className='scroll-mt-24 border-b border-white/10 bg-[#0c1018]'>
+                <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8 lg:grid-cols-[0.88fr_1.12fr]'>
+                    <div className='grid content-start gap-5'>
+                        <p className='text-sm font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>For non-specialist buyers</p>
+                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>A dark web alert should read like a decision brief.</h2>
+                        <p className='text-base leading-7 text-[#c8d2e4]'>
+                            The useful output is not a giant feed. It is a short explanation of the company mention, the safe source context, the risk level, and who should review it.
+                        </p>
+                        <div className='grid gap-3'>
+                            {plainLanguageTerms.map(item => (
+                                <div key={item.term} className='rounded-lg border border-white/10 bg-[#10141f] p-4'>
+                                    <h3 className='font-semibold text-white'>{item.term}</h3>
+                                    <p className='mt-2 text-sm leading-6 text-[#aeb9cc]'>{item.meaning}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className='overflow-hidden rounded-lg border border-[#7f5af0]/40 bg-[#171222] shadow-[0_30px_90px_rgba(0,0,0,0.35)]'>
+                        <div className='border-b border-white/10 p-5'>
+                            <p className='text-xs font-semibold uppercase tracking-[0.28em] text-[#b68cff]'>Sample alert packet</p>
+                            <h3 className='mt-2 text-2xl font-semibold'>Vendor named in extortion post</h3>
+                            <p className='mt-2 text-sm leading-6 text-[#aeb9cc]'>Alert format. Real notifications use your watchlist and live source context.</p>
+                        </div>
+                        <div className='grid gap-0'>
+                            {sampleAlertSummary.map(([label, value]) => (
+                                <div key={label} className='grid gap-2 border-b border-white/10 p-5 last:border-b-0 sm:grid-cols-[11rem_1fr]'>
+                                    <span className='text-sm font-semibold text-[#ff8c6a]'>{label}</span>
+                                    <span className='text-sm leading-6 text-[#d7dff0]'>{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -219,9 +338,9 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-10 px-4 py-16 md:px-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-center'>
                     <div className='grid gap-5'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>Telegram is the new dark web</p>
-                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be a first-class product, not a promise.</h2>
+                        <h2 className='text-4xl font-semibold tracking-normal md:text-5xl'>Telegram coverage has to be tied to source health, not vague claims.</h2>
                         <p className='text-base leading-7 text-[#c8d2e4]'>
-                            Threat actors move from Tor forums to public and semi-public Telegram channels, exfil drops, broker rooms, ransomware mirrors, and stealer-log shops. Hanasand treats those streams as monitored sources with source health, approval state, parser confidence, and escalation paths.
+                            Criminal groups and access sellers often post in public or semi-public channels before the same claim reaches a broader leak site. Hanasand tracks those sources, checks whether they are healthy, and shows when a finding needs review.
                         </p>
                         <div className='grid gap-3 sm:grid-cols-2'>
                             <SmallFact label='Coverage model' value='Channels, mirrors, actors, campaigns' />
@@ -265,7 +384,7 @@ export default function DarkWebMonitoringPage() {
                             <p className='text-sm font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>Dark web collection depth</p>
                             <h2 className='text-4xl font-semibold md:text-5xl'>Monitor the source graph, not just one public index.</h2>
                             <p className='text-base leading-7 text-[#c8d2e4]'>
-                                Hanasand keeps restricted sources behind approval and metadata-only boundaries while still giving analysts the investigation shape: source family, first seen, mirror status, actor, victim, data type, hash, screenshot state, and retention.
+                                Hanasand keeps sensitive sources behind approval and safe-field boundaries while still giving analysts the investigation shape: source family, first seen, mirror status, actor, victim, data type, hash, screenshot state, and retention.
                             </p>
                         </div>
                         <div className='grid gap-3'>
@@ -280,9 +399,9 @@ export default function DarkWebMonitoringPage() {
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-16 md:px-8'>
                     <div className='grid max-w-4xl gap-3'>
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>Credential movement changed</p>
-                        <h2 className='text-4xl font-semibold md:text-5xl'>Dark web monitoring built for sessions, tokens, APIs, and machine identities.</h2>
+                        <h2 className='text-4xl font-semibold md:text-5xl'>Dark web monitoring built for sessions, tokens, APIs, and service accounts.</h2>
                         <p className='text-base leading-7 text-[#c8d2e4]'>
-                            Password-only monitoring misses the most valuable exposure. Hanasand tracks the ways credentials move now: infostealer sessions, OAuth tokens, API keys, phishing-kit exfil, and non-human identities.
+                            Password-only monitoring misses valuable exposure. Hanasand tracks the ways credentials move now: infostealer sessions, OAuth tokens, API keys, phishing-kit exfil, and service or machine-account identifiers.
                         </p>
                     </div>
                     <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-5'>
@@ -310,7 +429,7 @@ export default function DarkWebMonitoringPage() {
                         <p className='text-sm font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>On-demand collection</p>
                         <h2 className='text-4xl font-semibold md:text-5xl'>Ask for the channel, actor, market, region, or vendor you actually care about.</h2>
                         <p className='text-base leading-7 text-[#c8d2e4]'>
-                            Standard coverage is not enough. Submit a Telegram channel, new forum, actor alias, sector, language, or specific customer scope. Hanasand turns it into an approval packet, tests parser fit, and promotes safe sources into continuous monitoring.
+                            Standard coverage is not enough. Submit a Telegram channel, new forum, actor alias, sector, language, or specific customer scope. Hanasand turns it into a scoped request, checks whether it can be monitored safely, and promotes safe sources into continuous monitoring.
                         </p>
                         <div className='grid gap-3 sm:grid-cols-2'>
                             {requestTypes.map(item => (
@@ -327,7 +446,7 @@ export default function DarkWebMonitoringPage() {
                                 <p className='text-xs font-semibold uppercase tracking-[0.28em] text-[#b68cff]'>New request</p>
                                 <h3 className='mt-2 text-2xl font-semibold'>Collection target</h3>
                             </div>
-                            <span className='rounded-lg border border-[#ff4d1d]/50 bg-[#ff4d1d]/10 px-3 py-1 text-sm font-semibold text-[#ff8c6a]'>High</span>
+                            <span className='rounded-lg border border-[#ff4d1d]/50 bg-[#ff4d1d]/10 px-3 py-1 text-sm font-semibold text-[#ff8c6a]'>Priority</span>
                         </div>
                         <label className='grid gap-2'>
                             <span className='text-xs font-semibold uppercase tracking-[0.18em] text-[#aeb9cc]'>Target</span>
@@ -336,7 +455,7 @@ export default function DarkWebMonitoringPage() {
                         <div className='grid gap-3 sm:grid-cols-2'>
                             <Token label='Scope' value='company + subsidiaries' />
                             <Token label='Window' value='90 days rolling' />
-                            <Token label='Boundary' value='metadata only' />
+                            <Token label='Boundary' value='no stolen files' />
                             <Token label='Approval' value='required' />
                         </div>
                         <button type='submit' className='inline-flex h-11 w-fit items-center gap-2 rounded-lg bg-[#ff4d1d] px-4 text-sm font-semibold text-white transition hover:bg-[#ff6a3f]'>
@@ -369,7 +488,7 @@ export default function DarkWebMonitoringPage() {
                         <div className='flex items-start justify-between gap-4'>
                             <div>
                                 <h2 className='text-xl font-semibold'>Subscribe a webhook</h2>
-                                <p className='mt-1 text-sm text-[#aeb9cc]'>Add an HTTPS endpoint and the terms to watch. The console creates the alert subscription.</p>
+                                <p className='mt-1 text-sm text-[#aeb9cc]'>Add an HTTPS endpoint and the terms to watch. Preview the payload before creating the console subscription.</p>
                             </div>
                             <Webhook className='h-5 w-5 text-[#9fb5ff]' />
                         </div>
@@ -383,8 +502,11 @@ export default function DarkWebMonitoringPage() {
                         </label>
                         <div className='grid gap-3 md:grid-cols-[auto_auto_auto_1fr] md:items-center'>
                             <button type='button' onClick={prepareWebhookAlert} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#ff4d1d] px-4 text-sm font-semibold text-white transition hover:bg-[#ff6a3f]'>
-                                Subscribe webhook
+                                Save draft
                                 <ArrowRight className='h-4 w-4' />
+                            </button>
+                            <button type='button' onClick={() => void testWebhookPreview()} disabled={testingWebhook} className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#5d6b86] bg-[#121722] px-4 text-sm font-semibold text-white transition hover:border-[#8ca2cf] hover:bg-[#182033] disabled:cursor-not-allowed disabled:opacity-60'>
+                                {testingWebhook ? 'Testing...' : 'Test sample delivery'}
                             </button>
                             <Link href='/dashboard/automations?setup=dwm' className='inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-[#5d6b86] bg-[#121722] px-4 text-sm font-semibold text-white transition hover:border-[#8ca2cf] hover:bg-[#182033]'>
                                 Create alert
@@ -398,6 +520,11 @@ export default function DarkWebMonitoringPage() {
                         {subscriptionId ? (
                             <div className='rounded-lg border border-[#53d18f]/30 bg-[#53d18f]/10 px-3 py-2 text-sm text-[#a9f0c7]'>
                                 Draft ID: <span className='font-mono font-semibold'>{subscriptionId}</span>
+                            </div>
+                        ) : null}
+                        {webhookReceipt ? (
+                            <div className='rounded-lg border border-[#53d18f]/30 bg-[#53d18f]/10 px-3 py-2 text-sm text-[#a9f0c7]'>
+                                Receiver accepted <span className='font-mono font-semibold'>{webhookReceipt.eventId}</span> at {webhookReceipt.receivedAt}.
                             </div>
                         ) : null}
                         <div className='rounded-lg border border-white/10 bg-[#080a10] p-3'>
@@ -491,13 +618,13 @@ function ThreatConsole({ payload }: { payload: ReturnType<typeof samplePayload> 
                     <p className='font-mono text-xs uppercase tracking-[0.28em] text-[#ff8c6a]'>Critical</p>
                     <h2 className='mt-2 text-2xl font-semibold'>Identify exposure</h2>
                 </div>
-                <span className='rounded-full bg-[#ff4d1d]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Preview</span>
+                <span className='rounded-full bg-[#ff4d1d]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Example</span>
             </div>
             <div className='grid gap-3 py-5'>
                 <AlertRow dot='bg-[#ff4d1d]' title={`${alert.artifactType.replaceAll('_', ' ')} · ${alert.actor || 'Actor'}`} detail={`${alert.sourceCount} sources · ${alert.confidence}% confidence · ${alert.reviewState.replaceAll('_', ' ')}`} time='02:14' />
-                <AlertRow dot='bg-[#b68cff]' title='Active session cookie · Okta' detail='TTL 18m · origin RU · bypasses MFA' time='02:12' />
-                <AlertRow dot='bg-[#9fb5ff]' title='AWS IAM key · scope:* admin' detail='Gist mirror · re-listed · matched supplier' time='02:03' />
-                <AlertRow dot='bg-[#53d18f]' title='Actor page claim · Akira' detail={`${payload.company} · ${payload.matchedTerm} · needs review`} time='01:58' />
+                <AlertRow dot='bg-[#b68cff]' title='Session-artifact example · Okta' detail='Example shape · verify in tenant alerts before action' time='02:12' />
+                <AlertRow dot='bg-[#9fb5ff]' title='API-key example · AWS IAM' detail='Example shape · source approval required' time='02:03' />
+                <AlertRow dot='bg-[#53d18f]' title='Leak-site claim · Akira' detail={`${payload.company} · ${payload.matchedTerm} · needs review`} time='01:58' />
             </div>
             <div className='grid gap-3 rounded-lg border border-white/10 bg-[#080a10] p-4'>
                 <div className='flex items-center justify-between gap-3'>
@@ -539,10 +666,10 @@ function AlertRow({ dot, title, detail, time }: { dot: string; title: string; de
 function TelegramFeed() {
     const rows = [
         ['BR', '@breach_drop_house', 'Selling internal dump · sample post on mirror', '02:08'],
-        ['SE', '@session_replay_market', '12 live tokens · Office365 · CRM · auto-rotated 24h', '02:05'],
-        ['NH', '@nhi_keystore', 'AWS IAM admin · seller offers escrow · API key match', '02:03'],
+        ['SE', '@session_replay_market', 'Sample token-risk hint · Office365 · CRM', '02:05'],
+        ['NH', '@nhi_keystore', 'API-key preview · seller offers escrow', '02:03'],
         ['PH', '@phishing_brand_alley', 'Lookalike domain registered · launching Monday', '01:59'],
-        ['RA', '@ransom_press_room', 'Affiliate post · victim claim · 48h countdown', '01:57'],
+        ['RA', '@ransom_press_room', 'Affiliate post · ransomware listing · 48h countdown', '01:57'],
     ]
     return (
         <div className='rounded-lg border border-white/10 bg-[#10141f] p-4'>
@@ -553,7 +680,7 @@ function TelegramFeed() {
                     <span className='h-3 w-3 rounded-full bg-[#667085]' />
                     <span className='ml-3 font-mono text-sm text-[#aeb9cc]'>hanasand://intel/feed/telegram</span>
                 </div>
-                <span className='text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Preview</span>
+                <span className='text-xs font-semibold uppercase tracking-[0.18em] text-[#ff6a3f]'>Example</span>
             </div>
             <div className='grid gap-3'>
                 {rows.map(([initials, handle, text, time]) => (
@@ -567,7 +694,38 @@ function TelegramFeed() {
                     </div>
                 ))}
             </div>
+            <p className='mt-4 border-t border-white/10 pt-4 text-sm leading-6 text-[#aeb9cc]'>
+                Public-page rows show the alert shape. Customer alerts require an approved source, a watchlist match, and safe-field review.
+            </p>
         </div>
+    )
+}
+
+function CoverageEvidenceBoundary() {
+    return (
+        <section data-dwm-evidence-boundary className='grid gap-3 rounded-lg border border-white/10 bg-[#10141f] p-4'>
+            <div className='grid gap-1'>
+                <p className='text-xs font-semibold uppercase tracking-[0.18em] text-[#9fb5ff]'>Coverage boundary</p>
+                <h2 className='text-xl font-semibold text-white'>What is verified now, and what is previewed.</h2>
+                <p className='text-sm leading-6 text-[#aeb9cc]'>The page separates current public source context from example alert shapes and tenant-gated collection.</p>
+            </div>
+            <div className='grid gap-3 lg:grid-cols-3'>
+                {coverageEvidenceTiers.map(tier => (
+                    <article key={tier.label} className='grid gap-3 rounded-lg border border-white/10 bg-[#080a10] p-3'>
+                        <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${tier.tone}`}>{tier.label}</span>
+                        <p className='text-sm leading-6 text-[#d7dff0]'>{tier.detail}</p>
+                        <div className='grid gap-1.5'>
+                            {tier.items.map(item => (
+                                <div key={item} className='flex items-center gap-2 text-xs text-[#aeb9cc]'>
+                                    <CheckCircle2 className='h-3.5 w-3.5 shrink-0 text-[#53d18f]' />
+                                    <span>{item}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </article>
+                ))}
+            </div>
+        </section>
     )
 }
 
@@ -575,7 +733,7 @@ function SourceHealthPanel() {
     return (
         <div className='overflow-hidden rounded-lg border border-white/10 bg-[#10141f] shadow-[0_30px_90px_rgba(0,0,0,0.24)]'>
             <div className='border-b border-white/10 bg-[#151a26] p-4'>
-                <p className='font-mono text-xs uppercase tracking-[0.22em] text-[#8d96a8]'>Source operations</p>
+                <p className='font-mono text-xs uppercase tracking-[0.22em] text-[#8d96a8]'>Collection</p>
                 <h3 className='mt-2 text-2xl font-semibold'>Coverage health board</h3>
             </div>
             <div className='grid gap-0'>
@@ -663,7 +821,7 @@ function writeWebhookDraft(draft: string) {
 
 function samplePayload(watchlist: string) {
     const matchedTerm = watchlist.split(',').map(item => item.trim()).filter(Boolean)[0] || 'acme.com'
-    const deliveredAt = new Date()
+    const deliveredAt = new Date(samplePayloadDeliveredAt)
     const firstSeenAt = new Date(deliveredAt.getTime() - 6 * 60_000)
     return {
         eventType: 'darkweb.monitoring.match',
@@ -674,14 +832,14 @@ function samplePayload(watchlist: string) {
         matchedTerm,
         artifactType: 'telegram_stealer_log_hint',
         sourceFamily: 'telegram_public + restricted_metadata',
-        sourceName: 'monitored Telegram broker room and actor-page metadata',
+        sourceName: 'monitored Telegram broker room and leak-site update',
         sourceUrl: 'https://hanasand.com/ti/Acme%20Payments',
-        claimSummary: 'Telegram broker post and actor-page metadata mention a watched company, corporate URLs, session artifacts, and claimed financial records.',
+        claimSummary: 'Telegram broker post and leak-site update mention a watched company, corporate URLs, session artifacts, and claimed financial records.',
         firstSeenAt: firstSeenAt.toISOString(),
         confidence: 88,
         sourceCount: 5,
         reviewState: 'needs_review',
-        recommendedAction: 'Confirm the company match, rotate exposed sessions or keys if present, notify vendor-risk or incident response, and keep the actor page on a 30-minute watch.',
+        recommendedAction: 'Confirm the company match, rotate exposed sessions or keys if present, notify vendor-risk or incident response, and keep the leak-site source on a 30-minute watch.',
         pivots: ['Akira', 'Acme Payments', matchedTerm, 'Lumma', 'session cookies', 'financial records'],
         webhookDelivery: {
             retryPolicy: 'signed delivery with retry and dead-letter review',

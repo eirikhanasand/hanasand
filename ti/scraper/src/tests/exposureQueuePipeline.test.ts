@@ -152,6 +152,38 @@ describe("DWM exposure queue pipeline", () => {
     expect(queueBody.items[0].company).toBe("Alpine Robotics");
   });
 
+  test("paginates live exposure queue rows for landing-page infinite scroll", async () => {
+    const store = new InMemoryScraperStore();
+    const options = { store, frontier: new FocusedFrontier(), port: 0 } as any;
+    for (let index = 0; index < 9; index++) {
+      await handleApiRequest(new Request("http://local/v1/dwm/exposure-claims/ingest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          items: [{
+            sourceName: "Example actor leak monitor",
+            title: `Akira has just published a new victim: Landing Queue ${index}`,
+            text: `Akira victim: Landing Queue ${index}. 10 GB claimed from public actor page.`,
+            publishedAt: new Date(Date.UTC(2026, 6, 2, 10, index)).toISOString(),
+            url: `https://news.example.test/landing-queue-${index}`
+          }]
+        })
+      }), options);
+    }
+
+    const first = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=4"), options);
+    const firstBody = await first.json() as any;
+    expect(firstBody.items).toHaveLength(4);
+    expect(firstBody.counts.total).toBe(9);
+    expect(firstBody.page).toMatchObject({ limit: 4, offset: 0, total: 9, nextOffset: 4, hasMore: true });
+
+    const second = await handleApiRequest(new Request("http://local/v1/dwm/exposure-queue?limit=4&offset=4"), options);
+    const secondBody = await second.json() as any;
+    expect(secondBody.items).toHaveLength(4);
+    expect(secondBody.page).toMatchObject({ limit: 4, offset: 4, total: 9, nextOffset: 8, hasMore: true });
+    expect(new Set([...firstBody.items, ...secondBody.items].map((item: any) => item.id)).size).toBe(8);
+  });
+
   test("does not promote generic advisory or ATT&CK text as victim claims", async () => {
     const store = new InMemoryScraperStore();
     await saveExposureClaimFromCollectedItem(store, {
