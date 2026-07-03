@@ -1156,6 +1156,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
 }
 
 function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, onSelectSubject, onRoleChange, onRemove }: { members: OrganizationMember[], canManage: boolean, busy: string, rowMessages: Record<string, RowMessage>, selectedSubject: ActivitySubject, onSelectSubject: (subject: ActivitySubject) => void, onRoleChange: (member: OrganizationMember, role: OrganizationRole) => void, onRemove: (member: OrganizationMember) => void }) {
+    const [pendingRoles, setPendingRoles] = useState<Record<string, OrganizationRole>>({})
     return (
         <section id='members' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, removal.' />
@@ -1172,30 +1173,54 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                             </tr>
                         </thead>
                         <tbody>
-                            {members.map(member => (
-                                <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
-                                    <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
-                                        <p className='truncate font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
-                                        <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
-                                    </td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                        {canManage && member.role !== 'owner' ? (
-                                            <select className={compactSelectClass} value={member.role} disabled={Boolean(busy)} onChange={event => onRoleChange(member, event.target.value as OrganizationRole)}>
-                                                {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
-                                            </select>
-                                        ) : <RoleBadge role={member.role} />}
-                                    </td>
-                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                        <div className='grid gap-1'>
-                                            <StatusPill status={member.status} />
-                                            <RowStatus message={rowMessages[`member-${member.userId}`]} />
-                                        </div>
-                                    </td>
-                                    <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
-                                        <ConfirmActionButton ariaLabel='Remove member' disabled={!canManage || member.role === 'owner' || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
-                                    </td>
-                                </tr>
-                            ))}
+                            {members.map(member => {
+                                const selectedRole = pendingRoles[member.userId] || member.role
+                                const roleChanged = selectedRole !== member.role
+                                return (
+                                    <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
+                                        <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
+                                            <p className='truncate font-semibold text-[#171a21] dark:text-white'>{sanitizeOrganizationDisplayCopy(member.name || member.userId)}</p>
+                                            <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
+                                        </td>
+                                        <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                            {canManage && member.role !== 'owner' ? (
+                                                <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
+                                                    <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
+                                                        {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                                    </select>
+                                                    {roleChanged && (
+                                                        <button
+                                                            type='button'
+                                                            className={secondaryButtonClass}
+                                                            disabled={Boolean(busy)}
+                                                            onClick={() => {
+                                                                onRoleChange(member, selectedRole)
+                                                                setPendingRoles(current => {
+                                                                    const next = { ...current }
+                                                                    delete next[member.userId]
+                                                                    return next
+                                                                })
+                                                            }}
+                                                        >
+                                                            <CheckCircle2 className='h-4 w-4' />
+                                                            Apply
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ) : <RoleBadge role={member.role} />}
+                                        </td>
+                                        <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                            <div className='grid gap-1'>
+                                                <StatusPill status={member.status} />
+                                                <RowStatus message={rowMessages[`member-${member.userId}`]} />
+                                            </div>
+                                        </td>
+                                        <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
+                                            <ConfirmActionButton ariaLabel='Remove member' disabled={!canManage || member.role === 'owner' || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
+                                        </td>
+                                    </tr>
+                                )
+                            })}
                         </tbody>
                     </table>
                 )}
