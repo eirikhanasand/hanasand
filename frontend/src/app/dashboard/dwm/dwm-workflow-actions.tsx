@@ -153,6 +153,93 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
         }
     }
 
+    async function runSourcePackToCase() {
+        setBusyAction('source-case')
+        setResult(null)
+
+        try {
+            const watchlist = await saveWatchlistTerms(terms)
+            if (!watchlist.ok) throw new Error(watchlist.message)
+
+            const telegram = await postJson('/api/dwm/source-requests', {
+                ...scope,
+                seedPackIds: ['telegram-ransomware-claim-watch', 'telegram-stealer-broker-watch', 'telegram-regional-language-watch'],
+                activate: true,
+                limit: 60,
+                scope: terms,
+            })
+            if (!telegram.ok) throw new Error(telegram.message)
+
+            const darkweb = await postJson('/api/dwm/darkweb/approve-metadata', {
+                ...scope,
+                seedPackIds: ['darkweb-actor-metadata-core', 'darkweb-market-metadata-watch'],
+                activate: true,
+                approveMetadataOnly: true,
+                approvedBy: 'dashboard',
+                limit: 68,
+                scope: terms,
+            })
+            if (!darkweb.ok) throw new Error(darkweb.message)
+
+            const run = await postJson('/api/dwm/canary/run', {
+                ...scope,
+                operatorApproval: true,
+                approvedBy: 'dashboard',
+                maxSources: 48,
+                maxTasks: 96,
+            })
+            if (!run.ok) throw new Error(run.message)
+
+            const rebuild = await postJson('/api/dwm/alerts/rebuild', scope)
+            if (!rebuild.ok) throw new Error(rebuild.message)
+            const alert = selectRebuiltAlert(rebuild, '', terms)
+            const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
+            if (!alert?.id) {
+                const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+                setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
+                router.refresh()
+                return
+            }
+
+            const casePayload = await postJson(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
+                ...scope,
+                actor: 'dashboard',
+                note: 'Case opened from source-pack collection.',
+                idempotencyKey: `dashboard-source-pack-case:${alert.id}`,
+            })
+            if (!casePayload.ok) throw new Error(casePayload.message)
+            const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
+
+            let deliveryText = ''
+            if (webhookConfigured) {
+                const delivery = await postJson('/api/dwm/webhooks/deliver', {
+                    ...scope,
+                    alertId: alert.id,
+                    caseId: caseId || undefined,
+                    limit: 1,
+                    dryRun: true,
+                    webhookUrl: webhookUrl.trim(),
+                    attachToWatchlist: true,
+                })
+                if (!delivery.ok) throw new Error(delivery.message)
+                const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
+                deliveryText = attemptedCount ? ' Dry-run delivery recorded.' : ' Delivery was not ready.'
+            }
+
+            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+            setResult({ ok: true, message: `Collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
+            if (caseId) {
+                router.push(caseDetailPath(caseId, alert.id, organizationId))
+            } else {
+                router.refresh()
+            }
+        } catch (error) {
+            setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
+        } finally {
+            setBusyAction(null)
+        }
+    }
+
     async function submitSource(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setBusyAction('source')
@@ -376,6 +463,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms }: {
                         <WorkflowButton busy={busyAction === 'collection'} disabled={busy} icon={<RefreshCw className='h-4 w-4' />} onClick={runCollection}>Run Telegram collection</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'telegram-pack'} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={expandTelegramCoverage}>Expand Telegram</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'darkweb'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={approveDarkwebMetadata}>Approve metadata</WorkflowButton>
+                        <WorkflowButton busy={busyAction === 'source-case'} disabled={busy || Boolean(saveDisabledReason)} disabledReason={saveDisabledReason || undefined} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                     </div>
