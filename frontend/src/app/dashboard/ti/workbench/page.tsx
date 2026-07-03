@@ -27,11 +27,11 @@ export default async function TiAnalystWorkbenchPage() {
                 description='Triage active exposure cases, inspect evidence, assign owners, and send findings when they are ready.'
                 actions={(
                     <div className='flex flex-wrap gap-2'>
-                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#26344d] bg-[#0f1726] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#3c5072] hover:bg-[#162033]'>
+                        <Link href='/dashboard/dwm' className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-panel'>
                             <Radar className='h-4 w-4' />
                             Dark web cases
                         </Link>
-                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#315fe8] px-3 text-sm font-semibold text-white transition hover:bg-[#426ef0]'>
+                        <Link href='/dashboard/ti/sources' className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-3 text-sm font-semibold text-ui-canvas transition hover:opacity-90'>
                             <Inbox className='h-4 w-4' />
                             Sources
                             <ArrowUpRight className='h-4 w-4' />
@@ -153,7 +153,7 @@ function attachCasesToAlerts(alerts: DwmAlert[], cases: WorkbenchDwmCaseListItem
             ...alert,
             organizationId: organizationId || (alert as DwmAlert & { organizationId?: string }).organizationId,
             caseId: caseId || (alert as DwmAlert & { caseId?: string }).caseId,
-            casePath: caseId ? caseApiHref(caseRow) : (alert as DwmAlert & { casePath?: string }).casePath,
+            casePath: caseId ? caseDashboardHref(caseRow) : (alert as DwmAlert & { casePath?: string }).casePath,
             assignedOwner: caseRow.assignedOwner || (alert as DwmAlert & { assignedOwner?: string }).assignedOwner,
             workflowStatus: caseRow.status || (alert as DwmAlert & { workflowStatus?: string }).workflowStatus,
             updatedAt: caseRow.updatedAt || (alert as DwmAlert & { updatedAt?: string }).updatedAt,
@@ -239,7 +239,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
             'Record rationale before suppressing, escalating, or closing.',
         ],
         relatedLinks: [
-            { href: caseApiHref(row), label: 'Open case' },
+            { href: caseDashboardHref(row), label: 'Open case' },
             ...(hasAlertRef ? [{ href: `/api/dwm/alerts/${encodeURIComponent(alertId)}`, label: 'Open alert detail' }] : []),
         ],
         workflowPath: [
@@ -261,7 +261,7 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
                 source: 'case file',
                 detail: `${caseId} · ${row.status || 'open'} · owner ${row.assignedOwner || 'unassigned'}.`,
                 entityId: caseId,
-                href: caseApiHref(row),
+                href: caseDashboardHref(row),
             },
             {
                 id: 'delivery_ref',
@@ -277,18 +277,19 @@ function dwmCaseToWorkbenchCase(row: WorkbenchDwmCaseListItem): WorkbenchCase {
             { id: 'replay_alert', label: 'Replay', method: 'POST', href: `/api/dwm/alerts/${encodeURIComponent(rowId)}/replay`, body: { organizationId: row.organizationId, action: 'replay' }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before replay can run.' },
             { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { organizationId: row.organizationId, alertId: rowId, limit: 1 }, disabledReason: hasAlertRef ? undefined : 'Alert reference is syncing before delivery can run.' },
         ],
-        caseDetailHref: caseApiHref(row),
+        caseDetailHref: caseDashboardHref(row),
         deliveryEvidence,
     }
 }
 
-function caseApiHref(row: WorkbenchDwmCaseListItem) {
+function caseDashboardHref(row: WorkbenchDwmCaseListItem) {
     const caseId = String(row.caseId || row.id || '')
     const params = new URLSearchParams()
     if (row.organizationId) params.set('organizationId', row.organizationId)
     if (row.alertId) params.set('alertId', row.alertId)
+    params.set('route', 'ti_workbench')
     const query = params.toString()
-    return `/api/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
+    return `/dashboard/dwm/cases/${encodeURIComponent(caseId || 'case')}${query ? `?${query}` : ''}`
 }
 
 function domainToCase(domain: TiAdminDomain, captures: TiAdminCapture[]): WorkbenchCase {

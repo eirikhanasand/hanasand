@@ -78,9 +78,9 @@ for (const token of [
     'Run to case / Open case',
     'STARTER_WATCH_TERMS',
     'workflowTerms(terms)',
-    'Use example terms',
-    'No saved terms yet. Example terms are staged only when you choose them.',
-    'Enter an HTTPS webhook URL before testing delivery.',
+    'Prepare starter list',
+    'No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.',
+    'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.',
     'RouteStepRow',
     'disabledReason',
 ]) {

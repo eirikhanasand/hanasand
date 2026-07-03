@@ -325,7 +325,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     if (state.loading && !state.detail) {
         return (
-            <main className='grid min-h-[70vh] place-items-center rounded-lg border border-[#26344d] bg-[#0b121e] text-[#dbe7ff]'>
+            <main className='grid min-h-[70vh] place-items-center rounded-lg border border-ui-border bg-ui-canvas text-ui-text'>
                 <div className='flex items-center gap-3 text-sm font-semibold'><Loader2 className='h-4 w-4 animate-spin' />Loading case</div>
             </main>
         )
@@ -333,10 +333,10 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
     if (state.error || !state.detail || !caseRecord) {
         return (
-            <main className='rounded-lg border border-[#7a3520] bg-[#2c160f] p-5 text-[#ffded3]'>
-                <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-xs font-semibold text-[#ffd4c4]'><ArrowLeft className='h-4 w-4' />Back to DWM</Link>
+            <main className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-5 text-ui-danger'>
+                <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-xs font-semibold text-ui-danger'><ArrowLeft className='h-4 w-4' />Back to DWM</Link>
                 <h1 className='mt-4 text-xl font-semibold'>Case unavailable</h1>
-                <p className='mt-2 max-w-2xl text-sm leading-6 text-[#ffb598]'>{state.error || 'The case could not be found for this organization.'}</p>
+                <p className='mt-2 max-w-2xl text-sm leading-6 text-ui-danger'>{state.error || 'The case could not be found for this organization.'}</p>
             </main>
         )
     }
@@ -351,13 +351,13 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
     const scopedAlertId = resolvedAlertId(caseRecord, alertContext, alertId)
 
     return (
-        <main className='grid gap-3 text-[#dbe7ff]'>
-            <section className='rounded-lg border border-[#26344d] bg-[#0b121e]'>
-                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
+        <main className='grid gap-3 text-ui-text'>
+            <section className='rounded-lg border border-ui-border bg-ui-canvas'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border px-4 py-3'>
                     <div className='min-w-0'>
-                        <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-[#9db8ff]'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
-                        <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-[#edf4ff]'>{caseRecord.title || caseRecord.id}</h1>
-                        <p className='mt-1 text-xs text-[#8fa0ba]'>{caseRecord.id} · {caseRecord.organizationId || organizationId || 'organization pending'} · alert {caseRecord.alertId || alertContext?.id || alertId || 'pending'}</p>
+                        <Link href='/dashboard/dwm' className='inline-flex items-center gap-2 text-[11px] font-semibold uppercase text-ui-primary'><ArrowLeft className='h-3.5 w-3.5' />DWM cases</Link>
+                        <h1 className='mt-2 min-w-0 wrap-break-word text-xl font-semibold text-ui-text'>{caseRecord.title || caseRecord.id}</h1>
+                        <p className='mt-1 text-xs text-ui-muted'>{caseRecord.id} · {caseRecord.organizationId || organizationId || 'organization pending'} · alert {caseRecord.alertId || alertContext?.id || alertId || 'pending'}</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         <CasePill label='Status' value={caseRecord.status || 'open'} tone={caseRecord.status === 'closed' ? 'neutral' : 'ready'} />
@@ -397,9 +397,9 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                         <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
 
                         <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`}>
-                            <div className='overflow-hidden rounded-lg border border-[#26344d]'>
+                            <div className='overflow-hidden rounded-lg border border-ui-border'>
                                 <table className='w-full min-w-[760px] text-left text-xs'>
-                                    <thead className='bg-[#111b2b] text-[#8fa0ba]'>
+                                    <thead className='bg-ui-panel text-ui-muted'>
                                         <tr>
                                             <th className='px-3 py-2 font-semibold'>Source</th>
                                             <th className='px-3 py-2 font-semibold'>Observed</th>
@@ -407,16 +407,16 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                             <th className='px-3 py-2 font-semibold'>Provenance</th>
                                         </tr>
                                     </thead>
-                                    <tbody className='divide-y divide-[#1f2c42] bg-[#0d1522]'>
+                                    <tbody className='divide-y divide-ui-border bg-ui-canvas'>
                                         {evidence.length ? evidence.map((row, index) => (
                                             <tr key={row.id || index}>
-                                                <td className='px-3 py-2 align-top font-semibold text-[#edf4ff]'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-[#8fa0ba]'>{stateLabel(row.sourceFamily)}</p></td>
-                                                <td className='px-3 py-2 align-top text-[#aab7cc]'>{relativeTime(row.observedAt || row.collectedAt)}</td>
-                                                <td className='max-w-xl px-3 py-2 align-top text-[#dbe7ff]'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
-                                                <td className='px-3 py-2 align-top font-mono text-[11px] text-[#8fa0ba]'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
+                                                <td className='px-3 py-2 align-top font-semibold text-ui-text'>{row.sourceName || row.provenance?.sourceId || 'source pending'}<p className='text-[11px] font-normal text-ui-muted'>{stateLabel(row.sourceFamily)}</p></td>
+                                                <td className='px-3 py-2 align-top text-ui-muted'>{relativeTime(row.observedAt || row.collectedAt)}</td>
+                                                <td className='max-w-xl px-3 py-2 align-top text-ui-text'>{row.safeExcerpt || row.excerpt || 'No safe excerpt available.'}</td>
+                                                <td className='px-3 py-2 align-top font-mono text-[11px] text-ui-muted'>{row.provenance?.captureId || row.id || 'capture pending'}<p>{row.contentHash || row.provenance?.contentHash || 'hash pending'}</p></td>
                                             </tr>
                                         )) : (
-                                            <tr><td colSpan={4} className='px-3 py-8 text-center text-[#8fa0ba]'>No evidence rows are attached to this case.</td></tr>
+                                            <tr><td colSpan={4} className='px-3 py-8 text-center text-ui-muted'>No evidence rows are attached to this case.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -433,49 +433,49 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                     </section>
 
                     <aside data-dwm-case-action-dock className='order-first grid content-start gap-3 xl:order-none'>
-                        <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+                        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
                             <div className='flex items-center justify-between gap-2'>
-                                <h2 className='text-sm font-semibold text-[#edf4ff]'>Analyst actions</h2>
-                                {readOnly ? <span className='rounded-full border border-[#6f5417] bg-[#2a220f] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#ffd879]'>Read only</span> : null}
+                                <h2 className='text-sm font-semibold text-ui-text'>Analyst actions</h2>
+                                {readOnly ? <span className='rounded-full border border-ui-warning/30 bg-ui-warning/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-warning'>Read only</span> : null}
                             </div>
-                            <label className='mt-3 block text-[10px] font-semibold uppercase text-[#8fa0ba]'>Owner</label>
-                            <input value={owner} onChange={event => setOwner(event.target.value)} placeholder='owner@company.com' className='mt-1 h-10 w-full rounded-lg border border-[#26344d] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#526173] focus:border-[#5f86ff]' />
-                            <label className='mt-3 block text-[10px] font-semibold uppercase text-[#8fa0ba]'>Reason</label>
-                            <textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Decision rationale, delivery context, or customer note.' className='mt-1 min-h-24 w-full resize-y rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2 text-sm leading-6 text-[#edf4ff] outline-none transition placeholder:text-[#526173] focus:border-[#5f86ff]' />
+                            <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Owner</label>
+                            <input value={owner} onChange={event => setOwner(event.target.value)} placeholder='owner@company.com' className='mt-1 h-10 w-full rounded-lg border border-ui-border bg-ui-canvas px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
+                            <label className='mt-3 block text-[10px] font-semibold uppercase text-ui-muted'>Reason</label>
+                            <textarea value={note} onChange={event => setNote(event.target.value)} placeholder='Decision rationale, delivery context, or customer note.' className='mt-1 min-h-24 w-full resize-y rounded-lg border border-ui-border bg-ui-canvas px-3 py-2 text-sm leading-6 text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary/35' />
                             <div className='mt-3 grid grid-cols-2 gap-2'>
                                 {actions.map(action => <ActionButton key={action.id} action={action} busy={busy === action.id} disabled={readOnly || busy !== null || !action.enabled} onClick={() => runAction(action)} />)}
                             </div>
-                            <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] disabled:cursor-not-allowed disabled:opacity-60'>
+                            <button type='button' onClick={notifyCustomer} disabled={readOnly || busy !== null} className='mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                 {busy === 'notify' ? <Loader2 className='h-4 w-4 animate-spin' /> : <BellRing className='h-4 w-4' />}Notify dry run
                             </button>
-                            {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>{message.text}</p> : null}
+                            {message ? <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${message.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>{message.text}</p> : null}
                         </section>
 
                         <Panel title='Webhook delivery' action={state.detail.deliveryContext?.retryable ? 'retryable' : latestDelivery?.status || 'pending'}>
                             {latestDelivery ? (
-                                <div className='grid gap-2 text-xs text-[#aab7cc]'>
+                                <div className='grid gap-2 text-xs text-ui-muted'>
                                     <KeyValue label='Status' value={stateLabel(latestDelivery.status)} />
                                     <KeyValue label='Attempted' value={relativeTime(latestDelivery.attemptedAt)} />
                                     <KeyValue label='Endpoint' value={latestDelivery.endpointHash || 'destination pending'} mono />
                                     <KeyValue label='Dedupe' value={latestDelivery.dedupeKey || 'pending'} mono />
-                                    {latestDelivery.error ? <p className='rounded-lg border border-[#7a3520] bg-[#2c160f] p-2 text-[#ffb598]'>{latestDelivery.error}</p> : null}
+                                    {latestDelivery.error ? <p className='rounded-lg border border-ui-danger/30 bg-ui-danger/10 p-2 text-ui-danger'>{latestDelivery.error}</p> : null}
                                 </div>
                             ) : <EmptyLine text='No webhook delivery attempt is attached to this case.' />}
                             <div className='mt-3 grid grid-cols-2 gap-2'>
-                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(true)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-test' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RotateCcw className='h-4 w-4' />}Test
                                 </button>
-                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => sendWebhook(false)} disabled={readOnly || busy !== null || !(caseRecord.alertId || alertId)} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 disabled:cursor-not-allowed disabled:opacity-60'>
                                     {busy === 'webhook-send' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}Send
                                 </button>
                             </div>
                         </Panel>
 
                         <Panel title='Case export' action={state.exportPayload?.exportChecksum ? 'ready' : 'pending'}>
-                            <div className='grid gap-2 text-xs text-[#aab7cc]'>
+                            <div className='grid gap-2 text-xs text-ui-muted'>
                                 <KeyValue label='Checksum' value={state.exportPayload?.exportChecksum || 'not available'} mono />
                                 <KeyValue label='Dedupe' value={state.exportPayload?.summary?.dedupeKey || alert?.webhookDelivery?.dedupeKey || 'pending'} mono />
-                                <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'>
+                                <button type='button' onClick={() => copyText(state.exportPayload?.copyText || '')} disabled={!state.exportPayload?.copyText} className='inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
                                     <Copy className='h-4 w-4' />Copy summary
                                 </button>
                             </div>
@@ -508,18 +508,18 @@ function RouteHandoffStrip({ routeRun, detail, exportPayload, latestDelivery }: 
     ]
 
     return (
-        <section data-dwm-case-route-handoff className='rounded-lg border border-[#334762] bg-[#0f1a2c] p-3'>
+        <section data-dwm-case-route-handoff className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Route handoff</p>
-                    <h2 className='mt-1 text-sm font-semibold text-[#edf4ff]'>Case opened from {label.toLowerCase()}</h2>
-                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Route handoff</p>
+                    <h2 className='mt-1 text-sm font-semibold text-ui-text'>Case opened from {label.toLowerCase()}</h2>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>Review the matched evidence, delivery state, and case decision before customer notification.</p>
                 </div>
                 <div className='grid grid-cols-2 gap-2 sm:grid-cols-5'>
                     {cells.map(cell => (
-                        <div key={cell.label} className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
-                            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
-                            <p className='mt-1 truncate text-xs font-semibold text-[#edf4ff]' title={cell.value}>{cell.value}</p>
+                        <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+                            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
+                            <p className='mt-1 truncate text-xs font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
                         </div>
                     ))}
                 </div>
@@ -541,15 +541,15 @@ function WorkflowStrip({ detail, exportPayload }: { detail: CaseDetail, exportPa
         { label: 'Audit', value: `${detail.timeline?.length || 0} events`, state: detail.timeline?.length ? 'ready' : 'action' },
     ] as Array<{ label: string, value: string, state: 'ready' | 'action' | 'blocked' }>
     return (
-        <section className='grid gap-2 rounded-lg border border-[#334762] bg-[#111b2b] p-3 md:grid-cols-3 xl:grid-cols-6'>
+        <section className='grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 md:grid-cols-3 xl:grid-cols-6'>
             {steps.map((step, index) => (
-                <div key={step.label} className='min-h-[104px] rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
+                <div key={step.label} className='min-h-[104px] rounded-lg border border-ui-border bg-ui-canvas p-3'>
                     <div className='flex items-center justify-between gap-2'>
-                        <span className='grid h-7 w-7 place-items-center rounded-full border border-[#27364f] text-xs font-semibold text-[#edf4ff]'>{index + 1}</span>
+                        <span className='grid h-7 w-7 place-items-center rounded-full border border-ui-border text-xs font-semibold text-ui-text'>{index + 1}</span>
                         <StatusDot state={step.state} />
                     </div>
-                    <p className='mt-3 text-[10px] font-semibold uppercase text-[#8fa0ba]'>{step.label}</p>
-                    <p className='mt-1 truncate text-sm font-semibold text-[#edf4ff]' title={step.value}>{step.value}</p>
+                    <p className='mt-3 text-[10px] font-semibold uppercase text-ui-muted'>{step.label}</p>
+                    <p className='mt-1 truncate text-sm font-semibold text-ui-text' title={step.value}>{step.value}</p>
                 </div>
             ))}
         </section>
@@ -565,8 +565,8 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
     latestDelivery?: DeliveryRow
     readOnly: boolean
 }) {
-    const caseScope = queryString({ tenantId, organizationId, alertId })
     const dashboardScope = queryString({ tenantId, organizationId, alert: alertId })
+    const currentCaseHref = `/dashboard/dwm/cases/${encodeURIComponent(caseId)}${queryString({ tenantId, organizationId, alertId, route: 'case_detail' })}`
     const organizationHref = organizationId
         ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
         : '/organizations'
@@ -575,10 +575,10 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
     const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
 
     return (
-        <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Case command</p>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Case command</p>
                     <div className='mt-2 grid gap-2 text-xs sm:grid-cols-4'>
                         <CommandFact label='Scope' value={organizationId || tenantId} />
                         <CommandFact label='Alert' value={alertId || 'pending'} mono />
@@ -591,10 +591,8 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
                     <CommandLink href={organizationHref}>Organization</CommandLink>
                     {alertHref ? <CommandLink href={alertHref}>Alert record</CommandLink> : null}
                     <CommandLink href={exportHref}>{exportReady ? 'Export packet' : 'Check export'}</CommandLink>
-                    {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-[#6f5417] bg-[#2a220f] px-3 text-xs font-semibold text-[#ffd879]'>Read only</span> : null}
-                    <a href={`/api/cases/${encodeURIComponent(caseId)}${caseScope}`} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033]'>
-                        Case record
-                    </a>
+                    {readOnly ? <span className='inline-flex h-9 items-center rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 text-xs font-semibold text-ui-warning'>Read only</span> : null}
+                    <CommandLink href={currentCaseHref}>Current case</CommandLink>
                 </div>
             </div>
         </section>
@@ -602,10 +600,10 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
 }
 
 function CommandFact({ label, value, mono = false, tone = 'neutral' }: { label: string, value: string, mono?: boolean, tone?: 'ready' | 'warn' | 'neutral' }) {
-    const toneClass = tone === 'ready' ? 'text-[#9cf0bc]' : tone === 'warn' ? 'text-[#ffd879]' : 'text-[#dbe7ff]'
+    const toneClass = tone === 'ready' ? 'text-ui-success' : tone === 'warn' ? 'text-ui-warning' : 'text-ui-text'
     return (
-        <div className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
-            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{label}</p>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-canvas px-3 py-2'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
             <p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} mt-1 truncate font-semibold ${toneClass}`} title={value}>{value}</p>
         </div>
     )
@@ -613,7 +611,7 @@ function CommandFact({ label, value, mono = false, tone = 'neutral' }: { label: 
 
 function CommandLink({ href, children }: { href: string, children: ReactNode }) {
     return (
-        <a href={href} className='inline-flex h-9 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a]'>
+        <a href={href} className='inline-flex h-9 items-center rounded-lg border border-ui-border bg-ui-canvas px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
             {children}
         </a>
     )
@@ -621,10 +619,10 @@ function CommandLink({ href, children }: { href: string, children: ReactNode }) 
 
 function Panel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
     return (
-        <section className='rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+        <section className='rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='mb-3 flex items-center justify-between gap-3'>
-                <h2 className='text-sm font-semibold text-[#edf4ff]'>{title}</h2>
-                {action ? <span className='rounded-full border border-[#27364f] bg-[#0b121e] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#9db8ff]'>{action}</span> : null}
+                <h2 className='text-sm font-semibold text-ui-text'>{title}</h2>
+                {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
             </div>
             {children}
         </section>
@@ -633,12 +631,12 @@ function Panel({ title, action, children }: { title: string, action?: string, ch
 
 function CollapsiblePanel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
     return (
-        <details className='rounded-lg border border-[#334762] bg-[#111b2b]'>
-            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+        <details className='rounded-lg border border-ui-border bg-ui-panel'>
+            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/20'>
                 <span>{title}</span>
-                {action ? <span className='rounded-full border border-[#27364f] bg-[#0b121e] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#9db8ff]'>{action}</span> : null}
+                {action ? <span className='rounded-full border border-ui-border bg-ui-canvas px-2 py-0.5 text-[10px] font-semibold uppercase text-ui-primary'>{action}</span> : null}
             </summary>
-            <div className='border-t border-[#26344d] p-3'>
+            <div className='border-t border-ui-border p-3'>
                 {children}
             </div>
         </details>
@@ -647,10 +645,10 @@ function CollapsiblePanel({ title, action, children }: { title: string, action?:
 
 function Metric({ label, value, detail }: { label: string, value: string, detail: string }) {
     return (
-        <div className='rounded-lg border border-[#26344d] bg-[#111b2b] p-3'>
-            <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{label}</p>
-            <p className='mt-1 text-xl font-semibold text-[#edf4ff]'>{value}</p>
-            <p className='mt-1 truncate text-xs text-[#8fa0ba]' title={detail}>{detail}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-panel p-3'>
+            <p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 text-xl font-semibold text-ui-text'>{value}</p>
+            <p className='mt-1 truncate text-xs text-ui-muted' title={detail}>{detail}</p>
         </div>
     )
 }
@@ -658,13 +656,13 @@ function Metric({ label, value, detail }: { label: string, value: string, detail
 function TimelineItem({ row }: { row: TimelineRow }) {
     const when = row.timestamp || row.at
     return (
-        <div className='grid gap-2 rounded-lg border border-[#26344d] bg-[#0b121e] p-3 text-xs md:grid-cols-[160px_minmax(0,1fr)_180px]'>
-            <div className='text-[#8fa0ba]'>{relativeTime(when)}</div>
+        <div className='grid gap-2 rounded-lg border border-ui-border bg-ui-canvas p-3 text-xs md:grid-cols-[160px_minmax(0,1fr)_180px]'>
+            <div className='text-ui-muted'>{relativeTime(when)}</div>
             <div className='min-w-0'>
-                <p className='font-semibold text-[#edf4ff]'>{stateLabel(row.action || row.eventType)}</p>
-                <p className='mt-1 wrap-break-word leading-5 text-[#aab7cc]'>{row.rationale || row.note || row.source || 'Workflow event recorded.'}</p>
+                <p className='font-semibold text-ui-text'>{stateLabel(row.action || row.eventType)}</p>
+                <p className='mt-1 wrap-break-word leading-5 text-ui-muted'>{row.rationale || row.note || row.source || 'Workflow event recorded.'}</p>
             </div>
-            <div className='font-mono text-[11px] text-[#8fa0ba]'>{row.actor || 'system'}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
+            <div className='font-mono text-[11px] text-ui-muted'>{row.actor || 'system'}{row.workflow?.toStatus ? <p>{stateLabel(row.workflow.toStatus)}</p> : null}</div>
         </div>
     )
 }
@@ -672,28 +670,28 @@ function TimelineItem({ row }: { row: TimelineRow }) {
 function ActionButton({ action, busy, disabled, onClick }: { action: CaseAction, busy: boolean, disabled: boolean, onClick: () => void }) {
     const Icon = busy ? Loader2 : action.id === 'reopen' ? RotateCcw : action.id === 'close' ? CheckCircle2 : action.id.includes('false') || action.id === 'suppress' ? XCircle : action.id === 'assign' ? UserRound : ShieldCheck
     return (
-        <button type='button' onClick={onClick} disabled={disabled} title={action.disabledReason} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-2 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-50'>
+        <button type='button' onClick={onClick} disabled={disabled} title={action.disabledReason} className='inline-flex h-9 min-w-0 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-canvas px-2 text-xs font-semibold text-ui-text transition hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-50'>
             <Icon className={`h-4 w-4 ${busy ? 'animate-spin' : ''}`} />{actionLabel(action.id)}
         </button>
     )
 }
 
 function CasePill({ label, value, tone }: { label: string, value: string, tone: 'ready' | 'warn' | 'neutral' }) {
-    const toneClass = tone === 'ready' ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : tone === 'warn' ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]' : 'border-[#27364f] bg-[#101827] text-[#dbe7ff]'
+    const toneClass = tone === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : tone === 'warn' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-border bg-ui-panel text-ui-text'
     return <div className={`rounded-lg border px-3 py-2 ${toneClass}`}><p className='text-[10px] font-semibold uppercase opacity-80'>{label}</p><p className='text-sm font-semibold'>{stateLabel(value)}</p></div>
 }
 
 function StatusDot({ state }: { state: 'ready' | 'action' | 'blocked' }) {
-    const toneClass = state === 'ready' ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : state === 'action' ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
+    const toneClass = state === 'ready' ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : state === 'action' ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
     return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${toneClass}`}>{state}</span>
 }
 
 function KeyValue({ label, value, mono = false }: { label: string, value: string, mono?: boolean }) {
-    return <div className='grid gap-1 rounded-lg border border-[#26344d] bg-[#0b121e] p-2'><p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{label}</p><p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} wrap-break-word text-[#dbe7ff]`}>{value}</p></div>
+    return <div className='grid gap-1 rounded-lg border border-ui-border bg-ui-canvas p-2'><p className='text-[10px] font-semibold uppercase text-ui-muted'>{label}</p><p className={`${mono ? 'font-mono text-[11px]' : 'text-xs'} wrap-break-word text-ui-text`}>{value}</p></div>
 }
 
 function EmptyLine({ text }: { text: string }) {
-    return <div className='rounded-lg border border-dashed border-[#334762] bg-[#0b121e] p-4 text-sm text-[#8fa0ba]'>{text}</div>
+    return <div className='rounded-lg border border-dashed border-ui-border bg-ui-canvas p-4 text-sm text-ui-muted'>{text}</div>
 }
 
 function queryString(params: Record<string, string | undefined>) {

@@ -633,33 +633,33 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     ] satisfies RouteQueueAction[]
 
     return (
-        <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 text-[#edf4ff]'>
+        <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-4 text-ui-text'>
             <section className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>DWM operator workflow</p>
-                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-[#edf4ff]'>Watchlist to case route</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Tune the org watchlist, collect approved sources, rebuild alerts, open a case, and test customer delivery from one path.</p>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>DWM operator workflow</p>
+                    <h2 className='mt-1 text-lg font-semibold tracking-normal text-ui-text'>Watchlist to case route</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>Tune the org watchlist, collect approved sources, rebuild alerts, open a case, and test customer delivery from one path.</p>
                 </div>
                 {result ? (
-                    <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>
+                    <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-ui-success/30 bg-ui-success/10 text-ui-success' : 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'}`}>
                         {result.message}
                     </p>
                 ) : null}
             </section>
 
-            <section data-dwm-route-queue className='rounded-lg border border-[#26344d] bg-[#101827] p-3'>
+            <section data-dwm-route-queue className='rounded-lg border border-ui-border bg-ui-raised p-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h3 className='text-sm font-semibold text-[#edf4ff]'>Next actions</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-[#8fa0ba]'>Run one backed step, or use Run to case after watchlist and source context are ready.</p>
+                        <h3 className='text-sm font-semibold text-ui-text'>Next actions</h3>
+                        <p className='mt-0.5 text-xs leading-5 text-ui-subtle'>Run one backed step, or use Run to case after watchlist and source context are ready.</p>
                     </div>
                     <div className='flex flex-wrap gap-2'>
                         {organizationId ? (
-                            <Link href={`/organizations?organizationId=${encodeURIComponent(organizationId)}&focus=watchlists`} className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                            <Link href={`/organizations?organizationId=${encodeURIComponent(organizationId)}&focus=watchlists`} className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                                 Org watchlists
                             </Link>
                         ) : null}
-                        <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                        <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                             Alert review
                         </Link>
                     </div>
@@ -667,20 +667,20 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <div className='mt-3 grid gap-2 lg:grid-cols-4'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
                 </div>
-                <div data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-[#26344d] bg-[#0b121e] p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
+                <div data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
                     <label className='min-w-0'>
-                        <span className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>Delivery endpoint</span>
+                        <span className='text-[10px] font-semibold uppercase text-ui-subtle'>Delivery endpoint</span>
                         <input
                             ref={webhookInputRef}
                             value={webhookUrl}
                             onChange={event => setWebhookUrl(event.target.value)}
                             placeholder='https://discord.com/api/webhooks/...'
-                            className='mt-1 h-10 w-full rounded-lg border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                            className='mt-1 h-10 w-full rounded-lg border border-ui-border bg-ui-raised px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     </label>
                     <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason || undefined} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test route</WorkflowButton>
                     <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send queued</WorkflowButton>
-                    <p className='text-xs leading-5 text-[#8fa0ba] lg:col-span-3'>
+                    <p className='text-xs leading-5 text-ui-subtle lg:col-span-3'>
                         {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
                 </div>
@@ -695,10 +695,10 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 <RouteStateCard label='Webhook' value={deliveryCount ? `${deliveryCount} attempt${deliveryCount === 1 ? '' : 's'}` : webhookConfigured ? 'URL ready' : 'Not tested'} detail={webhookConfigured ? 'Test before customer send' : 'Paste HTTPS endpoint to dry-run'} tone={deliveryCount || webhookConfigured ? 'ok' : 'warn'} />
             </section>
 
-            <section className='overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
+            <section className='overflow-hidden rounded-lg border border-ui-border bg-ui-raised'>
                 <div className='overflow-x-auto'>
                     <table className='w-full min-w-[820px] text-left text-xs'>
-                        <thead className='bg-[#0b121e] text-[10px] uppercase text-[#8fa0ba]'>
+                        <thead className='bg-ui-panel text-[10px] uppercase text-ui-subtle'>
                             <tr>
                                 <th className='px-3 py-2 font-semibold'>Stage</th>
                                 <th className='px-3 py-2 font-semibold'>Current state</th>
@@ -706,7 +706,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                                 <th className='px-3 py-2 font-semibold'>Operator command</th>
                             </tr>
                         </thead>
-                        <tbody className='divide-y divide-[#1f2c42]'>
+                        <tbody className='divide-y divide-ui-border'>
                             <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Customer terms needed'} next='Company, domain, supplier, brand, and product terms define alert scope.' command={termCount ? 'Save and rebuild alerts' : 'Prepare starter list'} tone={termCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
@@ -718,28 +718,28 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             </section>
 
             <div className='grid gap-4 xl:grid-cols-2 2xl:grid-cols-[1.05fr_0.95fr_0.95fr]'>
-                <form onSubmit={saveWatchlist} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
+                <form onSubmit={saveWatchlist} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#edf4ff]'>Customer watchlist</h2>
-                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Terms matched against collected evidence before an alert enters review or delivery.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Customer watchlist</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Terms matched against collected evidence before an alert enters review or delivery.</p>
                         </div>
-                        <BellRing className='h-5 w-5 text-[#9db8ff]' />
+                        <BellRing className='h-5 w-5 text-ui-primary' />
                     </div>
                     <textarea
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
                         placeholder={'your-company.com\nPrimary supplier\nCustomer brand'}
-                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='mt-4 min-h-36 w-full resize-y rounded-lg border border-ui-border bg-ui-panel px-3 py-2 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <input
                         value={webhookUrl}
                         onChange={event => setWebhookUrl(event.target.value)}
                         placeholder='Webhook URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(watchlistDisabledReason)} title={watchlistDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'watchlist' ? <Loader2 className='h-4 w-4 animate-spin' /> : <RefreshCw className='h-4 w-4' />}
                             Save and rebuild alerts
                         </button>
@@ -751,46 +751,46 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
                         {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Prepare starter list</WorkflowButton> : null}
                     </div>
-                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.</p> : null}
-                    {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{webhookTestDisabledReason}</p> : null}
+                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-ui-warning'>No saved terms yet. Prepare a starter list or paste customer-owned company, domain, supplier, brand, or product terms.</p> : null}
+                    {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-ui-subtle'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
+                <form onSubmit={ingestMetadataClaim} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#edf4ff]'>Exposure intake</h2>
-                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Create a metadata-only capture, add the affected company to the watchlist, and rebuild alerts.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Exposure intake</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Create a metadata-only capture, add the affected company to the watchlist, and rebuild alerts.</p>
                         </div>
-                        <ShieldCheck className='h-5 w-5 text-[#9db8ff]' />
+                        <ShieldCheck className='h-5 w-5 text-ui-primary' />
                     </div>
                     <div className='mt-4 grid gap-3 sm:grid-cols-2'>
                         <input
                             value={claimActor}
                             onChange={event => setClaimActor(event.target.value)}
                             placeholder='Actor'
-                            className='h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                         <input
                             value={claimCompany}
                             onChange={event => setClaimCompany(event.target.value)}
                             placeholder='Affected company or domain'
-                            className='h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                            className='h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                         />
                     </div>
                     <input
                         value={claimData}
                         onChange={event => setClaimData(event.target.value)}
                         placeholder='Exposure details, sector, or access type'
-                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <input
                         value={claimUrl}
                         onChange={event => setClaimUrl(event.target.value)}
                         placeholder='Source URL, optional'
-                        className='mt-3 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='mt-3 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
                     <div className='mt-3 flex flex-wrap gap-2'>
-                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
+                        <button disabled={busy || Boolean(claimDisabledReason)} title={claimDisabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                             {busyAction === 'claim' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Plus className='h-4 w-4' />}
                             Ingest and rebuild
                         </button>
@@ -798,28 +798,28 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                             Open case
                         </WorkflowButton>
                     </div>
-                    {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{claimDisabledReason}</p> : null}
+                    {claimDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{claimDisabledReason}</p> : null}
                 </form>
 
-                <form onSubmit={submitSource} className='rounded-lg border border-[#26344d] bg-[#101827] p-4 shadow-sm'>
+                <form onSubmit={submitSource} className='rounded-lg border border-ui-border bg-ui-raised p-4 shadow-sm'>
                     <div className='flex items-start justify-between gap-3'>
                         <div>
-                            <h2 className='text-base font-semibold text-[#edf4ff]'>Telegram source request</h2>
-                            <p className='mt-1 text-sm leading-6 text-[#8fa0ba]'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
+                            <h2 className='text-base font-semibold text-ui-text'>Telegram source request</h2>
+                            <p className='mt-1 text-sm leading-6 text-ui-subtle'>Add a public @handle or t.me URL. Private invites stay out of automated collection.</p>
                         </div>
-                        <Plus className='h-5 w-5 text-[#9db8ff]' />
+                        <Plus className='h-5 w-5 text-ui-primary' />
                     </div>
                     <input
                         value={sourceTarget}
                         onChange={event => setSourceTarget(event.target.value)}
                         placeholder='@breach_drop_house or https://t.me/channel'
-                        className='mt-4 h-10 w-full rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
+                        className='mt-4 h-10 w-full rounded-lg border border-ui-border bg-ui-panel px-3 text-sm text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-2 focus:ring-ui-primary/20'
                     />
-                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-[#9db8ff] px-4 text-sm font-semibold text-[#08111f] transition hover:bg-[#bfd0ff] disabled:cursor-not-allowed disabled:opacity-60'>
+                    <button disabled={busy || Boolean(sourceDisabledReason)} title={sourceDisabledReason || undefined} className='mt-3 inline-flex h-10 items-center gap-2 rounded-lg bg-ui-primary px-4 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60'>
                         {busyAction === 'source' ? <Loader2 className='h-4 w-4 animate-spin' /> : <Send className='h-4 w-4' />}
                         Submit source
                     </button>
-                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{sourceDisabledReason}</p> : null}
+                    {sourceDisabledReason ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{sourceDisabledReason}</p> : null}
                 </form>
             </div>
         </div>
@@ -896,27 +896,27 @@ type RouteQueueAction = {
 
 function RouteQueueCard({ action }: { action: RouteQueueAction }) {
     const toneClass = action.tone === 'ok'
-        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : action.tone === 'warn'
-            ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
             : action.tone === 'bad'
-                ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-                : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
+                ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+                : 'border-ui-border bg-ui-panel text-ui-muted'
     return (
-        <article className='grid min-h-44 gap-3 rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
+        <article className='grid min-h-44 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='min-w-0'>
                 <div className='flex items-start justify-between gap-2'>
-                    <h4 className='wrap-break-word text-sm font-semibold text-[#edf4ff]'>{action.label}</h4>
+                    <h4 className='wrap-break-word text-sm font-semibold text-ui-text'>{action.label}</h4>
                     <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>{action.state}</span>
                 </div>
-                <p className='mt-2 line-clamp-3 text-xs leading-5 text-[#8fa0ba]'>{action.detail}</p>
+                <p className='mt-2 line-clamp-3 text-xs leading-5 text-ui-subtle'>{action.detail}</p>
             </div>
             <button
                 type='button'
                 onClick={action.onClick}
                 disabled={action.disabled}
                 title={action.disabledReason}
-                className='mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[#27364f] bg-[#101827] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff] disabled:cursor-not-allowed disabled:opacity-60'
+                className='mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30 disabled:cursor-not-allowed disabled:opacity-60'
             >
                 {action.busy ? <Loader2 className='h-4 w-4 animate-spin' /> : <Activity className='h-4 w-4' />}
                 {action.busy ? 'Running...' : action.command}
@@ -935,81 +935,81 @@ function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
         { label: 'Delivery', value: route.deliveryAttempts === undefined ? route.deliveryState || 'not run' : `${route.deliveryAttempts} attempt${route.deliveryAttempts === 1 ? '' : 's'}` },
     ]
     return (
-        <section data-dwm-route-run-summary className='mt-3 rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+        <section data-dwm-route-run-summary className='mt-3 rounded-lg border border-ui-border bg-ui-raised p-3'>
             <div className='flex flex-wrap items-center justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Last route run</p>
-                    <h4 className='mt-1 text-sm font-semibold text-[#edf4ff]'>{route.label} · {relativeTime(route.at)}</h4>
+                    <p className='text-[10px] font-semibold uppercase text-ui-primary'>Last route run</p>
+                    <h4 className='mt-1 text-sm font-semibold text-ui-text'>{route.label} · {relativeTime(route.at)}</h4>
                 </div>
                 <div className='flex flex-wrap gap-2'>
                     {route.caseHref ? (
-                        <Link href={route.caseHref} className='inline-flex h-8 items-center rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                        <Link href={route.caseHref} className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
                             Open case
                         </Link>
                     ) : null}
-                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 font-mono text-[11px] text-[#aab7cc]'>{route.alertId}</span> : null}
+                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-ui-border bg-ui-panel px-3 font-mono text-[11px] text-ui-muted'>{route.alertId}</span> : null}
                 </div>
             </div>
             <div className='mt-3 grid grid-cols-2 gap-2 lg:grid-cols-6'>
                 {cells.map(cell => (
-                    <div key={cell.label} className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
-                        <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
-                        <p className='mt-1 truncate text-sm font-semibold text-[#edf4ff]' title={cell.value}>{cell.value}</p>
+                    <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
+                        <p className='text-[10px] font-semibold uppercase text-ui-subtle'>{cell.label}</p>
+                        <p className='mt-1 truncate text-sm font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
                     </div>
                 ))}
             </div>
-            {route.deliveryState ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{route.deliveryState}</p> : null}
+            {route.deliveryState ? <p className='mt-2 text-xs leading-5 text-ui-subtle'>{route.deliveryState}</p> : null}
         </section>
     )
 }
 
 function RouteStepRow({ stage, state, next, command, tone }: { stage: string, state: string, next: string, command: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
-        ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : tone === 'warn'
-            ? 'border-[#6f5417] bg-[#2a220f] text-[#ffd879]'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
             : tone === 'bad'
-                ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'
-                : 'border-[#27364f] bg-[#0b121e] text-[#aab7cc]'
+                ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+                : 'border-ui-border bg-ui-panel text-ui-muted'
     return (
-        <tr className='align-top transition hover:bg-[#111b2b]'>
+        <tr className='align-top transition hover:bg-ui-raised'>
             <td className='px-3 py-3'>
-                <p className='text-sm font-semibold text-[#edf4ff]'>{stage}</p>
+                <p className='text-sm font-semibold text-ui-text'>{stage}</p>
             </td>
             <td className='px-3 py-3'>
                 <span className={`inline-flex max-w-full rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>
                     <span className='truncate' title={state}>{state}</span>
                 </span>
             </td>
-            <td className='px-3 py-3 text-sm leading-5 text-[#aab7cc]'>{next}</td>
-            <td className='px-3 py-3 font-semibold text-[#dbe7ff]'>{command}</td>
+            <td className='px-3 py-3 text-sm leading-5 text-ui-muted'>{next}</td>
+            <td className='px-3 py-3 font-semibold text-ui-text'>{command}</td>
         </tr>
     )
 }
 
 function RouteStateCard({ label, value, detail, tone }: { label: string, value: string, detail: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
-        ? 'text-[#9cf0bc]'
+        ? 'text-ui-success'
         : tone === 'warn'
-            ? 'text-[#ffd58a]'
+            ? 'text-ui-warning'
             : tone === 'bad'
-                ? 'text-[#ffb598]'
-                : 'text-[#9db8ff]'
+                ? 'text-ui-danger'
+                : 'text-ui-primary'
     return (
-        <div className='rounded-lg border border-[#26344d] bg-[#101827] p-4'>
-            <div className='flex items-center justify-between gap-3 text-[#8fa0ba]'>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-4'>
+            <div className='flex items-center justify-between gap-3 text-ui-subtle'>
                 <p className='text-xs font-semibold uppercase'>{label}</p>
                 <Activity className='h-4 w-4' />
             </div>
             <p className={`mt-2 truncate text-lg font-semibold ${toneClass}`}>{value}</p>
-            <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#8fa0ba]'>{detail}</p>
+            <p className='mt-1 line-clamp-2 text-xs leading-5 text-ui-subtle'>{detail}</p>
         </div>
     )
 }
 
 function WorkflowButton({ busy, disabled, disabledReason, icon, onClick, children }: { busy: boolean, disabled: boolean, disabledReason?: string, icon: React.ReactNode, onClick: () => void, children: string }) {
     return (
-        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg border border-[#27364f] bg-[#0b121e] px-4 text-sm font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] disabled:cursor-not-allowed disabled:opacity-60'>
+        <button type='button' onClick={onClick} disabled={disabled} title={disabledReason || undefined} className='inline-flex h-10 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-4 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised disabled:cursor-not-allowed disabled:opacity-60'>
             {busy ? <Loader2 className='h-4 w-4 animate-spin' /> : icon}
             {children}
         </button>
