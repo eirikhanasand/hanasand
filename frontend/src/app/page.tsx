@@ -156,10 +156,10 @@ export default async function Page({
     const exposureQueue = await loadExposureQueue(Headers) || emptyExposureQueue(generatedAt)
 
     return (
-        <main className='min-h-full bg-[#f7f8fb] text-[#16181d] dark:bg-[#08111f] dark:text-[#f5f7fb]'>
+        <main className='min-h-full bg-ui-canvas text-ui-text'>
             <LogoutClient logoutServer={logout} />
 
-            <section className='border-b border-[#e3e7ee] bg-[radial-gradient(circle_at_1px_1px,rgba(24,32,52,0.09)_1px,transparent_0)] bg-[length:22px_22px] dark:border-[#26364f] dark:bg-[radial-gradient(circle_at_1px_1px,rgba(157,182,255,0.18)_1px,transparent_0)]'>
+            <section className='border-b border-ui-border bg-ui-canvas'>
                 <div className='mx-auto grid w-full max-w-7xl content-start gap-10 px-4 pb-12 pt-16 md:px-8 md:pt-24 lg:pt-28'>
                     <div className='mx-auto grid max-w-5xl justify-items-center gap-6 text-center'>
                         <Link href='/ti' className='landing-primary-action inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold shadow-sm transition'>
@@ -169,22 +169,22 @@ export default async function Page({
                         </Link>
 
                         <div className='grid gap-4'>
-                            <h1 className='text-5xl font-semibold tracking-normal text-[#111318] dark:text-white md:text-7xl'>
+                            <h1 className='text-5xl font-semibold tracking-normal text-ui-text md:text-7xl'>
                                 Know when your company appears in leak and extortion sources
                             </h1>
-                            <p className='mx-auto max-w-3xl text-lg leading-8 text-[#596170] dark:text-[#b9c4d6] md:text-xl'>
+                            <p className='mx-auto max-w-3xl text-lg leading-8 text-ui-muted md:text-xl'>
                                 Give Hanasand the names and domains to watch. We return a clear alert with what happened, why it matters, source context, severity, and the next step.
                             </p>
                         </div>
 
-                        <form action='/ti' className='landing-search-bar grid w-full max-w-3xl gap-0 overflow-hidden rounded-lg border p-0 shadow-[0_20px_60px_rgba(28,38,61,0.10)] md:grid-cols-[1fr_auto]'>
+                        <form action='/ti' className='landing-search-bar grid w-full max-w-3xl gap-0 overflow-hidden rounded-lg border border-ui-border bg-ui-panel p-0 shadow-md md:grid-cols-[1fr_auto]'>
                             <label className='landing-search-field flex min-w-0 items-center gap-3 px-4'>
-                                <Search className='h-5 w-5 shrink-0 text-[#697386]' />
+                                <Search className='h-5 w-5 shrink-0 text-ui-muted' />
                                 <input
                                     name='q'
                                     aria-label='Search threat intelligence'
                                     placeholder='Search a company, vendor, domain, or actor'
-                                    className='landing-search-input h-14 min-w-0 flex-1 bg-transparent text-base font-medium text-[#171a21] outline-none placeholder:text-[#8c95a5]'
+                                    className='landing-search-input h-14 min-w-0 flex-1 bg-transparent text-base font-medium text-ui-text outline-none placeholder:text-ui-muted'
                                 />
                             </label>
                             <button type='submit' className='landing-search-button inline-flex h-14 items-center justify-center gap-2 px-5 text-sm font-semibold transition'>
@@ -198,13 +198,13 @@ export default async function Page({
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className='landing-surface-border landing-surface-border-hover grid min-w-0 gap-1 rounded-lg border bg-white/90 px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 dark:bg-[#101927]/90'
+                                    className='landing-surface-border landing-surface-border-hover grid min-w-0 gap-1 rounded-lg border border-ui-border bg-ui-panel px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary'
                                 >
-                                    <span className='flex min-w-0 items-center justify-between gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>
+                                    <span className='flex min-w-0 items-center justify-between gap-2 text-sm font-semibold text-ui-text'>
                                         <span className='truncate'>{item.label}</span>
-                                        <ArrowRight className='h-4 w-4 shrink-0 text-[#3056d3] dark:text-[#9db6ff]' />
+                                        <ArrowRight className='h-4 w-4 shrink-0 text-ui-primary' />
                                     </span>
-                                    <span className='text-xs leading-5 text-[#667085] dark:text-[#97a6bd]'>{item.detail}</span>
+                                    <span className='text-xs leading-5 text-ui-muted'>{item.detail}</span>
                                 </Link>
                             ))}
                         </div>
@@ -212,22 +212,22 @@ export default async function Page({
                         <HomeReadinessStrip scoreboard={scoreboard} />
                     </div>
 
-                    <div className='landing-surface-border grid overflow-hidden rounded-xl border bg-white shadow-sm dark:bg-[#101927]' id='sample-alert' data-home-workflow-panel='true'>
+                    <div className='landing-surface-border grid overflow-hidden rounded-xl border border-ui-border bg-ui-panel shadow-sm' id='sample-alert' data-home-workflow-panel='true'>
                         <div className='landing-surface-divider grid gap-3 border-b p-5 md:grid-cols-[0.8fr_1.2fr] md:items-end' data-home-workflow-panel-header='true'>
                             <div>
-                                <p className='text-sm font-semibold uppercase text-[#3056d3] dark:text-[#9db6ff]'>Plain-English workflow</p>
-                                <h2 className='mt-2 text-2xl font-semibold text-[#171a21] dark:text-white'>From watchlist to decision packet.</h2>
+                                <p className='text-sm font-semibold uppercase text-ui-primary'>Plain-English workflow</p>
+                                <h2 className='mt-2 text-2xl font-semibold text-ui-text'>From watchlist to decision packet.</h2>
                             </div>
-                            <p className='text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                            <p className='text-sm leading-6 text-ui-muted'>
                                 A threat actor is a criminal group or seller. A source is where the mention appeared. A webhook is just an automatic delivery to your existing tools.
                             </p>
                         </div>
                         <div className='grid gap-0 md:grid-cols-4'>
                             {buyerSteps.map((step, index) => (
                                 <div key={step.title} className='landing-surface-divider grid gap-3 border-b p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0' data-home-workflow-step='true'>
-                                    <span className='grid h-9 w-9 place-items-center rounded-full bg-[#eef3ff] text-sm font-semibold text-[#3056d3] dark:bg-[#172646] dark:text-[#9db6ff]'>{index + 1}</span>
-                                    <h3 className='text-base font-semibold text-[#171a21] dark:text-white'>{step.title}</h3>
-                                    <p className='text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>{step.detail}</p>
+                                    <span className='grid h-9 w-9 place-items-center rounded-full bg-ui-primary/10 text-sm font-semibold text-ui-primary'>{index + 1}</span>
+                                    <h3 className='text-base font-semibold text-ui-text'>{step.title}</h3>
+                                    <p className='text-sm leading-6 text-ui-muted'>{step.detail}</p>
                                 </div>
                             ))}
                         </div>
@@ -237,22 +237,22 @@ export default async function Page({
                         {examples.map((item) => {
                             const Icon = item.icon
                             return (
-                                <Link key={item.slug} href='/ti' className='landing-surface-border landing-surface-border-hover group overflow-hidden rounded-lg border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_18px_50px_rgba(26,35,55,0.12)] dark:bg-[#101927]' data-home-example-card='true'>
+                                <Link key={item.slug} href='/ti' className='landing-surface-border landing-surface-border-hover group overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary hover:shadow-md' data-home-example-card='true'>
                                     <div className='grid gap-4 p-5'>
                                         <div className='flex items-start justify-between gap-3'>
-                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-[#dfe6f1] bg-[#f7f9fc] text-[#3056d3] dark:border-[#34445f] dark:bg-[#0b1422] dark:text-[#9db6ff]'>
+                                            <div className='grid h-12 w-12 place-items-center rounded-lg border border-ui-border bg-ui-raised text-ui-primary'>
                                                 <Icon className='h-5 w-5' />
                                             </div>
                                             <span className='landing-status-pill rounded-full border px-2.5 py-1 text-xs font-semibold'>{item.badge}</span>
                                         </div>
                                         <div className='grid gap-1'>
-                                            <h2 className='text-lg font-semibold text-[#171a21] dark:text-white'>{item.title}</h2>
-                                            <p className='text-sm font-medium text-[#737c8c] dark:text-[#97a6bd]'>{item.slug}</p>
+                                            <h2 className='text-lg font-semibold text-ui-text'>{item.title}</h2>
+                                            <p className='text-sm font-medium text-ui-muted'>{item.slug}</p>
                                         </div>
-                                        <p className='min-h-16 text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>{item.detail}</p>
+                                        <p className='min-h-16 text-sm leading-6 text-ui-muted'>{item.detail}</p>
                                     </div>
-                                    <div className='landing-surface-divider flex items-center justify-between border-t bg-[#f8fafc] px-5 py-3 text-sm dark:bg-[#0b1422]' data-home-example-card-footer='true'>
-                                        <span className='font-medium text-[#2b3340] dark:text-[#d8e0ee]'>{item.action}</span>
+                                    <div className='landing-surface-divider flex items-center justify-between border-t bg-ui-raised px-5 py-3 text-sm' data-home-example-card-footer='true'>
+                                        <span className='font-medium text-ui-text'>{item.action}</span>
                                         <span className='landing-text-action inline-flex items-center gap-1 font-semibold'>Open <ExternalLink className='landing-action-icon h-3.5 w-3.5' /></span>
                                     </div>
                                 </Link>
@@ -264,19 +264,19 @@ export default async function Page({
                 </div>
             </section>
 
-            <section className='border-b border-[#e3e7ee] bg-white'>
+            <section className='border-b border-ui-border bg-ui-panel'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8 lg:grid-cols-[0.82fr_1.18fr] lg:py-18'>
                     <div className='grid content-start gap-5'>
-                        <p className='text-sm font-semibold uppercase text-[#3056d3]'>How monitoring works</p>
-                        <h2 className='text-3xl font-semibold text-[#171a21] md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
-                        <p className='text-base leading-7 text-[#596170]'>
+                        <p className='text-sm font-semibold uppercase text-ui-primary'>How monitoring works</p>
+                        <h2 className='text-3xl font-semibold text-ui-text md:text-4xl'>Find the company mention before it becomes a forwarded screenshot.</h2>
+                        <p className='text-base leading-7 text-ui-muted'>
                             Each alert is built for the first triage decision: who posted it, which company was named, what data was mentioned, when it appeared, and what to review next.
                         </p>
                         <div className='grid gap-3'>
                             {stats.map(([label, value]) => (
-                                <div key={label} className='grid grid-cols-[10rem_1fr] gap-4 border-b border-[#eef1f5] py-3 text-sm'>
-                                    <span className='text-[#737c8c]'>{label}</span>
-                                    <span className='font-semibold text-[#171a21]'>{value}</span>
+                                <div key={label} className='grid grid-cols-[10rem_1fr] gap-4 border-b border-ui-border py-3 text-sm'>
+                                    <span className='text-ui-muted'>{label}</span>
+                                    <span className='font-semibold text-ui-text'>{value}</span>
                                 </div>
                             ))}
                         </div>
@@ -286,12 +286,12 @@ export default async function Page({
                 </div>
             </section>
 
-            <section className='bg-[#f7f8fb]'>
+            <section className='bg-ui-canvas'>
                 <div className='mx-auto grid max-w-7xl gap-8 px-4 py-14 md:px-8'>
                     <div className='flex flex-col gap-3 md:flex-row md:items-end md:justify-between'>
                         <div className='grid gap-2'>
-                            <p className='text-sm font-semibold uppercase text-[#3056d3]'>Solutions</p>
-                            <h2 className='text-3xl font-semibold text-[#171a21]'>Monitoring and secure response tools in one place.</h2>
+                            <p className='text-sm font-semibold uppercase text-ui-primary'>Solutions</p>
+                            <h2 className='text-3xl font-semibold text-ui-text'>Monitoring and secure response tools in one place.</h2>
                         </div>
                         <Link href='/dashboard/overview' className='landing-primary-action inline-flex w-fit items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold shadow-sm transition'>
                             Go to Console
@@ -301,12 +301,12 @@ export default async function Page({
 
                     <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
                         {solutions.map((solution) => (
-                            <Link key={solution.title} href={solution.href} className='landing-surface-border landing-surface-border-hover grid gap-4 rounded-lg border bg-white p-5 shadow-sm transition hover:-translate-y-0.5' data-home-solution-card='true'>
+                            <Link key={solution.title} href={solution.href} className='landing-surface-border landing-surface-border-hover grid gap-4 rounded-lg border border-ui-border bg-ui-panel p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-ui-primary' data-home-solution-card='true'>
                                 <div className='flex items-center justify-between gap-3'>
-                                    <h3 className='text-base font-semibold text-[#171a21]'>{solution.title}</h3>
+                                    <h3 className='text-base font-semibold text-ui-text'>{solution.title}</h3>
                                     <ArrowRight className='landing-action-icon h-4 w-4' />
                                 </div>
-                                <p className='text-sm leading-6 text-[#596170]'>{solution.detail}</p>
+                                <p className='text-sm leading-6 text-ui-muted'>{solution.detail}</p>
                             </Link>
                         ))}
                     </div>
@@ -333,7 +333,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
 
     return (
         <div
-            className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border bg-white/90 p-3 text-left shadow-sm backdrop-blur dark:bg-[#101927]/90 sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
+            className='landing-surface-border grid w-full max-w-6xl gap-3 rounded-xl border border-ui-border bg-ui-panel/90 p-3 text-left shadow-sm backdrop-blur sm:grid-cols-2 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.95fr_1.5fr_auto]'
             data-home-product-readiness='true'
             data-home-readiness-state={stateLabel}
             data-home-readiness-ready-rows={scoreboard.readyRows}
@@ -357,7 +357,7 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
             <HomeReadinessFact label={scoreboard.fullChainReady ? 'Live path' : 'Next action'} value={nextStep} />
             <Link
                 href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
-                className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                className='inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
             >
                 Open console
                 <ArrowRight className='h-4 w-4' />
@@ -368,9 +368,9 @@ function HomeReadinessStrip({ scoreboard }: { scoreboard: ProductNorthStarScoreb
 
 function HomeReadinessFact({ label, value }: { label: string, value: string }) {
     return (
-        <div className='landing-surface-border min-w-0 rounded-lg border bg-[#fbfcfe] px-3 py-2 dark:bg-[#0b1422]' data-home-readiness-fact='true'>
-            <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
-            <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-[#171a21] dark:text-white'>{value}</p>
+        <div className='landing-surface-border min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2' data-home-readiness-fact='true'>
+            <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 line-clamp-2 text-sm font-semibold leading-5 text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -378,26 +378,26 @@ function HomeReadinessFact({ label, value }: { label: string, value: string }) {
 function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
     return (
         <section
-            className='landing-surface-border overflow-hidden rounded-xl border bg-white/95 shadow-sm backdrop-blur dark:bg-[#101927]/95'
+            className='landing-surface-border overflow-hidden rounded-xl border border-ui-border bg-ui-panel/95 shadow-sm backdrop-blur'
             data-home-workflow-coverage='true'
             data-home-workflow-coverage-ready-rows={scoreboard.readyRows}
             data-home-workflow-coverage-total-rows={scoreboard.totalRows}
         >
             <div className='landing-surface-divider grid gap-2 border-b px-4 py-4 md:grid-cols-[1fr_auto] md:items-end' data-home-workflow-coverage-header='true'>
                 <div>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9db6ff]'>Workflow map</p>
-                    <h2 className='mt-1 text-xl font-semibold text-[#171a21] dark:text-white'>What your security team can use today</h2>
+                    <p className='text-xs font-semibold uppercase text-ui-primary'>Workflow map</p>
+                    <h2 className='mt-1 text-xl font-semibold text-ui-text'>What your security team can use today</h2>
                 </div>
                 <Link
                     href={`/dashboard?q=${encodeURIComponent(scoreboard.query)}`}
-                    className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-[#d9e2ef] px-3 py-2 text-sm font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                    className='inline-flex min-h-10 w-fit items-center gap-2 rounded-lg border border-ui-border px-3 py-2 text-sm font-semibold text-ui-primary transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
                 >
                     Inspect console
                     <ArrowRight className='h-4 w-4' />
                 </Link>
             </div>
             <div>
-                <div className='landing-surface-divider hidden grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b px-4 py-2 text-[0.68rem] font-semibold uppercase text-[#667085] dark:text-[#97a6bd] md:grid' data-home-workflow-coverage-table-header='true'>
+                <div className='landing-surface-divider hidden grid-cols-[1.1fr_8rem_1.5fr_8rem] gap-3 border-b px-4 py-2 text-[0.68rem] font-semibold uppercase text-ui-muted md:grid' data-home-workflow-coverage-table-header='true'>
                     <span>Use case</span>
                     <span>State</span>
                     <span>Customer value</span>
@@ -415,16 +415,16 @@ function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScor
                             data-home-direction-href={item.href}
                         >
                             <div className='min-w-0'>
-                                <p className='wrap-break-word font-semibold text-[#171a21] dark:text-white'>{item.label}</p>
-                                <p className='mt-1 wrap-break-word text-xs text-[#667085] dark:text-[#97a6bd]'>{formatLaneList(item.ownerLanes)}</p>
+                                <p className='wrap-break-word font-semibold text-ui-text'>{item.label}</p>
+                                <p className='mt-1 wrap-break-word text-xs text-ui-muted'>{formatLaneList(item.ownerLanes)}</p>
                             </div>
                             <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${homeStateTone(item.state)}`}>
                                 {homeStateLabel(item.state)}
                             </span>
-                            <p className='min-w-0 wrap-break-word text-[#596170] dark:text-[#b9c4d6]' title={item.blocker ? formatCustomerAction(item.blocker) : customerWorkflowValue(item)}>
+                            <p className='min-w-0 wrap-break-word text-ui-muted' title={item.blocker ? formatCustomerAction(item.blocker) : customerWorkflowValue(item)}>
                                 {customerWorkflowValue(item)}
                             </p>
-                            <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-[#3056d3] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff] dark:hover:text-white md:justify-self-end'>
+                            <Link href={item.href} className='inline-flex min-h-9 min-w-20 w-fit items-center justify-center px-3 py-2 text-sm font-semibold text-ui-primary hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20 md:justify-self-end'>
                                 Open
                             </Link>
                         </div>
@@ -436,10 +436,10 @@ function HomeWorkflowCoverage({ scoreboard }: { scoreboard: ProductNorthStarScor
 }
 
 function homeStateTone(state: ProductNorthStarScoreboard['rows'][number]['state']) {
-    if (state === 'ready') return 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
-    if (state === 'blocked') return 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
-    if (state === 'needs_action') return 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-    return 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8] dark:border-[#25456f] dark:bg-[#0b1b30] dark:text-[#93c5fd]'
+    if (state === 'ready') return 'border-ui-success/30 bg-ui-success/10 text-ui-success'
+    if (state === 'blocked') return 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
+    if (state === 'needs_action') return 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+    return 'border-ui-primary/30 bg-ui-primary/10 text-ui-primary'
 }
 
 function homeStateLabel(state: ProductNorthStarScoreboard['rows'][number]['state']) {
