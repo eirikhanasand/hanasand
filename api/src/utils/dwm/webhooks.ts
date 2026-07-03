@@ -1270,7 +1270,7 @@ export function buildDwmWebhookDeliveryReadinessConsumerProof({
             ...(retryableFailure ? [retryQueueBlocker('retry_scheduled', 'Delivery has a scheduled retry/backoff time.', row.destinationId, false)] : []),
             ...(nonRetryableFailure ? [retryQueueBlocker('terminal_failure', 'Latest delivery failure is terminal and not eligible for retry.', row.destinationId, true)] : []),
             ...(!row.audit.linked ? [retryQueueBlocker('audit_missing', 'Delivery readiness has no linked audit event yet.', row.destinationId, false)] : []),
-            ...(!liveDeliveryEnabled && row.live ? [retryQueueBlocker('live_delivery_disabled', 'Live webhook delivery is disabled; readiness proof is dry-run only.', row.destinationId, false)] : []),
+            ...(!liveDeliveryEnabled && row.live ? [retryQueueBlocker('live_delivery_disabled', 'Live webhook delivery is disabled; this row is a dry run until delivery is enabled.', row.destinationId, false)] : []),
         ])
 
         return {
@@ -8942,7 +8942,7 @@ function buildTestAlert(destination: Pick<DwmWebhookDestinationRow, 'org_id'>) {
         title: 'Hanasand DWM webhook test',
         severity: 'medium',
         claimSummary: 'This dry-run verifies the destination, Discord formatting, and delivery ledger without exposing the webhook secret.',
-        recommendedAction: 'No action required. Confirm this preview has the context your team expects.',
+        recommendedAction: 'Nothing to do. Confirm this preview has the context your team expects.',
         matchedTerm: { value: 'example.com', kind: 'domain' },
         domain: 'example.com',
         sourceFamily: 'dark_web',

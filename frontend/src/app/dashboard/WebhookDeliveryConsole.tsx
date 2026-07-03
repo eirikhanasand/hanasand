@@ -44,8 +44,8 @@ export type DashboardWebhookDelivery = {
 function sanitizeDeliveryCopy(value: string | undefined) {
     if (!value) return value
     return value
-        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
-        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(/hanasand-live-status-\d+/gi, 'Hanasand live org')
+        .replace(/hanasand-live-status/gi, 'Hanasand live org')
         .replace(/receipt/gi, 'delivery')
         .replace(/proof/gi, 'status')
         .replace(/readiness/gi, 'status')
@@ -84,14 +84,14 @@ type RequestResult = {
     error?: { code?: string, message?: string }
 }
 
-const emptyDestination = { name: '', url: '', kind: 'discord' }
+const blankDestination = { name: '', url: '', kind: 'discord' }
 
 export default function WebhookDeliveryConsole({ organization, initialDestinations, initialDeliveries, alertOptions }: Props) {
     const [destinations, setDestinations] = useState(initialDestinations)
     const [deliveries, setDeliveries] = useState(initialDeliveries)
     const [selectedDestinationId, setSelectedDestinationId] = useState(initialDestinations.find(item => item.status === 'active')?.id || initialDestinations[0]?.id || '')
     const [selectedAlertId, setSelectedAlertId] = useState(alertOptions[0]?.id || '')
-    const [draft, setDraft] = useState(emptyDestination)
+    const [draft, setDraft] = useState(blankDestination)
     const [editingId, setEditingId] = useState('')
     const [busy, setBusy] = useState('')
     const [message, setMessage] = useState('')
@@ -129,7 +129,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
             if (destination) {
                 setDestinations(current => upsertDestination(current, destination))
                 setSelectedDestinationId(destination.id)
-                setDraft(emptyDestination)
+                setDraft(blankDestination)
                 setEditingId('')
                 setMessage(editingId ? 'Destination updated.' : 'Destination created.')
             }
@@ -196,40 +196,40 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
     }
 
     return (
-        <section className='rounded-lg border border-[#dfe5ee] bg-white shadow-sm'>
-            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#edf1f6] px-4 py-3'>
+        <section className='rounded-lg border border-[#26344d] bg-[#101827] shadow-sm'>
+            <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#1f2c42] px-4 py-3'>
                 <div className='min-w-0'>
-                    <h2 className='flex items-center gap-2 text-sm font-semibold text-[#171a21]'>
-                        <Webhook className='h-4 w-4 text-[#3056d3]' />
+                    <h2 className='flex items-center gap-2 text-sm font-semibold text-[#edf4ff]'>
+                        <Webhook className='h-4 w-4 text-[#9db8ff]' />
                         Discord and webhook delivery
                     </h2>
-                    <p className='mt-1 text-xs text-[#667085]'>
+                    <p className='mt-1 text-xs text-[#8fa0ba]'>
                         {organization ? `${sanitizeDeliveryCopy(organization.name)}: ${activeCount}/${destinations.length} active destinations.` : 'Select or create an organization before configuring destinations.'}
                     </p>
                 </div>
                 <div className='flex flex-wrap items-center gap-2 text-xs font-semibold'>
                     <span className={statusPill(activeCount ? 'active' : 'paused')}>{activeCount ? 'Delivery configured' : 'Destination required'}</span>
-                    <span className='rounded-lg border border-[#d8dee9] bg-[#fbfcfe] px-2.5 py-1 text-[#596170]'>{scopedDeliveries.length} recent rows</span>
+                    <span className='rounded-lg border border-[#27364f] bg-[#0b121e] px-2.5 py-1 text-[#aab7cc]'>{scopedDeliveries.length} recent rows</span>
                 </div>
             </div>
 
             <div className='grid gap-4 p-4 xl:grid-cols-[0.9fr_1.1fr]'>
                 <div className='grid gap-4'>
-                    <form onSubmit={submitDestination} className='rounded-lg border border-[#e5eaf2] bg-[#fbfcfe] p-3'>
+                    <form onSubmit={submitDestination} className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-2'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>{editingId ? 'Edit destination' : 'Add destination'}</h3>
+                            <h3 className='text-sm font-semibold text-[#edf4ff]'>{editingId ? 'Edit destination' : 'Add destination'}</h3>
                             {editingId ? (
-                                <button type='button' className='text-xs font-semibold text-[#3056d3]' onClick={() => { setEditingId(''); setDraft(emptyDestination); setMessage('') }}>
+                                <button type='button' className='text-xs font-semibold text-[#9db8ff]' onClick={() => { setEditingId(''); setDraft(blankDestination); setMessage('') }}>
                                     Cancel
                                 </button>
                             ) : null}
                         </div>
                         <div className='mt-3 grid gap-2 sm:grid-cols-[1fr_120px]'>
-                            <label className='grid gap-1 text-xs font-semibold text-[#475467]'>
+                            <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
                                 Label
                                 <input className={inputClass} value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} placeholder='SOC Discord' disabled={!canUseActions || Boolean(busy)} />
                             </label>
-                            <label className='grid gap-1 text-xs font-semibold text-[#475467]'>
+                            <label className='grid gap-1 text-xs font-semibold text-[#aab7cc]'>
                                 Type
                                 <select className={inputClass} value={draft.kind} onChange={event => setDraft(current => ({ ...current, kind: event.target.value }))} disabled={!canUseActions || Boolean(busy)}>
                                     <option value='discord'>Discord</option>
@@ -237,36 +237,36 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                 </select>
                             </label>
                         </div>
-                        <label className='mt-2 grid gap-1 text-xs font-semibold text-[#475467]'>
+                        <label className='mt-2 grid gap-1 text-xs font-semibold text-[#aab7cc]'>
                             Endpoint URL
                             <input className={inputClass} value={draft.url} onChange={event => setDraft(current => ({ ...current, url: event.target.value }))} placeholder={editingId ? 'Leave blank to keep existing endpoint' : 'https://discord.com/api/webhooks/...'} disabled={!canUseActions || Boolean(busy)} />
                         </label>
-                        <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-3 text-xs font-semibold text-white transition hover:bg-[#2b2f39] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
+                        <button type='submit' className='mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#315fe8] px-3 text-xs font-semibold text-white transition hover:bg-[#426ef0] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-60' disabled={!canUseActions || busy === 'save-destination' || !draft.name.trim() || (!editingId && !draft.url.trim())}>
                             {busy === 'save-destination' ? <Loader2 className='h-4 w-4 animate-spin' /> : <CheckCircle2 className='h-4 w-4' />}
                             {editingId ? 'Save destination' : 'Create destination'}
                         </button>
                     </form>
 
-                    <div className='rounded-lg border border-[#e5eaf2]'>
-                        <div className='border-b border-[#edf1f6] px-3 py-2'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Destinations</h3>
+                    <div className='rounded-lg border border-[#26344d]'>
+                        <div className='border-b border-[#1f2c42] px-3 py-2'>
+                            <h3 className='text-sm font-semibold text-[#edf4ff]'>Destinations</h3>
                         </div>
                         <div className='max-h-80 overflow-auto'>
                             {!destinations.length ? (
-                                <div className='p-4 text-sm text-[#667085]'>No destination is configured. Add a Discord or generic webhook endpoint to enable dry-run tests.</div>
+                                <div className='p-4 text-sm text-[#8fa0ba]'>Delivery routes attach here. Add Discord or a generic webhook endpoint to start dry-run tests.</div>
                             ) : destinations.map(destination => (
-                                <div key={destination.id} className={`grid gap-3 border-b border-[#edf1f6] p-3 last:border-b-0 ${selectedDestination?.id === destination.id ? 'bg-[#f6f9ff]' : 'bg-white'}`}>
+                                <div key={destination.id} className={`grid gap-3 border-b border-[#1f2c42] p-3 last:border-b-0 ${selectedDestination?.id === destination.id ? 'bg-[#111b2b]' : 'bg-[#101827]'}`}>
                                     <div className='flex flex-wrap items-start justify-between gap-2'>
                                         <button type='button' className='min-w-0 text-left' onClick={() => setSelectedDestinationId(destination.id)}>
-                                            <p className='truncate text-sm font-semibold text-[#171a21]'>{destination.name}</p>
-                                            <p className='mt-1 truncate font-mono text-[11px] text-[#667085]'>{destination.endpointHint || destination.endpointHash || destination.id}</p>
+                                            <p className='truncate text-sm font-semibold text-[#edf4ff]'>{destination.name}</p>
+                                            <p className='mt-1 truncate font-mono text-[11px] text-[#8fa0ba]'>{destination.endpointHint || destination.endpointHash || destination.id}</p>
                                         </button>
                                         <span className={statusPill(destination.status)}>{destination.status}</span>
                                     </div>
-                                    <div className='flex flex-wrap items-center gap-2 text-xs text-[#667085]'>
+                                    <div className='flex flex-wrap items-center gap-2 text-xs text-[#8fa0ba]'>
                                         <span>{destination.kind === 'discord' ? 'Discord' : 'Webhook'}</span>
                                         <span>Updated {formatTimestamp(destination.updatedAt)}</span>
-                                        {destination.lastTestStatus ? <span>Last test {destination.lastTestStatus}</span> : <span>Not tested</span>}
+                                        {destination.lastTestStatus ? <span>Last test {destination.lastTestStatus}</span> : <span>Test ready</span>}
                                     </div>
                                     <div className='flex flex-wrap gap-2'>
                                         <ActionButton busy={busy === `test-${destination.id}`} disabled={!canUseActions || destination.status !== 'active'} onClick={() => testDestination(destination.id)} icon={<Send className='h-3.5 w-3.5' />}>Test</ActionButton>
@@ -282,38 +282,38 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                 </div>
 
                 <div className='grid gap-4'>
-                    <div className='rounded-lg border border-[#e5eaf2] bg-[#fbfcfe] p-3'>
+                    <div className='rounded-lg border border-[#26344d] bg-[#0b121e] p-3'>
                         <div className='flex flex-wrap items-center justify-between gap-3'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Dry-run payload</h3>
+                            <h3 className='text-sm font-semibold text-[#edf4ff]'>Dry-run payload</h3>
                             <select className={`${inputClass} max-w-full sm:w-[280px]`} value={selectedAlertId} onChange={event => setSelectedAlertId(event.target.value)}>
                                 {alertOptions.map(alert => <option key={alert.id} value={alert.id}>{alert.severity.toUpperCase()} - {alert.title}</option>)}
-                                {!alertOptions.length ? <option>No alert loaded</option> : null}
+                                {!alertOptions.length ? <option>Select an alert</option> : null}
                             </select>
                         </div>
                         {preview ? (
                             <div className='mt-3 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]'>
-                                <div className='grid gap-2 text-sm text-[#344054]'>
-                                    <PreviewLine label='Alert' value={selectedAlert?.title || 'No alert'} />
-                                    <PreviewLine label='Watchlist' value={selectedAlert?.watchlistTerm || 'Not returned'} />
-                                    <PreviewLine label='Source' value={selectedAlert?.sourceFamily || 'Not returned'} />
-                                    <PreviewLine label='Route' value={selectedAlert?.routeLabel || 'Not returned'} />
-                                    <PreviewLine label='Destination' value={selectedDestination?.endpointHint || selectedDestination?.endpointHash || 'No destination selected'} />
+                                <div className='grid gap-2 text-sm text-[#dbe7ff]'>
+                                    <PreviewLine label='Alert' value={selectedAlert?.title || 'alert syncing'} />
+                                    <PreviewLine label='Watchlist' value={selectedAlert?.watchlistTerm || 'syncing'} />
+                                    <PreviewLine label='Source' value={selectedAlert?.sourceFamily || 'syncing'} />
+                                    <PreviewLine label='Route' value={selectedAlert?.routeLabel || 'syncing'} />
+                                    <PreviewLine label='Destination' value={selectedDestination?.endpointHint || selectedDestination?.endpointHash || 'destination syncing'} />
                                 </div>
-                                <pre className='max-h-[260px] overflow-auto rounded-lg border border-[#d8dee9] bg-white p-3 text-[11px] leading-5 text-[#344054]'>{JSON.stringify(preview, null, 2)}</pre>
+                                <pre className='max-h-[260px] overflow-auto rounded-lg border border-[#27364f] bg-[#101827] p-3 text-[11px] leading-5 text-[#dbe7ff]'>{JSON.stringify(preview, null, 2)}</pre>
                             </div>
                         ) : (
-                            <div className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] p-3 text-sm text-[#9a3412]'>Load an alert and destination to preview the Discord body.</div>
+                            <div className='mt-3 rounded-lg border border-[#7a5618] bg-[#2a1c0e] p-3 text-sm text-[#ffd58a]'>Select an alert and destination to render the Discord body.</div>
                         )}
                     </div>
 
-                    <div className='rounded-lg border border-[#e5eaf2] bg-white'>
-                        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-[#edf1f6] px-3 py-2'>
-                            <h3 className='text-sm font-semibold text-[#171a21]'>Delivery history</h3>
+                    <div className='rounded-lg border border-[#26344d] bg-[#101827]'>
+                        <div className='flex flex-wrap items-center justify-between gap-2 border-b border-[#1f2c42] px-3 py-2'>
+                            <h3 className='text-sm font-semibold text-[#edf4ff]'>Delivery history</h3>
                             {lastResult?.delivery ? <span className={statusPill(lastResult.delivery.status)}>Latest {lastResult.delivery.status}</span> : null}
                         </div>
                         <div className='overflow-x-auto'>
-                            <table className='min-w-full divide-y divide-[#edf1f6] text-left text-xs'>
-                                <thead className='bg-[#fbfcfe] text-[#667085]'>
+                            <table className='min-w-full divide-y divide-[#1f2c42] text-left text-xs'>
+                                <thead className='bg-[#0b121e] text-[#8fa0ba]'>
                                     <tr>
                                         <th className='px-3 py-2 font-semibold'>Attempt</th>
                                         <th className='px-3 py-2 font-semibold'>Alert</th>
@@ -321,18 +321,18 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                                         <th className='px-3 py-2 font-semibold'>Retry/error</th>
                                     </tr>
                                 </thead>
-                                <tbody className='divide-y divide-[#edf1f6]'>
+                                <tbody className='divide-y divide-[#1f2c42]'>
                                     {!scopedDeliveries.length ? (
-                                        <tr><td colSpan={4} className='px-3 py-4 text-sm text-[#667085]'>No delivery rows for this destination yet. Run a dry-run test to record the first attempt.</td></tr>
+                                        <tr><td colSpan={4} className='px-3 py-4 text-sm text-[#8fa0ba]'>Dry-run and customer sends stream here.</td></tr>
                                     ) : scopedDeliveries.map(delivery => (
                                         <tr key={delivery.id}>
                                             <td className='px-3 py-2'>
-                                                <p className='font-mono text-[11px] text-[#344054]'>{delivery.id}</p>
-                                                <p className='mt-1 text-[#667085]'>{formatTimestamp(delivery.attemptedAt)}</p>
+                                                <p className='font-mono text-[11px] text-[#dbe7ff]'>{delivery.id}</p>
+                                                <p className='mt-1 text-[#8fa0ba]'>{formatTimestamp(delivery.attemptedAt)}</p>
                                             </td>
-                                            <td className='px-3 py-2 text-[#344054]'>{delivery.alertId}</td>
+                                            <td className='px-3 py-2 text-[#dbe7ff]'>{delivery.alertId}</td>
                                             <td className='px-3 py-2'><span className={statusPill(delivery.status)}>{delivery.status}</span></td>
-                                            <td className='px-3 py-2 text-[#667085]'>{delivery.error || (delivery.httpStatus ? `HTTP ${delivery.httpStatus}` : delivery.payloadHash || 'No error returned')}</td>
+                                            <td className='px-3 py-2 text-[#8fa0ba]'>{delivery.error || (delivery.httpStatus ? `HTTP ${delivery.httpStatus}` : delivery.payloadHash || 'clear')}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -341,7 +341,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
                     </div>
 
                     {(message || error) ? (
-                        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${error ? 'border-[#fecaca] bg-[#fef2f2] text-[#991b1b]' : 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534]'}`}>
+                        <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${error ? 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]' : 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'}`}>
                             {error ? <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' /> : <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />}
                             <span>{error || message}</span>
                         </div>
@@ -354,7 +354,7 @@ export default function WebhookDeliveryConsole({ organization, initialDestinatio
 
 function ActionButton({ children, icon, busy, disabled, onClick }: { children: ReactNode, icon: ReactNode, busy?: boolean, disabled?: boolean, onClick: () => void }) {
     return (
-        <button type='button' className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d8dee9] bg-white px-2.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] disabled:cursor-not-allowed disabled:opacity-50' disabled={disabled || busy} onClick={onClick}>
+        <button type='button' className='inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#27364f] bg-[#101827] px-2.5 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:opacity-50' disabled={disabled || busy} onClick={onClick}>
             {busy ? <Loader2 className='h-3.5 w-3.5 animate-spin' /> : icon}
             {children}
         </button>
@@ -363,9 +363,9 @@ function ActionButton({ children, icon, busy, disabled, onClick }: { children: R
 
 function PreviewLine({ label, value }: { label: string, value: string }) {
     return (
-        <p className='flex min-w-0 justify-between gap-3 rounded-md bg-white px-2 py-1.5'>
-            <span className='shrink-0 font-semibold text-[#667085]'>{label}</span>
-            <span className='truncate text-right text-[#171a21]'>{value}</span>
+        <p className='flex min-w-0 justify-between gap-3 rounded-md bg-[#101827] px-2 py-1.5'>
+            <span className='shrink-0 font-semibold text-[#8fa0ba]'>{label}</span>
+            <span className='truncate text-right text-[#edf4ff]'>{value}</span>
         </p>
     )
 }
@@ -447,9 +447,9 @@ function formatTimestamp(value?: string) {
 
 function statusPill(status: string) {
     const normalized = status.toLowerCase()
-    if (['active', 'delivered', 'dry_run', 'sent'].includes(normalized)) return 'inline-flex items-center rounded-full border border-[#bbf7d0] bg-[#f0fdf4] px-2 py-0.5 text-[11px] font-semibold text-[#166534]'
-    if (['failed', 'error'].includes(normalized)) return 'inline-flex items-center rounded-full border border-[#fecaca] bg-[#fef2f2] px-2 py-0.5 text-[11px] font-semibold text-[#991b1b]'
-    return 'inline-flex items-center rounded-full border border-[#fed7aa] bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#9a3412]'
+    if (['active', 'delivered', 'dry_run', 'sent'].includes(normalized)) return 'inline-flex items-center rounded-full border border-[#1f6f48] bg-[#0c261c] px-2 py-0.5 text-[11px] font-semibold text-[#9cf0bc]'
+    if (['failed', 'error'].includes(normalized)) return 'inline-flex items-center rounded-full border border-[#7a3520] bg-[#2c160f] px-2 py-0.5 text-[11px] font-semibold text-[#ffb598]'
+    return 'inline-flex items-center rounded-full border border-[#7a5618] bg-[#2a1c0e] px-2 py-0.5 text-[11px] font-semibold text-[#ffd58a]'
 }
 
-const inputClass = 'h-9 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm text-[#171a21] outline-none transition placeholder:text-[#98a2b3] focus:border-[#8fb4ff] focus:ring-2 focus:ring-[#dbe5ff] disabled:cursor-not-allowed disabled:bg-[#f2f5f9]'
+const inputClass = 'h-9 rounded-lg border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#6e7d92] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a] disabled:cursor-not-allowed disabled:bg-[#162033]'
