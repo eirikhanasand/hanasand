@@ -438,7 +438,17 @@ export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operation
                 </div>
             </section>
 
-            {selectedAlert ? <section id='dwm-workflow-actions' className='scroll-mt-24'>{workflowActions}</section> : null}
+            {selectedAlert ? (
+                <details id='dwm-workflow-actions' className='scroll-mt-24 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-dwm-selected-workflow-actions-disclosure>
+                    <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                        <span>Workflow setup and route controls</span>
+                        <span className='text-xs font-medium text-ui-muted'>Watchlist, sources, rebuilds, and delivery tests</span>
+                    </summary>
+                    <div className='border-t border-ui-border p-3'>
+                        {workflowActions}
+                    </div>
+                </details>
+            ) : null}
         </div>
     )
 }
@@ -473,31 +483,39 @@ function WorkflowRouteStrip({ watchTermCount, activeSourceCount, sourceCount, ca
     ] as const
 
     return (
-        <section data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised px-4 py-3'>
-            <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+        <details data-dwm-workflow-snapshot className='border-b border-ui-border bg-ui-raised'>
+            <summary className='flex cursor-pointer list-none flex-col gap-2 px-4 py-3 outline-none transition hover:bg-ui-panel focus-visible:ring-2 focus-visible:ring-ui-primary/25 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
                 <div>
                     <p className='text-[10px] font-semibold uppercase text-ui-primary'>Workflow route</p>
                     <p className='mt-1 text-sm font-semibold text-ui-text'>Watchlist to source, alert, case, and delivery.</p>
                 </div>
-                <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
-                    Run path
-                </a>
-            </div>
-            <div className='grid grid-cols-2 gap-2 lg:grid-cols-3 2xl:grid-cols-6'>
-                {cells.map(cell => (
-                    <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
-                        <div className='flex items-center justify-between gap-2'>
-                            <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
-                            <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-ui-success' : cell.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
+                <span className='rounded-lg border border-ui-border bg-ui-panel px-3 py-1.5 text-xs font-semibold text-ui-muted'>
+                    {alertCount} alerts · {caseCount} cases · {deliveryCount ? `${deliveryCount} deliveries` : webhookState}
+                </span>
+            </summary>
+            <div className='border-t border-ui-border px-4 py-3'>
+                <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
+                    <p className='text-xs leading-5 text-ui-muted'>Open this when diagnosing the full monitoring path. The queue and selected alert remain the primary work surface.</p>
+                    <a href='#dwm-workflow-actions' className='inline-flex h-8 items-center rounded-lg border border-ui-primary bg-ui-primary/10 px-3 text-xs font-semibold text-ui-primary transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>
+                        Run path
+                    </a>
+                </div>
+                <div className='grid grid-cols-2 gap-2 lg:grid-cols-3 2xl:grid-cols-6'>
+                    {cells.map(cell => (
+                        <div key={cell.label} className='min-w-0 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
+                            <div className='flex items-center justify-between gap-2'>
+                                <p className='truncate text-[10px] font-semibold uppercase text-ui-muted'>{cell.label}</p>
+                                <span className={`h-2 w-2 shrink-0 rounded-full ${cell.tone === 'ready' ? 'bg-ui-success' : cell.tone === 'blocked' ? 'bg-ui-warning' : 'bg-ui-primary'}`} />
+                            </div>
+                            <div className='mt-2 flex min-w-0 items-end justify-between gap-2'>
+                                <p className='truncate text-lg font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
+                                <p className='truncate pb-0.5 text-xs text-ui-muted' title={cell.detail}>{cell.detail}</p>
+                            </div>
                         </div>
-                        <div className='mt-2 flex min-w-0 items-end justify-between gap-2'>
-                            <p className='truncate text-lg font-semibold text-ui-text' title={cell.value}>{cell.value}</p>
-                            <p className='truncate pb-0.5 text-xs text-ui-muted' title={cell.detail}>{cell.detail}</p>
-                        </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
             </div>
-        </section>
+        </details>
     )
 }
 
