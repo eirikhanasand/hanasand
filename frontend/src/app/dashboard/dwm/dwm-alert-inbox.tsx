@@ -10,10 +10,16 @@ type InboxAlert = DwmAlert & {
     deliveryState?: string
     workflowNote?: string
     organizationId?: string
+    caseId?: string
+    caseIdCandidate?: string
+    casePath?: string
     replayCount?: number
     lastReplayedAt?: string
     workflowContext?: {
         organizationId?: string
+        caseId?: string
+        caseIdCandidate?: string
+        casePath?: string
     }
     workflowEvents?: Array<{
         id: string
@@ -77,10 +83,12 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
         setMessage(null)
         try {
             const alert = alerts.find(item => item.id === alertId)
+            const caseId = alert ? alertCaseId(alert) : undefined
+            const casePath = alert ? alert.casePath || alert.workflowContext?.casePath : undefined
             const response = await fetch('/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
+                body: JSON.stringify(scopeBody({ alertId, caseId, casePath, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string }, attemptedCount?: number }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -139,6 +147,7 @@ export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: 
                     ) : null}
 
                     <div className='flex flex-wrap gap-2'>
+                        {alertCaseId(alert) ? <a href={caseDetailHref(alert, tenantId, organizationId)} className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-primary/35 bg-ui-primary/10 px-3 text-xs font-semibold text-ui-text transition hover:bg-ui-primary/15 focus:outline-none focus:ring-2 focus:ring-ui-primary/30'>Open case</a> : null}
                         <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'reviewing', 'pending_review', 'Analyst review started.')} icon='review'>Review</ActionButton>
                         <ActionButton busy={busyAlert === alert.id} onClick={() => updateAlert(alert.id, 'route_to_customer', 'ready_to_send', 'Ready for customer delivery.')} icon='send'>Ready</ActionButton>
                         <ActionButton busy={busyAlert === alert.id} onClick={() => replayAlert(alert.id)} icon='replay'>Replay</ActionButton>
@@ -156,8 +165,34 @@ function alertOrganizationId(alert: InboxAlert, fallback?: string) {
     return alert.organizationId || alert.workflowContext?.organizationId || fallback
 }
 
+function alertCaseId(alert: InboxAlert) {
+    return alert.caseId || alert.workflowContext?.caseId || alert.caseIdCandidate || alert.workflowContext?.caseIdCandidate || caseIdFromPath(alert.casePath || alert.workflowContext?.casePath)
+}
+
+function caseDetailHref(alert: InboxAlert, tenantId: string, fallbackOrganizationId?: string) {
+    const params = new URLSearchParams()
+    const organizationId = alertOrganizationId(alert, fallbackOrganizationId)
+    if (organizationId) params.set('organizationId', organizationId)
+    if (tenantId) params.set('tenantId', tenantId)
+    params.set('alertId', alert.id)
+    params.set('route', 'alert_queue')
+    const query = params.toString()
+    return `/dashboard/dwm/cases/${encodeURIComponent(alertCaseId(alert) || '')}${query ? `?${query}` : ''}`
+}
+
+function caseIdFromPath(path?: string) {
+    const match = path?.match(/\/cases\/([^/?#]+)/)
+    if (!match?.[1]) return undefined
+    try {
+        return decodeURIComponent(match[1])
+    } catch {
+        return match[1]
+    }
+}
+
 function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {
-    return organizationId ? { ...body, tenantId, organizationId } : { ...body, tenantId }
+    const cleanBody = Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined)) as T
+    return organizationId ? { ...cleanBody, tenantId, organizationId } : { ...cleanBody, tenantId }
 }
 
 function ActionButton({ busy, onClick, icon, children }: { busy: boolean, onClick: () => void, icon: 'review' | 'send' | 'false' | 'replay', children: string }) {

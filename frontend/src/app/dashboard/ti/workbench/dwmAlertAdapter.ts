@@ -124,7 +124,7 @@ export function dwmAlertToWorkbenchCase(input: DwmAlert): WorkbenchCase {
     const evidence = buildWorkbenchEvidence(alert, selectedCaptureIds)
     const actionBlockers = alert.customerReadiness?.blockerCodes ?? []
     const alertHref = `/api/dwm/alerts/${encodeURIComponent(alert.id)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}`
-    const caseDetailHref = casePath || (caseId ? `/api/cases/${encodeURIComponent(caseId)}${organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : ''}` : undefined)
+    const caseDetailHref = dashboardCaseHref({ caseId, casePath, alertId: alert.id, organizationId, tenantId: alert.tenantId })
     const deliveryEvidence = (alert.deliveries ?? []).map(row => ({
         id: String(row.id ?? ''),
         alertId: String(row.alertId ?? alert.id),
@@ -288,6 +288,7 @@ function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | unde
     const scope = organizationId ? { organizationId } : {}
     const expectedWorkflowEventCount = alert.workflowEvents?.length ?? alert.customerReadiness?.workflowReadiness?.eventCount ?? alert.workflowSummary?.eventCount
     const caseId = alert.caseId ?? alert.customerReadiness?.caseHandoff?.caseId ?? alert.customerReadiness?.caseHandoff?.caseIdCandidate ?? alert.caseIdCandidate ?? alert.workflowContext?.caseIdCandidate
+    const casePath = alert.casePath ?? alert.customerReadiness?.caseHandoff?.casePath ?? alert.workflowSummary?.casePath ?? alert.workflowContext?.casePath
     const bodyBase = {
         ...scope,
         ...(expectedWorkflowEventCount !== undefined ? { expectedWorkflowEventCount } : {}),
@@ -312,7 +313,7 @@ function buildAlertActions(alert: RuntimeDwmAlert, organizationId: string | unde
         { id: 'suppress_alert', label: 'Suppress', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: 'suppressed' } },
         { id: 'close_alert', label: alert.workflowStatus === 'closed' ? 'Reopen' : 'Close', method: 'PATCH', href: alertHref, body: { ...bodyBase, status: alert.workflowStatus === 'closed' ? 'reopened' : 'closed' } },
         { id: 'replay_alert', label: 'Replay', method: 'POST', href: `${alertHref}/replay`, body: { ...bodyBase, action: 'replay' }, disabledReason: replayBlocked },
-        { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { ...scope, alertId: alert.id, webhookDestinationId: alert.customerReadiness?.deliveryReadiness?.selectedWebhookDestinationId ?? alert.deliveryReadinessContext?.selectedWebhookDestinationId, limit: 1 }, disabledReason: sendBlocked },
+        { id: 'send_alert', label: 'Send', method: 'POST', href: '/api/dwm/webhooks/deliver', body: { ...scope, alertId: alert.id, caseId, casePath, webhookDestinationId: alert.customerReadiness?.deliveryReadiness?.selectedWebhookDestinationId ?? alert.deliveryReadinessContext?.selectedWebhookDestinationId, limit: 1 }, disabledReason: sendBlocked },
     ]
 }
 
@@ -357,6 +358,27 @@ function deliveryLedgerHref(organizationId: string | undefined, tenantId: string
     if (tenantId) params.set('tenantId', tenantId)
     params.set('alertId', alertId)
     return `/api/dwm/webhooks/deliveries?${params.toString()}`
+}
+
+function dashboardCaseHref(input: { caseId?: string, casePath?: string, alertId: string, organizationId?: string, tenantId?: string }) {
+    const caseId = input.caseId ?? caseIdFromPath(input.casePath)
+    if (!caseId) return undefined
+    const params = new URLSearchParams()
+    if (input.organizationId) params.set('organizationId', input.organizationId)
+    if (input.tenantId) params.set('tenantId', input.tenantId)
+    params.set('alertId', input.alertId)
+    params.set('route', 'ti_workbench')
+    return `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?${params.toString()}`
+}
+
+function caseIdFromPath(path?: string) {
+    const match = path?.match(/\/cases\/([^/?#]+)/)
+    if (!match?.[1]) return undefined
+    try {
+        return decodeURIComponent(match[1])
+    } catch {
+        return match[1]
+    }
 }
 
 function normalizeSeverity(severity: DwmSeverity): WorkbenchCase['severity'] {
