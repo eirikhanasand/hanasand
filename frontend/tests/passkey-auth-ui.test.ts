@@ -25,6 +25,20 @@ test('passkey UI exposes enrollment and login actions', () => {
     assert.match(accountActions, /\/api\/auth\/passkeys\/register\/verify/)
 })
 
+test('SSO login is wired through the frontend auth proxy', () => {
+    const loginClient = readFileSync(join(root, 'src/app/login/pageClient.tsx'), 'utf8')
+    const ssoStartRoute = readFileSync(join(root, 'src/app/api/auth/sso/start/route.ts'), 'utf8')
+    const ssoCallbackRoute = readFileSync(join(root, 'src/app/api/auth/sso/callback/route.ts'), 'utf8')
+
+    assert.match(loginClient, /Continue with SSO/)
+    assert.match(loginClient, /\/api\/auth\/sso\/start\?redirectPath=/)
+    assert.match(ssoStartRoute, /\/auth\/sso\/start/)
+    assert.match(ssoStartRoute, /safeRedirectPath/)
+    assert.match(ssoCallbackRoute, /\/auth\/sso\/callback/)
+    assert.match(ssoCallbackRoute, /setAuthCookies/)
+    assert.match(ssoCallbackRoute, /safeRedirectPath\(data\.redirectPath\)/)
+})
+
 test('passkey browser helpers translate WebAuthn binary fields', () => {
     const requestOptions = decodePasskeyRequestOptions({
         challenge: encode('request-challenge'),
