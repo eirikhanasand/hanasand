@@ -170,6 +170,25 @@ type DeliveryResult = {
     deliveries?: DeliveryRow[]
 }
 
+type DwmAlertBridgeResult = {
+    ok?: boolean
+    skipped?: boolean
+    reason?: string
+    savedAlertCount?: number
+    alertIds?: string[]
+    sourceFamilies?: string[]
+    matchedTerms?: string[]
+    firstAlert?: {
+        id?: string
+        detailRoute?: string
+        sourceFamily?: string
+        matchedTerm?: string
+        recommendedRoute?: string
+        evidenceCount?: number
+        lastSeenAt?: string
+    }
+}
+
 type DestinationDraft = {
     kind: 'discord' | 'webhook'
     url: string
@@ -517,7 +536,7 @@ export default function OrganizationWorkspaceClient() {
     }, `member-${member.userId}`)
 
     const createWatchlist = () => selectedOrganization && runAction('create-watchlist', async () => {
-        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists`, {
+        const payload = await requestJson<{ dwmAlertBridge?: DwmAlertBridgeResult }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists`, {
             method: 'POST',
             body: JSON.stringify({
                 ...watchlistDraft,
@@ -526,12 +545,12 @@ export default function OrganizationWorkspaceClient() {
             }),
         })
         setWatchlistDraft({ kind: 'domain', value: '', notes: '' })
-        return 'Shared watchlist term saved.'
+        return watchlistMutationMessage(payload.dwmAlertBridge, 'Shared watchlist term saved.')
     })
 
     const saveWatchlistEdit = (item: WatchlistItem) => selectedOrganization && runAction('save-watchlist', async () => {
         const draft = editingWatchlist[item.id]
-        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
+        const payload = await requestJson<{ dwmAlertBridge?: DwmAlertBridgeResult }>(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/watchlists/${encodeURIComponent(item.id)}`, {
             method: 'PUT',
             body: JSON.stringify({
                 kind: draft.kind,
@@ -546,7 +565,7 @@ export default function OrganizationWorkspaceClient() {
             delete next[item.id]
             return next
         })
-        return 'Watchlist term updated.'
+        return watchlistMutationMessage(payload.dwmAlertBridge, 'Watchlist term updated.')
     }, `watchlist-${item.id}`)
 
     const watchlistAction = (item: WatchlistItem, action: 'pause' | 'resume' | 'archive' | 'restore') => selectedOrganization && runAction(`${action}-watchlist`, async () => {
@@ -1860,6 +1879,35 @@ function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow
 
 function firstDelivery(result: DeliveryResult) {
     return result.deliveries?.[0] || result.delivery || null
+}
+
+function watchlistMutationMessage(bridge: DwmAlertBridgeResult | undefined, fallback: string) {
+    if (!bridge) return fallback
+    if (bridge.skipped) return `${fallback} Alert sync skipped: ${humanizeBridgeReason(bridge.reason)}.`
+    if (bridge.savedAlertCount && bridge.savedAlertCount > 0) {
+        const firstAlert = bridge.firstAlert
+        const matched = firstAlert?.matchedTerm || bridge.matchedTerms?.[0]
+        const family = firstAlert?.sourceFamily || bridge.sourceFamilies?.[0]
+        const evidence = firstAlert?.evidenceCount
+        const route = firstAlert?.recommendedRoute
+        return [
+            fallback,
+            `${bridge.savedAlertCount} alert${bridge.savedAlertCount === 1 ? '' : 's'} generated`,
+            matched ? `term ${matched}` : undefined,
+            family ? `source ${family}` : undefined,
+            evidence ? `${evidence} evidence item${evidence === 1 ? '' : 's'}` : undefined,
+            route ? `route ${route}` : undefined,
+        ].filter(Boolean).join(' · ') + '.'
+    }
+    if (bridge.ok) {
+        const terms = bridge.matchedTerms?.length ? ` for ${bridge.matchedTerms.join(', ')}` : ''
+        return `${fallback} No matching captures found${terms}.`
+    }
+    return `${fallback} Alert sync did not complete${bridge.reason ? `: ${humanizeBridgeReason(bridge.reason)}` : ''}.`
+}
+
+function humanizeBridgeReason(value: unknown) {
+    return sanitizeOrganizationDisplayCopy(String(value || 'unavailable').replace(/_/g, ' ')) || 'unavailable'
 }
 
 function deliveryTime(delivery: DeliveryRow) {

@@ -17,6 +17,9 @@ test('organization workspace scopes alert workflow by selected tenant and role',
     assert.match(source, /disabled=\{!canManage \|\| !draft\.value\.trim\(\) \|\| Boolean\(busy\)\}/)
     assert.match(source, /disabled=\{!canManage \|\| Boolean\(busy\)\}/)
     assert.match(source, /disabled=\{!canManage \|\| member\.role === 'owner' \|\| Boolean\(busy\)\}/)
+    assert.match(source, /watchlistMutationMessage\(payload\.dwmAlertBridge/)
+    assert.match(source, /generated/)
+    assert.match(source, /No matching captures found/)
 
     for (const scopedRoute of [
         '/api/organizations/${encodeURIComponent(organizationId)}/settings',

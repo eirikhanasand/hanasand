@@ -19,6 +19,19 @@ export type DwmWatchlistMirrorPayload = {
     reason: string
 }
 
+export type DwmWatchlistMirrorAlertPreview = {
+    id: string
+    detailRoute: string
+    sourceFamily?: string
+    matchedTerm?: string
+    severity?: string
+    recommendedRoute?: string
+    evidenceCount?: number
+    evidenceExcerpt?: string
+    firstSeenAt?: string
+    lastSeenAt?: string
+}
+
 export async function proxyOrganizationWatchlistMutation(request: NextRequest, path: string, input: { method: MutationMethod, organizationId: string }) {
     const bodyText = await request.text()
     const organizationResult = await forwardOrganizationMutation(request, path, input.method, bodyText)
@@ -113,6 +126,10 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
         const cookieStore = await cookies()
         const token = cookieStore.get('access_token')?.value || bearerToken(request.headers.get('authorization')) || ''
         const id = cookieStore.get('id')?.value || request.headers.get('id') || ''
+        const authHeaders: Record<string, string> = {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(id ? { id } : {}),
+        }
         const mirrors = []
         for (const mirrorPayload of mirrorPayloads) {
             const response = await fetch(new URL('/v1/dwm/watchlists', base), {
@@ -122,8 +139,7 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
                     'content-type': 'application/json',
                     'x-tenant-id': organizationId,
                     'x-organization-id': organizationId,
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    ...(id ? { id } : {}),
+                    ...authHeaders,
                 },
                 body: JSON.stringify(mirrorPayload),
                 signal: AbortSignal.timeout(12000),
@@ -143,15 +159,20 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
             })
         }
         const first = mirrors[0]
+        const alertIds = Array.from(new Set(mirrors.flatMap(item => item.alertIds)))
+        const firstAlert = alertIds[0]
+            ? await fetchDwmAlertPreview(base, alertIds[0], organizationId, authHeaders)
+            : undefined
         return {
             ok: mirrors.every(item => item.ok),
             status: mirrors.every(item => item.ok) ? first.status : mirrors.find(item => !item.ok)?.status ?? first.status,
             watchlistId: first.watchlistId,
             watchlistStatus: first.watchlistStatus,
             savedAlertCount: mirrors.reduce((total, item) => total + item.savedAlertCount, 0),
-            alertIds: Array.from(new Set(mirrors.flatMap(item => item.alertIds))),
+            alertIds,
             sourceFamilies: Array.from(new Set(mirrors.flatMap(item => item.sourceFamilies))),
             matchedTerms: Array.from(new Set(mirrors.flatMap(item => item.matchedTerms))),
+            firstAlert,
             mirrors,
             error: mirrors.find(item => item.error)?.error,
         }
@@ -171,6 +192,48 @@ async function mirrorOrganizationWatchlistToDwm(request: NextRequest, organizati
                 message: error instanceof Error ? error.message : String(error),
             },
         }
+    }
+}
+
+async function fetchDwmAlertPreview(base: string, alertId: string, organizationId: string, authHeaders: Record<string, string>) {
+    const target = new URL(`/v1/dwm/alerts/${encodeURIComponent(alertId)}`, base)
+    target.searchParams.set('tenantId', organizationId)
+    target.searchParams.set('organizationId', organizationId)
+    const response = await fetch(target, {
+        cache: 'no-store',
+        headers: {
+            'x-tenant-id': organizationId,
+            'x-organization-id': organizationId,
+            ...authHeaders,
+        },
+        signal: AbortSignal.timeout(12000),
+    }).catch(() => null)
+    if (!response?.ok) return undefined
+    const payload = parseJsonObject(await response.text())
+    return buildDwmWatchlistMirrorAlertPreview(payload)
+}
+
+export function buildDwmWatchlistMirrorAlertPreview(payload: Record<string, any>): DwmWatchlistMirrorAlertPreview | undefined {
+    const alert = payload.alert && typeof payload.alert === 'object' ? payload.alert : payload
+    const id = stringValue(alert.id ?? payload.alertId)
+    if (!id) return undefined
+    const evidence = Array.isArray(alert.evidence) ? alert.evidence : []
+    const evidenceSummary = objectValue(alert.evidenceSummary)
+    const workflowContext = objectValue(alert.workflowContext)
+    const matchReason = objectValue(alert.matchReason ?? workflowContext?.matchReason)
+    const firstEvidence = evidence.find((item: any) => item && typeof item === 'object') ?? {}
+    const matchedTerm = stringValue(alert.matchedTerm?.value ?? matchReason?.matchedTerm?.value ?? matchReason?.matchedTerm)
+    return {
+        id,
+        detailRoute: stringValue(alert.alertDetailPath ?? payload.alertDetailPath) || `/dashboard/dwm?alert=${encodeURIComponent(id)}`,
+        sourceFamily: stringValue(alert.sourceFamily ?? evidenceSummary?.sourceFamilies?.[0] ?? workflowContext?.sourceFamily),
+        matchedTerm,
+        severity: stringValue(alert.severityOverride ?? alert.severity),
+        recommendedRoute: stringValue(alert.recommendedRoute ?? workflowContext?.recommendedRoute),
+        evidenceCount: numberValue(evidenceSummary?.evidenceCount ?? workflowContext?.evidenceCount ?? evidence.length),
+        evidenceExcerpt: stringValue(firstEvidence.excerpt ?? alert.evidenceExcerpt ?? evidenceSummary?.primaryExcerpt),
+        firstSeenAt: stringValue(alert.firstSeenAt ?? evidenceSummary?.firstObservedAt ?? workflowContext?.firstObservedAt),
+        lastSeenAt: stringValue(alert.lastSeenAt ?? evidenceSummary?.lastObservedAt ?? workflowContext?.lastObservedAt ?? alert.updatedAt),
     }
 }
 
@@ -197,4 +260,18 @@ function parseJsonObject(text: string): Record<string, any> {
     } catch {
         return { raw: text }
     }
+}
+
+function objectValue(value: unknown): Record<string, any> | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : undefined
+}
+
+function stringValue(value: unknown) {
+    const text = String(value ?? '').trim()
+    return text || undefined
+}
+
+function numberValue(value: unknown) {
+    const number = Number(value)
+    return Number.isFinite(number) ? number : undefined
 }

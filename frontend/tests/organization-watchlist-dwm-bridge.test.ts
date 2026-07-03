@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert'
 import test from 'node:test'
 import {
+    buildDwmWatchlistMirrorAlertPreview,
     buildDwmWatchlistMirrorPayload,
     buildDwmWatchlistMirrorPayloads,
 } from '@/app/api/organizations/_organizationWatchlistDwmBridge'
@@ -83,4 +84,36 @@ test('builds lifecycle DWM mirror payloads for archived org watchlist cleanup', 
             term: { id: 'watch_item_retired_vendor', value: 'RetiredVendor', kind: 'vendor' },
         },
     ])
+})
+
+test('summarizes mirrored DWM alert detail for organization watchlist feedback', () => {
+    const preview = buildDwmWatchlistMirrorAlertPreview({
+        alert: {
+            id: 'alert_org_acme',
+            alertDetailPath: '/v1/dwm/alerts/alert_org_acme?organizationId=org_acme',
+            sourceFamily: 'telegram_public',
+            matchedTerm: { value: 'acme.com' },
+            severity: 'high',
+            recommendedRoute: 'identity_response',
+            evidence: [{ excerpt: 'Telegram post references acme.com credentials.' }],
+            evidenceSummary: {
+                evidenceCount: 2,
+                firstObservedAt: '2026-06-27T21:02:00.000Z',
+                lastObservedAt: '2026-06-27T21:11:00.000Z',
+            },
+        },
+    })
+
+    assert.deepEqual(preview, {
+        id: 'alert_org_acme',
+        detailRoute: '/v1/dwm/alerts/alert_org_acme?organizationId=org_acme',
+        sourceFamily: 'telegram_public',
+        matchedTerm: 'acme.com',
+        severity: 'high',
+        recommendedRoute: 'identity_response',
+        evidenceCount: 2,
+        evidenceExcerpt: 'Telegram post references acme.com credentials.',
+        firstSeenAt: '2026-06-27T21:02:00.000Z',
+        lastSeenAt: '2026-06-27T21:11:00.000Z',
+    })
 })
