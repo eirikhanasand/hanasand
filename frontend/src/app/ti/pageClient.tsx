@@ -243,7 +243,6 @@ function Results({ result }: { result: TiSearchResponse }) {
         { icon: <Database className='h-3.5 w-3.5' />, label: 'Gaps', value: `${openGapCount} open` },
     ]
     const sectionOverview = sectionOverviewFor({ result, actorIntel, actionability, workItems, victimObservations, watchlist })
-    const resultTriageBrief = resultTriageBriefFor(result, workItems, actionability, victimObservations, watchlist)
     const commandLinks = [
         { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
         { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select result', icon: Eye },
@@ -342,7 +341,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                 ))}
                             </div>
                             <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
-                            <ResultTriageBriefPanel brief={resultTriageBrief} />
+                            {selected ? <TopSelectedEvidencePanel selected={selected} drilldown={selectedSourceDrilldown} caseReady={Boolean(selectedCaseDraft && selectedCaseOwnership)} /> : null}
                         </div>
                         <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </div>
@@ -768,16 +767,6 @@ type SectionOverviewItem = {
     label: 'Overview' | 'Activity' | 'Targets' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Collection gaps' | 'Actions'
     value: string
     state: 'ready' | 'review' | 'blocked'
-}
-
-type ResultTriageBrief = {
-    whatReturned: string
-    whyReview: string
-    nextAction: string
-    proofStatus: string
-    boundary: string
-    tone: 'ready' | 'review' | 'blocked'
-    labels: Array<{ label: string; value: string }>
 }
 
 type AlertPacket = {
@@ -3513,7 +3502,7 @@ function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
                 <div className='rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3'>
                     <p className='text-xs font-semibold uppercase text-[#586274]'>Evidence basis</p>
                     <ul className='mt-2 grid list-disc gap-1 pl-4 text-xs leading-5 text-[#596170]'>
-                        {packet.evidenceBasis.map(item => <li key={item}>{item}</li>)}
+                        {packet.evidenceBasis.map(item => <li key={item}>{displayRequirementText(item)}</li>)}
                     </ul>
                 </div>
                 <div className='rounded-lg border border-[#eef1f5] bg-white p-3'>
@@ -6009,44 +5998,6 @@ function SelectedTriageBriefPanel({ brief }: { brief: SelectedTriageBrief }) {
     )
 }
 
-function ResultTriageBriefPanel({ brief }: { brief: ResultTriageBrief }) {
-    return (
-        <section data-ti-result-brief='true' className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-4 dark:border-[#273244] dark:bg-[#131c29]'>
-            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
-                <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Result brief</p>
-                    <h2 className='mt-1 text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>What matched, why it matters, and where to start</h2>
-                </div>
-                <span className={brief.tone === 'ready' ? sourceHealthChipClass('ready') : brief.tone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
-                    {brief.tone === 'ready' ? 'usable now' : brief.tone === 'blocked' ? 'source needed' : 'review first'}
-                </span>
-            </div>
-            <div className='mt-4 grid gap-3 lg:grid-cols-3'>
-                <BriefStep title='What matched' value={brief.whatReturned} />
-                <BriefStep title='Why review' value={brief.whyReview} />
-                <BriefStep title='Start here' value={brief.nextAction} />
-            </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]'>
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source status</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.proofStatus}</p>
-                </div>
-                <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
-                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Safety boundary</p>
-                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{brief.boundary}</p>
-                </div>
-            </div>
-            <div className='mt-3 flex min-w-0 flex-wrap gap-2'>
-                {brief.labels.map(label => (
-                    <span key={`${label.label}:${label.value}`} className='max-w-full wrap-break-word rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
-                        {label.label}: {label.value}
-                    </span>
-                ))}
-            </div>
-        </section>
-    )
-}
-
 function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; actionability: TiActionabilityModel }) {
     const targets = [
         ...actor.targetSectors.slice(0, 2),
@@ -6168,6 +6119,38 @@ function EvidenceMetric({ label, value }: { label: string; value: string }) {
             <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{label}</p>
             <p className='mt-1 wrap-break-word text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{value || 'Not stated'}</p>
         </div>
+    )
+}
+
+function TopSelectedEvidencePanel({ selected, drilldown, caseReady }: { selected: AnalystWorkItem; drilldown: SelectedSourceDrilldown | null; caseReady: boolean }) {
+    const sourceRows = drilldown?.rows.length ?? 0
+    const captureRows = drilldown?.rows.filter(row => row.captureId).length ?? 0
+    return (
+        <section data-ti-top-selected-evidence='true' className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+            <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Selected evidence</p>
+                    <h2 className='mt-1 wrap-break-word text-base font-semibold leading-6 text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(selected.title)}</h2>
+                    <p className='mt-1 line-clamp-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selected.detail)}</p>
+                </div>
+                <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
+            </div>
+            <div className='mt-3 grid gap-2 sm:grid-cols-4'>
+                <EvidenceMetric label='Source' value={selected.source} />
+                <EvidenceMetric label='First seen' value={selected.timestamp} />
+                <EvidenceMetric label='Basis' value={sourceBasisLabel(selected.confidence)} />
+                <EvidenceMetric label='Case path' value={caseReady ? 'Ready' : sourceRows ? 'Needs IDs' : 'Needs source'} />
+            </div>
+            <div className='mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t border-[#eef1f5] pt-3 dark:border-[#273244]'>
+                <p className='wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
+                    {sourceRows ? `${sourceRows} source row${sourceRows === 1 ? '' : 's'} linked · ${captureRows} capture-ready` : 'Attach source rows before alert or case handoff.'}
+                </p>
+                <div className='flex flex-wrap gap-1.5'>
+                    <a href='#ti-selected-evidence' className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>Open detail</a>
+                    <a href='#ti-activity' className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>Queue</a>
+                </div>
+            </div>
+        </section>
     )
 }
 
@@ -6426,49 +6409,6 @@ function sectionOverviewFor(input: {
     ]
 }
 
-function resultTriageBriefFor(
-    result: TiSearchResponse,
-    workItems: AnalystWorkItem[],
-    actionability: TiActionabilityModel,
-    victimObservations: ReturnType<typeof victimObservationsFor>,
-    watchlist: WatchlistRelevance,
-): ResultTriageBrief {
-    const topItem = workItems[0]
-    const sourceRows = result.sources.length || actionability.sourceProvenance.length
-    const highPriorityCount = workItems.filter(item => item.severity === 'critical' || item.severity === 'high').length
-    const matchedWatchTerms = watchlist.matchedTerms.length
-    const sourceRefs = actionability.sourceProvenance.filter(row => row.sourceName || row.sourceId || row.captureId).length
-    const missing = actionability.readiness.blockers.slice(0, 2).map(blocker => displayRequirementText(blocker.detail || blocker.code))
-    const tone: ResultTriageBrief['tone'] = sourceRefs && highPriorityCount ? 'ready' : sourceRows ? 'review' : 'blocked'
-    const firstNextAction = topItem?.nextActions.map(displayRequirementText).find(Boolean)
-
-    return {
-        whatReturned: workItems.length
-            ? `${humanizeSlug(result.query)} matched ${workItems.length} analyst item${workItems.length === 1 ? '' : 's'}${highPriorityCount ? `, including ${highPriorityCount} high-priority item${highPriorityCount === 1 ? '' : 's'}` : ''}.`
-            : `${humanizeSlug(result.query)} has no recent activity attached yet.`,
-        whyReview: victimObservations.length
-            ? `${victimObservations.length} company or supplier observation${victimObservations.length === 1 ? '' : 's'} may need incident-response, vendor-risk, legal, or customer-communication review.`
-            : topItem
-                ? `${topItem.source} provides ${sourceBasisLabel(topItem.confidence).toLowerCase()} source basis; verify source references before customer-facing use.`
-                : 'No customer-facing action should be taken until a source record or fresh observation is attached.',
-        nextAction: firstNextAction
-            || (missing.length ? `Resolve ${displayRequirementList(missing)} before escalation.` : 'Open the highest-priority row, review source context, and decide whether it belongs in the authenticated console.'),
-        proofStatus: sourceRefs
-            ? `${sourceRefs} source reference${sourceRefs === 1 ? '' : 's'} available; use selected results for capture and case review.`
-            : sourceRows
-                ? `${sourceRows} source result${sourceRows === 1 ? '' : 's'} attached, but capture-ready evidence still needs review.`
-                : 'No source references are attached to this result yet.',
-        boundary: 'Public TI is metadata-only. It does not expose raw leak files, credential values, or customer webhook secrets.',
-        tone,
-        labels: [
-            { label: 'Latest', value: formatDate(result.lastSeen || result.generatedAt) },
-            { label: 'Sources', value: String(sourceRows) },
-            { label: 'Watchlists', value: matchedWatchTerms ? `${matchedWatchTerms} matched` : `${watchlist.terms.length} candidates` },
-            { label: 'Workflow', value: formatLabel(actionability.readiness.state) },
-        ],
-    }
-}
-
 function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: ReturnType<typeof victimObservationsFor>, sources: TiSearchResponse['sources'], actor: TiActorIntelligenceProfile, actionability: TiActionabilityModel): WatchlistRelevance {
     const organizations = unique([
         ...victimObservations.map(item => item.victim),
@@ -6639,7 +6579,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
         `${selected.source}; ${selected.provenance}`,
         `Timestamp: ${selected.timestamp}`,
         `Source basis: ${sourceBasisLabel(selected.confidence)}`,
-        ...selected.evidence.slice(0, 3),
+        ...selected.evidence.slice(0, 3).map(displayRequirementText),
     ])
     const blockedUntil = [
         selected.href ? '' : 'A source URL or internal capture reference is attached.',
@@ -6684,13 +6624,13 @@ function selectedReviewHandoffFor(
             id: selected.id,
             kind: selected.kind,
             severity: selected.severity,
-            title: selected.title,
+            title: displayRequirementText(selected.title),
             timestamp: selected.timestamp,
             source: selected.source,
             provenance: selected.provenance,
             confidence: selected.confidence,
             href: selected.href,
-            evidence: selected.evidence,
+            evidence: selected.evidence.map(displayRequirementText),
             nextActions: selected.nextActions,
         },
         localReview: {
@@ -6950,14 +6890,14 @@ function selectedCaseDraftFor(
     const caseIntent = relevance?.caseIntent ?? (selected.kind === 'exposure' ? 'case_candidate' : 'watchlist_context')
     const titlePrefix = caseIntent === 'case_candidate' ? 'Case review' : caseIntent === 'source_review' ? 'Source review' : 'Actor context'
     const body = {
-        title: `${titlePrefix}: ${selected.title}`.slice(0, 180),
+        title: `${titlePrefix}: ${displayRequirementText(selected.title)}`.slice(0, 180),
         query: result.query,
         selectedItemId: selected.id,
         priority: selected.severity,
         rationale: note.trim() || relevance?.rationale || alertPacket.customerValue,
         caseIntent,
         watchTerms,
-        evidence: selected.evidence,
+        evidence: selected.evidence.map(displayRequirementText),
         sourceRows,
         alertId: actionability.readiness.backedIds.alertIds[0],
         captureIds: unique(sourceRows.map(row => row.captureId).filter((value): value is string => Boolean(value))),
@@ -7140,7 +7080,7 @@ function selectedCaseCreateRequestFor(
         ...(caseDraft?.body ?? {}),
         query: result.query,
         selectedItemId: selected.id,
-        selectedItemTitle: selected.title,
+        selectedItemTitle: displayRequirementText(selected.title),
         sourceRows,
         alertIds,
         captureIds,
@@ -7177,7 +7117,7 @@ function selectedCaseCreateRequestFor(
         query: result.query,
         generatedAt: new Date().toISOString(),
         selectedItemId: selected.id,
-        title: selected.title,
+        title: displayRequirementText(selected.title),
         ready,
         state,
         route,
@@ -8214,7 +8154,7 @@ function selectedSourceDrilldownFor(
         selectedItem: {
             id: selected.id,
             kind: selected.kind,
-            title: selected.title,
+            title: displayRequirementText(selected.title),
             timestamp: selected.timestamp,
             source: selected.source,
             provenance: selected.provenance,
