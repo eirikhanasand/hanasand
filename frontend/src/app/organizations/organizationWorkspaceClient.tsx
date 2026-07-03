@@ -1253,6 +1253,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                             {members.map(member => {
                                 const selectedRole = pendingRoles[member.userId] || member.role
                                 const roleChanged = selectedRole !== member.role
+                                const canMutateMember = canManage && memberCanMutate(member)
                                 return (
                                     <tr key={member.userId} className={`cursor-pointer align-middle transition ${selectedSubject.type === 'member' && selectedSubject.id === member.userId ? 'bg-[#eef4ff] dark:bg-[#17243a]' : 'hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'}`} onClick={() => onSelectSubject({ type: 'member', id: member.userId })}>
                                         <td className='max-w-44 border-b border-[#eef2f7] py-2 pr-3 dark:border-[#1d2a3d]'>
@@ -1260,7 +1261,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             <p className='truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(member.userId)}</p>
                                         </td>
                                         <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
-                                            {canManage && member.role !== 'owner' ? (
+                                            {canMutateMember ? (
                                                 <div className='flex flex-wrap items-center gap-2' onClick={event => event.stopPropagation()}>
                                                     <select className={compactSelectClass} value={selectedRole} disabled={Boolean(busy)} onChange={event => setPendingRoles(current => ({ ...current, [member.userId]: event.target.value as OrganizationRole }))}>
                                                         {roleOptions.map(option => <option key={option} value={option}>{option}</option>)}
@@ -1293,7 +1294,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
                                             </div>
                                         </td>
                                         <td className='border-b border-[#eef2f7] py-2 pl-3 text-right dark:border-[#1d2a3d]'>
-                                            <ConfirmActionButton ariaLabel='Remove member' disabled={!canManage || member.role === 'owner' || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
+                                            <ConfirmActionButton ariaLabel='Remove member' disabled={!canMutateMember || Boolean(busy)} onConfirm={() => onRemove(member)} icon={<Trash2 className='h-4 w-4' />} />
                                         </td>
                                     </tr>
                                 )
@@ -2155,6 +2156,11 @@ function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resen
     if (action === 'copy') return status === 'pending'
     if (action === 'resend') return status !== 'accepted'
     return status !== 'accepted' && status !== 'revoked'
+}
+
+function memberCanMutate(member: OrganizationMember) {
+    const status = member.status.toLowerCase()
+    return member.role !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'
 }
 
 function destinationConfigured(item: WatchlistItem) {
