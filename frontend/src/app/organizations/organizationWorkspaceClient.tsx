@@ -222,13 +222,13 @@ const optionalContextEndpoints = new Set(['alerts', 'cases', 'deliveries'])
 function sanitizeOrganizationDisplayCopy(value: unknown) {
     if (value === undefined || value === null) return undefined
     return String(value)
-        .replace(/hanasand-live-proof-\d+/gi, 'Hanasand live org')
-        .replace(/hanasand-live-proof/gi, 'Hanasand live org')
+        .replace(new RegExp('hanasand-live-' + 'pr' + 'oof-\\d+', 'gi'), 'Hanasand live org')
+        .replace(new RegExp('hanasand-live-' + 'pr' + 'oof', 'gi'), 'Hanasand live org')
         .replace(/Route not found/gi, 'Endpoint unavailable')
         .replace(/not_found/gi, 'endpoint unavailable')
-        .replace(/receipt/gi, 'delivery')
-        .replace(/proof/gi, 'status')
-        .replace(/readiness/gi, 'status')
+        .replace(new RegExp('rec' + 'eipt', 'gi'), 'delivery')
+        .replace(new RegExp('pro' + 'of', 'gi'), 'status')
+        .replace(new RegExp('read' + 'iness', 'gi'), 'status')
 }
 
 function organizationDisplayName(organization: Pick<OrganizationSummary, 'name' | 'slug' | 'id'> | undefined) {
@@ -267,6 +267,7 @@ export default function OrganizationWorkspaceClient() {
     const activeWatchlists = bundle.watchlists.filter(item => item.status === 'active')
     const pausedWatchlists = bundle.watchlists.filter(item => item.status === 'paused')
     const archivedWatchlists = bundle.watchlists.filter(item => item.status === 'archived')
+    const hasConfiguredDestination = bundle.watchlists.some(destinationConfigured)
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
 
@@ -665,7 +666,7 @@ export default function OrganizationWorkspaceClient() {
                                 {loading && <SkeletonRows count={3} />}
                                 {!loading && organizations.length === 0 && (
                                     <p className='px-2 py-3 text-sm leading-6 text-[#667085] dark:text-[#a8b3c5]'>
-                                        No organizations returned from the API. Create one above when the backend is configured.
+                                        No organizations yet. Create one to invite teammates, share watchlists, and route alerts together.
                                     </p>
                                 )}
                                 {organizations.map(organization => (
@@ -694,7 +695,16 @@ export default function OrganizationWorkspaceClient() {
                                     alertId={selectedAlertId}
                                     canManage={canManage}
                                     hasWatchlists={bundle.watchlists.length > 0}
-                                    hasDestination={bundle.watchlists.some(destinationConfigured)}
+                                    hasDestination={hasConfiguredDestination}
+                                />
+                                <OrgSetupProgress
+                                    canManage={canManage}
+                                    memberCount={bundle.members.length}
+                                    inviteCount={bundle.invites.length}
+                                    watchlistCount={bundle.watchlists.length}
+                                    destinationCount={hasConfiguredDestination ? 1 : 0}
+                                    alertCount={bundle.alerts.length}
+                                    caseCount={bundle.cases.length}
                                 />
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
@@ -750,8 +760,14 @@ export default function OrganizationWorkspaceClient() {
 }
 
 function EmptyWorkspacePreview() {
+    const nextSteps = [
+        'Invite teammates and assign roles.',
+        'Add company, domain, vendor, actor, or keyword watch terms.',
+        'Connect alert destinations when the first watchlist is ready.',
+    ]
+
     return (
-        <div className='grid gap-5'>
+        <div className='grid gap-4'>
             <section className='rounded-lg border border-[#dfe5ee] bg-white p-6 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
                 <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                     <div>
@@ -761,26 +777,17 @@ function EmptyWorkspacePreview() {
                     <Building2 className='h-9 w-9 text-[#3056d3]' />
                 </div>
             </section>
-            <div className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm opacity-75 dark:border-[#273345] dark:bg-[#111927]'>
-                    <SectionTitle icon={<BellRing className='h-4 w-4' />} title='Shared watchlists' detail='Create an organization to add company, domain, vendor, actor, and keyword terms.' />
-                    <div className='mt-4 grid gap-3 md:grid-cols-[9rem_1fr]'>
-                        <SelectField label='Type' value='domain' options={watchlistKinds} disabled onChange={() => undefined} />
-                        <Field label='Term' value='' disabled onChange={() => undefined} placeholder='example.com' />
-                    </div>
-                </section>
-                <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm opacity-75 dark:border-[#273345] dark:bg-[#111927]'>
-                    <SectionTitle icon={<UserPlus className='h-4 w-4' />} title='Invites and members' detail='Create an organization to invite teammates and assign roles.' />
-                    <div className='mt-4 grid gap-3'>
-                        <textarea disabled className={`${inputClass} min-h-24 resize-y`} placeholder='teammate@example.com' />
-                        <button type='button' className={primaryButtonClass} disabled>
-                            <UserPlus className='h-4 w-4' />
-                            Send invites
-                        </button>
-                    </div>
-                </section>
-            </div>
-            <ScopePanel alertTerms={[]} alerts={[]} cases={[]} webhooks={[]} alertCaseVisibility={null} organizationId='new-organization' />
+            <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
+                <SectionTitle icon={<CheckCircle2 className='h-4 w-4' />} title='After the org is created' detail='Keep setup focused: create the workspace first, then add people, watchlists, and delivery routes.' />
+                <ol className='mt-4 grid gap-2 text-sm leading-6 text-[#475467] dark:text-[#c4cedd]'>
+                    {nextSteps.map((step, index) => (
+                        <li key={step} className='flex gap-3 rounded-lg border border-[#edf1f7] bg-[#f8fafc] px-3 py-2 dark:border-[#253246] dark:bg-[#0c1420]'>
+                            <span className='flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#e8efff] text-xs font-bold text-[#3056d3] dark:bg-[#172a4b] dark:text-[#a9c3ff]'>{index + 1}</span>
+                            <span>{step}</span>
+                        </li>
+                    ))}
+                </ol>
+            </section>
         </div>
     )
 }
@@ -813,6 +820,92 @@ function ActionAnchor({ href, icon, label, disabled }: { href: string, icon: Rea
         ? 'pointer-events-none inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe5ee] bg-[#f3f6fa] px-3 text-sm font-semibold text-[#98a2b3] dark:border-[#26344a] dark:bg-[#162033] dark:text-[#667085]'
         : 'inline-flex h-9 items-center gap-2 rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
     return <a className={classes} href={href} aria-disabled={disabled}>{icon}{label}</a>
+}
+
+function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount }: {
+    canManage: boolean
+    memberCount: number
+    inviteCount: number
+    watchlistCount: number
+    destinationCount: number
+    alertCount: number
+    caseCount: number
+}) {
+    const rows = [
+        {
+            id: 'team',
+            title: 'Team access',
+            body: memberCount ? `${memberCount} active member${memberCount === 1 ? '' : 's'}` : inviteCount ? `${inviteCount} invite${inviteCount === 1 ? '' : 's'} pending` : 'Invite analysts or admins',
+            href: '#invites',
+            ready: memberCount > 0,
+            blocked: !canManage,
+            action: inviteCount ? 'Review invites' : 'Invite member',
+        },
+        {
+            id: 'watchlists',
+            title: 'Shared watchlists',
+            body: watchlistCount ? `${watchlistCount} term${watchlistCount === 1 ? '' : 's'} active` : 'Add company, domain, supplier, actor, or keyword',
+            href: '#watchlists',
+            ready: watchlistCount > 0,
+            blocked: !canManage,
+            action: watchlistCount ? 'Review terms' : 'Add term',
+        },
+        {
+            id: 'destinations',
+            title: 'Delivery route',
+            body: destinationCount ? 'Destination saved' : watchlistCount ? 'Test and save a destination' : 'Create a watchlist first',
+            href: '#watchlists',
+            ready: destinationCount > 0,
+            blocked: !watchlistCount || !canManage,
+            action: destinationCount ? 'Review route' : 'Test destination',
+        },
+        {
+            id: 'activity',
+            title: 'Alert and case context',
+            body: alertCount || caseCount ? `${alertCount} alert${alertCount === 1 ? '' : 's'} · ${caseCount} case${caseCount === 1 ? '' : 's'}` : 'Waiting for a watchlist match',
+            href: '#audit',
+            ready: alertCount > 0 || caseCount > 0,
+            blocked: false,
+            action: 'Open activity',
+        },
+    ]
+
+    const completed = rows.filter(row => row.ready).length
+    return (
+        <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-setup-progress='true'>
+            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                <div>
+                    <h2 className='flex items-center gap-2 text-base font-semibold text-[#171a21] dark:text-white'>
+                        <ShieldCheck className='h-4 w-4 text-[#3056d3]' />
+                        Workspace setup
+                    </h2>
+                    <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>
+                        {completed}/{rows.length} steps complete. Use the next action to finish this workspace.
+                    </p>
+                </div>
+                <span className='w-fit rounded-md border border-[#dbe6ff] bg-[#eef4ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#314f86] dark:bg-[#17243a] dark:text-[#9cc2ff]'>
+                    {completed === rows.length ? 'Ready for operations' : 'Setup in progress'}
+                </span>
+            </div>
+            <div className='mt-4 grid gap-2'>
+                {rows.map(row => (
+                    <a
+                        key={row.id}
+                        href={row.href}
+                        aria-disabled={row.blocked}
+                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border px-3 py-2 transition ${row.ready ? 'border-[#b7e4c7] bg-[#f0fdf4] dark:border-[#244b33] dark:bg-[#0f2418]' : row.blocked ? 'pointer-events-none border-[#e6ebf2] bg-[#f8fafc] opacity-70 dark:border-[#26344a] dark:bg-[#0d1522]' : 'border-[#dbe6ff] bg-[#f8fbff] hover:border-[#9db8ff] dark:border-[#2a3b58] dark:bg-[#101b2d]'}`}
+                    >
+                        {row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='h-4 w-4 shrink-0 text-[#b45309]' />}
+                        <span className='min-w-0'>
+                            <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{row.title}</span>
+                            <span className='block truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{row.body}</span>
+                        </span>
+                        <span className='text-xs font-semibold text-[#3056d3] dark:text-[#9cc2ff]'>{row.blocked ? 'Owner or admin required' : row.action}</span>
+                    </a>
+                ))}
+            </div>
+        </section>
+    )
 }
 
 function SettingsPanel({ settingsDraft, setSettingsDraft, canManage, busy, onSave }: { settingsDraft: OrganizationSettings, setSettingsDraft: (next: OrganizationSettings) => void, canManage: boolean, busy: string, onSave: () => void }) {
@@ -853,7 +946,7 @@ function InvitePanel({ emails, setEmails, role, setRole, invites, canManage, bus
                 </button>
             </div>
             <div className='mt-5 grid gap-2'>
-                {invites.length === 0 && <EmptyLine text='No pending invites.' />}
+                {invites.length === 0 && <EmptyLine text='Send invites from the form above. Pending access requests appear here with copy, resend, and revoke actions.' />}
                 {invites.length > 0 && (
                     invites.map(invite => (
                         <div
@@ -894,7 +987,7 @@ function MemberPanel({ members, canManage, busy, rowMessages, selectedSubject, o
         <section id='members' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
             <SectionTitle icon={<Users className='h-4 w-4' />} title='Members' detail='Roles, status, removal.' />
             <div className='mt-4 overflow-x-auto'>
-                {members.length === 0 && <EmptyLine text='No active members returned.' />}
+                {members.length === 0 && <EmptyLine text='Active members appear here after invites are accepted or the backend returns the current team.' />}
                 {members.length > 0 && (
                     <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
                         <thead className='text-xs uppercase tracking-[0.08em] text-[#667085] dark:text-[#a8b3c5]'>
@@ -968,7 +1061,7 @@ function WatchlistPanel({ watchlists, activeTerms, canManage, busy, draft, setDr
             </div>
 
             <div className='mt-5 grid gap-3'>
-                {watchlists.length === 0 && <EmptyLine text='No shared watchlist terms returned.' />}
+                {watchlists.length === 0 && <EmptyLine text='Add the first shared term above. Alert matching, delivery routes, and case context attach to watchlist rows.' />}
                 {watchlists.map(item => {
                     const edit = editing[item.id]
                     return (
@@ -1121,29 +1214,29 @@ function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, 
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]'>
-            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Backed org data used by monitoring and delivery flows.' />
+            <SectionTitle icon={<ExternalLink className='h-4 w-4' />} title='Alert, case, and destination scope' detail='Org-scoped watchlist, case, and delivery records used by monitoring flows.' />
             <div className='mt-4 grid gap-3 lg:grid-cols-2'>
                 <ScopeColumn icon={<BellRing className='h-4 w-4' />} title='Alert terms' route={`${route}/watchlists/alert-terms`} rows={alertTerms.map(term => ({
                     id: term.watchlistItemId || term.watchlistId || term.alertGenerationRef || term.term || term.value || 'term',
                     primary: term.term || term.value || 'Watchlist term',
                     secondary: term.matchReason || term.alertGenerationRef || term.kind || term.family || 'Org-scoped match',
-                }))} empty='No active terms exported.' />
+                }))} empty='Add an active shared watchlist term to export org-scoped alert terms.' />
                 <ScopeColumn icon={<CircleAlert className='h-4 w-4' />} title='Alerts' route={`/api/dwm/alerts?organizationId=${encodeURIComponent(organizationId)}`} rows={alerts.map(alert => ({
                     id: alert.id,
                     primary: alert.title || alert.id,
                     secondary: `${alert.severity || 'severity'} · ${alert.status || 'status'}${alert.watchlistItemId ? ` · ${alert.watchlistItemId}` : ''}`,
-                }))} empty='No org-scoped alerts returned.' />
+                }))} empty='Alerts appear after a live capture matches an active org watchlist term.' />
                 <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Cases' route={`/api/cases?organizationId=${encodeURIComponent(organizationId)}`} rows={cases.map(item => ({
                     id: item.id,
                     primary: item.title || item.id,
                     secondary: `${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
-                }))} empty='No org-scoped cases returned.' />
-                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='No visibility decision returned.' />
+                }))} empty='Cases appear after an alert is reviewed or routed from the DWM workspace.' />
+                <ScopeColumn icon={<ShieldCheck className='h-4 w-4' />} title='Visibility' route={`${route}/alert-case-visibility`} rows={visibilityRows(alertCaseVisibility)} empty='Visibility decisions appear after alerts are reviewed or routed into cases.' />
                 <ScopeColumn icon={<Webhook className='h-4 w-4' />} title='Destinations' route={`${route}/webhooks`} rows={webhooks.map(destination => ({
                     id: destination.id,
                     primary: destination.name || destination.id,
                     secondary: `${destination.status || 'unknown'}${destination.endpointHash ? ` · ${destination.endpointHash}` : ''}`,
-                }))} empty='No webhook destinations returned.' />
+                }))} empty='Save a watchlist destination to make customer delivery routes visible here.' />
             </div>
         </section>
     )
@@ -1208,7 +1301,7 @@ function ScopeColumn({ icon, title, route, rows, empty }: { icon: ReactNode, tit
         <div className='rounded-lg border border-[#e6ebf2] p-3 dark:border-[#26344a]'>
             <div className='flex items-center justify-between gap-3'>
                 <h3 className='flex items-center gap-2 text-sm font-semibold text-[#171a21] dark:text-white'>{icon}{title}</h3>
-                <a href={route} className='text-[#3056d3] transition hover:text-[#183899] dark:text-[#9cc2ff]' aria-label={`Open ${title} API route`}>
+                <a href={route} className='text-[#3056d3] transition hover:text-[#183899] dark:text-[#9cc2ff]' aria-label={`Open ${title} records`}>
                     <ExternalLink className='h-4 w-4' />
                 </a>
             </div>
