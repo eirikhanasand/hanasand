@@ -386,16 +386,49 @@ type SystemSnapshot = {
 }
 
 type SystemMetricsApiResponse = {
-    system: SystemSnapshot
+    system: SystemSnapshot | null
+    unavailable_reason?: string
+    generated_at?: string
+}
+
+type DockerContainerPort = {
+    ip?: string
+    private_port: number
+    public_port?: number
+    type: string
+}
+
+type DockerContainerStats = {
+    cpu_percent: number | null
+    memory_bytes: number | null
+    memory_limit_bytes: number | null
+    memory_percent: number | null
 }
 
 type DockerContainer = {
     id: string
     name: string
-    status: 'running' | 'stopped' | 'paused'
-    cpu: number
-    memory: number
+    image?: string
+    state?: string
+    status: string
+    cpu?: number | null
+    memory?: number | null
+    ports?: DockerContainerPort[]
+    restart_count?: number
+    health?: string
+    uptime_seconds?: number | null
+    stats?: DockerContainerStats | null
+    stats_unavailable_reason?: string
+    stats_updated_at?: string
     created_at?: string
+}
+
+type DockerTelemetryResponse = {
+    containers: DockerContainer[]
+    source?: string
+    docker_socket_available?: boolean
+    unavailable_reason?: string
+    generated_at?: string
 }
 
 type VM = {

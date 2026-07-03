@@ -16,7 +16,7 @@ export default async function page() {
         return redirect('/logout?path=/login%3Fpath%3D/dashboard/system%26expired=true')
     }
 
-    const [system, dockerContainers, vms, vmMetrics] = await Promise.all([
+    const [systemTelemetry, dockerTelemetry, vms, vmMetrics] = await Promise.all([
         getSystemMetrics({ id, token }),
         getDockerContainers({ id, token }),
         getVMList(id, token),
@@ -27,11 +27,13 @@ export default async function page() {
         <DashboardPage className='h-full'>
             <DashboardHeader
                 title='System'
-                description='System metrics, Docker containers, and virtual machine state.'
+                description='Operate containers, host resources, and virtual machines from one live surface.'
             />
             <SystemDashboard
-                system={system}
-                dockerContainers={dockerContainers}
+                id={id}
+                token={token}
+                systemTelemetry={systemTelemetry}
+                dockerTelemetry={dockerTelemetry}
                 vms={vms}
                 vmMetrics={vmMetrics}
             />
