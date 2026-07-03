@@ -339,9 +339,10 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <ProfileStat key={item.label} icon={item.icon} label={item.label} value={item.value} />
                                 ))}
                             </div>
+                            <ActorIntelHighlights actor={actorIntel} result={result} actionability={actionability} />
                             <ResultTriageBriefPanel brief={resultTriageBrief} />
                         </div>
-                        <ThreatActorMap result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
+                        <ThreatActorMap actor={actorIntel} result={result} actionability={actionability} onSelectCountry={(country) => selectArtifactBy('country', country)} compact />
                     </div>
                     <TiCommandBar links={commandLinks} />
                     <SectionOverviewRail items={sectionOverview} />
@@ -5942,6 +5943,81 @@ function ResultTriageBriefPanel({ brief }: { brief: ResultTriageBrief }) {
     )
 }
 
+function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; actionability: TiActionabilityModel }) {
+    const targets = [
+        ...actor.targetSectors.slice(0, 2),
+        ...actor.geographies.slice(0, 2),
+    ].filter(Boolean).slice(0, 4)
+    const techniques = actor.techniqueCoverage.slice(0, 3)
+    const latestDate = actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
+    const openGap = actionability.enrichmentGapQueue[0]
+    const sourceCount = actor.provenanceRows.length || actor.sourceCoverage.totalRows || result.sources.length
+    const rows = [
+        {
+            icon: <Building2 className='h-3.5 w-3.5' />,
+            label: 'Targets',
+            value: targets.length ? targets.join(' · ') : 'No target pattern yet',
+            tone: targets.length ? 'ready' : 'review',
+        },
+        {
+            icon: <Database className='h-3.5 w-3.5' />,
+            label: 'Sources',
+            value: `${sourceCountLabel(sourceCount)} · ${sourceBasisLabel(actor.confidence)}`,
+            tone: sourceCount ? 'ready' : 'blocked',
+        },
+        {
+            icon: <Activity className='h-3.5 w-3.5' />,
+            label: 'Activity',
+            value: `${result.recentActivity.length} recent row${result.recentActivity.length === 1 ? '' : 's'} · latest ${formatDate(latestDate)}`,
+            tone: result.recentActivity.length ? 'ready' : 'review',
+        },
+        {
+            icon: <ClipboardList className='h-3.5 w-3.5' />,
+            label: 'Next review',
+            value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough source context for review',
+            tone: openGap ? 'review' : 'ready',
+        },
+    ] as const
+
+    return (
+        <section data-ti-actor-highlights='true' className='rounded-lg border border-[#dfe5ee] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+            <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor intelligence</p>
+                    <h2 className='mt-1 wrap-break-word text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Coverage, methods, and review path</h2>
+                </div>
+                <span className={sourceHealthChipClass(actor.sourceCoverage.stale ? 'review' : 'ready')}>
+                    {actor.sourceCoverage.stale ? 'refresh recommended' : 'current source set'}
+                </span>
+            </div>
+            <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                {rows.map(row => (
+                    <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
+                        <div className='flex min-w-0 items-center justify-between gap-2'>
+                            <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>
+                                <span className='shrink-0 text-[#3056d3] dark:text-[#9ab3ff]'>{row.icon}</span>
+                                <span className='truncate'>{row.label}</span>
+                            </p>
+                            <span className={sourceHealthChipClass(row.tone)}>{row.tone === 'blocked' ? 'needed' : row.tone}</span>
+                        </div>
+                        <p className='mt-2 wrap-break-word text-sm leading-6 text-[#344054] dark:text-[#d8e2f2]'>{row.value}</p>
+                    </div>
+                ))}
+            </div>
+            {techniques.length ? (
+                <div className='mt-3 flex min-w-0 flex-wrap items-center gap-2'>
+                    <span className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Observed methods</span>
+                    {techniques.map(item => item.attackId ? (
+                        <TechniqueBadge key={`${item.attackId}:${item.name}`} attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} />
+                    ) : (
+                        <span key={`${item.name}:${item.tactic}`} className={sourceHealthChipClass(item.freshness)}>{displayRequirementText(item.name)}</span>
+                    ))}
+                </div>
+            ) : null}
+        </section>
+    )
+}
+
 function BriefStep({ title, value }: { title: string; value: string }) {
     return (
         <div className='rounded-lg border border-[#eef1f5] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
@@ -9232,9 +9308,11 @@ function ProfileStat({ icon, label, value, dark = false }: { icon: React.ReactNo
     )
 }
 
-function ThreatActorMap({ result, actionability, onSelectCountry, compact = false }: { result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void; compact?: boolean }) {
+function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact = false }: { actor: TiActorIntelligenceProfile; result: TiSearchResponse; actionability: TiActionabilityModel; onSelectCountry?: (country: string) => void; compact?: boolean }) {
     const geo = actorGeoProfile(result)
     const hasPoints = geo.points.length > 0
+    const regionalAreas = actor.geographies.filter(Boolean).slice(0, 6)
+    const hasRegionalAreas = !hasPoints && regionalAreas.length > 0
     const [viewBox, setViewBox] = useState<ViewBox>(INITIAL_VIEWBOX)
     const [selectedCode, setSelectedCode] = useState(geo.points[0]?.code ?? '')
     const dragRef = useRef<{ x: number, y: number, viewBox: ViewBox } | null>(null)
@@ -9309,9 +9387,11 @@ function ThreatActorMap({ result, actionability, onSelectCountry, compact = fals
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3 dark:border-[#273244]'>
                 <div>
                     <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Actor country map</h2>
-                    <p className='mt-0.5 text-xs text-[#586274] dark:text-[#9aa8bd]'>Reported operator origin and victim or target countries from linked sources.</p>
+                    <p className='mt-0.5 text-xs text-[#586274] dark:text-[#9aa8bd]'>
+                        {hasPoints ? 'Reported operator origin and victim or target countries from linked sources.' : hasRegionalAreas ? 'Regional operating areas from the source-backed actor profile.' : 'Country-level source coverage for this actor profile.'}
+                    </p>
                 </div>
-                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : 'Country data pending'}</span>
+                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} regions` : 'Country data pending'}</span>
             </div>
             <div className={`${compact ? 'min-h-72' : 'min-h-80'} relative overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]`}>
                 <div className='absolute left-3 top-3 z-20 rounded-lg border border-[#dfe5ee] bg-white/90 px-3 py-1.5 text-xs text-[#596170] shadow-sm backdrop-blur dark:border-[#273244] dark:bg-[#101826]/90 dark:text-[#b7c2d4]'>
@@ -9405,7 +9485,19 @@ function ThreatActorMap({ result, actionability, onSelectCountry, compact = fals
                         )
                     })}
                 </svg>
-                {!hasPoints ? (
+                {hasRegionalAreas ? (
+                    <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/85 px-4 text-center dark:bg-[#101826]/90'>
+                        <div className='max-w-md'>
+                            <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Regional operating area</p>
+                            <div className='mt-3 flex flex-wrap justify-center gap-2'>
+                                {regionalAreas.map(region => (
+                                    <span key={region} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{region}</span>
+                                ))}
+                            </div>
+                            <p className='mt-3 text-sm font-medium leading-6 text-[#586274] dark:text-[#b7c2d4]'>Country-level map points appear when linked reporting names exact origin, victim, or target countries.</p>
+                        </div>
+                    </div>
+                ) : !hasPoints ? (
                     <div className='absolute inset-3 grid place-items-center rounded-lg bg-white/80 px-4 text-center text-sm font-medium text-[#586274] dark:bg-[#101826]/85 dark:text-[#b7c2d4]'>
                         Country mapping will appear when this profile has country-level target or origin observations.
                     </div>
