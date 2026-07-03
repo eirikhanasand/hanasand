@@ -1369,12 +1369,20 @@ function sourceMatchedWatchlistTerms(input: { captures: RawCapture[]; sources: S
   for (const capture of captures) {
     const latestAt = String((capture as any).collectedAt ?? "");
     const text = sourceMatchedCaptureText(capture);
-    for (const domain of extractWatchableDomains(text)) {
-      if (sourceHosts.has(domain) || isUnhelpfulWatchDomain(domain)) continue;
+    const domains = extractWatchableDomains(text).filter((domain) => !sourceHosts.has(domain) && !isUnhelpfulWatchDomain(domain));
+    for (const domain of domains) {
       const row = byValue.get(domain) ?? { value: domain, kind: "domain" as const, captureIds: new Set<string>(), latestAt };
       row.captureIds.add(String((capture as any).id));
       if (latestAt > row.latestAt) row.latestAt = latestAt;
       byValue.set(domain, row);
+    }
+    if (domains.length) continue;
+    for (const term of sourceMatchedMetadataTerms(capture)) {
+      const value = term.value.toLowerCase();
+      const row = byValue.get(value) ?? { value, kind: term.kind, captureIds: new Set<string>(), latestAt };
+      row.captureIds.add(String((capture as any).id));
+      if (latestAt > row.latestAt) row.latestAt = latestAt;
+      byValue.set(value, row);
     }
   }
   return [...byValue.values()]
@@ -1411,9 +1419,33 @@ function sourceMatchedCaptureText(capture: RawCapture): string {
   ].map((value) => String(value ?? "")).filter(Boolean).join(" ");
 }
 
+function sourceMatchedMetadataTerms(capture: RawCapture): Array<{ value: string; kind: DwmWatchTerm["kind"] }> {
+  const metadata = (capture as any).metadata ?? {};
+  const leakSite = metadata.leakSite ?? {};
+  return [
+    { value: metadata.victimName ?? metadata.companyName ?? metadata.company ?? leakSite.victimName ?? leakSite.companyName, kind: "company" as const },
+    { value: metadata.vendorName ?? metadata.productName ?? metadata.supplierName ?? leakSite.vendorName, kind: "vendor" as const },
+    { value: metadata.actorName ?? leakSite.actorName, kind: "brand" as const }
+  ]
+    .map((term) => ({ value: normalizeWatchableMetadataTerm(term.value), kind: term.kind }))
+    .filter((term) => Boolean(term.value) && !isUnhelpfulMetadataWatchTerm(term.value));
+}
+
 function extractWatchableDomains(text: string): string[] {
   return uniqueStrings((text.match(/\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}\b/gi) ?? [])
     .map((domain) => domain.toLowerCase().replace(/^www\./, "")));
+}
+
+function normalizeWatchableMetadataTerm(value: unknown): string {
+  return String(value ?? "").trim().replace(/\s+/g, " ").replace(/^["'`]+|["'`]+$/g, "");
+}
+
+function isUnhelpfulMetadataWatchTerm(value: string): boolean {
+  const normalized = value.toLowerCase();
+  if (normalized.length < 4 || normalized.length > 80) return true;
+  if (!/[a-z0-9]/i.test(normalized)) return true;
+  if (/^(unknown|n\/a|none|null|redacted|victim|company|actor|group|team|admin|user|customer|example)$/i.test(normalized)) return true;
+  return false;
 }
 
 function sourceHostCandidates(source: SourceRecord): string[] {

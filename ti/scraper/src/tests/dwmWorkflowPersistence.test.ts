@@ -767,6 +767,97 @@ describe("dwm workflow persistence", () => {
     });
   });
 
+  test("bootstraps org alerts from actor metadata terms without a domain-only watchlist", async () => {
+    const store = new InMemoryScraperStore();
+    store.saveSource(actorSource);
+    store.saveCapture({
+      id: "cap_workflow_actor_midnight_blizzard",
+      sourceId: actorSource.id,
+      url: "https://intel.example/actors/midnight-blizzard#2026-06-27",
+      collectedAt: "2026-06-27T21:16:00.000Z",
+      mediaType: "text/plain",
+      storageKind: "metadata_only",
+      contentHash: "hash-workflow-actor-midnight-blizzard",
+      sensitive: false,
+      body: "Public actor-page metadata lists current intrusion tradecraft and cloud identity targeting.",
+      metadata: { adapter: "actor_page_metadata", actorName: "Midnight Blizzard" }
+    } as RawCapture);
+    const options = { store, frontier: new FocusedFrontier() };
+
+    const orgResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/organizations", {
+      method: "POST",
+      headers: { "x-user-email": "owner-actor@workflow.example" },
+      body: JSON.stringify({ name: "Actor Metadata Org", ownerEmail: "owner-actor@workflow.example", ownerUserId: "owner-actor-workflow" })
+    }), options);
+    const orgPayload = await orgResponse.json() as any;
+    const organizationId = orgPayload.organization.id;
+
+    const rebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-actor@workflow.example" },
+      body: JSON.stringify({ organizationId })
+    }), options);
+    const rebuild = await rebuildResponse.json() as any;
+
+    expect(rebuildResponse.status).toBe(200);
+    expect(rebuild.savedAlertCount).toBe(1);
+    expect(rebuild.alerts[0]).toMatchObject({
+      organizationId,
+      sourceFamily: "actor_page",
+      recommendedRoute: "brand_protection",
+      matchedTerm: { value: "midnight blizzard", kind: "brand" },
+      workflowStatus: "new",
+      reviewState: "needs_review"
+    });
+    expect(rebuild.alerts[0].evidence[0]).toMatchObject({
+      id: "cap_workflow_actor_midnight_blizzard",
+      sourceFamily: "actor_page",
+      contentHash: "hash-workflow-actor-midnight-blizzard"
+    });
+    expect(rebuild.alerts[0].confidenceReasoning.join(" ")).toContain("capture-backed evidence");
+    expect(rebuild.alerts[0].workflowContext).toMatchObject({
+      organizationId,
+      captureIds: ["cap_workflow_actor_midnight_blizzard"],
+      evidenceCount: 1,
+      recommendedRoute: "brand_protection",
+      alertGeneratorKeys: expect.arrayContaining([expect.stringContaining("midnight blizzard")])
+    });
+
+    store.saveDwmAlert({
+      ...rebuild.alerts[0],
+      workflowStatus: "triaged",
+      assignedOwner: "actor-analyst",
+      workflowNote: "Actor metadata reviewed before replay.",
+      workflowEvents: [{
+        id: "evt_actor_triaged",
+        at: "2026-06-27T21:20:00.000Z",
+        actor: "actor-analyst",
+        eventType: "workflow.transition",
+        fromWorkflowStatus: "new",
+        toWorkflowStatus: "triaged",
+        note: "Actor metadata reviewed before replay."
+      }]
+    });
+
+    const secondRebuildResponse = await handleApiRequest(new Request("http://127.0.0.1/v1/dwm/alerts/rebuild", {
+      method: "POST",
+      headers: { "x-user-email": "owner-actor@workflow.example" },
+      body: JSON.stringify({ organizationId })
+    }), options);
+    const secondRebuild = await secondRebuildResponse.json() as any;
+
+    expect(secondRebuildResponse.status).toBe(200);
+    expect(secondRebuild.savedAlertCount).toBe(1);
+    expect(secondRebuild.alerts[0].id).toBe(rebuild.alerts[0].id);
+    expect(secondRebuild.alerts[0].dedupeKey).toBe(rebuild.alerts[0].dedupeKey);
+    expect(secondRebuild.alerts[0]).toMatchObject({
+      workflowStatus: "triaged",
+      assignedOwner: "actor-analyst",
+      workflowNote: "Actor metadata reviewed before replay."
+    });
+    expect(secondRebuild.alerts[0].workflowEvents).toHaveLength(1);
+  });
+
   test("keeps multi-source org alert lifecycle isolated across darkweb Telegram and actor captures", async () => {
     const store = new InMemoryScraperStore();
     for (const row of [source, darkwebSource, actorSource]) store.saveSource(row);

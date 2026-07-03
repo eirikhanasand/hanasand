@@ -4819,7 +4819,6 @@ function candidateAlertsForGeneration(plan: DwmAlertGenerationPlan, input: Rebui
   const captures = input.store.listCaptures();
   return plan.candidates
     .filter((candidate) => candidate.captureRefs.length > 0)
-    .filter((candidate) => !candidate.alertGeneratorKeys.length || !candidate.alertGenerationRefs.length)
     .flatMap((candidate) => {
       const sourceFamilies = candidate.sourceFamilies.length ? candidate.sourceFamilies : uniqueStrings(candidate.captureRefs.map((ref) => ref.sourceFamily).filter(Boolean));
       return sourceFamilies.map((sourceFamily) => alertFromGenerationCandidate(candidate, sources, captures, input, sourceFamily));
