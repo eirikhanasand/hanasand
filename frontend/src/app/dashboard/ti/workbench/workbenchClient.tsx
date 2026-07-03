@@ -919,6 +919,16 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
         }
     }
 
+    const workbenchStatsGrid = (
+        <div className='grid grid-cols-2 gap-2 border-b border-[#26344d] bg-[#0b111c] p-2 sm:p-3 xl:grid-cols-5' data-workbench-stats>
+            <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
+            <WorkbenchStat icon={<AlertTriangle className='h-4 w-4' />} label='High priority' value={String(workbenchStats.highPriority)} detail='critical or high severity' tone={workbenchStats.highPriority ? 'warn' : 'good'} />
+            <WorkbenchStat icon={<ShieldCheck className='h-4 w-4' />} label='Customer-ready' value={String(workbenchStats.persistent)} detail='saved alert workflows' tone={workbenchStats.persistent ? 'good' : 'neutral'} />
+            <WorkbenchStat icon={<Activity className='h-4 w-4' />} label='Evidence' value={String(workbenchStats.evidence)} detail='cases with captured material' tone={workbenchStats.evidence ? 'good' : 'neutral'} />
+            <WorkbenchStat icon={<Clock3 className='h-4 w-4' />} label='Newest update' value={workbenchStats.latest} detail='latest case refresh' tone='neutral' className='col-span-2 xl:col-span-1' />
+        </div>
+    )
+
     return (
         <div className='grid gap-3'>
             {message && (
@@ -928,13 +938,15 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             )}
 
             <div className='min-w-0 overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
-                <div className='grid grid-cols-2 gap-2 border-b border-[#26344d] bg-[#0b111c] p-2 sm:p-3 xl:grid-cols-5'>
-                    <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
-                    <WorkbenchStat icon={<AlertTriangle className='h-4 w-4' />} label='High priority' value={String(workbenchStats.highPriority)} detail='critical or high severity' tone={workbenchStats.highPriority ? 'warn' : 'good'} />
-                    <WorkbenchStat icon={<ShieldCheck className='h-4 w-4' />} label='Customer-ready' value={String(workbenchStats.persistent)} detail='saved alert workflows' tone={workbenchStats.persistent ? 'good' : 'neutral'} />
-                    <WorkbenchStat icon={<Activity className='h-4 w-4' />} label='Evidence' value={String(workbenchStats.evidence)} detail='cases with captured material' tone={workbenchStats.evidence ? 'good' : 'neutral'} />
-                    <WorkbenchStat icon={<Clock3 className='h-4 w-4' />} label='Newest update' value={workbenchStats.latest} detail='latest case refresh' tone='neutral' className='col-span-2 xl:col-span-1' />
-                </div>
+                {compact ? (
+                    <details className='border-b border-[#26344d] bg-[#0b111c]' data-workbench-stats-disclosure>
+                        <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#101827] focus-visible:ring-2 focus-visible:ring-[#1f3f7a] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                            <span>Workbench counters</span>
+                            <span className='text-xs font-medium text-[#8fa0ba]'>{workbenchStats.total} cases · {workbenchStats.highPriority} high · {workbenchStats.latest}</span>
+                        </summary>
+                        {workbenchStatsGrid}
+                    </details>
+                ) : workbenchStatsGrid}
 
                 <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
                     <aside className='min-w-0 border-b border-[#26344d] bg-[#0d1522] xl:border-b-0 xl:border-r'>
