@@ -143,9 +143,12 @@ type OrgBundle = {
 
 type DeliveryRow = {
     id: string
+    requestId?: string
     organizationId?: string
     tenantId?: string
     alertId?: string
+    caseId?: string
+    actionId?: string
     watchlistId?: string
     watchlistItemId?: string
     watchlistItemIds?: string[]
@@ -154,11 +157,18 @@ type DeliveryRow = {
     endpointHint?: string
     deliveryKind?: string
     status?: string
+    httpStatus?: number
     attemptedAt?: string
     createdAt?: string
     updatedAt?: string
     dryRun?: boolean
     error?: string
+    errorClass?: string
+    responseSummary?: string
+    dedupeKey?: string
+    retryCount?: number
+    attemptCount?: number
+    nextRetryAt?: string | null
 }
 
 type DeliveryResult = {
@@ -900,7 +910,14 @@ export default function OrganizationWorkspaceClient() {
                                 </section>
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
-                                    <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
+                                    <div className='grid min-w-0 gap-5'>
+                                        <DeliveryHistoryPanel
+                                            organization={selectedOrganization}
+                                            deliveries={bundle.deliveries}
+                                            selectedSubject={selectedActivitySubject}
+                                        />
+                                        <ScopePanel alertTerms={bundle.alertTerms} alerts={bundle.alerts} cases={bundle.cases} webhooks={bundle.webhooks} alertCaseVisibility={bundle.alertCaseVisibility} organizationId={selectedOrganization.id} />
+                                    </div>
                                     <div className='min-w-0'>
                                         <ActivityPanel organization={selectedOrganization} bundle={bundle} activity={activityRows} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} />
                                     </div>
@@ -1657,6 +1674,95 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     )
 }
 
+function DeliveryHistoryPanel({ organization, deliveries, selectedSubject }: { organization: OrganizationSummary, deliveries: DeliveryRow[], selectedSubject: ActivitySubject }) {
+    const scopedDeliveries = deliveries
+        .filter(delivery => deliveryMatchesSubject(delivery, selectedSubject))
+        .sort((left, right) => deliveryTime(right) - deliveryTime(left))
+        .slice(0, 8)
+    const allHref = `/api/dwm/webhooks/deliveries?organizationId=${encodeURIComponent(organization.id)}`
+    const selectedHref = deliveryHistoryHref(allHref, selectedSubject)
+    const totalFailures = scopedDeliveries.filter(delivery => delivery.status === 'failed' || delivery.error).length
+    const retryCount = scopedDeliveries.filter(delivery => Boolean(delivery.nextRetryAt)).length
+    return (
+        <section id='delivery-history' className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-delivery-history='true'>
+            <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
+                <SectionTitle icon={<Webhook className='h-4 w-4' />} title='Delivery history' detail='Recent tests, replays, failures, and retry state for the selected organization scope.' />
+                <div className='flex flex-wrap gap-2'>
+                    <StatusPill status={`${scopedDeliveries.length} shown`} />
+                    {totalFailures > 0 && <StatusPill status={`${totalFailures} failed`} />}
+                    {retryCount > 0 && <StatusPill status={`${retryCount} retry`} />}
+                    <a href={selectedHref} className={secondaryButtonClass}>
+                        <ExternalLink className='h-4 w-4' />
+                        Open API
+                    </a>
+                </div>
+            </div>
+            <div className='mt-4 overflow-x-auto rounded-lg border border-[#e6ebf2] dark:border-[#26344a]'>
+                {scopedDeliveries.length === 0 ? (
+                    <EmptyLine text={selectedSubject.type === 'organization' ? 'No delivery attempts for this organization yet.' : 'No delivery attempts for the selected row.'} />
+                ) : (
+                    <table className='min-w-full border-separate border-spacing-0 text-left text-sm'>
+                        <thead className='bg-[#f8fafc] text-xs uppercase tracking-[0.08em] text-[#667085] dark:bg-[#0d1522] dark:text-[#a8b3c5]'>
+                            <tr>
+                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>State</th>
+                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Target</th>
+                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Alert / case</th>
+                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>Retry</th>
+                                <th className='border-b border-[#e6ebf2] px-3 py-2 dark:border-[#26344a]'>When</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {scopedDeliveries.map(delivery => (
+                                <tr key={delivery.id} className='align-top hover:bg-[#f8fafc] dark:hover:bg-[#111d2d]'>
+                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <div className='grid gap-1'>
+                                            <StatusPill status={delivery.status || 'attempt'} />
+                                            <span className='text-xs text-[#667085] dark:text-[#a8b3c5]'>{delivery.dryRun ? 'dry run' : delivery.deliveryKind || 'webhook'}</span>
+                                            {delivery.httpStatus !== undefined && <span className='text-xs text-[#667085] dark:text-[#a8b3c5]'>HTTP {delivery.httpStatus}</span>}
+                                        </div>
+                                    </td>
+                                    <td className='max-w-56 border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <p className='truncate font-mono text-xs text-[#202838] dark:text-[#eef3fb]'>{sanitizeOrganizationDisplayCopy(delivery.endpointHint || delivery.endpointHash || delivery.webhookDestinationId || 'redacted destination')}</p>
+                                        <p className='mt-1 truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{delivery.webhookDestinationId || delivery.requestId || delivery.id}</p>
+                                    </td>
+                                    <td className='max-w-64 border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <DeliveryReference delivery={delivery} organizationId={organization.id} />
+                                        {delivery.error && <p className='mt-1 line-clamp-2 rounded-md bg-[#fff7ed] px-2 py-1 text-xs font-medium text-[#9a3412] dark:bg-[#2b1606] dark:text-[#fed7aa]'>{sanitizeOrganizationDisplayCopy(delivery.error) || delivery.error}</p>}
+                                        {!delivery.error && delivery.responseSummary && <p className='mt-1 line-clamp-2 text-xs text-[#667085] dark:text-[#a8b3c5]'>{sanitizeOrganizationDisplayCopy(delivery.responseSummary) || delivery.responseSummary}</p>}
+                                    </td>
+                                    <td className='border-b border-[#eef2f7] px-3 py-2 dark:border-[#1d2a3d]'>
+                                        <div className='grid gap-1 text-xs text-[#667085] dark:text-[#a8b3c5]'>
+                                            <span>{delivery.errorClass ? sanitizeOrganizationDisplayCopy(delivery.errorClass) : delivery.nextRetryAt ? 'scheduled' : 'none'}</span>
+                                            <span>{delivery.nextRetryAt ? formatDate(delivery.nextRetryAt) : `${delivery.attemptCount ?? delivery.retryCount ?? 0} attempts`}</span>
+                                            {delivery.dedupeKey && <span className='max-w-40 truncate font-mono'>{delivery.dedupeKey}</span>}
+                                        </div>
+                                    </td>
+                                    <td className='border-b border-[#eef2f7] px-3 py-2 text-xs text-[#667085] dark:border-[#1d2a3d] dark:text-[#a8b3c5]'>
+                                        {formatDate(delivery.attemptedAt || delivery.updatedAt || delivery.createdAt)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </div>
+        </section>
+    )
+}
+
+function DeliveryReference({ delivery, organizationId }: { delivery: DeliveryRow, organizationId: string }) {
+    const caseHref = delivery.caseId ? `/dashboard/dwm/cases/${encodeURIComponent(delivery.caseId)}?organizationId=${encodeURIComponent(organizationId)}${delivery.alertId ? `&alertId=${encodeURIComponent(delivery.alertId)}` : ''}` : ''
+    const alertHref = delivery.alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(delivery.alertId)}&organizationId=${encodeURIComponent(organizationId)}` : ''
+    return (
+        <div className='grid gap-1 text-xs'>
+            {delivery.caseId ? <a href={caseHref} className='truncate font-semibold text-[#3056d3] hover:text-[#183899] dark:text-[#9cc2ff]'>Case {delivery.caseId}</a> : null}
+            {delivery.alertId ? <a href={alertHref} className='truncate font-semibold text-[#3056d3] hover:text-[#183899] dark:text-[#9cc2ff]'>Alert {delivery.alertId}</a> : null}
+            {!delivery.caseId && !delivery.alertId ? <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>No alert attached</span> : null}
+            <span className='truncate text-[#667085] dark:text-[#a8b3c5]'>{delivery.watchlistItemId || delivery.watchlistId || delivery.actionId || 'watchlist pending'}</span>
+        </div>
+    )
+}
+
 function ScopePanel({ alertTerms, alerts, cases, webhooks, alertCaseVisibility, organizationId }: { alertTerms: AlertTerm[], alerts: ScopedAlert[], cases: ScopedCase[], webhooks: WebhookDestination[], alertCaseVisibility: Record<string, unknown> | null, organizationId: string }) {
     const route = `/api/organizations/${encodeURIComponent(organizationId)}`
     return (
@@ -1812,7 +1918,14 @@ function RoleBadge({ role }: { role: OrganizationRole }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-    const tone = status === 'active' ? 'bg-[#dcfae6] text-[#067647] dark:bg-[#12351f] dark:text-[#86efac]' : status === 'paused' ? 'bg-[#fff7d6] text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]' : 'bg-[#f1f4f8] text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'
+    const normalized = status.toLowerCase()
+    const tone = normalized === 'active' || normalized === 'delivered' || normalized === 'dry_run'
+        ? 'bg-[#dcfae6] text-[#067647] dark:bg-[#12351f] dark:text-[#86efac]'
+        : normalized === 'paused' || normalized.includes('retry') || normalized === 'skipped'
+            ? 'bg-[#fff7d6] text-[#8a4b00] dark:bg-[#332604] dark:text-[#fde68a]'
+            : normalized === 'failed' || normalized.includes('failed') || normalized === 'disabled'
+                ? 'bg-[#fff1f3] text-[#b42318] dark:bg-[#2a1010] dark:text-[#fecaca]'
+                : 'bg-[#f1f4f8] text-[#596170] dark:bg-[#1e293b] dark:text-[#cbd5e1]'
     return <span className={`rounded-md px-2 py-1 text-xs font-semibold ${tone}`}>{status}</span>
 }
 
@@ -2297,6 +2410,35 @@ function latestDeliveryForWatchlist(item: WatchlistItem, deliveries: DeliveryRow
     return deliveries
         .filter(delivery => delivery.watchlistId === item.id || delivery.watchlistItemId === item.id || delivery.watchlistItemIds?.includes(item.id))
         .sort((left, right) => deliveryTime(right) - deliveryTime(left))[0] || null
+}
+
+function deliveryMatchesSubject(delivery: DeliveryRow, subject: ActivitySubject) {
+    if (subject.type === 'organization') return true
+    if (subject.type === 'destination') {
+        return delivery.webhookDestinationId === subject.id
+            || delivery.watchlistId === subject.id
+            || delivery.watchlistItemId === subject.id
+            || delivery.watchlistItemIds?.includes(subject.id)
+    }
+    if (subject.type === 'watchlist') {
+        return delivery.watchlistId === subject.id
+            || delivery.watchlistItemId === subject.id
+            || delivery.watchlistItemIds?.includes(subject.id)
+    }
+    if (subject.type === 'alert') return delivery.alertId === subject.id
+    if (subject.type === 'case') return delivery.caseId === subject.id
+    return false
+}
+
+function deliveryHistoryHref(baseHref: string, subject: ActivitySubject) {
+    if (subject.type === 'organization') return baseHref
+    const params = new URLSearchParams()
+    if (subject.type === 'destination') params.set('destinationId', subject.id)
+    if (subject.type === 'watchlist') params.set('watchlistId', subject.id)
+    if (subject.type === 'alert') params.set('alertId', subject.id)
+    if (subject.type === 'case') params.set('caseId', subject.id)
+    const suffix = params.toString()
+    return suffix ? `${baseHref}&${suffix}` : baseHref
 }
 
 function firstDelivery(result: DeliveryResult) {
