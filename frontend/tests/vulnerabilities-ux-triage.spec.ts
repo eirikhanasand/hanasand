@@ -7,6 +7,7 @@ const root = process.cwd()
 test('vulnerability scanner starts with triage and collapses telemetry', async () => {
     const summaryGrid = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/summaryGrid.tsx'), 'utf8')
     const header = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/header.tsx'), 'utf8')
+    const imageDetails = await readFile(path.join(root, 'src/components/monitoring/vulnerabilities/imageDetails.tsx'), 'utf8')
 
     expect(summaryGrid).toContain('Scanner needs review')
     expect(summaryGrid).toContain('Review image findings by impact')
@@ -21,4 +22,10 @@ test('vulnerability scanner starts with triage and collapses telemetry', async (
     expect(header).toContain('customerOperationalText')
     expect(header).toContain('operationalStateLabel')
     expect(header).not.toContain('What returned')
+
+    expect(imageDetails).toContain('data-testid=\'vulnerability-image-breakdown-disclosure\'')
+    expect(imageDetails).toContain('Package and severity breakdown')
+    expect(imageDetails).toContain('data-testid=\'vulnerability-image-breakdown\'')
+    expect(imageDetails.indexOf('vulnerability-image-breakdown-disclosure')).toBeLessThan(imageDetails.indexOf('<ImageFindings'))
+    expect(imageDetails).toContain('<ImageFindings image={image} />')
 })
