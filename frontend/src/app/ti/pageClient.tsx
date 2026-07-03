@@ -363,7 +363,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                             <div className='flex items-center justify-between gap-3'>
                                 <div>
                                     <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Latest activity</h2>
-                                    <p className='mt-1 text-xs text-[#586274] dark:text-[#9aa8bd]'>Evidence ordered by severity, confidence, and recency.</p>
+                                    <p className='mt-1 text-xs text-[#586274] dark:text-[#9aa8bd]'>Evidence ordered by severity, source basis, and recency.</p>
                                 </div>
                                 <span className='rounded-lg border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{workItems.length}</span>
                             </div>
@@ -405,7 +405,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                         <span className='flex flex-wrap gap-2 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>
                                             <span>{item.timestamp}</span>
                                             <span>{item.source}</span>
-                                            <span>{Math.round(item.confidence * 100)}% confidence</span>
+                                            <span>{sourceBasisLabel(item.confidence)}</span>
                                             {item.priority ? <span>{item.priority.score}/100 priority</span> : null}
                                         </span>
                                     </button>
@@ -440,7 +440,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <div className='mt-4 grid gap-3 md:grid-cols-4'>
                                         <EvidenceMetric label='First seen' value={selected.timestamp} />
                                         <EvidenceMetric label='Source' value={selected.source} />
-                                        <EvidenceMetric label='Confidence' value={`${Math.round(selected.confidence * 100)}%`} />
+                                        <EvidenceMetric label='Source basis' value={sourceBasisLabel(selected.confidence)} />
                                         <EvidenceMetric label='Source reference' value={displayRequirementText(selected.provenance)} />
                                     </div>
 
@@ -728,7 +728,7 @@ type WatchlistWorkbenchRow = {
 }
 
 type SectionOverviewItem = {
-    label: 'Overview' | 'Activity' | 'Targeting' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Collection gaps' | 'Actions'
+    label: 'Overview' | 'Activity' | 'Targets' | 'Infrastructure' | 'Sources' | 'Evidence' | 'Watchlist relevance' | 'Related alerts/cases' | 'Collection gaps' | 'Actions'
     value: string
     state: 'ready' | 'review' | 'blocked'
 }
@@ -1679,7 +1679,7 @@ function ActorOperationsMatrix({
                                 <th className='px-3 py-2 font-semibold'>Name</th>
                                 <th className='px-3 py-2 font-semibold'>Source</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
-                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
@@ -1712,7 +1712,7 @@ function ActorOperationsMatrix({
                                             <span className={sourceHealthChipClass(row.freshness)}>{row.freshness}</span>
                                             <p className='mt-1 text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{formatDate(row.timestamp)}</p>
                                         </td>
-                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(row.confidence * 100)}%</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceBasisLabel(row.confidence)}</td>
                                         <td className='px-3 py-2'>
                                             <div className='flex min-w-0 flex-wrap gap-1.5'>
                                                 <button type='button' onClick={() => row.artifactKind && row.artifactLookup ? onSelectArtifactBy(row.artifactKind, row.artifactLookup) : onSelectArtifact(row.id)} className='inline-flex min-h-8 items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>Inspect</button>
@@ -1735,7 +1735,7 @@ function ActorOperationsMatrix({
                                 <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{displayRequirementText(selectedRow.detail)}</p>
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
-                                <EvidenceMetric label='Confidence' value={`${Math.round(selectedRow.confidence * 100)}%`} />
+                                <EvidenceMetric label='Source basis' value={sourceBasisLabel(selectedRow.confidence)} />
                                 <EvidenceMetric label='Source' value={selectedRow.source} />
                             </div>
                             <div className='grid grid-cols-2 gap-1.5'>
@@ -1798,7 +1798,7 @@ function SourceCoverageWorkbench({
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-2 border-b border-[#eef1f5] px-3 py-2 dark:border-[#273244]'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source review</p>
-                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Source coverage, newest mention, confidence, and review state.</p>
+                    <p className='mt-0.5 wrap-break-word text-xs text-[#596170] dark:text-[#b7c2d4]'>Source coverage, newest mention, evidence basis, and review state.</p>
                 </div>
                 <div className='flex min-w-0 flex-wrap gap-1.5'>
                     <span className={sourceHealthChipClass('ready')}>{readyCount} ready</span>
@@ -1815,7 +1815,7 @@ function SourceCoverageWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Source</th>
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Newest</th>
-                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Details</th>
                                 <th className='px-3 py-2 font-semibold'>State</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
@@ -1918,7 +1918,6 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
     selectedArtifactId?: string
     onSelectArtifact: (artifactId: string) => void
 }) {
-    const confidence = Math.round(actor.confidence * 100)
     const artifactByLookup = new Map(artifacts.map(artifact => [`${artifact.kind}:${artifact.label.toLowerCase()}`, artifact]))
     return (
         <section data-ti-actor-dossier='true' className='w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#dfe5ee] bg-white p-4 dark:border-[#263244] dark:bg-[#101722]'>
@@ -1931,7 +1930,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                 <div className='grid w-full min-w-0 basis-full grid-cols-2 gap-2 text-center text-xs sm:min-w-52 md:grid-cols-4 lg:w-auto lg:basis-auto'>
                     <EvidenceMetric label='First seen' value={actor.firstSeen} />
                     <EvidenceMetric label='Last seen' value={formatDate(actor.lastSeen || result.lastSeen)} />
-                    <EvidenceMetric label='Confidence' value={`${confidence}%`} />
+                    <EvidenceMetric label='Source basis' value={sourceBasisLabel(actor.confidence)} />
                     <EvidenceMetric label='Freshness' value={actor.freshness.stale ? 'Needs refresh' : 'Current'} />
                 </div>
             </div>
@@ -1943,7 +1942,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
                 <DossierList title='Tooling' values={actor.malwareTools} artifactKind='tool' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Campaigns' values={actor.campaigns} artifactKind='campaign' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Indicators' values={actor.indicators} />
-                <DossierList title='Targeting' values={actor.targetSectors} />
+                <DossierList title='Targets' description='Industries, victim types, or regions mentioned in the linked source evidence.' values={actor.targetSectors} />
                 <DossierList title='Geographies' values={actor.geographies} artifactKind='country' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <DossierList title='Infrastructure' values={actor.infrastructure} artifactKind='infrastructure' artifactByLookup={artifactByLookup} selectedArtifactId={selectedArtifactId} onSelectArtifact={onSelectArtifact} />
                 <TechniqueCoveragePanel techniques={actor.techniqueCoverage} />
@@ -1951,7 +1950,7 @@ function ActorIntelligenceDossier({ actor, actionability, result, artifacts, sel
             </div>
 
             <div className='mt-4 grid gap-3 xl:grid-cols-3'>
-                <EvidencePanel title='Confidence reasoning'>
+                <EvidencePanel title='Why this profile is trusted'>
                     {actor.confidenceReasoning.map(item => <li key={item}>{item}</li>)}
                 </EvidencePanel>
                 <SourceCoveragePanel coverage={actor.sourceCoverage} />
@@ -2294,7 +2293,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                             <div className='flex flex-wrap items-start justify-between gap-2'>
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.name}</p>
-                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.tactic} · {Math.round(item.confidence * 100)}%</p>
+                                    <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{item.tactic} · {sourceBasisLabel(item.confidence)}</p>
                                 </div>
                                 <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
                                     <span className={sourceHealthChipClass(item.freshness)}>{item.freshness}</span>
@@ -2368,7 +2367,7 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                        {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not mapped'} · {item.countries.slice(0, 2).join(', ') || 'Country not mapped'} · {Math.round(item.confidence * 100)}%
+                                        {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not mapped'} · {item.countries.slice(0, 2).join(', ') || 'Country not mapped'} · {sourceBasisLabel(item.confidence)}
                                     </p>
                                 </div>
                                 <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
@@ -2416,8 +2415,9 @@ function campaignActivityPayloadFor(item: TiActorIntelligenceProfile['campaignTi
     }
 }
 
-function DossierList({ title, values, artifactKind, artifactByLookup, selectedArtifactId, onSelectArtifact }: {
+function DossierList({ title, description, values, artifactKind, artifactByLookup, selectedArtifactId, onSelectArtifact }: {
     title: string
+    description?: string
     values: string[]
     artifactKind?: ActorArtifactKind
     artifactByLookup?: Map<string, ActorArtifact>
@@ -2426,7 +2426,10 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
 }) {
     return (
         <div className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-            <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
+            <div className='flex min-w-0 items-center gap-1.5'>
+                <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{title}</p>
+                {description ? <InfoTip label={description} /> : null}
+            </div>
             <div className='mt-2 grid grid-cols-1 gap-1.5 sm:flex sm:flex-wrap'>
                 {values.length ? values.slice(0, 8).map(value => {
                     const artifact = artifactKind ? artifactByLookup?.get(`${artifactKind}:${value.toLowerCase()}`) : undefined
@@ -2501,7 +2504,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                 <th className='px-3 py-2 font-semibold'>Detail</th>
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
-                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Review status</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
@@ -2523,7 +2526,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                                             <p className='mt-1 line-clamp-2 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>{artifact.evidence[0] ? displayRequirementText(artifact.evidence[0]) : artifact.subtitle}</p>
                                         </td>
                                         <td className='px-3 py-2 text-[#344054] dark:text-[#d8e2f2]'>{formatDate(artifact.freshness)}</td>
-                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{Math.round(artifact.confidence * 100)}%</td>
+                                        <td className='px-3 py-2 font-semibold text-[#344054] dark:text-[#d8e2f2]'>{sourceBasisLabel(artifact.confidence)}</td>
                                         <td className='px-3 py-2'>
                                             <span className={sourceHealthChipClass(state)}>{artifactStateLabel(artifact)}</span>
                                             <p className='mt-1 text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
@@ -2552,7 +2555,7 @@ function ArtifactNavigator({ artifacts, selectedArtifactId, onSelectArtifact }: 
                             </div>
                             <div className='grid grid-cols-2 gap-2 text-xs'>
                                 <EvidenceMetric label='Type' value={formatLabel(selectedArtifact.kind)} />
-                                <EvidenceMetric label='Confidence' value={`${Math.round(selectedArtifact.confidence * 100)}%`} />
+                                <EvidenceMetric label='Source basis' value={sourceBasisLabel(selectedArtifact.confidence)} />
                                 <EvidenceMetric label='Watch' value={String(selectedArtifact.watchlistTerms.length)} />
                                 <EvidenceMetric label='Open questions' value={String(selectedArtifact.enrichmentTasks.length)} />
                             </div>
@@ -2605,7 +2608,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                 <div data-ti-selected-artifact-export='true' className='grid w-full min-w-0 basis-full gap-2 sm:min-w-72 lg:w-auto lg:basis-auto'>
                     <div className='grid grid-cols-3 gap-2 text-center text-xs'>
                         <EvidenceMetric label='Freshness' value={formatDate(artifact.freshness)} />
-                        <EvidenceMetric label='Confidence' value={`${Math.round(artifact.confidence * 100)}%`} />
+                        <EvidenceMetric label='Source basis' value={sourceBasisLabel(artifact.confidence)} />
                         <EvidenceMetric label='Review status' value={displayRequirementText(artifact.readiness.label)} />
                     </div>
                     <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 lg:justify-end'>
@@ -2659,7 +2662,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     <p className='mt-1 break-all font-mono text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{request.captureId ?? displayRequirementText(request.provenance)}</p>
                                     {request.missing.length || typeof request.confidence === 'number' ? (
                                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                            {[typeof request.confidence === 'number' ? `${Math.round(request.confidence * 100)}% confidence` : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
+                                            {[typeof request.confidence === 'number' ? sourceBasisLabel(request.confidence) : '', ...request.missing.map(displayRequirementText)].filter(Boolean).join(' · ')}
                                         </p>
                                     ) : null}
                                     <div className='mt-2 flex min-w-0 flex-wrap gap-1.5'>
@@ -2835,7 +2838,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                         <tr>
                             <th className='px-3 py-2 font-semibold'>Source</th>
                             <th className='px-3 py-2 font-semibold'>Timestamp</th>
-                            <th className='px-3 py-2 font-semibold'>Confidence</th>
+                            <th className='px-3 py-2 font-semibold'>Basis</th>
                             <th className='px-3 py-2 font-semibold'>Capture</th>
                             <th className='px-3 py-2 font-semibold'>Next action</th>
                         </tr>
@@ -2848,7 +2851,7 @@ function SelectedEvidenceContextTable({ drilldown }: { drilldown: SelectedSource
                                     <p className='mt-1 wrap-break-word text-[11px] text-[#586274] dark:text-[#9aa8bd]'>{displayRequirementText(row.provenance)}</p>
                                 </td>
                                 <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{row.reportDate ? formatDate(row.reportDate) : 'Not dated'}</td>
-                                <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}%` : 'Not scored'}</td>
+                                <td className='px-3 py-2 text-[#475467] dark:text-[#b7c2d4]'>{sourceBasisLabel(row.confidence)}</td>
                                 <td className='px-3 py-2'>
                                     <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'attached' : 'needed'}</span>
                                 </td>
@@ -3257,7 +3260,7 @@ function WatchlistRelevanceWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Term</th>
                                 <th className='px-3 py-2 font-semibold'>Results</th>
                                 <th className='px-3 py-2 font-semibold'>Newest</th>
-                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Route</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
@@ -3938,7 +3941,7 @@ function OrgRelevancePanel({ actionability }: { actionability: TiActionabilityMo
                         const evidenceMeta = [
                             row.evidence.sourceName,
                             row.evidence.reportDate ? formatDate(row.evidence.reportDate) : '',
-                            typeof row.evidence.confidence === 'number' ? `${Math.round(row.evidence.confidence * 100)}% confidence` : '',
+                            typeof row.evidence.confidence === 'number' ? sourceBasisLabel(row.evidence.confidence) : '',
                             row.evidence.sourceId ? `source ${row.evidence.sourceId}` : '',
                             row.evidence.captureId ? `capture ${row.evidence.captureId}` : '',
                         ].filter(Boolean)
@@ -4315,6 +4318,8 @@ function handoffMissingLabel(values: string[]) {
 
 function displayRequirementText(value: string) {
     return value
+        .replace(/\bHanasand resolves it as an alias-collision profile:/gi, 'Open reporting treats this as an alias-collision profile:')
+        .replace(/\bHanasand resolves\b/gi, 'Open reporting maps')
         .replace(/\baction_required\b/gi, 'review')
         .replace(/\baction required\b/gi, 'review')
         .replace(/GET\s+\/api\/organizations\/[^/\s]+\/alert-readiness/gi, 'Check organization alert state')
@@ -4692,7 +4697,7 @@ function EnrichmentGapWorkbench({
                                 <th className='px-3 py-2 font-semibold'>Open question</th>
                                 <th className='px-3 py-2 font-semibold'>Entity</th>
                                 <th className='px-3 py-2 font-semibold'>Freshness</th>
-                                <th className='px-3 py-2 font-semibold'>Confidence</th>
+                                <th className='px-3 py-2 font-semibold'>Basis</th>
                                 <th className='px-3 py-2 font-semibold'>Action</th>
                             </tr>
                         </thead>
@@ -4854,7 +4859,7 @@ function SourceHealthPanel({ queue, intake, coverage, consumerReadiness, payload
                             {row.sourceId ? <span className={sourceHealthChipClass('review')}>source {row.sourceId}</span> : null}
                             {row.sourceRequestId ? <span className={sourceHealthChipClass('review')}>request {row.sourceRequestId}</span> : null}
                             <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? 'capture linked' : 'capture needed'}</span>
-                            {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{Math.round(row.confidence * 100)}% confidence</span> : null}
+                            {typeof row.confidence === 'number' ? <span className={sourceHealthChipClass('review')}>{sourceBasisLabel(row.confidence)}</span> : null}
                             <span className={sourceHealthChipClass(row.ownerLane === 'source' ? 'blocked' : row.state)}>{readinessOwnerLabel(row.ownerLane)}</span>
                         </div>
                         {row.requestedFields.length ? (
@@ -5223,7 +5228,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                     <div className='min-w-0'>
                         <p className='wrap-break-word text-[11px] font-semibold text-[#344054] dark:text-[#d8e2f2]'>Actor context</p>
                         <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {request.actorContext.attribution} · {Math.round(request.actorContext.confidence * 100)}% confidence
+                            {request.actorContext.attribution} · {sourceBasisLabel(request.actorContext.confidence)}
                         </p>
                     </div>
                     <span className={decisionStepStatusClass(request.actorContext.sourceCoverage.stale || request.actorContext.enrichmentGaps.length ? 'review' : 'ready')}>
@@ -5292,7 +5297,7 @@ function SelectedCaseCreateRequestPanel({ request }: { request: SelectedCaseCrea
                                 <span className={sourceHealthChipClass(row.captureId ? 'ready' : 'blocked')}>{row.captureId ? `capture ${row.captureId}` : 'capture needed'}</span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${Math.round(row.confidence * 100)}% confidence` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
+                                {row.reportDate ? formatDate(row.reportDate) : 'report date pending'}{typeof row.confidence === 'number' ? ` · ${sourceBasisLabel(row.confidence)}` : ''}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
                             <div data-ti-selected-case-provenance-fingerprints='true' className='mt-1 flex min-w-0 flex-wrap gap-1.5'>
                                 <span className={sourceHealthChipClass('review')}>{row.provenanceRefs.length} source ref{row.provenanceRefs.length === 1 ? '' : 's'}</span>
@@ -5732,7 +5737,7 @@ function SelectedCaseDraftPanel({ draft }: { draft: SelectedCaseDraft }) {
                                 </span>
                             </div>
                             <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                {typeof row.confidence === 'number' ? `${Math.round(row.confidence * 100)}% confidence` : 'confidence pending'}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
+                                {typeof row.confidence === 'number' ? sourceBasisLabel(row.confidence) : 'source basis pending'}{row.missing.length ? ` · needs ${handoffMissingLabel(row.missing)}` : ''}
                             </p>
                         </div>
                     ))}
@@ -6002,11 +6007,11 @@ function EvidenceQueueFilters({
                     </select>
                 </label>
                 <label className='grid min-w-0 gap-1'>
-                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Confidence</span>
+                    <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Source basis</span>
                     <select value={confidence} onChange={event => onConfidenceChange(event.target.value as 'all' | 'high' | 'medium')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         <option value='all'>Any</option>
-                        <option value='high'>70%+</option>
-                        <option value='medium'>50%+</option>
+                        <option value='high'>Strong</option>
+                        <option value='medium'>Moderate</option>
                     </select>
                 </label>
             </div>
@@ -6022,7 +6027,7 @@ function EvidenceQueueFilters({
                     <span className='text-[10px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Sort</span>
                     <select value={sort} onChange={event => onSortChange(event.target.value as 'priority' | 'confidence' | 'freshness')} className='h-9 min-w-0 rounded-lg border border-[#d8dee9] bg-white px-2 text-xs font-semibold text-[#344054] outline-none focus:border-[#3056d3] focus:ring-2 focus:ring-[#dce6ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         <option value='priority'>Priority</option>
-                        <option value='confidence'>Confidence</option>
+                        <option value='confidence'>Source basis</option>
                         <option value='freshness'>Freshness</option>
                     </select>
                 </label>
@@ -6109,7 +6114,7 @@ function MobileEvidenceWorkbar({
                     </button>
                 ))}
                 <button type='button' onClick={() => onConfidenceChange(confidence === 'high' ? 'all' : 'high')} className={`inline-flex min-h-8 shrink-0 items-center rounded-md border px-2 text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] ${confidence === 'high' ? 'border-[#3056d3] bg-[#eef3ff] text-[#3056d3] dark:border-[#8ca7ff] dark:bg-[#172646] dark:text-[#b8c8ff]' : 'border-[#dfe5ee] bg-white text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#9aa8bd]'}`}>
-                    70%+
+                    Strong basis
                 </button>
             </div>
 
@@ -6188,9 +6193,9 @@ function sectionOverviewFor(input: {
     const readyActions = Object.values(input.actionability.actionPayloads.payloads).filter(payload => payload.ready).length
     const sourceRows = input.actorIntel.provenanceRows.length || input.actionability.sourceProvenance.length || input.result.sources.length
     return [
-        { label: 'Overview', value: `${Math.round(input.actorIntel.confidence * 100)}% confidence`, state: input.actorIntel.provenanceRows.length ? 'ready' : 'blocked' },
+        { label: 'Overview', value: sourceBasisLabel(input.actorIntel.confidence), state: input.actorIntel.provenanceRows.length ? 'ready' : 'blocked' },
         { label: 'Activity', value: `${input.workItems.length} item${input.workItems.length === 1 ? '' : 's'}`, state: input.workItems.length ? 'ready' : 'review' },
-        { label: 'Targeting', value: `${input.victimObservations.length || input.actorIntel.targetSectors.length} row${(input.victimObservations.length || input.actorIntel.targetSectors.length) === 1 ? '' : 's'}`, state: input.victimObservations.length || input.actorIntel.targetSectors.length ? 'ready' : 'review' },
+        { label: 'Targets', value: `${input.victimObservations.length || input.actorIntel.targetSectors.length} row${(input.victimObservations.length || input.actorIntel.targetSectors.length) === 1 ? '' : 's'}`, state: input.victimObservations.length || input.actorIntel.targetSectors.length ? 'ready' : 'review' },
         { label: 'Infrastructure', value: `${input.actorIntel.infrastructure.length} pattern${input.actorIntel.infrastructure.length === 1 ? '' : 's'}`, state: input.actorIntel.infrastructure.length ? 'ready' : 'review' },
         { label: 'Sources', value: `${sourceRows} source result${sourceRows === 1 ? '' : 's'}`, state: sourceRows ? 'ready' : 'blocked' },
         { label: 'Evidence', value: `${input.workItems.filter(item => item.evidence.length).length} supported`, state: input.workItems.some(item => item.evidence.length) ? 'ready' : 'blocked' },
@@ -6224,7 +6229,7 @@ function resultTriageBriefFor(
         whyReview: victimObservations.length
             ? `${victimObservations.length} company or supplier observation${victimObservations.length === 1 ? '' : 's'} may need incident-response, vendor-risk, legal, or customer-communication review.`
             : topItem
-                ? `${topItem.source} provides ${Math.round(topItem.confidence * 100)}% confidence context; verify source references before customer-facing use.`
+                ? `${topItem.source} provides ${sourceBasisLabel(topItem.confidence).toLowerCase()} source basis; verify source references before customer-facing use.`
                 : 'No customer-facing action should be taken until a source record or fresh observation is attached.',
         nextAction: firstNextAction
             || (missing.length ? `Resolve ${displayRequirementList(missing)} before escalation.` : 'Open the highest-priority row, review source context, and decide whether it belongs in the authenticated console.'),
@@ -6413,19 +6418,19 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     const evidenceBasis = unique([
         `${selected.source}; ${selected.provenance}`,
         `Timestamp: ${selected.timestamp}`,
-        `Confidence: ${Math.round(selected.confidence * 100)}%`,
+        `Source basis: ${sourceBasisLabel(selected.confidence)}`,
         ...selected.evidence.slice(0, 3),
     ])
     const blockedUntil = [
         selected.href ? '' : 'A source URL or internal capture reference is attached.',
         isCustomerAlert ? '' : 'A watched company, domain, vendor, or portfolio term matches this finding.',
-        selected.confidence >= 0.7 ? '' : 'Confidence is raised or corroborating evidence is added.',
+        selected.confidence >= 0.7 ? '' : 'Corroborating evidence is added.',
     ].filter(Boolean)
 
     return {
         title: isCustomerAlert ? `Candidate customer alert: ${selected.title}` : `Actor context packet: ${selected.title}`,
         customerValue: isCustomerAlert
-            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source reference, confidence, and routing guidance.'
+            ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source reference, and routing guidance.'
             : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',
         watchTerms: watchlist.terms.slice(0, 8),
         evidenceBasis,
@@ -8069,7 +8074,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             status: hasActorCore ? 'ready' : 'needs_api',
             detail: hasActorCore
                 ? `Actor profile includes ${actor.malwareTools.length} tools, ${actor.campaigns.length} campaigns, and ${actor.infrastructure.length} infrastructure patterns for alert context.`
-                : 'Missing tooling, campaigns, infrastructure, confidence notes, or source details from the actor profile.',
+                : 'Missing tooling, campaigns, infrastructure, source-basis notes, or source details from the actor profile.',
         },
         {
             title: 'Persist alert review decision',
@@ -8336,7 +8341,7 @@ function selectedTriageBriefFor(
     alertPacket: AlertPacket | null,
     caseDraft: SelectedCaseDraft | null
 ): SelectedTriageBrief {
-    const confidence = `${Math.round(selected.confidence * 100)}%`
+    const sourceBasis = sourceBasisLabel(selected.confidence)
     const visibleTerm = watchlist.matchedTerms[0] || watchlist.terms[0] || result.query
     const sourceLabel = selected.source || 'listed source'
     const hasSourceReference = Boolean(selected.href || selected.provenance || selected.priority?.sourceIds.length || caseDraft?.sourceRows.length)
@@ -8355,8 +8360,8 @@ function selectedTriageBriefFor(
             : `${sourceLabel} provides current context for ${result.query}: ${displayRequirementText(selected.title)}.`
     const whyItMatters = alertValue
         || (selected.severity === 'critical' || selected.severity === 'high'
-            ? `${formatLabel(selected.severity)} priority with ${confidence} confidence; review it before customer notification or case routing.`
-            : `${confidence} confidence context that may support watchlist tuning, source review, or enrichment.`)
+            ? `${formatLabel(selected.severity)} priority with ${sourceBasis.toLowerCase()} source basis; review it before customer notification or case routing.`
+            : `${sourceBasis} source basis that may support watchlist tuning, source review, or enrichment.`)
     const nextAction = caseDraft?.ready
         ? 'Stage this item as a case candidate with the attached watch terms and source results.'
         : blocker
@@ -8376,7 +8381,7 @@ function selectedTriageBriefFor(
         safetyBoundary: 'Public TI results are metadata-only. Hanasand does not expose raw leak files, credential values, or webhook secrets in this view.',
         labels: [
             { label: 'Severity', value: formatLabel(selected.severity) },
-            { label: 'Confidence', value: confidence },
+            { label: 'Source basis', value: sourceBasis },
             { label: 'Watch term', value: visibleTerm },
             { label: 'Freshness', value: selected.timestamp },
         ],
@@ -8702,9 +8707,16 @@ function sourceCoverageStateRank(state: SourceCoverageWorkbenchRow['state']) {
 function sourceConfidenceLabel(values: number[]) {
     if (!values.length) return 'Not scored'
     const sorted = values.slice().sort((a, b) => a - b)
-    const low = Math.round(sorted[0]! * 100)
-    const high = Math.round(sorted[sorted.length - 1]! * 100)
-    return low === high ? `${high}%` : `${low}-${high}%`
+    const average = sorted.reduce((sum, value) => sum + value, 0) / sorted.length
+    return sourceBasisLabel(average)
+}
+
+function sourceBasisLabel(value: number | undefined) {
+    if (typeof value !== 'number' || Number.isNaN(value)) return 'Not scored'
+    if (value >= 0.8) return 'Strong'
+    if (value >= 0.6) return 'Moderate'
+    if (value >= 0.4) return 'Limited'
+    return 'Needs review'
 }
 
 function uniqueNumbers(values: number[]) {
@@ -8948,7 +8960,7 @@ function EmptyState() {
         { label: 'microsoft.com', href: '/ti/Microsoft', icon: <Building2 className='h-4 w-4' /> },
     ]
     const outcomeItems = [
-        ['Recent evidence', 'Recent company, actor, domain, and detail results with confidence, freshness, source family, and review state.'],
+        ['Recent evidence', 'Recent company, actor, domain, and detail results with source basis, freshness, source family, and review state.'],
         ['Source context', 'Linked source references, capture state, and open questions so analysts can judge whether a result is useful.'],
         ['Watchlist fit', 'Company, supplier, domain, and portfolio terms are separated from broad actor background.'],
         ['Action path', 'Review, watch, escalate, export, or open the authenticated console when the result needs follow-up.'],
@@ -8960,7 +8972,7 @@ function EmptyState() {
                 <div>
                     <h2 className='text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Not an analyst? Start with a company or domain.</h2>
                     <p className='mt-2 text-sm leading-6 text-[#596170] dark:text-[#b7c2d4]'>
-                        Hanasand translates the result into the company named, where the mention appeared, what was reported, how confident the match is, and what to review next.
+                        Search by actor, company, domain, CVE, or malware name to see what was reported, where it appeared, which sources support it, and what to review next.
                     </p>
                 </div>
                 <div className='grid gap-2 sm:grid-cols-2'>
