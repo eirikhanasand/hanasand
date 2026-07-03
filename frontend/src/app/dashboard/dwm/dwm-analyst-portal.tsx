@@ -95,6 +95,8 @@ type DeliveryItem = {
 }
 
 type PortalProps = {
+    tenantId: string
+    organizationId?: string
     snapshot: DwmProductSnapshot
     operations: OperationsSnapshot | null
     alerts: PortalAlert[]
@@ -121,7 +123,7 @@ type QueueFilter = 'active' | 'ready' | 'critical' | 'source' | 'high_confidence
 type InvestigationTab = 'evidence' | 'entities' | 'sources' | 'delivery'
 type EvidenceDispositionState = 'reviewed' | 'escalated' | 'suppressed' | 'false_positive'
 
-export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dataHealth, initialAlertId }: PortalProps) {
+export function DwmAnalystPortal({ tenantId, organizationId, snapshot, operations, alerts, deliveries, dataHealth, initialAlertId }: PortalProps) {
     const router = useRouter()
     const [selectedId, setSelectedId] = useState(initialAlertId && alerts.some(alert => alert.id === initialAlertId) ? initialAlertId : alerts[0]?.id ?? '')
     const [busyAction, setBusyAction] = useState<string | null>(null)
@@ -131,6 +133,7 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
     const [queueQuery, setQueueQuery] = useState('')
     const queue = useMemo(() => filterAlerts(orderAlerts(alerts), queueFilter, queueQuery), [alerts, queueFilter, queueQuery])
     const selectedAlert = queue.find(alert => alert.id === selectedId) ?? queue[0]
+    const selectedOrganizationId = selectedAlert ? alertOrganizationId(selectedAlert, organizationId) : organizationId
     const visibleQueue = useMemo(() => visibleQueueAlerts(queue, selectedAlert?.id), [queue, selectedAlert?.id])
     const selectedDeliveries = selectedAlert ? deliveries.filter(delivery => delivery.alertId === selectedAlert.id) : []
     const criticalCount = alerts.filter(alert => alert.severity === 'critical').length
@@ -157,10 +160,11 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
 
     async function updateAlert(alertId: string, reviewState: string, deliveryState: string, note: string, assignedOwner?: string) {
         await runAction(`update:${alertId}`, async () => {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ reviewState, deliveryState, note, assignedOwner, actor: 'dashboard' }),
+                body: JSON.stringify(scopeBody({ reviewState, deliveryState, note, assignedOwner, actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -170,10 +174,11 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
 
     async function replayAlert(alertId: string) {
         await runAction(`replay:${alertId}`, async () => {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}/replay`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ actor: 'dashboard' }),
+                body: JSON.stringify(scopeBody({ actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -186,14 +191,12 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alert.id)}/case-handoff`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({
-                    tenantId: 'default',
-                    organizationId: alert.organizationId || alert.workflowContext?.organizationId,
+                body: JSON.stringify(scopeBody({
                     actor: 'dashboard',
                     assignedOwner,
                     note: note?.trim() || 'Case opened from DWM alert.',
                     idempotencyKey: `dashboard-case-handoff:${alert.id}`,
-                }),
+                }, tenantId, alertOrganizationId(alert, organizationId))),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -203,10 +206,11 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
 
     async function sendAlert(alertId: string) {
         await runAction(`send:${alertId}`, async () => {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch('/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ tenantId: 'default', alertId, limit: 1 }),
+                body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -216,10 +220,11 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
 
     async function testDelivery(alertId: string) {
         await runAction(`test:${alertId}`, async () => {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch('/api/dwm/webhooks/test', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ tenantId: 'default', alertId, limit: 1 }),
+                body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await readPayload(response)
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -369,10 +374,18 @@ export function DwmAnalystPortal({ snapshot, operations, alerts, deliveries, dat
             </section>
 
             <section id='dwm-workflow-actions' className='scroll-mt-24'>
-                <DwmWorkflowActions initialTerms={snapshot.watchlist.map(term => term.value)} />
+                <DwmWorkflowActions tenantId={tenantId} organizationId={selectedOrganizationId} initialTerms={snapshot.watchlist.map(term => term.value)} />
             </section>
         </div>
     )
+}
+
+function alertOrganizationId(alert: PortalAlert, fallback?: string) {
+    return alert.organizationId || alert.workflowContext?.organizationId || fallback
+}
+
+function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {
+    return organizationId ? { ...body, tenantId, organizationId } : { ...body, tenantId }
 }
 
 function CaseWorkspace({ alert, deliveries, sourceCoverage, sourceHealth, localState, busyAction, actionMessage, onLocalStateChange, onUpdate, onOpenCase, onReplay, onTest, onSend }: {

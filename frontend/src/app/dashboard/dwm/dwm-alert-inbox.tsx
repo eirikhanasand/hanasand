@@ -9,8 +9,12 @@ import { safeAlertSummary, safeEvidenceExcerpt } from '@/utils/dwm/display'
 type InboxAlert = DwmAlert & {
     deliveryState?: string
     workflowNote?: string
+    organizationId?: string
     replayCount?: number
     lastReplayedAt?: string
+    workflowContext?: {
+        organizationId?: string
+    }
     workflowEvents?: Array<{
         id: string
         at: string
@@ -21,7 +25,7 @@ type InboxAlert = DwmAlert & {
     }>
 }
 
-export function DwmAlertInbox({ alerts }: { alerts: InboxAlert[] }) {
+export function DwmAlertInbox({ alerts, tenantId = 'default', organizationId }: { alerts: InboxAlert[], tenantId?: string, organizationId?: string }) {
     const router = useRouter()
     const [busyAlert, setBusyAlert] = useState<string | null>(null)
     const [message, setMessage] = useState<string | null>(null)
@@ -30,10 +34,11 @@ export function DwmAlertInbox({ alerts }: { alerts: InboxAlert[] }) {
         setBusyAlert(alertId)
         setMessage(null)
         try {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}`, {
                 method: 'PATCH',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ reviewState, deliveryState, note, actor: 'dashboard' }),
+                body: JSON.stringify(scopeBody({ reviewState, deliveryState, note, actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -50,10 +55,11 @@ export function DwmAlertInbox({ alerts }: { alerts: InboxAlert[] }) {
         setBusyAlert(alertId)
         setMessage(null)
         try {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch(`/api/dwm/alerts/${encodeURIComponent(alertId)}/replay`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ actor: 'dashboard' }),
+                body: JSON.stringify(scopeBody({ actor: 'dashboard' }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string } }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -70,10 +76,11 @@ export function DwmAlertInbox({ alerts }: { alerts: InboxAlert[] }) {
         setBusyAlert(alertId)
         setMessage(null)
         try {
+            const alert = alerts.find(item => item.id === alertId)
             const response = await fetch('/api/dwm/webhooks/deliver', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ tenantId: 'default', alertId, limit: 1 }),
+                body: JSON.stringify(scopeBody({ alertId, limit: 1 }, tenantId, alert ? alertOrganizationId(alert, organizationId) : organizationId)),
             })
             const payload = await response.json().catch(() => ({})) as { error?: { message?: string }, attemptedCount?: number }
             if (!response.ok) throw new Error(payload.error?.message || response.statusText)
@@ -143,6 +150,14 @@ export function DwmAlertInbox({ alerts }: { alerts: InboxAlert[] }) {
             {message && <p className='text-sm text-ui-muted'>{message}</p>}
         </div>
     )
+}
+
+function alertOrganizationId(alert: InboxAlert, fallback?: string) {
+    return alert.organizationId || alert.workflowContext?.organizationId || fallback
+}
+
+function scopeBody<T extends Record<string, unknown>>(body: T, tenantId: string, organizationId?: string) {
+    return organizationId ? { ...body, tenantId, organizationId } : { ...body, tenantId }
 }
 
 function ActionButton({ busy, onClick, icon, children }: { busy: boolean, onClick: () => void, icon: 'review' | 'send' | 'false' | 'replay', children: string }) {
