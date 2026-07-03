@@ -10,6 +10,22 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
     const longRunningQueries = overview.queries.filter(query => query.isLongRunning)
     const activeQueryCount = overview.activeQueries ?? overview.queries.filter(query => query.state === 'active').length
     const databaseRows = overview.clusters.flatMap(cluster => cluster.databases.map(database => ({ cluster, database })))
+    const primaryHref = unavailable ? '/dashboard/logs' : activeQueryCount > 0 ? '#active-queries' : '#storage-inventory'
+    const primaryAction = unavailable ? 'Open logs' : activeQueryCount > 0 ? 'Review queries' : 'Review inventory'
+    const primaryTitle = unavailable
+        ? 'Restore telemetry before triage'
+        : longRunningQueries.length
+            ? 'Review long-running queries now'
+            : activeQueryCount > 0
+                ? 'Watch active query pressure'
+                : 'Confirm inventory and backup readiness'
+    const primaryDetail = unavailable
+        ? overview.health.detail || overview.health.message
+        : longRunningQueries.length
+            ? `${longRunningQueries.length} query${longRunningQueries.length === 1 ? '' : 'ies'} exceeded the ${formatTime(overview.longRunningThresholdSeconds)} watch threshold.`
+            : activeQueryCount > 0
+                ? `${activeQueryCount} active query${activeQueryCount === 1 ? '' : 'ies'} are running with no long-running rows yet.`
+                : `${overview.databaseCount ?? databaseRows.length} databases are indexed; use the inventory to confirm storage and backup context.`
 
     return (
         <DashboardPage>
@@ -31,41 +47,70 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
                 </div>
             </DashboardPanel>
 
-            <section className='grid gap-3 xl:grid-cols-3'>
-                <OperationLane
-                    icon={<Radio className='h-4 w-4' />}
-                    title='Telemetry poll'
-                    value={unavailable ? 'retrying' : 'live'}
-                    detail={unavailable ? overview.health.detail || overview.health.message : `${databaseRows.length} database rows read from PostgreSQL telemetry`}
-                    tone={unavailable ? 'bad' : 'ok'}
-                />
-                <OperationLane
-                    icon={<Activity className='h-4 w-4' />}
-                    title='Query watcher'
-                    value={`${activeQueryCount} active`}
-                    detail={longRunningQueries.length ? `${longRunningQueries.length} long-running query${longRunningQueries.length === 1 ? '' : 'ies'} need review` : 'No long-running queries right now'}
-                    tone={longRunningQueries.length ? 'watch' : 'ok'}
-                />
-                <OperationLane
-                    icon={<HardDrive className='h-4 w-4' />}
-                    title='Inventory stream'
-                    value={overview.totalSizeBytes === null ? 'connecting' : formatBytes(overview.totalSizeBytes)}
-                    detail={overview.clusters.length ? `${overview.clusters.length} cluster${overview.clusters.length === 1 ? '' : 's'}, ${overview.databaseCount ?? databaseRows.length} databases tracked` : 'Checking PostgreSQL access for cluster inventory'}
-                    tone={overview.clusters.length ? 'ok' : 'watch'}
-                />
-            </section>
+            <DashboardPanel className='p-4'>
+                <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-db-primary-triage>
+                    <div className='min-w-0'>
+                        <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
+                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
+                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{activeQueryCount} active</span>
+                            <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{longRunningQueries.length} long-running</span>
+                        </div>
+                        <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
+                        <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                    </div>
+                    <Link
+                        href={primaryHref}
+                        className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                        data-db-primary-action
+                    >
+                        {primaryAction}
+                    </Link>
+                </div>
+            </DashboardPanel>
 
-            <div className='grid gap-3 md:grid-cols-3 xl:grid-cols-6'>
-                <MetricCard icon={<Server className='h-4 w-4 text-[#9db8ff]' />} label='Clusters' value={formatNumberMetric(overview.clusterCount)} />
-                <MetricCard icon={<Database className='h-4 w-4 text-[#9cf0bc]' />} label='Databases' value={formatNumberMetric(overview.databaseCount)} />
-                <MetricCard icon={<HardDrive className='h-4 w-4 text-[#ffd58a]' />} label='Storage' value={overview.totalSizeBytes === null ? 'Metering' : formatBytes(overview.totalSizeBytes)} />
-                <MetricCard icon={<PlayCircle className='h-4 w-4 text-[#bca8ff]' />} label='Active queries' value={String(activeQueryCount)} />
-                <MetricCard icon={<Clock3 className='h-4 w-4 text-[#bca8ff]' />} label='Avg active runtime' value={formatTime(overview.averageQuerySeconds)} />
-                <MetricCard icon={<AlertTriangle className='h-4 w-4 text-[#ffb598]' />} label='Long-running' value={String(longRunningQueries.length)} />
-            </div>
+            <details className='overflow-hidden rounded-lg border border-[#22334d] bg-[#0f172a]' data-db-telemetry-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Telemetry details and counters</span>
+                    <span className='text-xs font-medium text-[#8fa0ba]'>{overview.clusterCount ?? 0} clusters, {overview.databaseCount ?? databaseRows.length} databases, {formatBytes(overview.totalSizeBytes)}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-[#22334d] p-3'>
+                    <section className='grid gap-3 xl:grid-cols-3' data-db-operation-lanes>
+                        <OperationLane
+                            icon={<Radio className='h-4 w-4' />}
+                            title='Telemetry poll'
+                            value={unavailable ? 'retrying' : 'live'}
+                            detail={unavailable ? overview.health.detail || overview.health.message : `${databaseRows.length} database rows read from PostgreSQL telemetry`}
+                            tone={unavailable ? 'bad' : 'ok'}
+                        />
+                        <OperationLane
+                            icon={<Activity className='h-4 w-4' />}
+                            title='Query watcher'
+                            value={`${activeQueryCount} active`}
+                            detail={longRunningQueries.length ? `${longRunningQueries.length} long-running query${longRunningQueries.length === 1 ? '' : 'ies'} need review` : 'No long-running queries right now'}
+                            tone={longRunningQueries.length ? 'watch' : 'ok'}
+                        />
+                        <OperationLane
+                            icon={<HardDrive className='h-4 w-4' />}
+                            title='Inventory stream'
+                            value={overview.totalSizeBytes === null ? 'connecting' : formatBytes(overview.totalSizeBytes)}
+                            detail={overview.clusters.length ? `${overview.clusters.length} cluster${overview.clusters.length === 1 ? '' : 's'}, ${overview.databaseCount ?? databaseRows.length} databases tracked` : 'Checking PostgreSQL access for cluster inventory'}
+                            tone={overview.clusters.length ? 'ok' : 'watch'}
+                        />
+                    </section>
+
+                    <div className='grid gap-3 md:grid-cols-3 xl:grid-cols-6' data-db-metrics>
+                        <MetricCard icon={<Server className='h-4 w-4 text-[#9db8ff]' />} label='Clusters' value={formatNumberMetric(overview.clusterCount)} />
+                        <MetricCard icon={<Database className='h-4 w-4 text-[#9cf0bc]' />} label='Databases' value={formatNumberMetric(overview.databaseCount)} />
+                        <MetricCard icon={<HardDrive className='h-4 w-4 text-[#ffd58a]' />} label='Storage' value={overview.totalSizeBytes === null ? 'Metering' : formatBytes(overview.totalSizeBytes)} />
+                        <MetricCard icon={<PlayCircle className='h-4 w-4 text-[#bca8ff]' />} label='Active queries' value={String(activeQueryCount)} />
+                        <MetricCard icon={<Clock3 className='h-4 w-4 text-[#bca8ff]' />} label='Avg active runtime' value={formatTime(overview.averageQuerySeconds)} />
+                        <MetricCard icon={<AlertTriangle className='h-4 w-4 text-[#ffb598]' />} label='Long-running' value={String(longRunningQueries.length)} />
+                    </div>
+                </div>
+            </details>
 
             <div className='grid gap-4 xl:grid-cols-[1.35fr_0.65fr]'>
-                <DashboardPanel className='p-4'>
+                <DashboardPanel className='p-4' id='active-queries'>
                     <div className='flex flex-wrap items-center justify-between gap-2'>
                         <div>
                             <h2 className='text-base font-semibold text-[#edf4ff]'>Active and long-running queries</h2>
@@ -97,7 +142,7 @@ export function DatabaseDashboard({ overview }: { overview: DatabaseOverview }) 
             </div>
 
             <div className='grid gap-4 xl:grid-cols-[1fr_0.7fr]'>
-                <DashboardPanel className='p-4'>
+                <DashboardPanel className='p-4' id='storage-inventory'>
                     <h2 className='text-base font-semibold text-[#edf4ff]'>Storage and databases</h2>
                     {overview.clusters.length ? (
                         <div className='mt-3 overflow-x-auto'>
