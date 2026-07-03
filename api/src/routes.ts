@@ -78,6 +78,7 @@ import getMetrics from './handlers/metrics/getMetrics.ts'
 import getDatabaseOverview from './handlers/database/getOverview.ts'
 import { getDatabaseBackupFiles, getDatabaseBackups, postDatabaseBackup, postDatabaseBackupRestore } from './handlers/database/backups.ts'
 import getDocker from './handlers/docker/getDocker.ts'
+import { getVulnerabilities, postVulnerabilityScan } from './handlers/vulnerabilities.ts'
 import vmAction from './handlers/vms/action.ts'
 import getStatus from './handlers/status/get.ts'
 import ingestStatus from './handlers/status/ingest.ts'
@@ -435,6 +436,8 @@ export default async function apiRoutes(fastify: FastifyInstance, options: Fasti
 
     // Docker stats
     fastify.get('/docker', getDocker)
+    fastify.get('/vulnerabilities', getVulnerabilities)
+    fastify.post('/vulnerabilities/scan', postVulnerabilityScan)
     fastify.get('/system/cron', getSystemCronJobs)
     fastify.put('/system/cron/:id', putSystemCronJob)
 

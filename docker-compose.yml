@@ -45,6 +45,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/snap/lxd/common/lxd/unix.socket:/var/snap/lxd/common/lxd/unix.socket
       - /var/spool/cron/crontabs:/host/cron/crontabs
+      - api_state:/var/lib/hanasand
       - ${HANASAND_APP_UPDATE_DIR:-/srv/hanasand/app-updates}:/srv/hanasand/app-updates
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -66,6 +67,7 @@ services:
       MAIL_MANAGESIEVE_PORT: ${MAIL_MANAGESIEVE_PORT:-4190}
       MANAGED_CRON_GID: ${MANAGED_CRON_GID:-990}
       VM_HOST_ID: ${VM_HOST_ID:-ovhcloud}
+      VULNERABILITY_SCAN_STATE_PATH: ${VULNERABILITY_SCAN_STATE_PATH:-/var/lib/hanasand/vulnerability-scan.json}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api"]
       interval: 5s
@@ -233,6 +235,7 @@ services:
       - hanasandnet
 
 volumes:
+  api_state:
   postgres_data:
   ti_scraper_evidence:
 

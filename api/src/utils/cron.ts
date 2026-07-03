@@ -10,30 +10,33 @@ import { runDueAutomations } from './automations.ts'
 import runProductionLogMonitors from './status/logMonitors.ts'
 import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from './ti/search.ts'
 import { runDueThreatIntelPipeline } from './ti/autonomousPipeline.ts'
+import { runTrackedBackgroundJob } from './backgroundJobRuntime.ts'
+import { runDueVulnerabilityScan, VULNERABILITY_SCAN_JOB_ID } from './vulnerabilities/scanner.ts'
 
 export default function cron() {
     schedule('* * * * *', async() => {
         try {
             const jobs = [
-                invalidateOldTokens(),
-                invalidateOldAttempts(),
-                purgeDeletedAccounts(),
-                runSyntheticMonitor(),
-                runProductionLogMonitors(),
-                ensureAlwaysRunningVms(),
-                runDueAutomations(),
-                warmThreatActorProfileCache().catch(error => {
+                runTrackedBackgroundJob('api-auth-token-cleanup', invalidateOldTokens),
+                runTrackedBackgroundJob('api-login-attempt-cleanup', invalidateOldAttempts),
+                runTrackedBackgroundJob('api-deleted-account-purge', purgeDeletedAccounts),
+                runTrackedBackgroundJob('api-synthetic-monitor', runSyntheticMonitor),
+                runTrackedBackgroundJob('api-production-log-monitor', runProductionLogMonitors),
+                runTrackedBackgroundJob('api-vm-ensure-running', ensureAlwaysRunningVms),
+                runTrackedBackgroundJob(VULNERABILITY_SCAN_JOB_ID, runDueVulnerabilityScan),
+                runTrackedBackgroundJob('api-agent-automations', runDueAutomations),
+                runTrackedBackgroundJob('api-ti-profile-cache-warm', () => warmThreatActorProfileCache()).catch(error => {
                     recordThreatActorProfileWarmFailure(error)
                     throw error
                 }),
-                runDueThreatIntelPipeline().catch(error => {
+                runTrackedBackgroundJob('api-ti-autonomous-pipeline', () => runDueThreatIntelPipeline()).catch(error => {
                     console.error('Failed to run autonomous threat intelligence pipeline', error)
                     throw error
                 }),
             ]
 
             if (mailConfig.adminPassword) {
-                jobs.push(provisionExistingMailAccounts())
+                jobs.push(runTrackedBackgroundJob('api-mail-account-provisioning', provisionExistingMailAccounts))
             }
 
             await Promise.all(jobs)

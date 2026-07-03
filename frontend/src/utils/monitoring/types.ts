@@ -41,6 +41,22 @@ export type DockerScoutScanStatus = {
     completedImages: number
     currentImage: string | null
     estimatedCompletionAt: string | null
+    enabled: boolean
+    paused: boolean
+    schedule: string
+    cadenceSeconds: number
+    nextRunAt: string | null
+    targetCount: number
+    failureCount: number
+    stale: boolean
+    staleReason: string | null
+    blocker: string | null
+    blockerAction: string | null
+    logs: Array<{
+        at: string
+        level: 'info' | 'warn' | 'error'
+        message: string
+    }>
 }
 
 export type GetVulnerabilities = {

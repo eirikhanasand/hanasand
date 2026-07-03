@@ -9,7 +9,7 @@ RUN bun install
 
 FROM oven/bun:1.3.11-alpine
 
-RUN apk add --no-cache varnish git openssh-client chromium
+RUN apk add --no-cache varnish git openssh-client chromium docker-cli
 
 COPY --from=k6builder /usr/bin/k6 /usr/bin/k6
 

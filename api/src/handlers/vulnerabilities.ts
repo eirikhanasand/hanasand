@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import tokenWrapper from '#utils/auth/tokenWrapper.ts'
 import hasRole from '#utils/auth/hasRole.ts'
-import { listUnifiedScheduledJobs, updateManagedCronJob, type ManagedCronUpdate } from '#utils/systemCron.ts'
+import { getVulnerabilityReport, startTrackedVulnerabilityScan } from '#utils/vulnerabilities/scanner.ts'
 
 async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
     const { valid } = await tokenWrapper(req, res)
@@ -17,17 +17,19 @@ async function requireSystemAdmin(req: FastifyRequest, res: FastifyReply) {
     return true
 }
 
-export async function getSystemCronJobs(req: FastifyRequest, res: FastifyReply) {
+export async function getVulnerabilities(req: FastifyRequest, res: FastifyReply) {
     if (!await requireSystemAdmin(req, res)) return
-    return res.send({ jobs: await listUnifiedScheduledJobs() })
+    return res.send(await getVulnerabilityReport())
 }
 
-export async function putSystemCronJob(req: FastifyRequest<{ Params: { id: string }, Body: ManagedCronUpdate }>, res: FastifyReply) {
+export async function postVulnerabilityScan(req: FastifyRequest, res: FastifyReply) {
     if (!await requireSystemAdmin(req, res)) return
-    try {
-        const job = await updateManagedCronJob(req.params.id, req.body || {})
-        return res.send({ job, jobs: await listUnifiedScheduledJobs() })
-    } catch (error) {
-        return res.status(400).send({ error: error instanceof Error ? error.message : 'Unable to update cron job.' })
-    }
+    void startTrackedVulnerabilityScan().catch(error => {
+        console.error('Failed to run vulnerability scanner from dashboard', error)
+    })
+    const report = await getVulnerabilityReport()
+    return res.send({
+        message: 'Vulnerability scan started; refresh status for progress and blockers.',
+        status: { ...report.scanStatus, isRunning: true },
+    })
 }

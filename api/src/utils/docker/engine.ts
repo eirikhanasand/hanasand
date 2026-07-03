@@ -1,5 +1,6 @@
 import http from 'node:http'
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 
 export type RuntimeContainer = {
     id: string
@@ -8,6 +9,13 @@ export type RuntimeContainer = {
     state: string
     status: string
     created_at: string
+    ports?: RuntimeContainerPort[]
+    restart_count?: number
+    health?: string
+    uptime_seconds?: number | null
+    stats?: RuntimeContainerStats | null
+    stats_unavailable_reason?: string
+    stats_updated_at?: string
 }
 
 export type RuntimeLogEntry = {
@@ -21,6 +29,20 @@ export type RuntimeLogEntry = {
     source: 'runtime'
 }
 
+export type RuntimeContainerPort = {
+    ip?: string
+    private_port: number
+    public_port?: number
+    type: string
+}
+
+export type RuntimeContainerStats = {
+    cpu_percent: number | null
+    memory_bytes: number | null
+    memory_limit_bytes: number | null
+    memory_percent: number | null
+}
+
 type DockerContainerResponse = {
     Id: string
     Names?: string[]
@@ -28,12 +50,70 @@ type DockerContainerResponse = {
     State?: string
     Status?: string
     Created?: number
+    Ports?: {
+        IP?: string
+        PrivatePort?: number
+        PublicPort?: number
+        Type?: string
+    }[]
 }
 
-const DEFAULT_SOCKET_PATH = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock'
+type DockerInspectResponse = {
+    RestartCount?: number
+    State?: {
+        StartedAt?: string
+        Health?: {
+            Status?: string
+        }
+    }
+}
+
+type DockerStatsResponse = {
+    read?: string
+    cpu_stats?: {
+        online_cpus?: number
+        system_cpu_usage?: number
+        cpu_usage?: {
+            total_usage?: number
+            percpu_usage?: number[]
+        }
+    }
+    precpu_stats?: {
+        system_cpu_usage?: number
+        cpu_usage?: {
+            total_usage?: number
+        }
+    }
+    memory_stats?: {
+        usage?: number
+        limit?: number
+        stats?: {
+            inactive_file?: number
+            cache?: number
+        }
+    }
+}
+
+const DEFAULT_SOCKET_PATH = resolveDockerSocketPath()
 
 function canUseDockerSocket() {
     return existsSync(DEFAULT_SOCKET_PATH)
+}
+
+function resolveDockerSocketPath() {
+    const explicitPath = process.env.DOCKER_SOCKET_PATH
+    if (explicitPath) return explicitPath
+
+    const dockerHost = process.env.DOCKER_HOST
+    if (dockerHost?.startsWith('unix://')) {
+        return dockerHost.slice('unix://'.length)
+    }
+
+    const candidates = [
+        '/var/run/docker.sock',
+        `${homedir()}/.docker/run/docker.sock`,
+    ]
+    return candidates.find((candidate) => existsSync(candidate)) || candidates[0]
 }
 
 function requestDocker(path: string) {
@@ -75,6 +155,61 @@ function requestDocker(path: string) {
 
 function normalizeContainerName(name?: string) {
     return (name || '').replace(/^\/+/, '')
+}
+
+function normalizePorts(ports?: DockerContainerResponse['Ports']): RuntimeContainerPort[] {
+    if (!Array.isArray(ports)) return []
+    return ports
+        .filter((port) => typeof port.PrivatePort === 'number')
+        .map((port) => ({
+            ip: port.IP,
+            private_port: port.PrivatePort as number,
+            public_port: typeof port.PublicPort === 'number' ? port.PublicPort : undefined,
+            type: port.Type || 'tcp',
+        }))
+}
+
+function uptimeSeconds(startedAt?: string) {
+    if (!startedAt || startedAt.startsWith('0001-01-01')) return null
+    const started = new Date(startedAt).getTime()
+    if (Number.isNaN(started)) return null
+    return Math.max(0, Math.floor((Date.now() - started) / 1000))
+}
+
+function parseStats(stats: DockerStatsResponse): RuntimeContainerStats {
+    const cpuTotal = stats.cpu_stats?.cpu_usage?.total_usage ?? 0
+    const preCpuTotal = stats.precpu_stats?.cpu_usage?.total_usage ?? 0
+    const systemTotal = stats.cpu_stats?.system_cpu_usage ?? 0
+    const preSystemTotal = stats.precpu_stats?.system_cpu_usage ?? 0
+    const cpuDelta = cpuTotal - preCpuTotal
+    const systemDelta = systemTotal - preSystemTotal
+    const onlineCpus = stats.cpu_stats?.online_cpus || stats.cpu_stats?.cpu_usage?.percpu_usage?.length || 1
+    const cpuPercent = cpuDelta > 0 && systemDelta > 0
+        ? (cpuDelta / systemDelta) * onlineCpus * 100
+        : null
+
+    const rawUsage = typeof stats.memory_stats?.usage === 'number' ? stats.memory_stats.usage : null
+    const limit = typeof stats.memory_stats?.limit === 'number' ? stats.memory_stats.limit : null
+    const cache = stats.memory_stats?.stats?.inactive_file ?? stats.memory_stats?.stats?.cache ?? 0
+    const usage = rawUsage === null ? null : Math.max(0, rawUsage - cache)
+    const memoryPercent = usage !== null && limit && limit > 0 ? (usage / limit) * 100 : null
+
+    return {
+        cpu_percent: cpuPercent,
+        memory_bytes: usage,
+        memory_limit_bytes: limit,
+        memory_percent: memoryPercent,
+    }
+}
+
+async function inspectRuntimeContainer(id: string) {
+    const body = await requestDocker(`/containers/${id}/json`)
+    return JSON.parse(body.toString('utf8')) as DockerInspectResponse
+}
+
+async function statsRuntimeContainer(id: string) {
+    const body = await requestDocker(`/containers/${id}/stats?stream=false`)
+    return parseStats(JSON.parse(body.toString('utf8')) as DockerStatsResponse)
 }
 
 function detectLevel(message: string): RuntimeLogEntry['level'] {
@@ -173,6 +308,33 @@ export async function listRuntimeContainers(): Promise<RuntimeContainer[]> {
         state: container.State || 'unknown',
         status: container.Status || 'unknown',
         created_at: new Date((container.Created || 0) * 1000).toISOString(),
+        ports: normalizePorts(container.Ports),
+    }))
+}
+
+export async function listRuntimeContainersWithStats(): Promise<RuntimeContainer[]> {
+    const containers = await listRuntimeContainers()
+
+    return Promise.all(containers.map(async (container) => {
+        const [inspect, stats] = await Promise.allSettled([
+            inspectRuntimeContainer(container.id),
+            container.state === 'running'
+                ? statsRuntimeContainer(container.id)
+                : Promise.reject(new Error(`Container is ${container.state}; Docker stats are only available while running.`)),
+        ])
+
+        const inspected = inspect.status === 'fulfilled' ? inspect.value : null
+        return {
+            ...container,
+            restart_count: inspected?.RestartCount,
+            health: inspected?.State?.Health?.Status,
+            uptime_seconds: uptimeSeconds(inspected?.State?.StartedAt),
+            stats: stats.status === 'fulfilled' ? stats.value : null,
+            stats_unavailable_reason: stats.status === 'rejected'
+                ? stats.reason instanceof Error ? stats.reason.message : 'Docker stats are unavailable.'
+                : undefined,
+            stats_updated_at: stats.status === 'fulfilled' ? new Date().toISOString() : undefined,
+        }
     }))
 }
 

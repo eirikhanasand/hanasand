@@ -16,7 +16,7 @@ export default async function Page() {
         <DashboardPage className='h-full'>
             <DashboardHeader
                 title='Cron jobs'
-                description='Managed host schedules, health checks, and failover maintenance jobs.'
+                description='Operate recurring jobs across Forgejo, TI, exposure, alerts, mail, database, and system services.'
             />
             <CronJobsClient />
         </DashboardPage>
