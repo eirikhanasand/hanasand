@@ -664,7 +664,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         </Link>
                     </div>
                 </div>
-                <div className='mt-3 grid gap-2 lg:grid-cols-4'>
+                <div className='mt-3 grid min-w-0 gap-2 sm:grid-cols-2 2xl:grid-cols-4'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
                 </div>
                 <div data-dwm-inline-webhook className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-panel p-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-end'>
@@ -903,11 +903,11 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
                 ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
                 : 'border-ui-border bg-ui-panel text-ui-muted'
     return (
-        <article className='grid min-h-44 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
+        <article className='grid min-h-44 min-w-0 gap-3 rounded-lg border border-ui-border bg-ui-panel p-3'>
             <div className='min-w-0'>
                 <div className='flex items-start justify-between gap-2'>
-                    <h4 className='wrap-break-word text-sm font-semibold text-ui-text'>{action.label}</h4>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`}>{action.state}</span>
+                    <h4 className='min-w-0 wrap-break-word text-sm font-semibold text-ui-text'>{action.label}</h4>
+                    <span className={`max-w-[55%] shrink-0 truncate rounded-full border px-2 py-0.5 text-[11px] font-semibold ${toneClass}`} title={action.state}>{action.state}</span>
                 </div>
                 <p className='mt-2 line-clamp-3 text-xs leading-5 text-ui-subtle'>{action.detail}</p>
             </div>
@@ -916,7 +916,7 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
                 onClick={action.onClick}
                 disabled={action.disabled}
                 title={action.disabledReason}
-                className='mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30 disabled:cursor-not-allowed disabled:opacity-60'
+                className='mt-auto inline-flex min-h-9 max-w-full items-center justify-center gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 text-xs font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/30 disabled:cursor-not-allowed disabled:opacity-60'
             >
                 {action.busy ? <Loader2 className='h-4 w-4 animate-spin' /> : <Activity className='h-4 w-4' />}
                 {action.busy ? 'Running...' : action.command}
