@@ -11,6 +11,7 @@ import ensureRepositoryUpToDate from '#utils/git/ensureRepositoryUpToDate.ts'
 import ensureSchema from '#utils/db/ensureSchema.ts'
 import recordLog from '#utils/logs/recordLog.ts'
 import recordTraffic from '#utils/traffic/recordTraffic.ts'
+import { recordHttpErrorResponse } from '#utils/logs/httpErrors.ts'
 import { provisionExistingMailAccounts } from '#utils/mail/accounts.ts'
 import { recordThreatActorProfileWarmFailure, warmThreatActorProfileCache } from '#utils/ti/search.ts'
 
@@ -44,6 +45,10 @@ fastify.register(cors, {
 fastify.register(fp)
 fastify.register(ws)
 fastify.register(rateLimit)
+fastify.addHook('onSend', async (req, res, payload) => {
+    await recordHttpErrorResponse(req, res, payload)
+    return payload
+})
 fastify.addHook('onResponse', async (req, res) => {
     recordTraffic(req, res)
 })

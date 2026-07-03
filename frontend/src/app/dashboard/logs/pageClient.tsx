@@ -384,7 +384,7 @@ function BreakdownCard({ title, rows }: { title: string, rows: Array<{ label: st
                         <span className='rounded-md border border-ui-border bg-ui-panel px-2 py-0.5 text-xs font-semibold text-ui-muted'>{row.count}</span>
                     </div>
                 ))}
-                {!rows.length && <p className='rounded-md border border-dashed border-ui-border p-3 text-sm text-ui-muted'>No rows yet.</p>}
+                {!rows.length && <p className='rounded-md border border-dashed border-ui-border p-3 text-sm text-ui-muted'>No error-code rows in this window.</p>}
             </div>
         </div>
     )

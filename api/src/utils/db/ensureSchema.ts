@@ -201,6 +201,8 @@ export default async function ensureSchema() {
     `)
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_created_at ON service_logs(created_at DESC)')
     await run('CREATE INDEX IF NOT EXISTS idx_service_logs_service_level ON service_logs(service, level, created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_errors ON service_logs((metadata->>\'category\'), created_at DESC)')
+    await run('CREATE INDEX IF NOT EXISTS idx_service_logs_http_error_code ON service_logs((metadata->>\'error_code\'), created_at DESC) WHERE metadata->>\'category\' = \'http_response_error\'')
     await run(`
         CREATE TABLE IF NOT EXISTS ti_actor_enrichment_runs (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
