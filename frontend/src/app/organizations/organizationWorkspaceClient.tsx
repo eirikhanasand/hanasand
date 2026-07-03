@@ -301,6 +301,7 @@ export default function OrganizationWorkspaceClient() {
     const hasConfiguredDestination = bundle.watchlists.some(destinationConfigured)
     const selectedAlertId = bundle.alerts[0]?.id || liveDwmAlertId
     const activityRows = useMemo(() => organizationActivityRows(activity, bundle), [activity, bundle])
+    const hasDwmContext = Boolean(requestedAlertId || requestedCaseId || requestedWatchlistId || requestedDestinationId || requestedFocus)
 
     const loadOrganizations = useCallback(async (nextSelectedId?: string) => {
         setLoading(true)
@@ -752,6 +753,17 @@ export default function OrganizationWorkspaceClient() {
                         {selectedOrganization ? (
                             <div className='grid gap-5'>
                                 <WorkspaceSummary organization={selectedOrganization} activeWatchlists={activeWatchlists.length} pausedWatchlists={pausedWatchlists.length} archivedWatchlists={archivedWatchlists.length} memberCount={bundle.members.length} inviteCount={bundle.invites.length} webhookCount={bundle.webhooks.length} />
+                                {hasDwmContext && (
+                                    <DwmHandoffBanner
+                                        organization={selectedOrganization}
+                                        selectedSubject={selectedActivitySubject}
+                                        alertId={requestedAlertId || selectedAlertId}
+                                        caseId={requestedCaseId}
+                                        watchlistId={requestedWatchlistId}
+                                        destinationId={requestedDestinationId}
+                                        focus={requestedFocus}
+                                    />
+                                )}
                                 <OrgActionStrip
                                     alertId={selectedAlertId}
                                     canManage={canManage}
@@ -766,6 +778,7 @@ export default function OrganizationWorkspaceClient() {
                                     destinationCount={hasConfiguredDestination ? 1 : 0}
                                     alertCount={bundle.alerts.length}
                                     caseCount={bundle.cases.length}
+                                    alertId={selectedAlertId}
                                 />
 
                                 <section className='grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]'>
@@ -865,6 +878,60 @@ function WorkspaceSummary({ organization, activeWatchlists, pausedWatchlists, ar
     )
 }
 
+function DwmHandoffBanner({ organization, selectedSubject, alertId, caseId, watchlistId, destinationId, focus }: {
+    organization: OrganizationSummary
+    selectedSubject: ActivitySubject
+    alertId: string
+    caseId: string
+    watchlistId: string
+    destinationId: string
+    focus: string
+}) {
+    const scopedValues = [
+        ['Org', organizationDisplayId(organization)],
+        ['Selected', selectedSubject.type],
+        ['Case', caseId],
+        ['Alert', alertId],
+        ['Watchlist', watchlistId],
+        ['Destination', destinationId],
+    ].filter(([, value]) => Boolean(value))
+    const caseHref = caseId
+        ? `/dashboard/dwm/cases/${encodeURIComponent(caseId)}?organizationId=${encodeURIComponent(organization.id)}${alertId ? `&alertId=${encodeURIComponent(alertId)}` : ''}`
+        : ''
+    const alertHref = alertId
+        ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}&organizationId=${encodeURIComponent(organization.id)}`
+        : ''
+    return (
+        <section className='rounded-lg border border-[#c7d7fe] bg-[#f5f8ff] p-4 shadow-sm dark:border-[#2f4b7a] dark:bg-[#111d31]' data-dwm-handoff='true'>
+            <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center'>
+                <div className='min-w-0'>
+                    <h2 className='flex items-center gap-2 text-base font-semibold text-[#172554] dark:text-[#dbeafe]'>
+                        <CircleAlert className='h-4 w-4 text-[#3056d3] dark:text-[#9cc2ff]' />
+                        DWM context is scoped to this organization
+                    </h2>
+                    <p className='mt-1 text-sm leading-5 text-[#475467] dark:text-[#a8b3c5]'>
+                        Use this workspace to manage the watchlist, delivery route, and team access for the selected {selectedSubject.type}.
+                    </p>
+                    <div className='mt-3 flex flex-wrap gap-2'>
+                        {scopedValues.map(([label, value]) => (
+                            <span key={`${label}-${value}`} className='max-w-full truncate rounded-md border border-[#dbe6ff] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314f86] dark:bg-[#0d1522] dark:text-[#dbeafe]'>
+                                {label}: {sanitizeOrganizationDisplayCopy(value) || value}
+                            </span>
+                        ))}
+                        {focus && <span className='rounded-md border border-[#dbe6ff] bg-white px-2 py-1 text-xs font-semibold text-[#344054] dark:border-[#314f86] dark:bg-[#0d1522] dark:text-[#dbeafe]'>Focus: {focus}</span>}
+                    </div>
+                </div>
+                <div className='grid gap-2 sm:grid-cols-2 lg:flex'>
+                    <ActionAnchor href='#audit' icon={<CheckCircle2 className='h-4 w-4' />} label='Review context' />
+                    <ActionAnchor href='#watchlists' icon={<BellRing className='h-4 w-4' />} label='Manage watchlist' />
+                    {caseHref && <ActionAnchor href={caseHref} icon={<ExternalLink className='h-4 w-4' />} label='Open case' />}
+                    {alertHref && <ActionAnchor href={alertHref} icon={<ExternalLink className='h-4 w-4' />} label='Open alert' />}
+                </div>
+            </div>
+        </section>
+    )
+}
+
 function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: { alertId: string, canManage: boolean, hasWatchlists: boolean, hasDestination: boolean }) {
     return (
         <nav className='flex flex-wrap items-center gap-2 rounded-lg border border-[#dfe5ee] bg-white p-2 shadow-sm dark:border-[#273345] dark:bg-[#111927]' aria-label='Organization actions'>
@@ -879,12 +946,12 @@ function OrgActionStrip({ alertId, canManage, hasWatchlists, hasDestination }: {
 
 function ActionAnchor({ href, icon, label, disabled }: { href: string, icon: ReactNode, label: string, disabled?: boolean }) {
     const classes = disabled
-        ? 'pointer-events-none inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe5ee] bg-[#f3f6fa] px-3 text-sm font-semibold text-[#98a2b3] dark:border-[#26344a] dark:bg-[#162033] dark:text-[#667085]'
-        : 'inline-flex h-9 items-center gap-2 rounded-lg border border-[#cfd7e6] bg-white px-3 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
+        ? 'pointer-events-none inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#dfe5ee] bg-[#f3f6fa] px-3 py-2 text-sm font-semibold text-[#98a2b3] dark:border-[#26344a] dark:bg-[#162033] dark:text-[#667085]'
+        : 'inline-flex min-h-9 items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-[#cfd7e6] bg-white px-3 py-2 text-sm font-semibold text-[#202838] transition hover:bg-[#f2f5f9] dark:border-[#344258] dark:bg-[#121d2b] dark:text-[#eef3fb] dark:hover:bg-[#18263a]'
     return <a className={classes} href={href} aria-disabled={disabled}>{icon}{label}</a>
 }
 
-function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount }: {
+function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount, destinationCount, alertCount, caseCount, alertId }: {
     canManage: boolean
     memberCount: number
     inviteCount: number
@@ -892,6 +959,7 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     destinationCount: number
     alertCount: number
     caseCount: number
+    alertId: string
 }) {
     const rows = [
         {
@@ -933,36 +1001,44 @@ function OrgSetupProgress({ canManage, memberCount, inviteCount, watchlistCount,
     ]
 
     const completed = rows.filter(row => row.ready).length
+    const nextAction = rows.find(row => !row.ready && !row.blocked) || rows.find(row => row.ready) || rows[0]
+    const openAlertHref = alertId ? `/dashboard/ti/workbench?alertId=${encodeURIComponent(alertId)}` : ''
     return (
         <section className='rounded-lg border border-[#dfe5ee] bg-white p-4 shadow-sm dark:border-[#273345] dark:bg-[#111927]' data-org-setup-progress='true'>
-            <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
-                <div>
+            <div className='grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.55fr)]'>
+                <div className='min-w-0'>
                     <h2 className='flex items-center gap-2 text-base font-semibold text-[#171a21] dark:text-white'>
                         <ShieldCheck className='h-4 w-4 text-[#3056d3]' />
-                        Workspace setup
+                        Workspace launch path
                     </h2>
                     <p className='mt-1 text-sm leading-5 text-[#667085] dark:text-[#a8b3c5]'>
-                        {completed}/{rows.length} steps complete. Use the next action to finish this workspace.
+                        {completed}/{rows.length} complete. Finish the next required action, then validate delivery from a real alert.
                     </p>
                 </div>
-                <span className='w-fit rounded-md border border-[#dbe6ff] bg-[#eef4ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#314f86] dark:bg-[#17243a] dark:text-[#9cc2ff]'>
-                    {completed === rows.length ? 'Ready for operations' : 'Setup in progress'}
-                </span>
+                <div className='rounded-lg border border-[#dbe6ff] bg-[#f8fbff] p-3 dark:border-[#2a3b58] dark:bg-[#101b2d]'>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9cc2ff]'>Next action</p>
+                    <p className='mt-1 truncate text-sm font-semibold text-[#171a21] dark:text-white'>{nextAction.title}</p>
+                    <p className='mt-1 line-clamp-2 text-xs leading-5 text-[#667085] dark:text-[#a8b3c5]'>{nextAction.body}</p>
+                    <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1'>
+                        <ActionAnchor href={nextAction.href} icon={<ExternalLink className='h-4 w-4' />} label={nextAction.action} disabled={nextAction.blocked} />
+                        {openAlertHref && <ActionAnchor href={openAlertHref} icon={<CircleAlert className='h-4 w-4' />} label='Validate alert' disabled={!watchlistCount} />}
+                    </div>
+                </div>
             </div>
-            <div className='mt-4 grid gap-2'>
+            <div className='mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4'>
                 {rows.map(row => (
                     <a
                         key={row.id}
                         href={row.href}
                         aria-disabled={row.blocked}
-                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border px-3 py-2 transition ${row.ready ? 'border-[#b7e4c7] bg-[#f0fdf4] dark:border-[#244b33] dark:bg-[#0f2418]' : row.blocked ? 'pointer-events-none border-[#e6ebf2] bg-[#f8fafc] opacity-70 dark:border-[#26344a] dark:bg-[#0d1522]' : 'border-[#dbe6ff] bg-[#f8fbff] hover:border-[#9db8ff] dark:border-[#2a3b58] dark:bg-[#101b2d]'}`}
+                        className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border px-3 py-3 transition ${row.ready ? 'border-[#b7e4c7] bg-[#f0fdf4] dark:border-[#244b33] dark:bg-[#0f2418]' : row.blocked ? 'pointer-events-none border-[#e6ebf2] bg-[#f8fafc] opacity-70 dark:border-[#26344a] dark:bg-[#0d1522]' : 'border-[#dbe6ff] bg-[#f8fbff] hover:border-[#9db8ff] dark:border-[#2a3b58] dark:bg-[#101b2d]'}`}
                     >
-                        {row.ready ? <CheckCircle2 className='h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='h-4 w-4 shrink-0 text-[#b45309]' />}
+                        {row.ready ? <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0 text-[#067647]' /> : <CircleAlert className='mt-0.5 h-4 w-4 shrink-0 text-[#b45309]' />}
                         <span className='min-w-0'>
                             <span className='block truncate text-sm font-semibold text-[#171a21] dark:text-white'>{row.title}</span>
                             <span className='block truncate text-xs text-[#667085] dark:text-[#a8b3c5]'>{row.body}</span>
+                            <span className='mt-2 block text-xs font-semibold text-[#3056d3] dark:text-[#9cc2ff]'>{row.blocked ? 'Owner or admin required' : row.action}</span>
                         </span>
-                        <span className='text-xs font-semibold text-[#3056d3] dark:text-[#9cc2ff]'>{row.blocked ? 'Owner or admin required' : row.action}</span>
                     </a>
                 ))}
             </div>
