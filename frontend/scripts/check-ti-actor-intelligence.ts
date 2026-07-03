@@ -163,6 +163,37 @@ const publicTiImplementationPhrases = [
     'watchlistMatches',
     'actorIntelligence.malwareTools',
 ]
+const publicTiBackendEmptyStates = [
+    'No aliases returned',
+    'No attack details returned',
+    'No sources returned',
+    'No source references returned',
+    'No source families returned',
+    'No mapped techniques returned',
+    'No dated campaign activity returned',
+    'No source requests returned for this detail',
+    'No evidence text returned yet',
+    'No watchlist term returned',
+    'No country-level routing returned',
+    'No source details returned',
+    'No blocking workflow issues returned',
+    'No persisted organization/domain relevance was returned for this public result',
+]
+const publicTiBackendEmptyStatePatterns = [
+    /What\s+returned/i,
+    /\bnot returned\b/i,
+    /\bnone returned\b/i,
+    /\bexpanded for review\b/i,
+    /\breturned profile\b/i,
+    /\breturned by\b/i,
+    /\breturned for\b/i,
+    /\bsource result[^.]*returned\b/i,
+    /\bSource actions returned\b/i,
+    /\breturned source\b/i,
+    /\breturned current\b/i,
+    /\bReturned sources\b/i,
+    /\bOpen the returned source\b/i,
+]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
 assert(profile.malwareTools.includes('SUNBURST'), 'APT29 should include SUNBURST tooling context.')
@@ -576,6 +607,12 @@ for (const phrase of publicTiImplementationPhrases) {
     assert(!pageClientSource.includes(phrase), `Public TI page should not expose implementation wording: ${phrase}.`)
     assert(!actorIntelligenceSource.includes(phrase), `Public TI actor intelligence fallbacks should not expose implementation wording: ${phrase}.`)
 }
+for (const phrase of publicTiBackendEmptyStates) {
+    assert(!pageClientSource.includes(phrase), `Public TI empty states should be analyst-actionable instead of backend-shaped: ${phrase}.`)
+}
+for (const pattern of publicTiBackendEmptyStatePatterns) {
+    assert(!pattern.test(pageClientSource), `Public TI empty states should not expose backend-shaped copy: ${pattern}.`)
+}
 assert(pageClientSource.includes('Console actions'), 'Public TI page should use professional console action language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
 assert(pageClientSource.includes('Review status'), 'Public TI page should expose consumer-ready workflow state.')
@@ -640,7 +677,7 @@ assert(pageClientSource.includes('actionability.caseReviewIntake.summary.total')
 assert(pageClientSource.includes('actionability.sourceEnrichmentIntake.summary.total'), 'Source action exports should summarize source enrichment intake.')
 assert(pageClientSource.includes('data-ti-section-rail'), 'Public TI page should expose a section rail for analyst scanning.')
 assert(pageClientSource.includes('data-ti-result-brief'), 'Public TI page should expose a result-level analyst brief before dense workspace panels.')
-assert(pageClientSource.includes('What returned, why it matters, and where to start'), 'Public TI result brief should translate the overall search result before dense evidence tables.')
+assert(pageClientSource.includes('What matched, why it matters, and where to start'), 'Public TI result brief should translate the overall search result before dense evidence tables.')
 assert(pageClientSource.includes('Public TI is metadata-only'), 'Public TI result brief should state the metadata-only safety boundary.')
 assert(pageClientSource.includes('resultTriageBriefFor(result, workItems, actionability, victimObservations, watchlist)'), 'Public TI result brief should be derived from current result and actionability state.')
 assert(pageClientSource.includes('capture-ready evidence still needs review'), 'Public TI result brief should avoid overclaiming when sources lack capture-ready proof.')

@@ -245,7 +245,7 @@ function Results({ result }: { result: TiSearchResponse }) {
     const commandLinks = [
         { href: '#ti-activity', label: 'Latest activity', value: `${filteredWorkItems.length}/${workItems.length} results`, icon: Inbox },
         { href: '#ti-selected-evidence', label: 'Evidence', value: selected ? selected.source : 'select result', icon: Eye },
-        { href: '#ti-secondary-analysis', label: 'Analysis drawers', value: `${sources.length} sources`, icon: Database },
+        { href: '#ti-secondary-analysis', label: 'Workbenches', value: `${sources.length} sources`, icon: Database },
         { href: '/dashboard', label: 'Console', value: `${actionability.relatedCases.length} cases`, icon: ShieldAlert },
         { href: '/dashboard/automations?setup=dwm', label: 'Delivery', value: `${actionability.readiness.backedIds.webhookDestinationIds.length} destinations`, icon: Send },
     ]
@@ -332,7 +332,7 @@ function Results({ result }: { result: TiSearchResponse }) {
                                     <span key={alias} className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>{alias}</span>
                                 ))}
                                 {result.aliases.length > 8 ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>+{result.aliases.length - 8} aliases</span> : null}
-                                {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>No aliases returned</span> : null}
+                                {!result.aliases.length ? <span className='rounded-lg border border-[#dfe5ee] bg-[#f8fafc] px-2 py-1 text-xs text-[#586274] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#b7c2d4]'>No aliases in this actor profile</span> : null}
                             </div>
                             <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>
                                 {profileStats.map(item => (
@@ -642,9 +642,9 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
         <section id='ti-secondary-analysis' className='scroll-mt-24 rounded-lg border border-[#dfe5ee] bg-[#fbfcfe] p-3 dark:border-[#263244] dark:bg-[#0d1522]' data-ti-secondary-analysis-toggle='true'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
                 <div className='min-w-0'>
-                    <p className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Analysis drawers</p>
+                    <p className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Actor workbenches</p>
                     <p className='mt-1 text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>
-                        Keep the operator view focused on the selected finding. Open the drawers for dossier, source, watchlist, and collection detail.
+                        Source, detail, watchlist, and collection queues stay available without crowding the selected finding.
                     </p>
                 </div>
                 <button
@@ -653,7 +653,7 @@ function SecondaryAnalysisToggle({ expanded, artifactCount, sourceCount, watchli
                     aria-expanded={expanded}
                     className='inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-[#d8dee9] bg-white px-3 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'
                 >
-                    {expanded ? 'Hide drawers' : 'Open drawers'}
+                    {expanded ? 'Collapse' : 'Expand'}
                 </button>
             </div>
             <div className='mt-3 flex flex-wrap gap-2'>
@@ -1724,7 +1724,7 @@ function ActorOperationsMatrix({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No attack details returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>Add technique, infrastructure, or victim context before case review.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] lg:border-l lg:border-t-0'>
                     {selectedRow ? (
@@ -1866,7 +1866,7 @@ function SourceCoverageWorkbench({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No sources returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>Add source coverage before routing this actor.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
                     {selectedRow ? (
@@ -2025,7 +2025,7 @@ function FreshnessGatePanel({ actor, actionability, query }: { actor: TiActorInt
                 </div>
             </div>
             <p className='mt-3 wrap-break-word text-[11px] leading-5 text-[#586274] dark:text-[#9aa8bd]'>
-                {nextOwner ? `Next owner: ${readinessOwnerLabel(nextOwner)}.` : 'Next owner: none returned.'}
+                {nextOwner ? `Next owner: ${readinessOwnerLabel(nextOwner)}.` : 'No owner is assigned.'}
             </p>
         </div>
     )
@@ -2157,7 +2157,7 @@ function StructuredProvenancePanel({ rows, actor, actionability, query }: { rows
                             <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{row.shownBecause}</p>
                         </div>
                     )
-                }) : <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>No source references returned.</p>}
+                }) : <p className='text-sm text-[#586274] dark:text-[#9aa8bd]'>Attach source references before case or watchlist routing.</p>}
             </div>
         </div>
     )
@@ -2261,7 +2261,7 @@ function SourceCoveragePanel({ coverage }: { coverage: TiActorIntelligenceProfil
                     <span key={item.family} className='rounded-md border border-[#dfe5ee] bg-white px-2 py-1 text-[11px] font-semibold text-[#344054] dark:border-[#2a3547] dark:bg-[#0f1621] dark:text-[#d8e2f2]'>
                         {formatLabel(item.family)} · {item.count}
                     </span>
-                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No source families returned.</span>}
+                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Source family coverage is not mapped yet.</span>}
             </div>
             {coverage.missing.length ? (
                 <div className='mt-3 rounded-md border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>
@@ -2279,7 +2279,7 @@ function TechniqueCoveragePanel({ techniques }: { techniques: TiActorIntelligenc
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Techniques</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {techniques.length ? `${techniques.length} mapped technique${techniques.length === 1 ? '' : 's'} with source coverage.` : 'No mapped techniques returned.'}
+                        {techniques.length ? `${techniques.length} mapped technique${techniques.length === 1 ? '' : 's'} with source coverage.` : 'Add ATT&CK mapping before detection review.'}
                     </p>
                 </div>
                 <span className={techniques.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(techniques.length ? 'review' : 'blocked')}>
@@ -2352,7 +2352,7 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Activity timeline</p>
                     <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                        {timeline.length ? `${timeline.length} dated campaign or activity item${timeline.length === 1 ? '' : 's'} with source references.` : 'No dated campaign activity returned.'}
+                        {timeline.length ? `${timeline.length} dated campaign or activity item${timeline.length === 1 ? '' : 's'} with source references.` : 'Add dated campaign or activity evidence before trend review.'}
                     </p>
                 </div>
                 <span className={timeline.some(item => item.freshness === 'ready') ? decisionStepStatusClass('ready') : decisionStepStatusClass(timeline.length ? 'review' : 'blocked')}>
@@ -2368,7 +2368,7 @@ function CampaignTimelinePanel({ timeline }: { timeline: TiActorIntelligenceProf
                                 <div className='min-w-0'>
                                     <p className='min-w-0 wrap-break-word text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{item.title}</p>
                                     <p className='mt-1 wrap-break-word text-[11px] leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                                        {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not returned'} · {item.countries.slice(0, 2).join(', ') || 'Country not returned'} · {Math.round(item.confidence * 100)}%
+                                        {item.affectedSectors.slice(0, 2).join(', ') || 'Sector not mapped'} · {item.countries.slice(0, 2).join(', ') || 'Country not mapped'} · {Math.round(item.confidence * 100)}%
                                     </p>
                                 </div>
                                 <div className='flex min-w-0 flex-wrap items-center justify-start gap-1.5 sm:shrink-0'>
@@ -2444,7 +2444,7 @@ function DossierList({ title, values, artifactKind, artifactByLookup, selectedAr
                             {value}
                         </button>
                     )
-                }) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Not returned</span>}
+                }) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No values in this profile</span>}
             </div>
         </div>
     )
@@ -2672,7 +2672,7 @@ function ActorArtifactWorkbench({ artifact, handoffs }: { artifact: ActorArtifac
                                     </div>
                                 </div>
                             )) : (
-                                <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source requests returned for this detail.</p>
+                                <p className='rounded-lg border border-[#fff0c2] bg-[#fffdf2] p-2 text-xs leading-5 text-[#8a5a00] dark:border-[#5a4316] dark:bg-[#231b0c] dark:text-[#ffd77a]'>No source request is attached to this detail.</p>
                             )}
                         </div>
                         {bridge.missing.length ? (
@@ -3147,7 +3147,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
             item.affectedAccounts ? `Affected accounts: ${item.affectedAccounts}` : 'Affected accounts not stated.',
             item.accountSubjects ? `Account subjects: ${item.accountSubjects}` : 'Account subjects not stated.',
             item.datasetSize ? `Dataset size: ${item.datasetSize}` : 'Dataset size not stated.',
-            item.actorStatement ? `Actor statement: ${item.actorStatement}` : 'Actor statement not returned.',
+            item.actorStatement ? `Actor statement: ${item.actorStatement}` : 'Actor statement is not in the safe fields.',
         ],
         nextActions: item.allowedActions.map(action => formatLabel(action)),
     })) ?? []
@@ -3167,7 +3167,7 @@ function analystWorkItemsFor(result: TiSearchResponse, victimObservations: Retur
         source: 'TI search service',
         provenance: result.mode,
         confidence: result.confidence,
-        evidence: result.notes.length ? result.notes : ['No evidence text returned yet.'],
+        evidence: result.notes.length ? result.notes : ['No evidence text is attached to this result yet.'],
         nextActions: ['Leave this query open while polling continues.', 'Search an alias, domain, company name, CVE, or supplier term.', 'Open the customer console to save the work.'],
         priority: priorityByRow.get('collection-searching'),
     }]
@@ -3296,7 +3296,7 @@ function WatchlistRelevanceWorkbench({
                             })}
                         </tbody>
                     </table>
-                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No watchlist term returned.</p> : null}
+                    {!rows.length ? <p className='p-4 text-sm text-[#586274] dark:text-[#9aa8bd]'>No watchlist term is linked to this result.</p> : null}
                 </div>
                 <div className='min-w-0 border-t border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29] xl:border-l xl:border-t-0'>
                     {selectedRow ? (
@@ -3345,7 +3345,7 @@ function WatchlistBlock({ title, values }: { title: string; values: string[] }) 
             <div className='mt-2 flex flex-wrap gap-1.5'>
                 {visible.length ? visible.map(value => (
                     <span key={value} className='rounded-md border border-[#b8c5ff] bg-[#eef3ff] px-2 py-1 text-xs font-semibold text-[#3056d3] dark:border-[#4a68a8] dark:bg-[#172646] dark:text-[#b8c8ff]'>{value}</span>
-                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Not returned</span>}
+                )) : <span className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No matching values in this result</span>}
             </div>
         </div>
     )
@@ -3464,7 +3464,7 @@ function HandoffEvidenceMatrix({ actionability }: { actionability: TiActionabili
 
 function AlertPacketPanel({ packet }: { packet: AlertPacket }) {
     return (
-        <Panel title='Evidence' description='Customer-facing alert ingredients derived from the selected finding and returned profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
+        <Panel title='Evidence' description='Customer-facing alert ingredients derived from the selected finding and actor profile data. Delivery stays in the authenticated console.' icon={<BellRing className='h-4 w-4' />}>
             <div className='grid gap-3'>
                 <div>
                     <p className='text-sm font-semibold text-[#171a21]'>{packet.title}</p>
@@ -3526,7 +3526,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No country-level routing returned.</p> : null}
+                        {!actionability.geographyHandoffs.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Add country-specific source context before regional routing.</p> : null}
                     </div>
                 </div>
 
@@ -3543,7 +3543,7 @@ function ActionabilityPanel({ actionability, query }: { actionability: TiActiona
                                 <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>{item.watchlistTerm ? `${item.watchlistTerm.kind}: ${item.watchlistTerm.value}` : item.enrichmentTask}</p>
                             </div>
                         ))}
-                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>No source details returned.</p> : null}
+                        {!actionability.sourceClusters.length ? <p className='text-xs text-[#586274] dark:text-[#9aa8bd]'>Add source details before routing.</p> : null}
                     </div>
                 </div>
 
@@ -4124,7 +4124,7 @@ function ReadinessBlockersPanel({ actionability }: { actionability: TiActionabil
                     ))}
                 </div>
             ) : (
-                <p className='mt-3 text-xs leading-5 text-[#147a3b]'>No blocking workflow issues returned.</p>
+                <p className='mt-3 text-xs leading-5 text-[#147a3b]'>No blocking workflow issues are open.</p>
             )}
         </div>
     )
@@ -4485,7 +4485,7 @@ function decisionStepsFor(actionability: TiActionabilityModel): DecisionStep[] {
             label: 'Prepare watchlist',
             status: actionability.watchlistRelevance.blockers.length ? 'blocked' : actionability.watchlistRelevance.matches.length ? 'ready' : 'review',
             detail: actionability.watchlistRelevance.terms.length
-                ? `${actionability.watchlistRelevance.terms.length} candidate term${actionability.watchlistRelevance.terms.length === 1 ? '' : 's'}; ${actionability.watchlistRelevance.matches.length} org match${actionability.watchlistRelevance.matches.length === 1 ? '' : 'es'} returned.`
+                ? `${actionability.watchlistRelevance.terms.length} candidate term${actionability.watchlistRelevance.terms.length === 1 ? '' : 's'}; ${actionability.watchlistRelevance.matches.length} org match${actionability.watchlistRelevance.matches.length === 1 ? '' : 'es'} linked.`
                 : 'No watchlist term is attached to this result.',
             payload: actionability.exportPayloads.watchlist,
             route: actionability.exportPayloads.watchlist.backedRoute,
@@ -5905,14 +5905,14 @@ function ResultTriageBriefPanel({ brief }: { brief: ResultTriageBrief }) {
             <div className='flex min-w-0 flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
                     <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Result brief</p>
-                    <h2 className='mt-1 text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>What returned, why it matters, and where to start</h2>
+                    <h2 className='mt-1 text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>What matched, why it matters, and where to start</h2>
                 </div>
                 <span className={brief.tone === 'ready' ? sourceHealthChipClass('ready') : brief.tone === 'blocked' ? sourceHealthChipClass('blocked') : sourceHealthChipClass('review')}>
                     {brief.tone === 'ready' ? 'usable now' : brief.tone === 'blocked' ? 'source needed' : 'review first'}
                 </span>
             </div>
             <div className='mt-4 grid gap-3 lg:grid-cols-3'>
-                <BriefStep title='What returned' value={brief.whatReturned} />
+                <BriefStep title='What matched' value={brief.whatReturned} />
                 <BriefStep title='Why review' value={brief.whyReview} />
                 <BriefStep title='Start here' value={brief.nextAction} />
             </div>
@@ -6219,19 +6219,19 @@ function resultTriageBriefFor(
 
     return {
         whatReturned: workItems.length
-            ? `${humanizeSlug(result.query)} returned ${workItems.length} analyst item${workItems.length === 1 ? '' : 's'}${highPriorityCount ? `, including ${highPriorityCount} high-priority item${highPriorityCount === 1 ? '' : 's'}` : ''}.`
-            : `${humanizeSlug(result.query)} did not return recent activity yet.`,
+            ? `${humanizeSlug(result.query)} matched ${workItems.length} analyst item${workItems.length === 1 ? '' : 's'}${highPriorityCount ? `, including ${highPriorityCount} high-priority item${highPriorityCount === 1 ? '' : 's'}` : ''}.`
+            : `${humanizeSlug(result.query)} has no recent activity attached yet.`,
         whyReview: victimObservations.length
             ? `${victimObservations.length} company or supplier observation${victimObservations.length === 1 ? '' : 's'} may need incident-response, vendor-risk, legal, or customer-communication review.`
             : topItem
-                ? `${topItem.source} returned ${Math.round(topItem.confidence * 100)}% confidence context; verify source references before customer-facing use.`
+                ? `${topItem.source} provides ${Math.round(topItem.confidence * 100)}% confidence context; verify source references before customer-facing use.`
                 : 'No customer-facing action should be taken until a source record or fresh observation is attached.',
         nextAction: firstNextAction
             || (missing.length ? `Resolve ${displayRequirementList(missing)} before escalation.` : 'Open the highest-priority row, review source context, and decide whether it belongs in the authenticated console.'),
         proofStatus: sourceRefs
             ? `${sourceRefs} source reference${sourceRefs === 1 ? '' : 's'} available; use selected results for capture and case review.`
             : sourceRows
-                ? `${sourceRows} source result${sourceRows === 1 ? '' : 's'} returned, but capture-ready evidence still needs review.`
+                ? `${sourceRows} source result${sourceRows === 1 ? '' : 's'} attached, but capture-ready evidence still needs review.`
                 : 'No source references are attached to this result yet.',
         boundary: 'Public TI is metadata-only. It does not expose raw leak files, credential values, or customer webhook secrets.',
         tone,
@@ -6280,10 +6280,10 @@ function watchlistRelevanceFor(result: TiSearchResponse, victimObservations: Ret
         countries,
         domains,
         rationale: matchedTerms.length
-            ? `${matchedTerms.length} organization watchlist match${matchedTerms.length === 1 ? '' : 'es'} returned for this query.`
+            ? `${matchedTerms.length} organization watchlist match${matchedTerms.length === 1 ? '' : 'es'} for this query.`
             : organizations.length
-                ? 'Candidate watchlist inputs are present; no persisted organization watchlist match was returned yet.'
-                : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms are present only when returned by the profile or source results.',
+                ? 'Candidate watchlist inputs are present; save an organization watchlist match before alert review.'
+                : 'Candidate actor, alias, sector, country, campaign, tool, and source-domain terms appear when present in the profile or source results.',
     }
 }
 
@@ -7933,7 +7933,7 @@ function selectedSourceDrilldownFor(
             provenance: source.url || source.provenance || selected.provenance,
             href: source.url || linkFromText(source.provenance),
             confidence: selected.confidence,
-            handoff: 'Open the returned source and attach capture evidence before case replay if no capture ID is present.',
+            handoff: 'Open the listed source and attach capture evidence before case replay if no capture ID is present.',
         })),
         ...actorRows.map(row => drilldownRow({
             sourceId: row.sourceId,
@@ -8080,7 +8080,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             title: 'Attach source capture provenance',
             status: hasSourceUrls ? 'ready' : 'needs_api',
             detail: hasSourceUrls
-                ? 'Returned sources include URLs or source references that can be opened or mapped into console evidence.'
+                ? 'Available source references include URLs or IDs that can be opened or mapped into console evidence.'
                 : 'The result needs source URLs, capture IDs, or redacted source hashes before analyst trust is strong.',
         },
         {
@@ -8088,7 +8088,7 @@ function enrichmentTasksFor(result: TiSearchResponse, selected: AnalystWorkItem 
             status: hasOrganizations ? 'watch' : 'needs_api',
             detail: hasOrganizations
                 ? `Candidate watched objects include ${watchlist.organizations.slice(0, 3).join(', ')}.`
-                : 'No persisted organization/domain relevance was returned for this public result.',
+                : 'Org and domain relevance appears after saved watchlist or organization matches.',
         },
         {
             title: 'Create case from evidence',
@@ -8338,7 +8338,7 @@ function selectedTriageBriefFor(
 ): SelectedTriageBrief {
     const confidence = `${Math.round(selected.confidence * 100)}%`
     const visibleTerm = watchlist.matchedTerms[0] || watchlist.terms[0] || result.query
-    const sourceLabel = selected.source || 'returned source'
+    const sourceLabel = selected.source || 'listed source'
     const hasSourceReference = Boolean(selected.href || selected.provenance || selected.priority?.sourceIds.length || caseDraft?.sourceRows.length)
     const sourceRows = caseDraft?.sourceRows.length ?? 0
     const prioritySourceRows = selected.priority?.sourceIds.length ?? 0
@@ -8352,7 +8352,7 @@ function selectedTriageBriefFor(
         ? `${visibleTerm} is present in ${sourceLabel} reporting: ${displayRequirementText(selected.title)}.`
         : selected.kind === 'tradecraft'
             ? `${result.query} has a mapped technique or behavior from ${sourceLabel}: ${displayRequirementText(selected.title)}.`
-            : `${sourceLabel} returned current context for ${result.query}: ${displayRequirementText(selected.title)}.`
+            : `${sourceLabel} provides current context for ${result.query}: ${displayRequirementText(selected.title)}.`
     const whyItMatters = alertValue
         || (selected.severity === 'critical' || selected.severity === 'high'
             ? `${formatLabel(selected.severity)} priority with ${confidence} confidence; review it before customer notification or case routing.`
@@ -8419,7 +8419,7 @@ function actorOperationsRowsFor(result: TiSearchResponse, actor: TiActorIntellig
         id: `infra:${item}`.toLowerCase().replace(/[^a-z0-9:._-]+/g, '-'),
         type: 'Infrastructure',
         label: item,
-        detail: actor.confidenceReasoning[index % Math.max(1, actor.confidenceReasoning.length)] || 'Infrastructure pattern returned for source collection and alert enrichment.',
+        detail: actor.confidenceReasoning[index % Math.max(1, actor.confidenceReasoning.length)] || 'Infrastructure pattern available for source collection and alert enrichment.',
         confidence: Math.max(0.35, actor.confidence - 0.05),
         freshness: actor.freshness.stale ? 'review' : 'ready',
         source: defaultSource,
@@ -9123,13 +9123,13 @@ function SourceActivationPanel({ activation }: { activation: NonNullable<TiSearc
     const approvalCount = activation.actions.filter(action => action.execution === 'human_approval_required').length
     const state: DecisionStep['status'] = blockedCount ? 'blocked' : approvalCount || activation.dryRunOnly ? 'review' : 'ready'
     return (
-        <Panel title='Source Activation' description='Source actions returned by collection policy. Public TI can stage review, but source changes require authenticated approval.' icon={<ShieldAlert className='h-4 w-4' />}>
+        <Panel title='Source Activation' description='Source actions from collection policy. Public TI can stage review, but source changes require authenticated approval.' icon={<ShieldAlert className='h-4 w-4' />}>
             <div data-ti-source-activation='true' className='grid min-w-0 gap-3'>
                 <div className='flex min-w-0 flex-wrap items-start justify-between gap-2'>
                     <div className='min-w-0'>
                         <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Activation state</p>
                         <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b7c2d4]'>
-                            {activation.dryRunOnly ? 'Actions are review-only until a console user approves source changes.' : 'Returned source actions are ready for authenticated review.'}
+                            {activation.dryRunOnly ? 'Actions are review-only until a console user approves source changes.' : 'Source actions are ready for authenticated review.'}
                         </p>
                     </div>
                     <span className={decisionStepStatusClass(state)}>{decisionStepStatusLabel(state)}</span>
