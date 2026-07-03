@@ -35,7 +35,7 @@ type WorkflowRouteSummary = {
     deliveryState?: string
 }
 
-const STARTER_WATCH_TERMS = ['hanasand.com', 'Hanasand'] as const
+const STARTER_WATCH_TERMS = ['customer.example', 'Example Supplier'] as const
 
 export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
     const router = useRouter()
@@ -563,7 +563,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     function seedStarterWatchlist() {
         if (countTerms(terms)) return
         setTerms(starterWatchTerms())
-        setResult({ ok: true, message: 'Starter watchlist staged. Review the terms, then save or run to case.' })
+        setResult({ ok: true, message: 'Example watchlist staged. Replace the sample terms, then save or run to case.' })
     }
 
     const termCount = countTerms(terms)
@@ -598,7 +598,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         {
             id: 'watchlist',
             label: 'Watchlist match',
-            state: effectiveTermCount ? `${effectiveTermCount} terms` : 'starter terms staged',
+            state: effectiveTermCount ? `${effectiveTermCount} terms` : 'example terms ready',
             detail: 'Save the customer terms and rebuild matching alerts from collected evidence.',
             tone: effectiveTermCount ? 'ok' : 'warn',
             command: 'Save and rebuild',
@@ -634,9 +634,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
         <div data-dwm-workflow-runbook className='grid gap-4 rounded-lg border border-[#26344d] bg-[#0b121e] p-4 text-[#edf4ff]'>
             <section className='flex flex-wrap items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>Collection command center</p>
+                    <p className='text-xs font-semibold uppercase text-[#9db8ff]'>DWM operator workflow</p>
                     <h2 className='mt-1 text-lg font-semibold tracking-normal text-[#edf4ff]'>Watchlist to case route</h2>
-                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Tune the org watchlist, collect approved sources, rebuild alerts, open cases, and test customer delivery from one path.</p>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>Tune the org watchlist, collect approved sources, rebuild alerts, open a case, and test customer delivery from one path.</p>
                 </div>
                 {result ? (
                     <p data-dwm-workflow-result className={`max-w-xl rounded-lg border px-3 py-2 text-sm ${result.ok ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]' : 'border-[#7a3520] bg-[#2c160f] text-[#ffb598]'}`}>
@@ -648,12 +648,19 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             <section data-dwm-route-queue className='rounded-lg border border-[#26344d] bg-[#101827] p-3'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div className='min-w-0'>
-                        <h3 className='text-sm font-semibold text-[#edf4ff]'>Route queue</h3>
-                        <p className='mt-0.5 text-xs leading-5 text-[#8fa0ba]'>Run the next backed step from watchlist to case and delivery.</p>
+                        <h3 className='text-sm font-semibold text-[#edf4ff]'>Next actions</h3>
+                        <p className='mt-0.5 text-xs leading-5 text-[#8fa0ba]'>Run one backed step, or use Run to case after watchlist and source context are ready.</p>
                     </div>
-                    <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
-                        Recent attacks
-                    </Link>
+                    <div className='flex flex-wrap gap-2'>
+                        {organizationId ? (
+                            <Link href={`/organizations?organizationId=${encodeURIComponent(organizationId)}&focus=watchlists`} className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                                Org watchlists
+                            </Link>
+                        ) : null}
+                        <Link href='/dashboard/ti/workbench' className='inline-flex min-h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:border-[#5f86ff] hover:bg-[#162033] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                            Alert review
+                        </Link>
+                    </div>
                 </div>
                 <div className='mt-3 grid gap-2 lg:grid-cols-4'>
                     {routeQueue.map(action => <RouteQueueCard key={action.id} action={action} />)}
@@ -679,7 +686,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             </section>
 
             <section className='grid grid-cols-2 gap-3 xl:grid-cols-5'>
-                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Starter terms ready'} tone={termCount ? 'ok' : 'warn'} />
+                <RouteStateCard label='Watch terms' value={String(effectiveTermCount)} detail={termCount ? 'Ready for matching' : 'Example terms staged'} tone={termCount ? 'ok' : 'warn'} />
                 <RouteStateCard label='Sources' value={`${activeSourceCount}/${sourceCount}`} detail={sourceCount ? 'Active monitored sources' : 'Run source pack or add a channel'} tone={activeSourceCount ? 'ok' : 'warn'} />
                 <RouteStateCard label='Captures' value={String(captureCount)} detail={latestRunStatus ? `${latestRunStatus}${latestRunCaptureCount ? ` · ${latestRunCaptureCount} latest` : ''}` : 'No run loaded'} tone={captureCount ? 'ok' : 'neutral'} />
                 <RouteStateCard label='Alerts' value={String(alertCount)} detail={`${telemetry?.watchlistMatchCount ?? 0} source match${(telemetry?.watchlistMatchCount ?? 0) === 1 ? '' : 'es'}`} tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
@@ -698,7 +705,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                             </tr>
                         </thead>
                         <tbody className='divide-y divide-[#1f2c42]'>
-                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Starter terms staged on action'} next='Company, domain, supplier, brand, and product terms define alert scope.' command='Save and rebuild alerts' tone={termCount ? 'ok' : 'warn'} />
+                            <RouteStepRow stage='1. Watchlist' state={termCount ? `${termCount} terms saved or staged` : 'Example terms staged on action'} next='Company, domain, supplier, brand, and product terms define alert scope.' command='Save and rebuild alerts' tone={termCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='2. Sources' state={sourceCount ? `${activeSourceCount}/${sourceCount} active` : 'No source inventory loaded'} next='Enable public Telegram, public advisory, and metadata-only source packs before relying on matches.' command='Expand Telegram / Approve metadata' tone={activeSourceCount ? 'ok' : 'warn'} />
                             <RouteStepRow stage='3. Captures' state={captureCount ? `${captureCount} safe captures` : 'No accepted captures'} next='Run collection to pull safe excerpts and metadata into the exposure queue.' command='Run Telegram collection' tone={captureCount ? 'ok' : 'neutral'} />
                             <RouteStepRow stage='4. Alert and case' state={alertCount ? `${alertCount} alerts in queue` : 'No active alert'} next='Rebuild after source changes, then open the alert as a case with provenance.' command='Run to case / Open case' tone={alertCount ? 'ok' : termCount ? 'warn' : 'neutral'} />
@@ -720,7 +727,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                     <textarea
                         value={terms}
                         onChange={event => setTerms(event.target.value)}
-                        placeholder={'acme.com\nAcme Payments\nNorthwind Supplier'}
+                        placeholder={'customer.example\nExample Payments\nExample Supplier'}
                         className='mt-4 min-h-36 w-full resize-y rounded-lg border border-[#27364f] bg-[#0b121e] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#60708a] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
                     />
                     <input
@@ -740,9 +747,9 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         <WorkflowButton busy={busyAction === 'source-case'} disabled={busy} icon={<ShieldCheck className='h-4 w-4' />} onClick={runSourcePackToCase}>Run to case</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'delivery'} disabled={busy} icon={<Send className='h-4 w-4' />} onClick={deliverWebhooks}>Send webhooks</WorkflowButton>
                         <WorkflowButton busy={busyAction === 'webhook-test'} disabled={busy || Boolean(webhookTestDisabledReason)} disabledReason={webhookTestDisabledReason} icon={<Send className='h-4 w-4' />} onClick={testWebhook}>Test webhook</WorkflowButton>
-                        {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Use hanasand.com</WorkflowButton> : null}
+                        {starterTermsActive ? <WorkflowButton busy={false} disabled={busy} icon={<Plus className='h-4 w-4' />} onClick={seedStarterWatchlist}>Use example terms</WorkflowButton> : null}
                     </div>
-                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>No saved terms yet. Actions will stage hanasand.com and Hanasand before collection.</p> : null}
+                    {starterTermsActive ? <p className='mt-2 text-xs leading-5 text-[#ffd58a]'>No saved terms yet. Example terms are staged only when you choose them.</p> : null}
                     {webhookTestDisabledReason ? <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>{webhookTestDisabledReason}</p> : null}
                 </form>
 
