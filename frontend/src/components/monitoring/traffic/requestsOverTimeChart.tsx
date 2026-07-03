@@ -1,6 +1,6 @@
 export default function RequestsOverTimeChart({ data }: { data: { key: string, count: number }[] }) {
     if (!data || data.length === 0) {
-        return <div className='p-4 text-sm text-muted-foreground'>No data available</div>
+        return <div className='p-4 text-sm text-muted-foreground'>Traffic meter updates as requests arrive.</div>
     }
 
     const width = 620

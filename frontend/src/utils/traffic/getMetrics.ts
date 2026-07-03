@@ -1,4 +1,4 @@
-import config from '@/config'
+import fetchTrafficJson from './fetchTrafficJson'
 
 export type TrafficSummaryMetric = {
     value: string
@@ -9,15 +9,6 @@ export type TrafficSummaryMetric = {
 }
 
 export default async function fetchMetrics(metric: 'path' | 'ip' | 'user_agent' | 'domain' = 'path') {
-    try {
-        const response = await fetch(`${config.url.cdn}/traffic/summary?metric=${metric}`)
-        if (!response.ok) {
-            throw new Error(await response.text())
-        }
-
-        const data = await response.json()
-        return Array.isArray(data) ? data as TrafficSummaryMetric[] : []
-    } catch {
-        return []
-    }
+    const data = await fetchTrafficJson<unknown[]>(`/traffic/summary?metric=${metric}`, [])
+    return Array.isArray(data) ? data as TrafficSummaryMetric[] : []
 }

@@ -1,27 +1,19 @@
-import config from '@/config'
+import fetchTrafficJson from './fetchTrafficJson'
 
 export default async function getDomains() {
-    try {
-        const response = await fetch(`${config.url.cdn}/traffic/tps?fresh=1`, {
-            cache: 'no-store',
+    const data = await fetchTrafficJson<unknown[]>('/traffic/tps?fresh=1', [])
+
+    return data
+        .map((entry) => {
+            const name = typeof entry === 'object' && entry !== null && 'name' in entry && typeof entry.name === 'string' ? entry.name : ''
+            const tps = typeof entry === 'object' && entry !== null && 'tps' in entry ? Number(entry.tps) : 0
+            return { name, tps: Number.isFinite(tps) ? tps : 0 }
         })
-        if (!response.ok) {
-            throw new Error(await response.text())
-        }
-
-        const data = await response.json()
-        if (!Array.isArray(data)) {
-            return []
-        }
-
-        return data.filter((entry) => {
-            const name = typeof entry?.name === 'string' ? entry.name : ''
+        .filter((entry) => {
+            const name = entry.name
             if (!name) return false
             if (name.startsWith('/')) return false
             if (name.includes(' ')) return false
             return name.includes('.') || name === 'localhost'
         })
-    } catch {
-        return []
-    }
 }

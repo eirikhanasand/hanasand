@@ -6,6 +6,11 @@ const publicRoutes = [
     '/register',
     '/reset-password',
     '/status',
+    '/trust',
+    '/trust/security-overview',
+    '/trust/dpa-and-data',
+    '/trust/subprocessors',
+    '/trust/sla-onboarding',
     '/support',
     '/articles',
     '/articles/bot',
@@ -53,7 +58,7 @@ test.describe('public website routes', () => {
         })
     }
 
-    test('public navigation keeps readable light contrast and exposes load testing', async ({ page }, testInfo) => {
+    test('public navigation keeps readable light contrast and exposes service checks', async ({ page }, testInfo) => {
         const baseURL = testInfo.project.use.baseURL || 'http://127.0.0.1:3000'
         await page.context().addCookies([
             {
@@ -70,7 +75,9 @@ test.describe('public website routes', () => {
         const brand = header.getByRole('link', { name: 'hanasand' }).locator('span').filter({ hasText: /^hanasand$/ })
         await expect(brand).toBeVisible()
         const productButton = header.getByRole('button', { name: 'Product' })
+        const resourcesButton = header.getByRole('button', { name: 'Resources' })
         await expect(productButton).toBeVisible()
+        await expect(resourcesButton).toBeVisible()
 
         const contrast = await brand.evaluate((element) => {
             const style = window.getComputedStyle(element)
@@ -86,9 +93,9 @@ test.describe('public website routes', () => {
             background: 'rgb(255, 255, 255)',
         })
 
-        await productButton.hover()
-        const loadTesting = page.getByRole('link', { name: /Load Testing/i }).first()
-        await expect(loadTesting).toBeVisible()
-        await expect(loadTesting).toHaveAttribute('href', '/test')
+        await resourcesButton.hover()
+        const serviceChecks = page.getByRole('link', { name: /Service Checks/i }).first()
+        await expect(serviceChecks).toBeVisible()
+        await expect(serviceChecks).toHaveAttribute('href', '/test')
     })
 })

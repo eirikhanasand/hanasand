@@ -62,21 +62,21 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                         {([
                             {
                                 title: 'Total Requests',
-                                value: totalRequests || '—',
+                                value: totalRequests || 'metering',
                                 accent: 'amber',
                                 outline: 'outline outline-orange-300/20',
                                 icon: <Activity className='w-5 h-5 stroke-orange-300' />
                             },
                             {
                                 title: 'Avg Request Time',
-                                value: avgRequestTime ? `${avgRequestTime}ms` : '—',
+                                value: avgRequestTime ? `${avgRequestTime}ms` : 'metering',
                                 accent: 'blue',
                                 outline: 'outline outline-blue-500/25',
                                 icon: <Clock className='w-5 h-5 stroke-blue-500' />
                             },
                             {
                                 title: 'Error Rate',
-                                value: errorRate ? `${errorRate}%` : '—',
+                                value: errorRate ? `${errorRate}%` : 'clear',
                                 accent: 'amber',
                                 outline: 'outline outline-yellow-500/25',
                                 icon: <AlertTriangle className='w-5 h-5 stroke-yellow-500' />
@@ -107,7 +107,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             }
                             if (isChart) {
                                 return (
-                                    <div className='rounded-[1.4rem] border border-white/10 bg-black/55 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
+                                    <div className='rounded-[1.4rem] border border-[#27364f] bg-[#0f1726] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
                                         <h3 className='mb-4 text-lg font-semibold text-bright'>{title as string}</h3>
                                         <RequestsOverTimeChart data={data as TrafficMetric[]} />
                                     </div>
@@ -115,7 +115,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             }
                             const set = data as Array<TrafficMetric | TrafficSlowMetric>
                             return (
-                                <div className='rounded-[1.4rem] border border-white/10 bg-black/55 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
+                                <div className='rounded-[1.4rem] border border-[#27364f] bg-[#0f1726] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]' key={title as string}>
                                     <h3 className='mb-4 text-lg font-semibold text-bright'>{title as string}</h3>
                                     <div className='space-y-2'>
                                         {set.map((entry) => (
@@ -135,8 +135,8 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
             )}
 
             {recs && recs.length > 0 &&
-                <div className='overflow-hidden rounded-[1.4rem] border border-white/10 bg-black/55 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
-                    <div className='border-b border-white/10 p-4'>
+                <div className='overflow-hidden rounded-[1.4rem] border border-[#27364f] bg-[#0f1726] shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+                    <div className='border-b border-[#27364f] p-4'>
                         <h3 className='text-lg font-semibold text-bright'>Recent Traffic</h3>
                     </div>
                     <div className='overflow-x-auto'>
@@ -153,7 +153,7 @@ export default function TrafficDashboard({ metrics, records, selectedDomain }: T
                             </thead>
                             <tbody>
                                 {recs.map((req, i) => (
-                                    <tr key={i} className='border-b border-white/10 hover:bg-white/4'>
+                                    <tr key={i} className='border-b border-[#27364f] hover:bg-[#162033]'>
                                         <td className='px-4 py-3 text-bright/45'>
                                             {new Date(req.timestamp).toLocaleString()}
                                         </td>
@@ -185,11 +185,11 @@ function StatCard({ title, value, accent = 'slate', icon, outline }: StatCardPro
         rose: 'from-rose-500/18 to-red-500/6 border-rose-400/18 text-rose-200',
         violet: 'from-violet-500/18 to-fuchsia-500/6 border-violet-400/18 text-violet-200',
         cyan: 'from-cyan-500/18 to-sky-500/6 border-cyan-400/18 text-cyan-200',
-        slate: 'from-white/10 to-white/3 border-white/10 text-bright/75',
+        slate: 'from-white/10 to-white/3 border-[#27364f] text-bright/75',
     } as const
 
     return (
-        <div className='flex items-center justify-between rounded-[1.4rem] border border-white/10 bg-black/55 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
+        <div className='flex items-center justify-between rounded-[1.4rem] border border-[#27364f] bg-[#0f1726] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.22)]'>
             <div>
                 <p className='text-sm text-bright/45'>{title}</p>
                 <p className='mt-1 text-2xl font-bold text-bright'>{value}</p>
