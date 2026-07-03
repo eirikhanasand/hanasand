@@ -236,7 +236,7 @@ export function buildActorArtifacts(
         actionability,
         kind: 'campaign',
         label: campaign,
-        subtitle: 'Campaign or operation context tied to returned actor intelligence',
+        subtitle: 'Campaign or operation context tied to actor intelligence',
         evidence: [
             `${campaign} is carried in the actor intelligence profile.`,
             ...matchingActivity(result, campaign),
@@ -795,7 +795,7 @@ function artifactFromActorList(input: {
             subtitle: input.subtitle,
             confidence: input.actor.confidence,
             freshness: input.result.lastSeen || input.result.generatedAt,
-            evidence: unique(input.evidence.length ? input.evidence : [`${input.label} is present in the returned actor intelligence profile.`]),
+            evidence: unique(input.evidence.length ? input.evidence : [`${input.label} is present in the actor intelligence profile.`]),
             provenance,
             watchlistTerms: matchedWatchTerms.length ? matchedWatchTerms : [{
                 kind: input.watchlistKind,

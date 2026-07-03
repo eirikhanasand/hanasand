@@ -155,7 +155,7 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
             confidenceReasoning: [
                 'Aliases and attribution are corroborated across government and vendor reporting.',
                 'Victim observations include named organizations, sectors, timeframes, and source basis.',
-                'Tradecraft aligns with returned ATT&CK techniques for credential, cloud, email, and command-and-control activity.',
+                'Tradecraft aligns with mapped ATT&CK techniques for credential, cloud, email, and command-and-control activity.',
             ],
             sourceProvenance: [
                 'CISA and allied government SVR/APT29 advisories',
@@ -167,8 +167,8 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
 
     return {
         actorClass: result.aliases.length ? 'Named threat actor or activity cluster' : 'Threat intelligence query',
-        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution not returned by the search service',
-        firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'Not returned',
+        attribution: result.notes.find(note => /attribut/i.test(note)) || 'Attribution needs a source-backed statement',
+        firstSeen: result.recentActivity.map(item => item.firstReportedAt || item.date).filter(Boolean).sort()[0] || 'No dated activity yet',
         lastSeen: result.lastSeen || result.generatedAt,
         motivation: result.targets.map(target => target.rationale).slice(0, 4),
         malwareTools: [],
@@ -179,9 +179,9 @@ function fallbackActorIntelligence(result: TiSearchResponse, victimObservations:
         geographies: unique([...result.targets.flatMap(target => target.regions), ...victimObservations.map(item => item.country)]).slice(0, 8),
         confidence: result.confidence,
         confidenceReasoning: [
-            result.sources.length ? `${result.sources.length} returned source records are attached to the profile.` : 'No source records were returned.',
-            result.recentActivity.length ? `${result.recentActivity.length} activity rows are available for review.` : 'No recent activity rows were returned.',
-            result.ttps.length ? `${result.ttps.length} tradecraft rows are mapped for analyst review.` : 'No tradecraft rows were returned.',
+            result.sources.length ? `${result.sources.length} source records are attached to the profile.` : 'No source records yet.',
+            result.recentActivity.length ? `${result.recentActivity.length} activity rows are available for review.` : 'No recent activity rows yet.',
+            result.ttps.length ? `${result.ttps.length} tradecraft rows are mapped for analyst review.` : 'No tradecraft rows yet.',
         ],
         sourceProvenance: result.sources.map(source => source.url || source.provenance || source.name).slice(0, 8),
     }
@@ -201,7 +201,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
         reportDate: undefined,
         captureId: undefined,
         confidence: result.confidence,
-        shownBecause: `Returned source record for ${result.query}.`,
+        shownBecause: `Source record supporting ${result.query}.`,
     }))
     const fallbackRows = fallback.sourceProvenance.map(source => ({
         sourceId: undefined,
@@ -210,7 +210,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
         reportDate: undefined,
         captureId: undefined,
         confidence: fallback.confidence,
-        shownBecause: 'Used to support actor profiles when newer source rows are not returned.',
+        shownBecause: 'Used to support actor profiles until newer source rows are attached.',
     }))
 
     return uniqueBy([
@@ -226,7 +226,7 @@ function buildProvenanceRows(result: TiSearchResponse, fallback: TiActorIntellig
             parserStatus: source.parserStatus,
             lastCollectedAt: source.lastCollectedAt,
             confidence: source.confidence,
-            shownBecause: 'Returned as evidence for watchlist, alert, or case handoff.',
+            shownBecause: 'Evidence used for watchlist, alert, or case handoff.',
         })),
         ...sourceRows,
         ...fallbackRows,

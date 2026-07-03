@@ -1043,7 +1043,7 @@ function buildEvidencePriority(input: {
             route: casePaths[0] || input.relatedAlerts[0]?.recommendedRoute,
             reasons: [
                 `${item.confidence >= 0.75 ? 'High' : 'Review'} confidence activity row.`,
-                item.affectedSectors?.length ? `Affected sectors: ${item.affectedSectors.slice(0, 3).join(', ')}.` : 'Affected sector is not returned.',
+                item.affectedSectors?.length ? `Affected sectors: ${item.affectedSectors.slice(0, 3).join(', ')}.` : 'Affected sector needs source detail.',
                 ...sharedReasons,
             ],
         })
@@ -1071,7 +1071,7 @@ function buildEvidencePriority(input: {
     if (!rows.length) {
         rows.push(priorityRow({
             rowId: 'collection-searching',
-            label: input.result.status === 'searching' ? 'Collection running' : 'No actionable rows returned',
+            label: input.result.status === 'searching' ? 'Collection running' : 'No actionable rows yet',
             score: input.sourceProvenance.length ? 35 : 12,
             state: input.sourceProvenance.length ? 'review' : 'blocked',
             sourceIds,
@@ -1081,7 +1081,7 @@ function buildEvidencePriority(input: {
             watchlistTerms: candidateTerms,
             blockers: sharedBlockers,
             reasons: [
-                input.sourceProvenance.length ? `${input.sourceProvenance.length} source row${input.sourceProvenance.length === 1 ? '' : 's'} returned.` : 'No source row is attached yet.',
+                input.sourceProvenance.length ? `${input.sourceProvenance.length} source row${input.sourceProvenance.length === 1 ? '' : 's'} attached.` : 'No source row is attached yet.',
                 ...sharedReasons,
             ],
         }))
@@ -1326,7 +1326,7 @@ function buildOrgRelevanceProof(input: {
             lastCollectedAt: source.lastCollectedAt,
             confidence: source.confidence,
             supportsTerms: uniqueStrings(terms.length ? terms : readTermArray(input.exportPayloads.watchlist.body.terms).map(term => String(term.value))),
-            shownBecause: actorEvidence?.shownBecause ?? 'Returned as evidence for watchlist, alert, or case handoff.',
+            shownBecause: actorEvidence?.shownBecause ?? 'Evidence used for watchlist, alert, or case handoff.',
         }
     })
     const evidenceRefs = sourceEvidence.flatMap(source => [
@@ -1966,10 +1966,10 @@ function buildPublicTiReadiness(input: {
     if (!webhookDestinationIds.length) blockers.push(readinessBlocker('missing_webhook_destination', 'webhook', 'webhook', 'relatedWebhookDestinations[].id', 'No active webhook destination ID is attached for dry-run delivery.', '/dashboard/dwm', 'Attach an active webhook destination before preparing customer delivery.', 'consumer_readiness'))
 
     if (hasOrgContext && !input.contract?.entitlementReadiness) {
-        blockers.push(readinessBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Organization access context was not returned with the public TI result.', '/dashboard/dwm', 'Load organization access context before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
+        blockers.push(readinessBlocker('unavailable_contract', 'entitlement', 'entitlement', 'actionability.entitlementReadiness', 'Organization access context is not attached to the public TI result.', '/dashboard/dwm', 'Load organization access context before enabling watchlist, alert, case, or delivery mutation.', 'entitlement_readiness'))
     }
     if (hasAlertContext && input.relatedAlerts.every(alert => !alert.deliveryReadinessContext)) {
-        blockers.push(readinessBlocker('unavailable_contract', 'webhook', 'webhook', 'relatedAlerts[].deliveryReadinessContext', 'Alert delivery readiness was not returned with the related alert.', '/dashboard/dwm', 'Return delivery readiness context with capture, case, destination, replay, and entitlement fields.', 'delivery_readiness'))
+        blockers.push(readinessBlocker('unavailable_contract', 'webhook', 'webhook', 'relatedAlerts[].deliveryReadinessContext', 'Alert delivery context is not attached to the related alert.', '/dashboard/dwm', 'Attach delivery context with capture, case, destination, replay, and entitlement fields.', 'delivery_readiness'))
     }
 
     const entitlementActions = Object.values(input.contract?.entitlementReadiness?.actions ?? {})
@@ -2956,7 +2956,7 @@ function buildExportPayloads(input: {
             route: 'enrichment_queue',
             backedRoute: '/dashboard/ti/enrichment',
             blocked: enrichmentTasks.length === 0,
-            missing: enrichmentTasks.length ? [] : ['No enrichment tasks returned for this actor/query result'],
+            missing: enrichmentTasks.length ? [] : ['No enrichment tasks queued for this actor/query result'],
             body: {
                 query: input.result.query,
                 tasks: enrichmentTasks,
@@ -3186,7 +3186,7 @@ function normalizeCandidates(contractCandidates: TiActionabilityContract['watchl
             return domain ? [{
                 kind: 'domain' as const,
                 value: domain,
-                reason: `Source domain attached to returned evidence: ${source.name}.`,
+                reason: `Source domain attached to profile evidence: ${source.name}.`,
                 confidence: 0.64,
             }] : []
         }),
@@ -3202,7 +3202,7 @@ function normalizeCandidates(contractCandidates: TiActionabilityContract['watchl
         .map(candidate => ({
             ...candidate,
             value: candidate.value.trim(),
-            reason: candidate.reason.trim() || 'Candidate watchlist term from returned actor context.',
+            reason: candidate.reason.trim() || 'Candidate watchlist term from actor context.',
         }))
         .filter(candidate => Boolean(candidate.value) && !/not stated|global|multiple|various|unknown/i.test(candidate.value)), candidate => `${candidate.kind}:${candidate.value.toLowerCase()}`)
         .slice(0, 12)
@@ -3225,7 +3225,7 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
             id: 'capture-provenance',
             title: 'Attach capture IDs to source evidence',
             severity: 'high',
-            detail: 'Returned sources identify provenance, but no capture IDs are attached for alert replay or case evidence.',
+            detail: 'Source records identify provenance, but no capture IDs are attached for alert replay or case evidence.',
             dependency: 'TI search response sourceProvenance[].captureId or DWM alert evidence provenance',
             route: '/dashboard/ti/enrichment',
             sourceFamily: 'source_capture',
@@ -3237,7 +3237,7 @@ function normalizeEnrichmentGaps(contractGaps: TiActionabilityContract['enrichme
             id: 'alert-linkage',
             title: 'Link actor result to generated alerts',
             severity: result.recentActivity.length ? 'medium' : 'high',
-            detail: 'No related DWM alert IDs were returned, so the public result cannot open or create a backed case yet.',
+            detail: 'No related DWM alert IDs are attached, so the public result cannot open or create a backed case yet.',
             dependency: '/v1/dwm/alerts or /v1/dwm/alerts/rebuild alert ID',
             route: '/dashboard/dwm',
             sourceFamily: 'alert',
@@ -3392,7 +3392,7 @@ function rationaleFor(disposition: TiActionabilityModel['alertDisposition'], can
     if (disposition === 'case_ready') return 'A related case is already attached to this actor/query result.'
     if (alerts.length) return 'A backed alert ID is attached, so this result can move into case review.'
     if (matches.length) return 'A backed organization watchlist match is attached; rebuild or open alert review before customer delivery.'
-    if (candidates.length) return 'The result has watchlist candidates, but no backed organization watchlist match or alert ID was returned.'
+    if (candidates.length) return 'The result has watchlist candidates, but no backed organization watchlist match or alert ID is attached.'
     if (sources.length) return 'Source details exist, but the result has no customer-relevant watchlist terms or alert linkage.'
     return 'The result does not have enough source, watchlist, alert, or case data to act on yet.'
 }
