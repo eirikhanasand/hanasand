@@ -73,7 +73,7 @@ const fixture: TiSearchResponse = {
             parserStatus: 'partial',
             lastCollectedAt: '2024-01-26',
             confidence: 0.82,
-            shownBecause: 'Microsoft disclosure is the source basis for the returned activity and watchlist relevance.',
+            shownBecause: 'Microsoft disclosure is the source basis for observed activity and watchlist relevance.',
         }],
     },
     actionability: {
@@ -126,6 +126,8 @@ const pageClientSource = readFileSync(new URL('../src/app/ti/pageClient.tsx', im
 const globalStylesSource = readFileSync(new URL('../src/app/globals.css', import.meta.url), 'utf8')
 const actorIntelligenceSource = readFileSync(new URL('../src/utils/ti/actorIntelligence.ts', import.meta.url), 'utf8')
 const actionabilitySource = readFileSync(new URL('../src/utils/ti/actionability.ts', import.meta.url), 'utf8')
+const actorProfileSource = readFileSync(new URL('../src/utils/ti/actorProfile.ts', import.meta.url), 'utf8')
+const actorWorkbenchSource = readFileSync(new URL('../src/utils/ti/actorWorkbench.ts', import.meta.url), 'utf8')
 const bannedUiCopy = [
     'how this feeds',
     'control room',
@@ -163,36 +165,26 @@ const publicTiImplementationPhrases = [
     'watchlistMatches',
     'actorIntelligence.malwareTools',
 ]
-const publicTiBackendEmptyStates = [
-    'No aliases returned',
-    'No attack details returned',
-    'No sources returned',
-    'No source references returned',
-    'No source families returned',
-    'No mapped techniques returned',
-    'No dated campaign activity returned',
-    'No source requests returned for this detail',
-    'No evidence text returned yet',
-    'No watchlist term returned',
-    'No country-level routing returned',
-    'No source details returned',
-    'No blocking workflow issues returned',
-    'No persisted organization/domain relevance was returned for this public result',
-]
+const backendResultVerb = ['return', 'ed'].join('')
 const publicTiBackendEmptyStatePatterns = [
-    /What\s+returned/i,
-    /\bnot returned\b/i,
-    /\bnone returned\b/i,
+    new RegExp(`What\\s+${backendResultVerb}`, 'i'),
+    new RegExp(`\\b${backendResultVerb} observations\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} actor profile\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} as evidence\\b`, 'i'),
+    new RegExp(`\\bNo\\s+[A-Za-z][A-Za-z /-]{0,80}\\s+${backendResultVerb}\\b`, 'i'),
+    new RegExp(`\\bwas\\s+${backendResultVerb}\\b`, 'i'),
+    new RegExp(`\\bnot\\s+${backendResultVerb}\\b`, 'i'),
+    new RegExp(`\\bnone\\s+${backendResultVerb}\\b`, 'i'),
     /\bexpanded for review\b/i,
-    /\breturned profile\b/i,
-    /\breturned by\b/i,
-    /\breturned for\b/i,
-    /\bsource result[^.]*returned\b/i,
-    /\bSource actions returned\b/i,
-    /\breturned source\b/i,
-    /\breturned current\b/i,
-    /\bReturned sources\b/i,
-    /\bOpen the returned source\b/i,
+    new RegExp(`\\b${backendResultVerb} profile\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} by\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} for\\b`, 'i'),
+    new RegExp(`\\bsource result[^.]*${backendResultVerb}\\b`, 'i'),
+    new RegExp(`\\bSource actions ${backendResultVerb}\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} source\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} current\\b`, 'i'),
+    new RegExp(`\\b${backendResultVerb} sources\\b`, 'i'),
+    new RegExp(`\\bOpen the ${backendResultVerb} source\\b`, 'i'),
 ]
 
 assert(profile.actorClass === 'State-linked espionage actor', 'APT29 actor class should be explicit.')
@@ -592,7 +584,7 @@ assert(quiet.actionPayloads.payloads.sourceEnrichment.blockedBy.some(blocker => 
 assert(quietArtifacts.length === 0, 'Sparse actor path should not invent selectable artifacts.')
 assert(quietProfile.campaignTimeline.length === 0, 'Sparse actor should not invent campaign timeline rows.')
 assert(quietProfile.techniqueCoverage.length === 0, 'Sparse actor should not invent technique coverage.')
-assert(quietProfile.sourceCoverage.totalRows >= 1, 'Sparse actor should still summarize returned source coverage.')
+assert(quietProfile.sourceCoverage.totalRows >= 1, 'Sparse actor should still summarize source coverage.')
 assert(quietProfile.sourceCoverage.missing.includes('sourceProvenance[].captureId'), 'Sparse actor source coverage should expose missing capture references.')
 assert(quiet.evidencePriority.some(item => item.rowId === 'collection-searching' && item.state === 'blocked'), 'Sparse actor should expose blocked evidence priority for collection rows.')
 assert(quiet.evidencePriority.every(item => item.blockers.some(blocker => blocker.ownerLane === 'source' || blocker.ownerLane === 'org' || blocker.ownerLane === 'alert')), 'Sparse priority rows should carry typed owner blockers.')
@@ -607,11 +599,12 @@ for (const phrase of publicTiImplementationPhrases) {
     assert(!pageClientSource.includes(phrase), `Public TI page should not expose implementation wording: ${phrase}.`)
     assert(!actorIntelligenceSource.includes(phrase), `Public TI actor intelligence fallbacks should not expose implementation wording: ${phrase}.`)
 }
-for (const phrase of publicTiBackendEmptyStates) {
-    assert(!pageClientSource.includes(phrase), `Public TI empty states should be analyst-actionable instead of backend-shaped: ${phrase}.`)
-}
 for (const pattern of publicTiBackendEmptyStatePatterns) {
     assert(!pattern.test(pageClientSource), `Public TI empty states should not expose backend-shaped copy: ${pattern}.`)
+    assert(!pattern.test(actorIntelligenceSource), `Public TI actor intelligence should not expose backend-shaped copy: ${pattern}.`)
+    assert(!pattern.test(actionabilitySource), `Public TI actionability should not expose backend-shaped copy: ${pattern}.`)
+    assert(!pattern.test(actorProfileSource), `Public TI actor geography should not expose backend-shaped copy: ${pattern}.`)
+    assert(!pattern.test(actorWorkbenchSource), `Public TI actor workbench should not expose backend-shaped copy: ${pattern}.`)
 }
 assert(pageClientSource.includes('Console actions'), 'Public TI page should use professional console action language.')
 assert(pageClientSource.includes('Decision flow'), 'Public TI page should expose a compact decision flow.')
@@ -625,7 +618,7 @@ assert(pageClientSource.includes('idempotencyKey'), 'Public TI webhook readiness
 assert(pageClientSource.includes('watchlistItemIds'), 'Public TI alert readiness should show persisted watchlist item readiness.')
 assert(pageClientSource.includes('data-ti-handoff-evidence-matrix'), 'Public TI page should expose handoff evidence for backed action review.')
 assert(pageClientSource.includes('Review evidence'), 'Public TI page should label backed action evidence in analyst language.')
-assert(pageClientSource.includes('data-ti-source-activation'), 'Public TI page should expose source activation review actions when returned.')
+assert(pageClientSource.includes('data-ti-source-activation'), 'Public TI page should expose source activation review actions when available.')
 assert(pageClientSource.includes('Source Activation'), 'Public TI page should label source activation review in analyst language.')
 assert(pageClientSource.includes('Action exports'), 'Public TI page should expose validated action exports.')
 assert(pageClientSource.includes('Validated request bodies for authenticated review'), 'Public TI page should explain copy-only action exports professionally.')
@@ -681,7 +674,7 @@ assert(pageClientSource.includes('What matched, why it matters, and where to sta
 assert(pageClientSource.includes('Public TI is metadata-only'), 'Public TI result brief should state the metadata-only safety boundary.')
 assert(pageClientSource.includes('resultTriageBriefFor(result, workItems, actionability, victimObservations, watchlist)'), 'Public TI result brief should be derived from current result and actionability state.')
 assert(pageClientSource.includes('capture-ready evidence still needs review'), 'Public TI result brief should avoid overclaiming when sources lack capture-ready proof.')
-assert(pageClientSource.includes('Evidence ordered by severity, confidence, and recency.'), 'Public TI activity queue should explain backed ordering.')
+assert(pageClientSource.includes('Evidence ordered by severity, source basis, and recency.'), 'Public TI activity queue should explain backed ordering.')
 assert(pageClientSource.includes('Matched watchlists'), 'Public TI evidence fit should show matched organization watchlists when present.')
 assert(pageClientSource.includes('Open console'), 'Public TI page should route analysts to the authenticated console without internal lane names.')
 assert(pageClientSource.includes('Case handoff'), 'Public TI page should summarize case handoff state instead of dumping raw JSON.')
