@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertTriangle, Activity, Database, Server, ShieldAlert, TerminalSquare, Bug } from 'lucide-react'
+import { AlertTriangle, Activity, ArrowRight, Database, Server, ShieldAlert, TerminalSquare, Bug } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
@@ -111,6 +111,30 @@ export default function LogsPageClient({
     )
     const recentErrorCount = liveLogs.filter((log) => log.level === 'error' || log.level === 'fatal').length
     const generatedAt = realtime.generated_at ? when(realtime.generated_at) : 'Syncing'
+    const activeServiceLabel = serviceFilter === 'all' ? 'all services' : serviceFilter
+    const trackedRecentErrors = errorEvents.summary.last_hour || 0
+    const totalTrackedFailures = errorEvents.summary.total || 0
+    const streamInterrupted = !realtime.runtime_available || realtime.native_available === false
+    const primaryView: LogsView = recentErrorCount > 0 || trackedRecentErrors > 0 || totalTrackedFailures > 0
+        ? 'errors'
+        : streamInterrupted
+            ? 'live'
+            : 'dashboard'
+    const primaryTitle = primaryView === 'errors'
+        ? 'Review the failing requests first'
+        : primaryView === 'live'
+            ? 'Watch the stream reconnect'
+            : 'Scan the current service activity'
+    const primaryDetail = primaryView === 'errors'
+        ? `${recentErrorCount} live error lines and ${trackedRecentErrors} tracked failures in the last hour for ${activeServiceLabel}.`
+        : primaryView === 'live'
+            ? `The runtime feed needs attention before deeper triage for ${activeServiceLabel}.`
+            : `Live output, stored error records, and service activity are ready for ${activeServiceLabel}.`
+    const primaryActionLabel = primaryView === 'errors'
+        ? 'Open error review'
+        : primaryView === 'live'
+            ? 'Open live feed'
+            : 'Open overview'
 
     function handleServiceFilter(nextService: string) {
         setServiceFilter(nextService)
@@ -122,6 +146,10 @@ export default function LogsPageClient({
         }
         const query = params.toString()
         router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    }
+
+    function handlePrimaryAction() {
+        setView(primaryView)
     }
 
     function toggleLog(id: string | number) {
@@ -161,7 +189,7 @@ export default function LogsPageClient({
 
                 <div className='flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4'>
                     <div className='text-sm text-ui-muted'>
-                        Showing <span className='font-semibold text-ui-text'>{serviceFilter === 'all' ? 'all services' : serviceFilter}</span> across live, stored, and error streams.
+                        Showing <span className='font-semibold text-ui-text'>{activeServiceLabel}</span> across live, stored, and error streams.
                     </div>
                     <label htmlFor='logs-service-filter' className='flex min-w-0 flex-col gap-1.5 text-sm sm:w-72'>
                         <span className='text-xs font-semibold text-ui-muted'>Service filter</span>
@@ -181,12 +209,39 @@ export default function LogsPageClient({
                 </div>
             </section>
 
-            <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
-                <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
-                <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
-                <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
-                <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Tracked failures' value={String(errorEvents.summary.total)} note={`${errorEvents.summary.last_hour} in the last hour`} />
+            <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-logs-primary-triage>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{liveLogs.length} live lines</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{totalTrackedFailures} tracked failures</span>
+                    </div>
+                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                </div>
+                <button
+                    type='button'
+                    onClick={handlePrimaryAction}
+                    className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                    data-logs-primary-action
+                >
+                    <span>{primaryActionLabel}</span>
+                    <ArrowRight className='h-4 w-4' aria-hidden='true' />
+                </button>
             </section>
+
+            <details className={`${dashboardPanelClass} overflow-hidden`} data-logs-metrics-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Operational counters</span>
+                    <span className='text-xs font-medium text-ui-muted'>{realtime.containers?.length || 0} containers, {liveLogs.length} live lines, {recentErrorCount} live errors</span>
+                </summary>
+                <section className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 sm:grid-cols-2 xl:grid-cols-4' data-logs-metrics>
+                    <SummaryCard icon={<Server className='h-4 w-4' />} label='Runtime containers' value={String(realtime.containers?.length || 0)} note='Live source' />
+                    <SummaryCard icon={<Activity className='h-4 w-4' />} label='Live log lines' value={String(liveLogs.length)} note='Rolling feed' />
+                    <SummaryCard icon={<AlertTriangle className='h-4 w-4' />} label='Live errors' value={String(recentErrorCount)} note='Error and fatal' />
+                    <SummaryCard icon={<ShieldAlert className='h-4 w-4' />} label='Tracked failures' value={String(totalTrackedFailures)} note={`${trackedRecentErrors} in the last hour`} />
+                </section>
+            </details>
 
             {(!realtime.runtime_available || realtime.native_available === false) && (
                 <section className='grid gap-2' data-logs-stream-alerts>
