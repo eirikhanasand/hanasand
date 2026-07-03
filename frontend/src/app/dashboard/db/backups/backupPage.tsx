@@ -43,8 +43,29 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
     const presentations = backups.map((backup) => ({ backup, presentation: presentBackup(backup) }))
     const healthyCount = presentations.filter(({ presentation }) => presentation.healthTone === 'ok').length
     const restoreReadyCount = presentations.filter(({ presentation }) => presentation.restoreReady).length
+    const attentionTarget = presentations.find(({ presentation }) => presentation.healthTone !== 'ok')
     const nextBackup = backups.find(backup => backup.nextBackup)?.nextBackup
     const lastBackup = backups.find(backup => backup.lastBackup)?.lastBackup
+    const firstRestoreReady = presentations.find(({ presentation }) => presentation.restoreReady)
+    const primaryTitle = loadBlocker
+        ? 'Fix backup configuration first'
+        : !backups.length
+            ? 'Create the first verified backup'
+            : attentionTarget
+                ? `Review ${attentionTarget.backup.name}`
+                : restoreReadyCount
+                    ? 'Restore files are ready'
+                    : 'Run backup to create a restore point'
+    const primaryDetail = loadBlocker
+        ? loadBlocker.safeError
+        : !backups.length
+            ? 'No backup targets are reporting yet. Start a backup check to establish the first restore point.'
+            : attentionTarget
+                ? attentionTarget.presentation.safeError || attentionTarget.presentation.restoreDisabledReason || attentionTarget.presentation.summary
+                : restoreReadyCount
+                    ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} can open restore files. Last backup: ${formatRelative(lastBackup)}.`
+                    : 'Backup targets are visible, but no restore file is indexed yet.'
+    const primaryRestoreHref = firstRestoreReady ? `/dashboard/db/restore?service=${encodeURIComponent(backupServiceSlug(firstRestoreReady.backup))}` : ''
 
     function handleRun() {
         startTransition(async () => {
@@ -55,14 +76,69 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
 
     return (
         <div className='grid gap-4'>
-            <section className={`${dashboardPanelClass} p-4`}>
-                <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
+            <section className={`${dashboardPanelClass} grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center`} data-backup-primary-flow>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-ui-muted'>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{healthyCount}/{backups.length || 0} healthy</span>
+                        <span className='rounded-md border border-ui-border bg-ui-raised px-2 py-1'>{restoreReadyCount} restore-ready</span>
+                    </div>
+                    <h2 className='mt-3 text-lg font-semibold text-ui-text'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-ui-muted'>{primaryDetail}</p>
+                </div>
+                {loadBlocker ? (
+                    <Link
+                        href='/dashboard/logs'
+                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                        data-backup-primary-action
+                    >
+                        <ListChecks className='h-4 w-4' />
+                        Open logs
+                    </Link>
+                ) : attentionTarget ? (
+                    <a
+                        href='#backup-targets'
+                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                        data-backup-primary-action
+                    >
+                        <AlertTriangle className='h-4 w-4' />
+                        Review target
+                    </a>
+                ) : primaryRestoreHref ? (
+                    <Link
+                        href={primaryRestoreHref}
+                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 focus:outline-none focus:ring-2 focus:ring-ui-primary/40 sm:w-auto'
+                        data-backup-primary-action
+                    >
+                        <RotateCcw className='h-4 w-4' />
+                        Open restore files
+                    </Link>
+                ) : (
+                    <button
+                        type='button'
+                        onClick={handleRun}
+                        disabled={isPending}
+                        className='inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md bg-ui-primary px-4 text-sm font-semibold text-ui-canvas shadow-sm transition hover:bg-ui-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto'
+                        data-backup-primary-action
+                    >
+                        <DatabaseBackup className='h-4 w-4' />
+                        {isPending ? 'Running backup...' : 'Run backup now'}
+                    </button>
+                )}
+            </section>
+
+            <details className={`${dashboardPanelClass} overflow-hidden`} data-backup-summary-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Backup counters and schedule</span>
+                    <span className='text-xs font-medium text-ui-muted'>Last {formatRelative(lastBackup)}, next {formatSchedule(nextBackup)}</span>
+                </summary>
+                <div className='grid gap-3 border-t border-ui-border bg-ui-panel p-3 md:grid-cols-2 xl:grid-cols-4' data-backup-summary-metrics>
                     <SummaryMetric icon={<ShieldCheck className='h-4 w-4' />} label='Backup health' value={loadBlocker ? 'Unavailable' : backups.length ? `${healthyCount}/${backups.length} healthy` : 'Checking targets'} />
                     <SummaryMetric icon={<FileClock className='h-4 w-4' />} label='Last backup' value={formatRelative(lastBackup)} />
                     <SummaryMetric icon={<Clock3 className='h-4 w-4' />} label='Next backup' value={formatSchedule(nextBackup)} />
                     <SummaryMetric icon={<RotateCcw className='h-4 w-4' />} label='Restore lane' value={restoreReadyCount ? `${restoreReadyCount} target${restoreReadyCount === 1 ? '' : 's'} ready` : 'Indexing restore points'} />
                 </div>
-            </section>
+            </details>
 
             {loadBlocker && (
                 <ConfigurationBlocker safeError={loadBlocker.safeError} rawDetails={loadBlocker.rawDetails} />
@@ -72,7 +148,7 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                 <p className='rounded-lg border border-ui-border bg-ui-panel px-4 py-3 text-sm text-ui-text shadow-sm'>{message}</p>
             )}
 
-            <div className='grid gap-4'>
+            <div className='grid gap-4' id='backup-targets' data-backup-targets>
                 {presentations.map(({ backup, presentation }) => (
                     <article key={backup.id} className={`${dashboardPanelClass} p-5`}>
                         <div className='flex flex-wrap items-start justify-between gap-4'>
@@ -127,16 +203,22 @@ export default function BackupPage({ backups, loadError = '' }: BackupPageProps)
                             <ConfigurationBlocker safeError={presentation.safeError} rawDetails={presentation.rawDetails} compact />
                         )}
 
-                        <div className='mt-4 grid gap-3 text-sm text-ui-muted md:grid-cols-2 xl:grid-cols-4'>
-                            <InfoCell label='Last backup' value={formatRelative(backup.lastBackup)} />
-                            <InfoCell label='Next backup' value={formatSchedule(backup.nextBackup)} />
-                            <InfoCell label='Retention' value={presentation.retention} />
-                            <InfoCell label='Storage target' value={presentation.storageTarget} />
-                            <InfoCell label='Latest file' value={presentation.latestFile} />
-                            <InfoCell label='Latest size' value={presentation.latestSize} />
-                            <InfoCell label='Duration' value={presentation.duration} />
-                            <InfoCell label='Health check' value={presentation.healthCheck} />
-                        </div>
+                        <details className='mt-4 overflow-hidden rounded-lg border border-ui-border bg-ui-panel' data-backup-target-details>
+                            <summary className='flex cursor-pointer list-none flex-col gap-1 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-raised sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                                <span>Schedule, storage, and file details</span>
+                                <span className='text-xs font-medium text-ui-muted'>{formatRelative(backup.lastBackup)} last, {formatSchedule(backup.nextBackup)} next</span>
+                            </summary>
+                            <div className='grid gap-3 border-t border-ui-border p-3 text-sm text-ui-muted md:grid-cols-2 xl:grid-cols-4'>
+                                <InfoCell label='Last backup' value={formatRelative(backup.lastBackup)} />
+                                <InfoCell label='Next backup' value={formatSchedule(backup.nextBackup)} />
+                                <InfoCell label='Retention' value={presentation.retention} />
+                                <InfoCell label='Storage target' value={presentation.storageTarget} />
+                                <InfoCell label='Latest file' value={presentation.latestFile} />
+                                <InfoCell label='Latest size' value={presentation.latestSize} />
+                                <InfoCell label='Duration' value={presentation.duration} />
+                                <InfoCell label='Health check' value={presentation.healthCheck} />
+                            </div>
+                        </details>
                     </article>
                 ))}
 
