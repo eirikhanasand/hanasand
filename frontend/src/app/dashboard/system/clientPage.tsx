@@ -106,6 +106,39 @@ export default function SystemDashboard({
     const runningVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'running').length
     const stoppedVms = normalizedVms.filter((vm) => (vm.status ?? '').toLowerCase() === 'stopped').length
     const telemetryFresh = isFresh(lastUpdated, refreshSeconds * 2500)
+    const unhealthyContainers = containers.filter((container) => {
+        const tone = containerHealth(container).tone
+        return tone === 'bad' || tone === 'warn'
+    })
+    const telemetryBlocked = Boolean(dockerTelemetry.unavailable_reason || (systemUnavailableReason && !systemSnapshot))
+    const primaryHref = telemetryBlocked
+        ? '#system-telemetry'
+        : unhealthyContainers.length
+            ? '#system-containers'
+            : normalizedVms.length
+                ? '#system-vms'
+                : '#system-containers'
+    const primaryTitle = telemetryBlocked
+        ? 'Recover telemetry first'
+        : unhealthyContainers.length
+            ? 'Inspect container health'
+            : normalizedVms.length
+                ? 'Review virtual machines'
+                : 'Wait for runtime inventory'
+    const primaryDetail = telemetryBlocked
+        ? dockerTelemetry.unavailable_reason || systemUnavailableReason || 'System telemetry is reconnecting.'
+        : unhealthyContainers.length
+            ? `${unhealthyContainers.length} container${unhealthyContainers.length === 1 ? '' : 's'} need review before VM operations.`
+            : normalizedVms.length
+                ? `${runningVms} VMs running, ${stoppedVms} stopped, with ${runningContainers}/${containers.length || 0} containers active.`
+                : 'Container and VM inventory will appear when the live system streams respond.'
+    const primaryActionLabel = telemetryBlocked
+        ? 'Review telemetry'
+        : unhealthyContainers.length
+            ? 'Inspect containers'
+            : normalizedVms.length
+                ? 'Review VMs'
+                : 'Open containers'
 
     const summary = useMemo<SystemSummary[]>(() => {
         const memoryPercent = systemSnapshot?.memory?.percent ? `${systemSnapshot.memory.percent}%` : 'Connecting'
@@ -272,7 +305,7 @@ export default function SystemDashboard({
         <div className='grid gap-4'>
             <ErrorNotice compact variant='info' className='max-w-3xl' message={message as string | null} />
 
-            <DashboardPanel className='p-4'>
+            <DashboardPanel className='p-4' id='system-telemetry'>
                 <div className='flex flex-wrap items-start justify-between gap-3'>
                     <div>
                         <div className='flex flex-wrap items-center gap-2'>
@@ -330,11 +363,36 @@ export default function SystemDashboard({
                 </div>
             </DashboardPanel>
 
-            <section className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-                {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
-            </section>
+            <DashboardPanel className='grid gap-3 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-system-primary-triage>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-[#8fa0ba]'>
+                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{runningContainers}/{containers.length || 0} containers running</span>
+                        <span className='rounded-md border border-[#26344d] bg-[#101827] px-2 py-1'>{runningVms} VMs running</span>
+                    </div>
+                    <h2 className='mt-3 text-lg font-semibold text-[#edf4ff]'>{primaryTitle}</h2>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-[#aab7cc]'>{primaryDetail}</p>
+                </div>
+                <a
+                    href={primaryHref}
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#7aa5ff] px-4 text-sm font-semibold text-[#08111f] shadow-sm transition hover:bg-[#9db8ff] focus:outline-none focus:ring-2 focus:ring-[#7aa5ff]/40 sm:w-auto'
+                    data-system-primary-action
+                >
+                    {primaryActionLabel}
+                </a>
+            </DashboardPanel>
 
-            <section className='grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]'>
+            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' data-system-summary-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Host, container, and VM counters</span>
+                    <span className='text-xs font-medium text-[#8fa0ba]'>{sourceLabel(dockerTelemetry.source)}, {formatDateTime(lastUpdated)}</span>
+                </summary>
+                <section className='grid gap-3 border-t border-[#26344d] p-3 sm:grid-cols-2 xl:grid-cols-4' data-system-summary-metrics>
+                    {summary.map((item) => <SummaryCard key={item.label} item={item} />)}
+                </section>
+            </details>
+
+            <section className='grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(22rem,0.65fr)]' id='system-containers' data-system-containers>
                 <DashboardPanel className='p-4'>
                     <div className='flex flex-wrap items-center justify-between gap-3'>
                         <div>
@@ -388,14 +446,17 @@ export default function SystemDashboard({
                 />
             </section>
 
-            <DashboardPanel className='p-4'>
-                <h2 className='text-base font-semibold text-[#edf4ff]'>Related operations</h2>
-                <div className='mt-3 flex flex-wrap gap-2'>
+            <details className='overflow-hidden rounded-lg border border-[#26344d] bg-[#0f172a]' data-system-related-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-[#edf4ff] transition hover:bg-[#101827] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Related operations</span>
+                    <span className='text-xs font-medium text-[#8fa0ba]'>{relatedLinks.length} linked consoles</span>
+                </summary>
+                <div className='flex flex-wrap gap-2 border-t border-[#26344d] p-3' data-system-related-links>
                     {relatedLinks.map((link) => <LinkButton key={link.href} {...link} />)}
                 </div>
-            </DashboardPanel>
+            </details>
 
-            <DashboardPanel className='p-4'>
+            <DashboardPanel className='p-4' id='system-vms' data-system-vms>
                 <div className='flex flex-wrap items-center justify-between gap-3'>
                     <div>
                         <h2 className='text-base font-semibold text-[#edf4ff]'>Virtual machines</h2>
@@ -738,12 +799,12 @@ function responseErrorMessageSync(status: number, body: string, label: string) {
             : typeof parsed.message === 'string'
                 ? parsed.message
                 : ''
-        if (message) return `${label} returned ${status}: ${message}`
+        if (message) return `${label} reported ${status}: ${message}`
     } catch {
         // Plain text response bodies fall through.
     }
 
     return body.trim()
-        ? `${label} returned ${status}: ${body.trim().slice(0, 300)}`
-        : `${label} returned ${status}.`
+        ? `${label} reported ${status}: ${body.trim().slice(0, 300)}`
+        : `${label} reported ${status}.`
 }
