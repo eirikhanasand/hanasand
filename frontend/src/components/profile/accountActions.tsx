@@ -3,9 +3,10 @@
 import config from '@/config'
 import { DashboardPanel } from '@/components/dashboard/ui'
 import { getCookie, removeCookies } from '@/utils/cookies/cookies'
-import { LogOut, Trash2 } from 'lucide-react'
+import { Fingerprint, LogOut, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { decodePasskeyCreationOptions, passkeyCredentialToJSON } from '@/utils/auth/passkeys'
 
 export default function AccountActions({ isSelf }: { isSelf: boolean }) {
     const router = useRouter()
@@ -47,6 +48,52 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
         }
     }
 
+    async function addPasskey() {
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+            return setMessage('This browser does not support passkeys.')
+        }
+        if (busy) return
+
+        setBusy(true)
+        setMessage('')
+        try {
+            const optionsResponse = await fetch('/api/auth/passkeys/register/options', { cache: 'no-store' })
+            const options = await optionsResponse.json().catch(() => null)
+            if (!optionsResponse.ok || !options?.challengeId || !options?.publicKey) {
+                setMessage(options?.error || 'Unable to start passkey enrollment.')
+                return
+            }
+
+            const credential = await navigator.credentials.create({
+                publicKey: decodePasskeyCreationOptions(options.publicKey),
+            }) as PublicKeyCredential | null
+            if (!credential) {
+                setMessage('No passkey was created.')
+                return
+            }
+
+            const verifyResponse = await fetch('/api/auth/passkeys/register/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    challengeId: options.challengeId,
+                    credential: passkeyCredentialToJSON(credential),
+                }),
+            })
+            const data = await verifyResponse.json().catch(() => null)
+            if (!verifyResponse.ok) {
+                setMessage(data?.error || 'Unable to save passkey.')
+                return
+            }
+
+            setMessage('Passkey added. You can use it on the login page.')
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : 'Unable to add passkey.')
+        } finally {
+            setBusy(false)
+        }
+    }
+
     return (
         <DashboardPanel className='p-4'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
@@ -55,6 +102,10 @@ export default function AccountActions({ isSelf }: { isSelf: boolean }) {
                     <p className='mt-1 text-sm text-[#596170]'>Session and deletion controls.</p>
                 </div>
                 <div className='flex flex-wrap gap-2'>
+                    <button onClick={() => void addPasskey()} disabled={busy} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] hover:bg-[#f2f5f9] disabled:opacity-60'>
+                        <Fingerprint className='h-4 w-4' />
+                        Add passkey
+                    </button>
                     <button onClick={clearAndGoLogin} className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8dee9] bg-white px-3 text-sm font-semibold text-[#364152] hover:bg-[#f2f5f9]'>
                         <LogOut className='h-4 w-4' />
                         Log out
