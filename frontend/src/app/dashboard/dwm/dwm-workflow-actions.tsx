@@ -21,6 +21,20 @@ type WorkflowTelemetry = {
     deliveryCount: number
 }
 
+type WorkflowRouteSummary = {
+    label: string
+    at: string
+    watchTerms: number
+    sourceCount?: number
+    captureCount?: number
+    alertCount?: number
+    alertId?: string
+    caseId?: string
+    caseHref?: string
+    deliveryAttempts?: number
+    deliveryState?: string
+}
+
 const STARTER_WATCH_TERMS = ['hanasand.com', 'Hanasand'] as const
 
 export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, telemetry }: { tenantId: string, organizationId?: string, initialTerms: string[], telemetry?: WorkflowTelemetry }) {
@@ -35,6 +49,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
     const [claimUrl, setClaimUrl] = useState('')
     const [busyAction, setBusyAction] = useState<string | null>(null)
     const [result, setResult] = useState<WorkflowResult | null>(null)
+    const [lastRoute, setLastRoute] = useState<WorkflowRouteSummary | null>(null)
     const scope = organizationId ? { tenantId, organizationId } : { tenantId }
 
     function saveWatchlistTerms(nextTerms: string) {
@@ -72,6 +87,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setResult({
                 ok: rebuild.ok,
                 message: rebuild.ok ? `Watchlist saved. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message,
+            })
+            setLastRoute({
+                label: 'Watchlist match',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                alertCount: savedAlertCount,
             })
             router.refresh()
         } catch (error) {
@@ -112,6 +133,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setClaimData('')
             setClaimUrl('')
             setResult({ ok: rebuild.ok, message: rebuild.ok ? `Ingested ${accepted} exposure report${accepted === 1 ? '' : 's'}. Matched ${savedAlertCount} alert${savedAlertCount === 1 ? '' : 's'}.` : rebuild.message })
+            setLastRoute({
+                label: 'Metadata intake',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                captureCount: accepted,
+                alertCount: savedAlertCount,
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -172,6 +200,18 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             setTerms(nextTerms)
             setClaimData('')
             setClaimUrl('')
+            setLastRoute({
+                label: 'Metadata case',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                captureCount: accepted,
+                alertCount: 1,
+                alertId: alert.id,
+                caseId: caseId || undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId) : undefined,
+                deliveryAttempts: deliveryText ? (deliveryText.includes('recorded') ? 1 : 0) : undefined,
+                deliveryState: deliveryText ? deliveryText.trim() : undefined,
+            })
             setResult({ ok: true, message: `Ingested ${accepted} exposure report(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId))
@@ -230,9 +270,21 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!rebuild.ok) throw new Error(rebuild.message)
             const alert = selectRebuiltAlert(rebuild, '', nextTerms)
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
+            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
+            const telegramCount = readSummaryNumber(telegram, 'telegramPublicCreated')
+            const darkwebCount = readSummaryNumber(darkweb, 'darkwebMetadataCreated')
+            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
+            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
             if (!alert?.id) {
-                const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
                 setTerms(nextTerms)
+                setLastRoute({
+                    label: 'Source pack run',
+                    at: new Date().toISOString(),
+                    watchTerms: countTerms(nextTerms),
+                    sourceCount: telegramCount + darkwebCount + advisoryCount,
+                    captureCount,
+                    alertCount: savedAlertCount,
+                })
                 setResult({ ok: true, message: `Sources updated. Collected ${captureCount} capture(s) and rebuilt ${savedAlertCount} alert(s). No watchlist match opened a case.` })
                 router.refresh()
                 return
@@ -248,6 +300,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const caseId = readNestedString(casePayload, ['case', 'id']) || readNestedString(casePayload, ['alertCaseHandoff', 'caseId'])
 
             let deliveryText = ''
+            let deliveryAttempts: number | undefined
             if (webhookConfigured) {
                 const delivery = await postJson('/api/dwm/webhooks/deliver', {
                     ...scope,
@@ -260,13 +313,24 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                 })
                 if (!delivery.ok) throw new Error(delivery.message)
                 const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
+                deliveryAttempts = attemptedCount
                 deliveryText = attemptedCount ? ' Dry-run delivery recorded.' : ' Delivery was not ready.'
             }
 
-            const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
-            const advisorySummary = advisory.summary && typeof advisory.summary === 'object' ? advisory.summary as Record<string, unknown> : {}
-            const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
             setTerms(nextTerms)
+            setLastRoute({
+                label: 'Full route',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                sourceCount: telegramCount + darkwebCount + advisoryCount,
+                captureCount,
+                alertCount: savedAlertCount,
+                alertId: alert.id,
+                caseId: caseId || undefined,
+                caseHref: caseId ? caseDetailPath(caseId, alert.id, organizationId) : undefined,
+                deliveryAttempts,
+                deliveryState: deliveryText ? deliveryText.trim() : undefined,
+            })
             setResult({ ok: true, message: `Added ${advisoryCount} public advisory source(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s), opened ${caseId || 'a case'}.${deliveryText}` })
             if (caseId) {
                 router.push(caseDetailPath(caseId, alert.id, organizationId))
@@ -297,6 +361,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!source.ok) throw new Error(source.message)
             const duplicateOf = typeof source.duplicateOf === 'string' ? source.duplicateOf : ''
             setResult({ ok: true, message: duplicateOf ? `Already registered as ${duplicateOf}.` : 'Telegram source submitted for bounded public polling.' })
+            setLastRoute({
+                label: 'Source request',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(terms),
+                sourceCount: duplicateOf ? 0 : 1,
+            })
             setSourceTarget('')
             router.refresh()
         } catch (error) {
@@ -324,6 +394,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const captureCount = readNumber(run.canaryRun, 'insertedCaptureCount')
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setResult({ ok: true, message: `Collected ${captureCount} Telegram captures. Rebuilt ${savedAlertCount} alerts.` })
+            setLastRoute({
+                label: 'Collection run',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(workflowTerms(terms)),
+                captureCount,
+                alertCount: savedAlertCount,
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -367,6 +444,14 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const savedAlertCount = typeof rebuild.savedAlertCount === 'number' ? rebuild.savedAlertCount : 0
             setTerms(nextTerms)
             setResult({ ok: true, message: `Added ${createdCount} Telegram canary source(s), skipped ${duplicateCount} duplicate(s), collected ${captureCount} capture(s), rebuilt ${savedAlertCount} alert(s).` })
+            setLastRoute({
+                label: 'Telegram expansion',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                sourceCount: createdCount,
+                captureCount,
+                alertCount: savedAlertCount,
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -402,6 +487,12 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             const advisoryCount = typeof advisorySummary.publicAdvisoryCreated === 'number' ? advisorySummary.publicAdvisoryCreated : 0
             setTerms(nextTerms)
             setResult({ ok: true, message: `Approved ${count} dark-web metadata source(s) and ${advisoryCount} public advisory source(s). No payload downloads enabled.` })
+            setLastRoute({
+                label: 'Metadata sources',
+                at: new Date().toISOString(),
+                watchTerms: countTerms(nextTerms),
+                sourceCount: count + advisoryCount,
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -422,6 +513,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             if (!delivery.ok) throw new Error(delivery.message)
             const attemptedCount = typeof delivery.attemptedCount === 'number' ? delivery.attemptedCount : 0
             setResult({ ok: true, message: `Webhook delivery attempted for ${attemptedCount} alert(s).` })
+            setLastRoute({
+                label: 'Webhook delivery',
+                at: new Date().toISOString(),
+                watchTerms: effectiveTermCount,
+                deliveryAttempts: attemptedCount,
+                deliveryState: attemptedCount ? 'attempted' : 'nothing queued',
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -441,6 +539,13 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
             })
             if (!test.ok) throw new Error(test.message)
             setResult({ ok: true, message: 'Webhook test delivered. Future alerts can use this route.' })
+            setLastRoute({
+                label: 'Webhook test',
+                at: new Date().toISOString(),
+                watchTerms: effectiveTermCount,
+                deliveryAttempts: 1,
+                deliveryState: 'test delivered',
+            })
             router.refresh()
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
@@ -570,6 +675,7 @@ export function DwmWorkflowActions({ tenantId, organizationId, initialTerms, tel
                         {webhookConfigured ? 'Delivery actions use the staged endpoint for dry-runs and queued alert sends.' : 'Paste an HTTPS Discord or webhook endpoint before testing customer delivery.'}
                     </p>
                 </div>
+                {lastRoute ? <RouteRunSummary route={lastRoute} /> : null}
             </section>
 
             <section className='grid grid-cols-2 gap-3 xl:grid-cols-5'>
@@ -809,6 +915,44 @@ function RouteQueueCard({ action }: { action: RouteQueueAction }) {
     )
 }
 
+function RouteRunSummary({ route }: { route: WorkflowRouteSummary }) {
+    const cells = [
+        { label: 'Watch terms', value: String(route.watchTerms) },
+        { label: 'Sources', value: route.sourceCount === undefined ? 'unchanged' : String(route.sourceCount) },
+        { label: 'Captures', value: route.captureCount === undefined ? 'pending' : String(route.captureCount) },
+        { label: 'Alerts', value: route.alertCount === undefined ? 'pending' : String(route.alertCount) },
+        { label: 'Case', value: route.caseId || 'not opened' },
+        { label: 'Delivery', value: route.deliveryAttempts === undefined ? route.deliveryState || 'not run' : `${route.deliveryAttempts} attempt${route.deliveryAttempts === 1 ? '' : 's'}` },
+    ]
+    return (
+        <section data-dwm-route-run-summary className='mt-3 rounded-lg border border-[#334762] bg-[#111b2b] p-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
+                <div className='min-w-0'>
+                    <p className='text-[10px] font-semibold uppercase text-[#9db8ff]'>Last route run</p>
+                    <h4 className='mt-1 text-sm font-semibold text-[#edf4ff]'>{route.label} · {relativeTime(route.at)}</h4>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                    {route.caseHref ? (
+                        <Link href={route.caseHref} className='inline-flex h-8 items-center rounded-lg border border-[#5f86ff] bg-[#122449] px-3 text-xs font-semibold text-[#dbe7ff] transition hover:bg-[#183064] focus:outline-none focus:ring-2 focus:ring-[#5f86ff]'>
+                            Open case
+                        </Link>
+                    ) : null}
+                    {route.alertId ? <span className='inline-flex h-8 items-center rounded-lg border border-[#27364f] bg-[#0b121e] px-3 font-mono text-[11px] text-[#aab7cc]'>{route.alertId}</span> : null}
+                </div>
+            </div>
+            <div className='mt-3 grid grid-cols-2 gap-2 lg:grid-cols-6'>
+                {cells.map(cell => (
+                    <div key={cell.label} className='min-w-0 rounded-lg border border-[#26344d] bg-[#0b121e] px-3 py-2'>
+                        <p className='text-[10px] font-semibold uppercase text-[#8fa0ba]'>{cell.label}</p>
+                        <p className='mt-1 truncate text-sm font-semibold text-[#edf4ff]' title={cell.value}>{cell.value}</p>
+                    </div>
+                ))}
+            </div>
+            {route.deliveryState ? <p className='mt-2 text-xs leading-5 text-[#8fa0ba]'>{route.deliveryState}</p> : null}
+        </section>
+    )
+}
+
 function RouteStepRow({ stage, state, next, command, tone }: { stage: string, state: string, next: string, command: string, tone: 'ok' | 'warn' | 'bad' | 'neutral' }) {
     const toneClass = tone === 'ok'
         ? 'border-[#1f6f48] bg-[#0c261c] text-[#9cf0bc]'
@@ -913,4 +1057,25 @@ function readNumber(value: unknown, key: string) {
     if (!value || typeof value !== 'object') return 0
     const candidate = (value as Record<string, unknown>)[key]
     return typeof candidate === 'number' ? candidate : 0
+}
+
+function readSummaryNumber(value: Record<string, unknown>, key: string) {
+    const summary = value.summary
+    if (!summary || typeof summary !== 'object') return 0
+    const candidate = (summary as Record<string, unknown>)[key]
+    return typeof candidate === 'number' ? candidate : 0
+}
+
+function relativeTime(value: string) {
+    const then = new Date(value).getTime()
+    if (!Number.isFinite(then)) return 'just now'
+    const delta = Date.now() - then
+    const abs = Math.abs(delta)
+    const minute = 60_000
+    const hour = 60 * minute
+    const day = 24 * hour
+    if (abs < minute) return 'just now'
+    if (abs < hour) return `${Math.max(1, Math.round(abs / minute))}m ago`
+    if (abs < day) return `${Math.round(abs / hour)}h ago`
+    return `${Math.round(abs / day)}d ago`
 }
