@@ -928,12 +928,12 @@ export default function AnalystWorkbenchClient({ initialCases, chrome = 'full', 
             )}
 
             <div className='min-w-0 overflow-hidden rounded-lg border border-[#26344d] bg-[#101827]'>
-                <div className='grid gap-2 border-b border-[#26344d] bg-[#0b111c] p-3 sm:grid-cols-2 xl:grid-cols-5'>
+                <div className='grid grid-cols-2 gap-2 border-b border-[#26344d] bg-[#0b111c] p-2 sm:p-3 xl:grid-cols-5'>
                     <WorkbenchStat icon={<Inbox className='h-4 w-4' />} label='Open cases' value={String(workbenchStats.total)} detail={`${workbenchStats.review} awaiting analyst`} tone='neutral' />
                     <WorkbenchStat icon={<AlertTriangle className='h-4 w-4' />} label='High priority' value={String(workbenchStats.highPriority)} detail='critical or high severity' tone={workbenchStats.highPriority ? 'warn' : 'good'} />
                     <WorkbenchStat icon={<ShieldCheck className='h-4 w-4' />} label='Customer-ready' value={String(workbenchStats.persistent)} detail='saved alert workflows' tone={workbenchStats.persistent ? 'good' : 'neutral'} />
                     <WorkbenchStat icon={<Activity className='h-4 w-4' />} label='Evidence' value={String(workbenchStats.evidence)} detail='cases with captured material' tone={workbenchStats.evidence ? 'good' : 'neutral'} />
-                    <WorkbenchStat icon={<Clock3 className='h-4 w-4' />} label='Newest update' value={workbenchStats.latest} detail='latest case refresh' tone='neutral' />
+                    <WorkbenchStat icon={<Clock3 className='h-4 w-4' />} label='Newest update' value={workbenchStats.latest} detail='latest case refresh' tone='neutral' className='col-span-2 xl:col-span-1' />
                 </div>
 
                 <div className={`grid min-w-0 ${compact ? 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[320px_minmax(0,1fr)_300px]' : 'min-h-[480px] xl:grid-cols-[300px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)_330px]'}`}>
@@ -4109,7 +4109,7 @@ function workbenchSummary(cases: WorkbenchCase[]) {
     }
 }
 
-function WorkbenchStat({ icon, label: statLabel, value, detail, tone }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'neutral' | 'good' | 'warn' }) {
+function WorkbenchStat({ icon, label: statLabel, value, detail, tone, className = '' }: { icon: React.ReactNode, label: string, value: string, detail: string, tone: 'neutral' | 'good' | 'warn', className?: string }) {
     const toneClass = tone === 'good'
         ? 'text-[#9cf0bc]'
         : tone === 'warn'
@@ -4117,7 +4117,7 @@ function WorkbenchStat({ icon, label: statLabel, value, detail, tone }: { icon: 
             : 'text-[#9db8ff]'
 
     return (
-        <div className='rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2'>
+        <div className={`rounded-lg border border-[#26344d] bg-[#101827] px-3 py-2 ${className}`}>
             <div className='flex items-center justify-between gap-3'>
                 <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>{statLabel}</p>
                 <span className={toneClass}>{icon}</span>
