@@ -68,8 +68,7 @@ const checks = [
     command: "bun",
     args: ["run", "smoke:live-alert-discord"],
     requiredEnv: [
-      "DWM_LIVE_API_BASE_URL",
-      "DWM_LIVE_PROBE_TERM"
+      "DWM_LIVE_API_BASE_URL"
     ],
     requiredAnyEnv: [
       ["DWM_LIVE_DISCORD_WEBHOOK_URL", "DWM_LIVE_WEBHOOK_DESTINATION_ID"]
@@ -104,12 +103,13 @@ const checks = [
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log([
     "Usage:",
-    "  DWM_LIVE_API_BASE_URL=... DWM_LIVE_PROBE_TERM=... DWM_LIVE_DISCORD_WEBHOOK_URL=... \\",
+    "  DWM_LIVE_API_BASE_URL=... DWM_LIVE_DISCORD_WEBHOOK_URL=... \\",
     "  API_LIVE_BASE_URL=... API_LIVE_OWNER_ID=... API_LIVE_OWNER_TOKEN=... API_LIVE_OWNER_EMAIL=... \\",
     "  API_LIVE_MEMBER_ID=... API_LIVE_MEMBER_TOKEN=... API_LIVE_MEMBER_EMAIL=... \\",
     "  AUTH_LIVE_API_BASE_URL=... bun scripts/smoke-live-alert-auth-goal.mjs",
     "",
     "Optional variables are passed through to the underlying probes:",
+    "  DWM_LIVE_PROBE_TERM is optional; when omitted the live DWM probe discovers a source-matched term from alert generation readiness.",
     "  DWM_LIVE_WEBHOOK_DESTINATION_ID may be used instead of DWM_LIVE_DISCORD_WEBHOOK_URL when an org Discord destination already exists.",
     "  DWM_LIVE_AUTHORIZATION DWM_LIVE_ORGANIZATION_ID DWM_LIVE_ACTOR_ID DWM_LIVE_OWNER_EMAIL DWM_LIVE_CREATE_ORGANIZATION=false",
     "  API_LIVE_OUTSIDER_ID API_LIVE_OUTSIDER_TOKEN API_LIVE_ORGANIZATION_ID API_LIVE_CREATE_ORGANIZATION=false",

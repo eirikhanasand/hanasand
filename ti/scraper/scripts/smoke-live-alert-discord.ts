@@ -6,11 +6,11 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
   console.log([
     "Usage:",
     "  DWM_LIVE_API_BASE_URL=https://scraper.example.com \\",
-    "  DWM_LIVE_PROBE_TERM=acme.com \\",
     "  DWM_LIVE_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/... \\",
     "  bun run smoke:live-alert-discord",
     "",
     "Optional:",
+    "  DWM_LIVE_PROBE_TERM=acme.com",
     "  DWM_LIVE_WEBHOOK_DESTINATION_ID=webhook_destination_...",
     "  DWM_LIVE_AUTHORIZATION='Bearer ...'",
     "  DWM_LIVE_ORGANIZATION_ID=org_...",
@@ -22,7 +22,7 @@ if (process.argv.includes("--help") || process.argv.includes("-h")) {
 }
 
 const baseUrl = requiredEnv("DWM_LIVE_API_BASE_URL").replace(/\/+$/, "");
-const term = requiredEnv("DWM_LIVE_PROBE_TERM").trim();
+let term = env("DWM_LIVE_PROBE_TERM");
 const webhookUrl = env("DWM_LIVE_DISCORD_WEBHOOK_URL");
 const webhookDestinationId = env("DWM_LIVE_WEBHOOK_DESTINATION_ID");
 const organizationId = env("DWM_LIVE_ORGANIZATION_ID") || `org_live_alert_probe_${Date.now()}`;
@@ -33,19 +33,28 @@ const createOrganization = env("DWM_LIVE_CREATE_ORGANIZATION") !== "false";
 
 assert.ok(webhookUrl || webhookDestinationId, "Provide DWM_LIVE_DISCORD_WEBHOOK_URL or DWM_LIVE_WEBHOOK_DESTINATION_ID.");
 if (webhookUrl) assert.match(webhookUrl, /^https:\/\/discord(?:app)?\.com\/api\/webhooks\//, "DWM_LIVE_DISCORD_WEBHOOK_URL must be a Discord webhook URL.");
-assert.ok(term.length >= 3, "DWM_LIVE_PROBE_TERM must be at least 3 characters.");
+if (term) assert.ok(term.length >= 3, "DWM_LIVE_PROBE_TERM must be at least 3 characters.");
 
 const startedAt = new Date().toISOString();
 
 if (createOrganization) {
   const org = await postJson("/v1/organizations", {
     id: organizationId,
-    name: `Live alert probe ${term}`,
+    name: `Live alert probe ${term ?? "auto term"}`,
     slug: organizationId.toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 60),
     ownerEmail,
     ownerUserId: actorId
   });
   assert.ok([200, 201].includes(org.response.status), `organization create/upsert failed: ${org.response.status} ${JSON.stringify(org.body)}`);
+}
+
+let discoveredTerm: JsonRecord | undefined;
+if (!term) {
+  const readiness = await getJson(`/v1/dwm/alerts/generation-readiness?organizationId=${encodeURIComponent(organizationId)}`);
+  assert.equal(readiness.response.status, 200, `alert generation readiness failed: ${readiness.response.status} ${JSON.stringify(readiness.body)}`);
+  discoveredTerm = firstWatchableTerm(readiness.body);
+  term = discoveredTerm?.term;
+  assert.ok(term && term.length >= 3, `no source-matched watchlist term was available from recent captures; readiness=${JSON.stringify(readiness.body)}`);
 }
 
 const watchlist = await postJson("/v1/dwm/watchlists", {
@@ -100,6 +109,8 @@ console.log(JSON.stringify({
   baseUrl,
   organizationId,
   term,
+  termSource: discoveredTerm ? "alert_generation_readiness" : "env",
+  discoveredTerm,
   webhookDestinationId: webhookDestinationId ?? null,
   webhookUrlProvided: Boolean(webhookUrl),
   savedAlertCount: Number(rebuild.savedAlertCount ?? 0),
@@ -173,7 +184,28 @@ function env(name: string) {
 function requiredEnv(name: string) {
   const value = env(name);
   if (!value) {
-    throw new Error(`Missing ${name}. Required live probe vars: DWM_LIVE_API_BASE_URL, DWM_LIVE_PROBE_TERM, plus DWM_LIVE_DISCORD_WEBHOOK_URL or DWM_LIVE_WEBHOOK_DESTINATION_ID. Optional: DWM_LIVE_AUTHORIZATION, DWM_LIVE_ORGANIZATION_ID, DWM_LIVE_ACTOR_ID, DWM_LIVE_OWNER_EMAIL, DWM_LIVE_CREATE_ORGANIZATION=false.`);
+    throw new Error(`Missing ${name}. Required live probe vars: DWM_LIVE_API_BASE_URL plus DWM_LIVE_DISCORD_WEBHOOK_URL or DWM_LIVE_WEBHOOK_DESTINATION_ID. Optional: DWM_LIVE_PROBE_TERM, DWM_LIVE_AUTHORIZATION, DWM_LIVE_ORGANIZATION_ID, DWM_LIVE_ACTOR_ID, DWM_LIVE_OWNER_EMAIL, DWM_LIVE_CREATE_ORGANIZATION=false.`);
   }
   return value;
+}
+
+function firstWatchableTerm(body: JsonRecord): JsonRecord | undefined {
+  const candidates = [
+    ...(body.readiness?.plan?.candidates ?? []),
+    ...(body.readiness?.zeroAlertProof?.watchlistTerms ?? [])
+  ];
+  for (const candidate of candidates) {
+    const term = String(candidate.term ?? candidate.value ?? candidate.normalizedTerm ?? candidate.matchedTerm?.value ?? "").trim();
+    if (term.length < 3) continue;
+    const captureCount = Number(candidate.captureRefCount ?? candidate.captureRefs?.length ?? candidate.evidenceCount ?? 0);
+    if (captureCount <= 0 && candidate.hasMatchingCaptures === false) continue;
+    return {
+      term,
+      sourceFamily: candidate.sourceFamily,
+      captureRefCount: captureCount,
+      candidateId: candidate.id ?? candidate.candidateId,
+      watchlistId: candidate.watchlistId
+    };
+  }
+  return undefined;
 }
