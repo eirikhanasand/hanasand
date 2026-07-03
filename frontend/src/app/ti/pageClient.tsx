@@ -6308,7 +6308,7 @@ function MobileEvidenceWorkbar({
             <div className='flex min-w-0 items-start justify-between gap-2'>
                 <div className='min-w-0'>
                     <p className='text-[11px] font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>{filteredCount}/{totalCount} results</p>
-                    <p className='mt-0.5 line-clamp-1 text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{selected.title}</p>
+                    <p className='mt-0.5 line-clamp-1 text-xs font-semibold text-[#171a21] dark:text-[#eef4ff]'>{displayRequirementText(selected.title)}</p>
                 </div>
                 <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${severityClass(selected.severity)}`}>{selected.severity}</span>
             </div>
@@ -6648,7 +6648,7 @@ function alertPacketFor(result: TiSearchResponse, selected: AnalystWorkItem, wat
     ].filter(Boolean)
 
     return {
-        title: isCustomerAlert ? `Candidate customer alert: ${selected.title}` : `Actor context packet: ${selected.title}`,
+        title: isCustomerAlert ? `Candidate customer alert: ${displayRequirementText(selected.title)}` : `Actor context packet: ${displayRequirementText(selected.title)}`,
         customerValue: isCustomerAlert
             ? 'This finding has enough structure to enter the alert review workflow: named object, evidence basis, timestamp, source reference, and routing guidance.'
             : 'This finding strengthens watchlist and detection context, but should not become a customer alert until it matches a watched organization, domain, vendor, or portfolio term.',
@@ -9530,12 +9530,12 @@ function ThreatActorMap({ actor, result, actionability, onSelectCountry, compact
         <div className='overflow-hidden rounded-lg border border-[#dfe5ee] bg-[#f8fafc] dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex items-center justify-between gap-3 border-b border-[#e8edf5] px-4 py-3 dark:border-[#273244]'>
                 <div>
-                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>Actor country map</h2>
+                    <h2 className='text-sm font-semibold text-[#171a21] dark:text-[#eef4ff]'>{hasPoints ? 'Actor country map' : 'Geography coverage'}</h2>
                     <p className='mt-0.5 text-xs text-[#586274] dark:text-[#9aa8bd]'>
                         {hasPoints ? 'Reported operator origin and victim or target countries from linked sources.' : hasRegionalAreas ? 'Regional operating areas from the source-backed actor profile.' : 'Country-level source coverage for this actor profile.'}
                     </p>
                 </div>
-                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} regions` : 'Country data pending'}</span>
+                <span className='rounded-lg bg-white px-2 py-1 text-xs font-semibold text-[#3056d3] dark:bg-[#131c29] dark:text-[#9eb3ff]'>{hasPoints ? `${geo.points.length} countries` : hasRegionalAreas ? `${regionalAreas.length} region${regionalAreas.length === 1 ? '' : 's'}` : 'Source coverage'}</span>
             </div>
             <div className={`${hasPoints ? compact ? 'min-h-72' : 'min-h-80' : ''} relative overflow-hidden bg-[#f7f9fc] dark:bg-[#0b111a]`}>
                 {hasPoints ? (
