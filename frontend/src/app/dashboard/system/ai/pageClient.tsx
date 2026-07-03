@@ -209,7 +209,9 @@ export default function GPT_Page() {
                     </div>
                     <GPT_Header isConnected={gpt.isConnected} participants={gpt.participants} />
                     <EconomicsPanel economics={economics} error={economicsError} />
-                    {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
+                    <div id='ai-clients' data-ai-clients>
+                        {gpt.clients.length ? <GPT_Content clients={gpt.clients} onTestClient={gpt.openChat} /> : <GPT_EmptyState />}
+                    </div>
                 </div>
             </div>
             {gpt.chatSession && gpt.activeClient ? (
@@ -245,6 +247,33 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
 
     const summary = economics.summary
     const cacheRate = summary.cacheableEvents ? Math.round((summary.cacheHits / summary.cacheableEvents) * 100) : 0
+    const hasIncident = economics.reliability.incidentStatus.state !== 'operational'
+    const hasOperatorActions = economics.commercialReadiness.internalActionCount > 0
+    const hasQueue = economics.reliability.capacity.totalQueued > 0
+    const primaryHref = hasIncident || hasQueue
+        ? '#ai-reliability'
+        : hasOperatorActions
+            ? '#ai-operations'
+            : '#ai-clients'
+    const primaryTitle = hasIncident
+        ? 'Review worker reliability first'
+        : hasQueue
+            ? 'Clear queued worker jobs'
+            : hasOperatorActions
+                ? 'Review operator actions'
+                : 'Open live worker clients'
+    const primaryDetail = hasIncident
+        ? economics.reliability.incidentStatus.message
+        : hasQueue
+            ? `${economics.reliability.capacity.totalQueued} queued jobs with ${economics.reliability.capacity.totalAvailableSessions} open worker sessions.`
+            : hasOperatorActions
+                ? `${economics.commercialReadiness.internalActionCount} autonomous lane action${economics.commercialReadiness.internalActionCount === 1 ? '' : 's'} need operator review.`
+                : `${economics.reliability.capacity.totalAvailableSessions} worker sessions are available; live clients are ready for inspection.`
+    const primaryActionLabel = hasIncident || hasQueue
+        ? 'Review reliability'
+        : hasOperatorActions
+            ? 'Review lanes'
+            : 'Open clients'
 
     return (
         <section className='space-y-4 rounded-xl bg-dark/35 p-4 outline outline-dark'>
@@ -261,83 +290,116 @@ function EconomicsPanel({ economics, error }: { economics: AIEconomics | null, e
                 </span>
             </div>
 
-            <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-4'>
-                <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Spend' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable work units`} />
-                <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified output' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
-                <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token flow' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units excluded from value`} />
-                <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
+            <div className='grid gap-3 rounded-lg border border-bright/8 bg-black/18 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' data-ai-primary-triage>
+                <div className='min-w-0'>
+                    <div className='flex flex-wrap items-center gap-2 text-xs font-semibold text-bright/42'>
+                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>Recommended next</span>
+                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>{economics.reliability.capacity.totalAvailableSessions} open sessions</span>
+                        <span className='rounded-md border border-bright/8 bg-bright/[0.035] px-2 py-1'>{economics.reliability.capacity.totalQueued} queued</span>
+                    </div>
+                    <h3 className='mt-3 text-lg font-semibold text-bright/90'>{primaryTitle}</h3>
+                    <p className='mt-1 max-w-3xl text-sm leading-6 text-bright/52'>{primaryDetail}</p>
+                </div>
+                <a
+                    href={primaryHref}
+                    className='inline-flex min-h-10 w-full items-center justify-center rounded-md bg-[#f07d33] px-4 text-sm font-semibold text-black shadow-sm transition hover:bg-[#ff9857] focus:outline-none focus:ring-2 focus:ring-[#f07d33]/40 sm:w-auto'
+                    data-ai-primary-action
+                >
+                    {primaryActionLabel}
+                </a>
             </div>
+
+            <details className='overflow-hidden rounded-lg border border-bright/8 bg-black/18' data-ai-economics-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-bright/84 transition hover:bg-bright/[0.035] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Spend and output counters</span>
+                    <span className='text-xs font-medium text-bright/35'>{formatNok(summary.estimatedCostNok)} NOK, {formatCompact(summary.verifiedUnits)} verified units, {cacheRate}% cached</span>
+                </summary>
+                <div className='grid gap-3 border-t border-bright/8 p-3 md:grid-cols-2 xl:grid-cols-4' data-ai-economics-metrics>
+                    <EconomicsStat icon={<Coins className='h-4 w-4' />} label='Spend' value={`${formatNok(summary.estimatedCostNok)} NOK`} detail={`${formatCompact(summary.billableUnits)} billable work units`} />
+                    <EconomicsStat icon={<CheckCircle2 className='h-4 w-4' />} label='Verified output' value={formatMetric(summary.verifiedProgressPerMinutePerNok)} detail={`${formatCompact(summary.verifiedUnits)} verified units over ${formatDuration(summary.productiveMinutes * 60_000)} productive time`} />
+                    <EconomicsStat icon={<LineChart className='h-4 w-4' />} label='Token flow' value={formatCompact(summary.tokenUnits)} detail={`${formatCompact(summary.platformErrorUnits)} platform-error units excluded from value`} />
+                    <EconomicsStat icon={<Layers3 className='h-4 w-4' />} label='Cached work' value={`${cacheRate}%`} detail={`${summary.cacheHits} cache hits from ${summary.cacheableEvents} cacheable events`} />
+                </div>
+            </details>
 
             <ReliabilityPanel reliability={economics.reliability} />
             <OperationsPanel readiness={economics.commercialReadiness} />
 
-            <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
-                <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <div className='mb-3 flex items-center justify-between'>
-                        <h3 className='text-sm font-semibold text-bright/84'>Worker output over time</h3>
-                        <span className='text-xs text-bright/35'>tokens · spend · verified outcomes</span>
-                    </div>
-                    <UsageTrendChart trend={economics.trend} />
-                </div>
-                <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Lane controls</h3>
-                    <div className='mt-3 grid gap-2'>
-                        {economics.modes.map((mode) => (
-                            <div key={mode.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
-                                <div className='flex items-center justify-between gap-3'>
-                                    <span className='text-sm font-medium text-bright/82'>{mode.label}</span>
-                                    <span className='text-xs text-bright/42'>{mode.concurrency} concurrent</span>
-                                </div>
-                                <p className='mt-1 text-xs leading-5 text-bright/48'>{mode.verification}</p>
+            <details className='overflow-hidden rounded-lg border border-bright/8 bg-black/18' data-ai-history-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-bright/84 transition hover:bg-bright/[0.035] sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Trends, lane configuration, and recent runs</span>
+                    <span className='text-xs font-medium text-bright/35'>{economics.trend.length} trend buckets, {economics.modes.length} modes, {economics.recentRuns.length} recent runs</span>
+                </summary>
+                <div className='grid gap-4 border-t border-bright/8 p-3' data-ai-history-panels>
+                    <div className='grid gap-4 xl:grid-cols-[1.35fr_0.9fr]'>
+                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+                            <div className='mb-3 flex items-center justify-between'>
+                                <h3 className='text-sm font-semibold text-bright/84'>Worker output over time</h3>
+                                <span className='text-xs text-bright/35'>tokens · spend · verified outcomes</span>
                             </div>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className='grid gap-4 xl:grid-cols-2'>
-                <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Customer lanes</h3>
-                    <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
-                        {economics.subscriptionTiers.map((tier) => (
-                            <article key={tier.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
-                                <div className='flex items-center gap-2 text-bright/84'>
-                                    <ShieldCheck className='h-4 w-4 text-[#f07d33]' />
-                                    <h4 className='text-sm font-semibold'>{tier.label}</h4>
-                                </div>
-                                {tier.fit ? <p className='mt-2 text-xs font-medium text-bright/62'>{tier.fit}</p> : null}
-                                <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
-                                {tier.features?.length ? (
-                                    <div className='mt-2 flex flex-wrap gap-1'>
-                                        {tier.features.map((feature) => (
-                                            <span key={feature} className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] text-bright/48'>
-                                                {feature}
-                                            </span>
-                                        ))}
+                            <UsageTrendChart trend={economics.trend} />
+                        </div>
+                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+                            <h3 className='text-sm font-semibold text-bright/84'>Lane controls</h3>
+                            <div className='mt-3 grid gap-2'>
+                                {economics.modes.map((mode) => (
+                                    <div key={mode.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
+                                        <div className='flex items-center justify-between gap-3'>
+                                            <span className='text-sm font-medium text-bright/82'>{mode.label}</span>
+                                            <span className='text-xs text-bright/42'>{mode.concurrency} concurrent</span>
+                                        </div>
+                                        <p className='mt-1 text-xs leading-5 text-bright/48'>{mode.verification}</p>
                                     </div>
-                                ) : null}
-                            </article>
-                        ))}
-                    </div>
-                </div>
-                <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
-                    <h3 className='text-sm font-semibold text-bright/84'>Recent worker runs</h3>
-                    <div className='mt-3 max-h-64 space-y-2 overflow-auto'>
-                        {economics.recentRuns.length ? economics.recentRuns.map((run) => (
-                            <div key={run.id} className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] p-3 text-xs text-bright/52 sm:grid-cols-[1fr_auto]'>
-                                <div>
-                                    <p className='font-medium text-bright/78'>{formatKind(run.kind)} · {run.outcome}</p>
-                                    <p className='mt-1'>{formatDate(run.createdAt)} · {formatCompact(run.units)} tokens · {formatCompact(run.billableUnits)} billable</p>
-                                </div>
-                                <div className='flex items-center gap-2 text-bright/70 sm:justify-end'>
-                                    <Clock3 className='h-3.5 w-3.5 text-[#f07d33]' />
-                                    {formatNok(run.estimatedCostNok)} NOK
-                                </div>
+                                ))}
                             </div>
-                        )) : <p className='text-sm text-bright/45'>Worker telemetry updates as verified jobs finish.</p>}
+                        </div>
+                    </div>
+
+                    <div className='grid gap-4 xl:grid-cols-2'>
+                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+                            <h3 className='text-sm font-semibold text-bright/84'>Customer lanes</h3>
+                            <div className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5'>
+                                {economics.subscriptionTiers.map((tier) => (
+                                    <article key={tier.id} className='rounded-lg border border-bright/8 bg-bright/[0.035] p-3'>
+                                        <div className='flex items-center gap-2 text-bright/84'>
+                                            <ShieldCheck className='h-4 w-4 text-[#f07d33]' />
+                                            <h4 className='text-sm font-semibold'>{tier.label}</h4>
+                                        </div>
+                                        {tier.fit ? <p className='mt-2 text-xs font-medium text-bright/62'>{tier.fit}</p> : null}
+                                        <p className='mt-1 text-xs leading-5 text-bright/48'>{tier.outcomeAllowance} verified outcomes, {tier.queuePriority} queue, {tier.concurrency} concurrent job{tier.concurrency === 1 ? '' : 's'}.</p>
+                                        {tier.features?.length ? (
+                                            <div className='mt-2 flex flex-wrap gap-1'>
+                                                {tier.features.map((feature) => (
+                                                    <span key={feature} className='rounded-full border border-bright/8 px-2 py-0.5 text-[10px] text-bright/48'>
+                                                        {feature}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </article>
+                                ))}
+                            </div>
+                        </div>
+                        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+                            <h3 className='text-sm font-semibold text-bright/84'>Recent worker runs</h3>
+                            <div className='mt-3 max-h-64 space-y-2 overflow-auto'>
+                                {economics.recentRuns.length ? economics.recentRuns.map((run) => (
+                                    <div key={run.id} className='grid gap-2 rounded-lg border border-bright/8 bg-bright/[0.035] p-3 text-xs text-bright/52 sm:grid-cols-[1fr_auto]'>
+                                        <div>
+                                            <p className='font-medium text-bright/78'>{formatKind(run.kind)} · {run.outcome}</p>
+                                            <p className='mt-1'>{formatDate(run.createdAt)} · {formatCompact(run.units)} tokens · {formatCompact(run.billableUnits)} billable</p>
+                                        </div>
+                                        <div className='flex items-center gap-2 text-bright/70 sm:justify-end'>
+                                            <Clock3 className='h-3.5 w-3.5 text-[#f07d33]' />
+                                            {formatNok(run.estimatedCostNok)} NOK
+                                        </div>
+                                    </div>
+                                )) : <p className='text-sm text-bright/45'>Worker telemetry updates as verified jobs finish.</p>}
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </details>
         </section>
     )
 }
@@ -349,7 +411,7 @@ function ReliabilityPanel({ reliability }: { reliability: AIEconomics['reliabili
     const deployRate = reliability.buildDeploy.find((row) => row.kind === 'deploy')
 
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+        <div className='rounded-lg border border-bright/8 bg-black/18 p-4' id='ai-reliability' data-ai-reliability>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
                     <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Reliability and observability</p>
@@ -466,7 +528,7 @@ function OperationsPanel({ readiness }: { readiness: AIEconomics['commercialRead
             : 'bg-amber-400/8 text-amber-100/80 outline-amber-300/15'
 
     return (
-        <div className='rounded-lg border border-bright/8 bg-black/18 p-4'>
+        <div className='rounded-lg border border-bright/8 bg-black/18 p-4' id='ai-operations' data-ai-operations>
             <div className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between'>
                 <div>
                     <p className='text-xs font-medium uppercase tracking-[0.18em] text-bright/35'>Worker operations</p>
