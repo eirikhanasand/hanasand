@@ -189,6 +189,12 @@ try {
   const delivery = await postJson("/v1/dwm/webhooks/deliver", { organizationId });
   assert.equal(delivery.response.status, 200, "webhook delivery should return 200");
   assert.equal(delivery.body.deliveredCount ?? delivery.body.deliveries?.filter((row: JsonRecord) => row.status === "delivered").length, 2);
+  const deliveredRoutes = (delivery.body.deliveries ?? []).filter((row: JsonRecord) => row.status === "delivered");
+  assert.equal(deliveredRoutes[0]?.organizationId, organizationId);
+  assert.equal(deliveredRoutes[0]?.tenantId, tenantId);
+  assert.equal(deliveredRoutes[0]?.watchlistId, watchlist.body.watchlist.id);
+  assert.equal(deliveredRoutes[0]?.deliveryKind, "discord");
+  assert.ok(deliveredRoutes[0]?.endpointHash);
   assert.equal(seenDeliveries.length, 2);
   assert.equal(seenDeliveries[0].url, "https://discord.com/api/webhooks/live-probe/token");
   assert.equal(seenDeliveries[0].headers.get("x-hanasand-event"), "darkweb.monitoring.match");

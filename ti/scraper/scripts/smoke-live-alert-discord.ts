@@ -81,6 +81,12 @@ const delivery = await postJson("/v1/dwm/webhooks/deliver", { organizationId, al
 assert.equal(delivery.response.status, 200, `webhook delivery failed: ${delivery.response.status} ${JSON.stringify(delivery.body)}`);
 const delivered = (delivery.body.deliveries ?? []).filter((row: JsonRecord) => row.status === "delivered");
 assert.ok(delivered.length > 0 || Number(delivery.body.deliveredCount ?? 0) > 0, `Discord delivery was not accepted: ${JSON.stringify(delivery.body)}`);
+const deliveredRoute = delivered[0] ?? delivery.body.deliveries?.[0];
+assert.equal(deliveredRoute?.organizationId, organizationId, "Discord delivery did not retain organization scope.");
+assert.equal(deliveredRoute?.tenantId, organizationId, "Discord delivery did not retain tenant scope.");
+assert.ok(deliveredRoute?.watchlistId, "Discord delivery did not retain watchlist route.");
+assert.equal(deliveredRoute?.deliveryKind, "discord", "Delivery route was not classified as Discord.");
+assert.ok(deliveredRoute?.endpointHash, "Discord delivery did not persist endpoint hash.");
 
 console.log(JSON.stringify({
   event: "live_alert_discord_smoke",
@@ -97,6 +103,15 @@ console.log(JSON.stringify({
   sourceFamilies: rebuild.sourceFamilies,
   matchedTerms: rebuild.matchedTerms,
   deliveredCount: Number(delivery.body.deliveredCount ?? delivered.length),
+  deliveredRoute: deliveredRoute ? {
+    organizationId: deliveredRoute.organizationId,
+    tenantId: deliveredRoute.tenantId,
+    watchlistId: deliveredRoute.watchlistId,
+    webhookDestinationId: deliveredRoute.webhookDestinationId,
+    deliveryKind: deliveredRoute.deliveryKind,
+    endpointHash: deliveredRoute.endpointHash,
+    status: deliveredRoute.status
+  } : null,
   alert: {
     id: alert.id,
     sourceFamily: alert.sourceFamily,
