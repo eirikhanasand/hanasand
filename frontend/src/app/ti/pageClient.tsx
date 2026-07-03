@@ -4319,6 +4319,17 @@ function handoffMissingLabel(values: string[]) {
 
 function displayRequirementText(value: string) {
     return value
+        .replace(
+            /\bAPT49 is an ambiguous label in open reporting\. Some sources map it to Tropic Trooper, a long-running Asia-Pacific espionage actor\. Malpedia and Cyberint map BlueHornet\/AgainstTheWest\/APT49 to a hacktivist and leak-focused persona\. The profile is split into both tracks until source-specific reporting makes the context clear\./gi,
+            'APT49 is used for two tracks in open reporting: Tropic Trooper espionage reporting and BlueHornet/AgainstTheWest leak-claim reporting. Keep the tracks separate when reviewing attribution or company exposure.',
+        )
+        .replace(/\bAPT49 label collision requires analyst disambiguation\b/gi, 'APT49 naming has two reporting tracks')
+        .replace(
+            /\bOpen-source references disagree on whether APT49 should be treated as Tropic Trooper or BlueHornet\/AgainstTheWest\. The profile is therefore split into espionage-track and hacktivist\/leak-track monitoring until a source-specific claim resolves the context\./gi,
+            'Open reporting maps APT49 to both Tropic Trooper and BlueHornet/AgainstTheWest. Review the source track before using it for attribution or company exposure.',
+        )
+        .replace(/\blabel collision\b/gi, 'shared-name profile')
+        .replace(/\banalyst disambiguation\b/gi, 'source-track review')
         .replace(/\bHanasand resolves it as an alias-collision profile:/gi, 'Open reporting treats this as an alias-collision profile:')
         .replace(/\bHanasand resolves\b/gi, 'Open reporting maps')
         .replace(/\baction_required\b/gi, 'review')
@@ -5952,67 +5963,98 @@ function ActorIntelHighlights({ actor, result, actionability }: { actor: TiActor
     const latestDate = actor.sourceCoverage.latestReportDate || result.lastSeen || result.generatedAt
     const openGap = actionability.enrichmentGapQueue[0]
     const sourceCount = actor.provenanceRows.length || actor.sourceCoverage.totalRows || result.sources.length
+    const methodNames = techniques.map(item => item.attackId || item.name).filter(Boolean)
+    const workflowSummary = [
+        `${sourceCountLabel(sourceCount)} linked`,
+        actionability.watchlistRelevance.terms.length ? `${actionability.watchlistRelevance.terms.length} watch terms` : 'watch term needed',
+        actionability.relatedAlerts.length ? `${actionability.relatedAlerts.length} alerts` : 'no routed alert',
+        actionability.relatedCases.length ? `${actionability.relatedCases.length} cases` : 'case handoff ready',
+    ].join(' · ')
     const rows = [
         {
-            icon: <Building2 className='h-3.5 w-3.5' />,
-            label: 'Targets',
+            icon: <ShieldAlert className='h-4 w-4' />,
+            label: 'Actor type',
+            value: actor.actorClass || 'Actor class not stated',
+            meta: actor.motivation.slice(0, 2).join(' · ') || 'Motivation not stated',
+            tone: actor.actorClass ? 'ready' : 'review',
+        },
+        {
+            icon: <Globe2 className='h-4 w-4' />,
+            label: 'Operating area',
             value: targets.length ? targets.join(' · ') : 'No target pattern yet',
+            meta: actor.geographies.length ? `${actor.geographies.length} region${actor.geographies.length === 1 ? '' : 's'}` : `${actor.targetSectors.length} target pattern${actor.targetSectors.length === 1 ? '' : 's'}`,
             tone: targets.length ? 'ready' : 'review',
         },
         {
-            icon: <Database className='h-3.5 w-3.5' />,
-            label: 'Sources',
-            value: `${sourceCountLabel(sourceCount)} · ${sourceBasisLabel(actor.confidence)}`,
+            icon: <Activity className='h-4 w-4' />,
+            label: 'Observed methods',
+            value: methodNames.length ? methodNames.join(' · ') : 'No mapped method yet',
+            meta: `${actor.techniqueCoverage.length} technique${actor.techniqueCoverage.length === 1 ? '' : 's'} mapped`,
+            tone: actor.techniqueCoverage.length ? 'ready' : 'review',
+        },
+        {
+            icon: <Database className='h-4 w-4' />,
+            label: 'Source coverage',
+            value: `${sourceCountLabel(sourceCount)} · latest ${formatDate(latestDate)}`,
+            meta: `${actor.sourceCoverage.captureRows} captured page${actor.sourceCoverage.captureRows === 1 ? '' : 's'} · ${sourceBasisLabel(actor.confidence)}`,
             tone: sourceCount ? 'ready' : 'blocked',
         },
         {
-            icon: <Activity className='h-3.5 w-3.5' />,
-            label: 'Activity',
-            value: `${result.recentActivity.length} recent row${result.recentActivity.length === 1 ? '' : 's'} · latest ${formatDate(latestDate)}`,
-            tone: result.recentActivity.length ? 'ready' : 'review',
-        },
-        {
-            icon: <ClipboardList className='h-3.5 w-3.5' />,
+            icon: <ClipboardList className='h-4 w-4' />,
             label: 'Next review',
             value: openGap ? displayRequirementText(openGap.title) : 'Profile has enough source context for review',
+            meta: openGap ? sourceHealthFieldLabel(openGap.requestedFields[0] ?? 'source') : 'No open source question',
             tone: openGap ? 'review' : 'ready',
         },
     ] as const
 
     return (
-        <section data-ti-actor-highlights='true' className='rounded-lg border border-[#dfe5ee] bg-white p-3 dark:border-[#273244] dark:bg-[#0f1621]'>
+        <section data-ti-actor-highlights='true' className='rounded-lg border border-[#dfe5ee] bg-white p-3 shadow-sm dark:border-[#273244] dark:bg-[#0f1621]'>
             <div className='flex min-w-0 flex-wrap items-center justify-between gap-2'>
                 <div className='min-w-0'>
-                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor intelligence</p>
-                    <h2 className='mt-1 wrap-break-word text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Coverage, methods, and review path</h2>
+                    <p className='text-xs font-semibold uppercase text-[#3056d3] dark:text-[#9ab3ff]'>Actor at a glance</p>
+                    <h2 className='mt-1 wrap-break-word text-base font-semibold text-[#171a21] dark:text-[#eef4ff]'>Identity, geography, methods, and review path</h2>
                 </div>
                 <span className={sourceHealthChipClass(actor.sourceCoverage.stale ? 'review' : 'ready')}>
                     {actor.sourceCoverage.stale ? 'refresh recommended' : 'current source set'}
                 </span>
             </div>
-            <div className='mt-3 grid gap-2 md:grid-cols-2'>
+            <div className='mt-3 divide-y divide-[#eef1f5] rounded-lg border border-[#eef1f5] bg-[#fbfcfe] dark:divide-[#273244] dark:border-[#273244] dark:bg-[#131c29]'>
                 {rows.map(row => (
-                    <div key={row.label} className='min-w-0 rounded-lg border border-[#eef1f5] bg-[#fbfcfe] p-3 dark:border-[#273244] dark:bg-[#131c29]'>
-                        <div className='flex min-w-0 items-center justify-between gap-2'>
-                            <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>
-                                <span className='shrink-0 text-[#3056d3] dark:text-[#9ab3ff]'>{row.icon}</span>
-                                <span className='truncate'>{row.label}</span>
-                            </p>
-                            <span className={sourceHealthChipClass(row.tone)}>{row.tone === 'blocked' ? 'needed' : row.tone}</span>
-                        </div>
-                        <p className='mt-2 wrap-break-word text-sm leading-6 text-[#344054] dark:text-[#d8e2f2]'>{row.value}</p>
+                    <div key={row.label} className='grid min-w-0 gap-2 px-3 py-2 text-sm sm:grid-cols-[9rem_minmax(0,1fr)_minmax(0,0.8fr)_5rem] sm:items-center'>
+                        <p className='inline-flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>
+                            <span className='shrink-0 text-[#3056d3] dark:text-[#9ab3ff]'>{row.icon}</span>
+                            <span className='truncate'>{row.label}</span>
+                        </p>
+                        <p className='wrap-break-word font-semibold text-[#171a21] dark:text-[#eef4ff]'>{row.value}</p>
+                        <p className='wrap-break-word text-xs leading-5 text-[#586274] dark:text-[#9aa8bd]'>{row.meta}</p>
+                        <span className={sourceHealthChipClass(row.tone)}>{row.tone === 'blocked' ? 'needed' : row.tone}</span>
                     </div>
                 ))}
             </div>
+            <div className='mt-3 flex min-w-0 flex-col gap-2 border-t border-[#eef1f5] pt-3 dark:border-[#273244] sm:flex-row sm:items-center sm:justify-between'>
+                <div className='min-w-0'>
+                    <p className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Workflow state</p>
+                    <p className='mt-1 wrap-break-word text-sm leading-6 text-[#344054] dark:text-[#d8e2f2]'>{workflowSummary}</p>
+                </div>
+                <a href='#ti-selected-evidence' className='inline-flex min-h-8 w-fit items-center rounded-md border border-[#d8dee9] bg-white px-2 text-[11px] font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#b8c5ff] dark:border-[#314057] dark:bg-[#0f1621] dark:text-[#d8e2f2] dark:hover:bg-[#172131]'>
+                    Open evidence
+                </a>
+            </div>
             {techniques.length ? (
                 <div className='mt-3 flex min-w-0 flex-wrap items-center gap-2'>
-                    <span className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Observed methods</span>
+                    <span className='text-xs font-semibold uppercase text-[#586274] dark:text-[#9aa8bd]'>Mapped ATT&CK techniques</span>
                     {techniques.map(item => item.attackId ? (
                         <TechniqueBadge key={`${item.attackId}:${item.name}`} attackId={item.attackId} name={item.name} tactic={item.tactic} detail={item.detail} />
                     ) : (
                         <span key={`${item.name}:${item.tactic}`} className={sourceHealthChipClass(item.freshness)}>{displayRequirementText(item.name)}</span>
                     ))}
                 </div>
+            ) : null}
+            {actor.provenanceRows.length ? (
+                <p className='mt-3 wrap-break-word border-t border-[#eef1f5] pt-3 text-xs leading-5 text-[#586274] dark:border-[#273244] dark:text-[#9aa8bd]'>
+                    Visible sources: {actor.provenanceRows.slice(0, 4).map(row => `${row.sourceName}${row.reportDate ? ` (${formatDate(row.reportDate)})` : ''}`).join(' · ')}
+                </p>
             ) : null}
         </section>
     )
