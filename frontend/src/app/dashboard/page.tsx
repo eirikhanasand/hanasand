@@ -128,17 +128,25 @@ export default async function Page({
 
             <AnalystWorkbenchClient initialCases={cases} chrome='compact' orgContext={orgContext} initialSelectedId={initialSelectedId} />
 
-            <WebhookDeliveryConsole
-                organization={organizationState.selectedOrganization ? {
-                    id: organizationState.selectedOrganization.id,
-                    tenantId: organizationState.selectedOrganization.tenantId,
-                    name: organizationState.selectedOrganization.name,
-                    status: organizationState.selectedOrganization.status,
-                } : undefined}
-                initialDestinations={organizationState.webhooks}
-                initialDeliveries={deliveries}
-                alertOptions={webhookAlertOptions}
-            />
+            <details className='overflow-hidden rounded-lg border border-ui-border bg-ui-panel shadow-sm' data-dashboard-delivery-console-disclosure>
+                <summary className='flex cursor-pointer list-none flex-col gap-1 px-4 py-3 text-sm font-semibold text-ui-text outline-none transition hover:bg-ui-raised focus-visible:ring-2 focus-visible:ring-ui-primary/25 sm:flex-row sm:items-center sm:justify-between [&::-webkit-details-marker]:hidden'>
+                    <span>Delivery management</span>
+                    <span className='text-xs font-medium text-ui-muted'>{organizationState.webhooks.length} destinations · {deliveries.length} attempts</span>
+                </summary>
+                <div className='border-t border-ui-border p-3' data-dashboard-delivery-console>
+                    <WebhookDeliveryConsole
+                        organization={organizationState.selectedOrganization ? {
+                            id: organizationState.selectedOrganization.id,
+                            tenantId: organizationState.selectedOrganization.tenantId,
+                            name: organizationState.selectedOrganization.name,
+                            status: organizationState.selectedOrganization.status,
+                        } : undefined}
+                        initialDestinations={organizationState.webhooks}
+                        initialDeliveries={deliveries}
+                        alertOptions={webhookAlertOptions}
+                    />
+                </div>
+            </details>
         </DashboardPage>
     )
 }
