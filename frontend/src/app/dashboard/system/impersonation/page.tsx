@@ -116,6 +116,13 @@ function stats(events: AdminAuditEvent[]) {
     }
 }
 
+function auditSnapshotHeadline(eventCount: number, eventStats: ReturnType<typeof stats>) {
+    if (!eventCount) return 'No matching support events'
+    if (eventStats.critical) return `${eventStats.critical} critical event${eventStats.critical === 1 ? '' : 's'} need review`
+    if (eventStats.denied) return `${eventStats.denied} denied event${eventStats.denied === 1 ? '' : 's'} need review`
+    return `${eventCount} event${eventCount === 1 ? '' : 's'} matching filters`
+}
+
 export default async function ImpersonationAuditPage({
     searchParams,
 }: {
@@ -146,7 +153,7 @@ export default async function ImpersonationAuditPage({
     const primarySearch = param(params, 'q')
     const advancedFilterCount = filterEntries.filter(([key]) => key !== 'q').length
     const responseError = response && !response.ok
-        ? `Audit API returned ${response.status}.`
+        ? `Audit service reported ${response.status}.`
         : !response
             ? 'Audit API is unavailable.'
             : ''
@@ -286,19 +293,16 @@ export default async function ImpersonationAuditPage({
                     </DashboardPanel>
                 </div>
                 <aside className='grid content-start gap-3'>
-                    <div className='grid grid-cols-2 gap-2'>
-                        {[
-                            ['Events', String(events.length)],
-                            ['Denied', String(eventStats.denied)],
-                            ['Recovery', String(eventStats.recovery)],
-                            ['Impersonation', String(eventStats.impersonation)],
-                        ].map(([label, value]) => (
-                            <DashboardPanel className='p-3' key={label}>
-                                <div className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>{label}</div>
-                                <div className='mt-1 text-2xl font-semibold text-[#edf4ff]'>{value}</div>
-                            </DashboardPanel>
-                        ))}
-                    </div>
+                    <DashboardPanel className='p-4'>
+                        <p className='text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8fa0ba]'>Audit snapshot</p>
+                        <h2 className='mt-1 text-base font-semibold text-[#edf4ff]'>{auditSnapshotHeadline(events.length, eventStats)}</h2>
+                        <div className='mt-3 grid grid-cols-2 gap-2 text-xs text-[#aab7cc]'>
+                            <SnapshotFact label='Events' value={String(events.length)} />
+                            <SnapshotFact label='Denied' value={String(eventStats.denied)} tone={eventStats.denied ? 'warn' : 'quiet'} />
+                            <SnapshotFact label='Recovery' value={String(eventStats.recovery)} />
+                            <SnapshotFact label='Sessions' value={String(eventStats.impersonation)} />
+                        </div>
+                    </DashboardPanel>
                     <DashboardPanel className='p-0' id='support-actions'>
                         <div className='border-b border-[#26344d] px-4 py-3'>
                             <h2 className='text-sm font-semibold text-[#edf4ff]'>Support actions</h2>
@@ -318,5 +322,14 @@ export default async function ImpersonationAuditPage({
                 </aside>
             </section>
         </DashboardPage>
+    )
+}
+
+function SnapshotFact({ label, value, tone = 'quiet' }: { label: string, value: string, tone?: 'quiet' | 'warn' }) {
+    return (
+        <div className='rounded-md border border-[#27364f] bg-[#0b121e] px-3 py-2'>
+            <div className='font-semibold uppercase text-[#8fa0ba]'>{label}</div>
+            <div className={`mt-0.5 text-sm font-semibold ${tone === 'warn' ? 'text-[#ffd58a]' : 'text-[#edf4ff]'}`}>{value}</div>
+        </div>
     )
 }

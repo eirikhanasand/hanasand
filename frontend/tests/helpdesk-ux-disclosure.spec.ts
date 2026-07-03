@@ -13,6 +13,11 @@ test('helpdesk audit keeps advanced controls behind explicit disclosures', async
     expect(page).toContain('aria-label=\'Active audit filters\'')
     expect(page).toContain('href=\'#support-actions\'')
     expect(page).toContain('placeholder=\'Search audit events\'')
+    expect(page).toContain('Audit snapshot')
+    expect(page).toContain('auditSnapshotHeadline')
+    expect(page).toContain('SnapshotFact')
+    expect(page).toContain('Audit service reported')
+    expect(page).not.toContain('Audit API returned')
     expect(page).toContain('Start or manage support action')
     expect(page).toContain('Show controls')
 
