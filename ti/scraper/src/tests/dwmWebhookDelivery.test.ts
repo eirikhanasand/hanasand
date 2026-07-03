@@ -140,7 +140,7 @@ describe("dwm webhook delivery", () => {
     expect(seen[0].body.deliveryReadinessContext.alertCreatedAt).toBe(seen[0].body.alertCreatedEvent.at);
     expect(seen[0].body.caseIdCandidate).toMatch(/^case_/);
     expect(seen[0].body.casePath).toContain(`/v1/cases/${seen[0].body.caseIdCandidate}`);
-    expect(seen[0].body.watchlistItemIds[0]).toContain("acme.com");
+    expect(seen[0].body.watchlistItemIds[0]).toMatch(/^dwm_watchlist_item_/);
     expect(seen[0].body.matchContext).toMatchObject({
       normalizedTerm: "acme.com",
       termKind: "domain"

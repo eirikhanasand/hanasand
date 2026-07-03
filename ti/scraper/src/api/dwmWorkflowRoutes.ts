@@ -553,8 +553,10 @@ export async function deliverDwmWebhooks(request: Request, options: ApiServerOpt
       refreshAlertDeliveryReadiness(options, alert, { ...scope, organizationId: deliveryOrgId }, [delivery], generatedAt);
       continue;
     }
-    const webhookUrl = explicitWebhookUrl ?? normalizeWebhookUrl(destination?.url) ?? normalizeWebhookUrl(watchlist?.webhookUrl);
-    const deliveryKind = destination?.kind ?? inferWebhookKind(webhookUrl ?? "");
+    const destinationUrl = normalizeWebhookUrl(destination?.url);
+    const watchlistWebhookUrl = normalizeWebhookUrl(watchlist?.webhookUrl);
+    const webhookUrl = explicitWebhookUrl ?? (requestedDestinationId ? destinationUrl : watchlistWebhookUrl ?? destinationUrl);
+    const deliveryKind = webhookUrl ? inferWebhookKind(webhookUrl) : destination?.kind ?? "generic";
     if (!webhookUrl) {
       const deliveryId = stableId("dwm_delivery", `${tenantId}:${alert.id}:missing-webhook:${generatedAt}`);
       const delivery = (options.store as any).saveDwmWebhookDelivery({
@@ -1261,7 +1263,7 @@ function termsWithStableIds(watchlist: DwmWatchlist): Array<DwmWatchTerm & { id:
     .filter(Boolean) as Array<DwmWatchTerm & { id: string }>;
 }
 
-function ensureSourceMatchedDeliveryRoute(options: ApiServerOptions, scope: { organizationId?: string; tenantId: string }, generatedAt: string): { organizationId: string; webhookDestinationId: string } {
+function ensureSourceMatchedDeliveryRoute(options: ApiServerOptions, scope: { organizationId?: string; tenantId: string }, generatedAt: string): { organizationId: string; webhookDestinationId?: string } {
   const store = options.store as any;
   const organizationId = scope.organizationId || "default";
   const existingOrg = store.getOrganization?.(organizationId);
@@ -1278,14 +1280,16 @@ function ensureSourceMatchedDeliveryRoute(options: ApiServerOptions, scope: { or
   }
 
   const webhookDestinationId = stableId("webhook_destination", `${organizationId}:source_matched_dwm_intake`);
-  if (!store.getWebhookDestination?.(webhookDestinationId) && typeof store.saveWebhookDestination === "function") {
+  const existingDestination = store.getWebhookDestination?.(webhookDestinationId);
+  const configuredWebhookUrl = normalizeWebhookUrl(process.env.DWM_DEFAULT_WEBHOOK_URL);
+  if (!existingDestination && configuredWebhookUrl && typeof store.saveWebhookDestination === "function") {
     store.saveWebhookDestination({
       id: webhookDestinationId,
       organizationId,
       tenantId: scope.tenantId,
       name: "Hanasand DWM intake",
-      url: process.env.DWM_DEFAULT_WEBHOOK_URL || "https://hanasand.com/api/dwm/webhook-sink",
-      kind: "generic",
+      url: configuredWebhookUrl,
+      kind: inferWebhookKind(configuredWebhookUrl),
       status: "active",
       createdAt: generatedAt,
       updatedAt: generatedAt,
@@ -1293,7 +1297,7 @@ function ensureSourceMatchedDeliveryRoute(options: ApiServerOptions, scope: { or
     });
   }
 
-  return { organizationId, webhookDestinationId };
+  return { organizationId, webhookDestinationId: existingDestination || configuredWebhookUrl ? webhookDestinationId : undefined };
 }
 
 function sourceMatchedOrgRuntime(input: {

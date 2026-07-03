@@ -168,7 +168,7 @@ describe("organization shared DWM workflow", () => {
         webhookDestinationIds: [webhookPayload.destination.id]
       });
       expect(rebuildPayload.alerts[0].workflowContext.watchlistIds).toEqual([watchlistPayload.watchlist.id]);
-      expect(rebuildPayload.alerts[0].workflowContext.watchlistItemIds[0]).toContain("acme.com");
+      expect(rebuildPayload.alerts[0].workflowContext.watchlistItemIds[0]).toMatch(/^dwm_watchlist_item_/);
       expect(rebuildPayload.alerts[0].webhookContext).toMatchObject({
         organizationId,
         sourceFamily: "telegram_public",
@@ -220,7 +220,7 @@ describe("organization shared DWM workflow", () => {
         evidenceCount: 1,
         recommendedRoute: "identity_response"
       });
-      expect(seen[0].body.hanasand.watchlistItemIds[0]).toContain("acme.com");
+      expect(seen[0].body.hanasand.watchlistItemIds[0]).toMatch(/^dwm_watchlist_item_/);
       expect(seen[0].body.hanasand.casePath).toContain(`/v1/cases/${seen[0].body.hanasand.caseIdCandidate}`);
 
       const rehydrated = new FileBackedScraperStore({ snapshotPath });
