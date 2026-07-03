@@ -4395,7 +4395,7 @@ export async function postSupportAccessRecovery(req: FastifyRequest<{ Params: Or
                 `Request: ${requestId}`,
                 `Approval: ${approval.status}`,
                 `Audit events: ${auditEventIds.join(', ') || 'pending index refresh'}`,
-                approval.approvalRequired ? 'Share status: blocked until approved' : 'Share status: ready',
+                approval.approvalRequired ? 'Share status: waiting for approval' : 'Share status: ready',
                 `Reason: ${reason}`,
             ].join('\n'),
         },
@@ -13825,7 +13825,7 @@ function supportAuditExportProof(filters: Record<string, unknown>, timeline: Arr
         entityLinkRollup: supportAuditEntityLinkRollup(timeline),
         actionEvidenceRollup: supportAuditActionEvidenceRollup(timeline),
         copyText: [
-            'Support audit export proof',
+            'Support audit export event',
             `Replay: ${replayQuery}`,
             `Events: ${eventIds.join(', ') || 'none'}`,
             `Requests: ${requestIds.join(', ') || 'none'}`,

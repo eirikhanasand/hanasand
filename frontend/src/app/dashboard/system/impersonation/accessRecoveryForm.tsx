@@ -65,13 +65,32 @@ type ImpersonationPayload = {
     detail?: { code?: string, message?: string }
 }
 
-type SupportOperation = 'impersonation' | 'recovery' | 'decision' | 'queue'
+type InspectionPayload = {
+    organization?: { id?: string, name?: string, slug?: string, status?: string }
+    user?: { id?: string, name?: string, active?: boolean }
+    accessStatus?: { overall?: string, blockers?: string[], reasons?: string[] }
+    members?: Array<{ userId?: string, user_id?: string, name?: string, role?: string, status?: string }>
+    memberships?: Array<{ organizationId?: string, organization_id?: string, organizationName?: string, organization_name?: string, role?: string, status?: string }>
+    invites?: Array<{ id?: string, email?: string, role?: string, status?: string, expiresAt?: string, expires_at?: string }>
+    pendingInvites?: Array<{ id?: string, email?: string, role?: string, status?: string, expiresAt?: string, expires_at?: string }>
+    watchlistItems?: Array<{ id?: string, kind?: string, value?: string }>
+    webhookDestinations?: Array<{ id?: string, name?: string, kind?: string, status?: string, endpointHint?: string, endpoint_hint?: string }>
+    recentAuditEvents?: Array<{ id?: number, actionType?: string, action_type?: string, outcome?: string, reason?: string, createdAt?: string, created_at?: string }>
+    supportLinks?: Record<string, string | null>
+    error?: string
+}
+
+type SupportOperation = 'inspect' | 'impersonation' | 'recovery' | 'decision' | 'queue'
+type InspectionUserMember = NonNullable<InspectionPayload['members']>[number]
+type InspectionOrganizationMembership = NonNullable<InspectionPayload['memberships']>[number]
+type InspectionMember = InspectionUserMember | InspectionOrganizationMembership
 
 const inputClass = 'h-9 min-w-0 rounded-md border border-[#27364f] bg-[#101827] px-3 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
 const textAreaClass = 'min-h-20 rounded-md border border-[#27364f] bg-[#101827] px-3 py-2 text-sm text-[#edf4ff] outline-none transition placeholder:text-[#7b8494] focus:border-[#7aa5ff] focus:ring-2 focus:ring-[#1f3f7a]'
 const primaryButton = 'h-9 rounded-md bg-[#315bd8] px-3 text-sm font-semibold text-white transition hover:bg-[#244bbf] disabled:cursor-not-allowed disabled:opacity-55'
 const secondaryButton = 'h-9 rounded-md border border-[#31466b] bg-[#111827] px-3 text-sm font-semibold text-[#dbe7ff] transition hover:bg-[#172033] disabled:cursor-not-allowed disabled:opacity-55'
 const operationTabs: Array<{ id: SupportOperation, label: string, detail: string }> = [
+    { id: 'inspect', label: 'Inspect', detail: 'Members, invites, audit' },
     { id: 'impersonation', label: 'Session', detail: 'Start or end scoped access' },
     { id: 'recovery', label: 'Recovery', detail: 'Generate an invite' },
     { id: 'decision', label: 'Review', detail: 'Approve or deny' },
@@ -91,6 +110,20 @@ function Message({ value, tone = 'neutral' }: { value: string, tone?: 'neutral' 
 function CopyBlock({ value }: { value?: string }) {
     if (!value) return null
     return <pre className='max-h-36 overflow-auto rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-xs leading-5 text-[#dbe7ff]'>{value}</pre>
+}
+
+function isOrganizationMembership(member: InspectionMember): member is InspectionOrganizationMembership {
+    return 'organizationId' in member || 'organization_id' in member || 'organizationName' in member || 'organization_name' in member
+}
+
+function inspectionMemberId(member: InspectionMember, fallback: number) {
+    if (isOrganizationMembership(member)) return member.organizationId || member.organization_id || `membership-${fallback}`
+    return member.userId || member.user_id || `member-${fallback}`
+}
+
+function inspectionMemberName(member: InspectionMember) {
+    if (isOrganizationMembership(member)) return member.organizationName || member.organization_name || member.organizationId || member.organization_id || 'Organization'
+    return member.name || member.userId || member.user_id || 'User'
 }
 
 function OperationTab({
@@ -124,7 +157,8 @@ function auditHref(requestId: string, action?: string) {
 }
 
 export default function AccessRecoveryForm() {
-    const [operation, setOperation] = useState<SupportOperation>('impersonation')
+    const [operation, setOperation] = useState<SupportOperation>('inspect')
+    const [inspectionResult, setInspectionResult] = useState<InspectionPayload | null>(null)
     const [recoveryResult, setRecoveryResult] = useState<RecoveryPayload | null>(null)
     const [decisionResult, setDecisionResult] = useState<DecisionPayload | null>(null)
     const [searchResult, setSearchResult] = useState<ApprovalSearchPayload | null>(null)
@@ -133,7 +167,42 @@ export default function AccessRecoveryForm() {
     const [decisionMessage, setDecisionMessage] = useState('')
     const [searchMessage, setSearchMessage] = useState('')
     const [impersonationMessage, setImpersonationMessage] = useState('')
+    const [inspectionMessage, setInspectionMessage] = useState('')
     const [submitting, setSubmitting] = useState('')
+
+    async function submitInspection(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const form = new FormData(event.currentTarget)
+        const targetType = String(form.get('targetType') || 'organization')
+        const targetId = String(form.get('targetId') || '').trim()
+        const reason = String(form.get('reason') || '').trim()
+        const context = String(form.get('context') || '').trim()
+        const query = new URLSearchParams()
+        if (reason) query.set('reason', reason)
+        if (context) query.set('context', context)
+        const path = targetType === 'user'
+            ? `/api/backend/admin/support/users/${encodeURIComponent(targetId)}`
+            : `/api/backend/admin/support/organizations/${encodeURIComponent(targetId)}`
+
+        setSubmitting('inspect')
+        setInspectionMessage('')
+        setInspectionResult(null)
+        try {
+            const response = await fetch(`${path}${query.toString() ? `?${query}` : ''}`)
+            const body = await response.json().catch(() => ({})) as InspectionPayload
+            if (!response.ok) {
+                setInspectionMessage(body.error || 'Inspection failed.')
+                setInspectionResult(body)
+                return
+            }
+            setInspectionResult(body)
+            setInspectionMessage(`${targetType === 'user' ? 'User' : 'Organization'} inspection loaded.`)
+        } catch (error) {
+            setInspectionMessage(error instanceof Error ? error.message : 'Inspection failed.')
+        } finally {
+            setSubmitting('')
+        }
+    }
 
     async function submitRecovery(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -311,6 +380,75 @@ export default function AccessRecoveryForm() {
                     />
                 ))}
             </div>
+
+            {operation === 'inspect' && <section className='grid gap-3'>
+                <div>
+                    <h3 className='text-sm font-semibold text-[#edf4ff]'>Support inspection</h3>
+                    <p className='mt-1 text-xs leading-5 text-[#8fa0ba]'>Load organization or user state before recovery, role changes, or impersonation.</p>
+                </div>
+                <form className='grid gap-2' onSubmit={submitInspection}>
+                    <div className='grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]'>
+                        <select className={inputClass} name='targetType' defaultValue='organization'>
+                            <option value='organization'>Org</option>
+                            <option value='user'>User</option>
+                        </select>
+                        <input className={inputClass} name='targetId' placeholder='Organization or user id' required />
+                    </div>
+                    <input className={inputClass} name='context' placeholder='Case or customer context' />
+                    <textarea className={textAreaClass} name='reason' placeholder='Reason' required />
+                    <button className={primaryButton} disabled={submitting === 'inspect'} type='submit'>{submitting === 'inspect' ? 'Inspecting...' : 'Inspect access'}</button>
+                </form>
+                <Message value={inspectionMessage} tone={inspectionResult?.error ? 'error' : inspectionMessage ? 'success' : 'neutral'} />
+                {inspectionResult && !inspectionResult.error ? (
+                    <div className='grid gap-3 rounded-md border border-[#27364f] bg-[#0b121e] p-3 text-sm text-[#aab7cc]'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <span className='font-semibold text-[#edf4ff]'>{inspectionResult.organization?.name || inspectionResult.user?.name || inspectionResult.organization?.id || inspectionResult.user?.id || 'Inspection'}</span>
+                            {inspectionResult.accessStatus?.overall ? <span className='rounded-md bg-[#122449] px-2 py-1 text-xs text-[#9db8ff]'>{inspectionResult.accessStatus.overall}</span> : null}
+                        </div>
+                        <div className='grid grid-cols-2 gap-2 text-xs sm:grid-cols-4'>
+                            <span className='rounded-md bg-[#101827] px-2 py-1'>members {(inspectionResult.members || inspectionResult.memberships || []).length}</span>
+                            <span className='rounded-md bg-[#101827] px-2 py-1'>invites {(inspectionResult.invites || inspectionResult.pendingInvites || []).length}</span>
+                            <span className='rounded-md bg-[#101827] px-2 py-1'>watchlists {(inspectionResult.watchlistItems || []).length}</span>
+                            <span className='rounded-md bg-[#101827] px-2 py-1'>webhooks {(inspectionResult.webhookDestinations || []).length}</span>
+                        </div>
+                        {(inspectionResult.members || inspectionResult.memberships || []).length ? (
+                            <div className='grid gap-1'>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Roles</div>
+                                {(inspectionResult.members || inspectionResult.memberships || []).slice(0, 6).map((member, index) => (
+                                    <div className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_5rem]' key={inspectionMemberId(member, index)}>
+                                        <span className='truncate'>{inspectionMemberName(member)}</span>
+                                        <span>{member.role || 'role'}</span>
+                                        <span>{member.status || 'status'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
+                        {(inspectionResult.invites || inspectionResult.pendingInvites || []).length ? (
+                            <div className='grid gap-1'>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Invites</div>
+                                {(inspectionResult.invites || inspectionResult.pendingInvites || []).slice(0, 6).map((invite, index) => (
+                                    <div className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs sm:grid-cols-[minmax(0,1fr)_5rem_6rem]' key={`${invite.id || invite.email || index}`}>
+                                        <span className='truncate'>{invite.email || invite.id}</span>
+                                        <span>{invite.role || 'role'}</span>
+                                        <span>{invite.status || 'status'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
+                        {(inspectionResult.recentAuditEvents || []).length ? (
+                            <div className='grid gap-1'>
+                                <div className='text-xs font-semibold uppercase tracking-[0.14em] text-[#8fa0ba]'>Recent audit</div>
+                                {(inspectionResult.recentAuditEvents || []).slice(0, 4).map((event, index) => (
+                                    <a className='grid gap-1 rounded-md bg-[#101827] px-2 py-1 text-xs text-[#dbe7ff] hover:bg-[#162033]' href={event.id ? `/dashboard/system/impersonation?entity=${encodeURIComponent(String(event.id))}` : '/dashboard/system/impersonation'} key={`${event.id || index}`}>
+                                        <span>{event.actionType || event.action_type || 'audit event'} · {event.outcome || 'outcome'}</span>
+                                        {event.reason ? <span className='truncate text-[#8fa0ba]'>{event.reason}</span> : null}
+                                    </a>
+                                ))}
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+            </section>}
 
             {operation === 'impersonation' && <section className='grid gap-3'>
                 <div>
