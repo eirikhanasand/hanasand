@@ -192,7 +192,7 @@ type RowMessage = {
     text: string
 }
 
-type ActivitySubjectType = 'organization' | 'invite' | 'member' | 'watchlist' | 'destination'
+type ActivitySubjectType = 'organization' | 'invite' | 'member' | 'watchlist' | 'destination' | 'alert' | 'case'
 
 type ActivitySubject = {
     type: ActivitySubjectType
@@ -247,6 +247,11 @@ function organizationDisplayId(organization: Pick<OrganizationSummary, 'slug' | 
 export default function OrganizationWorkspaceClient() {
     const searchParams = useSearchParams()
     const requestedOrganizationId = searchParams.get('organizationId')?.trim() || ''
+    const requestedWatchlistId = searchParams.get('watchlistItemId')?.trim() || searchParams.get('watchlistId')?.trim() || ''
+    const requestedDestinationId = searchParams.get('destinationId')?.trim() || ''
+    const requestedAlertId = searchParams.get('alertId')?.trim() || searchParams.get('alert')?.trim() || ''
+    const requestedCaseId = searchParams.get('caseId')?.trim() || ''
+    const requestedFocus = searchParams.get('focus')?.trim() || ''
     const [organizations, setOrganizations] = useState<OrganizationSummary[]>([])
     const [selectedId, setSelectedId] = useState('')
     const [bundle, setBundle] = useState<OrgBundle>(initialBundle)
@@ -362,8 +367,16 @@ export default function OrganizationWorkspaceClient() {
         })
         setBundle(nextBundle)
         setSettingsDraft(nextBundle.settings || {})
+        setSelectedActivitySubject(requestedSubjectFromSearch({
+            organizationId,
+            focus: requestedFocus,
+            watchlistId: requestedWatchlistId,
+            destinationId: requestedDestinationId,
+            alertId: requestedAlertId,
+            caseId: requestedCaseId,
+        }, nextBundle))
         setBusy('')
-    }, [])
+    }, [requestedAlertId, requestedCaseId, requestedDestinationId, requestedFocus, requestedWatchlistId])
 
     useEffect(() => {
         void loadOrganizations()
@@ -372,7 +385,6 @@ export default function OrganizationWorkspaceClient() {
     useEffect(() => {
         if (selectedOrganization?.id) {
             void loadOrganizationBundle(selectedOrganization.id)
-            setSelectedActivitySubject({ type: 'organization', id: selectedOrganization.id })
         }
     }, [selectedOrganization?.id, loadOrganizationBundle])
 
@@ -1568,6 +1580,36 @@ function visibilityRows(payload: Record<string, unknown> | null) {
 }
 
 function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
+    const alertRows: ActivityItem[] = bundle.alerts.map(alert => ({
+        id: `alert-${alert.id}`,
+        at: alert.updatedAt || new Date(0).toISOString(),
+        title: 'Alert',
+        detail: `${alert.title || alert.id} · ${alert.severity || 'severity'} · ${alert.status || 'status'}`,
+        ok: alert.status !== 'failed' && alert.status !== 'suppressed',
+        subjectType: 'alert',
+        subjectId: alert.id,
+        relatedSubjectIds: [alert.watchlistItemId, ...(alert.watchlistItemIds || []), ...(alert.watchlistIds || [])].filter(Boolean) as string[],
+        metadata: compactMetadata([
+            ['Alert', alert.id],
+            ['Severity', alert.severity],
+            ['Status', alert.status],
+            ['Watchlist', alert.watchlistItemId || alert.watchlistItemIds?.[0] || alert.watchlistIds?.[0]],
+        ]),
+    }))
+    const caseRows: ActivityItem[] = bundle.cases.map(item => ({
+        id: `case-${item.id}`,
+        at: item.updatedAt || new Date(0).toISOString(),
+        title: 'Case',
+        detail: `${item.title || item.id} · ${item.status || 'status'}${item.assignedOwner ? ` · ${item.assignedOwner}` : ''}`,
+        ok: item.status !== 'failed' && item.status !== 'blocked',
+        subjectType: 'case',
+        subjectId: item.id,
+        metadata: compactMetadata([
+            ['Case', item.id],
+            ['Status', item.status],
+            ['Owner', item.assignedOwner],
+        ]),
+    }))
     const deliveryRows: ActivityItem[] = bundle.deliveries.map(delivery => ({
         id: `delivery-${delivery.id}`,
         at: delivery.attemptedAt || delivery.updatedAt || delivery.createdAt || new Date(0).toISOString(),
@@ -1637,9 +1679,28 @@ function organizationActivityRows(local: ActivityItem[], bundle: OrgBundle) {
             ['Hash', destination.endpointHash],
         ]),
     }))
-    return [...local, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
+    return [...local, ...alertRows, ...caseRows, ...deliveryRows, ...inviteRows, ...memberRows, ...watchlistRows, ...destinationRows]
         .sort((left, right) => Date.parse(right.at) - Date.parse(left.at))
         .slice(0, 12)
+}
+
+function requestedSubjectFromSearch(input: {
+    organizationId: string
+    focus: string
+    watchlistId: string
+    destinationId: string
+    alertId: string
+    caseId: string
+}, bundle: OrgBundle): ActivitySubject {
+    if (input.caseId && bundle.cases.some(item => item.id === input.caseId)) return { type: 'case', id: input.caseId }
+    if (input.alertId && bundle.alerts.some(item => item.id === input.alertId)) return { type: 'alert', id: input.alertId }
+    if (input.destinationId && bundle.webhooks.some(item => item.id === input.destinationId)) return { type: 'destination', id: input.destinationId }
+    if (input.watchlistId && bundle.watchlists.some(item => item.id === input.watchlistId)) return { type: 'watchlist', id: input.watchlistId }
+    if (input.focus === 'cases' && bundle.cases[0]?.id) return { type: 'case', id: bundle.cases[0].id }
+    if (input.focus === 'alerts' && bundle.alerts[0]?.id) return { type: 'alert', id: bundle.alerts[0].id }
+    if (input.focus === 'destinations' && bundle.webhooks[0]?.id) return { type: 'destination', id: bundle.webhooks[0].id }
+    if (input.focus === 'watchlists' && bundle.watchlists[0]?.id) return { type: 'watchlist', id: bundle.watchlists[0].id }
+    return { type: 'organization', id: input.organizationId }
 }
 
 function activitySubjectFromRowKey(rowKey: string | undefined, organizationId: string | undefined): ActivitySubject | null {
@@ -1672,6 +1733,14 @@ function selectedSubjectLabel(subject: ActivitySubject, organization: Organizati
     if (subject.type === 'member') {
         const member = bundle.members.find(item => item.userId === subject.id)
         return member?.name || member?.userId || subject.id
+    }
+    if (subject.type === 'alert') {
+        const alert = bundle.alerts.find(item => item.id === subject.id)
+        return alert?.title || alert?.id || subject.id
+    }
+    if (subject.type === 'case') {
+        const item = bundle.cases.find(row => row.id === subject.id)
+        return item?.title || item?.id || subject.id
     }
     const watchlist = bundle.watchlists.find(item => item.id === subject.id)
     const destination = bundle.webhooks.find(item => item.id === subject.id)
@@ -1707,6 +1776,25 @@ function selectedContextRows(subject: ActivitySubject, organization: Organizatio
             ['Role', member?.role],
             ['Status', member?.status],
             ['Joined', member?.joinedAt ? formatDate(member.joinedAt) : undefined],
+        ])
+    }
+    if (subject.type === 'alert') {
+        const alert = bundle.alerts.find(item => item.id === subject.id)
+        return compactMetadata([
+            ['Alert', alert?.id || subject.id],
+            ['Severity', alert?.severity],
+            ['Status', alert?.status],
+            ['Watchlist', alert?.watchlistItemId || alert?.watchlistItemIds?.[0] || alert?.watchlistIds?.[0]],
+            ['Updated', alert?.updatedAt ? formatDate(alert.updatedAt) : undefined],
+        ])
+    }
+    if (subject.type === 'case') {
+        const item = bundle.cases.find(row => row.id === subject.id)
+        return compactMetadata([
+            ['Case', item?.id || subject.id],
+            ['Status', item?.status],
+            ['Owner', item?.assignedOwner],
+            ['Updated', item?.updatedAt ? formatDate(item.updatedAt) : undefined],
         ])
     }
     const destination = subject.type === 'destination' ? bundle.webhooks.find(row => row.id === subject.id) : undefined

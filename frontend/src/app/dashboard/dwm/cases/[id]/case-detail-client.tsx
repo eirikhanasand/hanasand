@@ -517,7 +517,9 @@ function CaseCommandBar({ caseId, tenantId, organizationId, alertId, exportReady
 }) {
     const caseScope = queryString({ tenantId, organizationId, alertId })
     const dashboardScope = queryString({ tenantId, organizationId, alert: alertId })
-    const organizationHref = organizationId ? `/organizations?organizationId=${encodeURIComponent(organizationId)}` : '/organizations'
+    const organizationHref = organizationId
+        ? `/organizations${queryString({ organizationId, caseId, alertId, focus: alertId ? 'cases' : 'watchlists' })}`
+        : '/organizations'
     const exportHref = `/api/cases/${encodeURIComponent(caseId)}/export${queryString({ tenantId, organizationId, alertId, shape: 'full' })}`
     const alertHref = alertId ? `/api/dwm/alerts/${encodeURIComponent(alertId)}${queryString({ tenantId, organizationId })}` : undefined
     const lastDelivery = latestDelivery ? `${stateLabel(latestDelivery.status)} · ${relativeTime(latestDelivery.attemptedAt)}` : 'not sent'
