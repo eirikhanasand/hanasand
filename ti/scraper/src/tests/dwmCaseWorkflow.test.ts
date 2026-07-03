@@ -165,7 +165,8 @@ describe("dwm case workflow", () => {
         name: "Case watchlist",
         status: "active"
       });
-      expect(watchlistPayload.watchlist.workflowContext).toMatchObject({ alertCount: 0, activeForAlertGeneration: true });
+      expect(watchlistPayload.watchlist.workflowContext).toMatchObject({ alertCount: 1, activeForAlertGeneration: true });
+      expect(watchlistPayload.watchlist.workflowContext.alertIds[0]).toMatch(/^dwm_alert_/);
       const watchlistId = watchlistPayload.watchlist.id;
 
       const viewerWatchlistListResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/watchlists?organizationId=${organizationId}`, {
@@ -270,7 +271,12 @@ describe("dwm case workflow", () => {
         webhookDestinationIds: [webhookPayload.destination.id],
         visibilityPolicy: "members"
       });
-      expect((store as any).listDwmAlerts()).toHaveLength(0);
+      expect((store as any).listDwmAlerts()).toHaveLength(1);
+      expect((store as any).listDwmAlerts()[0]).toMatchObject({
+        organizationId,
+        watchlistIds: [watchlistId],
+        sourceFamily: "telegram_public"
+      });
 
       const analystReadinessResponse = await handleApiRequest(new Request(`http://127.0.0.1/v1/dwm/alerts/generation-readiness?organizationId=${organizationId}`, {
         headers: { "x-actor-id": "analyst-1" }
@@ -713,9 +719,19 @@ describe("dwm case workflow", () => {
         consumerCompatibility: {
           webhook: { canConsume: true },
           helpdesk: { canConsume: true },
-          publicTI: { canConsume: false }
+          publicTI: {
+            canConsume: true,
+            alertGeneratorKeys: expect.arrayContaining([expect.stringContaining("acme.com")])
+          }
         },
-        blockerCodes: expect.arrayContaining(["duplicate_delivered_dedupe"])
+        blockerCodes: expect.arrayContaining(["replay_already_delivered", "duplicate_delivered_dedupe"]),
+        alertGenerationRefs: [
+          expect.objectContaining({
+            organizationId,
+            normalizedTerm: "acme.com",
+            source: "organization_shared_watchlist"
+          })
+        ]
       });
 
       (store as any).saveDwmAlert({
