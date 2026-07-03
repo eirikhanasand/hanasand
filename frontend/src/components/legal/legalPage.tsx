@@ -1,10 +1,16 @@
 import Link from 'next/link'
 
+type LegalSection = {
+    title: string
+    body: string | string[]
+    bullets?: string[]
+}
+
 type LegalPageProps = {
     eyebrow: string
     title: string
     description: string
-    sections: Array<{ title: string; body: string }>
+    sections: LegalSection[]
 }
 
 export default function LegalPage({ eyebrow, title, description, sections }: LegalPageProps) {
@@ -21,7 +27,18 @@ export default function LegalPage({ eyebrow, title, description, sections }: Leg
                 {sections.map((section) => (
                     <article key={section.title} className='rounded-lg border border-[#e0e5ed] bg-white p-5 shadow-sm'>
                         <h2 className='text-lg font-semibold'>{section.title}</h2>
-                        <p className='mt-2 text-sm leading-7 text-[#596170]'>{section.body}</p>
+                        <div className='mt-2 grid gap-3 text-sm leading-7 text-[#596170]'>
+                            {(Array.isArray(section.body) ? section.body : [section.body]).map((paragraph) => (
+                                <p key={paragraph}>{paragraph}</p>
+                            ))}
+                            {section.bullets?.length ? (
+                                <ul className='list-disc space-y-2 pl-5'>
+                                    {section.bullets.map((bullet) => (
+                                        <li key={bullet}>{bullet}</li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                        </div>
                     </article>
                 ))}
                 <div className='rounded-lg border border-[#dfe5ee] bg-white p-5 text-sm leading-7 text-[#596170] shadow-sm'>
