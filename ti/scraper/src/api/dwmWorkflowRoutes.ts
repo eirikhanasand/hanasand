@@ -671,6 +671,13 @@ export async function testDwmWebhook(request: Request, options: ApiServerOptions
     tenantId,
     watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
     webhookDestinationId: destination?.id,
+    notificationTarget: {
+      organizationId: scope.organizationId,
+      tenantId,
+      watchlistId: watchlist?.id ?? "ad_hoc_webhook_test",
+      webhookDestinationId: destination?.id,
+      deliveryKind
+    },
     generatedAt,
     message: "Hanasand dark web monitoring webhook test.",
     expectedAlertEvent: "darkweb.monitoring.match"
@@ -726,6 +733,14 @@ function buildWebhookPayload(alert: any, watchlist: DwmWatchlist, generatedAt: s
     tenantId: alert.tenantId,
     watchlistId: watchlist.id,
     webhookDestinationId: destination?.id,
+    notificationTarget: {
+      organizationId: alert.organizationId ?? watchlist.organizationId,
+      tenantId: alert.tenantId,
+      watchlistId: watchlist.id,
+      webhookDestinationId: destination?.id ?? watchlist.webhookDestinationId,
+      assignedOwner: alert.assignedOwner,
+      deliveryKind: destination?.kind ?? (normalizeWebhookUrl(watchlist.webhookUrl)?.includes("discord") ? "discord" : undefined)
+    },
     generatedAt,
     severity: alert.severity,
     confidence: alert.confidence,

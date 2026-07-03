@@ -344,12 +344,15 @@ export function buildWebhookRequestBody(kind: WebhookKind, payload: any): any {
     ?? payload.generatedAt;
   const route = payload.recommendedRoute ?? payload.routingContext?.queue ?? payload.workflowStatus;
   const caseLink = payload.casePath ?? payload.alertDetailPath;
+  const notificationTarget = payload.notificationTarget ?? {};
+  const targetLabel = notificationTarget.organizationId || payload.organizationId || payload.tenantId;
+  const ownerLabel = notificationTarget.assignedOwner || payload.assignedOwner;
   const title = payload.eventType === "darkweb.monitoring.match"
     ? `${payload.severity?.toUpperCase?.() ?? "ALERT"}: ${payload.company ?? payload.matchedTerm ?? "watchlist match"}`
     : "Hanasand webhook test";
   return {
     content: isAlert
-      ? `Hanasand alert for ${payload.company ?? payload.matchedTerm ?? "watchlist match"}`
+      ? `Hanasand alert for ${payload.company ?? payload.matchedTerm ?? "watchlist match"}${targetLabel ? ` in ${targetLabel}` : ""}`
       : "Hanasand organization webhook test.",
     embeds: [{
       title,
@@ -364,6 +367,7 @@ export function buildWebhookRequestBody(kind: WebhookKind, payload: any): any {
         field("Evidence", evidenceCount ? `${evidenceCount} item${evidenceCount === 1 ? "" : "s"}; latest ${evidenceTimestamp}` : undefined),
         field("Evidence excerpt", discordEvidenceExcerpt(payload)),
         field("Confidence", typeof payload.confidence === "number" ? `${payload.confidence}%${firstString(payload.confidenceReasoning) ? ` - ${firstString(payload.confidenceReasoning)}` : ""}` : undefined),
+        field("Notification target", targetLabel ? `${targetLabel}${ownerLabel ? `; owner ${ownerLabel}` : ""}` : undefined),
         field("Case", caseLink),
         field("Route", route),
         field("Review state", payload.reviewState),

@@ -192,6 +192,11 @@ try {
   assert.equal(seenDeliveries.length, 2);
   assert.equal(seenDeliveries[0].url, "https://discord.com/api/webhooks/live-probe/token");
   assert.equal(seenDeliveries[0].headers.get("x-hanasand-event"), "darkweb.monitoring.match");
+  assert.match(String(seenDeliveries[0].body.content ?? ""), new RegExp(organizationId));
+  assert.deepEqual(seenDeliveries[0].body.allowed_mentions, { parse: [] });
+  const notificationField = seenDeliveries[0].body.embeds?.[0]?.fields?.find((field: JsonRecord) => field.name === "Notification target");
+  assert.ok(notificationField, "Discord alert embed should include notification target context.");
+  assert.match(String(notificationField.value ?? ""), new RegExp(organizationId));
 
   const payload = seenDeliveries[0].body.hanasand;
   assert.equal(payload.eventType, "darkweb.monitoring.match");
@@ -204,6 +209,10 @@ try {
   assert.equal(payload.matchContext?.normalizedTerm, "acme.com");
   assert.equal(payload.evidence?.[0]?.provenance?.captureId, capture.id);
   assert.match(String(payload.alertDetailPath ?? ""), /\/v1\/dwm\/alerts\//);
+  assert.equal(payload.notificationTarget?.organizationId, organizationId);
+  assert.equal(payload.notificationTarget?.tenantId, tenantId);
+  assert.equal(payload.notificationTarget?.watchlistId, watchlist.body.watchlist.id);
+  assert.equal(payload.notificationTarget?.deliveryKind, "discord");
 
   console.log(JSON.stringify({
     event: "realtime_alert_discord_smoke",
