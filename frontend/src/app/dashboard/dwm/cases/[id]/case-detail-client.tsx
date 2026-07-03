@@ -396,7 +396,7 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
 
                         <WorkflowStrip detail={state.detail} exportPayload={state.exportPayload} />
 
-                        <Panel title='Evidence' action={`${evidence.length} rows`}>
+                        <CollapsiblePanel title='Evidence rows' action={`${evidence.length} rows`}>
                             <div className='overflow-hidden rounded-lg border border-[#26344d]'>
                                 <table className='w-full min-w-[760px] text-left text-xs'>
                                     <thead className='bg-[#111b2b] text-[#8fa0ba]'>
@@ -421,15 +421,15 @@ export function DwmCaseDetailClient({ caseId, tenantId, organizationId, alertId,
                                     </tbody>
                                 </table>
                             </div>
-                        </Panel>
+                        </CollapsiblePanel>
 
-                        <Panel title='Audit timeline' action={`${timeline.length} events`}>
+                        <CollapsiblePanel title='Audit timeline' action={`${timeline.length} events`}>
                             <div className='grid gap-2'>
                                 {timeline.length ? timeline.map((row, index) => (
                                     <TimelineItem key={row.id || index} row={row} />
                                 )) : <EmptyLine text='No workflow events have been recorded yet.' />}
                             </div>
-                        </Panel>
+                        </CollapsiblePanel>
                     </section>
 
                     <aside data-dwm-case-action-dock className='order-first grid content-start gap-3 xl:order-none'>
@@ -628,6 +628,20 @@ function Panel({ title, action, children }: { title: string, action?: string, ch
             </div>
             {children}
         </section>
+    )
+}
+
+function CollapsiblePanel({ title, action, children }: { title: string, action?: string, children: ReactNode }) {
+    return (
+        <details className='rounded-lg border border-[#334762] bg-[#111b2b]'>
+            <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-sm font-semibold text-[#edf4ff] outline-none transition hover:bg-[#162033] focus-visible:ring-2 focus-visible:ring-[#1f3f7a]'>
+                <span>{title}</span>
+                {action ? <span className='rounded-full border border-[#27364f] bg-[#0b121e] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#9db8ff]'>{action}</span> : null}
+            </summary>
+            <div className='border-t border-[#26344d] p-3'>
+                {children}
+            </div>
+        </details>
     )
 }
 
