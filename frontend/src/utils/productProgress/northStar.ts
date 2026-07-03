@@ -563,9 +563,9 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
         }),
         directionItem({
             id: 'source_backed_intelligence',
-            label: 'Source-backed intelligence',
+            label: 'Threat actor search',
             backedRowIds: ['source_coverage', 'public_ti_enrichment'],
-            detailReady: 'Source coverage and public TI enrichment both have current source data.',
+            detailReady: 'Current collection and enrichment are connected across monitored sources.',
             detailBlocked: 'Intelligence quality depends on current source coverage and source-linked TI enrichment.',
             rows,
         }),
@@ -573,7 +573,7 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             id: 'shared_alert_workflow',
             label: 'Shared alert workflow',
             backedRowIds: ['real_alert_generation', 'analyst_workflow'],
-            detailReady: 'A backed alert is visible and can be handled in the analyst workflow.',
+            detailReady: 'Fresh exposure claims can move from the queue into analyst triage.',
             detailBlocked: 'The alert workflow is not complete until a real alert is visible and reviewable by an analyst.',
             rows,
         }),
@@ -581,7 +581,7 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             id: 'delivery_destinations',
             label: 'Delivery destinations',
             backedRowIds: ['webhook_delivery'],
-            detailReady: 'Webhook delivery is tied to a dashboard-visible alert.',
+            detailReady: 'Customer notifications are routed through configured delivery destinations.',
             detailBlocked: 'Delivery needs webhook lifecycle data and a matched delivery row.',
             rows,
         }),
@@ -589,7 +589,7 @@ function buildProductDirection(rows: ProductNorthStarRow[]): ProductNorthStarDir
             id: 'enterprise_support',
             label: 'Enterprise support',
             backedRowIds: ['support_admin_audit', 'deploy_live_status'],
-            detailReady: 'Support audit and live deploy status are current.',
+            detailReady: 'Support visibility and live service status are current.',
             detailBlocked: 'Support and release operations need audit history and a fresh deploy check.',
             rows,
         }),
@@ -611,9 +611,9 @@ function directionItem(input: {
     const blocker = backedRows.find(row => row.state !== 'ready')?.blocker || ''
     const href = backedRows.find(row => row.state !== 'ready')?.href || backedRows[0]?.href || '/dashboard'
     const ownerLanes = Array.from(new Set(backedRows.map(row => row.ownerLane).filter(Boolean)))
-    const proofSummary = backedRows
-        .map(row => `${row.label}: ${row.backendProofContractVersion}`)
-        .join('; ')
+    const proofSummary = state === 'ready'
+        ? input.detailReady
+        : input.detailBlocked
 
     return {
         id: input.id,
@@ -773,7 +773,7 @@ function publicTiEnrichmentRow(external: ProductReadinessExternalState, query: s
         fallbackExpectedDashboardRowId: 'public_ti_provenance',
         fallbackContract: 'ti.public_provenance.readiness.v1',
         fallbackProbe: 'GET /api/public-ti/provenance/status must return source, evidence, confidence, and freshness status.',
-        fallbackBlocker: 'Attach public TI source provenance and freshness.',
+        fallbackBlocker: 'Attach public TI source details and freshness.',
         readyDetail: 'Public TI enrichment has source, evidence, and freshness data.',
     })
     if (row.href === '/ti') return { ...row, href: actorIntelligenceHref(query) }
@@ -878,7 +878,7 @@ function proofDrilldownsFor(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | '
         },
         {
             kind: 'api',
-            label: 'Proof API',
+            label: 'Status API',
             value: apiRoute || row.proofSource || row.integrationProbeHint,
             href: linkableRoute(apiRoute) ? apiRoute : '',
         },
@@ -890,7 +890,7 @@ function proofDrilldownsFor(row: Omit<ProductNorthStarRow, 'proofAgeSeconds' | '
         },
         {
             kind: 'contract',
-            label: 'Contract',
+            label: 'Integration',
             value: row.backendProofContractVersion,
             href: '',
         },

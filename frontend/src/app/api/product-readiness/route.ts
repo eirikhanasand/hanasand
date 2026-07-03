@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
     const generatedAt = new Date().toISOString()
-    const query = request.nextUrl.searchParams.get('q')?.trim() || 'watchlist terms'
+    const query = request.nextUrl.searchParams.get('q')?.trim() || 'acworth-ga.gov'
     const [progress, productReadinessAggregate] = await Promise.all([
         loadProductProgress(request, query, generatedAt),
         loadProductReadinessAggregate(),
@@ -26,7 +26,7 @@ async function loadProductProgress(request: NextRequest, query: string, generate
     payload: ReturnType<typeof parseProductProgressReadinessPayload>
     source: ProductNorthStarProgressSource
 }> {
-    const target = new URL('/api/product-progress', request.nextUrl.origin)
+    const target = new URL('/api/product-progress', internalFrontendOrigin(request))
     target.searchParams.set('q', query)
     copyScopedParams(request, target)
     try {
@@ -72,6 +72,12 @@ async function loadProductProgress(request: NextRequest, query: string, generate
             }),
         }
     }
+}
+
+function internalFrontendOrigin(request: NextRequest) {
+    return process.env.FRONTEND_INTERNAL_ORIGIN
+        || process.env.NEXT_INTERNAL_ORIGIN
+        || (process.env.NODE_ENV === 'production' ? 'http://127.0.0.1:3000' : request.nextUrl.origin)
 }
 
 function progressSource(input: {

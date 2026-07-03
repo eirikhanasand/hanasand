@@ -215,11 +215,11 @@ const expectedNonReadyRows = partialScoreboard.rows.filter(row => row.state !== 
 assert.deepEqual(partialScoreboard.deployGate.blockerRows, partialScoreboard.rows.filter(row => row.state === 'blocked').map(row => row.id))
 assert.deepEqual(partialScoreboard.deployGate.needsActionRows, partialScoreboard.rows.filter(row => row.state === 'needs_action').map(row => row.id))
 assert.deepEqual(partialScoreboard.deployGate.unavailableRows, partialScoreboard.rows.filter(row => row.state === 'unavailable').map(row => row.id))
-assert.ok(partialScoreboard.deployGate.blockerRows.includes('organizations'))
+assert.ok(partialScoreboard.deployGate.needsActionRows.includes('organizations'))
 assert.ok(partialScoreboard.deployGate.needsActionRows.includes('real_alert_generation'))
 assert.ok(partialScoreboard.deployGate.needsActionRows.includes('webhook_delivery'))
-assert.ok(partialScoreboard.deployGate.unavailableRows.includes('support_admin_audit'))
-assert.ok(partialScoreboard.deployGate.unavailableRows.includes('public_ti_enrichment'))
+assert.ok(partialScoreboard.deployGate.needsActionRows.includes('support_admin_audit'))
+assert.ok(partialScoreboard.deployGate.needsActionRows.includes('public_ti_enrichment'))
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/ti/workbench'))
 assert.ok(partialScoreboard.deployGate.actionNeededWorkflowLinks.includes('/dashboard/automations?setup=dwm'))
 assert.ok(partialScoreboard.deployGate.proofContracts.some(contract => contract.includes('dashboard.alert_evidence.readiness.v1')))
@@ -342,7 +342,7 @@ assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     deployGate: {
         ...partialScoreboard.deployGate,
-        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'organizations' ? { ...row, state: 'needs_action' } : row),
+        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'deploy_live_status' ? { ...row, state: 'ready' } : row),
     },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
@@ -410,7 +410,7 @@ assert.equal(parseProductNorthStarScoreboard({
     ...partialScoreboard,
     deployGate: {
         ...partialScoreboard.deployGate,
-        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'organizations' ? { ...row, proofDrilldowns: [] } : row),
+        blockingProofRows: partialScoreboard.deployGate.blockingProofRows.map(row => row.rowId === 'deploy_live_status' ? { ...row, proofDrilldowns: [] } : row),
     },
 }), null)
 assert.equal(parseProductNorthStarScoreboard({
@@ -607,55 +607,65 @@ for (const token of [
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
     'buildProductNorthStarScoreboard',
-    'Product category',
-    'Company Exposure Monitoring',
-    'Proof state',
-    'Ledger',
+    'Company exposure monitoring for security teams',
+    'Know when your company appears in leak and extortion sources',
+    'Monitor a company or vendor',
+    'Search intelligence',
+    'New',
+    'Delivery',
     'ledger.customerVisibleBlockedCount',
     'ledger.deployRisk',
-    'Next blocker',
-    'Open readiness',
-    'data-home-workflow-proof',
-    'data-home-workflow-proof-ready-rows',
-    'data-home-workflow-proof-total-rows',
+    'Next action',
+    'Open console',
+    'data-home-workflow-coverage',
+    'data-home-workflow-coverage-ready-rows',
+    'data-home-workflow-coverage-total-rows',
     'data-home-direction-id',
     'data-home-direction-state',
     'data-home-direction-backed-rows',
     'data-home-direction-owner-lanes',
     'data-home-direction-href',
-    'Customer workflow proof',
-    'Current proof',
-    'Inspect readiness',
+    'Workflow map',
+    'What your security team can use today',
+    'Customer value',
+    'Inspect console',
 ]) {
-    assert.ok(homeSource.includes(token), `Homepage missing product readiness proof token: ${token}.`)
+    assert.ok(homeSource.includes(token), `Homepage missing product readiness token: ${token}.`)
 }
 
 for (const token of [
     'scoreboard.direction.map',
-    'item.blocker || item.detail',
-    'item.proofSummary',
+    'formatCustomerAction(item.blocker)',
+    'customerWorkflowValue(item)',
     'item.href',
     'md:grid-cols-[1.1fr_8rem_1.5fr_8rem]',
     'wrap-break-word',
-    'formatProofText(item.blocker || item.detail)',
 ]) {
-    assert.ok(homeSource.includes(token), `Homepage workflow proof is not wired to north-star direction data: ${token}.`)
+    assert.ok(homeSource.includes(token), `Homepage workflow coverage is not wired to north-star direction data: ${token}.`)
 }
 
 for (const token of [
-    'DWM entitlement readiness API is not loaded',
-    'organization watchlist alert proof is not loaded',
-    'source worker readiness proof is not loaded',
-    'no backed alert is visible in the analyst console',
-    'Dashboard-visible alert proof is not loaded',
-    'webhook lifecycle proof is not loaded',
-    'support audit readiness proof is not loaded',
-    'public TI provenance proof is not loaded',
+    'Organization access policy is not connected to this console view yet',
+    'Generate a dashboard-visible alert for the selected customer.',
+    'Connect current source coverage for public threat intelligence.',
+    'Connect support audit history.',
+    'Run the latest live deploy check.',
 ]) {
-    assert.ok(homeSource.includes(token), `Homepage proof formatter missing human-readable blocker: ${token}.`)
+    assert.ok(homeSource.includes(token), `Homepage formatter missing human-readable blocker: ${token}.`)
 }
 
-for (const phrase of ['Refresh signal', ' item.signal', 'High-speed', 'Buyer workflow']) {
+for (const phrase of [
+    'Refresh signal',
+    ' item.signal',
+    'High-speed',
+    'Buyer workflow',
+    'Proof source-backed monitoring',
+    'source-backed monitoring',
+    'HomeWorkflowProof',
+    'data-home-workflow-proof',
+    'Customer workflow proof',
+    'Current proof',
+]) {
     assert.equal(homeSource.includes(phrase), false, `Homepage contains stale product language: ${phrase}`)
 }
 
@@ -663,18 +673,18 @@ for (const token of [
     'data-north-star-row-id',
     'data-north-star-state',
     'data-north-star-owner-lane',
-    'data-north-star-proof-timestamp',
+    'data-north-star-checked-at',
     'data-north-star-backend-proof-contract-version',
     'data-north-star-stale-after-seconds',
-    'data-north-star-proof-age-seconds',
-    'data-north-star-proof-stale',
+    'data-north-star-check-age-seconds',
+    'data-north-star-check-stale',
     'data-north-star-expected-dashboard-row-id',
-    'data-north-star-proof-source',
+    'data-north-star-source',
     'data-north-star-blocker',
     'data-north-star-href',
     'data-north-star-integration-probe-hint',
     'data-north-star-detail',
-    'data-north-star-proof-drilldowns',
+    'data-north-star-check-links',
     'data-north-star-direction-id',
     'data-north-star-direction-state',
     'data-north-star-direction-backed-rows',
@@ -683,11 +693,11 @@ for (const token of [
     'data-north-star-deploy-state',
     'data-north-star-deploy-ready-rows',
     'data-north-star-deploy-total-rows',
-    'data-north-star-deploy-proof-drilldown-count',
-    'data-north-star-deploy-linkable-proof-drilldown-count',
+    'data-north-star-deploy-check-link-count',
+    'data-north-star-deploy-linkable-check-count',
     'data-north-star-deploy-probe-route-count',
     'data-north-star-deploy-workflow-routes',
-    'data-north-star-deploy-proof-api-routes',
+    'data-north-star-deploy-live-api-routes',
     'data-north-star-deploy-probe-routes',
     'data-north-star-deploy-blocking-owner-lanes',
     'data-north-star-deploy-owner-blocker',
@@ -702,7 +712,7 @@ for (const token of [
     'data-north-star-progress-source-status',
     'data-north-star-progress-source-reason',
     'data-north-star-progress-source-contract',
-    'data-north-star-progress-source-timestamp',
+    'data-north-star-progress-source-checked-at',
     'data-north-star-readiness-ledger',
     'data-north-star-readiness-ledger-state',
     'data-north-star-readiness-ledger-source',
@@ -721,53 +731,52 @@ for (const token of [
     'data-north-star-readiness-ledger-blocker-last-checked-at',
     'data-north-star-readiness-ledger-blocker-last-checked-age-seconds',
     'data-north-star-readiness-ledger-blocker-last-checked-stale',
-    'data-north-star-readiness-ledger-blocker-proof-schema-version',
-    'data-north-star-readiness-ledger-blocker-proof-artifact-id',
+    'data-north-star-readiness-ledger-blocker-check-schema-version',
+    'data-north-star-readiness-ledger-blocker-check-artifact-id',
     'data-north-star-readiness-ledger-blocker-route',
     'data-north-star-readiness-ledger-blocker-probe-id',
     'data-north-star-readiness-ledger-blocker-action',
     'data-north-star-readiness-ledger-blocker-deploy-risk',
-    'data-north-star-readiness-ledger-blocker-ui-proof',
+    'data-north-star-readiness-ledger-blocker-ui-check',
     'data-north-star-readiness-ledger-blocker-workflow-route',
-    'data-north-star-readiness-ledger-blocker-workflow-proof-row-id',
+    'data-north-star-readiness-ledger-blocker-workflow-row-id',
     'data-north-star-readiness-ledger-blocker-workflow-test',
     'data-north-star-readiness-ledger-blocker-workflow-adapter',
     'data-north-star-readiness-ledger-blocker-workflow-command',
     'data-north-star-blocker-row-id',
     'data-north-star-blocker-state',
     'data-north-star-blocker-owner-lane',
-    'data-north-star-blocker-proof-timestamp',
+    'data-north-star-blocker-checked-at',
     'data-north-star-blocker-stale-after-seconds',
-    'data-north-star-blocker-proof-age-seconds',
-    'data-north-star-blocker-proof-stale',
+    'data-north-star-blocker-check-age-seconds',
+    'data-north-star-blocker-check-stale',
     'data-north-star-blocker-contract',
     'data-north-star-blocker-dashboard-row-id',
-    'data-north-star-blocker-proof-drilldowns',
-    'data-north-star-proof-drilldown-group',
-    'data-north-star-proof-drilldown-kind',
-    'data-north-star-proof-drilldown-label',
-    'data-north-star-proof-drilldown-value',
-    'data-north-star-proof-drilldown-href',
+    'data-north-star-blocker-check-links',
+    'data-north-star-source-drilldown-group',
+    'data-north-star-source-drilldown-kind',
+    'data-north-star-source-drilldown-label',
+    'data-north-star-source-drilldown-value',
+    'data-north-star-source-drilldown-href',
     '/api/product-readiness',
     'parseProductNorthStarScoreboard',
     'expectedDashboardRowId',
     'proofAgeSeconds',
     'proofStale',
     'proofDrilldowns',
-    'ProofDrilldowns',
-    'Operational evidence',
-    'Readiness source',
-    'Release blockers',
-    'What still needs proof',
-    'Proof links',
+    'SourceDrilldowns',
+    'Operations feed',
+    'Live source',
+    'Release gates',
+    'Live gates holding release',
+    'Gate links',
     'Linked routes',
     'Probe routes',
     'RouteTargetList',
     'OwnerBlockerCard',
-    'Proof APIs',
+    'Live APIs',
     '+{hiddenCount} more',
-    'Product readiness ledger',
-    'hanasand.product_readiness.v1',
+    'Rows only turn green when the live lane is fresh',
     'Open route',
     'localRoute(row.route)',
     'row.proofArtifactSchemaVersion',
@@ -844,7 +853,7 @@ for (const token of [
     assert.ok(productReadinessAggregateSource.includes(token), `Product readiness aggregate source missing ${token}.`)
 }
 
-for (const phrase of ['powered by', 'confidence', 'signals', 'control room', 'named examples', 'dashboard slop', 'how this feeds', 'acceptance criteria', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
+for (const phrase of ['powered by', 'confidence signal', 'confidence scorecard', 'signals', 'control room', 'named examples', 'dashboard slop', 'how this feeds', 'acceptance criteria', 'prompt-shaped', 'coordinator', 'delegation', 'you are tasked', 'marketing', 'world-class', 'best-in-class', 'unlock', 'buyers', 'open owner surface']) {
     assert.equal(homeSource.toLowerCase().includes(phrase), false, `Homepage contains banned copy: ${phrase}`)
     assert.equal(pageSource.toLowerCase().includes(phrase), false, `Readiness page contains banned copy: ${phrase}`)
     assert.equal(modelSource.toLowerCase().includes(phrase), false, `North-star model contains banned copy: ${phrase}`)

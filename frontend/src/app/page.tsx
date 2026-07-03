@@ -73,14 +73,14 @@ const stats = [
     ['Where it goes', 'Webhook, API, and analyst console'],
 ]
 
-const buyerShortcuts = [
+const workflowShortcuts = [
     { label: 'Search actor intel', href: '/ti/apt29', detail: 'Evidence, sources, and action rows' },
     { label: 'Inspect DWM queue', href: '/dashboard/dwm', detail: 'Alerts, cases, delivery, and source context' },
     { label: 'Compare fit', href: '/pricing#competitive-fit', detail: 'Where Hanasand should and should not win' },
     { label: 'Start pilot', href: '/contact?plan=pilot', detail: 'Watchlist, delivery, and security review' },
 ]
 
-const buyerSteps = [
+const customerSteps = [
     {
         title: 'Tell us what to watch',
         detail: 'Add company names, domains, subsidiaries, vendors, brands, executives, or portfolio companies.',
@@ -193,8 +193,8 @@ export default async function Page({
                             </button>
                         </form>
 
-                        <div className='grid w-full max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4' aria-label='Buyer shortcuts'>
-                            {buyerShortcuts.map(item => (
+                        <div className='grid w-full max-w-5xl gap-2 sm:grid-cols-2 lg:grid-cols-4' aria-label='Workflow shortcuts'>
+                            {workflowShortcuts.map(item => (
                                 <Link
                                     key={item.href}
                                     href={item.href}
@@ -223,7 +223,7 @@ export default async function Page({
                             </p>
                         </div>
                         <div className='grid gap-0 md:grid-cols-4'>
-                            {buyerSteps.map((step, index) => (
+                            {customerSteps.map((step, index) => (
                                 <div key={step.title} className='landing-surface-divider grid gap-3 border-b p-5 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0' data-home-workflow-step='true'>
                                     <span className='grid h-9 w-9 place-items-center rounded-full bg-ui-primary/10 text-sm font-semibold text-ui-primary'>{index + 1}</span>
                                     <h3 className='text-base font-semibold text-ui-text'>{step.title}</h3>

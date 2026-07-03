@@ -93,24 +93,24 @@ export default function LoadTestingOperations() {
 
     return (
         <div className='grid gap-4'>
-            <DashboardPanel className='overflow-hidden rounded-xl border-[#dbe4f0] bg-white p-0 shadow-[0_18px_48px_rgba(16,24,40,0.07)]'>
+            <DashboardPanel className='overflow-hidden rounded-lg border-ui-border bg-ui-panel p-0 shadow-sm'>
                 <div className='grid gap-0 lg:grid-cols-[minmax(0,1fr)_20rem]'>
                     <div className='grid gap-4 p-4 sm:p-5 lg:p-6'>
                         <div className='max-w-3xl'>
-                            <p className='inline-flex items-center gap-2 rounded-full border border-[#c8d8ff] bg-[#f3f7ff] px-3 py-1 text-xs font-semibold text-[#3056d3]'>
+                            <p className='inline-flex items-center gap-2 rounded-full border border-ui-primary/30 bg-ui-primary/10 px-3 py-1 text-xs font-semibold text-ui-primary'>
                                 <ShieldCheck className='h-3.5 w-3.5' />
                                 Permission-gated
                             </p>
-                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-[#171a21] md:text-3xl'>Check an endpoint you control</h2>
-                            <p className='mt-2 text-sm leading-6 text-[#596170]'>Run a permitted HTTP check, then open the result for latency, failures, logs, and response evidence.</p>
+                            <h2 className='mt-3 text-2xl font-semibold tracking-normal text-ui-text md:text-3xl'>Check an endpoint you control</h2>
+                            <p className='mt-2 text-sm leading-6 text-ui-muted'>Run a permitted HTTP check, then open the result for latency, failures, logs, and response evidence.</p>
                         </div>
                         <form onSubmit={startCheck} className='grid gap-3'>
                             <div className='flex min-w-0 flex-col gap-2 xl:flex-row'>
                                 <label className='relative min-w-0 flex-1'>
                                     <span className='sr-only'>Endpoint URL</span>
-                                    <Globe2 className='absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#667085]' />
+                                    <Globe2 className='absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ui-subtle' />
                                     <input
-                                        className='h-12 w-full rounded-lg border border-[#d8e1ee] bg-white pl-12 pr-4 text-sm font-medium text-[#171a21] outline-none transition placeholder:text-[#8c95a5] focus:border-[#3056d3] focus:ring-4 focus:ring-[#dce6ff]'
+                                        className='h-12 w-full rounded-lg border border-ui-border bg-ui-panel pl-12 pr-4 text-sm font-medium text-ui-text outline-none transition placeholder:text-ui-muted focus:border-ui-primary focus:ring-4 focus:ring-ui-primary/20'
                                         value={targetUrl}
                                         onChange={(event) => setTargetUrl(event.target.value)}
                                         placeholder='https://api.example.com/health'
@@ -119,51 +119,51 @@ export default function LoadTestingOperations() {
                                 <button
                                     type='submit'
                                     disabled={!canStart || isStarting}
-                                    className='inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-[#171a21] px-5 text-sm font-semibold text-white transition hover:bg-[#2b2f39] disabled:cursor-not-allowed disabled:border disabled:border-[#d8e1ee] disabled:bg-[#eef2f7] disabled:text-[#8c95a5]'
+                                    className='inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-lg bg-ui-primary px-5 text-sm font-semibold text-ui-canvas transition hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-ui-border disabled:bg-ui-raised disabled:text-ui-muted'
                                 >
                                     <Search className='h-4 w-4' />
                                     {isStarting ? 'Starting' : 'Start check'}
                                 </button>
                             </div>
-                            <div className='flex flex-wrap items-center gap-2 text-xs text-[#667085]'>
-                                <span className='rounded-md border border-[#dbe4f0] bg-[#f8fafc] px-2.5 py-1.5 font-medium text-[#344054]'>{selectedScenario.label}: {selectedScenario.detail}</span>
-                                <span className='rounded-md border border-[#dbe4f0] bg-[#f8fafc] px-2.5 py-1.5'>{Math.round(selectedScenario.timeout / 1000)}s timeout</span>
-                                <span className='rounded-md border border-[#dbe4f0] bg-[#f8fafc] px-2.5 py-1.5'>p95, errors, logs</span>
+                            <div className='flex flex-wrap items-center gap-2 text-xs text-ui-subtle'>
+                                <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5 font-medium text-ui-text'>{selectedScenario.label}: {selectedScenario.detail}</span>
+                                <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>{Math.round(selectedScenario.timeout / 1000)}s timeout</span>
+                                <span className='rounded-md border border-ui-border bg-ui-raised px-2.5 py-1.5'>p95, errors, logs</span>
                             </div>
-                            <details className='rounded-lg border border-[#dbe4f0] bg-[#f8fafc]' data-load-test-scenario-disclosure>
-                                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-[#344054] transition hover:bg-white [&::-webkit-details-marker]:hidden'>
+                            <details className='rounded-lg border border-ui-border bg-ui-raised' data-load-test-scenario-disclosure>
+                                <summary className='flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 text-sm font-semibold text-ui-text transition hover:bg-ui-panel [&::-webkit-details-marker]:hidden'>
                                     <span>Scenario settings</span>
-                                    <span className='text-xs font-medium text-[#667085]'>Baseline by default</span>
+                                    <span className='text-xs font-medium text-ui-subtle'>Baseline by default</span>
                                 </summary>
-                                <div className='grid gap-2 border-t border-[#dbe4f0] p-3 md:grid-cols-3'>
+                                <div className='grid gap-2 border-t border-ui-border p-3 md:grid-cols-3'>
                                     {scenarioPresets.map((scenario) => (
                                         <button
                                             key={scenario.id}
                                             type='button'
                                             onClick={() => setScenarioId(scenario.id)}
-                                            className={`grid min-h-[4.5rem] gap-1 rounded-lg border p-3 text-left transition ${scenario.id === scenarioId ? 'border-[#3056d3] bg-[#f3f7ff] text-[#2445ad]' : 'border-[#dbe4f0] bg-white text-[#344054] hover:border-[#b8c8df]'}`}
+                                            className={`grid min-h-[4.5rem] gap-1 rounded-lg border p-3 text-left transition ${scenario.id === scenarioId ? 'border-ui-primary bg-ui-primary/10 text-ui-primary' : 'border-ui-border bg-ui-panel text-ui-text hover:border-ui-primary'}`}
                                         >
                                             <span className='flex items-center justify-between gap-2 text-sm font-semibold'>
                                                 {scenario.label}
-                                                {scenario.id === scenarioId ? <CheckCircle2 className='h-4 w-4 text-[#147a3b]' /> : null}
+                                                {scenario.id === scenarioId ? <CheckCircle2 className='h-4 w-4 text-ui-success' /> : null}
                                             </span>
-                                            <span className='text-xs leading-5 text-[#667085]'>{scenario.detail}</span>
+                                            <span className='text-xs leading-5 text-ui-subtle'>{scenario.detail}</span>
                                         </button>
                                     ))}
                                 </div>
                             </details>
-                            {error ? <p className='text-sm text-[#b42318]'>{error}</p> : null}
+                            {error ? <p className='text-sm text-ui-danger'>{error}</p> : null}
                         </form>
                     </div>
-                    <aside className='grid content-start gap-3 border-t border-[#e5ebf4] bg-[#f8fafc] p-4 lg:border-l lg:border-t-0'>
-                        <h3 className='text-sm font-semibold text-[#171a21]'>Operations snapshot</h3>
+                    <aside className='grid content-start gap-3 border-t border-ui-border bg-ui-raised p-4 lg:border-l lg:border-t-0'>
+                        <h3 className='text-sm font-semibold text-ui-text'>Operations snapshot</h3>
                         <SnapshotRow icon={<Activity className='h-4 w-4' />} label='Now' value={activeScans.length ? `${activeScans.length} running` : 'No active checks'} tone={activeScans.length ? 'watch' : 'ok'} />
                         <SnapshotRow icon={<CheckCircle2 className='h-4 w-4' />} label='History' value={allScans.length ? `${allScans.length} recent` : 'No runs yet'} tone='neutral' />
                         <SnapshotRow icon={<Gauge className='h-4 w-4' />} label='Latest p95' value={p95 ? `${p95}ms` : 'Waiting for a run'} tone={p95 && p95 > 1000 ? 'watch' : 'ok'} />
                         <SnapshotRow icon={<AlertTriangle className='h-4 w-4' />} label='Failures' value={failedScans.length ? `${failedScans.length} flagged` : 'Clear'} tone={failedScans.length ? 'bad' : 'ok'} />
-                        <details className='rounded-lg border border-[#dbe4f0] bg-white' data-load-test-policy-disclosure>
-                            <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-[#344054] [&::-webkit-details-marker]:hidden'>Policy and evidence</summary>
-                            <div className='grid gap-2 border-t border-[#dbe4f0] p-3'>
+                        <details className='rounded-lg border border-ui-border bg-ui-panel' data-load-test-policy-disclosure>
+                            <summary className='cursor-pointer list-none px-3 py-2 text-sm font-semibold text-ui-text [&::-webkit-details-marker]:hidden'>Policy and evidence</summary>
+                            <div className='grid gap-2 border-t border-ui-border p-3'>
                                 <PolicyRow label='Allowed target' value='HTTP/S endpoints you own or are permitted to test' />
                                 <PolicyRow label='Evidence' value='status, p95 latency, failure rate, logs, errors' />
                                 <PolicyRow label='Refresh' value={loadedAt ? loadedAt.toLocaleTimeString() : 'loading history'} />
@@ -173,26 +173,26 @@ export default function LoadTestingOperations() {
                 </div>
             </DashboardPanel>
 
-            <DashboardPanel className='overflow-hidden rounded-xl border-[#dbe4f0] bg-white p-0 shadow-[0_14px_36px_rgba(16,24,40,0.06)]'>
-                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ebf4] bg-[#f8fafc] px-4 py-3'>
+            <DashboardPanel className='overflow-hidden rounded-lg border-ui-border bg-ui-panel p-0 shadow-sm'>
+                <div className='flex flex-wrap items-center justify-between gap-3 border-b border-ui-border bg-ui-raised px-4 py-3'>
                     <div>
-                        <h2 className='text-base font-semibold text-[#171a21]'>Result history</h2>
-                        <p className='mt-1 text-sm text-[#667085]'>Open a run to inspect the full evidence report.</p>
+                        <h2 className='text-base font-semibold text-ui-text'>Result history</h2>
+                        <p className='mt-1 text-sm text-ui-subtle'>Open a run to inspect the full evidence report.</p>
                     </div>
                     <div className='flex flex-wrap items-center gap-2'>
-                        <div className='inline-flex rounded-lg border border-[#d8e1ee] bg-white p-1' role='group' aria-label='Choose result history'>
+                        <div className='inline-flex rounded-lg border border-ui-border bg-ui-panel p-1' role='group' aria-label='Choose result history'>
                             {(['mine', 'global'] as const).map((view) => (
                                 <button
                                     key={view}
                                     type='button'
                                     onClick={() => setHistoryView(view)}
-                                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${historyView === view ? 'bg-[#171a21] text-white' : 'text-[#596170] hover:bg-[#f2f5f9]'}`}
+                                    className={`h-8 rounded-md px-3 text-xs font-semibold transition ${historyView === view ? 'bg-ui-primary text-ui-canvas' : 'text-ui-muted hover:bg-ui-raised'}`}
                                 >
                                     {view === 'mine' ? 'My checks' : 'Global'}
                                 </button>
                             ))}
                         </div>
-                        <Link href='/test/stats' className='inline-flex h-9 items-center gap-2 rounded-lg border border-[#d8e1ee] bg-white px-3 text-sm font-semibold text-[#344054] transition hover:border-[#bdc7d5] hover:bg-[#f8fafc]'>
+                        <Link href='/test/stats' className='inline-flex h-9 items-center gap-2 rounded-lg border border-ui-border bg-ui-panel px-3 text-sm font-semibold text-ui-text transition hover:border-ui-primary hover:bg-ui-raised'>
                             Results
                             <ArrowRight className='h-4 w-4' />
                         </Link>
@@ -216,9 +216,9 @@ export default function LoadTestingOperations() {
 
 function PolicyRow({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#dbe4f0] bg-[#f8fafc] p-3'>
-            <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-            <p className='mt-1 text-sm leading-5 text-[#171a21]'>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-raised p-3'>
+            <p className='text-xs font-semibold uppercase text-ui-subtle'>{label}</p>
+            <p className='mt-1 text-sm leading-5 text-ui-text'>{value}</p>
         </div>
     )
 }
@@ -234,18 +234,18 @@ function isValidServiceUrl(value: string) {
 
 function SnapshotRow({ icon, label, value, tone }: { icon: ReactNode, label: string, value: string, tone: 'neutral' | 'ok' | 'watch' | 'bad' }) {
     const toneClass = tone === 'bad'
-        ? 'text-[#b42318]'
+        ? 'text-ui-danger'
         : tone === 'watch'
-            ? 'text-[#8a5a00]'
+            ? 'text-ui-warning'
             : tone === 'ok'
-                ? 'text-[#147a3b]'
-                : 'text-[#3056d3]'
+                ? 'text-ui-success'
+                : 'text-ui-primary'
 
     return (
-        <div className='flex items-center justify-between gap-3 rounded-lg border border-[#dbe4f0] bg-white px-3 py-2'>
+        <div className='flex items-center justify-between gap-3 rounded-lg border border-ui-border bg-ui-panel px-3 py-2'>
             <div className='min-w-0'>
-                <p className='text-xs font-semibold uppercase text-[#667085]'>{label}</p>
-                <p className='truncate text-sm font-semibold text-[#171a21]'>{value}</p>
+                <p className='text-xs font-semibold uppercase text-ui-subtle'>{label}</p>
+                <p className='truncate text-sm font-semibold text-ui-text'>{value}</p>
             </div>
             <span className={toneClass}>{icon}</span>
         </div>

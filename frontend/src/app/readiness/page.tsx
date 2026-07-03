@@ -25,18 +25,18 @@ export default async function Page({
     const generatedAt = new Date().toISOString()
     const scoreboard = await loadProductReadiness(Headers, query) || buildProductNorthStarScoreboard(null, { generatedAt, query })
     const stateTone = scoreboard.fullChainReady
-        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
-        : 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
+        : 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
 
     return (
-        <main className='min-h-[calc(100vh-4.5rem)] bg-[#f7f8fb] px-4 py-8 text-[#171a21] dark:bg-[#08111f] dark:text-[#f5f7fb] md:px-8'>
+        <main className='min-h-[calc(100vh-4.5rem)] bg-ui-canvas px-4 py-8 text-ui-text   md:px-8'>
             <section className='mx-auto flex w-full max-w-7xl flex-col gap-5'>
-                <div className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'>
+                <div className='rounded-xl border border-ui-border bg-ui-panel p-5 shadow-sm'>
                     <div className='flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between'>
                         <div className='max-w-3xl'>
-                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Live operations</p>
-                            <h1 className='mt-2 text-3xl font-semibold tracking-normal text-[#171a21] dark:text-white'>Threat monitoring gates</h1>
-                            <p className='mt-3 max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Live operations</p>
+                            <h1 className='mt-2 text-3xl font-semibold tracking-normal text-ui-text'>Threat monitoring gates</h1>
+                            <p className='mt-3 max-w-2xl text-sm leading-6 text-ui-muted'>
                                 Track the live lanes that keep monitoring, alerts, delivery, analyst work, and support actions moving.
                             </p>
                         </div>
@@ -53,7 +53,7 @@ export default async function Page({
                     <ProgressSourcePanel source={scoreboard.progressSource} />
                     <ProductReadinessAggregatePanel scoreboard={scoreboard} />
                     {scoreboard.firstBlocker && (
-                        <div className='mt-4 flex items-start gap-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-sm text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                        <div className='mt-4 flex items-start gap-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-sm text-ui-warning'>
                             <AlertCircle className='mt-0.5 h-4 w-4 shrink-0' />
                             <span>{scoreboard.firstBlocker}</span>
                         </div>
@@ -62,13 +62,13 @@ export default async function Page({
 
                 <DeployGatePanel scoreboard={scoreboard} />
 
-                <section className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'>
+                <section className='rounded-xl border border-ui-border bg-ui-panel p-5 shadow-sm'>
                     <div className='flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between'>
                         <div>
-                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Operating groups</p>
-                            <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>What is running now</h2>
+                            <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Operating groups</p>
+                            <h2 className='mt-2 text-xl font-semibold text-ui-text'>What is running now</h2>
                         </div>
-                        <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                        <p className='max-w-2xl text-sm leading-6 text-ui-muted'>
                             Each group rolls up the current operating lane, owner, and next action when something needs attention.
                         </p>
                     </div>
@@ -92,16 +92,16 @@ export default async function Page({
 function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboard }) {
     const source = scoreboard.productReadinessAggregate
     const tone = source.state === 'ready'
-        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : source.state === 'blocked'
-            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
             : source.state === 'needs_action'
-                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+                ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                : 'border-ui-border bg-ui-raised text-ui-muted'
 
     return (
         <section
-            className='mt-4 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-3 text-sm dark:border-[#26364f] dark:bg-[#0b1422]'
+            className='mt-4 rounded-lg border border-ui-border bg-ui-raised px-3 py-3 text-sm'
             data-north-star-readiness-ledger='true'
             data-north-star-readiness-ledger-state={source.state}
             data-north-star-readiness-ledger-source={source.source}
@@ -117,9 +117,9 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
         >
             <div className='grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]'>
                 <div className='min-w-0'>
-                    <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-[#667085] dark:text-[#97a6bd]'>Operations feed</p>
-                    <p className='mt-1 wrap-break-word font-semibold text-[#171a21] dark:text-white'>{source.source}</p>
-                    <p className='mt-1 text-xs leading-5 text-[#596170] dark:text-[#b9c4d6]'>
+                    <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted'>Operations feed</p>
+                    <p className='mt-1 wrap-break-word font-semibold text-ui-text'>{source.source}</p>
+                    <p className='mt-1 text-xs leading-5 text-ui-muted'>
                         Rows only turn green when the live lane is fresh, visible, and connected to the operator workflow.
                     </p>
                 </div>
@@ -134,7 +134,7 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                 </div>
             </div>
             {source.unavailableReason && (
-                <p className='mt-3 rounded-lg border border-[#d9e2ef] bg-[#f8fafc] px-3 py-2 text-xs leading-5 text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'>
+                <p className='mt-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs leading-5 text-ui-muted'>
                     {source.unavailableReason}
                 </p>
             )}
@@ -143,7 +143,7 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                     {source.blockingRows.map(row => (
                         <div
                             key={row.id}
-                            className='min-w-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+                            className='min-w-0 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning'
                             data-north-star-readiness-ledger-blocker-id={row.id}
                             data-north-star-readiness-ledger-blocker-owner-lane={row.ownerLane}
                             data-north-star-readiness-ledger-blocker-state={row.state}
@@ -163,9 +163,9 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             data-north-star-readiness-ledger-blocker-workflow-adapter={row.workflowExpectedAdapter}
                             data-north-star-readiness-ledger-blocker-workflow-command={publicOpsText(row.workflowProofCommand)}
                         >
-                            <p className='font-semibold text-[#171a21] dark:text-white'>{row.label}</p>
+                            <p className='font-semibold text-ui-text'>{row.label}</p>
                             <p className='mt-1 wrap-break-word'>{publicOpsText(row.blockers.join(', ') || row.requiredNextAction)}</p>
-                            <dl className='mt-3 grid gap-2 rounded-lg border border-[#fed7aa] bg-white/55 px-3 py-2 text-[11px] leading-4 dark:border-[#7c3b16] dark:bg-black/10'>
+                            <dl className='mt-3 grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-panel/55 px-3 py-2 text-[11px] leading-4'>
                                 <Fact label='Source' value={publicOpsText(row.proofArtifactSchemaVersion)} />
                                 <Fact label='Run id' value={publicOpsText(row.proofArtifactId)} />
                                 <Fact label='Check' value={row.probeId || 'checking'} />
@@ -177,7 +177,7 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                                 <Fact label='Adapter' value={row.workflowExpectedAdapter || 'checking'} />
                             </dl>
                             {(row.workflowTestName || row.workflowProofCommand) && (
-                                <dl className='mt-2 grid gap-2 rounded-lg border border-[#fed7aa] bg-white/55 px-3 py-2 text-[11px] leading-4 dark:border-[#7c3b16] dark:bg-black/10'>
+                                <dl className='mt-2 grid gap-2 rounded-lg border border-ui-warning/30 bg-ui-panel/55 px-3 py-2 text-[11px] leading-4'>
                                     <Fact label='Test' value={row.workflowTestName || 'checking'} />
                                     <Fact label='Command' value={row.workflowProofCommand || 'checking'} />
                                 </dl>
@@ -185,7 +185,7 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
                             <div className='mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
                                 <p className='min-w-0 wrap-break-word text-[11px] leading-4'>{row.workflowRoute || row.route || 'Route is reconnecting.'}</p>
                                 {localRoute(row.route) ? (
-                                    <Link href={row.route} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#fed7aa] px-3 py-1.5 text-xs font-semibold text-[#9a3412] transition hover:bg-[#ffedd5] focus:outline-none focus:ring-2 focus:ring-[#fdba74] dark:border-[#7c3b16] dark:text-[#fdba74] dark:hover:bg-[#3a1d0c]'>
+                                    <Link href={row.route} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-ui-warning/30 px-3 py-1.5 text-xs font-semibold text-ui-warning transition hover:bg-ui-warning/15 focus:outline-none focus:ring-2 focus:ring-ui-warning/25'>
                                         Open route
                                         <ExternalLink className='h-3.5 w-3.5' />
                                     </Link>
@@ -201,16 +201,16 @@ function ProductReadinessAggregatePanel({ scoreboard }: { scoreboard: ProductNor
 
 function ProgressSourcePanel({ source }: { source: ProductNorthStarProgressSource }) {
     const tone = source.state === 'ready'
-        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : source.state === 'blocked'
-            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
             : source.state === 'needs_action'
-                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+                ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                : 'border-ui-border bg-ui-raised text-ui-muted'
 
     return (
         <section
-            className='mt-4 grid gap-3 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-3 text-sm dark:border-[#26364f] dark:bg-[#0b1422] md:grid-cols-[minmax(0,1fr)_auto]'
+            className='mt-4 grid gap-3 rounded-lg border border-ui-border bg-ui-raised px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_auto]'
             data-north-star-progress-source='true'
             data-north-star-progress-source-state={source.state}
             data-north-star-progress-source-route={source.route}
@@ -220,9 +220,9 @@ function ProgressSourcePanel({ source }: { source: ProductNorthStarProgressSourc
             data-north-star-progress-source-checked-at={source.proofTimestamp}
         >
             <div className='min-w-0'>
-                <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-[#667085] dark:text-[#97a6bd]'>Live source</p>
-                <p className='mt-1 wrap-break-word font-semibold text-[#171a21] dark:text-white'>{source.route}</p>
-                <p className='mt-1 wrap-break-word text-xs leading-5 text-[#596170] dark:text-[#b9c4d6]'>{publicOpsText(source.integrationProbeHint)}</p>
+                <p className='text-[11px] font-semibold uppercase tracking-[0.08em] text-ui-muted'>Live source</p>
+                <p className='mt-1 wrap-break-word font-semibold text-ui-text'>{source.route}</p>
+                <p className='mt-1 wrap-break-word text-xs leading-5 text-ui-muted'>{publicOpsText(source.integrationProbeHint)}</p>
             </div>
             <div className='grid gap-2 sm:grid-cols-3 md:min-w-[26rem]'>
                 <div className={`rounded-lg border px-3 py-2 ${tone}`}>
@@ -233,7 +233,7 @@ function ProgressSourcePanel({ source }: { source: ProductNorthStarProgressSourc
                 <SummaryBox label='Feed' value={publicOpsText(source.backendProofContractVersion)} />
             </div>
             {source.unavailableReason && (
-                <p className='md:col-span-2 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                <p className='md:col-span-2 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning'>
                     {source.unavailableReason}
                 </p>
             )}
@@ -245,7 +245,7 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
     const blockers = scoreboard.deployGate.blockingProofRows
     return (
         <section
-            className='rounded-xl border border-[#d9e2ef] bg-white p-5 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'
+            className='rounded-xl border border-ui-border bg-ui-panel p-5 shadow-sm'
             data-north-star-deploy-gate='true'
             data-north-star-deploy-state={scoreboard.deployGate.state}
             data-north-star-deploy-ready-rows={scoreboard.deployGate.readyRows}
@@ -261,10 +261,10 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
         >
             <div className='flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between'>
                 <div>
-                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-[#3056d3] dark:text-[#9db6ff]'>Release gates</p>
-                    <h2 className='mt-2 text-xl font-semibold text-[#171a21] dark:text-white'>Live gates holding release</h2>
+                    <p className='text-xs font-semibold uppercase tracking-[0.08em] text-ui-primary'>Release gates</p>
+                    <h2 className='mt-2 text-xl font-semibold text-ui-text'>Live gates holding release</h2>
                 </div>
-                <p className='max-w-2xl text-sm leading-6 text-[#596170] dark:text-[#b9c4d6]'>
+                <p className='max-w-2xl text-sm leading-6 text-ui-muted'>
                     A hold clears when the live operating lane is fresh and linked to an action the console can run.
                 </p>
             </div>
@@ -286,7 +286,7 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
                 </div>
             )}
             {scoreboard.deployGate.fullChainReady ? (
-                <div className='mt-5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2 text-sm font-semibold text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'>
+                <div className='mt-5 rounded-lg border border-ui-success/30 bg-ui-success/10 px-3 py-2 text-sm font-semibold text-ui-success'>
                     All live lanes are fresh and connected.
                 </div>
             ) : (
@@ -302,14 +302,14 @@ function DeployGatePanel({ scoreboard }: { scoreboard: ProductNorthStarScoreboar
 
 function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
     const tone = row.state === 'blocked'
-        ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+        ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
         : row.state === 'needs_action'
-            ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-            : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+            ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+            : 'border-ui-border bg-ui-raised text-ui-muted'
     const Icon = row.state === 'blocked' ? AlertCircle : row.state === 'needs_action' ? Clock3 : CircleDashed
     return (
         <article
-            className='min-w-0 rounded-xl border border-[#d9e2ef] bg-[#fbfcfe] p-4 dark:border-[#26364f] dark:bg-[#0b1422]'
+            className='min-w-0 rounded-xl border border-ui-border bg-ui-raised p-4'
             data-north-star-blocker-row-id={row.rowId}
             data-north-star-blocker-state={row.state}
             data-north-star-blocker-owner-lane={row.ownerLane}
@@ -323,15 +323,15 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h3 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-white'>{readableId(row.rowId)}</h3>
-                    <p className='mt-1 text-xs font-semibold text-[#667085] dark:text-[#97a6bd]'>Owner: {row.ownerLane}</p>
+                    <h3 className='wrap-break-word text-sm font-semibold text-ui-text'>{readableId(row.rowId)}</h3>
+                    <p className='mt-1 text-xs font-semibold text-ui-muted'>Owner: {row.ownerLane}</p>
                 </div>
                 <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${tone}`}>
                     <Icon className='h-3.5 w-3.5' />
                     {stateLabel(row.state)}
                 </span>
             </div>
-            <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+            <p className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning'>
                 {publicOpsText(row.blocker)}
             </p>
             <dl className='mt-4 grid gap-2 text-xs'>
@@ -343,9 +343,9 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
                 <Fact label='Row id' value={row.expectedDashboardRowId} />
             </dl>
             <SourceDrilldowns items={row.proofDrilldowns} scope={`blocker-${row.rowId}`} />
-            <div className='mt-4 flex flex-col gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f] sm:flex-row sm:items-center sm:justify-between'>
-                <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{publicOpsText(row.integrationProbeHint)}</p>
-                <Link href={row.href} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+            <div className='mt-4 flex flex-col gap-3 border-t border-ui-border pt-3 sm:flex-row sm:items-center sm:justify-between'>
+                <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-ui-muted'>{publicOpsText(row.integrationProbeHint)}</p>
+                <Link href={row.href} className='inline-flex min-h-9 min-w-32 w-fit shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-ui-border px-3 py-1.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                     Inspect
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>
@@ -357,7 +357,7 @@ function DeployBlockerCard({ row }: { row: ProductNorthStarDeployBlocker }) {
 function OwnerBlockerCard({ item }: { item: ProductNorthStarOwnerBlocker }) {
     return (
         <div
-            className='min-w-0 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
+            className='min-w-0 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs text-ui-warning'
             data-north-star-deploy-owner-blocker={item.ownerLane}
             data-north-star-deploy-owner-blocker-rows={item.rowIds.join(',')}
             data-north-star-deploy-owner-blocker-states={item.states.join(',')}
@@ -365,7 +365,7 @@ function OwnerBlockerCard({ item }: { item: ProductNorthStarOwnerBlocker }) {
             data-north-star-deploy-owner-blocker-workflows={item.workflowRoutes.join(',')}
         >
             <p className='font-semibold uppercase tracking-[0.08em]'>{item.ownerLane}</p>
-            <p className='mt-1 wrap-break-word font-semibold text-[#171a21] dark:text-white'>{item.rowIds.join(', ')}</p>
+            <p className='mt-1 wrap-break-word font-semibold text-ui-text'>{item.rowIds.join(', ')}</p>
             <dl className='mt-2 grid gap-1'>
                 <Fact label='States' value={item.states.join(', ')} />
                 <Fact label='Routes' value={item.workflowRoutes.join(', ')} />
@@ -378,27 +378,27 @@ function RouteTargetList({ label, routes }: { label: string, routes: string[] })
     const visibleRoutes = routes.slice(0, 4)
     const hiddenCount = Math.max(0, routes.length - visibleRoutes.length)
     return (
-        <div className='min-w-0 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-2 text-xs dark:border-[#26364f] dark:bg-[#0b1422]'>
-            <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
+        <div className='min-w-0 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs'>
+            <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
             {visibleRoutes.length ? (
                 <div className='mt-2 flex flex-wrap gap-2'>
                     {visibleRoutes.map(route => (
                         <Link
                             key={route}
                             href={route}
-                            className='inline-flex min-h-8 min-w-11 max-w-full items-center justify-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#3056d3] underline-offset-2 hover:bg-[#f2f5f9] hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238]'
+                            className='inline-flex min-h-8 min-w-11 max-w-full items-center justify-center rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-primary underline-offset-2 hover:bg-ui-raised hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/20'
                         >
                             <span className='min-w-0 wrap-break-word'>{route}</span>
                         </Link>
                     ))}
                     {hiddenCount > 0 && (
-                        <span className='inline-flex min-h-8 items-center rounded-md border border-[#d9e2ef] px-2 py-1 font-semibold text-[#667085] dark:border-[#34445f] dark:text-[#97a6bd]'>
+                        <span className='inline-flex min-h-8 items-center rounded-md border border-ui-border px-2 py-1 font-semibold text-ui-muted'>
                             +{hiddenCount} more
                         </span>
                     )}
                 </div>
             ) : (
-                <p className='mt-2 text-[#596170] dark:text-[#b9c4d6]'>checking</p>
+                <p className='mt-2 text-ui-muted'>checking</p>
             )}
         </div>
     )
@@ -406,40 +406,40 @@ function RouteTargetList({ label, routes }: { label: string, routes: string[] })
 
 function DirectionCard({ item }: { item: ProductNorthStarDirection }) {
     const tone = item.state === 'ready'
-        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : item.state === 'blocked'
-            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
             : item.state === 'needs_action'
-                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+                ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                : 'border-ui-border bg-ui-raised text-ui-muted'
     const Icon = item.state === 'ready' ? CheckCircle2 : item.state === 'blocked' ? AlertCircle : item.state === 'needs_action' ? Clock3 : CircleDashed
     return (
         <article
-            className='flex min-w-0 flex-col rounded-xl border border-[#d9e2ef] bg-[#fbfcfe] p-4 dark:border-[#26364f] dark:bg-[#0b1422]'
+            className='flex min-w-0 flex-col rounded-xl border border-ui-border bg-ui-raised p-4'
             data-north-star-direction-id={item.id}
             data-north-star-direction-state={item.state}
             data-north-star-direction-backed-rows={item.backedRowIds.join(',')}
             data-north-star-direction-owner-lanes={item.ownerLanes.join(',')}
         >
             <div className='flex items-start justify-between gap-3'>
-                <h3 className='wrap-break-word text-sm font-semibold text-[#171a21] dark:text-white'>{item.label}</h3>
+                <h3 className='wrap-break-word text-sm font-semibold text-ui-text'>{item.label}</h3>
                 <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${tone}`}>
                     <Icon className='h-3.5 w-3.5' />
                     {stateLabel(item.state)}
                 </span>
             </div>
-            <p className='mt-3 wrap-break-word text-sm leading-5 text-[#596170] dark:text-[#b9c4d6]'>{item.detail}</p>
+            <p className='mt-3 wrap-break-word text-sm leading-5 text-ui-muted'>{item.detail}</p>
             <dl className='mt-4 grid gap-2 text-xs'>
                 <Fact label='Owner' value={item.ownerLanes.join(', ') || 'checking'} />
                 <Fact label='Rows' value={item.backedRowIds.join(', ')} />
                 <Fact label='Sources' value={publicOpsText(item.proofSummary)} />
             </dl>
             {item.blocker && (
-                <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                <p className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning'>
                     {publicOpsText(item.blocker)}
                 </p>
             )}
-            <Link href={item.href} className='mt-4 inline-flex min-h-9 min-w-36 w-fit items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#3056d3] transition hover:bg-[#f2f5f9] hover:text-[#1d3fb0] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#9db6ff] dark:hover:bg-[#162238] dark:hover:text-white'>
+            <Link href={item.href} className='mt-4 inline-flex min-h-9 min-w-36 w-fit items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-ui-border px-3 py-1.5 text-xs font-semibold text-ui-primary transition hover:bg-ui-raised hover:text-ui-text focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                 Open workflow
                 <ExternalLink className='h-3.5 w-3.5' />
             </Link>
@@ -449,25 +449,25 @@ function DirectionCard({ item }: { item: ProductNorthStarDirection }) {
 
 function SummaryBox({ label, value }: { label: string, value: string }) {
     return (
-        <div className='rounded-lg border border-[#d9e2ef] bg-[#fbfcfe] px-3 py-2 dark:border-[#26364f] dark:bg-[#0b1422]'>
-            <p className='text-[11px] font-semibold uppercase text-[#667085] dark:text-[#97a6bd]'>{label}</p>
-            <p className='mt-1 text-sm font-semibold text-[#171a21] dark:text-white'>{value}</p>
+        <div className='rounded-lg border border-ui-border bg-ui-raised px-3 py-2'>
+            <p className='text-[11px] font-semibold uppercase text-ui-muted'>{label}</p>
+            <p className='mt-1 text-sm font-semibold text-ui-text'>{value}</p>
         </div>
     )
 }
 
 function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
     const tone = row.state === 'ready'
-        ? 'border-[#bbf7d0] bg-[#f0fdf4] text-[#166534] dark:border-[#246b42] dark:bg-[#10251b] dark:text-[#a7f3d0]'
+        ? 'border-ui-success/30 bg-ui-success/10 text-ui-success'
         : row.state === 'blocked'
-            ? 'border-[#fecaca] bg-[#fff1f2] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[#2a1114] dark:text-[#fca5a5]'
+            ? 'border-ui-danger/30 bg-ui-danger/10 text-ui-danger'
             : row.state === 'needs_action'
-                ? 'border-[#fed7aa] bg-[#fff7ed] text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'
-                : 'border-[#d9e2ef] bg-[#f8fafc] text-[#475467] dark:border-[#26364f] dark:bg-[#0b1422] dark:text-[#b9c4d6]'
+                ? 'border-ui-warning/30 bg-ui-warning/10 text-ui-warning'
+                : 'border-ui-border bg-ui-raised text-ui-muted'
     const Icon = row.state === 'ready' ? CheckCircle2 : row.state === 'blocked' ? AlertCircle : row.state === 'needs_action' ? Clock3 : CircleDashed
     return (
         <article
-            className='min-w-0 rounded-xl border border-[#d9e2ef] bg-white p-4 shadow-sm dark:border-[#26364f] dark:bg-[#101927]'
+            className='min-w-0 rounded-xl border border-ui-border bg-ui-panel p-4 shadow-sm'
             data-north-star-row-id={row.id}
             data-north-star-state={row.state}
             data-north-star-owner-lane={row.ownerLane}
@@ -486,8 +486,8 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
         >
             <div className='flex items-start justify-between gap-3'>
                 <div className='min-w-0'>
-                    <h2 className='wrap-break-word text-base font-semibold text-[#171a21] dark:text-white'>{row.label}</h2>
-                    <p className='mt-1 wrap-break-word text-sm leading-5 text-[#596170] dark:text-[#b9c4d6]'>{row.detail}</p>
+                    <h2 className='wrap-break-word text-base font-semibold text-ui-text'>{row.label}</h2>
+                    <p className='mt-1 wrap-break-word text-sm leading-5 text-ui-muted'>{row.detail}</p>
                 </div>
                 <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-semibold ${tone}`}>
                     <Icon className='h-3.5 w-3.5' />
@@ -506,13 +506,13 @@ function ReadinessCard({ row }: { row: ProductNorthStarRow }) {
             </dl>
             <SourceDrilldowns items={row.proofDrilldowns} scope={row.id} />
             {row.blocker && (
-                <p className='mt-3 rounded-lg border border-[#fed7aa] bg-[#fff7ed] px-3 py-2 text-xs leading-5 text-[#9a3412] dark:border-[#7c3b16] dark:bg-[#2b170b] dark:text-[#fdba74]'>
+                <p className='mt-3 rounded-lg border border-ui-warning/30 bg-ui-warning/10 px-3 py-2 text-xs leading-5 text-ui-warning'>
                     {publicOpsText(row.blocker)}
                 </p>
             )}
-            <div className='mt-4 flex items-center justify-between gap-3 border-t border-[#e4eaf2] pt-3 dark:border-[#26364f]'>
-                <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-[#667085] dark:text-[#97a6bd]'>{publicOpsText(row.integrationProbeHint)}</p>
-                <Link href={row.href} className='inline-flex min-h-9 min-w-24 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-[#d9e2ef] px-3 py-1.5 text-xs font-semibold text-[#344054] transition hover:bg-[#f2f5f9] focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:border-[#34445f] dark:text-[#d8e0ee] dark:hover:bg-[#162238]'>
+            <div className='mt-4 flex items-center justify-between gap-3 border-t border-ui-border pt-3'>
+                <p className='min-w-0 wrap-break-word text-[11px] leading-4 text-ui-muted'>{publicOpsText(row.integrationProbeHint)}</p>
+                <Link href={row.href} className='inline-flex min-h-9 min-w-24 shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg border border-ui-border px-3 py-1.5 text-xs font-semibold text-ui-text transition hover:bg-ui-raised focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                     Open
                     <ExternalLink className='h-3.5 w-3.5' />
                 </Link>
@@ -530,7 +530,7 @@ function SourceDrilldowns({
 }) {
     return (
         <dl
-            className='mt-3 grid gap-2 rounded-lg border border-[#e4eaf2] bg-[#fbfcfe] px-3 py-2 text-xs dark:border-[#26364f] dark:bg-[#0b1422]'
+            className='mt-3 grid gap-2 rounded-lg border border-ui-border bg-ui-raised px-3 py-2 text-xs'
             data-north-star-source-drilldown-group={scope}
         >
             {items.map(item => (
@@ -542,10 +542,10 @@ function SourceDrilldowns({
                     data-north-star-source-drilldown-value={publicOpsText(item.value)}
                     data-north-star-source-drilldown-href={item.href}
                 >
-                    <dt className='font-semibold text-[#667085] dark:text-[#97a6bd]'>{item.label}</dt>
-                    <dd className='min-w-0 wrap-break-word font-medium text-[#171a21] dark:text-[#f5f7fb]'>
+                    <dt className='font-semibold text-ui-muted'>{item.label}</dt>
+                    <dd className='min-w-0 wrap-break-word font-medium text-ui-text '>
                         {item.href ? (
-                            <Link href={item.href} className='inline-flex min-h-8 min-w-11 items-center justify-center rounded-md px-1 text-[#3056d3] underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-[#c7d2fe] dark:text-[#9db6ff]'>
+                            <Link href={item.href} className='inline-flex min-h-8 min-w-11 items-center justify-center rounded-md px-1 text-ui-primary underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-ui-primary/20'>
                                 {publicOpsText(item.value)}
                             </Link>
                         ) : publicOpsText(item.value)}
@@ -559,8 +559,8 @@ function SourceDrilldowns({
 function Fact({ label, value }: { label: string, value: string }) {
     return (
         <div className='grid grid-cols-[84px_minmax(0,1fr)] gap-2'>
-            <dt className='font-semibold text-[#667085] dark:text-[#97a6bd]'>{label}</dt>
-            <dd className='min-w-0 wrap-break-word font-medium text-[#171a21] dark:text-[#f5f7fb]'>{value || 'checking'}</dd>
+            <dt className='font-semibold text-ui-muted'>{label}</dt>
+            <dd className='min-w-0 wrap-break-word font-medium text-ui-text '>{value || 'checking'}</dd>
         </div>
     )
 }

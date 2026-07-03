@@ -22,6 +22,8 @@ export default function isPublicProductPath(path: string | null | undefined) {
         || pathname.startsWith('/ti/')
         || pathname === '/pwned'
         || pathname === '/status'
+        || pathname === '/trust'
+        || pathname.startsWith('/trust/')
         || pathname === '/support'
         || pathname === '/gallery'
         || pathname === '/upload'

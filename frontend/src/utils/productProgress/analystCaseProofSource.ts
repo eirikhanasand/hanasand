@@ -89,10 +89,10 @@ export function analystCaseDetailPayloadFromLedger(ledger: ProductAnalystCasePro
         deliveries: [],
         evidence: [],
         timeline: [{
-            id: `${row.id}_proof_loaded`,
+            id: `${row.id}_detail_loaded`,
             at: updatedAt,
-            title: 'Case proof loaded',
-            detail: 'Analyst case detail came from the product proof ledger.',
+            title: 'Case detail loaded',
+            detail: 'Analyst case detail came from the product status ledger.',
             eventType: 'proof_ledger.case_detail',
         }],
         nextAllowedActions: [],
