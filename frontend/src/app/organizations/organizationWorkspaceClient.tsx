@@ -194,6 +194,13 @@ type DestinationDraft = {
     url: string
 }
 
+type DestinationEditDraft = {
+    name: string
+    kind: 'discord' | 'webhook'
+    url: string
+    status: string
+}
+
 type ActivityItem = {
     id: string
     at: string
@@ -313,6 +320,7 @@ export default function OrganizationWorkspaceClient() {
     const [settingsDraft, setSettingsDraft] = useState<OrganizationSettings>({})
     const [editingWatchlist, setEditingWatchlist] = useState<Record<string, { kind: WatchlistKind, value: string, notes: string }>>({})
     const [destinationDrafts, setDestinationDrafts] = useState<Record<string, DestinationDraft>>({})
+    const [editingDestinations, setEditingDestinations] = useState<Record<string, DestinationEditDraft>>({})
     const [deliveryResults, setDeliveryResults] = useState<Record<string, DeliveryRow>>({})
     const [rowMessages, setRowMessages] = useState<Record<string, RowMessage>>({})
     const [activity, setActivity] = useState<ActivityItem[]>([])
@@ -657,6 +665,7 @@ export default function OrganizationWorkspaceClient() {
         const withUrl = mode === 'save'
         const url = draft.url.trim()
         if (withUrl && !url) throw new Error('Enter a destination URL before testing.')
+        if (withUrl && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
         const alert = alertForWatchlist(item, bundle.alerts)
         const payload: Record<string, unknown> = {
             alertId: alert?.id || liveDwmAlertId,
@@ -701,6 +710,28 @@ export default function OrganizationWorkspaceClient() {
         })
         const delivery = firstDelivery(result)
         return delivery?.status ? `Destination test ${delivery.status}.` : 'Destination test sent.'
+    }, `destination-${destination.id}`)
+
+    const updateSavedDestination = (destination: WebhookDestination, draft: DestinationEditDraft) => selectedOrganization && runAction('update-destination', async () => {
+        const url = draft.url.trim()
+        if (url && !validDestinationUrl(url)) throw new Error('Enter a valid HTTPS destination URL.')
+        const body: Record<string, unknown> = {
+            name: draft.name.trim() || destination.name || destination.id,
+            kind: draft.kind,
+            status: draft.status,
+            requestId: `org-ui-${Date.now()}`,
+        }
+        if (url) body.endpointUrl = url
+        await requestJson(`/api/organizations/${encodeURIComponent(selectedOrganization.id)}/webhooks/${encodeURIComponent(destination.id)}`, {
+            method: 'PATCH',
+            body: JSON.stringify(body),
+        })
+        setEditingDestinations(current => {
+            const next = { ...current }
+            delete next[destination.id]
+            return next
+        })
+        return draft.status === 'active' ? 'Destination updated.' : 'Destination disabled.'
     }, `destination-${destination.id}`)
 
     const deleteSavedDestination = (destination: WebhookDestination) => selectedOrganization && runAction('delete-destination', async () => {
@@ -864,7 +895,7 @@ export default function OrganizationWorkspaceClient() {
                                     <div className='grid min-w-0 content-start gap-5'>
                                         <InvitePanel emails={inviteEmails} setEmails={setInviteEmails} role={inviteRole} setRole={setInviteRole} invites={bundle.invites} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onInvite={() => void sendInvite()} onInviteAction={(invite, action) => void inviteAction(invite, action)} onCopyInvite={invite => void copyInvite(invite)} />
                                         <MemberPanel members={bundle.members} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onRoleChange={(member, role) => void changeMemberRole(member, role)} onRemove={member => void removeMember(member)} />
-                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} onSelectSubject={setSelectedActivitySubject} onTest={destination => void testSavedDestination(destination)} onDelete={destination => void deleteSavedDestination(destination)} />
+                                        <DestinationPanel destinations={bundle.webhooks} canManage={canManage} busy={busy} rowMessages={rowMessages} selectedSubject={selectedActivitySubject} editing={editingDestinations} setEditing={setEditingDestinations} onSelectSubject={setSelectedActivitySubject} onTest={destination => void testSavedDestination(destination)} onUpdate={(destination, draft) => void updateSavedDestination(destination, draft)} onDelete={destination => void deleteSavedDestination(destination)} />
                                     </div>
                                 </section>
 
@@ -1523,6 +1554,8 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
     const selectedAlertId = alert?.id || liveDwmAlertId
     const deliveryStatus = delivery?.status || (configured ? 'Configured' : 'None')
     const replayLabel = delivery?.status === 'failed' || delivery?.status === 'skipped' ? 'Retry' : 'Replay'
+    const destinationUrl = draft.url.trim()
+    const destinationUrlInvalid = Boolean(destinationUrl) && !validDestinationUrl(destinationUrl)
     return (
         <div className='grid gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] p-3 dark:border-[#26344a] dark:bg-[#0d1522]' onClick={event => {
             event.stopPropagation()
@@ -1550,10 +1583,14 @@ function DestinationControls({ item, organization, alert, delivery, draft, canMa
             </div>
             <div className='grid gap-2 md:grid-cols-[8rem_minmax(12rem,1fr)_auto]'>
                 <SelectField label='Type' value={draft.kind} options={destinationKinds} disabled={!canManage || Boolean(busy)} onChange={value => onDraftChange({ ...draft, kind: value as DestinationDraft['kind'] })} />
-                <Field label='URL' value={draft.url} disabled={!canManage || Boolean(busy)} onChange={url => onDraftChange({ ...draft, url })} placeholder='https://discord.com/api/webhooks/...' />
+                <label className='grid gap-1 text-sm font-medium text-[#344054] dark:text-[#cbd5e1]'>
+                    URL
+                    <input value={draft.url} disabled={!canManage || Boolean(busy)} onChange={event => onDraftChange({ ...draft, url: event.target.value })} className={inputClass} placeholder='https://discord.com/api/webhooks/...' />
+                    {destinationUrlInvalid && <span className='text-xs font-semibold text-[#b42318] dark:text-[#fecaca]'>Use a valid HTTPS URL.</span>}
+                </label>
                 <label className='grid content-end'>
                     <span className='sr-only'>Test destination</span>
-                    <button type='button' className={primaryButtonClass} disabled={!canManage || !draft.url.trim() || Boolean(busy)} onClick={() => onTest('save')}>
+                    <button type='button' className={primaryButtonClass} disabled={!canManage || !destinationUrl || destinationUrlInvalid || Boolean(busy)} onClick={() => onTest('save')}>
                         <CheckCircle2 className='h-4 w-4' />
                         Test and save
                     </button>
@@ -2161,6 +2198,15 @@ function inviteActionAllowed(invite: OrganizationInvite, action: 'copy' | 'resen
 function memberCanMutate(member: OrganizationMember) {
     const status = member.status.toLowerCase()
     return member.role !== 'owner' && status !== 'removed' && status !== 'revoked' && status !== 'inactive'
+}
+
+function validDestinationUrl(value: string) {
+    try {
+        const url = new URL(value)
+        return url.protocol === 'https:' && Boolean(url.hostname)
+    } catch {
+        return false
+    }
 }
 
 function destinationConfigured(item: WatchlistItem) {
